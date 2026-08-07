@@ -43,10 +43,8 @@ def _me(obs):
 
 @pytest.mark.req("REQ-LETHAL-SEED-0001")
 def test_exact_own_zones_keeps_the_prized_copy_out_of_the_deck():
-    """The Petrel→Air Balloon lethal is sound only because one Air Balloon is still in the deck. The
-    exact seed must place exactly ONE Air Balloon in your_deck (fetchable) and ONE in your_prize —
-    the decklist has two, one is prized. A pool-into-deck seed would seat BOTH in the deck: the
-    over-count that could false-confirm a win when a needed card is actually all prized."""
+    """The decklist has two Air Balloons and one is prized. A pool-into-deck seed would seat BOTH in
+    the deck — the over-count that false-confirms a win when a needed card is actually all prized."""
     deck = _deck()
     assert deck.count(_AIR_BALLOON) == 2                    # decklist truly has two
     pilot = _pilot(deck)
@@ -64,9 +62,8 @@ def test_exact_own_zones_keeps_the_prized_copy_out_of_the_deck():
 
 @pytest.mark.req("REQ-LETHAL-SEED-0001")
 def test_exact_own_zones_is_none_when_prizes_unanchored():
-    """No `own_prizes` on the obs → (None, None): the caller keeps the sound decklist-prefix fallback
-    rather than guess a split. A guessed split could seat a prized card in the deck (a false
-    confirm), so positive certainty is never asserted without the anchored prizes."""
+    """A guessed split could seat a prized card in the deck (a false confirm), so positive certainty
+    is never asserted without the anchored prizes."""
     pilot = _pilot(_deck())
     obs = _f15_obs()
     obs.pop("own_prizes", None)
@@ -80,10 +77,8 @@ def _opp(obs):
 
 @pytest.mark.req("REQ-LETHAL-SEED-0003")
 def test_seed_zones_exposes_the_enabler_that_the_prefix_hides():
-    """The seeding fix, at the pure decision seam. `deck.csv` is id-sorted, so the decklist prefix
-    `deck[:deckCount]` cuts mid-Trainer and hides the high-id Air Balloon (positions 45–46, outside
-    deck[:44]); the exact split from `own_prizes` puts the one deck-certain copy back in `your_deck`.
-    Same board, opposite reachability — this is the whole seeding gap, engine-free."""
+    """`deck.csv` is id-sorted, so the prefix `deck[:deckCount]` cuts mid-Trainer and hides the
+    high-id Air Balloon; the exact split from `own_prizes` puts the deck-certain copy back."""
     deck = _deck()
     obs = _f15_obs()
     obs["own_prizes"] = dict(_F15_PRIZES)
@@ -103,9 +98,8 @@ def test_seed_zones_exposes_the_enabler_that_the_prefix_hides():
 
 @pytest.mark.req("REQ-LETHAL-SEED-0003")
 def test_seed_zones_falls_back_to_prefix_when_unanchored():
-    """Kill-switch ON but no `own_prizes`: `_seed_zones` falls back to the prefix rather than seed a
-    guessed split. Sound because only non-fetch lines (verdict deck-independent) reach the search
-    pre-anchor — the fetch tiers gate on `deck_definitely_has`, which needs the anchor."""
+    """Sound because only non-fetch lines reach the search pre-anchor — the fetch tiers gate on
+    `deck_definitely_has`, which needs the anchor."""
     deck = _deck()
     obs = _f15_obs()
     obs.pop("own_prizes", None)

@@ -49,9 +49,8 @@ def test_load_game_provides_replay_live_trace_own_seat_and_build_identity():
 
 
 def test_tag_corrections_across_a_directory_of_replays(tmp_path):
-    """SYSTEM: point at a directory of real Replays, step across them, and tag a Correction on
-    two different Replays in one session — each stored with its own episode_id + live trace,
-    sharing the one build identity, and the per-episode review list isolates each Replay."""
+    """Each Correction is stored with its own episode_id + live trace, sharing the one build
+    identity; the per-episode review list isolates each Replay."""
     replays = discover_replays(TELE)
     assert len(replays) == 3
     store = tmp_path / "corrections.jsonl"

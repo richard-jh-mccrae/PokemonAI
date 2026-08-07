@@ -51,9 +51,8 @@ def _games_payload() -> dict:
 
 
 def _turn_plan_from_form(form: dict) -> dict | None:
-    """The develop-rung Phase-3 turn-plan note (`{intended_line, expected_end_board}`) assembled from
-    the tag form — ONLY on a ``turn`` tag that carries content. A decision tag, or an empty note,
-    yields None so the field stays sparse and never rides on a non-turn-plan Correction."""
+    """None on a decision tag or an empty note, so the field stays sparse and never rides on a
+    non-turn-plan Correction."""
     if form.get("scope") != "turn":
         return None
     intended = str(form.get("intended_line", "")).strip()
@@ -168,12 +167,7 @@ def init_state(replays, *, store_path, agent="", source="own", our_team=None,
 
 def serve(replays, *, store_path, agent="", source="own", our_team=None,
           submission_id=None, agent_version=None, viewer_dir="", host="127.0.0.1", port=8077):
-    """Start the shell server (blocking). Returns the bound port.
-
-    ``replays`` is the ordered list of Replay paths (batch mode; a single-file run is a
-    batch-of-one). Each Replay's own-seat + live Decision Telemetry (ADR-0019) and build identity
-    are loaded lazily per game (``batch.load_game``); ``◀/▶`` steps across them in the UI.
-    """
+    """Blocking; returns the bound port. Each Replay's telemetry (ADR-0019) loads lazily per game."""
     init_state(replays, store_path=store_path, agent=agent, source=source, our_team=our_team,
                submission_id=submission_id, agent_version=agent_version, viewer_dir=viewer_dir)
     httpd = ThreadingHTTPServer((host, port), _Handler)

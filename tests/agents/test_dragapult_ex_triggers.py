@@ -87,11 +87,8 @@ def test_hold_evolution_silent_when_body_has_fp():
 
 
 def _stadium_delta(pilot, obs):
-    """The composer's own 1-ply delta for the Stadium play — the number the deleted rung stood in for.
-
-    Asserted instead of a rung id because the rung is gone and the QUESTION is not: is playing this
-    Stadium worth anything to the board? Today the answer is a hard 0.0, and the two tests below say
-    so as strict xfails rather than pretending the fact moved somewhere."""
+    """The composer's own 1-ply delta for the Stadium play — the number the deleted rung stood in
+    for. Today it is a hard 0.0, which is why the two tests below are strict xfails."""
     from common import composer as cp
     sel = obs["select"]
     pilot._board(obs, sel)
@@ -126,14 +123,6 @@ def test_play_risky_ruins_fires_with_no_stadium_once_wincon_online():
         "the Stadium play still prices at nothing; `state_value` has no reader for `model.stadium`")
 
 
-# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
-# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
-# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
-# passing, because dead text that looks like a guard is worse than no guard.
-#
-# The positive half survives directly above: `play-risky-ruins-when-net-positive` is deleted with
-# the deck rung it named, and the Ruins decision is now the composer scoring a board with the Stadium
-# in play against one without. `src/agents/dragapult_ex/STRATEGY.md` is updated in the same change.
 @pytest.mark.req("REQ-DP-0003")
 @pytest.mark.xfail(strict=True, reason=(
     "POC-T4/5 UNPRICED FAMILY (Issue #386): `play-risky-ruins-when-net-positive` (+15) is "

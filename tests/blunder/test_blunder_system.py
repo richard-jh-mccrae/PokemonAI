@@ -141,24 +141,11 @@ def test_correction_with_note_becomes_a_hypothesis_proposal(real_pilot):
 # --- ST-3: Correction translates to a weight change (W route) -----------------------------------
 
 def test_correction_translates_to_a_weight_change(real_pilot):
-    """REQ-TUNER-0013: when the better option fires DIFFERENT Hypotheses than the chosen one, the
-    tuner fits a real weight delta so 'correct' outranks 'chosen' — landing in tuned.json.
-
-    Uses a responsive ``reg`` (the production default is deliberately conservative — it won't let one
-    correction overturn a strong doctrine weight; see ``fit.DEFAULT_REG``); this exercises the W-route
-    mechanism end to end, and the fit is *adopted* only because it satisfies the correction."""
+    """Uses a responsive ``reg``: the production ``fit.DEFAULT_REG`` deliberately will not let one
+    correction overturn a strong doctrine weight, which would hide the W-route mechanism."""
     pilot, seeds = real_pilot
-    # A TO_HAND grab of one of two revealed deck cards: the win-condition Mega (`prefer-payoff-over-
-    # preevo` +5) or the bench-fill Poffin. Chosen the Mega, corrected to the Poffin.
-    #
-    # Deliberately a SAME-TIER select, and this test used to be a Main-phase play-vs-attach pair until
-    # ADR-0086 made that shape unable to exercise the W route at all. Two reasons, both structural
-    # rather than a weight being merely too strong: `_finish_turn_last` sequences a Main menu by TIER
-    # before score, so a develop is chosen over a higher-scoring attach whatever the weights say; and
-    # on a bare Bench the post-setup empty-Bench guard (decision 7) FILTERS the order, forcing the
-    # develop outright. A fit that cannot satisfy the correction correctly refuses to adopt, so the
-    # old board would have made this assert the wrong mechanism. At one select, in one tier, score
-    # alone decides — which is exactly what a weight delta moves.
+    # A TO_HAND grab of two revealed deck cards, deliberately a SAME-TIER select: a Main-phase
+    # play-vs-attach pair cannot exercise the W route, because TIER decides it before score does.
     grab_mega = {"type": CARD, "area": 1, "index": 0, "playerIndex": 0}
     grab_poffin = {"type": CARD, "area": 1, "index": 1, "playerIndex": 0}
     obs = make_select([grab_mega, grab_poffin], context=TO_HAND,
@@ -170,9 +157,8 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     corr = build_correction(d, source="own", agent=AGENT, correct=[1], category="wasted_resource",
                             rationale="take the bench-fill, not a second Mega")
 
-    # reg responsive enough to overturn the chosen option's weight — the production default is
-    # deliberately conservative about one correction overturning a doctrine weight (see
-    # ``fit.DEFAULT_REG``); this is the W-route mechanism, not doctrine.
+    # reg responsive enough to overturn the chosen option's weight — ``fit.DEFAULT_REG`` is
+    # deliberately conservative. This is the W-route mechanism, not doctrine.
     res = tune([corr], pilot, seeds, reg=0.08)
 
     changed = sparse_overrides(res.overrides, seeds)
@@ -188,9 +174,8 @@ def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
     picks — an extreme override flips the choice an empty file would have made."""
     package(AGENT, tmp_path)
     bundle = tmp_path / AGENT
-    # `power-up-attacker` — the rung this used to move — is DELETED (#139, ADR-0069 §7). The plumbing
-    # claim is unchanged, so it is demonstrated on a rung that still exists and still drives an ATTACH:
-    # the Active-preference prior, which needs the option to name its TARGET.
+    # `power-up-attacker` is DELETED (ADR-0069 §7); the plumbing claim runs on the Active-preference
+    # prior instead, which still drives an ATTACH and needs the option to name its TARGET.
     obs = make_select([opt(type=ATTACH, area=2, index=0, inPlayArea=4, inPlayIndex=0), opt(type=NO)],
                       context=MAIN, current=state(active=poke(CINDERACE, hp=70)))
 

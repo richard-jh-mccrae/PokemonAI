@@ -25,9 +25,8 @@ def _counter_move(t: str) -> bool:
 _CUES = {
     "draw":            lambda t: "draw" in t or ("look at" in t and "into your hand" in t),
     "search":          lambda t: "search your deck" in t,
-    # a `search` refinement: deck-search specifically for an Energy card *into hand* (the Turn
-    # Planner's tutor-energy KO line). Deck-search only — discard-pile energy retrieval is `recycle`
-    # and a top-N look is `dig`, neither says "search your deck".
+    # a `search` refinement: deck-search specifically for an Energy card INTO HAND. Deck-search
+    # only — discard-pile retrieval is `recycle` and a top-N look is `dig`.
     "tutor_energy":    lambda t: "search your deck" in t and "energy" in t and "into your hand" in t,
     "dig":             lambda t: "look at the top" in t or "look at the bottom" in t,
     "heal":            lambda t: "heal" in t or ("remove" in t and "damage counter" in t)
@@ -60,9 +59,8 @@ _CUES = {
 }
 BEHAVIORAL = frozenset(_CUES)
 
-# High-precision cues for the *missing* check (a tag the probe likely dropped). Only tags whose
-# phrasing rarely false-matches; `heal` included *only* via specific phrasings (counter-move or
-# "heal … damage"), never the bare word, so it doesn't over-flag.
+# High-precision cues for the MISSING check — only tags whose phrasing rarely false-matches.
+# `heal` is included only via specific phrasings, never the bare word, so it cannot over-flag.
 _MISSING_CUES = {
     tag: _CUES[tag] for tag in
     ("poison", "burn", "sleep", "paralyze", "confuse", "spread", "search", "dig",
@@ -72,12 +70,8 @@ _MISSING_CUES["heal"] = lambda t: _counter_move(t) or ("heal" in t and "damage" 
 
 
 def audit_card(tags, text: str) -> tuple[list[str], list[str]]:
-    """``(unsupported, missing)`` for one card given its tags and rules text.
-
-    ``unsupported`` — behavioral tags present with no text cue (suspect false positive).
-    ``missing`` — a strong, unambiguous text cue with no matching tag (suspect probe miss). Pure;
-    case-insensitive; tolerant of empty text.
-    """
+    """``(unsupported, missing)`` for one card given its tags and rules text: a behavioral tag with no
+    text cue, and a strong unambiguous cue with no tag. Pure; case-insensitive; tolerates empty."""
     t = (text or "").lower().replace("’", "'")   # normalize curly apostrophe -> cues match
     have = set(tags)
     unsupported = sorted(tag for tag in have if tag in BEHAVIORAL and not _CUES[tag](t))

@@ -107,11 +107,8 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 def _ranked(pilot, obs):
-    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
-    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this deck's trigger and started
-    testing the composer on a board no human ever ruled. The ranking is the fact these tests own."""
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]`` — the
+    fact these tests own, since the single-pick MAIN decision now belongs to the composer."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
 
 
@@ -131,9 +128,8 @@ def test_fetch_the_missing_engine_half_prefers_solrock_when_lunatone_is_down():
     assert "fetch-the-missing-engine-half" not in _fired(opts[1])   # Riolu — a line piece, not an engine half
 
 
-# --- GENERAL: Meowth ex supporter-tutor re-model (grill 2026-07-03) ---------------------------
-# The deck's own rules key off Roles/ids, so _pilot() runs tag-free; the Meowth re-model is GENERAL
-# and keys off Function Tags, so these use a tag-aware Pilot.
+# --- GENERAL: Meowth ex supporter-tutor re-model ----------------------------------------------
+# The deck's rules key off Roles/ids so _pilot() runs tag-free; the re-model keys off Function Tags.
 
 def _tagged_pilot():
     return Pilot(STRATEGY, deck=[RIOLU] * 3 + [MEGA_LUCARIO] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
@@ -144,10 +140,8 @@ def _tagged_pilot():
 
 
 def _deploy_ability_relevance(hand):
-    """The Deploy Marginal's ABILITY leg for benching Meowth ex with `hand` held, on the REAL
-    mega_lucario pilot. Real, not the `_tagged_pilot()` stub: since ADR-0086 the leg matches the need
-    against the Supporters the DECK actually holds, and the stub's filler deck contains none — it
-    would measure 0 for the wrong reason and pass either assertion."""
+    """The Deploy Marginal's ABILITY leg for benching Meowth ex. The REAL pilot, not `_tagged_pilot`:
+    the leg matches need against the DECK's Supporters and the stub's filler deck holds none."""
     from train.tune import _build_pilot
     p, _ = _build_pilot("mega_lucario")
     obs = make_select([opt(PLAY, index=0)], context=MAIN,
@@ -157,15 +151,8 @@ def _deploy_ability_relevance(hand):
 
 @pytest.mark.req("REQ-ML-0015")
 def test_a_fetched_bench_drop_earns_no_ability_yield():
-    """WHERE the body comes from decides whether the trigger exists — a CARD FACT, checked at source
-    rather than assumed (Issue #261 item 2d).
-
-    Every bench-drop Ability in the pool reads "when you play this Pokémon **from your hand** onto
-    your Bench" — Meowth ex 1071's Last-Ditch Catch and the six siblings in `EN_Card_Data.csv`. A
-    Poffin-class fetch puts the body there from the DECK, so the clause is unsatisfiable and the leg
-    is structurally 0, exactly as it is at `_SETUP_BENCH` for decision 3's reason. Without this the
-    newly-priced `_TO_BENCH` entry point would pay a fetched Meowth ex for an Ability that never
-    fires, and prefer it over every other body on the menu."""
+    """CARD FACT: every bench-drop Ability in the pool reads "from your hand" onto your Bench, so a
+    fetch out of the DECK leaves the clause unsatisfiable and the leg structurally 0."""
     from train.tune import _build_pilot
     p, _ = _build_pilot("mega_lucario")
     played = make_select([opt(PLAY, index=0)], context=MAIN,
@@ -180,28 +167,20 @@ def test_a_fetched_bench_drop_earns_no_ability_yield():
 
 @pytest.mark.req("REQ-ML-0015")
 def test_bench_the_supporter_tutor_when_supporterless_in_setup():
-    """SETUP, Meowth ex in hand, no Supporter held: bench it to fetch one (the free-Ability grab).
-
-    `bench-the-supporter-tutor` (+25) is DELETED — ADR-0086 decision 3 makes the bench-drop Ability a
-    need-matched fetch yield, so what used to be a flat endorsement is now a priced leg."""
+    """`bench-the-supporter-tutor` is DELETED: ADR-0086 prices the bench-drop Ability as a
+    need-matched fetch yield instead."""
     assert _deploy_ability_relevance([MEOWTH_EX]) > 0
 
 
 @pytest.mark.req("REQ-ML-0015")
 def test_bench_the_supporter_tutor_stands_down_with_a_supporter_in_hand():
-    """A Supporter already in hand -> no need to expose the 2-prize ex; the leg prices ZERO.
-
-    This is the issue's own framing — "only bench it when we need a specific supporter" — and it is
-    now arithmetic rather than a hand-written gate: the draw need is COVERED, so the yield is 0
-    however certainly the deck still holds a Supporter."""
     assert _deploy_ability_relevance([MEOWTH_EX, LILLIES]) == 0
 
 
 @pytest.mark.req("REQ-ML-0015")
 def test_the_supporter_tutor_still_pays_when_the_held_supporter_is_not_a_draw_engine():
-    """Soundness: the stand-down keys on the NEED, not on "any Supporter". Boss's Orders is a gust,
-    not fuel — holding it leaves the draw need open, so benching Meowth to dig still prices > 0.
-    Judge is likewise no stand-down (`hand_disruption`: a symmetric shuffle refills them too)."""
+    """The stand-down keys on the NEED, not on "any Supporter": a gust, or a symmetric shuffle that
+    refills them too, leaves the draw need open."""
     assert _deploy_ability_relevance([MEOWTH_EX, BOSS_ORDERS]) > 0
     assert _deploy_ability_relevance([MEOWTH_EX, JUDGE]) > 0
 
@@ -218,13 +197,8 @@ def test_grab_the_gust_supporter_when_a_gust_kos():
 
 @pytest.mark.req("REQ-ML-0016")
 def test_grab_a_draw_supporter_in_setup_default():
-    """No closing gust available: in SETUP the grab defaults to a draw Supporter (keep digging).
-
-    `grab-a-draw-supporter-in-setup` was RETIRED 2026-08-06 (ADR-0122 amendment) — a flat category
-    credit for exactly what `_grab_refresh_value`'s real swing (`_refresh_swing`) now measures, and
-    stacking them double-counted (ml f71: a Lillie's that could not be played tied a playable Item at
-    8.00 and the option index broke it wrong). The DEFAULT this test names still holds — a draw
-    Supporter still outscores a silent option in SETUP — it is just no longer a rung to name."""
+    """`grab-a-draw-supporter-in-setup` is RETIRED (ADR-0122 amendment) — `_refresh_swing` measures
+    the same swing. The default still holds, it is just no longer a rung to name."""
     p = _tagged_pilot()
     obs = make_select([card_opt(1, 0)], context=TO_HAND, deck=[{"id": LILLIES}],
                       current=state(active=poke(MAKUHITA, hp=80)))
@@ -382,11 +356,7 @@ def test_lone_locking_attack_is_never_charged_below_passing():
 
 
 # --- GENERAL: the dual-Mega swap, now a DECIDER claim (ADR-0100 §11) --------------------------
-#
-# `swap-out-the-locked-attacker` (+35) is DELETED. The doctrine is emergent from destination value
-# minus retreat cost: a transient-locked attack scores LESS on its OWN option, and a fresh powered
-# copy scores more as a destination, so the swap wins without a rung asserting it. These tests
-# therefore assert the DECISION (is the pivot endorsed?) rather than a rung firing.
+# `swap-out-the-locked-attacker` is DELETED — emergent from destination value minus retreat cost.
 
 def _locked_board(bench_energy, logs):
     active = poke(MEGA_LUCARIO, energy=2, hp=340)
@@ -403,9 +373,8 @@ _MEGA_BRAVE_LOG = [{"type": 15, "playerIndex": 0, "attackId": MEGA_BRAVE, "seria
 
 @pytest.mark.req("REQ-ML-0006")
 def test_the_swap_is_endorsed_when_a_fresh_powered_mega_is_ready():
-    """The dual-Mega cadence: with Mega Brave transient-locked on the Active and a second POWERED
-    Mega on the Bench, the pivot is priced positive — the destination reaches real damage while the
-    locked body does not."""
+    """Mega Brave transient-locked on the Active: the powered destination reaches real damage while
+    the locked body does not."""
     obs = _locked_board(bench_energy=2, logs=_MEGA_BRAVE_LOG)
     row = _pilot().explain(obs).options[0].promote_retreat_working
     assert row is not None and row["site"] == "whether"
@@ -414,19 +383,15 @@ def test_the_swap_is_endorsed_when_a_fresh_powered_mega_is_ready():
 
 @pytest.mark.req("REQ-ML-0006")
 def test_the_swap_is_declined_when_the_benched_mega_is_bare():
-    """The discrimination that matters: a BARE second Mega reaches nothing, so pivoting into it
-    buys no damage and still pays exposure — the pivot prices negative. This is the half the deleted
-    rung expressed as its `bench_wincon_ready` gate, now measured rather than gated."""
+    """A BARE second Mega buys no damage and still pays exposure — the half the deleted rung
+    expressed as its `bench_wincon_ready` gate, now measured rather than gated."""
     obs = _locked_board(bench_energy=0, logs=_MEGA_BRAVE_LOG)
     row = _pilot().explain(obs).options[0].promote_retreat_working
     assert row["my_yield"] == 0.0 and row["total"] < 0
 
 
 # --- GENERAL: the prize-reach brake, now EMERGENT from Exposure (ADR-0100 §4/§7) ---------------
-#
-# `dont-promote-into-their-prize-reach` (−20) is DELETED. Exposing a body costs `prizes x 100`
-# graded by the clock, so the 3-prize Mega is charged three times what the 1-prize Hariyama is —
-# a continuous per-body price where the rung was a flag with a boolean stand-down.
+# `dont-promote-into-their-prize-reach` is DELETED — exposing a body costs `prizes x 100` per body.
 
 def _promote(opp_prizes):
     cur = state(active=None, bench=[poke(MEGA_LUCARIO, hp=340), poke(HARIYAMA, hp=150)],
@@ -436,9 +401,7 @@ def _promote(opp_prizes):
 
 @pytest.mark.req("REQ-ML-0007")
 def test_the_three_prize_mega_is_charged_three_times_the_one_prize_body():
-    """Opponent at 3 prizes: promoting the 3-prize Mega risks handing them the match, so it carries
-    strictly more Exposure than the 1-prize Hariyama on the identical board — and the cheap body is
-    promoted. Per-body, which is the defect §4 fixes: the retired read resolved ONE body's verdict
+    """Per-body, which is the defect ADR-0100 §4 fixes: the retired read resolved ONE body's verdict
     and applied it to every candidate."""
     opts = _pilot().explain(_promote(opp_prizes=3)).options
     mega, hariyama = opts[0].promote_retreat_working, opts[1].promote_retreat_working
@@ -448,9 +411,8 @@ def test_the_three_prize_mega_is_charged_three_times_the_one_prize_body():
 
 @pytest.mark.req("REQ-ML-0007")
 def test_exposure_scales_with_their_remaining_prizes_without_a_goal_band():
-    """§7b: the near-goal escalation needs no `_NEAR_GOAL`/`_GOAL_BAND` weighting. Exposure itself is
-    prize-count-blind — it prices what a Knock Out YIELDS — and the endgame enters through the fatal
-    step's condition alone, so the same board reads the same exposure at 3 prizes and at 4."""
+    """ADR-0100 §7b: Exposure prices what a Knock Out YIELDS, so it is prize-count-blind and the
+    endgame enters through the fatal step's condition alone."""
     at_three = _pilot().explain(_promote(opp_prizes=3)).options[0].promote_retreat_working
     at_four = _pilot().explain(_promote(opp_prizes=4)).options[0].promote_retreat_working
     assert at_three["exposure"] == pytest.approx(at_four["exposure"])
@@ -541,9 +503,8 @@ def test_played_power_pro_boosts_the_attack_itself():
 
 @pytest.mark.req("REQ-ML-0012")
 def test_black_belts_play_is_lethal_class_vs_an_ex_at_the_breakpoint():
-    """Black Belt's Training (Supporter, +40 vs an ex Active): playing it crosses 270→310 on a
-    310-HP ex. Silent vs a non-ex wall (the defender gate). Replaced Maximum Belt as the ex-boost;
-    now a PLAY (one/turn), not a Tool ATTACH."""
+    """Black Belt's Training (Supporter, +40 vs an ex Active) crosses 270→310 on a 310-HP ex;
+    silent vs a non-ex wall (the defender gate)."""
     p = _pilot()
     ex = _boost_menu([BLACK_BELTS], poke(EX_WALL, hp=310))
     assert p.explain(ex).options[0].tactical >= 1000                     # the Black Belt's PLAY
@@ -553,8 +514,7 @@ def test_black_belts_play_is_lethal_class_vs_an_ex_at_the_breakpoint():
 
 @pytest.mark.req("REQ-ML-0012")
 def test_played_black_belts_boosts_the_attack_vs_the_ex():
-    """After the Black Belt's PLAY log lands, the attack itself prices 270+40 ≥ 310 vs the ex —
-    the boosted KO is visible on Mega Brave; gated off vs a non-ex defender."""
+    """After the PLAY log lands the attack prices 270+40 ≥ 310 vs the ex; gated off vs a non-ex."""
     p = _pilot()
     played = [{"type": 10, "playerIndex": 0, "cardId": BLACK_BELTS}]
     obs = _boost_menu([], poke(EX_WALL, hp=310), extra_logs=played)
@@ -598,20 +558,8 @@ def test_wild_press_ko_is_never_charged():
 
 @pytest.mark.req("REQ-ML-0014")
 def test_no_flat_rung_decides_the_stadium_any_more():
-    """`gravity-mountain-vs-stage2` (+15, `assumed`) was RETIRED by Issue #424: the crossing it could
-    only gesture at is now computed by `_boost_lethal_tactical`'s HP-delta leg, off the card's own
-    `stadium_static`/`hp_delta` clause. Its replacement is tested in
-    `tests/strategy/test_stadium_lethal.py` — where the arithmetic lives.
-
-    What is asserted HERE is only the deck-side half: no rung fires on the Stadium play at all, on
-    the exact board where the old one did. The `_pilot()` fixture is clause-blind (no `CardEffects`),
-    so the computed leg is correctly silent for it too and this stays a rung assertion rather than a
-    duplicate of the equation's tests.
-
-    The last two assertions are the **positive control**, and without them this would be two
-    negatives proving nothing: the deck Strategy really is loaded on this Pilot, and its rungs really
-    do still fire on a board that earns one. An empty `hypotheses` list or a Pilot built without the
-    deck doctrine would satisfy the absence above and fail here."""
+    """`gravity-mountain-vs-stage2` is RETIRED (Issue #424); `tests/strategy/test_stadium_lethal.py`
+    holds its replacement. The last two asserts are the positive control for the two negatives."""
     p = _pilot()
     cur = state(active=poke(SOLROCK, energy=1, hp=110), hand=[GRAVITY_MOUNTAIN],
                 opp_active=poke(WALL, hp=400), opp_bench=[poke(STAGE2, hp=170)])

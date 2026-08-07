@@ -1,21 +1,8 @@
-"""Issue #138 Phase 0b — the Board differential gate (ADR-0068 decision 3).
+"""Issue #138 Phase 0b (ADR-0068) — over the correction-fixture corpus, every `Board` field migrated
+to the StateModel equals the helper it replaced.
 
-`Board` becomes an adapter ASSEMBLED FROM the StateModel: field by field, its kwargs stop calling a
-bespoke helper and start reading a model field. A field may migrate only when
-
-  (i)  a Phase-1 consumer needs the model's version anyway, and
-  (ii) the model's derivation is verified EQUAL to the old helper's output.
-
-This file IS criterion (ii), and it is the executable form of the phase's headline acceptance
-criterion — ZERO behavior change. It runs over the real correction-fixture corpus, each fixture
-carrying a full observation from a real game, and asserts that every migrated field agrees with the
-helper it replaced.
-
-The gate is only possible DURING this phase: nothing is deleted in 0b (deletions are 1d per 0a's
-ratified supersession path), so both implementations are alive to be compared. When 1d removes the
-helpers, the corresponding rows leave this file with them.
-
-Prior art: the correction-corpus replay tests.
+The gate is only possible while both implementations are alive; Phase 1d deletes the helpers and the
+corresponding `MIGRATED` rows leave with them.
 """
 import json
 import sys
@@ -33,9 +20,8 @@ def _has_obs(fixture: Path) -> bool:
 FIXTURES = [f for f in sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json"))
             if _has_obs(f)]
 
-#: (Board field, how the OLD helper computed it from the raw obs) for every field migrated in 0b.
-#: Each entry is the pre-migration expression, kept verbatim so the comparison is against history
-#: rather than against a paraphrase of it.
+#: Board field -> the OLD helper's expression, kept VERBATIM: paraphrasing a lambda here makes the
+#: differential compare the model against itself.
 MIGRATED = {
     "my_prizes_remaining": lambda p, me, opp: len(me.get("prize") or []),
     "opp_prizes_remaining": lambda p, me, opp: len(opp.get("prize") or []),
@@ -49,7 +35,6 @@ MIGRATED = {
 
 
 def _agent_of(fixture: Path) -> str:
-    """The fixture's agent, from its filename prefix (`dp_…` = dragapult_ex)."""
     stem = fixture.name
     if stem.startswith("dp_"):
         return "dragapult_ex"
@@ -67,8 +52,8 @@ def build_pilot():
     cache: dict = {}
 
     def get(agent: str):
-        if agent not in cache:                      # one Pilot per agent, not per fixture (the deck
-            cache[agent] = _build_pilot(agent)[0]   # and stat tables are deck-fixed)
+        if agent not in cache:
+            cache[agent] = _build_pilot(agent)[0]
         return cache[agent]
     return get
 
@@ -83,14 +68,11 @@ def _sides(pilot, obs):
 
 
 def test_the_corpus_is_present_so_the_gate_is_not_vacuously_green():
-    """A differential over zero frames proves nothing — pin that the corpus is really there."""
     assert len(FIXTURES) >= 100
 
 
 @pytest.mark.parametrize("fixture", FIXTURES, ids=lambda f: f.stem)
 def test_every_migrated_board_field_matches_the_helper_it_replaced(fixture, build_pilot):
-    """Criterion (ii) over one real frame: the Board the Pilot now assembles from the StateModel
-    agrees, field for field, with what the hand-rolled helpers produced."""
     obs = json.loads(fixture.read_text(encoding="utf-8"))["obs"]
     pilot = build_pilot(_agent_of(fixture))
     board = pilot._board(obs, obs.get("select"), carried=pilot.carried())
@@ -102,9 +84,6 @@ def test_every_migrated_board_field_matches_the_helper_it_replaced(fixture, buil
 
 @pytest.mark.parametrize("fixture", FIXTURES[:25], ids=lambda f: f.stem)
 def test_the_board_build_is_reproducible_on_a_real_frame(fixture, build_pilot):
-    """Purity at the Board level: two builds of the same frame, with the Carried State snapshot
-    supplied, agree on every migrated field and leave the channel untouched. This is the property
-    that replaced the two hand-written snapshot/restore guards."""
     obs = json.loads(fixture.read_text(encoding="utf-8"))["obs"]
     pilot = build_pilot(_agent_of(fixture))
     before = pilot.carried()
@@ -117,8 +96,7 @@ def test_the_board_build_is_reproducible_on_a_real_frame(fixture, build_pilot):
 
 @pytest.mark.parametrize("fixture", FIXTURES[:25], ids=lambda f: f.stem)
 def test_the_opponent_fingerprint_is_stable_within_a_frame(fixture, build_pilot):
-    """The sharing guard must not churn on a board that did not move — otherwise the cache it guards
-    would never hit and the side-sharing design would be inert."""
+    """A fingerprint that churns on a still board makes the cache it guards never hit."""
     obs = json.loads(fixture.read_text(encoding="utf-8"))["obs"]
     pilot = build_pilot(_agent_of(fixture))
     pilot._board(obs, obs.get("select"), carried=pilot.carried())

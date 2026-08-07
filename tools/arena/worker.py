@@ -1,10 +1,5 @@
 """One PvC Match in one subprocess (ADR-0058).
 
-Drives the cabt env with the real agent on one seat and the *human bridge* on the
-other: each human decision goes out as an `obs` line on stdout and blocks until the
-parent writes a `choice` (or `forfeit`) line on stdin. On any end — played out,
-concede, timeout — the replay is tagged and saved before the `end` line is emitted.
-
 Protocol (line-delimited JSON), two-phase so the manager can pre-warm workers:
   stdin   warm:  {agent_dir, agent_name, replay_dir}          # boot env + agent
   stdout  {"kind": "ready"}                                   # slow part done
@@ -14,11 +9,9 @@ Protocol (line-delimited JSON), two-phase so the manager can pre-warm workers:
         | {"kind": "forfeit", "reason": "concede"|"timeout"}
   stdout  {"kind": "end", "replay_path": .., "statuses": .., "rewards": ..}
 
-stdout is the protocol channel: fd 1 is duplicated for it and then pointed at
-stderr, so stray agent/env prints can never corrupt the stream (same trick as
-tools/sim/_agent_server.py). Timeouts are overridden at env.make — the cabt
-defaults (runTimeout 2000s) would forfeit a slow human mid-game.
-"""
+stdout is the protocol channel: fd 1 is duplicated for it and then pointed at stderr, so stray
+agent/env prints cannot corrupt the stream. Timeouts are overridden at env.make — the cabt
+defaults would forfeit a slow human mid-game."""
 from __future__ import annotations
 
 import importlib.util

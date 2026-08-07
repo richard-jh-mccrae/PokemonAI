@@ -1,22 +1,11 @@
 """Hand-refresh swing oracle (ADR-0060) — the closed-form value of a shuffle-refresh.
 
-Judge and Harlequin are SYMMETRIC REFILLS, not strips: both players shuffle their hand away and
-redraw, so the whole value of playing one is the net card swing
+Judge and Harlequin are SYMMETRIC REFILLS, not strips, so the whole value of playing one is
 
-    swing = my_net - opp_net,  where  my_net  = my_draw  - my_hand
-                                      opp_net = opp_draw - opp_hand   (0 if they don't shuffle)
+    swing = my_net - opp_net,  my_net = my_draw - my_hand,  opp_net = opp_draw - opp_hand
 
-Every expected value below is derived from the PRINTED CARD TEXT (data/EN_Card_Data.csv), never by
-re-running the implementation:
-
-- Judge (1213)                "Each player shuffles their hand into their deck and draws 4 cards."
-- Harlequin (1223)            "...flip a coin. If heads, you draw 5 and your opponent draws 3.
-                               If tails, you draw 3 and your opponent draws 5."
-- Unfair Stamp (1080)         "...you draw 5 cards, and your opponent draws 2 cards."
-- Lillie's Determination (1227) "Shuffle YOUR hand into YOUR deck. Then, draw 6 cards. If you have
-                               exactly 6 Prize cards remaining, draw 8 cards instead."
-- Lacey (1199)                "Shuffle your hand into your deck. Then, draw 4 cards. If your
-                               opponent has 3 or fewer Prize cards remaining, draw 8 cards instead."
+Every expected value below is derived from the PRINTED CARD TEXT (`data/EN_Card_Data.csv`), never by
+re-running the implementation.
 """
 import pytest
 
@@ -96,9 +85,7 @@ def test_lillies_break_even_is_its_own_draw_count_not_a_constant():
 
 
 def test_lillies_beats_harlequin_on_a_big_early_hand():
-    """ms 83116081 f17 / 82754241 f11 -- the ledger closed these as 'a Base-Value-Model call, not a
-    weight gap'. They are closed-form: at six prizes with 8 in hand, Lillie's is neutral and
-    Harlequin is negative."""
+    """Closed-form: at six prizes with 8 in hand, Lillie's is neutral and Harlequin is negative."""
     assert _swing(1227, my_hand=8, opp_hand=5) > _swing(1223, my_hand=8, opp_hand=5)
 
 
@@ -115,9 +102,8 @@ def test_a_symmetric_refresh_does_read_the_opponents_hand():
 # --- the two halves, which the scorer prices differently ------------------------------------------
 
 def test_net_change_splits_the_swing_into_its_two_directions():
-    """Judge, my 8 / opp 1: I shed 8 and redraw 4 (-4); they trade 1 for 4 (+3). Both are certain,
-    and their SUM is the swing (-7) -- but a card I shed is one I chose to keep, while a card I draw
-    is unseen, so the scorer must be able to price them apart."""
+    """The two directions SUM to the swing, but a card I shed is one I chose to keep while a card I
+    draw is unseen — so the scorer must be able to price them apart."""
     my_net, opp_net = net_change(1213, my_hand=8, opp_hand=1,
                                  my_prizes_remaining=6, opp_prizes_remaining=6)
     assert (my_net, opp_net) == (-4, 3)
@@ -145,9 +131,8 @@ def test_fresh_counts_only_the_stripped_cards_they_just_drew():
 # --- own draw count: the grab-time tie-break input (build item 1) ---------------------------------
 
 def test_own_draw_count_is_the_cards_averaged_self_draw():
-    """The card's OWN redraw count, averaged over its coin branches — the quantity that ranks a
-    bigger-ceiling refresh above a smaller one at a TO_HAND grab. Read from the printed card text,
-    never the implementation."""
+    """The card's OWN redraw count, averaged over its coin branches — what ranks a bigger-ceiling
+    refresh above a smaller one at a TO_HAND grab."""
     assert own_draw_count(1213, my_prizes_remaining=6, opp_prizes_remaining=6) == 4   # Judge 4/4
     assert own_draw_count(1223, my_prizes_remaining=6, opp_prizes_remaining=6) == 4   # Harlequin EV (5+3)/2
     assert own_draw_count(1080, my_prizes_remaining=6, opp_prizes_remaining=6) == 5   # Unfair Stamp 5/2
@@ -198,18 +183,8 @@ def test_refills_opponent_is_false_for_an_unknown_card():
 # --- one fact, two stores (Issue #302) -----------------------------------------------------------
 
 def test_the_compendium_and_this_oracle_state_the_same_draw_counts():
-    """**Two stores hold the refresh draw counts and they must agree.**
-
-    This module's `_REFRESH` table is the ADR-0060 oracle the live scorer reads
-    (`pilot._refresh_cycle` → `net_change`). `card_effects.json` is the compendium the apply seam
-    reads. Until Issue #302 they disagreed on four of these five cards — the compendium stated
-    Lillie's maximum (8) as its base and Lacey's likewise, and carried no coin branch at all for
-    Harlequin — and nothing checked, because the two are read by different consumers on different
-    tracks. This is that check.
-
-    The comparison is deliberately over the OWN-side count only: the compendium's clause set is
-    ruled `partial` for exactly the opponent leg on the three symmetric cards, so asserting the
-    opponent's number would assert a fact one of the two stores honestly does not claim."""
+    """Two stores hold the refresh draw counts (this oracle and `card_effects.json`) and are read by
+    different consumers. OWN-side only: the compendium's opponent leg is ruled `partial`."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -228,14 +203,11 @@ def test_the_compendium_and_this_oracle_state_the_same_draw_counts():
         for mp, op in boards:
             assert compendium_own_draw(cid, mp, op, tails=False) == \
                 own_draw_count(cid, mp, op), (cid, mp, op)
-    # Harlequin's two coin faces average to the oracle's EV — 5 heads / 3 tails is 4, which is what
-    # `own_draw_count` returns after averaging its equally-likely branches.
+    # Harlequin's two coin faces average to the oracle's EV.
     faces = [compendium_own_draw(1223, 6, 6, tails=t) for t in (False, True)]
     assert faces == [5, 3]
     assert sum(faces) / 2 == own_draw_count(1223, 6, 6)
-    # Positive control: the helper is reading the compendium, not echoing the oracle. A card the
-    # oracle has never heard of still yields a number here — Billy & O'Nare draws 2, and its own
-    # `amount_if` predicate is one this board-reader deliberately does not evaluate (the hand size
-    # is not a refresh input), so the base is the honest answer.
+    # Positive control: a card the oracle has never heard of still yields a number here, so the
+    # helper is reading the compendium rather than echoing the oracle.
     billy, = eff.clauses(1181)
     assert billy["amount"] == 2 and own_draw_count(1181, 6, 6) is None

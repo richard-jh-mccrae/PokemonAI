@@ -1,25 +1,10 @@
-"""The **Damage Formula's** scaler context — the ONE builder, and the model's direction-aware
-accessor (Issue #279, POC-T3.5).
+"""The Damage Formula's scaler context — the ONE builder plus the model's direction-aware accessor
+(Issue #279).
 
-Three claims are pinned here, in the order they matter:
-
-1. **One builder.** :func:`common.strategy.damage_context.damage_context` owns the key vocabulary,
-   and both live suppliers — the Pilot and the StateModel — assemble through it from the SAME
-   fact-gatherer. The parity test is what keeps that honest: two hand-rolled builders of one fact
-   are free to drift, and `CombatMath.card_level_damage` exists because a pair of them did
-   (`combat.py`: *"One fact, two hand-rolled call sites, free to drift — and they did."*).
-2. **Direction.** The Formula's variables are named relative to the ATTACKER (`atk_*` / `def_*`),
-   so "their attack on me" and "my attack on them" are different dicts, not one dict read twice.
-   The `both_` class is the one direction-symmetric exception (ADR-0083, Issue #213).
-3. **Identity stability.** The model memoizes per direction, so the returned dict is the SAME
-   object for the model's lifetime. Every clock memo downstream keys the context through
-   `_Lazily._key`, whose per-object projection cache is only paid once for a stable dict — a fresh
-   dict per call re-canonicalises the whole context on every read and grows that cache without
-   bound.
-
-**No scoring change is asserted here and none is intended** (Issue #279's acceptance): nothing
-consumes `StateModel.damage_context` yet, so both gates must stay byte-identical. What this file
-guards is that the extraction did not move the Pilot's answer.
+Three claims: ONE BUILDER, which the Pilot and the StateModel both assemble through; DIRECTION, since
+the variables are named relative to the ATTACKER so the two directions are different dicts (`both_`
+is the one symmetric class — ADR-0083); and IDENTITY STABILITY, because `_Lazily._key`'s per-object
+projection cache is only paid once for a stable dict.
 """
 from __future__ import annotations
 
@@ -43,9 +28,8 @@ def _facts(**kw) -> SideFacts:
 
 @pytest.mark.req("REQ-DMGCTX-0001")
 def test_an_empty_pair_of_sides_claims_nothing_but_still_answers_every_key():
-    """Fail-closed: an absent field contributes its IDENTITY (0 / empty), never a guess — and never
-    a missing key, because the oracle's `context.get(var) is not None` test is what decides whether
-    a scaler is priced at all (`strategy/damage.py`)."""
+    """Fail-closed: an absent field contributes its IDENTITY, never a guess and never a missing key —
+    the oracle's `context.get(var) is not None` is what decides whether a scaler is priced at all."""
     ctx = damage_context(_facts(), _facts())
     assert ctx["atk_hand"] == 0 and ctx["def_hand"] == 0
     assert ctx["both_bench"] == 0 and ctx["both_active_energy"] == 0
@@ -66,17 +50,16 @@ def test_every_directional_key_reads_the_side_it_is_named_for():
     assert (ctx["atk_bench"], ctx["def_bench"]) == (4, 0)
     assert (ctx["atk_prizes_taken"], ctx["def_prizes_taken"]) == (2, 5)
     assert (ctx["atk_self_counters"], ctx["def_counters"]) == (5, 6)
-    # the two FILTERED counts are single-direction by construction (`src/common/CONTEXT.md`):
-    # "Stage 2 on YOUR Bench" is attacker-side, "{ex} in play" / "counters on ALL of your
-    # opponent's" are defender-side — so neither side's mirror exists to be read.
+    # the two FILTERED counts are single-direction by construction (`src/common/CONTEXT.md`), so
+    # neither side's mirror exists to be read
     assert ctx["atk_bench_stage2"] == 1
     assert (ctx["def_counters_all"], ctx["def_ex_in_play"]) == (8, 3)
 
 
 @pytest.mark.req("REQ-DMGCTX-0001")
 def test_the_both_class_is_direction_symmetric():
-    """ADR-0083 §4 / Issue #213: a `both_` variable is the SUM of its two halves, so ONE key is
-    correct whichever side attacks — swapping the arguments must not move it."""
+    """ADR-0083 §4: a `both_` variable is the SUM of its halves, so swapping arguments must not move
+    it."""
     a, b = _facts(bench_count=3, active_energy=2), _facts(bench_count=5, active_energy=1)
     fwd, rev = damage_context(a, b), damage_context(b, a)
     assert fwd["both_bench"] == rev["both_bench"] == 8
@@ -86,9 +69,8 @@ def test_the_both_class_is_direction_symmetric():
 
 @pytest.mark.req("REQ-DMGCTX-0001")
 def test_the_attackers_private_zones_never_mirror():
-    """The discard, the bench-partner names, the live boosts and the deck facts are read for the
-    ATTACKER only — they price the attacker's own scalers, and there is no `def_` counterpart in the
-    vocabulary to hold a mirror."""
+    """They price the attacker's own scalers, and the vocabulary holds no `def_` counterpart to
+    mirror into."""
     atk = _facts(discard_energy_total=4, discard_basic_by_type={3: 2},
                  bench_names=("Lunatone",), damage_boosts=((30, None, False),))
     dfn = _facts(discard_energy_total=9, discard_basic_by_type={1: 9},
@@ -104,9 +86,8 @@ def test_the_attackers_private_zones_never_mirror():
 
 @pytest.mark.req("REQ-DMGCTX-0001")
 def test_the_deck_leg_appears_only_when_the_prizes_are_anchored():
-    """The hidden deck-discard scaler's fuel (Hammer-lanche class) is EXACT only once the deck
-    tracker has resolved the prizes. Unanchored, the pair is absent and the oracle falls back to its
-    own bound — a present-but-zero pair would be a positive claim the board cannot support."""
+    """EXACT only once the deck tracker has resolved the prizes; unanchored the pair is ABSENT and
+    the oracle falls back to its own bound — a present-but-zero pair would be a positive claim."""
     assert "atk_deck_count" not in damage_context(_facts(deck_count=None), _facts())
     ctx = damage_context(_facts(deck_count=31, deck_basic_by_type={3: 5}), _facts())
     assert ctx["atk_deck_count"] == 31 and ctx["atk_deck_basic_by_type"] == {3: 5}
@@ -116,24 +97,8 @@ def test_the_deck_leg_appears_only_when_the_prizes_are_anchored():
 
 @pytest.mark.req("REQ-DMGCTX-0001")
 def test_the_key_set_is_exactly_the_shipped_vocabulary():
-    """The closed vocabulary, pinned. Every name here is either a `scaleVar` the parser can emit
-    (`scouting/card_text.py`), an override-only `scaleVar` (`attack_overrides.json`), or one of the
-    non-scaler riders the oracle reads off the same dict (`atk_bench_names` for a bench-partner
-    condition, `atk_boosts` for a flat Trainer/Tool boost, the `atk_deck_*` pair for a hidden deck
-    scaler). A key added without a consumer is dead weight; one removed is a silent 0.
-
-    `hidden_units` is deliberately ABSENT though the oracle reads it (`strategy/damage.py`): it is a
-    caller's direct OVERRIDE of the hidden-scaler count, which this builder answers instead with the
-    deck facts the oracle turns into a pigeonhole floor / hypergeometric mean. Emitting both would
-    be two answers to one question, and the override wins — so the builder must not offer one.
-
-    **The last two are RAW MATERIAL, not variable names** (ADR-0115, Issue #361). The open
-    filtered-count family — 651's "each Pokémon in play that has 'Koffing' or 'Weezing' in its name",
-    708's "each of your Pokémon in play that has the Round attack" — takes an argument that lives on
-    the ATTACK (`AttackStat.scaleFilter`), so this builder cannot pre-reduce it to an integer: it has
-    never seen the attack. It supplies the material and the oracle reduces it, exactly as
-    `atk_discard_energy_total` / `atk_discard_basic_by_type` already serve `atk_discard_energy`. Two
-    keys, one per family, so the collision that would follow from a key per FILTER cannot arise."""
+    """A key added without a consumer is dead weight; one removed is a silent 0. `hidden_units` stays
+    ABSENT (the caller's OVERRIDE wins); the last two are RAW MATERIAL, not variables (ADR-0115)."""
     assert set(damage_context(_facts(), _facts())) == {
         "atk_hand", "def_hand",
         "atk_active_energy", "def_active_energy", "both_active_energy",
@@ -180,10 +145,8 @@ def _asymmetric_obs():
 
 @pytest.mark.req("REQ-DMGCTX-0002")
 def test_the_context_is_the_same_object_on_every_read(combat):
-    """The property the whole design rests on. Every downstream clock memo carries the context in
-    its key (`incoming`, `turns_to_ko_me` both take `self._key(context)`), and `_Lazily._key` caches
-    its canonical projection per OBJECT — so a stable dict is projected once and then hits a plain
-    dict lookup, while a freshly-allocated one re-walks the whole context on every read."""
+    """`_Lazily._key` caches its canonical projection per OBJECT, so a stable dict is projected once
+    and then hits a plain dict lookup while a fresh one re-walks the whole context on every read."""
     model = StateModel.build(_asymmetric_obs(), combat=combat)
     assert model.damage_context(attacker="mine") is model.damage_context(attacker="mine")
     assert model.damage_context(attacker="theirs") is model.damage_context(attacker="theirs")
@@ -195,8 +158,7 @@ def test_the_two_directions_are_different_dicts_and_agree_only_on_the_both_class
     model = StateModel.build(_asymmetric_obs(), combat=combat)
     mine = model.damage_context(attacker="mine")
     theirs = model.damage_context(attacker="theirs")
-    # my hand is 3 cards, theirs is 8 — so `atk_hand` swaps with the direction, and each
-    # direction's `def_hand` is the other side's number.
+    # my hand is 3 cards, theirs 8 — so `atk_hand` swaps with the direction
     assert (mine["atk_hand"], mine["def_hand"]) == (3, 8)
     assert (theirs["atk_hand"], theirs["def_hand"]) == (8, 3)
     assert (mine["atk_bench"], mine["def_bench"]) == (1, 2)
@@ -213,8 +175,8 @@ def test_each_side_reads_its_own_zones(combat):
     # discard: mine holds 2 Water, theirs 1 — and only the ATTACKER's is read
     assert mine["atk_discard_energy_total"] == 2 and mine["atk_discard_basic_by_type"] == {3: 2}
     assert theirs["atk_discard_energy_total"] == 1 and theirs["atk_discard_basic_by_type"] == {3: 1}
-    # damage counters: my Active is at 50/70 (2 counters), theirs at 70/70 (0); their bench carries
-    # one body at 60/70, which is what makes `def_counters_all` different from `def_counters`.
+    # their bench carries a body at 60/70, which is what separates `def_counters_all` from
+    # `def_counters`
     assert (mine["atk_self_counters"], mine["def_counters"]) == (2, 0)
     assert mine["def_counters_all"] == 1
     assert (theirs["atk_self_counters"], theirs["def_counters"]) == (0, 2)
@@ -226,9 +188,8 @@ def test_each_side_reads_its_own_zones(combat):
 
 @pytest.mark.req("REQ-DMGCTX-0002")
 def test_an_absent_prize_zone_claims_nothing_rather_than_six_taken(combat):
-    """Fail-closed, and the reason `prizes_taken` is not `6 - prizes_remaining`: a hand-built board
-    that carries no `prize` list has an EMPTY remaining count, which that subtraction would read as
-    "all six taken" — a maximal positive claim from an absent zone."""
+    """Why `prizes_taken` is not `6 - prizes_remaining`: a board with no `prize` list has an EMPTY
+    remaining count, which that subtraction reads as "all six taken" — a claim from an absent zone."""
     obs = {"current": {"yourIndex": 0, "players": [{"active": []}, {"active": []}]}}
     ctx = StateModel.build(obs, combat=combat).damage_context(attacker="mine")
     assert ctx["atk_prizes_taken"] == 0 and ctx["def_prizes_taken"] == 0
@@ -236,14 +197,8 @@ def test_an_absent_prize_zone_claims_nothing_rather_than_six_taken(combat):
 
 @pytest.mark.req("REQ-DMGCTX-0002")
 def test_a_live_boost_moves_the_opponent_fingerprint(combat):
-    """The sharing guard must see the boost tuple, which the wholesale hash of their `PlayerState`
-    structurally cannot: a "during this turn" boost is a LOG fact, threaded onto the side rather
-    than derived from it, so nothing in their player dict changes when one is played.
-
-    `opponent_fingerprint` is what licenses reusing a built `TheirSide` across the selects of a turn
-    (and, from Issue #150, across sampled worlds). Without this the reuse would serve a stale boost
-    tuple into their damage context — an under-read of THEIR damage, which is the fail-open
-    direction the hash exists to refuse."""
+    """A "during this turn" boost is a LOG fact threaded onto the side, so nothing in their player
+    dict changes — a wholesale hash cannot see it, and a stale reuse under-reads THEIR damage."""
     obs = _asymmetric_obs()
 
     class _Tracker:                                  # the TurnBoostTracker's one duck-typed method
@@ -265,9 +220,8 @@ def test_a_live_boost_moves_the_opponent_fingerprint(combat):
 
 @pytest.mark.req("REQ-DMGCTX-0002")
 def test_an_unknown_direction_is_rejected(combat):
-    """The Formula has exactly two directions. A typo must be an error, never a silently-mine dict:
-    a survival read handed MY attacker's scalers under-reads their damage, which is the one
-    direction a survival estimate may never fail in."""
+    """A typo must be an error, never a silently-mine dict: a survival read handed MY attacker's
+    scalers under-reads their damage, the one direction a survival estimate may never fail in."""
     model = StateModel.build(_asymmetric_obs(), combat=combat)
     with pytest.raises(ValueError):
         model.damage_context(attacker="opponent")
@@ -275,20 +229,8 @@ def test_an_unknown_direction_is_rejected(combat):
 
 @pytest.mark.req("REQ-DMGCTX-0002")
 def test_a_stable_context_is_canonicalised_once_where_a_fresh_one_is_not(combat):
-    """What identity stability actually buys, asserted where it can actually fail.
-
-    Issue #279 argued for it as MEMO SOUNDNESS — *"a freed dict's `id` can be reused by a later
-    allocation, so two different contexts can collide on one memo entry"*. That premise is stale:
-    POC-T1 (Issue #260) moved the clock memos off `id(context)` onto `_Lazily._key`, which projects
-    by VALUE and holds a reference beside each cached projection, so the collision is impossible and
-    an equal-but-fresh dict is answered correctly either way. A test written to the issue's literal
-    wording therefore passes with the accessor UN-memoized, which is a dead guard.
-
-    The live property is COST, and it is one layer down: `_key` caches its canonical projection per
-    OBJECT, so a stable context is walked once and every later read is a dict lookup, while a fresh
-    one pays a fresh walk and leaves a fresh entry behind on every call. `_canon` growth is what
-    separates the two, so that is what this asserts — and the identity guarantee itself is pinned by
-    `test_the_context_is_the_same_object_on_every_read` above."""
+    """The live property is COST, not memo soundness: `_Lazily._key` projects by VALUE, so an
+    equal-but-fresh dict is answered correctly and only pays a fresh `_canon` walk."""
     probe: set = set()
     model = StateModel.build(_asymmetric_obs(), combat=combat, probe=probe)
     theirs, body = model.theirs, model.mine.active.body
@@ -297,8 +239,7 @@ def test_a_stable_context_is_canonicalised_once_where_a_fresh_one_is_not(combat)
     # the SAME object again: a memo hit, and no second canonical projection of the context
     assert theirs.turns_to_ko_me(body, context=model.damage_context(attacker="theirs")) == first
     assert (len(theirs._memo), len(theirs._canon)) == (memo, canon)
-    # an EQUAL but freshly-allocated dict: still the right answer (the key is by value — that is
-    # what POC-T1 bought), still one memo entry, but it re-walks the whole context to get there
+    # an EQUAL but fresh dict: right answer, one memo entry, but a fresh walk to get there
     assert theirs.turns_to_ko_me(body, context=dict(model.damage_context(attacker="theirs"))) == first
     assert len(theirs._memo) == memo, "a value-keyed memo must not gain an entry for an equal context"
     assert len(theirs._canon) > canon, "a fresh dict must cost a fresh canonical projection"
@@ -324,13 +265,8 @@ def live_pilot():
 
 @pytest.mark.req("REQ-DMGCTX-0003")
 def test_the_model_context_equals_the_pilots_key_for_key(live_pilot):
-    """**The guard that keeps the extraction honest** (Issue #279).
-
-    Runs the production path — the Pilot's own `_turn_boosts.observe` + `_board`, which is what a
-    live decision does — then asserts the model's accessor answers exactly what the Pilot's builder
-    answers, in BOTH directions, on real corpus frames. A key present on one side and not the other
-    is a silent 0 in whichever consumer reads the thinner dict.
-    """
+    """Runs the PRODUCTION path (`_turn_boosts.observe` + `_board`) and asserts the model's accessor
+    matches the Pilot's builder in BOTH directions — a key on one side only is a silent 0."""
     checked = 0
     for name, obs in _frames():
         live_pilot._turn_boosts.observe(obs)
@@ -344,9 +280,7 @@ def test_the_model_context_equals_the_pilots_key_for_key(live_pilot):
 
 @pytest.mark.req("REQ-DMGCTX-0003")
 def test_the_pilots_my_direction_is_built_once_per_decision(live_pilot):
-    """`_opp_attack_context` has been cached per decision since ADR-0032 P1; MY direction now is
-    too. The three per-option consumers (`_tactical`, the bench-partner enabler, the boost-lethal
-    tactical) each used to rebuild it, so an attack-heavy menu paid for the same dict N times — and
+    """`_opp_attack_context` has been cached per decision since ADR-0032 P1; MY direction now too.
     N fresh dicts also cannot hit the clock memos the previous one filled."""
     seen = []
     for _name, obs in _frames(4):
@@ -362,11 +296,8 @@ def test_the_pilots_my_direction_is_built_once_per_decision(live_pilot):
 
 @pytest.mark.req("REQ-DMGCTX-0003")
 def test_the_pilot_and_the_model_carry_the_same_deck_leg(live_pilot):
-    """The one key pair the model cannot derive from its own zones today — `MySide.visible_counts`
-    walks `energies`/`energy` while the Pilot's deck tracker walks `energyCards`, and reconciling
-    those two moves the Attach Budget, which Issue #279 may not do. So the anchored deck resolution
-    is THREADED into the snapshot exactly as `deck` / `own_prizes` / `deck_empty` already are, and
-    this pins that the threading actually reaches the context."""
+    """`MySide.visible_counts` walks `energies` while the deck tracker walks `energyCards`, and
+    reconciling those moves the Attach Budget — so the anchored resolution is THREADED in instead."""
     anchored = 0
     for _name, obs in _frames(None):
         if not obs.get("own_prizes"):

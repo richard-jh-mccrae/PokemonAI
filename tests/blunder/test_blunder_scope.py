@@ -86,11 +86,8 @@ def test_match_scope_is_retired_and_refused_by_the_writer():
 
 @pytest.mark.req("REQ-BLUNDER-0017")
 def test_decision_scope_still_requires_correct_and_scope_is_validated():
-    """The atomic contract of ADR-0015 is untouched at `decision` scope, and an unknown scope raises.
-
-    The Anchor here carries NO `obs`, so its `minCount` is unreadable — which is exactly the case
-    Issue #229 rules must keep raising (D2a, fail closed). An unverifiable decline is the degenerate
-    shape the relaxation exists to stop, not a case of it."""
+    """The Anchor here carries NO `obs`, so its `minCount` is unreadable — the fail-closed case
+    (Issue #229 D2a) that must keep raising."""
     with pytest.raises(ValueError):
         build_correction(_decision(), source="own", agent="x", correct=[],
                          category="bad_target", rationale="r")            # decision needs a correct
@@ -101,10 +98,8 @@ def test_decision_scope_still_requires_correct_and_scope_is_validated():
 
 @pytest.mark.req("REQ-BLUNDER-0021")
 def test_a_decision_scope_decline_is_recordable_on_an_optional_select():
-    """Issue #229 / D1+D2. `correct: []` at `decision` scope is the ruling *"take none of these"* —
-    the answer an OPTIONAL select exists to allow. The READER already speaks this language
-    (`gates.satisfies_human` reads an empty `correct` as an exact-match DECLINE at every scope); only
-    the writer refused it, so the corpus could not contain the shape its own grader grades."""
+    """`correct: []` at `decision` scope is the ruling "take none of these". `gates.satisfies_human`
+    already reads it as an exact-match DECLINE at every scope; only the writer refused it."""
     corr = build_correction(_decision(min_count=0), source="own", agent="x", correct=[],
                             category="bad_target", rationale="taking any of these is worse")
     assert corr.scope == "decision" and corr.subject == 9
@@ -113,9 +108,8 @@ def test_a_decision_scope_decline_is_recordable_on_an_optional_select():
 
 @pytest.mark.req("REQ-BLUNDER-0021")
 def test_a_mandatory_select_still_refuses_a_decision_scope_decline():
-    """D2 — the narrowness that makes the relaxation safe. At a select the engine forces an answer
-    to, "take none" is not a legal answer, so `correct: []` there is a MALFORMED record rather than a
-    ruling. Same `minCount == 0` narrowness `records_a_decline_it_cannot_state` was built with."""
+    """At a select the engine forces an answer to, "take none" is not a legal answer, so
+    `correct: []` there is a MALFORMED record rather than a ruling."""
     with pytest.raises(ValueError, match="minCount"):
         build_correction(_decision(min_count=1), source="own", agent="x", correct=[],
                          category="bad_target", rationale="r")
@@ -124,10 +118,8 @@ def test_a_mandatory_select_still_refuses_a_decision_scope_decline():
 @pytest.mark.req("REQ-BLUNDER-0021")
 @pytest.mark.parametrize("obs", [None, {}, {"select": {}}, {"select": {"minCount": None}}])
 def test_an_unprovable_optional_select_fails_closed(obs):
-    """D2a. `Decision` carries no `minCount` field of its own and `snapshot()` omits it, so the only
-    route to it is `obs["select"]["minCount"]` — and `obs` is None-able. Where it cannot be READ the
-    old behaviour stands, which makes this a *strict* relaxation: a decline is admitted only where
-    the optional select is provable, never merely assumed."""
+    """The only route to `minCount` is `obs["select"]["minCount"]`, and `obs` is None-able: a
+    decline is admitted only where the optional select is PROVABLE, never merely assumed."""
     with pytest.raises(ValueError, match="minCount"):
         build_correction(_decision(), source="own", agent="x", correct=[],
                          category="bad_target", rationale="r", obs=obs)
@@ -135,9 +127,8 @@ def test_an_unprovable_optional_select_fails_closed(obs):
 
 @pytest.mark.req("REQ-BLUNDER-0021")
 def test_the_validated_obs_is_the_obs_the_record_stores():
-    """The `obs=` argument OVERRIDES the Anchor's own, and the stored record keeps the override — so
-    validating against `decision.obs` while storing the override would let a record be admitted on
-    evidence it does not carry. One read, used for both."""
+    """One read, used for both: validating against `decision.obs` while storing the `obs=`
+    override would admit a record on evidence it does not carry."""
     optional = {"select": {"context": 0, "minCount": 0, "maxCount": 1, "option": [{"type": 12}]}}
     corr = build_correction(_decision(min_count=1), source="own", agent="x", correct=[],
                             category="bad_target", rationale="r", obs=optional)
@@ -151,9 +142,8 @@ def test_the_validated_obs_is_the_obs_the_record_stores():
 
 @pytest.mark.req("REQ-BLUNDER-0021")
 def test_a_decision_scope_decline_round_trips_and_grades_exactly():
-    """Acceptance 4. The shape must survive the store AND mean the same thing on the way out: an
-    empty `correct` is matched EXACTLY, never by subset. Subset would be catastrophic here — the
-    empty set is a subset of everything, so every frame would vacuously agree."""
+    """An empty `correct` is matched EXACTLY, never by subset: the empty set is a subset of
+    everything, so subset matching would make every frame vacuously agree."""
     import sys
     from pathlib import Path
     sys.path[:0] = [str(Path(__file__).resolve().parents[2] / "tools")]
@@ -181,9 +171,8 @@ def test_turn_scope_contract_is_untouched():
 
 @pytest.mark.req("REQ-BLUNDER-0018")
 def test_turn_span_is_the_turns_decisions_carrying_obs_and_no_board(tmp_path):
-    """ADR-0049: a Turn Correction embeds every Decision that seat made in the Turn, each with the
-    agent `obs` that makes it re-drivable — but no per-Decision `current` (the Anchor carries one
-    board; a full board per Decision would be ~10 KB each for a human view nothing reads)."""
+    """ADR-0049: each embedded Decision carries the `obs` that makes it re-drivable, but no
+    per-Decision `current` — the Anchor carries the one board."""
     corr = record_correction(load_replay(REPLAY), frame=ANCHOR, correct=[], scope="turn",
                              category="sequencing_error", rationale="develop before attacking",
                              source="own", agent="mega_starmie", store_path=tmp_path / "c.jsonl")
@@ -230,14 +219,8 @@ def test_list_corrections_reports_each_tags_scope_and_subject(tmp_path):
 
 @pytest.mark.req("REQ-BLUNDER-0021")
 def test_the_tagging_pane_lets_a_human_record_a_decision_scope_decline():
-    """The SECOND writer-side refusal, and the one that decides whether the shape is writable *by a
-    human*. `build_correction` is the validator; this pane is the only thing that calls it for a
-    ruling. It refused an empty `correct` at decision scope unconditionally, so relaxing the
-    validator alone would leave the corpus exactly as unable to hold a decline as before — and a
-    ruling nobody can type is not a ruling.
-
-    Gated on the payload's `min_count`, so the pane's rule IS the validator's rule (D2), and a frame
-    whose `min_count` is unknown keeps the old message (D2a)."""
+    """The pane is the only thing that calls `build_correction` for a ruling, so relaxing the
+    validator alone would leave the corpus as unable to hold a decline as before."""
     from train.blunder.shell import _SHELL_HTML
     # The save guard: an empty `correct` at decision scope is refused only where the select is NOT
     # provably optional — `!==0` so an unknown `min_count` keeps refusing, matching D2a exactly.

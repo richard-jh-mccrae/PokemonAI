@@ -11,10 +11,8 @@ from dataclasses import dataclass, field
 
 
 class Plan(enum.Enum):
-    """The Pilot's current-turn strategic mode — a closed set. The tempo/defensive axis of the Match
-    Planner's Game Plan (ADR-0045): SETUP→develop; RACE→take the on-path KO on tempo; STALL→develop while
-    declining giant-waking KOs to buy setup turns; STABILIZE→survive my threatened Active;
-    SACRIFICE→trade the Active, race on prize math; CLOSE→force the finishing line."""
+    """The Pilot's current-turn strategic mode — a closed set, the tempo/defensive axis of the Match
+    Planner's Game Plan (ADR-0045)."""
     SETUP = "SETUP"
     RACE = "RACE"
     STALL = "STALL"
@@ -25,11 +23,8 @@ class Plan(enum.Enum):
 
 @dataclass
 class GamePlan:
-    """The Match Planner's output (ADR-0045): the committed route to victory + tempo/defensive **mode** +
-    **confidence**, and the **directed Turn Goal** it hands the Turn Planner. A ranking/steering object,
-    re-derived each turn, NEVER a lock; emitted to Decision telemetry so the blunder-buster can tie a
-    ladder misplay to the match-scale read. When confidence is low the directed goal is withheld and the
-    Pilot defers to the Turn Planner's own Goal Ladder plus the tuned weights (the fallback)."""
+    """The Match Planner's output (ADR-0045): route, mode, confidence and the directed Turn Goal it
+    hands the Turn Planner. Re-derived each turn, NEVER a lock; withheld on low confidence."""
     mode: Plan = Plan.SETUP
     confidence: float = 0.0
     route: frozenset = field(default_factory=frozenset)   # opp card ids on my cheapest Prize Path
@@ -41,8 +36,7 @@ class GamePlan:
 @dataclass
 class Ready:
     """When a Line's payoff counts as online: in play with >= `energy` attached. `energy=None`
-    (the default) derives the threshold from the engine — the payoff's cheapest attack cost — so
-    a Pokémon with a 1-Energy attack is 'online' at 1, not at the cost of its biggest attack."""
+    derives the threshold from the payoff's CHEAPEST attack cost, not its biggest."""
     energy: int | None = None
 
 
@@ -57,19 +51,8 @@ class Line:
 
 @dataclass
 class Hypothesis:
-    """A named, testable claim that biases scoring (see common/CONTEXT.md).
-
-    `when(ctx) -> bool` is the trigger; `weight` is the tunable surface; `status` tracks
-    its test journey (assumed -> testing -> confirmed/refuted).
-
-    `weight` is REQUIRED — it carries no default (2026-07-14). Authoring a rung at `weight=0` is a
-    real and used pattern (the ladder-gated seed: mint the rung, write its `when()` and its
-    `SEED(ladder): NN`, ship it inert until corrections exercise it, and let the tuner promote it off
-    zero). But a `0.0` DEFAULT made a rung authored by OMISSION — a dropped kwarg, a bad
-    copy-paste — indistinguishable at runtime from a deliberate seed: same value, same silence, no
-    record of intent. Requiring the argument keeps the deliberate zero (write `weight=0`, stating
-    intent) and makes the accidental one impossible.
-    """
+    """A named, testable claim that biases scoring. ``weight`` is REQUIRED and has NO default: a `0.0`
+    default made a rung authored by OMISSION indistinguishable from a deliberate `weight=0` seed."""
     id: str
     rationale: str
     when: object                  # callable: (ctx) -> bool
@@ -87,25 +70,12 @@ class Strategy:
     fetch_priority: list = field(default_factory=list)  # Tier-3 explicit grab order (cardIds, highest
                                                         # first) -- combo deck's override of derived
                                                         # fetch importance (ADR-0023); empty for most decks
-    starter_priority: list = field(default_factory=list)  # the deck's ordered opening bodies (cardIds,
-                                                        # highest first) for the pregame Set-Up ACTIVE pick
-                                                        # (ADR-0079). Deck-declared data read by the
-                                                        # card-name-free general `open-the-declared-starter`
-                                                        # -- the ids live HERE, never in a trigger (ADR-0034),
-                                                        # exactly as `fetch_priority` / `partners` do. The
-                                                        # Pilot resolves the highest-ranked id PRESENT among
-                                                        # the options into `board.top_starter_id`, so one
-                                                        # boolean carries the whole ordering. Must be
-                                                        # COMPLETE -- every startable body in the deck (a
-                                                        # Basic, or an `opener`-tagged card) ranked -- which
-                                                        # is what makes the single-winner read exact;
-                                                        # test_setup_active_placement enforces it for every
-                                                        # authored agent. Empty = pre-doctrine agent only.
+    starter_priority: list = field(default_factory=list)  # ordered opening bodies (cardIds, best first)
+                                                        # for the pregame Set-Up ACTIVE pick (ADR-0079).
+                                                        # Must be COMPLETE -- every startable body ranked.
     weight_overrides: dict = field(default_factory=dict)  # authored per-deck seed overrides of (typically
                                                         # general) Hypothesis weights by id -- doctrine-driven,
                                                         # sparse, UNDER the learned tuned.json layer (ADR-0035)
-    partners: dict = field(default_factory=dict)       # cardId -> [partner cardIds]: a co-dependent engine
-                                                        # body whose value REQUIRES at least one listed
-                                                        # partner in play (Solrock<->Lunatone). Deck-declared
-                                                        # data (ADR-0034); the general attach oracle reads it
-                                                        # to zero a partnerless engine body (attach Ruling 6)
+    partners: dict = field(default_factory=dict)       # cardId -> [partner cardIds]: an engine body whose
+                                                        # value REQUIRES a listed partner in play (ADR-0034);
+                                                        # the attach oracle zeroes a partnerless one

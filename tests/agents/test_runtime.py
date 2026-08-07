@@ -1,10 +1,8 @@
 """The shared agent runtime (ADR-0055): one deployment PROFILE + one Pilot build for every agent.
 
-The Pilot ctor stays the raw-scoring layer; the validated-best deployment config lives in
-``common.runtime.PROFILE`` — the ONE home for "what ships". These tests replace the per-file
-AST pattern `test_agent_wiring.py` pinned pre-0055: the profile is now data, so completeness
-is asserted against the Pilot ctor signature (a new kill-switch that isn't consciously added
-to the profile fails CI) and the shipped values are pinned as a worked example.
+The Pilot ctor stays the raw-scoring layer; the deployment config lives in ``common.runtime.PROFILE``
+and completeness is asserted against the ctor signature, so a new kill-switch that is not
+consciously added to the profile fails CI.
 """
 import importlib.util
 import inspect
@@ -36,139 +34,64 @@ SEAM_PARAMS = frozenset({
     "scout", "briefs",
 })
 
-# The shipped deployment config — the A/B-cleared / user-decided values every agent runs
-# (independent source: the pre-0055 main.py literals and their ADR decision records).
+# The shipped deployment config — the A/B-cleared / user-decided values every agent runs.
 EXPECTED_SHIPPED = {
     "search_budget": 0,
     "posture": True,                # ADR-0026
     "lethal_verify": True,          # ADR-0030
     "lethal_seed_exact": True,      # ADR-0050
-    # `planner_engine_rank` (ADR-0031) is DELETED by POC-T4/5 (Issue #386) — the FOURTH flag the
-    # swap retires, and the one Issue #386's own table missed. It armed `_engine_rank`, which
-    # forward-simmed each planner candidate to its end-of-turn board and re-ranked on that value.
-    # Ranking end states is the composer's job now, and it does it closed-form; a second, SAMPLED
-    # opinion about the same board is the double-source ADR-0092 decision 4 forbids. The sampling
-    # is not hypothetical — the same first step on ml f24 scored 7000 / 162 / 129 / 89 / 57.5
-    # across processes. `TurnLine.ranked_by`'s "engine" value dies with it.
+    # `planner_engine_rank` (ADR-0031) is DELETED by Issue #386 — ranking end states is the
+    # composer's job and it does it closed-form; `TurnLine.ranked_by`'s "engine" value died with it.
     "planner_key_threat": True,     # ADR-0031
     "lethal_family": True,          # ADR-0037
     "lethal_veto": True,            # ADR-0037
-    "promote_ko_aware": True,       # Proposal C (2026-07-11)
-    "boost_lethal": True,           # Proposal B (2026-07-11)
-    "retreat_enabler_lethal": True,  # ml f15 retreat-enabler lethal (2026-07-13, engine-confirmed)
-    "disruptor_lock_maneuver": True,  # dragapult f20 offensive item-lock (2026-07-13, ship-and-refine)
-    "matchup_targeting": True,      # ADR-0051 MatchupPlan spine (retired brief_preevo/brief_engine)
+    "promote_ko_aware": True,       # Proposal C
+    "boost_lethal": True,           # Proposal B
+    "retreat_enabler_lethal": True,  # retreat-enabler lethal
+    "disruptor_lock_maneuver": True,  # offensive item-lock
+    "matchup_targeting": True,      # ADR-0051 MatchupPlan spine
     "objectives_race": True,        # ADR-0040
     "objectives_path": True,        # ADR-0040
     "objectives_phases": True,      # ADR-0040
     "gamble_lines": True,           # ADR-0039
-    "snipe_prize_redundant": True,  # ADR-0044 (user decision 2026-07-06)
-    "snipe_prize_reach": True,      # snipe-targeting grill (2026-07-21) — rider-reach Prize-Path tie-break
+    "snipe_prize_redundant": True,  # ADR-0044
+    "snipe_prize_reach": True,      # rider-reach Prize-Path tie-break
     "forced_promotion": True,       # ADR-0044
     "match_planner_steer": True,    # ADR-0045 S3
-    # `forgo_ko` (ADR-0045 S4) is DELETED, not flipped, by POC-T4/5 (Issue #386). It gated a rung
-    # ABOVE the decider — "decline this KO because it wakes a scarier body" — which under 1-ply
-    # differencing is just one sequence out-scoring another. A gate above the composer is exactly
-    # what ADR-0092 exists to eliminate, so the flag has no OFF meaning left to express.
+    # `forgo_ko` (ADR-0045 S4) is DELETED by Issue #386: it gated a rung ABOVE the decider, which
+    # under 1-ply differencing is one sequence out-scoring another — no OFF meaning left to express.
     "prize_economy_fetch": True,    # ADR-0048
-    # `evolving_wincon_priority` RETIRED by ADR-0085 Amendment G — inert once the rungs it stood
-    # down were deleted. f22 is now asserted against the scalar in test_snipe_evolving_wincon_f22.py
+    # `evolving_wincon_priority` RETIRED by ADR-0085 Amendment G — inert once its rungs were deleted.
     "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
-    "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
-    "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
-    "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
-    "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
-                                    # term (readiness consumes needs), gated on the leaf-lab bench before arming
-    # `develop_rollout` and `leaf_option_equivalence` are DELETED by POC-T4/5 (Issue #386), and both
-    # for the same reason: their SUBJECT went away, so neither has an OFF state left to name.
-    # The rollout rung simmed a candidate first action to its end-of-turn board through the native
-    # engine and ranked on that; the composer differences `state_value` closed-form instead, so the
-    # rung, its `_engine_leaf_value` scorer and the `plan_candidates` stream are all gone.
-    # `leaf_option_equivalence` (ADR-0091, #247) survives as BEHAVIOUR rather than as a switch —
-    # Option-Equivalence classing is unconditional inside the composer, which prices one
-    # representative per class and fans the class value back across its members
-    # (`ComposerResult.fanned`). Its only `src/` reader lived inside the deleted rung.
+    "ko_target_whiff": True,        # KO-target rebuild-odds tiebreak
+    "opp_resource_reads": True,     # deck-out grind nudge
+    "enabler_item_composer": True,  # ko_for_prizes composer
+    "leaf_hand_value": False,       # ADR-0065 armed-OFF: the develop-rung leaf's hand-value term
+    # `develop_rollout` and `leaf_option_equivalence` are DELETED by Issue #386: the rollout scorer is
+    # gone, and Option-Equivalence classing (ADR-0091) is unconditional inside the composer.
     "copy_top_value": True,         # Issue #289 ON: known-top carry + Slowking copy-top value.
-    "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140). The swap
-                                    # protocol's batched review is closed (6 FIX, 0 regression) and the
-                                    # four baseline_evolution rungs it replaced are DELETED, so OFF is
-                                    # degraded mode rather than a rollback.
-    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0086, Issue #197). The
-                                    # Decision Gate is ruled and EVERY rung it replaced is DELETED —
-                                    # `keep-a-bench` included, since ADR-0096 decision 2 — so OFF is
-                                    # degraded mode rather than a rollback.
-    "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069): the axes-sum
-                                    # marginal IS the energy-attach decision; 19 baseline_energy rungs are
-                                    # DELETED, so OFF is documented DEGRADED MODE, never a rollback
-    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0100, #141):
-                                    # the Sub-lethal Residual in the damage currency, at a DERIVED
-                                    # 100 damage/prize. Eleven of the twelve promote/retreat rungs it
-                                    # replaced are DELETED (only `retreat-to-wall-the-line` survives, as
-                                    # #165's Maneuver), so OFF is degraded mode rather than a rollback.
-    "doom_matched_relax": True,     # doom-shadow grill armed-ON 2026-07-23: matched-Read charged doom
-                                    # (`_DOOM_CHARGED`) confirms-or-clears a worst-case `active_doomed`
-                                    # cry (relax-only); unmatched = worst-case
-    "recur_fuel_relax": True,       # ADR-0076 (#186) armed-ON 2026-07-27: quantifies the
-                                    # `_doom_recur_fueled` relax-block; corpus-swept clean (0/331)
-                                    # AND cleared the ADR-0072 mid-build paired-A/B tripwire
-                                    # (+2.4% delta, CI-lo -1.1%, 0 crashes/2400 games)
-    "gust_target_slots": True,      # ADR-0076 (#186) armed-ON 2026-07-27: generalizes `deny_slot`
-                                    # to a `gust_target` kind; 0 decision flips over 331 corpus
-                                    # frames AND cleared the ADR-0072 mid-build tripwire (-0.75%
-                                    # delta, CI-lo -4.3%, 0 crashes/2400 games)
-    "scaled_threat_rank": True,     # Issue #213 armed-ON 2026-07-30: the threat rank and the
-                                    # forced-promotion read price a body through the Damage Formula
-                                    # against the live board instead of printed `maxDamage`, and the
-                                    # flat `_HAND_SIZE_ATTACKER_BOOST` proxy is deleted. Ships ON
-                                    # because OFF would make the change a no-op on the board and
-                                    # both ADR-0072 merit gates measure the ON behaviour
-    "deny_strip_delta": True,       # ADR-0078 / Issue #199 (S3c). ARMED-ON 2026-07-31 (Issue #228)
-                                    # TOGETHER with `deny_relevance`, never alone — its only consumer
-                                    # lives inside that flag's branch, and that flag alone would
-                                    # leave the tie to engine option order (the ADR-0062 defect).
-                                    # ADR-0084 (Issue #217) gave it its
-                                    # consumer — the target pick's lexicographic tiebreak among
-                                    # candidates tied on relevance, which orders a tie and never GATES
-                                    # one (a `strip_shift > 0` keep-price gate suppresses 128/218
-                                    # relevance-positive rows). ARMED ON — the entry it
-                                    # annotates is `True` (ADR-0084 / Issue #217)
-    "snipe_relevance": True,        # ADR-0083 / Issue #188 (S4-snipe): the **Snipe Relevance** scalar
-                                    # decides the DAMAGE bench-target select; the six additive target
-                                    # rungs + the MatchupPlan steer stand down together while armed.
-                                    # Armed-ON 2026-07-30 (ADR-0085 Amendment C) after the OFF path
-                                    # measured byte-identical and all three bars cleared: Decision
-                                    # Gate, Discrimination Gate (run ARMED, per ADR-0072 decision 5),
-                                    # and the mid-build Tripwire (-1.25 pp, CI [-4.79, +2.29], 0
-                                    # crashes / 2400 games — `mid_build_verdict` True)
-    "deny_relevance": True,         # ADR-0080 / Issue #199 (S3c). **ARMED-ON 2026-07-31
-                                    # (Issue #228, ADR-0093), closing Phase 1e and discharging
-                                    # the directive-1 debt.** The Discrimination Gate's blocker was a
-                                    # DEFECT, not the leaf weighting ADR-0084 Amendment B point 3
-                                    # diagnosed: `_opponent_target_rows` returned None mid-sim, and
-                                    # `deny_relevance_best` could not express absence, so the fire
-                                    # rung read the dataclass default as a measured whiff. Three
-                                    # frames moved, each by exactly `_PLANNER_SURVIVAL_W` 50.0.
-                                    # Fixed, then armed; all three bars cleared at `baed389` vs
-                                    # baseline `a8da62d` — Discrimination Gate PASS with the fix in
-                                    # and flags OFF (0 picks moved, which is what makes the armed run
-                                    # attributable), Discrimination Gate PASS armed (0 unruled,
-                                    # 0 ruled), Decision Gate PASS armed (372 frames, agree
-                                    # 250/346 -> 250/346, 0 picks moved). What ALSO clears:
-                                    # `_DENIAL_BENCH`'s retirement to the promotion gate, with 0 sign
-                                    # changes over 21 Hammer-ruled frames and **0 decision flips over
-                                    # 331 corpus frames at the real `decide()`** — the retest decision
-                                    # 5 made a precondition, because gate 1 proved SIGN only and the
-                                    # promotion gate inflates the rung's MAGNITUDE where it opens
-                                    # (f79 55->95, f26 16.25->95, f24 17.5->100)
-    "deferred_target_expansion": False,  # ADR-0121 (Issue #392) armed-OFF: the CHOICE node
-                                    # (`common.board_choice`). ON, the apply seam returns an
-                                    # Expectation over the boards a Deferred-Target Option's target
-                                    # can reach instead of the point transition. Its consumer — the
-                                    # composer that takes the `max` over those classes — is Issue
-                                    # #385 and does not exist yet, so ON would change only what the
-                                    # ADR-0098 parity lane and both ADR-0072 gates see. Same
-                                    # contract, and the same reason, as `board_expectation` shipping
-                                    # inert at Issue #383.
+    "evolve_value": True,           # the EVOLVE DECIDER (ADR-0070); the rungs it replaced are
+                                    # DELETED, so OFF is degraded mode rather than a rollback
+    "deploy_value": True,           # the DEPLOY DECIDER (ADR-0086); every rung it replaced is
+                                    # DELETED, so OFF is degraded mode rather than a rollback
+    "attach_value": True,           # the ATTACH DECIDER (ADR-0069); the baseline_energy rungs are
+                                    # DELETED, so OFF is degraded mode rather than a rollback
+    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER (ADR-0100): the Sub-lethal Residual
+                                    # at a DERIVED 100 damage/prize. OFF is degraded mode
+    "doom_matched_relax": True,     # a matched Read confirms-or-clears a worst-case `active_doomed`
+                                    # cry (relax-only); unmatched stays worst-case
+    "recur_fuel_relax": True,       # ADR-0076 quantifies the `_doom_recur_fueled` relax-block
+    "gust_target_slots": True,      # ADR-0076 generalizes `deny_slot` to a `gust_target` kind
+    "scaled_threat_rank": True,     # Issue #213: the threat rank prices a body through the Damage
+                                    # Formula against the live board, not printed `maxDamage`
+    "deny_strip_delta": True,       # ADR-0078 / ADR-0084. Arm only TOGETHER with `deny_relevance` —
+                                    # its only consumer lives inside that flag's branch
+    "snipe_relevance": True,        # ADR-0083: the Snipe Relevance scalar decides the DAMAGE
+                                    # bench-target select; the additive target rungs stand down
+    "deny_relevance": True,         # ADR-0080 / ADR-0093. Arm TOGETHER with `deny_strip_delta`
+    "deferred_target_expansion": False,  # ADR-0121 armed-OFF: the CHOICE node's consumer — the
+                                    # composer taking the `max` over the target classes — is Issue
+                                    # #385 and does not exist yet
 }
 
 
@@ -180,10 +103,8 @@ def _ctor_flag_params() -> set[str]:
 
 @pytest.mark.req("REQ-WIRE-0003")
 def test_profile_covers_every_pilot_flag():
-    """REQ-WIRE-0003: PROFILE and the Pilot ctor's flag params match EXACTLY, both ways — a
-    new kill-switch added to the ctor fails here until its shipped value is consciously added
-    to the profile (the pre-0055 bug class: a flag omitted from one main.py ran that agent's
-    layer dark), and a stale profile key fails here when its ctor param is retired."""
+    """Both ways: a new ctor kill-switch fails here until its shipped value is added to the
+    profile, and a stale profile key fails here when its ctor param is retired."""
     flags = _ctor_flag_params()
     missing = sorted(flags - PROFILE.keys())
     assert not missing, (
@@ -195,9 +116,7 @@ def test_profile_covers_every_pilot_flag():
 
 @pytest.mark.req("REQ-WIRE-0001")
 def test_profile_ships_the_validated_best_config():
-    """REQ-WIRE-0001 (inverted from the per-file AST pins): the shipped values are the
-    A/B-cleared / user-decided deployment config — in particular no armed-off switch
-    (brief_engine, value_model) silently flips ON without its evidence gate."""
+    """No armed-off switch may silently flip ON without its evidence gate."""
     assert PROFILE == EXPECTED_SHIPPED
 
 
@@ -208,8 +127,7 @@ def _raw_seams():
 
 @pytest.mark.req("REQ-WIRE-0003")
 def test_build_pilot_applies_the_shipped_profile():
-    """REQ-WIRE-0003: with no params, every flag on the built Pilot reads its PROFILE value —
-    the runtime, not the ctor default, decides what a deployed agent runs."""
+    """The runtime, not the ctor default, decides what a deployed agent runs."""
     pilot = build_pilot(Strategy(), [1] * 60, **_raw_seams())
     for flag, shipped in PROFILE.items():
         if flag == "value_model":
@@ -220,9 +138,8 @@ def test_build_pilot_applies_the_shipped_profile():
 
 @pytest.mark.req("REQ-WIRE-0003")
 def test_params_beat_the_profile():
-    """REQ-WIRE-0003: a Strategy param (or overlay param — merged upstream by
-    load_overrides_and_params) overrides the profile per flag, so the battle.py A/B lever
-    (AGENT_OVERLAY) and a deck's own params keep forcing any switch."""
+    """A Strategy param overrides the profile per flag, so the battle.py A/B lever keeps
+    forcing any switch."""
     strategy = Strategy(params={"posture": False, "search_budget": 50})
     pilot = build_pilot(strategy, [1] * 60, **_raw_seams())
     assert pilot.posture is False               # forced OFF through params
@@ -232,22 +149,19 @@ def test_params_beat_the_profile():
 
 @pytest.mark.req("REQ-WIRE-0003")
 def test_explicit_params_argument_beats_strategy_params():
-    """REQ-WIRE-0003: the ``params=`` argument (the already-merged Strategy+overlay dict the
-    shell resolves) wins over ``strategy.params`` when both are given."""
+    """``params=`` is the already-merged Strategy+overlay dict the shell resolves."""
     strategy = Strategy(params={"posture": False})
     pilot = build_pilot(strategy, [1] * 60, params={"posture": True}, **_raw_seams())
     assert pilot.posture is True
 
 
-# --- make_agent: the whole shell, exercised from a real bundle-shaped dir (cwd = agent dir,
-# deck.csv + tuned.json beside it), engine-backed exactly like the grader loads it.
+# --- make_agent: the whole shell, from a real bundle-shaped dir (cwd = agent dir, deck.csv +
+# tuned.json beside it), engine-backed exactly like the grader loads it.
 
 @pytest.mark.req("REQ-WIRE-0004")
 def test_make_agent_builds_the_deployed_agent(monkeypatch):
-    """REQ-WIRE-0004: make_agent(STRATEGY) is the whole pre-0055 main.py shell — deck read
-    from cwd, tuned.json applied, knowledge seams wired, provider warmed in the pregame
-    window, profile flags ON — and returns the harness contract: a 1-arg ``agent(obs)``
-    callable (with the pilot reachable for probes/tools as ``agent.pilot``)."""
+    """The harness contract is a 1-arg ``agent(obs)`` callable with the pilot reachable for
+    probes/tools as ``agent.pilot``."""
     monkeypatch.chdir(FIXTURE)
     monkeypatch.setenv("AGENT_NO_TELEMETRY", "1")
     agent = make_agent(_fixture_strategy())
@@ -268,8 +182,7 @@ def test_make_agent_builds_the_deployed_agent(monkeypatch):
 
 @pytest.mark.req("REQ-WIRE-0004")
 def test_make_agent_overlay_forces_a_flag(monkeypatch, tmp_path):
-    """REQ-WIRE-0004: AGENT_OVERLAY params reach the built Pilot through make_agent — the
-    battle.py A/B lever (ADR-0021) can force any profile flag off (or on)."""
+    """AGENT_OVERLAY params reach the built Pilot through make_agent (the ADR-0021 A/B lever)."""
     overlay = tmp_path / "exp.json"
     overlay.write_text(json.dumps({"params": {"posture": False}}), encoding="utf-8")
     monkeypatch.chdir(FIXTURE)
@@ -281,9 +194,8 @@ def test_make_agent_overlay_forces_a_flag(monkeypatch, tmp_path):
 
 @pytest.mark.req("REQ-WIRE-0004")
 def test_make_agent_emits_telemetry_unless_silenced(monkeypatch):
-    """REQ-WIRE-0004: the shell emits Decision Telemetry (ADR-0019) per decision — tier 0
-    for a searchless profile — and AGENT_NO_TELEMETRY=1 silences it (the battle protocol
-    channel depends on that)."""
+    """Decision Telemetry (ADR-0019) per decision; the battle protocol channel depends on
+    AGENT_NO_TELEMETRY=1 silencing it."""
     from common import telemetry
     emitted = []
     monkeypatch.chdir(FIXTURE)

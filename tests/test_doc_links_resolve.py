@@ -1,28 +1,15 @@
 """A Markdown link in a committed doc must point at a file that exists.
 
-The 2026-08-07 documentation audit found 283 file references across the repo that resolve to nothing.
-Most turned out to be legitimate: `pilot.py:10055` names ``tools/train/probes/deny_gate217.py`` and
-says in the same breath that Issue #243 deleted it, which is accurate prose about a dead thing. Policing
-every backticked filename would therefore fail on correct writing.
-
-A **link target** is different. Nobody writes a tombstone as a hyperlink — a link is a navigational
-promise, so a broken one is always a defect. That makes it the one file-reference claim worth asserting,
-and it is cheap: 997 targets across the repo, 34 of them broken when this landed.
-
-The failures are the ordinary kind: ADR cross-links naming a title that was later renamed
-(`0031-the-turn-planner.md` for what is really `0031-turn-planner-is-goal-directed-...`), links into a
-`demos/` directory that no longer exists, and `../plans/ml-training-build.md` after that file moved into
-`plans/ml/`.
+A backticked filename is not policed: `pilot.py` names a deleted probe and says so in the same
+breath, which is accurate prose about a dead thing. A **link target** is different — nobody writes a
+tombstone as a hyperlink, so a broken one is always a defect.
 
 Scope notes:
 
 * Targets must look like paths — containing `/` or a suffix. Bare `[x](plan)` is prose, not a link.
-* `.claude/skills/` is excluded: the vendored Matt Pocock skills ship template placeholders
-  (`./src/ordering/CONTEXT.md`) that are examples, not references into this repo.
+* `.claude/skills/` is excluded: the vendored skills ship template placeholders, not references.
 * Gitignored trees (`data/meta/`, `reports/`) are excluded — absent locally, present in a real run.
-* The scan set is `git ls-files`, never a filesystem walk. `tests/test_import_hygiene.py` documents
-  why at length: `.venv/` and `.claude/worktrees/` otherwise pull in other branches' files and the
-  guard reports a foreign checkout's defect as this tree's.
+* The scan set is `git ls-files`, never a filesystem walk; `tests/test_import_hygiene.py` says why.
 """
 from __future__ import annotations
 

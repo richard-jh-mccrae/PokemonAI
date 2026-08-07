@@ -1,25 +1,9 @@
-"""`gates.shape_the_constructor_would_refuse` / `gates.refused_shapes` — the **Refused Shape** audit
+"""`gates.shape_the_constructor_would_refuse` / `gates.refused_shapes` — the Refused Shape audit
 (Issue #256, ADR-0113 decision 4).
 
-`build_correction` validates at *write* time. `Correction.from_dict` — THE loader, and so what the
-**Corpus Reader** inherits — validates nothing. That asymmetry is deliberate and stays: validating on
-load would reject committed records at read time and take *both* gates down over a record that has
-been sitting green for weeks. But unvalidated must not mean unobserved, and until this audit nothing
-re-applied the writer's rules to what was already on disk — which is how `85709280|1|match|`
-(`match` scope carrying `correct: [0]`, hand-edited past the constructor on 2026-07-29) got in, and
-stayed, *grading in both gates*, until the developer reviewed the finding and repaired it (ADR-0113
-Amendment A): re-scoped to `decision`/subject 51, where `correct: [0]` is a legal shape. The corpus
-is clean today — the census below asserts that, not "exactly one" — and the repaired record's key,
-`85709280|1|decision|51`, is what `THE_RECORD` now names.
-
-The census here is worthless without the controls, and this repo has a named failure mode for exactly
-that (`CLAUDE.md`): an instrument that finds nothing and a broken instrument return the same empty
-output. So every "exactly one" assertion below is paired with a synthetic record of the shape it
-claims is absent, and — the strongest control — with a differential test that drives the REAL
-`build_correction` with the same shape and asserts it raises. The audit claims to re-apply the
-constructor's rules; a test that only exercised a paraphrase could not tell a faithful re-application
-from a plausible one.
-"""
+`Correction.from_dict` validates nothing, deliberately: validating on load would reject committed
+records at read time and take both gates down. This audit re-applies the writer's rules to what is
+already on disk, and every census assertion is paired with a positive control."""
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,12 +16,8 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.gates import (REFUSED_SHAPE_RULES, refused_shapes,  # noqa: E402
                          shape_the_constructor_would_refuse as refuses)
 
-#: The record this whole audit was built to find, and its two keys. It shipped `match` scope
-#: carrying a `correct` the constructor forbids (hand-edited past it on 2026-07-29) until the
-#: developer reviewed the wave-3 packet and ruled: the rationale was always about ONE select, never
-#: a whole-match note, so re-scoping to `decision`/subject 51 invents nothing and costs nothing — the
-#: record's `span` (a genuine turn-by-turn Game Plan trace, ADR-0045) survives untouched (ADR-0113
-#: Amendment A). `THE_RECORD_WAS` no longer resolves; kept so a test can assert exactly that.
+#: The record the audit was built to find, re-scoped from `match` to `decision`/subject 51
+#: (ADR-0113 Amendment A). `THE_RECORD_WAS` no longer resolves; kept so a test asserts that.
 THE_RECORD = "85709280|1|decision|51"
 THE_RECORD_WAS = "85709280|1|match|"
 
@@ -69,10 +49,7 @@ def _build(**kw):
     return build_correction(_decision(), **{**base, **kw})
 
 
-# ---------------------------------------------------------------------------
-# Per-shape POSITIVE CONTROLS — the audit finds each shape, and the constructor
-# really does refuse the same shape. (Acceptance criterion 4.)
-# ---------------------------------------------------------------------------
+# Per-shape POSITIVE CONTROLS: the audit finds each shape, and the constructor refuses it.
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_a_record_the_constructor_would_accept_is_clean():
@@ -89,9 +66,7 @@ def test_a_match_scope_record_is_caught_as_unknown_scope():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_a_turn_scope_correct_equal_to_chosen_is_caught():
-    """ADR-0049's *first divergent Decision* assertion, enforced. A turn-scope `correct` repeating
-    `chosen` asserts nothing — and it is the rule **decision D2** rests on, so if it ever stopped
-    being enforced, D2's claim that Anchor grading is deliberate would quietly become false."""
+    """ADR-0049's *first divergent Decision* rule; decision D2 rests on it staying enforced."""
     assert refuses(_Rec(scope="turn", correct=[1], chosen=[1])) == ["turn_correct_equals_chosen"]
     # Compared as SETS, exactly as the constructor compares them — order is not a second ruling.
     assert refuses(_Rec(scope="turn", correct=[1, 0], chosen=[0, 1])) == \
@@ -110,9 +85,7 @@ def test_a_correct_off_the_menu_is_caught():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_an_unprovable_decision_scope_decline_is_caught():
-    """Issue #229's relaxation is STRICT: an empty `correct` is a **Decline**, admissible at
-    `decision` scope only where the record's own `obs` proves the select optional. On a mandatory
-    select — or where `minCount` cannot be read at all — the writer refuses, so the audit does too."""
+    """Issue #229: an empty `correct` is legal only where the record's own `obs` proves the select optional."""
     assert refuses(_Rec(correct=[], chosen=[1])) == ["unprovable_decline"]          # minCount 1
     assert refuses(_Rec(correct=[], chosen=[1], obs=None)) == ["unprovable_decline"]  # unknown
     # PROVED optional -> a legal Decline, and clean. Without this the rule would read as
@@ -125,9 +98,7 @@ def test_an_unprovable_decision_scope_decline_is_caught():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_closed_vocabularies_are_caught_and_an_unknown_scope_stops_the_dispatch():
-    """`source` and `scope` are two-and-three-element tuples fixed in `correction.py`. An
-    unrecognised `scope` returns alone: every `correct` rule dispatches on scope, so classifying
-    further would be guessing."""
+    """An unrecognised `scope` returns alone: every `correct` rule dispatches on scope."""
     assert refuses(_Rec(correct=[2], chosen=[1], source="enemy")) == ["unknown_source"]
     assert refuses(_Rec(correct=[9], chosen=[1], scope="episode")) == ["unknown_scope"]
     assert refuses(_Rec(correct=[9], chosen=[1], scope="episode", source="enemy")) == \
@@ -136,13 +107,8 @@ def test_the_closed_vocabularies_are_caught_and_an_unknown_scope_stops_the_dispa
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_category_vocabulary_is_deliberately_NOT_re_applied():
-    """The line the audit draws, asserted so a later session does not quietly cross it. `category`'s
-    vocabulary lives in `categories.py` and is documented as *extensible*; refusing a committed
-    record because a category was later renamed would report a **vocabulary edit as a corpus
-    defect** — a different question, needing a ruling rather than a predicate.
-
-    Positive control on the claim itself: the constructor DOES refuse the same value, so this is a
-    deliberate omission from the audit rather than a rule that never existed."""
+    """The line the audit draws: `category`'s vocabulary is documented extensible, so refusing a
+    committed record for a later rename would report a vocabulary edit as a corpus defect."""
     from train.blunder.categories import is_valid_category
     assert is_valid_category("missed_lethal") is False              # renamed away
     with pytest.raises(ValueError):
@@ -163,9 +129,7 @@ def test_every_slug_the_predicate_can_emit_has_a_printable_sentence():
     assert all(REFUSED_SHAPE_RULES[s] and isinstance(REFUSED_SHAPE_RULES[s], str) for s in emitted)
 
 
-# ---------------------------------------------------------------------------
 # DIFFERENTIAL — the audit re-applies the REAL constructor's rules, not a paraphrase.
-# ---------------------------------------------------------------------------
 
 @pytest.mark.req("REQ-GATE-0009")
 @pytest.mark.parametrize("kw,slug", [
@@ -177,9 +141,7 @@ def test_every_slug_the_predicate_can_emit_has_a_printable_sentence():
     (dict(scope="episode", correct=[2]), "unknown_scope"),
 ])
 def test_the_constructor_really_refuses_each_shape_the_audit_names(kw, slug):
-    """**The control that makes "would refuse" an honest claim.** Each shape is fed to the REAL
-    `build_correction`, which must raise, and to the audit, which must name it. A paraphrase that had
-    drifted from the constructor would pass the synthetic tests above and fail here."""
+    """A paraphrase that had drifted from the constructor would pass the synthetic tests and fail here."""
     with pytest.raises(ValueError):
         _build(**kw)
     rec = _Rec(chosen=[1], **{k: v for k, v in kw.items() if k != "agent"})
@@ -188,50 +150,25 @@ def test_the_constructor_really_refuses_each_shape_the_audit_names(kw, slug):
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_constructor_accepts_the_shape_the_audit_calls_clean():
-    """The other direction, and the one that catches an audit gone paranoid: a record the audit
-    passes must be one the writer would actually write. Without it, a predicate returning a
-    violation for everything would satisfy every `raises` test above."""
+    """Catches an audit gone paranoid: a predicate refusing everything satisfies every `raises` above."""
     corr = _build(correct=[2])
     assert corr.correct == [2] and corr.scope == "decision"
     assert refuses(corr) == []
 
 
-# ---------------------------------------------------------------------------
 # The committed corpus — the census, and the reason the audit exists.
-# ---------------------------------------------------------------------------
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_committed_corpus_holds_no_refused_shapes():
-    """**The census.** Measured through the Corpus Reader, never raw JSONL: 23 records carry no
-    explicit `scope` key and only default to `decision` inside `Correction.from_dict`, and every rule
-    here dispatches on scope.
-
-    Was ``== [THE_RECORD_WAS]`` — the corpus held exactly the one violation this audit was built to
-    find, `85709280|1|match|`. The developer reviewed it (the wave-3 packet this issue produced) and
-    repaired it rather than excluding it: re-scoped to `decision`/subject 51, where a non-empty
-    `correct` is legal (ADR-0113 Amendment A). This assertion is the record of that repair landing —
-    it goes red again the moment a SECOND bad shape appears, which is the property the store lacked
-    entirely and the whole deliverable of Issue #256."""
+    """Measured through the Corpus Reader, never raw JSONL: `scope` defaults inside `from_dict`."""
     found = refused_shapes(REPO / "data" / "corrections")
     assert found == []
 
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
-    """**The control the census is worthless without.** An empty corpus, a broken reader, or a
-    predicate that only ever returns ``[]`` would all satisfy "0 refused shapes" while proving
-    nothing. So: the reader finds all 375 records, every one is clean — including the repaired
-    record, checked by name — and the synthetic + differential tests above already established the
-    predicate really does fire (`test_a_match_scope_correct_is_caught`,
-    `test_the_constructor_really_refuses_each_shape_the_audit_names`), so "0 here" reads as "clean",
-    not as "broken".
-
-    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0123): the first ctx-17 (`SelectContext.HEAL`)
-    rulings, `data/corrections/mega_starmie_20260806_parity-ctx17/`. This is the denominator moving
-    because the corpus really grew, not a shape being admitted — `refused_shapes` above still returns
-    `[]`, so all three are clean by the same predicate. The count going red first is this census
-    working: a corpus-size assertion is a ruling record, and it must be re-taken deliberately rather
-    than loosened."""
+    """The control the census is worthless without — an empty corpus or an always-`[]` predicate would
+    also satisfy "0 refused shapes". The count is a ruling record: re-take it, never loosen it."""
     from train.gates import keyed_corrections
     recs = keyed_corrections(REPO / "data" / "corrections")
     assert len(recs) == 375
@@ -244,20 +181,7 @@ def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_corpus_now_holds_no_match_scope_records_at_all():
-    """Decision **D1** — *a match-scope Correction should not grade at its Anchor* — was written
-    about a corpus that held exactly ONE `match`-scope record (353 decision / 18 turn / 1 match):
-    this one. The developer reviewed the wave-3 packet and repaired it rather than ruling D1: the
-    record's Anchor rationale was always about ONE select (never a whole-match note), so re-scoping
-    to `decision`/subject 51 invents nothing (ADR-0113 Amendment A). D1 therefore has no live
-    instance to apply to — `scope="match"` is theoretical vocabulary today, not dead code; a future
-    tag can still use it.
-
-    This is the corpus-composition half of that repair. `test_the_repaired_record_still_grades_the_
-    same_way` below is the grading half — the fix must be a pure re-label, not a value change.
-
-    **`decision` 354 → 357 on 2026-08-06** (Issue #409 / ADR-0123): three ctx-17 HEAL-target rulings,
-    all `decision` scope. `turn` is untouched and `match` is still absent, which is the assertion
-    this test actually makes — the decision count is the denominator that carries it."""
+    """`scope="match"` is theoretical vocabulary today, not dead code; a future tag can still use it."""
     from collections import Counter
 
     from train.gates import keyed_corrections
@@ -267,17 +191,8 @@ def test_the_corpus_now_holds_no_match_scope_records_at_all():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_repaired_record_still_grades_the_same_way():
-    """The repair must be a re-label, not a re-ruling: `correct`/`chosen`/`span` are untouched, so
-    whatever the gate concluded about this frame before must still hold after.
-
-    ⚠️ **The gate grades the PILOT's fresh replay pick, not the record's own `chosen` field.** The
-    record's historical `chosen` is `[2]`; the committed baseline row's `chosen` is `[0]` — what the
-    Pilot picked on replay — against a recorded `correct: [0]`, so the frame reads **AGREE**.
-    Confusing the two inverts the consequence, and the spec for Issue #256 did exactly that.
-
-    The baseline row is still keyed `THE_RECORD_WAS` (captured before the repair, byte-identical
-    since — neither gate baseline is ever re-captured without a developer act) — this is the OTHER
-    face of "corpus shape moved: +1/-1" both gates now report."""
+    """⚠️ The gate grades the PILOT's fresh replay pick, not the record's own `chosen`; confusing the
+    two inverts the consequence. The baseline row is still keyed `THE_RECORD_WAS`."""
     import json
 
     from train.decider_lab import gradeable_rows
@@ -297,10 +212,7 @@ def test_the_repaired_record_still_grades_the_same_way():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_a_refused_shape_gets_no_excuse_from_either_gate():
-    """**The report-only ruling, asserted behaviourally rather than by reading source.** The audit
-    reaches no verdict, in either direction: a REGRESSION or an `OK -> MISS` on a record with a
-    refused shape must fail exactly as any other unruled flip does. Wiring an exclusion is the change
-    this test refuses — the same ruling Issue #251 made for the **Unstatable Decline**."""
+    """Report-only: a refused shape earns no exclusion — the ruling Issue #251 made for the Decline."""
     from train.gates import decision_gate_verdict, discrimination_gate_verdict
     assert decision_gate_verdict([{"key": THE_RECORD, "verdict": "REGRESSION"}],
                                  held_out={}) is False
@@ -313,15 +225,8 @@ def test_a_refused_shape_gets_no_excuse_from_either_gate():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_from_dict_still_loads_a_refused_shape_without_complaint():
-    """**Decision D4, asserted directly.** The loader must NOT validate: it is what the Corpus Reader
-    runs, so a validating `from_dict` would reject committed records at read time and take both gates
-    down. The audit is the reporting half of that contract, and this is the half it must not become.
-
-    Was asserted against the real corpus's one refused shape (`85709280|1|match|`); repaired since
-    (ADR-0113 Amendment A). Reproduced here the way the real one actually got in: a record the
-    constructor accepted, hand-edited past it afterwards — every OTHER field stays whatever the
-    constructor produced, so only `scope`/`correct` are the corruption under test. Positive control
-    that the two halves really disagree: the same payload through the *constructor* raises."""
+    """Decision D4: the loader must NOT validate. The Corpus Reader runs it, so a validating
+    `from_dict` would reject committed records at read time and take both gates down."""
     from train.blunder.correction import Correction
     valid = _build(correct=[2])
     tampered = {**valid.to_dict(), "scope": "match", "correct": [0]}
@@ -332,9 +237,7 @@ def test_from_dict_still_loads_a_refused_shape_without_complaint():
         _build(scope="match", correct=[0])
 
 
-# ---------------------------------------------------------------------------
-# The readout (acceptance criterion 5).
-# ---------------------------------------------------------------------------
+# The readout.
 
 def _row(key, *, chosen=None, correct=None, **extra):
     return {"key": key, "chosen": chosen, "correct": correct, **extra}
@@ -351,9 +254,7 @@ def _finding(key, *violations, scope="match", id="synthetic"):
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_readout_names_a_synthetic_refused_record_and_says_it_is_still_grading(capsys):
-    """Driven by a SYNTHETIC finding, not the corpus: the live one has never moved, so a test that
-    only read the corpus could not prove the section survives a second record appearing — which is
-    the whole property this audit adds."""
+    """Driven by a SYNTHETIC finding: the live corpus is clean, so it cannot prove the section survives."""
     from train.decider_lab import print_refused_shape_readout
     key = "99999999|0|match|"
     rows = [_row(key, chosen=[0], correct=[0]), _row("other|0|decision|1", chosen=[1], correct=[1])]
@@ -378,9 +279,7 @@ def test_the_readout_is_silent_when_the_corpus_is_clean(capsys):
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_readout_says_so_when_a_refused_record_is_in_no_capture(capsys):
-    """The claim is COMPUTED, never asserted. The audit is corpus-wide, so it legitimately names
-    records no capture holds — unreplayable ones, or ones an `--agent` filter dropped — and a readout
-    that printed "GRADING anyway" regardless would be decoration."""
+    """The audit is corpus-wide, so it legitimately names records no capture holds."""
     from train.decider_lab import print_refused_shape_readout
     key = "99999999|0|match|"
     print_refused_shape_readout([_finding(key, "unknown_scope")], _rpt([]))

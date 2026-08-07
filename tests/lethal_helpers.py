@@ -27,25 +27,8 @@ def require_cg() -> None:
 
 
 def engine_confirms(fixture: dict, pilot, *, line=None, max_cascade: int = 40):
-    """Drive ``fixture``'s win line through the engine cascade and return the verdict:
-
-    - ``True``  — the engine declares the win end-to-end (real play completes the line),
-    - ``False`` — refuted (a closed-form-only line lands here),
-    - ``None``  — undetermined / no seed on the fixture / native lib absent (keep closed-form).
-
-    ``line`` defaults to the fixture's ``correct``. It is EITHER a single select's picks (``[1]`` — the
-    common case: drive that one explicit step, then ``decide()`` completes the cascade) OR a full
-    explicit multi-step line, a list-of-lists (``[[5],[1],[2],...]`` — drive every listed select, then
-    ``decide()`` handles only the trailing pure cascades). The shape is auto-detected (mirrors
-    ``tools/sim/lethal_probe.py``): a first element that is itself a list means a multi-step line.
-
-    The multi-step form is the gate for a lethal whose ``decide()`` follow-up hooks are UNBUILT: its
-    ``[correct]``-only form can't be confirmed (``decide()`` won't steer the retreat/promote/tool line),
-    so the target win is proven by driving the whole line explicitly (ADR-0050 DoD#3, ml f24). Once the
-    Phase-3 hooks exist, the single-step form goes green on its own — that is the fix's gate.
-
-    A no-op returning ``None`` when the fixture carries no ``search_begin_input`` (or an empty line), so
-    it never needs the engine on an unseeded fixture."""
+    """Verdict: ``True`` win end-to-end, ``False`` refuted, ``None`` undetermined / unseeded /
+    no native lib. ``line`` is one select's picks OR a list-of-lists multi-step line, auto-detected."""
     obs = (fixture or {}).get("obs") or {}
     if not obs.get("search_begin_input"):
         return None
@@ -57,14 +40,8 @@ def engine_confirms(fixture: dict, pilot, *, line=None, max_cascade: int = 40):
 
 
 def engine_confirms_py(fixture: dict, pilot, *, line=None, max_cascade: int = 40):
-    """``engine_confirms`` on the cgpy twin — DLL-free (ADR-0050 M3).
-
-    Same verdict contract, driven through `cgpy.alias` for the duration of the call (any
-    displaced native ``cg`` modules are restored after). Structured seeding needs no engine
-    blob: a fixture with NO ``search_begin_input`` is still driven, by injecting the bare
-    cgpy marker (the planner and the gate only test for presence; `cgpy.compat` rebuilds
-    the state from the observation itself). A fixture whose state cgpy cannot reconstruct
-    (an ambiguous mid-effect select) comes back ``None`` — undetermined, never a lie."""
+    """``engine_confirms`` on the cgpy twin — DLL-free (ADR-0050 M3). A fixture with NO
+    ``search_begin_input`` is still driven; one cgpy cannot reconstruct comes back ``None``."""
     from cgpy import alias
 
     obs = (fixture or {}).get("obs") or {}

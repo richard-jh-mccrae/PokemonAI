@@ -1,9 +1,5 @@
-"""Presence-only Naive Bayes recognition scorer (see docs/scouting.md).
-
-`posterior` ranks Archetypes given the set of opponent cards revealed so far. It is a
-pure function — no I/O, no engine — so it is trivially testable and fast to call each
-decision.
-"""
+"""Presence-only Naive Bayes recognition scorer (docs/scouting.md): ranks Archetypes given the
+opponent cards revealed so far. Pure — no I/O, no engine."""
 from __future__ import annotations
 
 
@@ -16,20 +12,8 @@ def posterior(
     unknown_prior: float = 0.05,
     floor: float = 0.01,
 ) -> tuple[list[tuple[str, float]], float]:
-    """Rank archetypes by posterior given revealed cards.
-
-    Args:
-        priors: ``{archetype: prior_probability}``.
-        card_inclusion: ``{archetype: {card_id: P(card in deck | archetype)}}``.
-        background: ``{card_id: P(card present overall)}`` — the unknown hypothesis.
-        evidence: iterable of revealed opponent card ids.
-        unknown_prior: prior mass for the off-meta "unknown" hypothesis.
-        floor: smoothing floor for a card absent from an archetype's inclusion.
-
-    Returns:
-        ``(candidates, unknown_mass)`` where candidates is ``[(archetype, posterior)]``
-        sorted descending.
-    """
+    """``(candidates, unknown_mass)``, candidates ``[(archetype, posterior)]`` sorted descending.
+    ``background`` is the off-meta hypothesis; ``floor`` smooths a card absent from an inclusion."""
     ev = list(evidence)
 
     scores: dict[str, float] = {}

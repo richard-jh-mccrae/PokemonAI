@@ -1,20 +1,10 @@
 """Seed ChainDefs for the FULL card pool → `src/cgpy/defs/generated_chains.json` (ADR-0050 M4).
+The machine layer under `chain_overrides.json`, which WINS per chain key. Sources, in priority
+order: (a) structured tables, (b) sentence-anchored ``R-…`` text rules, (c) an explicit
+``{"deferred": reason}`` plus a hand-authoring queue entry in `reports/parity/`.
 
-The machine layer under `chain_overrides.json` (overrides WIN per chain key). Seed sources in
-priority order:
-
-(a) structured tables — textless ("vanilla") attacks and skill-less Pokémon get empty defs
-    for free; basic energies likewise.
-(b) sentence-anchored text rules (ids ``R-…``) over the formulaic effect texts: a chain is
-    seeded ONLY when EVERY sentence of its text is consumed by a rule — one leftover
-    sentence defers the whole chain (never guess half a card).
-(c) everything unmatched → an explicit ``{"deferred": reason}`` entry plus a queue entry in
-    ``reports/parity/unparsed_sentences.json`` grouped by template hash — the hand-authoring
-    queue, ordered by meta play-rate when `data/meta` is present (count otherwise).
-
-Every generated entry carries a ``_seed`` provenance key (rule ids / table source); the
-loader ignores underscore keys. Regenerate wholesale — never hand-edit the output (that's
-what `chain_overrides.json` is for).
+A chain is seeded ONLY when EVERY sentence is consumed — one leftover defers the whole chain.
+Regenerate wholesale; never hand-edit the output.
 
     python tools/parity/seed_chains.py            # regenerate defs + report
     python tools/parity/seed_chains.py --stats    # print rollup only, write nothing
@@ -139,9 +129,8 @@ _CSV_CATEGORIES: dict[str, list] | None = None
 
 
 def _csv_categories() -> dict[str, list]:
-    """Card-family tags (Future / Ancient / …) from the OFFICIAL card CSV's Category
-    column — no native table carries them (sgc87_9300 f51 proves the engine filters
-    by family). CSV Card ID == engine cardId (verified: 27 Iron Leaves, 87 Miraidon)."""
+    """Card-family tags (Future / Ancient / …) from the card CSV's Category column — no native
+    table carries them. CSV Card ID == engine cardId."""
     global _CSV_CATEGORIES
     if _CSV_CATEGORIES is None:
         import csv as _csv
@@ -200,9 +189,8 @@ def _noun_filter(noun: str) -> dict | None:
 
 
 def parse_search_spec(spec: str) -> tuple[int, dict] | None:
-    """"up to 2 Basic Pokémon with 70 HP or less" → ``(max_count, filter)`` or None.
-    "any number of" quantifies as 60 (the op layer clamps to matches/bench room).
-    "in any combination of X and Y" → an ``anyOf`` union filter."""
+    """"up to 2 Basic Pokémon with 70 HP or less" → ``(max_count, filter)`` or None. "any number
+    of" quantifies as 60 (the op layer clamps); "in any combination of X and Y" → ``anyOf``."""
     m = _QTY_RE.match(spec.strip())
     if not m:
         return None
@@ -236,9 +224,8 @@ class Frag:
 
 
 class Rules:
-    """Ordered sentence-consuming rules. Each rule sees ``(sents, i)`` and returns
-    ``(consumed_count, Frag)`` or None. First match wins; unmatched sentence at ``i``
-    defers the whole chain."""
+    """Ordered sentence-consuming rules: ``(sents, i)`` -> ``(consumed_count, Frag)`` or None.
+    First match wins; an unmatched sentence defers the whole chain."""
 
     def __init__(self):
         self.rules: list = []
@@ -707,9 +694,8 @@ def _opp_hand_discard_random(sents, i):
            r"cards? in their hand\.")(sents, i)
     if m:
         n = int(m.group(1))
-        # Menu-gated: the engine hides the attack until the opponent holds MORE than n
-        # (pinned onboard1076a1554: 6 offers, 5 hides). Plain 1-card variants are NOT
-        # gated — offered at oppHand 0 (onboard103a130_9901 f39 etc.).
+        # Menu-gated: the engine hides the attack until the opponent holds MORE than n. Plain
+        # 1-card variants are NOT gated — they are offered at oppHand 0.
         return (1, Frag("", rider=[{"op": "xOppHandDiscardRandom", "untilLeft": n}],
                         legal=[{"op": "oppHandAbove", "n": n}]))
     return None
@@ -951,9 +937,8 @@ def _opp_reveals_hand(sents, i):
     discard-all-Items+Tools rider / per-Trainer|Energy damage scalers."""
     if not _s(r"Your opponent reveals their hand\.")(sents, i):
         return None
-    # The plain and discard-all scripts are menu-gated on a nonempty opponent hand
-    # (pinned rvl297_9000 f50 / rvlitems284_9102 f68: only the sibling attack offered
-    # at oppHand 0); the choose script is NOT (rvl995_9001 f53 offers 995 at 0).
+    # The plain and discard-all scripts are menu-gated on a nonempty opponent hand; the choose
+    # script is NOT — it is offered at oppHand 0.
     gate = [{"op": "oppHandAbove", "n": 0}]
     if i + 1 < len(sents):
         if _s(r"Discard all Item cards and Pok.mon Tool cards you find "
@@ -1106,10 +1091,8 @@ def _may_switch_self(sents, i):
 
 @ATK.rule("R-B17")
 def _search_hand_rider(sents, i):
-    """Deck→hand searches: revealed and unrevealed prints, optional "You may" (a real
-    YES_NO ask — pinned sg33_9000 f18), unfiltered counts ("a card" = min 1, pinned
-    sg1093_9000 f14; "up to N cards" = min 0) and the benched-count cap (Nab 'n'
-    Dash → maxVar, pinned sg1_9000 f34 min 0)."""
+    """Deck→hand searches. "You may" is a real YES_NO ask; "a card" is min 1 and "up to N cards"
+    min 0; a benched-count cap becomes ``maxVar``."""
     m = _s(r"(You may )?[Ss]earch your deck for (.+?)(, reveal (?:it|them),)? and put "
            r"(?:it|them) into your hand\.")(sents, i)
     if not m:
@@ -1143,9 +1126,8 @@ def _search_hand_rider(sents, i):
 
 @ATK.rule("R-E03")
 def _search_bench_rider(sents, i):
-    """Deck→bench searches ("put them onto your Bench"): Flock / Geo Gate / Roto Call
-    class — ctx TO_BENCH min 0, bench-room clamp inside the op (pinned sg23_9000 f9);
-    "You may" wraps the same YES_NO ask as the hand flavor."""
+    """Deck→bench searches: ctx TO_BENCH min 0, with the bench-room clamp inside the op. "You may"
+    wraps the same YES_NO ask as the hand flavour."""
     m = _s(r"(You may )?[Ss]earch your deck for (.+?) and put (?:it|them) onto your "
            r"Bench\.")(sents, i)
     if not m:
@@ -1169,10 +1151,8 @@ def _search_bench_rider(sents, i):
 
 @ATK.rule("R-E05")
 def _search_energy_attach_distribute(sents, i):
-    """The search-and-attach family (ctx ATTACH_TO pick + ATTACH_FROM placement —
-    pinned sg965/sg328/sg242/sg208/sg1463). Family-noun targets ("your Future
-    Pokémon") stay unmatched: the Future/Ancient tag exists in no extracted table
-    (sgc87_9300 f51 proves the native filters by it), so those defer loudly."""
+    """The search-and-attach family (ctx ATTACH_TO pick + ATTACH_FROM placement). Family-noun
+    targets ("your Future Pokémon") stay unmatched — that tag is in no extracted table."""
     k = 1
     if i + 1 < len(sents) and _s(r"Then, shuffle your deck\.")(sents, i + 1):
         k = 2
@@ -1385,10 +1365,8 @@ def _inflict_two(sents, i):
     m = _s(r"Your opponent.s Active Pok.mon is now (Poisoned|Burned|Asleep|Paralyzed|"
            r"Confused) and (Poisoned|Burned|Asleep|Paralyzed|Confused)\.")(sents, i)
     if m:
-        # Condition-ENUM order, not text order: "Asleep and Poisoned" logs POISONED(17)
-        # then ASLEEP(19) (pinned micro_onboard780a1128); "Burned and Confused" logs
-        # BURNED(18) then CONFUSED(21) (pinned micro_onboard409a573) — ascending in
-        # SpecialConditionType/LogType for both.
+        # Condition-ENUM order, NOT text order: the engine logs ascending in
+        # SpecialConditionType, so "Asleep and Poisoned" logs POISONED(17) then ASLEEP(19).
         conds = sorted(_COND[m.group(g)] for g in (1, 2))
         return (1, Frag("", rider=[{"op": "xInflictConditionActive", "condition": c}
                                    for c in conds]))
@@ -1775,10 +1753,8 @@ def seed_pool(cards: list[dict], attacks: list[dict], overrides: dict) -> tuple[
     gen: dict = {}
     queue: list[dict] = []
 
-    # Sentence templates the engine MENU-GATES (the attack is unoffered until its board
-    # condition holds — pinned mill_9200 f33, Terminal Period). Deferred attacks matching
-    # one get menuOffer=false; every other deferred attack stays offered (Phantom-Dive
-    # class pin) and raises UnsupportedCard on use.
+    # Sentence templates the engine MENU-GATES. A deferred attack matching one gets
+    # menuOffer=false; every other deferred attack stays offered and raises UnsupportedCard.
     menu_gated = [re.compile(r"^If your opponent.s Active Pok.mon has exactly \d+ damage "
                              r"counters on it, that Pok.mon is Knocked Out\.$")]
 
@@ -1810,9 +1786,8 @@ def seed_pool(cards: list[dict], attacks: list[dict], overrides: dict) -> tuple[
         if entry is None:
             defer(key, name, "attack", "fragments would not compose", sentences(text))
             continue
-        # A 0-damage attack whose whole effect needs a resource is MENU-GATED by the
-        # engine on that resource (pinned earthquake_9710 f6: Abundant Harvest unoffered
-        # with an empty discard; same class as the Terminal-Period gate).
+        # A 0-damage attack whose whole effect needs a resource is MENU-GATED by the engine on
+        # that resource — e.g. unoffered with an empty discard.
         if not a.get("damage"):
             for op in entry.get("rider") or []:
                 if op["op"] == "xDiscardEnergyAttachSelf":

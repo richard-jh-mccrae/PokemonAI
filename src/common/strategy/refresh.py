@@ -1,37 +1,16 @@
 """ORACLE: Hand-refresh swing — ADR-0060. The closed-form value of a shuffle-refresh.
 
-Judge and Harlequin are **symmetric REFILLS, not strips**: each player shuffles their hand into
-their deck and redraws, so both land on the card's draw count. The entire value of playing one is
-therefore a single quantity — the net card swing:
+Judge / Harlequin / Unfair Stamp are symmetric REFILLS, not strips: both players shuffle and redraw,
+so the whole value is one quantity, the net card swing
+``(my_draw - my_hand) - (opp_draw - opp_hand)``. The card's own draw number IS the break-even, which
+is why the retired hand-size thresholds matched no card.
 
-    swing = my_net - opp_net,   my_net  = my_draw  - my_hand
-                                opp_net = opp_draw - opp_hand   (0 when they don't shuffle)
-
-- Judge (4/4)          -> swing = opp_hand - my_hand
-- Harlequin (EV 4/4)   -> the same EV as Judge, plus a +/-2 coin variance (branches kept paired for
-                          a later ADR-0039 gamble pass; ranked at EV today)
-- Unfair Stamp (5/2)   -> swing = opp_hand - my_hand + 3   (and it is an ITEM, not a Supporter)
-- Lillie's (6 self)    -> swing = 6 - my_hand   (8 at exactly six prizes)
-
-The card's own draw number IS the break-even. That is why the pre-ADR-0060 thresholds
-(`_STACKED_HAND` 6, `_REFRESH_HAND_FLOOR` 5, `_TAILORED_HAND` 3) matched no card: they were
-hand-fitted constants standing in for a number the card already prints.
-
-FRESHNESS. The count model cannot tell a FRESH big hand from a STALE one. `fresh_cards` counts how
-many of the opponent's current cards arrived last turn (`opp_hand_size_delta`): stripping eight
-cards they just drew denies live resources; stripping eight they have been stuck holding for three
-turns denies cards they demonstrably cannot play. It only applies when we are actually stripping
-them (a positive swing on a card that shuffles their hand).
-
-This settles the sign convention that `opponent_resources.py` and `pilot.py` used to contradict each
-other on: **a POSITIVE delta means they GREW their hand, i.e. it is fresh.**
+Sign convention: a POSITIVE `opp_hand_size_delta` means they GREW their hand, i.e. it is FRESH.
 """
 from __future__ import annotations
 
-# DRAW-COUNT facts, id-keyed, verified at data/EN_Card_Data.csv. Each entry:
-#   (opp_shuffles, branches(my_prizes_remaining, opp_prizes_remaining) -> ((my_draw, opp_draw), ...))
-# Branches are EQUALLY LIKELY (a coin); a single branch is deterministic. `opp_shuffles=False` means
-# the opponent's hand is untouched, so their net change is 0 -- NOT `0 - opp_hand`.
+# DRAW-COUNT facts, verified at data/EN_Card_Data.csv:
+#   {id: (opp_shuffles, branches(my_prizes, opp_prizes) -> ((my_draw, opp_draw), ...))}, coin-equal.
 _REFRESH = {
     # "Each player shuffles their hand into their deck and draws 4 cards."
     1213: (True, lambda mp, op: ((4, 4),)),                                     # Judge
@@ -83,19 +62,8 @@ def hand_swing(card_id, my_hand: int, opp_hand: int,
 
 def net_change(card_id, my_hand: int, opp_hand: int,
                my_prizes_remaining: int, opp_prizes_remaining: int):
-    """``(my_net, opp_net)`` — each side's expected change in hand size. ``None`` for an unknown card.
-
-    The two halves are NOT worth the same per card, which is why the scorer prices them separately
-    rather than collapsing them into `hand_swing`:
-
-    - a card I SHED is one I chose to hold — known, curated, certain value walking away;
-    - a card I DRAW is unseen — speculative, and only as good as what the deck can still supply
-      (which is what the `hold-*-dont-shuffle` / `dont-refresh-into-a-probable-miss` guards
-      adjudicate). Crediting it per-card would swamp exactly those guards.
-
-    `hand_swing` (my_net - opp_net) remains the honest CARD-COUNT statement and is what the card
-    facts are checked against; the scorer's asymmetry is a value judgement layered on top of it.
-    """
+    """``(my_net, opp_net)`` — each side's expected change in hand size; None for an unknown card.
+    The scorer prices the halves separately: a card I SHED is curated, a card I DRAW is unseen."""
     branches = refresh_branches(card_id, my_prizes_remaining, opp_prizes_remaining)
     if branches is None:
         return None
@@ -107,13 +75,8 @@ def net_change(card_id, my_hand: int, opp_hand: int,
 
 
 def own_draw_count(card_id, my_prizes_remaining: int, opp_prizes_remaining: int) -> float | None:
-    """The card's OWN redraw count, averaged over its coin branches (``my_draw``), on this board.
-    ``None`` when the card is not a known refresh.
-
-    The grab-time ceiling: at a TO_HAND draw-Supporter grab, `hand_swing` cannot rank two refreshes
-    apart (it needs the hand sizes at PLAY time, unknown at the grab), but the card's own draw count
-    already separates them — Lillie's redraws 8 early, Judge only 4 (ep86088989 f29). Prize-conditional
-    exactly as `refresh_branches` (Lillie's 8 at six prizes; Lacey 8 once the opponent is at 3 or fewer)."""
+    """The card's OWN redraw count averaged over its coin branches, or None. The grab-time ceiling:
+    `hand_swing` needs PLAY-time hand sizes, which a TO_HAND grab does not have."""
     branches = refresh_branches(card_id, my_prizes_remaining, opp_prizes_remaining)
     if branches is None:
         return None
@@ -122,13 +85,8 @@ def own_draw_count(card_id, my_prizes_remaining: int, opp_prizes_remaining: int)
 
 def refills_opponent(card_id, opp_hand: int,
                      my_prizes_remaining: int, opp_prizes_remaining: int) -> bool:
-    """True when playing this refresh GROWS the opponent's hand (``opp_net > 0``) — a symmetric
-    refill handing the losing opponent cards. ``False`` for a self-only refresh (Lillie's / Lacey
-    never touch their hand), an unknown card, or a STRIP that redraws them below their current hand.
-
-    The `dont-gift-a-refresh-when-favored` sign gate: the favored tax is for GIFTING outs, so it must
-    fire only when the play actually refills them — never on a strip of a stacked hand (ep83664991 f43:
-    Harlequin into an 8-card hand denies, it does not gift)."""
+    """Playing this refresh GROWS the opponent's hand (``opp_net > 0``). The sign gate for the favored
+    tax, so it never fires on a STRIP of a stacked hand. False for a self-only or unknown card."""
     branches = refresh_branches(card_id, my_prizes_remaining, opp_prizes_remaining)
     if branches is None or not opponent_shuffles(card_id):
         return False

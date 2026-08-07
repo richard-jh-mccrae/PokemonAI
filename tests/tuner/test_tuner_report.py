@@ -71,14 +71,8 @@ def test_run_report_locates_a_scoped_proposal_by_its_subject():
 
 
 def test_the_report_names_a_correction_by_the_key_the_ledger_uses():
-    """ADR-0090 decision 4 (Issue #250). `_at` printed `ep <id> f<frame>` for EVERY Correction
-    regardless of scope, so a turn-scoped record was displayed under its Anchor frame — and an
-    operator copying that string into `review_correction.py` wrote a ruling that reached nothing.
-    That is literally how `86091435-119` was born, and the reviewed-entries section (which this
-    exercises) is where the broken ruling was printed back beside the frame that broke it.
-
-    So the rule is: what the report prints is what the writer accepts. Asserted through the RENDERED
-    report, not `_at` directly — the property is about the artifact a human reads."""
+    """ADR-0090 decision 4: what the report prints is what `review_correction.py` accepts. A turn-scoped
+    record printed under its Anchor frame produced a ruling that reached nothing."""
     from train.blunder.correction import build_correction
     from train.blunder.decisions import Decision
     from train.blunder.reviewed import review_key

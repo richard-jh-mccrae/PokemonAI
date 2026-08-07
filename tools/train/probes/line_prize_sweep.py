@@ -1,45 +1,12 @@
-"""Line-prize denial sweep. **Not a gate.**
+"""Line-prize denial sweep (ADR-0119). **Not a gate.**
 
-Answers what ADR-0119 owes its own change: does pricing `prize_advance` as the LINE's prize
-recover real discrimination in the opponent-target ranking, or does it merely break Flat Ties the
-way any number of that size would?
+Does pricing `prize_advance` as the LINE's prize recover real discrimination, or does it merely break
+Flat Ties? OWN is the pre-ADR-0119 reading, by patching the shipped route; the sham arms are
+ADR-0118's mandatory null, sparsity-matched because this leg perturbs under a third of the rows.
 
-The bar is ADR-0118's sham policy — **a movement number published without its sham baseline is not
-evidence** — and this probe exists partly because the previous change on this seam published one
-that was not. It also fixes that measurement's OTHER error by default: the tie population is counted
-on `value`, the field the ranking actually sorts on, with the `survival_shift` sub-population printed
-beside it rather than in place of it (see `_sham.tie_population`).
-
-## Arms
-
-    OWN    the pre-ADR-0119 ranking — `prize_advance` collapsed back to the body's OWN prize.
-           Reconstructed by patching the shipped model route for the duration of the frame, so it
-           is the real code path answering the OLD question rather than a hand-rebuilt imitation.
-    LINE   the ranking as it now ships.
-    S_cid  sham — (cid % 7), band-matched to LINE's own measured effect on `value`. No causal claim.
-    S_hp   sham — (hp % 70), same band. No causal claim.
-    S_pos  sham — position index. The degenerate case: a leg that cannot beat LIST ORDER is not
-           ordering anything, and list order is precisely what a Flat Tie falls back to.
-
-**The pre-registration, and how it turned out.** Before the first run this docstring predicted the
-leg SHOULD clear its shams, on the reasoning that it separates bodies by a card fact that varies
-across them rather than by a removal Δ that is zero for every non-leading body. **It did not, and
-the prediction is left standing here rather than edited into agreement with the result.**
-
-Measured: 25.3% bench argmax movement against band-matched shams at 29.0% / 29.9%. That prompted
-ADR-0118's sparsity-match amendment, since a band-matched sham perturbs every row while this leg
-perturbs 29.2% of them. Under the corrected control the leg beats the two content shams by 8 and 14
-frames out of 241 and loses to the position sham. **Eight frames is not a pass** — ADR-0117's
-retraction turned on rejecting a five-frame separation, and that standard binds a leg we wanted to
-work exactly as hard as one we did not.
-
-What justifies the change is the TIE POPULATION (253 → 139 groups, directly counted, printed below)
-and the authored constants it deletes — not discrimination. Read the two halves separately.
-
-    python tools/train/probes/line_prize_sweep.py
-
-Reads what SHIPS: a fresh stateful Pilot per arm, deployment profile untouched. Offline, read-only,
-always exits 0.
+**The pre-registration stands rather than being edited into agreement with the result**: it predicted
+the leg would clear its shams, and it did not. What justifies the change is the TIE POPULATION and
+the authored constants it deletes, not discrimination. Read the two halves separately.
 """
 from __future__ import annotations
 
@@ -60,11 +27,8 @@ from common.state_model import TheirSide                       # noqa: E402
 
 
 class _OwnPrizeOnly(ArmPatch):
-    """Collapses `forward_line_prize` onto the body's OWN prize — the pre-ADR-0119 reading.
-
-    ``(0, 0)`` is what makes this the OLD reading EXACTLY rather than approximately:
-    `needs.line_prize_advance` floors its result at ``own_prize``, so a zero best-line-prize yields
-    the body's own value unchanged, which is precisely what `prize_value` returned before."""
+    """Collapses `forward_line_prize` onto the body's OWN prize — the pre-ADR-0119 reading. ``(0, 0)``
+    makes it EXACT: `needs.line_prize_advance` floors at ``own_prize``, which is what shipped before."""
 
     target, name = TheirSide, "forward_line_prize"
 
@@ -90,9 +54,8 @@ def main(argv=None) -> int:
     for key, rec in frames:
         try:
             obs = rec.obs
-            # A FRESH stateful Pilot per arm: the two must not share a per-decision memo or any
-            # board cache, or the second would answer with the first's numbers and the comparison
-            # would silently be a null control.
+            # A FRESH stateful Pilot per arm: the two must not share a per-decision memo or board
+            # cache, or the second would answer with the first's numbers and prove nothing.
             with _OwnPrizeOnly():
                 p_own = tune._build_pilot(replay_agent(rec))[0]
                 before = p_own._opponent_target_rows(obs, p_own._board(obs, obs.get("select") or {}))
@@ -128,10 +91,8 @@ def main(argv=None) -> int:
             base = argmax([r["value"] for r in pre])
             if argmax([r["value"] for r in post]) != base:
                 moved[("LINE", scope)] += 1
-            # WHICH rows the real leg actually lifted. A band-matched sham perturbs EVERY row; this
-            # leg perturbs under a third of them, because most opponent bodies are dead-end lines.
-            # Matching on band alone therefore compares a sparse leg against a dense one and the
-            # sham wins on volume — see the SPARSITY-MATCHED arm below, which is the honest control.
+            # WHICH rows the real leg lifted. A band-matched sham perturbs EVERY row while this leg
+            # perturbs under a third, so band-alone matching pits a sparse leg against a dense one.
             lifted = [abs(a["value"] - b["value"]) > 1e-12 for a, b in zip(post, pre)]
             for k, _label in SHAMS:
                 # `opponent_target_value` is LINEAR in `prize_advance`, so adding the sham leg to the
@@ -141,10 +102,8 @@ def main(argv=None) -> int:
                            for i, r in enumerate(pre)]
                 if argmax(shammed) != base:
                     moved[(k, scope)] += 1
-                # ...and the same sham confined to the rows the real leg lifted: same band, same
-                # COUNT of perturbed rows, meaningless CHOICE of magnitude within them. This is the
-                # arm that isolates the only thing the leg claims — that WHICH bodies it lifts, and
-                # by how much, tracks something real.
+                # ...and the same sham confined to the rows the real leg lifted: same band, same COUNT
+                # of perturbed rows, meaningless CHOICE within them. The honest control.
                 masked = [r["value"] + (legs(k, band=band, card_id=r["id"],
                                              hp=(r["body"] or {}).get("hp"), index=i, of=len(pre))
                                         if lifted[i] else 0.0)

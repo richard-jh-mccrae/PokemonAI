@@ -19,16 +19,7 @@ from __future__ import annotations
 
 class MatchRecorder:
     """Accumulate one match's ``(obs, choice)`` steps, then emit a `visualize`-shaped replay dict.
-
-    Usage (inside `play_match`)::
-
-        rec = MatchRecorder()
-        # per engine step, after the acting seat returns its choice:
-        rec.step(obs, choice)
-        # once the engine reports a verdict:
-        rec.finish(terminal_obs, winner)          # winner is the ENGINE seat (0/1) or None
-        replay = rec.replay(episode_id=eid, team_names=[seat0_name, seat1_name])
-    """
+    `finish`'s ``winner`` is the ENGINE seat (0/1) or None."""
 
     def __init__(self) -> None:
         self._steps: list[tuple[dict, list]] = []   # (obs shown to the actor, the choice it returned)
@@ -63,10 +54,8 @@ class MatchRecorder:
         return [0, 0]
 
     def replay(self, *, episode_id: int, team_names: list[str]) -> dict:
-        """The full replay dict: the `visualize` film (each prompt frame + the terminal frame, +1-offset
-        selections), seat-indexed ``rewards``, and ``info`` carrying ``EpisodeId``/``TeamNames`` so the
-        inspector keys corrections and `detect_seat` resolves a seat — the same envelope `selfplay`
-        writes, so the corpus files are indistinguishable to every downstream tool."""
+        """The full replay dict — the `visualize` film with +1-OFFSET selections, seat-indexed
+        ``rewards``, and ``info``. The same envelope `selfplay` writes, byte-shape for byte-shape."""
         frames: list[dict] = []
         prev_choice = None
         for obs, choice in self._steps:

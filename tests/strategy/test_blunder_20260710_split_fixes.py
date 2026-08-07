@@ -1,25 +1,8 @@
-"""Blunder round 2026-07-09 SPLIT-OUTS — applied 2026-07-10 via /update-strategy (dragapult_ex).
+"""Blunder round 2026-07-09 SPLIT-OUTS (dragapult_ex) — four proposals each needing a distinct
+mechanism the parent fix could not provide.
 
-Four proposals that were split out of the 2026-07-09 dragapult blunder round because each needed a
-distinct mechanism the parent fix couldn't provide. Grilled + authored 2026-07-10:
-
-  - f14  `develop-the-item-lock-opener` (general-hypothesis): at an empty-Bench hand-search, grab the
-         deck's item-lock opener (Budew) over a redundant base or an evolution that only stacks on the
-         Active. Rides two BREADTH stand-downs (redundant in-play base; empty-Bench mid-Line evolution)
-         plus `fetch-the-support` no longer crediting a win-condition-line evolution as an engine.
-  - f32 + f20  `retreat-to-wall-the-line` (planner-code): the retreat-to-promote-the-sacrificial-wall
-         maneuver — a fragile developing Dreepy retreats behind a benched Budew item-lock wall. Verified
-         single-frame (the retreat is step 1, tier-0 in `_finish_turn_last`); the follow-through rides
-         existing rungs. Unifies f32 with the deferred f20 retreat-to-promote-disruptor.
-  - f10  `gust-for-the-stall` gated on `opp_active_can_damage_us`: don't gust a HARMLESS Active (Kyogre
-         at 0 Energy) off to the bench — it just frees it; keep it pinned and develop. The +95 famine
-         hard-stall is deliberately NOT gated (its canonical case is a harmless-now-but-forward-lethal
-         Active — see tests/strategy/test_gust.py).
-  - f79  the `bench_fill` fetch-filter tightened to <=70 HP (Buddy-Buddy Poffin only fetches Basics with
-         70 HP or less), so the sound whiff guard `dont-search-an-empty-deck` sees the exhaustion.
-
-Single-frame verification per the grill: the f32 maneuver is a TEMPO play (a partial maneuver is not
-catastrophic), so verifying the retreat step is sound; the lethal retreat-enabler (f15) stays deferred.
+The f32 maneuver is verified SINGLE-FRAME (a tempo play, so a partial maneuver is not catastrophic);
+the lethal retreat-enabler stays deferred.
 """
 import json
 import sys
@@ -53,11 +36,8 @@ def _fired_ids(option):
 
 @pytest.mark.req("REQ-GEN-0074")
 def test_f14_grabs_the_item_lock_opener_over_evolution_and_redundant_base():
-    """f14 (CRITICAL): Active a lone Dreepy, bench EMPTY, Drakloak in the discard. At an Ultra Ball grab
-    the agent took Drakloak (+53: a mid-Line evolution that only stacks on the Active, leaving the Bench
-    empty). Correct is Budew — the item-lock opener that fills the Bench and buys tempo. The breadth
-    stand-downs collapse the evolution/redundant-base grabs and `develop-the-item-lock-opener` (+30)
-    wins."""
+    """With an EMPTY Bench, a mid-Line evolution only stacks on the Active — the breadth stand-downs
+    collapse those grabs so the item-lock opener wins."""
     fx = _fixture("dragapult_fetch_stranded_payoff_f14")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # [1] Budew
@@ -75,26 +55,18 @@ def test_f14_grabs_the_item_lock_opener_over_evolution_and_redundant_base():
                    "tier composes a retreat+evolve+lock sequence whose payoff is positional. STRICT "
                    "so it XPASSes and forces this mark's removal when the planner lands.")
 def test_f32_retreats_to_wall_the_line_with_the_item_lock_disruptor():
-    """f32 + f20 (CRITICAL): fragile developing Dreepy Active, Budew (item_lock) benched, opp Gabite can
-    damage the line. The sound play is the retreat-to-promote-the-sacrificial-wall maneuver, NOT the
-    Crushing Hammer strip. Step 1 (Retreat) rides tier-0 in `_finish_turn_last` and wins the frame."""
+    """The sound play is the retreat-to-promote-the-sacrificial-wall maneuver; step 1 rides tier 0."""
     fx = _fixture("dragapult_hammer_over_develop_f32")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # [3] Retreat (wall the line with Budew)
-    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
-    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
-    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
-    # dead rung name and concluded the fix did not work. One xfail, one cause.
+    assert dec.chosen == fx["correct"]                          # [3] Retreat (wall the line)
+    # The rung-id assertion here is DELETED with its rung (Issue #386): it gave this strict xfail a
+    # SECOND cause, and the recorded reason is a seam-coverage gap. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GEN-0075")
 def test_f20_feeds_the_active_for_the_offensive_item_lock_maneuver():
-    """f20 (the ATTACH-enablement frame of the OFFENSIVE item-lock maneuver, ``disruptor_lock_maneuver``,
-    BUILT 2026-07-13): turn 2, a fragile Dreepy Active (0 Energy), Budew (item_lock) benched, opponent's
-    Gible can NOT damage us — so this is offensive disruption, not defensive walling. Attach the Crispin
-    Energy to the ACTIVE Dreepy so it can retreat into Budew and Itchy-Pollen the opponent's Item turn.
-    With the maneuver flag ON, ``feed-the-line-for-disruptor-lock`` fires and decide() picks the active
-    recipient [0] over the bench Dreepy [1] (the pre-maneuver blunder)."""
+    """The opponent CANNOT damage us here, so this is OFFENSIVE disruption, not defensive walling: the
+    Energy goes to the Active so it can retreat into the item-lock body."""
     fx = _fixture("dragapult_retreat_to_item_lock_f20")
     pilot = _pilot("dragapult_ex")
     pilot.disruptor_lock_maneuver = True
@@ -104,9 +76,7 @@ def test_f20_feeds_the_active_for_the_offensive_item_lock_maneuver():
 
 
 def test_f20_inert_with_the_maneuver_flag_off():
-    """Kill-switch bookend: with ``disruptor_lock_maneuver`` OFF the signal is silent
-    (`can_lock_line_with_disruptor` False) so the maneuver rung never fires — the flag is the ship-and-
-    refine lever. (The shipped PROFILE runs it ON, so flip it off explicitly here.)"""
+    """Kill-switch bookend. The shipped PROFILE runs the flag ON, so it is flipped off explicitly here."""
     fx = _fixture("dragapult_retreat_to_item_lock_f20")
     pilot = _pilot("dragapult_ex")
     pilot.disruptor_lock_maneuver = False
@@ -116,24 +86,19 @@ def test_f20_inert_with_the_maneuver_flag_off():
 
 @pytest.mark.req("REQ-GUST-0014")
 def test_f10_develops_instead_of_gusting_a_harmless_active():
-    """f10: the opp Active (Kyogre, 0 Energy) is harmless NOW — gusting a benched body up would just free
-    Kyogre to the Bench. `gust-for-the-stall` stands down (gated on `opp_active_can_damage_us`) and the
-    agent attaches Energy to develop instead, saving the premium Boss's Orders."""
+    """Gusting a benched body up would FREE the harmless Active, so `gust-for-the-stall` stands down."""
     fx = _fixture("dragapult_gust_wasted_in_setup_f10")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # [2] Attach {P} -> Dreepy
     boss = next(o for o in dec.options if o.card_id == BOSS)
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
+    # The `not in <deleted-rung>` line here is GONE with its rung (Issue #386) — it would be true of
+    # every board in the game.
 
 
 @pytest.mark.req("REQ-GEN-0076")
 @pytest.mark.xfail(strict=True, reason=marks("dragapult_poffin_whiff_take_gust_ko_f79")[0].kwargs["reason"])
 def test_f79_poffin_whiff_detected_after_tightening_bench_fill_filter():
-    """f79: the deck holds no fetchable <=70-HP Basic, so Buddy-Buddy Poffin whiffs. With the `bench_fill`
-    filter tightened to <=70 HP, the sound whiff guard `dont-search-an-empty-deck` (-60) now fires on the
-    Poffin play. (The gust-KO is still the pick — Boss's Orders for the Phantom-Dive line.)"""
+    """The `bench_fill` filter is <=70 HP (the card's own text), so the whiff guard can see exhaustion."""
     fx = _fixture("dragapult_poffin_whiff_take_gust_ko_f79")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # [4] Boss's Orders (gust-for-the-ko)

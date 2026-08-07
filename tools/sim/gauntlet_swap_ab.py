@@ -1,44 +1,18 @@
-"""Paired-delta A/B for a CODE SWAP — the merge evidence a decider swap owes (#139, ADR-0069 §8).
+"""Paired-delta A/B for a CODE SWAP — the merge evidence a decider swap owes (ADR-0069 §8).
 
-`gauntlet_ab.py` A/Bs a PROFILE flag: it flips the switch through an overlay while both arms run the
-same code. That is the wrong instrument once a swap DELETES what the switch used to fall back to —
-flag-OFF is then degraded mode, not the incumbent, and the on−off delta measures the decider against
-nothing. This runner A/Bs two BUILDS instead.
+`gauntlet_ab.py` A/Bs a PROFILE flag with both arms on the same code — the wrong instrument once a
+swap DELETES the flag's fallback, since flag-OFF is then degraded mode, not the incumbent. This
+runner A/Bs two BUILDS, opponent held fixed at the incumbent:
 
-The construction is the same paired one (`sim.paired_ab`), with the opponent held fixed at the
-INCUMBENT build so the raw deck matchup subtracts out:
+    ON = winrate(D@candidate vs O@incumbent), OFF = winrate(D@incumbent vs O@incumbent)
 
-    for each directed matchup (D, O), D != O:
-        ON  = winrate(D@candidate  vs  O@incumbent)
-        OFF = winrate(D@incumbent  vs  O@incumbent)
-        delta = ON - OFF
-
-Both arms are seat-balanced by ``seat_plan`` (ADR-0021), so first/second-player advantage cancels
-inside each arm rather than being handed to one side.
-
-Two builds in one process is exactly the ``sys.modules`` collision the battle harness was
-process-isolated to avoid — so each contestant is a self-contained BUNDLE (`submit.package`, which
-stages `common/` and `cg/` into the bundle) and is served by its own subprocess with NO shared
-``extra_syspath``. That is what lets candidate `common/` and incumbent `common/` coexist.
-
-    # stage the incumbent from a worktree at the pre-swap commit, then:
+Two builds in one process is the ``sys.modules`` collision the harness is process-isolated to
+avoid, so each contestant is a self-contained BUNDLE in its own subprocess, NO shared syspath.
     python tools/sim/gauntlet_swap_ab.py --candidate /tmp/ab/new_bundles \\
         --incumbent /tmp/ab/old_bundles --n 200 --jobs 4 --out /tmp/ab
 
-**Two stage rules, chosen by ``--stage`` (#136 directive 6, re-scoped by ADR-0072).** ``mid-build``
-(Phases 1a–1g) is the **Tripwire**: ``crashes == 0 AND CI-lo >= -5%``, with **no delta clause** — a
-mid-build decider swap is not trying to raise win rate, so merit belongs to the two deterministic
-per-frame gates in ``train.gates`` and this run only excludes catastrophes. ``post-composition``
-(#145 onward) is the original `flips_on` verbatim, where a positive delta is meaningful.
-
-**Read the precision beside the verdict.** Both rules are a 95% CI LOWER BOUND, so a clearly positive
-delta can clear one at a width that could never have done so on its own — and under the
-post-composition rule a delta near zero cannot clear it without thousands of games per arm per
-matchup (1b: n ≈ 2340/arm/matchup, ~28,000 games). The report prints the rule's verdict, the stage it
-applied, and the half-width achieved, so a wide-but-passing interval is never read as precision it
-does not have. What any run establishes unconditionally is the crash gate (a hard zero) and the
-exclusion of a regression larger than the CI lower bound.
-"""
+``--stage`` picks the rule (`paired_ab.STAGES`); both are a 95% CI LOWER BOUND, so the report prints
+the achieved half-width beside the verdict — a wide-but-passing interval is not precision."""
 from __future__ import annotations
 
 import argparse
@@ -85,16 +59,14 @@ def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path
     verdict = verdict_fn(result, crashes=crashes)
     print(f"\nAGGREGATE delta={result['delta']:+.4f}  95% CI "
           f"[{result['ci_lo']:+.4f}, {result['ci_hi']:+.4f}]  (+-{half:.4f})  crashes={crashes}")
-    # The rule is the CI LOWER BOUND, not the half-width: a positive enough delta clears the bound at
-    # a width that could never have done so on its own. Report both, so a wide-but-passing interval is
-    # not read as precision it does not have, and a narrow-but-failing one is not excused.
+    # The rule is the CI LOWER BOUND, not the half-width, so both are reported: a positive enough
+    # delta clears the bound at a width that could never have done so on its own.
     print(f"PRECISION: +-{half:.1%} at n={n} per arm per matchup — this run excludes a regression "
           f"worse than {abs(result['ci_lo']):.1%}, and is {'' if half <= reg_tol else 'NOT '}tight "
           f"enough to have cleared the rule on width alone.")
     print(f"STAGE: {stage}")
-    # The label follows the stage: mid-build is a TRIPWIRE, never a "flip rule" — that phrase is on
-    # the Tripwire's _Avoid_ list (tools/sim/CONTEXT.md) precisely because it claims more than the
-    # verdict means.
+    # mid-build is a TRIPWIRE, never a "flip rule" — that phrase is on the Tripwire's _Avoid_ list
+    # (`tools/sim/CONTEXT.md`) because it claims more than the verdict means.
     print(f"{verdict_label}: {verdict}  (rule: {rule_text})")
     if stage == "mid-build":
         # Say what this verdict does NOT claim, next to the verdict itself — the whole failure mode

@@ -83,9 +83,8 @@ def test_unknown_ids_read_zero_rather_than_guessing(combat):
 
 @pytest.mark.req("REQ-THREATCEIL-0003")
 def test_the_card_level_fallback_still_credits_hand_size_without_attack_records(combat):
-    # The fallback path: no AttackStat resolves, so the read drops to the card-level roll-up.
-    # It must still credit the hand-size scaler — that credit used to be hand-rolled at two
-    # separate call sites, and one of them omitted it.
+    # No AttackStat resolves, so the read drops to the card-level roll-up — which must still credit
+    # the hand-size scaler.
     from common.scouting.provider import CardStat, DictCardStatProvider
     from common.strategy.combat import CombatMath
     blind = CombatMath(DictCardStatProvider({

@@ -15,8 +15,7 @@ from pathlib import Path
 
 
 def pairings(agents: list[str], *, include_mirror: bool = True) -> list[tuple[str, str]]:
-    """The deck pairings for the gauntlet: every unordered cross pair, plus each mirror when
-    ``include_mirror`` (the grilled corpus mix). Order within a pair is (earlier, later) in the given
+    """Every unordered cross pair, plus each mirror when ``include_mirror``. Pair order is the given
     agent order; seat balancing at run time puts each deck in both engine seats regardless."""
     out: list[tuple[str, str]] = []
     for i, a in enumerate(agents):
@@ -35,11 +34,8 @@ def pair_stem(a: str, b: str, when, sha: str) -> str:
 
 def generate_gauntlet(agents, n, *, agents_root, out_root, when, sha, extra_syspath=(),
                       include_mirror: bool = True):
-    """Run ``n`` seat-balanced games per pairing through `play_match` + `MatchRecorder`, writing each
-    clean game as a tagged replay under ``<out_root>/gauntlet/<stem>/<episode_id>.json``; return the
-    gauntlet root. Crashed games are SKIPPED (an unclean policy game would poison the corpus). Each
-    game alternates which deck sits in engine seat 0 (ADR-0021) so both decks' decisions are captured
-    from both the first- and second-player seat, and the film's `TeamNames` record the deck per seat."""
+    """Run ``n`` seat-balanced games per pairing, writing each clean game as a tagged replay -> the
+    gauntlet root. Crashed games are SKIPPED: an unclean policy game would poison the corpus."""
     from sim.battle import AgentServer, play_match, read_deck
     from sim.record import MatchRecorder
     from sim.selfplay import episode_id

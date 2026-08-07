@@ -13,11 +13,8 @@ Row = dict  # {"rank": int, "teamId": int, "teamName": str, "score": float}
 
 
 def rating_cutoffs(leaderboard: list[Row], bands=config.BANDS) -> list[tuple[str, float]]:
-    """Min score for each (contiguous) band, derived from the score distribution.
-
-    Returns [(band, min_score)] ordered top->down; a score below the last band's
-    min is outside the kept range (the dropped lower tier).
-    """
+    """Min score for each contiguous band, derived from the score distribution. Returns [(band, min)]
+    ordered top->down; a score below the last band's min is outside the kept range."""
     scores = sorted((r["score"] for r in leaderboard), reverse=True)
     n = len(scores)
     out = []

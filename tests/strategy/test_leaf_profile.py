@@ -1,17 +1,8 @@
 """Issue #138 Phase 0b — the **Leaf Profile** pin (ADR-0068 decision 1).
 
-Because StateModel fields are lazy, the cost of an evaluation is set by the field SET it touches —
-and that set is invisible in the source. Nothing in a future `state_value` term will say "this line
-costs you the Needs assignment DP on every one of a dozen forked leaves". So the field set is pinned
-here: it grows, this fails, and somebody has to re-measure deliberately.
-
-Pinned as a field-SET SNAPSHOT and deliberately NOT as wall-clock — a timing assertion is flaky
-across the Windows and Linux CI runners. The measured timings are PR evidence (recorded in the commit
-and in ADR-0068's consequences), not assertions.
-
-Both profiles are reported PER SIDE, which is what keeps the side-sharing rationale falsifiable: the
-design claims the expensive clusters sit on opposite sides of the table, so the split is the number
-that would refute it.
+StateModel fields are lazy, so an evaluation's cost is set by the field SET it touches and that set
+is invisible in the source. Pinned as a field-SET SNAPSHOT, deliberately NOT as wall-clock (flaky
+across the CI runners): it grows, this fails, and somebody re-measures deliberately.
 """
 import json
 import sys
@@ -23,56 +14,18 @@ from common.state_model import StateModel
 
 REPO = Path(__file__).resolve().parents[2]
 
-#: The exact model field set ONE per-decision `Board` build touches, as measured on real correction
-#: frames. Every entry traces to a field migrated in 0b under ADR-0068 decision 3's criteria; the
-#: `theirs.*.prize_value` rows are the prize map the cross-side race composite reads.
-#: **Re-measured 2026-07-27 (#142, Phase 1d).** **Famine** is now read off the model on EVERY
-#: decision, not only on a menu offering an attach, so the deck-availability chain
-#: (`visible_counts` -> `unseen_counts` -> `deck_energy_counts` -> the two typed leg projections)
-#: moved out of `ATTACH_DECIDER_PROFILE` and into the per-decision cost. Measured on these frames,
-#: dragapult_ex, the retired premise vs the oracle: **1.216 ms -> 1.511 ms per Board build
-#: (+0.294 ms, +24%)**. Paid once per decision — every field here memoizes for the life of the snapshot, and
-#: both Budget legs share the one `deck_energy_counts` derivation, so the second leg is an extra
-#: `attach_budget` assembly rather than a second walk over my zones. Accepted: it is the price of
-#: the famine premise being typed and accelerator-aware at all, which is the entire point of the
-#: phase, and it is ~3 orders below the per-match budget (grader: 2 vCPUs x ~10 min/match).
-#:
-#: **Re-measured 2026-08-01 (POC-T1, Issue #260).** The bypass census moved onto the model, so THEIR
-#: half's clock family now appears here — the reads are not new work, they are the same reads through
-#: the snapshot instead of around it (`theirs.incoming` is the folded doom read; `theirs.turns_to_ko_me`
-#: the `opponent_target_value` removal Δ; `theirs.*.attached_types` the deny relevance read). Cost,
-#: measured per Board build over each agent's committed correction corpus, this tree vs `origin/main`:
-#: **dragapult_ex 1.527 -> 1.554 ms (+1.8%), mega_lucario 1.428 -> 1.581 ms (+10.7%),
-#: mega_starmie 1.626 -> 1.749 ms (+7.6%)**. The delta is memo-KEY construction, not derivation: the
-#: clock memos key by VALUE now (a canonical projection) rather than by `id()`, because the deny and
-#: target instruments hand them TEMPORARY body dicts whose addresses can be reallocated. Keys are
-#: cached per object (`_Lazily._key`), which is what keeps the increase in single digits rather than
-#: the ~25% a naive re-canonicalisation per read measured. Accepted on the same grounds as above.
-#: **Re-measured 2026-08-02 (Issue #261 item 2d).** The Prize Path's their-side gained a second
-#: ROUTE to my Bench — the shared-budget rider harvest (ADR-0086 decision 5's sharpening), which
-#: `_their_turns_to_ko`'s printed-damage read structurally cannot express. Three fields:
-#: `theirs.bench_harvest_clock` plus the two raw opponent-board arguments it takes.
-#:
-#: The pin caught a real defect before it merged, which is the whole point of it. The obvious
-#: spelling asked the clock PER BODY, and the rider budget is a property of the BENCH — so each
-#: member re-derived the same payload table and re-ran the same subset search. Measured as an exact
-#: in-process A/B (the leg live vs neutered, same pilot, same frames, so machine noise cancels):
-#: **+2.48 / +2.65 / +2.71 ms per Board build (+36% / +36% / +32%)** on dragapult_ex / mega_lucario /
-#: mega_starmie. Solving the clock ONCE for the whole Bench (`CombatMath.bench_harvest_clock`, which
-#: `turns_to_ko_me`'s bench leg now reads underneath, so there is still one derivation) brings that
-#: to **+1.75 / +1.56 / +0.33 ms (+24.8% / +21.8% / +3.7%)**. Accepted on the same grounds as the two
-#: re-measures above: paid once per decision, memoised for the life of the snapshot, and ~3 orders
-#: below the per-match budget (grader: 2 vCPUs x ~10 min/match).
+#: The field set ONE per-decision `Board` build touches (ADR-0068 decision 3). Re-measure before
+#: re-pinning: a per-BODY spelling of a per-BENCH clock cost +36%, and this pin caught it (Issue #261).
 PER_DECISION_PROFILE = frozenset({
     "mine.active",
-    "mine.active.energy_count",       # ← POC-T1: Board's `my_active_energy`, off its one home
+    "mine.active.energy_count",
     "mine.active.energy_key",
     "mine.active.stat",            # the fail-OPEN unreadable-body check the famine read makes first
     "mine.active_famine",
     "mine.attach_budget",
     "mine.attack_blocked",
     "mine.bench",
-    "mine.bench_count",               # ← POC-T1: bench occupancy has ONE derivation now
+    "mine.bench_count",
     "mine.bench_full",
     "mine.bodies",
     "mine.body_raws",
@@ -84,7 +37,7 @@ PER_DECISION_PROFILE = frozenset({
     "mine.hand_energy_counts",
     "mine.hand_energy_types",
     "mine.hand_ids",
-    "mine.hand_size",                 # ← POC-T1: Board's `my_hand_size`, off its one home
+    "mine.hand_size",
     "mine.prizes_hidden",
     "mine.prizes_remaining",
     "mine.reachable_attach",
@@ -93,235 +46,56 @@ PER_DECISION_PROFILE = frozenset({
     "model.prize_race",
     "theirs.active",
     "theirs.active.prize_value",
-    "theirs.active.attached_types",   # ← POC-T1: Deny Relevance, off the model's BodyView
-    "theirs.active_raw",              # ← #261 2d: the harvest clock's opponent-Active argument
+    "theirs.active.attached_types",   # Deny Relevance
+    "theirs.active_raw",              # the harvest clock's opponent-Active argument
     "theirs.bench",
     "theirs.bench.attached_types",
     "theirs.bench.prize_value",
-    "theirs.bench_harvest_clock",     # ← #261 2d: the Prize Path's RIDER route to my Bench
+    "theirs.bench_harvest_clock",     # the Prize Path's RIDER route to my Bench
     "theirs.bodies",
-    "theirs.body_raws",               # ← #261 2d: that clock's opponent-board argument
+    "theirs.body_raws",               # that clock's opponent-board argument
     "theirs.discard_energy_counts",
-    "theirs.discard_ids",             # ← POC-T1: `opp_has_played_gust`, off the public zone
-    "theirs.hand_size",               # ← POC-T1: THE supplier of the opponent hand count
-    "theirs.incoming",                # ← POC-T1: the FOLDED doom read, at the `UNCHARGED` policy
+    "theirs.discard_ids",             # `opp_has_played_gust`
+    "theirs.hand_size",
+    "theirs.incoming",                # the FOLDED doom read, at the `UNCHARGED` policy
     "theirs.prizes_remaining",
-    # ← POC-T1: `opponent_target_value`'s removal Δ. RENAMED from `theirs.turns_to_ko_me` by
-    # ADR-0117, and a rename is all it is: the integer route is that clock's `.turns` view.
-    #
-    # **Measured before re-pinning**, as this pin's own note demands — an argument that a rename
-    # costs nothing is not the same as a measurement that it costs nothing, and this pin exists
-    # because that difference caught a real +36% defect (Issue #261 item 2d, above). On the
-    # `test_state_model` fixture: ONE `turns_to_ko_me()` registers exactly one field
-    # (`theirs.survival_clock`), taking BOTH readings still registers that same one field, and the
-    # two share ONE memo entry (1 before, 1 after). `turns_to_ko_me` no longer calls `_memoized` at
-    # all, so there is no second registration to find. Field-set cardinality is unchanged.
+    # ADR-0117 renamed this from `theirs.turns_to_ko_me`; the integer route is that clock's `.turns`
+    # view, and `turns_to_ko_me` no longer calls `_memoized`, so there is no second registration.
     "theirs.survival_clock",
-    # ← ADR-0119: `prize_advance` is the LINE's prize, so the rows ask what each opponent body
-    # BECOMES. Unlike the `survival_clock` rename above this is a genuinely NEW derivation, so it
-    # was measured rather than argued.
-    #
-    # **Measured before re-pinning**, the pin's own method (Issue #261 item 2d): an exact in-process
-    # A/B, the leg live vs neutered to `(0, 0)`, interleaved across three passes over the same 40
-    # frames so machine drift hits both arms equally. **3.116 ms live against 3.100 ms neutered —
-    # +0.016 ms per Board build, +0.52%** over 120 paired samples. Accepted on the same grounds as
-    # every re-measure above: card knowledge only (an `evolvesFrom` name-chain and `prize_value`,
-    # both already in the stat cache), memoised per card id for the life of the snapshot, and ~3
-    # orders below the per-match budget (grader: 2 vCPUs x ~10 min/match).
-    #
-    # The doubled "their" matches the sibling `their_forward_payoff` memo key rather than reading
-    # better — one naming convention, even where it is an ugly one.
+    # ADR-0119: `prize_advance` is the LINE's prize, so the rows ask what each opponent body BECOMES.
+    # The doubled "their" matches the sibling `their_forward_payoff` memo key.
     "theirs.their_forward_line_prize",
 })
 
-#: The model fields the ATTACH DECIDER adds on any menu that offers an energy attach (#139,
-#: ADR-0069), measured on the mega_starmie attach corpus. They are NOT in the per-decision profile
-#: above because the sampled `dp_*` frames happen to carry no attach option — the two sets are
-#: measurements of different menus, not a discrepancy.
-#:
-#: The cluster it drags in is the deck-availability chain (`visible_counts` -> `unseen_counts` ->
-#: `deck_energy_counts` -> `deck_energy_types`), which the Attach Budget needs to know which colours
-#: the deck can still yield (ADR-0067's fail-OPEN presence gate). That is a deliberate, bounded cost:
-#: one pass over my zones per decision, memoized for the whole decision, and it is the price of the
-#: Budget being typed at all. Everything else here is body-view construction (dict wrapping, no
-#: derivation) plus the memoized per-body Budget and reachable-damage reads.
-#: **Re-measured 2026-07-27 (#142).** This set has COLLAPSED, and the collapse is the finding: the
-#: deck-availability chain it used to name is now paid on every decision by the famine read, so the
-#: attach decider adds essentially nothing over the baseline. The cost moved — it did not grow.
+#: What the ATTACH DECIDER adds on a menu offering an energy attach (Issue #139, ADR-0069). Nearly
+#: empty because the famine read now pays the deck-availability chain on every decision.
 ATTACH_DECIDER_PROFILE = frozenset({
     "mine.best_reachable_damage",
 })
 
-#: The model fields the PROMOTE/RETREAT DECIDER adds (#141, ADR-0100) on any menu where it prices an
-#: option — a TO_ACTIVE/SWITCH body pick, or a MAIN menu carrying a RETREAT (which is why they show
-#: up on the attach corpus at all: those frames are open turn menus).
-#:
-#: Each read is RULED, not incidental:
-#:   * `theirs.active_raw` / `theirs.body_raws` — the survival clock's opponent side, for §4's
-#:     per-body `exposure` and `preservation`.
-#:   * `mine.bench_raws` — the Bench Harvest's input, for the preservation leg's bench reading.
-#:
-#: **Re-measured 2026-08-01 (POC-T1, Issue #260).** `theirs.incoming` has LEFT this set — not because
-#: §6's `tempo_denied` stopped reading the curve, but because the per-decision build now reads it too
-#: (the folded doom read), so it nets out of the "what does this decider ADD" subtraction. The ruling
-#: that it is legitimate cost for THIS decider is unchanged; see PER_DECISION_PROFILE.
-#:
-#: **Re-measured 2026-08-02 (Issue #261 item 2d).** `theirs.active_raw` and `theirs.body_raws` have
-#: LEFT for the same reason and with the same caveat: the Prize Path's rider route reads both on
-#: EVERY decision now, so they net out of this subtraction. §4's `exposure`/`preservation` still read
-#: them, and this decider still pays for them — see PER_DECISION_PROFILE.
+#: What the PROMOTE/RETREAT DECIDER adds (Issue #141, ADR-0100). It also reads the survival clock's
+#: opponent side, which nets out of this subtraction because the per-decision build now reads it too.
 PROMOTE_DECIDER_PROFILE = frozenset({
     "mine.bench_raws",
 })
 
-#: The model fields the DENY-SLOT keep price adds (ADR-0080 / Issue #187), on any menu where a
-#: forced discard prices a held denier. New as a MODEL read in POC-T1 (Issue #260): the deadline
-#: grade always read this clock, it just read it around the snapshot.
-#:
-#: Both entries are ruled cost for this consumer, not a leak:
-#:   * `theirs.turns_to_afford` — the deny slot's `/2^t` deadline grade IS this clock. A Hammer on a
-#:     body three turns from arming is worth a fraction of one on a body arming next turn.
-#:   * `theirs.discard_recur_fuel` — the clock's own input since Issue #204; a refueler reloads
-#:     outside the attach quota, so the bare quota does not merely under-state its clock, it is wrong.
-#:
-#: ⚠️ **UNEXERCISED by this file's corpus, as of Issue #261 item 2h — the CONSUMER is live, the
-#: corpus just never reaches it.** Measured 2026-08-02: `_frames()` carries SelectContexts
-#: `{0, 2, 7, 22}` and `_attach_frames()` only `{0}` — **no `_DISCARD` select among them** — and
-#: `_resolve_needs` runs once per pass emitting only `line` / `fund_attack` / `general` slots. A deny
-#: slot never opens here, so the deadline grade is never reached, so neither field is read.
-#:
-#: Both fields WERE being read on every frame in this file until item 2h — by `_recur_shadow`, which
-#: ran on every decision and which that item deleted. So this test was crediting the deny slot for a
-#: diagnostic's reads. Nothing about the deny clock changed: `_resolve_needs` still emits
-#: `needs.deny_slot(..., turns_to_ready=_opp_turns_to_ready(p))`, that delegates to
-#: `TheirSide.turns_to_afford`, and that consumes `discard_recur_fuel` on its `fuelled` leg
-#: (Issue #204). `deny_relevance` ships ON.
-#:
-#: Kept defined, and kept in `LEAF_PROFILE` — the cost claim about the consumer is unchanged and
-#: still true where it fires — but no longer asserted as ADDED by the attach test, because asserting
-#: a read no frame in the corpus makes is how a test goes vacuous. Restoring it to the pinned set is
-#: a matter of giving this file a frame with a forced discard and a held denier, not of re-wiring
-#: anything.
+#: What the DENY-SLOT keep price adds (ADR-0080 / Issue #187). ⚠️ UNEXERCISED here — no `_DISCARD`
+#: select in this corpus — so it is kept in `LEAF_PROFILE` but never asserted as ADDED (Issue #261).
 DENY_SLOT_PROFILE = frozenset({
     "theirs.discard_recur_fuel",
     "theirs.turns_to_afford",
 })
 
-#: The CEILING on the model field set one PLANNER-LEAF evaluation may touch.
-#:
-#: A leaf does not read the model directly — its own terms (`_readiness`, `_incoming_worst`,
-#: `_predicted_loss`) are one-sided closed-form reads that predate it. It reads the model *because
-#: `_simulate_line` re-runs my policy to end-of-turn*, and every decision inside that line builds a
-#: board. So the honest shape of a leaf's model cost is **N per-decision builds**, where N is the
-#: number of decisions the simulated line makes — measured at N = 4 on a real turn-1 drive, against a
-#: 12.7 ms leaf whose model share is roughly 0.08 ms (under 1%; the engine sim dominates).
-#:
-#: Pinned as a SUBSET bound rather than an equality because the set legitimately varies with the end
-#: board (an empty bench drops the bench prize-map row). Growth BEYOND the per-decision profile is
-#: what matters, and it is the tripwire for #145: the moment `state_value` reads a field the ordinary
-#: decision path does not — the Needs assignment, the clock curves, the deck Count Triples — this
-#: fails, which is exactly when the per-leaf cost needs measuring against the 2-vCPU / ~10-min grader
-#: bank and exactly when nobody would otherwise think to look.
-#: A leaf's simulated line re-runs my policy to end of turn, so it reaches menus WITH attaches and
-#: pays the attach decider's reads too — hence the union rather than the per-decision set alone.
-#: Fields the PLANNER LEAF reads beyond the per-decision build and the two deciders — the
-#: `ko_for_prizes` KO lines' own cluster. Separate from `PER_DECISION_PROFILE` because that one is
-#: pinned with `==` against a bare Board build, which never reaches these.
+#: What the `ko_for_prizes` KO lines add beyond the per-decision build and the two deciders. Separate
+#: from `PER_DECISION_PROFILE` because that one is pinned with `==` against a bare Board build.
 KO_LINE_PROFILE = frozenset({
-    # The Probability Leg (ADR-0074 decision 2, #175). Every `ko_for_prizes` line reads it once #177
-    # folded the five `_play_accel_extra` builders onto the typed Budget (ADR-0075 decision 6) — the
-    # five joined the two composed lines that already weighted. Admitted to the pin rather than
-    # re-measured: it is the THIRD projection of the SAME `deck_energy_counts` derivation already in
-    # `PER_DECISION_PROFILE` (`{t: c.p_any ...}` over an already-memoized map), so it is a dict
-    # comprehension, not a second walk over my zones.
+    # The Probability Leg (ADR-0074 decision 2). A THIRD projection of the same `deck_energy_counts`
+    # derivation already pinned above, so it is a dict comprehension, not a second walk over my zones.
     "mine.deck_energy_p",
 })
 
-#: The fields **`state_value`** adds when the planner leaf scores its end board (POC-T3 / Issue #262).
-#:
-#: This is the tripwire above FIRING and being answered, not being widened away. Its own note
-#: says the moment `state_value` reads a field the ordinary decision path does not, *"the per-leaf
-#: cost needs measuring against the 2-vCPU / ~10-min grader bank"* — so it was measured, on the same
-#: real turn-1 engine drive the tripwire itself uses (`test_planner_engine.py`, dragapult_ex):
-#:
-#:     leaf, hand-composed (`_leaf_value` + `_readiness` + `_value_term`)   16.76 ms median / 20.98 p95
-#:     leaf, `KO_SCORE x state_value(end board)`                             3.83 ms median /  5.31 p95
-#:     `state_value` alone, on a FRESH model (the T4 1-ply ordering cost)     247 us median /   354 p95
-#:     `state_value` re-scored on a WARM model (the ADR-0068 memo hit)         81 us median /   113 p95
-#:
-#: **The leaf got ~4x cheaper, not dearer**, which is the opposite of what a wider field set
-#: suggests and is worth stating plainly: the retired composition ran `_readiness` over every body
-#: with its eleven sub-helpers plus the Tier-5 `_value_term`'s hypothetical board build, and the
-#: scalar replaces all of that with reads that memoize on the ONE model. The field count went up
-#: because the model is now doing the work that used to happen beside it.
-#:
-#: ── RECONCILED 2026-08-04 (POC-T4/1, Issue #382) ─────────────────────────────────────────────────
-#: The **247 us** row above and the **8.14 ms** row further down were both labelled *"`state_value`
-#: on a FRESH model"* and read as a 33x contradiction. They are not in conflict: they measure
-#: different BOARDS built with different SUPPLIERS, and nothing said so. Measured on this box,
-#: dragapult_ex, 54 committed corpus frames, 5 passes each — the three conditions isolated:
-#:
-#:     mid-game corpus board, `needs` resolver live (a LIVE decision)      2.46 ms median / 4.39 p95
-#:     mid-game corpus board, `needs` -> None                              0.88 ms median / 2.16 p95
-#:     turn-1-SHAPED board (no bench either side, no hand), `needs` None    0.35 ms median / 0.47 p95
-#:
-#: Two multiplicative factors, both nameable:
-#:
-#: 1. **Board population** (~2.5x). Bodies on both Benches, attachments and discards are what the
-#:    per-body walks cost. The 247 us row was taken on a real turn-1 engine drive
-#:    (`test_planner_engine.py`), whose end board is nearly empty; the ms-scale rows are mid-game
-#:    correction frames. `STATE_VALUE_PROFILE`'s Issue #281 block already hints at this — it calls
-#:    the 40-frame corpus *"much richer boards"* — but never joined it to the 247 us figure.
-#: 2. **The `needs` DP** (~2.8x). `mine.needs` is LAZY and its resolver returns None on a board with
-#:    no injected hand, so the assignment never runs — which is exactly the condition of the develop
-#:    rollout's simulated end board (`planner._leaf_needs_resolution`). A live decision has a real
-#:    hand, so the DP fires. This is the factor the 247 us row's own note omits, and it is the larger
-#:    of the two.
-#:
-#: The residual to 33x is machine and era: the 8.14 ms row predates two of this file's later
-#: re-measures and names only *"this box"*. The canonical figure on THIS box, via the shipped
-#: instrument over the whole corpus (`python tools/train/value_lab.py`, 371 frames):
-#: **median 2.89 ms | P95 6.44 ms | max 30.87 ms** — consistent with Issue #291's P95 6.57 ms at
-#: `bb9bd69`, and with the 0.88 ms `needs`-free row above once the DP is added back.
-#:
-#: **Which one Issue #385 must size its beam against: the CORPUS figure (P95 ~6.4 ms), not 247 us.**
-#: The composer's 1-ply ordering runs on the LIVE decision board with the Pilot's suppliers threaded
-#: — the condition `value_lab` measures — once per candidate option. The 247 us figure is real but
-#: describes a stripped simulated end board reached through the develop rollout, which is the path
-#: Issue #386 deletes. Sizing against it would under-budget the composer by an order of magnitude.
-#: ─────────────────────────────────────────────────────────────────────────────────────────────────
-#:
-#: Every row below is a read some family in the registry is on record as making:
-#:   * `mine.attack_payoff` / `mine.bench_names` — `readiness` prices the best attack a body can actually
-#:     pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` roll-up (Issue #287,
-#:     ADR-0109), and it asks `readiness_p` about THAT attack rather than about "any attack";
-#:     pairing a max-damage payoff with the famine probability saturates the term and prunes the
-#:     attach that completes it. `bench_names` is the bench-partner condition's input, and it
-#:     REPLACED an inline comprehension inside `damage_facts` rather than adding a walk.
-#:
-#:     Re-pinned with a measurement, as this pin's own rule demands (60 corpus frames, this box).
-#:     **See the RECONCILED block above before comparing these to the 247 us row** — they measure a
-#:     different board with a different `needs` supplier, and the ~33x gap is accounted for there
-#:     rather than being the contradiction it reads as:
-#:
-#:         `state_value` on a FRESH model   before 8.37 ms median / 17.28 ms p95
-#:                                           after 8.14 ms median / 13.79 ms p95
-#:         the `attack_payoff` read alone, per body   1.80 us first call / 1.40 us memoized
-#:
-#:     ~2.7 bodies to a board, so the added work is ~5 us against a fresh-model evaluation
-#:     dominated three orders of magnitude over by the model's own lazy derivations. The two rows
-#:     that left (`mine.active.payoff_attack`, `mine.bench.payoff_attack`) were the printed-only
-#:     body-scoped twin this read replaces; it could not see the Bench, which is the whole bug.
-#:   * `mine.*.prize_value` + `theirs.survival_clock` — `survival`, both areas, Bench-Harvest-aware.
-#:     (`survival` reads that clock's INTEGER `.turns`; only the opponent-target ranking takes the
-#:     fractional `.exact` — ADR-0117.)
-#:   * `theirs.active.hp_remaining` — `threat`'s reachability filter (can I actually reach this KO).
-#:   * `mine.forward_index` / `forward_payoff` — `development`'s evolution topology, over MY decklist.
-#:   * `mine.mine_turns_to_afford` — the forward leg of `readiness`'s odds, so a mid-turn board with
-#:     the attach already spent does not go flat.
-#:   * `mine.role_worth` — the deck-DECLARED Roles `readiness` and `development` weigh by.
-#:   * `mine.needs` — the `hand` family's `set_keep_v2` spine. LAZY: on a simulated board with no
-#:     injected hand the resolver returns None and the DP never runs.
+#: What `state_value` adds when the planner leaf scores its end board (POC-T3 / Issue #262). Size a
+#: beam against the CORPUS cost (`tools/train/value_lab.py`), never a turn-1 board: `needs` is LAZY.
 STATE_VALUE_PROFILE = frozenset({
     # `state_value` memoizes its own per-family dict on the model (Issue #262's incremental-eval
     # line), so the scalar itself appears as a cross-side memo key beside the fields it reads.
@@ -345,60 +119,8 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.reachable_incoming",
     "theirs.turns_to_ko_me",
 
-    # ── POC-T3.5 / Issue #281: `threat`'s reachability gate asks the DAMAGE MODEL ──────────────
-    # The gate used to read `mine.best_reachable_damage` — the biggest PRINTED number, which is
-    # opponent-independent and therefore wrong in both directions (it missed every Weakness Knock
-    # Out and claimed every prevented one). It now reads the sibling against their actual Active,
-    # which drags in the Damage Formula's scaler context and, with it, the `damage_facts` gatherer
-    # on BOTH sides — that is the whole of the growth below.
-    #
-    # **Measured before re-pinning**, as this pin's own note demands. On the 40-frame corrections
-    # corpus, against a `state_value` whose fresh-model median on those (much richer) boards is
-    # ~6.7 ms: `damage_context(attacker="mine")` costs **111 us median / 149 us p95 on a FRESH
-    # model** and is memoized per direction for the model's lifetime, so every later reader pays a
-    # dict lookup. The damage read itself is not new cost: it is the same per-attack loop under the
-    # same Budget filter, one closed-form call (`predicted_damage`) where there used to be one field
-    # read (`attack_damage`).
-    #
-    # **Issue #280 added the SECOND direction** (`survival`'s clocks read `attacker="theirs"`) and
-    # re-measured, because the sentence above originally predicted it would cost a dict lookup and
-    # that was the one number worth checking rather than inheriting. Same 40 frames, same method:
-    # one direction on a fresh model 102 us median, BOTH directions on a fresh model **107 us
-    # median** — the second direction is ~5 us, not another 100. The reason is structural rather
-    # than lucky: the cost is `_SideBase.damage_facts`, one `@lazy` per SIDE that both directions
-    # share, and `damage_context` itself only decides which side's record becomes `atk_`/`def_`.
-    # So the profile below does not grow at all for Issue #280 — the second direction reads no
-    # field the first did not.
-    # ── ADR-0115 / Issue #361: the gatherer walks two MORE per-side facts ──────────────────
-    # The open filtered-count family reads RAW MATERIAL rather than a pre-reduced count, because its
-    # predicate's argument lives on the ATTACK (`AttackStat.scaleFilter`) and the context builder has
-    # never seen the attack. So `damage_facts` gained `in_play_names` (a name per in-play body) and
-    # `in_play_attack_names` (that body's attack names) — on BOTH sides, for the same structural
-    # reason the block below gives: `damage_facts` is one un-overridden `_SideBase` method and the
-    # Formula's variables are `atk_`/`def_`-relative, so one direction needs both records.
-    #
-    # **Measured before re-pinning**, as this pin's own note demands. In-process A/B on the same
-    # pilot and the same frames, the fields LIVE vs NEUTERED (returning their empty identity), and
-    # INTERLEAVED per frame (live, off, off, live) with the paired per-frame deltas summarised — a
-    # sequential A/B was tried first and its two halves disagreed by more than the effect, because
-    # the whole machine drifts between them. 40 correction frames:
-    #
-    #   * the sub-step, `damage_context` BOTH directions on a fresh model (1200 pairs):
-    #     **72.9 us -> 87.7 us median, paired delta +13.7 us (+18.8%)**.
-    #   * the whole leaf, `StateModel.build` + `state_value` on a fresh model (600 pairs):
-    #     **888.1 us -> 912.3 us median, paired delta +29.7 us (+3.3%)**.
-    #
-    # Accepted on the same grounds as the three re-measures at the top of this file, and it is the
-    # SMALLEST of them by nearly two orders — Issue #261 item 2d accepted +1.75 ms on this same path.
-    # Paid once per decision, memoised for the life of the snapshot, and ~4 orders below the
-    # per-match budget (grader: 2 vCPUs x ~10 min/match). The walk is per BODY over `bodies` — the
-    # same iteration `counters_in_play` / `ex_in_play` already make — plus one `attack_stat` dict
-    # lookup per attack; nothing here is a new derivation.
-    #
-    # Two consumers exist in the whole pool (651, 708) and neither card appears in any shipped deck,
-    # which is why this cost is worth stating plainly rather than burying: today it is paid on every
-    # leaf and collected on none of them. That is the price of the context being ONE dict built
-    # per direction rather than per attack, which is the property `test_damage_context` pins.
+    # ADR-0115: the open filtered-count predicate's argument lives on the ATTACK, which the context
+    # builder never sees, so `damage_facts` walks raw names on both sides rather than a reduced count.
     "mine.in_play_names",
     "theirs.in_play_names",
     "mine.in_play_attack_names",
@@ -420,22 +142,13 @@ STATE_VALUE_PROFILE = frozenset({
     "mine.discard_energy_total",
     "mine.discard_ids",
     "mine.prizes_taken",
-    # The `theirs.bench.*` half of the SAME gatherer. `damage_facts` is one un-overridden method on
-    # `_SideBase` — it walks `bodies` and `bench` for `counters_in_play`, `bench_stage2`,
-    # `ex_in_play` and `bench_names` — so these are read on any frame where their Bench is not
-    # empty. They are DECLARED rather than measured: the engine-driven frame this ceiling is
-    # asserted against happens to reach the leaf with an empty opponent Bench. Safe to declare on a
-    # `<=` bound (it is a ceiling, not an equality), and the alternative is a latent failure that
-    # arrives the first time the drive benches an opposing body.
+    # The `theirs.bench.*` half of the SAME gatherer, DECLARED rather than measured: the drive this
+    # ceiling is asserted against reaches the leaf with an empty opponent Bench, and `<=` allows it.
     "theirs.bench.damage_counters",
     "theirs.bench.is_ex",
     "theirs.bench.is_stage2",
     "theirs.bench.stat",
-    # …and `bench_names`, the fourth thing that same walk reads, which the comment above names but
-    # the list omitted. Surfaced by Issue #286's merge with Issue #287 (`attack_payoff` keys on
-    # `bench_names`) on a frame whose opponent Bench is NOT empty — exactly the "latent failure that
-    # arrives the first time the drive benches an opposing body" the comment predicts. DECLARED for
-    # the same reason as its three siblings, on the same `<=` ceiling.
+    # …and `bench_names`, the fourth thing that same walk reads. DECLARED on the same `<=` ceiling.
     "theirs.bench_names",
     "theirs.active.damage_counters",
     "theirs.active.energy_count",
@@ -448,24 +161,8 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.discard_energy_total",
     "theirs.prizes_taken",
 
-    # ── POC-T3.5 / Issue #284: `threat` reads their BENCH as well as their Active ──────────────
-    # The loop returned at most one element, so chip standing on their bench between turns was
-    # invisible — `dragapult_ex`'s whole win plan. Widening it adds exactly TWO fields, measured
-    # with `_Probe` over a board that actually has an opponent Bench (the engine drive this file
-    # pins against reaches the leaf with an empty one, so the measurement had to be made on a
-    # constructed board and is DECLARED here on the same `<=` ceiling as the `theirs.bench.*` block
-    # above):
-    #
-    #   * `mine.best_reachable_bench_damage` — the bench route. NOT a second damage read: it is the
-    #     attack's printed snipe RIDER under the SAME `reachable_attach` Attach Budget the two
-    #     existing reachability reads use, so the added cost is one `max` over the attacker's
-    #     attacks, memoized per (attacker, defender) on the model. No `context` — a rider ignores
-    #     Weakness and Resistance by rule (ADR-0022), so no Damage Formula scaler reaches it and the
-    #     `damage_facts` gatherer above is not touched a third time.
-    #   * `theirs.bench.hp_remaining` — the counters themselves, the fact the issue exists for.
-    #
-    # `theirs.bench.prize_value` is read too and is deliberately NOT listed: `PER_DECISION_PROFILE`
-    # already carries it (the Prize Path's bench map), and `LEAF_PROFILE` is their union.
+    # Issue #284: `threat` reads their BENCH too. The bench route is the attack's printed snipe RIDER
+    # under the same Attach Budget — a rider ignores Weakness/Resistance (ADR-0022), so no scaler.
     "mine.best_reachable_bench_damage",
     "theirs.bench.hp_remaining",
 })
@@ -475,13 +172,8 @@ LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_
 
 
 class _Probe:
-    """Captures the field set a call touches by handing every model build a shared probe.
-
-    Restores the original **class-dict entry** (the `classmethod` descriptor), not the bound callable
-    that attribute access yields — assigning the latter back would leave `StateModel.build` globally
-    rebound for every test that runs afterwards, which is test pollution regardless of whether it
-    changes an answer.
-    """
+    """Restores the original class-dict entry (the `classmethod` descriptor), not the bound callable
+    attribute access yields — the latter leaves `StateModel.build` globally rebound."""
 
     def __init__(self):
         self.fields: set = set()
@@ -502,7 +194,6 @@ class _Probe:
         return False
 
     def split(self) -> dict:
-        """The per-side breakdown — the falsifiable half of the sharing rationale."""
         return {
             "mine": {f for f in self.fields if f.startswith("mine")},
             "theirs": {f for f in self.fields if f.startswith("theirs")},
@@ -521,12 +212,8 @@ _ATTACH_FRAMES = (("82523811", 59), ("83664340", 45), ("82750161", 59))
 
 
 def _attach_frames():
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089).
-
-    `corpus_record` raises on a missing frame, which is what the old `len(out) == len(wanted)` guard
-    was for — and it names WHICH frame, where the count could only say one went missing. The raw walk
-    also appended per matching line, so a duplicated frame would have inflated the count into a
-    silent pass; `load_corrections` dedups."""
+    """THE Corpus Reader (ADR-0087 / ADR-0089): `corpus_records` raises on a missing frame, naming
+    it, and dedups — a hand-rolled walk turns both failures into a silent pass."""
     from corpus_helpers import corpus_records
     return [c.obs for c in corpus_records(_ATTACH_FRAMES)]
 
@@ -539,8 +226,6 @@ def pilot():
 
 
 def test_the_per_decision_build_profile_is_pinned(pilot):
-    """The field set a live decision's Board build touches. A migration that drags in a new field —
-    especially one of the expensive clusters — moves this and must be measured, not merged."""
     with _Probe() as probe:
         for obs in _frames():
             pilot._board(obs, obs.get("select"), carried=pilot.carried())
@@ -551,7 +236,6 @@ def test_the_per_decision_build_profile_is_pinned(pilot):
 
 
 def test_the_per_decision_profile_touches_both_sides_and_the_cross_side_read(pilot):
-    """Reported per side, so the "expensive clusters sit on opposite sides" claim stays checkable."""
     with _Probe() as probe:
         for obs in _frames():
             pilot._board(obs, obs.get("select"), carried=pilot.carried())
@@ -560,8 +244,7 @@ def test_the_per_decision_profile_touches_both_sides_and_the_cross_side_read(pil
 
 
 def test_construction_itself_touches_nothing(pilot):
-    """The premise under every cost claim here: building the model computes no field, so a consumer
-    pays for reads alone. Measured at ~0.004 ms against a ~0.95 ms whole-Board build."""
+    """The premise under every cost claim here: a consumer pays for reads alone."""
     with _Probe() as probe:
         for obs in _frames():
             StateModel.build(obs, combat=pilot.combat, deck=pilot.deck)
@@ -569,18 +252,8 @@ def test_construction_itself_touches_nothing(pilot):
 
 
 def test_the_attach_decider_profile_is_pinned(pilot):
-    """The attach decider's model reads, pinned on a menu that actually offers an energy attach. Same
-    tripwire as the per-decision pin: if the decider starts reading the Needs assignment or a clock
-    curve, this moves and the per-leaf cost needs re-measuring before it merges.
-
-    **Driven at the DECIDERS rather than through `explain()` since POC-T4/5 (Issue #386).** The old
-    spelling ran a whole decision and subtracted the per-decision Board profile, on the premise that
-    what remained was the deciders' own reads. Arming the composer broke that premise, not the pin:
-    `plan_turn` now runs a beam search inside the same `explain()`, and it touched 51 further fields
-    — `state_value`, the damage context, both sides' bench stats — none of which the attach decider
-    reads. Left as it was, this tripwire would have been measuring the composer's cost under the
-    decider's name, and would have stopped moving when the decider changed. Calling the two deciders
-    directly measures what the docstring says it measures."""
+    """Driven at the DECIDERS, not through `explain()`: `plan_turn`'s beam touches dozens of further
+    fields no decider reads, so subtracting the per-decision profile would measure the composer."""
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     ms = _build_pilot("mega_starmie")[0]
@@ -598,32 +271,21 @@ def test_the_attach_decider_profile_is_pinned(pilot):
         "the decider field set moved — re-measure before re-pinning\n"
         f"  added:   {sorted(added - expected)}\n"
         f"  removed: {sorted(expected - added)}")
-    # The tripwire's real claim, kept intact: the ATTACH decider must not reach an expensive cluster
-    # it has no term for. The promote/retreat decider's own reads are netted out because it DOES have
-    # a term for the clock (ADR-0100 §6's `tempo_denied`) — these frames are open turn menus, where
-    # it legitimately prices the retreat option alongside the attach. Since POC-T1 the curve is also
-    # in the per-decision set (the folded doom read), so `added` no longer carries it either way; the
-    # claim is asserted against the union so it keeps biting if that ever reverses.
+    # The promote/retreat decider's reads net out because it DOES have a term for the clock
+    # (ADR-0100 §6); the subtraction is against the union so it keeps biting if that ever reverses.
     attach_only = added - PROMOTE_DECIDER_PROFILE - DENY_SLOT_PROFILE - PER_DECISION_PROFILE
     assert not any("incoming" in f or "needs" in f for f in attach_only), (
         "the attach decider reached an expensive cluster it has no term for")
 
 
 def test_an_unread_expensive_cluster_costs_nothing(pilot):
-    """Laziness where it matters: reading a cheap my-side field must not drag in their clock curves
-    or the deck-count derivation. This is what makes "maximal model, nothing speculative" coherent —
-    an offered-but-unread field is free."""
+    """An offered-but-unread field is free, which is what makes "maximal model, nothing
+    speculative" coherent."""
     with _Probe() as probe:
         for obs in _frames():
             StateModel.build(obs, combat=pilot.combat, deck=pilot.deck).mine.prizes_remaining
     assert probe.fields == {"mine.prizes_remaining"}
     assert not any("incoming" in f or "deck_energy" in f for f in probe.fields)
 
-# NB: the ENGINE-DRIVEN halves of this pin live in `test_planner_engine.py`, not here.
-# `test_leaf_profile` collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and
-# `ml_lethal_retreat_boost_to_ko_f24` used to depend on "the process's RNG position — the CI
-# heisenbug", documented in the retired `planner._develop_rollout_line`. Starting a native battle
-# ahead of those pins shifted that position and fired the heisenbug (it did, in CI). POC-T4/5 deleted
-# the rollout, so the ORIGINAL sensitivity is gone — but the placement stands, because moving these
-# back buys nothing and the ordering constraint is cheap insurance against the next engine-driven
-# test. Everything above is engine-free by design — keep it that way.
+# NB: the ENGINE-DRIVEN halves of this pin live in `test_planner_engine.py`. Everything above is
+# engine-free BY DESIGN — a native battle collected ahead of the lethal pins once fired a CI flake.

@@ -197,13 +197,8 @@ def test_accumulate_from_empty_prior_is_identity():
 
 @pytest.mark.req("REQ-FUNC-0002")
 def test_DERIVED_TAGS_is_exactly_what_the_classifier_can_emit():
-    """`DERIVED_TAGS` is a CLAIM about this module, and `card_tags.unsourced_tag_instances` trusts
-    it to decide whether a shipped tag survives a `--fresh` rebuild (Issue #395 D6.1). A stale claim
-    fails in the direction that HIDES data loss — a tag wrongly listed here reads as re-derivable and
-    the audit stays green while the rebuild deletes it. So both directions are asserted.
-
-    The probe records below are one per classify rule, in the shape the harness captures
-    (`cg/api.py` `Log` / `SelectContext` codes, mirrored locally by the module under test)."""
+    """A stale `DERIVED_TAGS` fails in the direction that HIDES data loss: a tag wrongly listed
+    reads as re-derivable, so the audit stays green while a `--fresh` rebuild deletes it."""
     records = [
         {"actor": 0, "logs": [{"type": 4, "playerIndex": 0}]},                       # draw
         {"actor": 0, "logs": [{"type": 6, "playerIndex": 0, "fromArea": 1, "toArea": 2}]},   # search

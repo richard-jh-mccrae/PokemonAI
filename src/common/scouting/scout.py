@@ -1,9 +1,7 @@
 """Scout: accumulate revealed-card evidence across a match and produce the Read.
 
-Reads the raw observation *dict* (so importing this package never loads the native
-engine); card stats for threats/targets come from an injected provider. `observe`
-never raises — on any internal error it returns a safe, low-confidence Read.
-"""
+Reads the raw observation *dict*, so importing this package never loads the native engine; card
+stats come from an injected provider. `observe` never raises — an error returns an empty Read."""
 from __future__ import annotations
 
 from ..board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
@@ -44,17 +42,14 @@ class Scout:
         except Exception:
             return Read()
 
-    # --- match lifecycle --------------------------------------------------
     def _maybe_reset(self, cur: dict) -> None:
-        # Turn counter only ever increases within a match; a drop means a new
-        # match began (local self-play harness reuses one process).
+        # A turn counter only ever increases within a match; a drop means a new match began.
         turn = cur.get("turn")
         if turn is not None:
             if self._last_turn is not None and turn < self._last_turn:
                 self._evidence.clear()
             self._last_turn = turn
 
-    # --- evidence ---------------------------------------------------------
     def _absorb(self, obs: dict) -> None:
         self._opp_in_play = []
         cur = obs.get("current") or {}
@@ -75,11 +70,8 @@ class Scout:
                 self._evidence.add(log["cardId"])
 
     def _add_pokemon(self, p) -> None:
-        """Every CARD a board Pokémon accounts for is revealed evidence — the body itself plus the
-        Energy cards, Tools and pre-evolutions it carries. One walk, shared with the deck tracker
-        and the two visible-count readers (`common.board_cards`, Issue #297): a body's ``energies``
-        is deliberately not among them, being the Energy UNITS those cards provide rather than the
-        cards."""
+        """Every CARD a board Pokémon accounts for — body, Energy cards, Tools, pre-evolutions. One
+        walk, shared with the deck tracker; ``energies`` is UNITS, not cards, so it is excluded."""
         for cid in body_card_ids(p):
             self._evidence.add(cid)
 
@@ -87,7 +79,6 @@ class Scout:
         if c and c.get("id"):
             self._evidence.add(c["id"])
 
-    # --- intel ------------------------------------------------------------
     def _observed_intel(self) -> tuple[list[Intel], list[Intel]]:
         """Objective threats/targets from the opponent's board now (`seen=True`)."""
         threats, targets = [], []
@@ -101,7 +92,7 @@ class Scout:
     @staticmethod
     def _target_role(st) -> str:
         if st and st.is_ex_body:
-            return "prize_liability"   # KO yields extra prizes
+            return "prize_liability"
         if st and st.maxDamage > 0:
             return "attacker"
         if st:
@@ -110,8 +101,7 @@ class Scout:
 
     def _dossier_intel(self, arch: str, key: str) -> list[Intel]:
         """The recognized archetype's dossier ``threats``/``targets`` as Intel — the PREDICTED layer
-        (ADR-0027). Role is the dossier's archetype-specific label (``engine`` / ``fragile_preevo`` /
-        ``prize_liability`` / ``attacker``); ``seen`` reflects whether the card is on the board now."""
+        (ADR-0027). ``seen`` reflects whether the card is on the board now."""
         entries = (self.artifact.dossiers.get(arch) or {}).get(key) or []
         return [Intel(cardId=e["cardId"], role=e.get("role", "unknown"),
                       seen=e["cardId"] in self._opp_in_play)
@@ -119,8 +109,7 @@ class Scout:
 
     @staticmethod
     def _merge_intel(observed: list[Intel], predicted: list[Intel]) -> list[Intel]:
-        """Merge observed + predicted Intel by ``cardId`` — the dossier (predicted) role wins for a
-        card in both (archetype-specific intel beats the stat default), carrying its ``seen`` flag."""
+        """Merge observed + predicted Intel by ``cardId`` — the dossier (predicted) role wins."""
         by_id = {i.cardId: i for i in observed}
         for p in predicted:
             by_id[p.cardId] = p
@@ -151,7 +140,7 @@ class Scout:
         """Predict each in-play opponent Pokémon's line top (dossier evolution lines)."""
         arch = self._confident_archetype(top)
         if arch is None:
-            return []  # off-meta: engine `evolvesFrom` fallback handles it next cycle
+            return []
         lines = (self.artifact.dossiers.get(arch) or {}).get("evolution_lines") or []
         paths = []
         for cid in self._opp_in_play:
@@ -161,7 +150,6 @@ class Scout:
                     break
         return paths
 
-    # --- read helpers -----------------------------------------------------
     @staticmethod
     def _confidence(top) -> tuple[float, float]:
         if not top:

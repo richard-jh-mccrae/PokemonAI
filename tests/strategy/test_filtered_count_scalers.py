@@ -1,29 +1,12 @@
-"""Issue #361 — the FILTERED-COUNT family: two per-unit attacks that were frozen at one board's count.
+"""The FILTERED-COUNT scaler family (ADR-0115, Issue #361).
 
-Two shipped `unaudited` overrides priced a per-unit attack as a flat constant:
+A family name in `scaleVar` plus the predicate's argument in `AttackStat.scaleFilter`, resolved
+against raw context material (`both_in_play_names`, `atk_in_play_attack_names`) rather than a
+pre-reduced integer. Attack 651 (Team Rocket's Weezing) and 708 (Palpitoad) both print
+`damage: 0`, so the override is the only source of the number and a constant freezes one board's
+count.
 
-| attack | card | printed text (verified: `data/EN_Card_Data.csv`, `src/cgpy/defs/attack_data.json`) |
-|---|---|---|
-| 651 | 462 Team Rocket's Weezing | *"This attack does 40 damage for each Pokémon in play that has "Koffing" or "Weezing" in its name (both yours and your opponent's)."* |
-| 708 | 501 Palpitoad | *"This attack does 40 damage for each of your Pokémon in play that has the Round attack."* |
-
-Both print `damage: 0` in the engine record, so the override was the ONLY source of the number, and
-that number was `80` — 40 × 2, one board's count, frozen. On the common board where the attacker is
-the single matching Pokémon the engine deals 40 and the oracle promised 80: an `over_prediction`,
-the soundness class `tools/sim/ci_audit_gate.py` exists to fail, invisible only because neither
-attack is on its `_GATE_ATTACKS` list.
-
-**The ruling (developer, 2026-08-03, Issue #361) was to GROW THE VOCABULARY**, not to drop the two
-entries to the printed 0. So the vocabulary gains a *filtered-count FORM*: a family name in
-`scaleVar` plus the predicate's argument in a new `AttackStat.scaleFilter`, resolved against raw
-material the context supplies (`both_in_play_names`, `atk_in_play_attack_names`) rather than a
-pre-reduced integer. `ADR-0115` records why Issue #225's decision to flatten its three filtered
-counts into atoms does not govern here: those predicates are CLOSED (a stage, a rule box, a damage
-counter), these are OPEN (an arbitrary name substring, an arbitrary attack name), and flattening an
-open predicate means hardcoding card names into the vocabulary.
-
-The three Issue #225 flat names are deliberately NOT migrated — see `tests/strategy/
-test_visible_state_scalers.py`, which still owns them.
+Issue #225's three CLOSED-predicate scalers stay flat and belong to test_visible_state_scalers.py.
 """
 from __future__ import annotations
 
@@ -43,9 +26,8 @@ TYMPOLE, PALPITOAD, SEISMITOAD = 500, 501, 502
 LEAKING_GAS, EXPLODE = 650, 651
 ROUND_707, ROUND_708, ROUND_710, WAVE_SPLASH = 707, 708, 710, 709
 
-#: attackId -> (scaleVar, per-unit, filter) as SHIPPED. Pinned here so a regeneration that drops one
-#: — or restores the frozen `{"damage": 80}` — fails where the reason is written down, rather than
-#: as a silent 2× over-prediction inside a threat rank.
+#: attackId -> (scaleVar, per-unit, filter) as SHIPPED. A regeneration that restores the frozen
+#: `{"damage": 80}` is otherwise a silent 2x over-prediction inside a threat rank.
 SHIPPED = {
     EXPLODE:  ("both_in_play_named", 40, ["Koffing", "Weezing"]),
     ROUND_708: ("atk_in_play_with_attack", 40, ["Round"]),
@@ -60,9 +42,8 @@ def _defender(cid=1):
 # ── the shipped table ─────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-SCALER-0007")
 def test_the_two_entries_ship_a_board_dependent_scaler_and_no_frozen_constant():
-    """The defect, at its source. `{"damage": 80}` is not an under-specified value — it is a WRONG
-    one on every board whose count is not exactly 2, and it carries no `scaleVar` at all, so nothing
-    downstream can tell it is board-dependent."""
+    """A flat `damage` here carries no `scaleVar`, so nothing downstream can tell it is
+    board-dependent."""
     overrides = json.loads((REPO / "src" / "common" / "attack_overrides.json").read_text(
         encoding="utf-8"))
     for aid, (var, per_unit, filt) in SHIPPED.items():
@@ -110,9 +91,8 @@ def test_one_matching_pokemon_in_play_reads_40_not_80():
     (("Team Rocket's Weezing", "Team Rocket's Koffing", "Koffing", "Weezing"), 160),
 ])
 def test_both_in_play_named_counts_every_matching_name_on_either_side(names, expected):
-    """A NAME-SUBSTRING predicate over both seats. `Team Rocket's Koffing` matches "Koffing" —
-    the owner prefix is part of the printed name (`docs/rules.md` §9), and the card's sentence asks
-    only that the name CONTAIN the word."""
+    """A NAME-SUBSTRING predicate over both seats: `Team Rocket's Koffing` matches "Koffing", since
+    the owner prefix is part of the printed name (`docs/rules.md` §9)."""
     stat = AttackStat(EXPLODE, damage=0, cost=2, scaleVar="both_in_play_named",
                       scalePerUnit=40, scaleFilter=("Koffing", "Weezing"))
     got = compute_active_damage(stat, CardStat(TR_WEEZING, name="Team Rocket's Weezing",
@@ -129,9 +109,8 @@ def test_both_in_play_named_counts_every_matching_name_on_either_side(names, exp
     ((("Round", "Wave Splash"), ("Round",)), 80),
 ])
 def test_atk_in_play_with_attack_counts_bodies_that_HAVE_the_named_attack(per_body, expected):
-    """An ATTACK-NAME predicate over the attacker's own in-play bodies. The material is one entry
-    per body — a flat list of attack names could not tell two Round-havers from one body with two
-    copies of the name."""
+    """One entry per BODY: a flat list of attack names could not tell two Round-havers from one body
+    carrying the name twice."""
     stat = AttackStat(ROUND_708, damage=0, cost=2, scaleVar="atk_in_play_with_attack",
                       scalePerUnit=40, scaleFilter=("Round",))
     got = compute_active_damage(stat, CardStat(PALPITOAD, name="Palpitoad", energyType=3),
@@ -141,9 +120,8 @@ def test_atk_in_play_with_attack_counts_bodies_that_HAVE_the_named_attack(per_bo
 
 @pytest.mark.req("REQ-SCALER-0010")
 def test_a_missing_context_key_contributes_ZERO_rather_than_a_guess():
-    """The oracle's standing rule (`strategy/damage.py`): a variable absent from the context
-    contributes 0 — a sound floor and a weak ceiling. Never the old behaviour, which was to promise
-    a number no board established."""
+    """`strategy/damage.py`'s standing rule: a variable absent from the context contributes 0 — a
+    sound floor and a weak ceiling."""
     for aid, (var, per_unit, filt) in SHIPPED.items():
         stat = AttackStat(aid, damage=0, cost=2, scaleVar=var, scalePerUnit=per_unit,
                           scaleFilter=tuple(filt))
@@ -255,10 +233,8 @@ def test_explode_together_now_is_priced_off_the_LIVE_board_not_a_constant(pilot)
 
 @pytest.mark.req("REQ-SCALER-0012")
 def test_round_counts_my_own_Round_havers_and_never_theirs(pilot):
-    """"each of YOUR Pokémon in play that has the Round attack" — an opposing Seismitoad with the
-    same attack contributes nothing, and an in-play body counts whether Active or Benched — the
-    Bench IS in play (`docs/rulebook.txt` L559: *"Your deck, your discard pile, and your Prize cards
-    are not in play, but your Benched Pokémon are."*)."""
+    """An opposing Round-haver contributes nothing, and the Bench IS in play (rulebook L559), so an
+    in-play body counts whether Active or Benched."""
     obs = _board(my_active=_body(PALPITOAD), my_bench=[_body(TYMPOLE), _body(1)],
                  opp_active=_body(1), opp_bench=[_body(SEISMITOAD), _body(TYMPOLE)])
     ctx = pilot._damage_context(obs)
@@ -269,9 +245,8 @@ def test_round_counts_my_own_Round_havers_and_never_theirs(pilot):
 
 @pytest.mark.req("REQ-SCALER-0012")
 def test_the_filtered_count_fails_CLOSED_on_an_unresolvable_body(pilot):
-    """An unknown card claims nothing. `both_in_play_named` and `atk_in_play_with_attack` both
-    scale MY damage, so an over-read is the direction that manufactures a phantom lethal — the one
-    error the Lethal Solver may never make."""
+    """Both families scale MY damage, so an over-read manufactures a phantom lethal — the one error
+    the Lethal Solver may never make."""
     obs = _board(my_active=_body(TR_WEEZING), my_bench=[_body(999999)],
                  opp_active=_body(999999))
     ctx = pilot._damage_context(obs)

@@ -31,9 +31,8 @@ def _stats():
         DREEPY: CardStat(DREEPY, synthetic=True, name="Dreepy", hp=40),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50, attacks=(20,)),
         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, retreatCost=3, maxDamage=120),
-        # `handSizeDamage=20` is the card fact this posture now turns on (MEG 743 Powerful Hand,
-        # "2 damage counters … for each card in your hand"): its printed 10 hides the whole threat,
-        # and the scaler is what the Damage Formula — and so the survival clock — actually reads.
+        # `handSizeDamage=20` is the card fact this posture turns on (MEG 743 Powerful Hand): the
+        # printed 10 hides the whole threat, and the scaler is what the survival clock reads.
         ALAKAZAM: CardStat(ALAKAZAM, synthetic=True, name='Alakazam', hp=140, retreatCost=2, ex=True, maxDamage=10,
                            minCostDamage=10, evolvesFrom="Kadabra", handSizeDamage=20),
         KADABRA: CardStat(KADABRA, name="Kadabra", hp=80, maxDamage=30, evolvesFrom="Abra"),
@@ -56,8 +55,6 @@ def _pilot():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
-    # Opp Active = Crustle (prevents ex damage). My Mega ex does 0 to it; benched non-ex Cinderace
-    # (50 dmg) KOs the 50-HP Crustle. Retreat into Cinderace -- don't whiff with the Mega.
     p = _pilot()
     me = {"active": [{"id": MEGA, "energies": [1] * 6, "hp": 330}],
           "bench": [{"id": CINDER, "energies": [1], "hp": 160}], "hand": []}
@@ -74,12 +71,8 @@ def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_harlequin_against_a_hand_size_attacker_line_is_priced_BOTH_ways():
-    # Opp has Kadabra (line reaches Alakazam, whose Powerful Hand scales off THEIR hand). The posture
-    # is unchanged; what changed (ADR-0102) is that it is PRICED rather than flagged. The retired
-    # `play-harlequin-vs-hand-size` (+25) fired off `opp_has_hand_size_attacker` — a boolean, so it
-    # endorsed the play at full strength on BOTH boards below, including the one where the refresh
-    # REFILLS them. `_hand_size_relief_tactical` reads the survival clock instead, so the same card
-    # against the same line is worth a lot, nothing, or less than nothing depending on the hand.
+    # ADR-0102: the retired `play-harlequin-vs-hand-size` fired off a BOOLEAN, so it endorsed the
+    # play at full strength even where the refresh REFILLS them; the relief term reads the clock.
     from types import SimpleNamespace
 
     from common.strategy.context import _PLAY as PLAY_OPT
@@ -111,9 +104,7 @@ def test_harlequin_against_a_hand_size_attacker_line_is_priced_BOTH_ways():
 
 @pytest.mark.req("REQ-DMG-0006")
 def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
-    # ADR-0032 per-target semantics: vs Crustle, Mega's Jetting Blow (attack 11) deals 0 to the
-    # ACTIVE -- but its 50 bench rider still KOs the benched 40-HP Dreepy, banking a real prize.
-    # Old attack-blind path early-returned 0 and the snipe was invisible.
+    # ADR-0032 per-target semantics: 0 to the prevented ACTIVE, but the 50 bench rider still KOs.
     p = _pilot()
     me = {"active": [{"id": MEGA, "energies": [1] * 6, "hp": 330}], "bench": [], "hand": []}
     opp = {"active": [{"id": CRUSTLE, "energies": [1], "hp": 150}],
@@ -128,9 +119,7 @@ def test_prevented_active_damage_does_not_kill_the_bench_snipe_credit():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_a_non_ex_attacker_is_not_prevented():
-    # Sanity: Cinderace (non-ex) NOT blocked by Crustle's ex-lock — the oracle lands its 50;
-    # the Mega ex's plain attack IS zeroed (attack-scoped prevention, the one damage.py home —
-    # the Pilot-side _ability_prevents_damage pair is retired, ADR-0052).
+    # Prevention is attack-scoped and lives only in damage.py (ADR-0052).
     p = _pilot()
     assert p.predicted_damage(CINDER, 20, {"id": CRUSTLE, "hp": 150}) == 50
     assert p.predicted_damage(MEGA, 11, {"id": CRUSTLE, "hp": 150}) == 0

@@ -1,29 +1,9 @@
 """The per-decision `_state_model` must survive the composer running (POC-T4/5, Issue #386).
 
-`_snapshot` *builds AND STASHES* the per-decision StateModel onto `self._state_model` — one
-construction site, unconditional. `_board_hypothetical` reaches it, and that is deliberate: a caller
-that builds a speculative board in order to evaluate something against it wants exactly that stash.
-
-It stops being deliberate the moment a speculative board is built DURING a live decision. Arming the
-composer did that: `state_value`'s `hand` family calls `needs` -> `_leaf_needs_resolution` ->
-`_board_hypothetical`, three times on an ordinary board, inside `plan_turn` — which `explain()` runs
-BEFORE it builds the Decision. Every later reader of `self._state_model` in that same `explain()`
-then saw a hypothetical end-of-turn board instead of the real one.
-
-**What it cost, measured rather than imagined.** `_attach_value` reads `self._state_model.mine`.
-Against the leaked leaf model, `_attach_body_view` returned None, `can_attack_tonight` went False,
-and a one-shot Energy that unlocks a 210-damage attack this turn read as EVAPORATING for nothing:
-
-    this_turn   90.0 -> 0.0        marginal   +90.0 -> -30.0        evaporates  False -> True
-
-on a board where nothing about the attach had changed. Seven `test_attach_decider` tests caught it;
-all forty-four pass on `main`, and the same seven fail at the bare swap commit, so it was the swap
-and not the deletions around it. Nothing in the composer's own output looked wrong — this is a
-telemetry-and-scoring corruption downstream of a decision that was itself fine.
-
-The guard is written against the SYMPTOM (identity of the stashed model across a decision) rather
-than against the attach decider, because the attach decider was one victim and the leak was general:
-anything reading `self._state_model` after `plan_turn` was affected.
+`_snapshot` builds AND STASHES the model onto `self._state_model`, and `_board_hypothetical` reaches
+it deliberately — but a speculative build DURING a live decision leaves every later reader in that
+`explain()` scoring a hypothetical end-of-turn board. The guard is written against that SYMPTOM
+(identity of the stashed model across a decision), because the leak is general.
 """
 import pytest
 
@@ -57,15 +37,8 @@ def _obs():
 
 @pytest.mark.req("REQ-PLANNER-0012")
 def test_the_live_state_model_survives_a_decision_that_ran_the_composer():
-    """The stashed model at the END of a decision is the one built for the LIVE board, not the last
-    hypothetical the composer priced on its way there.
-
-    Asserted by OBJECT IDENTITY against the first model `_snapshot` built in this decision, and that
-    choice is the whole test. The first version of this guard compared `prizes_remaining` and the
-    body count between the stashed model and a freshly-built one — and it PASSED with the fix
-    disabled, because a hypothetical END-OF-TURN board of the same game has the same prize count and
-    usually the same bodies. It asserted nothing while looking like a regression net. Identity cannot
-    be satisfied by a coincidence."""
+    """Asserted by OBJECT IDENTITY: comparing `prizes_remaining` and body counts passes with the fix
+    disabled, because a hypothetical end-of-turn board of the same game matches on both."""
     pilot = _pilot()
     obs = _obs()
     built = []
@@ -86,16 +59,8 @@ def test_the_live_state_model_survives_a_decision_that_ran_the_composer():
 
 @pytest.mark.req("REQ-PLANNER-0012")
 def test_the_hypothetical_build_still_stashes_for_callers_that_want_it():
-    """The other half, and the reason the fix is NOT a blanket restore inside `_board_hypothetical`.
-
-    A caller that builds a hypothetical board in order to evaluate a rung against it depends on the
-    stash — `tests/strategy/test_hand_size_relief.py` does exactly this. A first attempt at the fix
-    restored the model inside `_board_hypothetical` itself; it repaired the attach decider and broke
-    five relief tests, and it made a sixth test pass for the WRONG reason, by feeding the live model
-    to reads inside `_leaf_needs_resolution` that are supposed to see the hypothetical one.
-
-    So the restore lives in `_leaf_needs_resolution` — the one caller that is speculative *during a
-    live decision* — and this asserts the general behaviour it deliberately did not change."""
+    """The restore lives in `_leaf_needs_resolution`, NOT in `_board_hypothetical`: callers that
+    evaluate a rung against a hypothetical board depend on the stash (`test_hand_size_relief.py`)."""
     pilot = _pilot()
     obs = _obs()
     pilot._board(obs, obs.get("select"))

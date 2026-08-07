@@ -1,15 +1,12 @@
 """Capture native-engine matches as parity traces (ADR-0050, needs the DLL).
 
-Plays N matches on the native engine under a seeded chaos policy (uniform legal choices with a
-bias toward engaging optional effects) and writes each as a `parity-trace/1` file: per select the
-mover's verbatim observation, the choice, and the aligned god-view frame.
+Plays N matches under a seeded chaos policy and writes each as a `parity-trace/1` file: per
+select the mover's verbatim observation, the choice, and the aligned god-view frame.
 
-    python tools/parity/capture_match.py --decks mega_starmie mega_starmie -n 2 \
-        --out tests/fixtures/parity --prefix ms_mirror
+    python tools/parity/capture_match.py --decks mega_starmie mega_starmie -n 2 --prefix ms
 
 The god frames come from `visualize_data()` at match end; visualize's `selected` rides one frame
-behind (+1 offset, `tools/sim/record.py` convention), which capture realigns and asserts.
-"""
+behind (+1 offset), which capture realigns and asserts."""
 from __future__ import annotations
 
 import argparse

@@ -35,9 +35,8 @@ def _key(o: dict) -> str:
 
 
 def join_seed(obs: dict, replay: dict) -> str | None:
-    """The ``search_begin_input`` for ``obs``, recovered by joining it to the step observation with
-    the same select+current. None when no seed-bearing frame matches (e.g. a mulligan/terminal frame
-    the engine never emitted a seed for)."""
+    """The ``search_begin_input`` for ``obs``, joined on the step observation with the same
+    select+current. None when no seed-bearing frame matches."""
     want = _key(obs)
     for step in replay.get("steps", []):
         for a in step:
@@ -48,14 +47,8 @@ def join_seed(obs: dict, replay: dict) -> str | None:
 
 
 def own_prizes_for(replay: dict, target_obs: dict) -> dict | None:
-    """The exact ``own_prizes`` at ``target_obs`` — replay the acting seat's observation stream through
-    ``OwnCardModel`` (in chronological REPLAY-step order, up to and including the target frame) and
-    export the anchored prize multiset. None until the tracker anchors (no positive claim without
-    certainty), matching the runtime model.
-
-    Ordered by replay-step index and cut off by content-key (``select``+``current``) rather than by
-    ``obs['step']`` — the latter is only present on the first-seat's observations, so a second-seat
-    fixture would otherwise reconstruct zero history."""
+    """The exact ``own_prizes`` at ``target_obs``, or None until the tracker anchors. Cut off by
+    CONTENT-key, not ``obs['step']`` — the latter exists only on the first seat's observations."""
     cur = (target_obs or {}).get("current") or {}
     seat = cur.get("yourIndex", 0)
     decks = extract_decks(replay)
@@ -77,9 +70,8 @@ def own_prizes_for(replay: dict, target_obs: dict) -> dict | None:
 
 
 def backfill_seed(obs: dict, replay: dict) -> dict:
-    """Return a copy of ``obs`` with ``search_begin_input`` (content-joined) and ``own_prizes`` (exact
-    split from the seat's history) attached. Either may be None when unrecoverable — the runtime and
-    the engine verify already treat a missing seed / unanchored prizes as fail-safe."""
+    """A copy of ``obs`` with ``search_begin_input`` and ``own_prizes`` attached. Either may be None
+    when unrecoverable; both consumers already treat that as fail-safe."""
     out = copy.deepcopy(obs)
     out["search_begin_input"] = join_seed(obs, replay)
     out["own_prizes"] = own_prizes_for(replay, obs)

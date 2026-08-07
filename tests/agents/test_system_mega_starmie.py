@@ -1,10 +1,7 @@
 """System test: the mega_starmie deck (tests/fixtures) driven through a scripted mock match.
 
-Verifies end-to-end that the deck's DECLARATIONS (Roles / Lines / params — the deck carries zero
-Hypotheses since the 2026-07-02 fold) drive the role-keyed General Strategy rules, that the
-tag-keyed rules fire alongside them, and that Function Tags + engine card stats (weakness) are
-used and have an effect. Lib-free: the fixture Strategy imports only common.strategy, and
-observations are built by hand.
+The deck carries zero Hypotheses, so its DECLARATIONS (Roles / Lines / params) are what drive the
+role-keyed General Strategy rules, with the tag-keyed rules firing alongside them.
 """
 import importlib.util
 from pathlib import Path
@@ -39,12 +36,8 @@ _STATS = DictCardStatProvider({
     BUDDY_POFFIN: CardStat(BUDDY_POFFIN, hp=0),
     MEGA_SIGNAL: CardStat(MEGA_SIGNAL, hp=0),
 }, attacks={JETTING: AttackStat(JETTING, damage=120)})
-# The tags are the COMMITTED ones for these card ids (`src/common/card_functions.json`), not a
-# convenient subset. They were trimmed to `["search"]` / `["opener"]` here until POC-T4/5, which was
-# harmless only while `dig-before-commit` (+20) fired off the bare `search` tag and carried the
-# tag-keyed half of this system test on its own. That rung is deleted by Issue #386, and with the
-# real tags the same boards still exercise both layers — via `bench_fill` and `energy_accel`, which
-# are facts about these cards rather than about a rung.
+# The COMMITTED tags for these card ids (`src/common/card_functions.json`), not a convenient subset:
+# the tag-keyed half of this test now runs through `bench_fill` / `energy_accel`, which are card facts.
 _TAGS = CardFunctions({BUDDY_POFFIN: ["search", "bench_fill"],
                        MEGA_SIGNAL: ["search", "tutor_mega"],
                        CINDERACE: ["opener", "energy_accel"]})
@@ -62,9 +55,8 @@ def _open_active():   # SETUP: choose opening Active (Staryu vs Cinderace)
 
 
 def _play_search():   # SETUP: PLAY a tutor/search card (Buddy Poffin) vs basic (Staryu)
-    # The Bench is stated EMPTY rather than left to default, because that is the board condition the
-    # tag-keyed rule reads: Buddy Poffin's `bench_fill` only earns its bump while there is a Bench to
-    # fill. Leaving it implicit made the test depend on a default rather than on the fact.
+    # The Bench is stated EMPTY rather than left to default: Buddy Poffin's `bench_fill` only earns
+    # its bump while there is a Bench to fill, so this is the board condition under test.
     return make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
                        current=state(active=poke(STARYU), bench=[], hand=[BUDDY_POFFIN, STARYU]))
 
@@ -84,9 +76,8 @@ def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
     # Deck ships ZERO Hypotheses; its Roles/params opt in to role-keyed General Strategy.
     p = _pilot()
     fired = set().union(*(_fired(p, o) for o in (_open_active(), _play_search(), _attack())))
-    # `open-the-declared-starter` is DECLARATION-keyed rather than Role-keyed since ADR-0079 (it
-    # replaced `open-the-accelerator`), but it belongs in this set for the same reason the others do:
-    # it fires only because THIS deck opted in, via `Strategy.starter_priority` instead of a Role.
+    # `open-the-declared-starter` is DECLARATION-keyed (ADR-0079), but belongs in this set for the
+    # same reason: it fires only because THIS deck opted in, via `Strategy.starter_priority`.
     role_keyed = {"open-the-declared-starter", "advance-the-accel-pieces",
                   "play-a-tutor-for-the-unfound-wincon"}       # fire only via this deck's declarations
     general = {h.id for h in GENERAL_STRATEGY.hypotheses}
@@ -96,12 +87,8 @@ def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
 
 @pytest.mark.req("REQ-SYS-0002")
 def test_a_role_keyed_and_a_tag_keyed_general_rule_fire_on_the_same_card():
-    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'bench_fill' -> both signals fire on
-    # one option. The tag-keyed exemplar was `dig-before-commit` off the `search` tag until POC-T4/5
-    # deleted that rung (Issue #386); `prefer-bench-fill-first` reads a different tag on the SAME
-    # card, so the thing under test — two independently-keyed layers meeting on one option — is
-    # unchanged. Worth stating because the tag-keyed layer got materially quieter in that deletion:
-    # `dig-before-commit` was the universal one, firing on any `search` card anywhere.
+    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'bench_fill' -> two independently-keyed
+    # layers meeting on one option.
     fired0 = {h.id for h, _ in _pilot().explain(_play_search()).options[0].fired}
     assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (deck's declaration)
     assert "prefer-bench-fill-first" in fired0               # tag-keyed (Function Tag on the card)
@@ -141,10 +128,8 @@ def test_agent_keeps_a_startable_cinderace_hand_rather_than_mulliganing():
 
 @pytest.mark.req("REQ-SYS-0006")
 def test_agent_attaches_energy_during_setup_rather_than_passing():
-    # Blunder #1: in SETUP, attaching Energy must beat doing nothing, so the agent powers up its
-    # attacker instead of only ever playing the special accel energy. `power-up-attacker`'s flat +15
-    # is DELETED (#139, ADR-0069 §7) — the attach now wins on ORDERING: an unendorsed do-nothing play
-    # sequences with the turn-enders while the attach keeps its own tier.
+    # `power-up-attacker`'s flat +15 is DELETED (ADR-0069 §7) — the attach wins on ORDERING: an
+    # unendorsed do-nothing play sequences with the turn-enders while the attach keeps its own tier.
     p = _pilot()
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state(active=poke(STARYU, energy=0)))
     assert p.decide(obs) == [0]    # attach the Energy

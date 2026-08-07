@@ -1,41 +1,17 @@
-"""Own-card perfect-information model — the "deck tracker" (match-scoped).
+"""Own-card perfect-information model — the "deck tracker" (match-scoped, ADR-0023).
 
-Maintains an EXACT account of the agent's own cards by zone, from the known 60-card decklist and
-the always-visible zones (hand / discard / board + attached Energy/Tools + evolution stacks),
-anchored by what a deck SEARCH reveals.
+Soundness rests on one invariant: the 6-card PRIZE pile is fixed at game start and only shrinks.
+Everything else is re-read fresh from each observation, so the prize multiset is the ONLY persistent
+state, and once it is known ``deck = decklist - prizes - visible`` holds exactly every turn.
 
-Soundness rests on one invariant: the 6-card PRIZE pile is fixed at game start and only ever
-shrinks (a card is taken into hand on a Knock Out). Everything else (deck<->hand<->discard<->board)
-is re-read fresh from each observation, so it cannot drift — the ONLY persistent state is the prize
-multiset. Once the prizes are known, the deck is derived exactly EVERY turn:
+ANCHORING: a search that reveals the WHOLE deck (``len(select.deck) == deckCount``) makes
+``prizes = decklist - select.deck - visible`` exact. A partial reveal is rejected.
 
-    deck = decklist - prizes - visible
+Prize takes come from the LOG, never a guess (#175). ``logs`` is a DELTA, so takes accumulate across
+observations, keyed by the engine's per-card ``serial`` so a replayed frame cannot count one twice.
 
-**Anchoring.** A search presents the player the whole remaining deck in ``select.deck`` (length ==
-``deckCount``); the card whose effect is resolving (the played search card) sits in no zone but is
-named by ``select.effect`` / ``select.contextCard``, so it is counted as visible. Then
-``prizes = decklist - select.deck - visible`` is exact — accepted only when it has exactly
-``prizes_remaining`` cards (a partial/filtered reveal is rejected).
-
-**Prize takes are read from the LOG, not guessed** (#175). When a Knock Out takes one of my prizes
-into hand, the engine names the exact card: a ``logs`` entry ``{fromArea: PRIZE, toArea: HAND,
-playerIndex, cardId, serial}``. Measured on the corrections corpus, **42 of 42** of my own prize
-takes carry ``cardId``; the opponent's carry none (correctly — their prizes are hidden). Without
-reading it the model had to guess which copy left, and dropped the anchor whenever the taken id also
-still sat in the deck — which is most likely for a high-copy card like Basic Energy, and cost the
-anchor for the rest of the match. ``logs`` is a **delta**, not a cumulative stream, so takes are
-accumulated across observations; they are keyed by ``serial`` (unique per physical card —
-engine-verified: 103 distinct serials over a match with zero serial→cardId conflicts) so a replayed
-or overlapping frame can never count one twice.
-
-**Before the first reveal** the prize split is genuinely unknown (prizes are set face-down), so the
-model reports None and the caller falls back to the sound stateless bounds (a card with more copies
-hidden than there are prize slots must have the surplus in the deck — pigeonhole). On ANY
-inconsistency (a "prized" card turns up visible, counts exceed the decklist, prizes grow) the anchor
-is dropped — a desynced model must never assert a false certainty.
-
-Match-scoped: reset on a new game (the local self-play harness reuses one process; the grader forks
-per match — see the kaggle-execution-model). Pure / lib-free; never raises (grader safety).
+Before the first reveal, and on ANY inconsistency, the anchor is dropped and None reported — the
+caller falls back to the sound stateless pigeonhole bounds. Never raises (grader safety).
 """
 from __future__ import annotations
 
@@ -48,11 +24,8 @@ _AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .P
 
 
 class OwnCardModel:
-    """A match-scoped, sound model of the agent's own hidden cards (deck + prizes).
-
-    Feed every observation to :meth:`observe`; read :meth:`prize_export` for the exact prize multiset
-    (or None until the first search anchors it). The consumer derives the deck from it.
-    """
+    """Feed every observation to :meth:`observe`; read :meth:`prize_export` for the exact prize multiset
+    (None until a search anchors it). The consumer derives the deck from it."""
 
     def __init__(self, deck) -> None:
         self.decklist: Counter = Counter(int(c) for c in deck)
@@ -137,10 +110,8 @@ class OwnCardModel:
             self._prizes = None
 
     def _record_prize_takes(self, obs: dict, yi: int) -> None:
-        """Accumulate MY prize takes from the engine's log DELTA, keyed by the card's unique
-        ``serial`` so a replayed or overlapping frame can never count one twice. The opponent's
-        takes are skipped (not mine, and they carry no ``cardId`` anyway); an entry missing
-        ``serial``/``cardId`` is ignored, leaving the sound pigeonhole fallback in charge."""
+        """Accumulate MY prize takes from the log DELTA, keyed by ``serial`` so a replayed frame cannot
+        count one twice. An entry missing ``serial``/``cardId`` is ignored (the fallback stays in charge)."""
         for entry in (obs.get("logs") or ()):
             if not isinstance(entry, dict):
                 continue
@@ -152,9 +123,8 @@ class OwnCardModel:
                 self._takes[serial] = cid
 
     def _prizes_after_logged_takes(self, remaining: int) -> Counter | None:
-        """The EXACT prize multiset after the takes the log named, or None when the log does not
-        fully account for the drop — a missing entry must fall back to the sound heuristic rather
-        than assert a prize pile the engine never confirmed."""
+        """The EXACT prize multiset after the takes the log NAMED, or None when the log does not fully
+        account for the drop — an unconfirmed pile must never be asserted."""
         taken = Counter(cid for serial, cid in self._takes.items()
                         if serial not in self._takes_at_anchor)
         if sum(taken.values()) != self._anchor_remaining - remaining:
@@ -164,20 +134,8 @@ class OwnCardModel:
         return self._prizes - taken
 
     def _visible(self, me: dict, select: dict) -> Counter:
-        """MY cards provably OUTSIDE deck+prizes: hand, discard, every board Pokémon (its id +
-        attached Energy/Tools + the cards stacked under it, through the one shared walk in
-        :mod:`common.board_cards`) AND the card whose effect is resolving (``select.effect`` /
-        ``contextCard``).
-
-        The resolving-card rider exists for a card that has left the deck but sits in no zone — a
-        played Trainer mid-resolution. That premise is FALSE for an **Ability**, whose context card
-        is the Pokémon still in play and already counted above (Drakloak's Recon Directive; measured
-        on real games as 9 of 9 ``visible``-overflow de-anchors, on Drakloak id 120 and Meowth ex
-        id 1071). Counting it twice pushed ``visible`` past the decklist and dropped the anchor for a
-        desync that never happened. So the rider is deduped by the engine's ``serial`` — the unique
-        physical-card id, carried on BOTH zone entries and the rider — which also covers ``effect``
-        and ``contextCard`` naming the same card. A rider with no serial is counted as before: the
-        old behaviour is the fallback, never a new assumption."""
+        """MY cards provably OUTSIDE deck+prizes, plus the card whose effect is RESOLVING (it has left
+        the deck but sits in no zone). That rider is deduped by ``serial``: an Ability's is still in play."""
         c: Counter = Counter()
         seen: set = set()
 
@@ -208,8 +166,8 @@ class OwnCardModel:
         return c
 
     def _revealed_full_deck(self, select: dict, me: dict) -> Counter | None:
-        """The full remaining deck as a multiset, ONLY when a search reveals all of it
-        (``len(select.deck) == deckCount``); None for no/partial reveal — never anchor off a subset."""
+        """The full remaining deck as a multiset, ONLY on a complete reveal; None otherwise — never
+        anchor off a subset."""
         deck = select.get("deck")
         if not deck or len(deck) != me.get("deckCount"):
             return None
@@ -217,6 +175,6 @@ class OwnCardModel:
 
     @staticmethod
     def _consistent(prizes: Counter, hidden: Counter, remaining: int) -> bool:
-        """The prize multiset must be a submultiset of the still-hidden cards and have the right size
-        — else a 'prized' card is contradicted by what we can now see (a desync)."""
+        """The prize multiset must be a submultiset of the still-hidden cards, at the right size — else a
+        "prized" card is contradicted by what we can now see (a desync)."""
         return sum(prizes.values()) == remaining and all(prizes[c] <= hidden[c] for c in prizes)

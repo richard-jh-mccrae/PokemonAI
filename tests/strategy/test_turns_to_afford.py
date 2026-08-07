@@ -1,23 +1,10 @@
-"""Threat-Clock unification S1c — the ``turns_to_afford`` affordability+evolve clock (design:
-docs/plans/opponent-value-equation-unification.md).
+"""`CombatMath.turns_to_afford` — the deny-clock's energy/evolve model.
 
-``CombatMath.turns_to_afford`` is the deny-clock's energy/evolve model, extracted next to
-``incoming`` so the Threat Clock's two legs — the damage CURVE and the affordability CLOCK — share
-ONE home and the one forward index. "Armed" = the line's biggest-attack COST is payable (NOT
-lethality — blocker 3), at the attach quota, in PARALLEL with the forward hops (the MAX of the two
-legs, never the sum). Policy-parameterizable via ``attaches_per_turn`` (1 = the slow deny read,
-ruling 2).
-
-**POC-T1 (Issue #260)** moved the Pilot's delegate off the raw oracle onto the SNAPSHOT
-(``theirs.turns_to_afford``), and landed **Issue #204**: the clock now credits a
-``discard_energy_recur`` line's own discard reload at the ``self_arming`` scope — Effect-Clause
-quantified, so it distinguishes Assemble Alloy (an Ability firing on the evolve hop, reloading the
-evolved body) from Aura Jab (an attack reloading the BENCH, never the attacker).
-
-**Issue #286 (POC-T3.5)** adds the EXPIRING-Energy strip — `CombatMath.without_expiring_energy` and
-the `exclude_expiring` leg of `MySide.turns_to_afford`. The oracle itself is untouched, deliberately:
-`pilot._opp_turns_to_ready` delegates to it byte-identically, so a change there would move
-corpus-ruled deny decisions. The strip is a SIBLING at the model accessor.
+"Armed" = the line's biggest-attack COST is payable (NOT lethality), at the attach quota, in PARALLEL
+with the forward hops (the MAX of the two legs, never the sum); `attaches_per_turn` parameterizes it.
+Issue #204 credits a `discard_energy_recur` line's own discard reload at the `self_arming` scope.
+Issue #286 adds the EXPIRING-Energy strip as a SIBLING at the model accessor — the oracle below is
+untouched, so `pilot._opp_turns_to_ready` delegates to it byte-identically.
 """
 from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
@@ -28,15 +15,8 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 RIOLU = 677
 MLUC = 678          # Mega Lucario ex — one hop from Riolu (rulebook Appendix 1)
 
-#: **Ignition Energy**, Card ID 17 — verified at `data/EN_Card_Data.csv`: a *Special Energy* whose
-#: text reads *"If this card is attached to 1 of your Pokémon, discard it at the end of your turn. …
-#: it provides {C} Energy. If this card is attached to an Evolution Pokémon, it provides {C}{C}{C}
-#: Energy instead."* That sentence is carried in TWO committed stores and they must agree:
-#: `card_effects.json` holds the parametric clause
-#: ``{"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3, "type": "colorless",
-#: "rider": "discard_eot"}`` and `card_functions.json` holds ``provides:1`` / ``provides_evo:3``
-#: beside the behavioural ``discard_eot`` tag. It is the ONLY card in the 1267-card pool carrying
-#: either (swept 2026-08-03), which is why the strip's coverage question is a one-card question.
+#: **Ignition Energy** (verified at `data/EN_Card_Data.csv`): a Special Energy providing {C}, or
+#: {C}{C}{C} on an Evolution, discarded at end of turn. The ONLY such card in the 1267-card pool.
 IGNITION = 17
 COLORLESS, FIGHTING = 0, 6
 
@@ -83,10 +63,8 @@ def test_attaches_per_turn_scales_the_energy_leg():
     assert c.turns_to_afford(_b(RIOLU, 0), attaches_per_turn=1) == 2
 
 
-# REQ-TTR-0004 — the Pilot deny-clock read DELEGATES to the SNAPSHOT's route (one home; drift
-# guard). POC-T1 (Issue #260) moved the delegate off the raw oracle onto `theirs.turns_to_afford`,
-# which is where the forward index, the discard and the energy policy already live — so the Pilot no
-# longer assembles any of them by hand.
+# REQ-TTR-0004 — the Pilot deny-clock read DELEGATES to the SNAPSHOT's `theirs.turns_to_afford`,
+# where the forward index, the discard and the energy policy already live.
 def test_opp_turns_to_ready_delegates_to_the_snapshot_route():
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
@@ -104,16 +82,11 @@ def test_opp_turns_to_ready_delegates_to_the_snapshot_route():
     assert p._opp_turns_to_ready({"id": RIOLU, "energies": [0]}) is None
 
 
-# REQ-TTR-0005 (Issue #204) — the clock credits a `discard_energy_recur` line's own DISCARD reload.
-# Archaludon ex's Assemble Alloy attaches up to 2 Basic {M} from the discard on evolving (verified,
-# data/EN_Card_Data.csv), so with {M} sitting in their discard its Metal Defender {M}{M}{M} 220 is
-# ONE turn away, not two — the shipped clock's one-manual-attach assumption is not conservative
-# here, it is wrong.
+# REQ-TTR-0005 (Issue #204) — the clock credits a `discard_energy_recur` line's own DISCARD reload:
+# Assemble Alloy attaches 2 Basic {M} from the discard on evolving (data/EN_Card_Data.csv).
 def _recur_model(pre_energy=0, discard=2):
-    """A Duraludon → Archaludon ex line with {M} sitting in their discard.
-
-    The clock is asked about the PRE-EVOLUTION, which is the position Issue #204 names: Assemble
-    Alloy fires as Duraludon evolves, so the reload lands on the very hop the clock is counting."""
+    """A Duraludon → Archaludon ex line with {M} in their discard. The clock is asked about the
+    PRE-EVOLUTION: Assemble Alloy fires as Duraludon evolves, on the very hop being counted."""
     from common.cards import CardFunctions
     from common.effects import CardEffects
     from common.state_model import StateModel
@@ -152,10 +125,8 @@ def test_the_clock_credits_an_on_evolve_discard_reload():
 
 
 def test_the_clock_refuses_an_on_attack_bench_only_reload():
-    """Mega Lucario ex's Aura Jab is an ATTACK that reloads the BENCH, never the attacker (verified,
-    data/EN_Card_Data.csv). Crediting it toward arming that same body would be circular — it must
-    already be armed to attack — so the `self_arming` scope reads 0 where the fail-open caution
-    reading reads 3."""
+    """Aura Jab is an ATTACK reloading the BENCH, never the attacker (data/EN_Card_Data.csv), so
+    crediting it toward arming that same body would be circular — `self_arming` reads 0."""
     from common.cards import CardFunctions
     from common.effects import CardEffects
     FIGHTING, F_ENERGY = 6, 6
@@ -176,9 +147,8 @@ def test_the_clock_refuses_an_on_attack_bench_only_reload():
 
 
 def test_the_arming_scope_fails_closed_without_a_clause():
-    """A tagged line the Effect-Clause compendium says nothing about yields NOTHING to the clock —
-    ADR-0067's rule that the tag ROUTES and the clause quantifies, applied one zone over. Without
-    it a newly tagged card would silently inherit the {F}/{M} lines' generous cap."""
+    """A tagged line the Effect-Clause compendium says nothing about yields NOTHING — ADR-0067's rule
+    that the tag ROUTES and the clause QUANTIFIES, one zone over."""
     from common.cards import CardFunctions
     from common.effects import CardEffects
     UNKNOWN, FIGHTING = 990001, 6
@@ -194,10 +164,7 @@ def test_the_arming_scope_fails_closed_without_a_clause():
 
 
 # ── Issue #286 — the EXPIRING-Energy strip ───────────────────────────────────────────────────────
-#
-# `readiness`'s forward leg asks "how many turns until this line is armed?", and an Energy the rules
-# discard at the end of THIS turn is not there to answer it. The strip is opt-in at the model
-# accessor and the oracle below it never learns about it — see the module docstring.
+# An Energy the rules discard at the end of THIS turn cannot answer "how many turns until armed?".
 
 STARYU, MSTAR = 1030, 1031      # Staryu → Mega Starmie ex: ONE hop, no "Starmie" in this line
 WATER_GUN, JETTING_BLOW, NEBULA_BEAM = 1486, 1487, 1488
@@ -205,13 +172,8 @@ WATER = 3
 
 
 def _ignition_combat():
-    """A Staryu → Mega Starmie ex line, plus the two Energy cards the strip must tell apart.
-
-    Every field verified at `data/EN_Card_Data.csv`: Staryu (1030) Basic HP 70 {W}, Water Gun ``{W}``
-    20; Mega Starmie ex (1031) Stage 1 *Mega Pokémon ex*, ``Previous stage`` **Staryu**, HP 330,
-    Jetting Blow ``{W}`` 120 / **Nebula Beam ``{C}{C}{C}`` 210** — the colourless payoff an Ignition
-    can pay outright, which is the whole reason this deck runs the card.
-    """
+    """A Staryu → Mega Starmie ex line plus the two Energy cards the strip must tell apart. Every field
+    verified at `data/EN_Card_Data.csv`."""
     stats = DictCardStatProvider({
         STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER, maxDamageCost=1,
                          maxDamage=20, attacks=(WATER_GUN,)),
@@ -234,13 +196,8 @@ def _ignition_combat():
 
 
 def _held(cid, cards, units):
-    """A body holding ``cards`` (the CARD ids on ``energyCards``) providing ``units`` (the
-    ``EnergyType`` codes on ``energies``).
-
-    The two keys are given separately because they are separately real: ``energies`` is NOT a card
-    list (`common/board_cards.py`), so one Ignition on an Evolution is ONE entry in ``energyCards``
-    and THREE in ``energies``. A fixture that derived one from the other would be testing the
-    derivation rather than the strip."""
+    """A body holding ``cards`` (CARD ids on ``energyCards``) providing ``units`` (EnergyType codes on
+    ``energies``): one Ignition on an Evolution is ONE `energyCards` entry and THREE in `energies`."""
     return {"id": cid, "energies": list(units), "energyCards": [{"id": c} for c in cards]}
 
 
@@ -261,30 +218,25 @@ def test_the_strip_removes_an_expiring_cards_units_and_nothing_else():
                                                "energyCards": [{"id": WATER}]}
 
 
-# REQ-TTR-0006 — a body with nothing expiring is returned UNCHANGED, by identity. The strip runs on
-# every `readiness` call for every body on the board, so "unchanged" has to mean no allocation and no
-# re-keying, not merely an equal dict.
+# REQ-TTR-0006 — a body with nothing expiring is returned UNCHANGED **by identity**: the strip runs
+# on every `readiness` call, so "unchanged" must mean no allocation and no re-keying.
 def test_a_body_with_nothing_expiring_is_returned_UNCHANGED():
     c = _ignition_combat()
     plain = _held(MSTAR, [WATER, WATER], [WATER, WATER])
     assert c.without_expiring_energy(plain) is plain
     assert c.without_expiring_energy(None) is None
-    # A hand-built body with no `energyCards` key at all makes NO claim — card identity is what the
-    # rider is read from, so without it nothing is provably expiring. Fail-closed, and it is why
-    # every fixture board in this suite that predates Issue #286 is byte-identical under the strip.
+    # No `energyCards` key at all makes NO claim — card identity is what the rider is read from, so
+    # without it nothing is provably expiring. Fail-closed.
     bare = {"id": MSTAR, "energies": [COLORLESS] * 3}
     assert c.without_expiring_energy(bare) is bare
-    # An unresolvable HOLDER is the same refusal, and it is not pedantry: the provision is
-    # stage-dependent, so an unknown stage cannot size the removal. Guessing "Basic" would strip 1
-    # of the 3 units and leave a body claiming two phantom ones — on MY clock, the direction that
-    # prices a line as armed sooner than it is.
+    # An unresolvable HOLDER is the same refusal: the provision is stage-dependent, so an unknown
+    # stage cannot size the removal.
     unknown = _held(424242, [IGNITION], [COLORLESS] * 3)
     assert c.without_expiring_energy(unknown) is unknown
 
 
-# REQ-TTR-0006 — the RIDER is read from the CLAUSE, not from the Function Tag. The tag is
-# behavioural-only ("this card evaporates"); the clause is the parametric record, and ADR-0032's
-# split is that the tag ROUTES while the clause QUANTIFIES.
+# REQ-TTR-0006 — the RIDER is read from the CLAUSE, not the Function Tag: ADR-0032's split is that
+# the tag ROUTES while the clause QUANTIFIES.
 def test_the_strip_reads_the_CLAUSE_not_the_TAG():
     stats = DictCardStatProvider({
         MSTAR: CardStat(MSTAR, name="Mega Starmie ex", hp=330, evolvesFrom="Staryu",
@@ -301,9 +253,8 @@ def test_the_strip_reads_the_CLAUSE_not_the_TAG():
     assert blind.without_expiring_energy(body) is body
 
 
-# REQ-TTR-0006 — the two committed stores that BOTH describe Ignition's provision must agree, over
-# the real pool. The strip DETECTS through `card_effects.json` and SIZES through
-# `card_functions.json`, so a drift between them would silently strip the wrong number of units.
+# REQ-TTR-0006 — the strip DETECTS through `card_effects.json` and SIZES through
+# `card_functions.json`, so a drift between the two committed stores strips the wrong unit count.
 def test_the_clause_and_the_tag_agree_about_every_expiring_cards_provision():
     functions, effects = CardFunctions.load(), CardEffects.load()
     checked = 0
@@ -329,9 +280,8 @@ def _starmie_model(units, cards, *, cid=MSTAR):
     return StateModel.build(obs, combat=_ignition_combat()), body
 
 
-# REQ-TTR-0007 (Issue #286) — the INCUMBENT read did not move. The epic's rule made executable: this
-# issue adds a SIBLING reading, it does not retune the incumbent, and `pilot._opp_turns_to_ready`
-# delegates to the same oracle byte-identically.
+# REQ-TTR-0007 (Issue #286) — the INCUMBENT read did not move: this adds a SIBLING reading, and
+# `pilot._opp_turns_to_ready` delegates to the same oracle byte-identically.
 def test_the_incumbent_turns_to_afford_read_is_BYTE_IDENTICAL():
     oracle = _ignition_combat()
     for units, cards in (([COLORLESS] * 3, [IGNITION]),          # armed by an evaporating Energy
@@ -357,9 +307,8 @@ def test_exclude_expiring_lengthens_the_clock_only_where_something_expires():
     plain, _ = _starmie_model([WATER, WATER, WATER], [WATER, WATER, WATER])
     assert plain.mine.turns_to_afford(plain.mine.active) == 0
     assert plain.mine.turns_to_afford(plain.mine.active, exclude_expiring=True) == 0
-    # A PARTIAL loan: Staryu holds one Ignition ({C} on a Basic) toward its line's deepest attack,
-    # Nebula Beam {C}{C}{C}. The unit matches a colourless slot, so the incumbent counts it and reads
-    # two attaches; without it the deficit is the full three, and the ONE evolve hop runs in parallel.
+    # A PARTIAL loan: Staryu holds one Ignition ({C} on a Basic) toward Nebula Beam {C}{C}{C} — the
+    # incumbent counts the unit and reads two attaches; without it the deficit is the full three.
     staryu, _ = _starmie_model([COLORLESS], [IGNITION], cid=STARYU)
     assert staryu.mine.turns_to_afford(staryu.mine.active) == 2
     assert staryu.mine.turns_to_afford(staryu.mine.active, exclude_expiring=True) == 3

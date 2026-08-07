@@ -299,7 +299,8 @@ comparator) and ADR-0032 (Effect-Clause tier).
   pitch-side fuel stay 0.0; `fund_attack` windows widen by the quota deadline (`quota_window`
   re-derived). **In-build adjudication: `general` slots stay 0.0** — `_GENERAL_WORTH_W` (0.45) was
   measured at resupply 0.0 and empirically already carries the site's re-access discount; stacking
-  ×(1−r) flipped the sweep unsafe (under-pricing 19→62). **Measured (83 frames): sign-flips 13→8
+  ×(1−r) flipped the sweep unsafe (under-pricing 19→62, sign-flips 13→17). Re-open only as a JOINT
+  re-measure of `_GENERAL_WORTH_W` and the resupply rate, never the rate alone. **Measured (83 frames): sign-flips 13→8
   (every large baseline over-pricing flip fixed, worst −46; 3 new tips all |swing_v2| ≤ 2),
   mean |v2−v1| 9.7→6.7, bias +5.8→−2.2 (centered); discard 12/12 held (that site keeps resupply
   0.0 — no redraw window).** The swap bar (flips ≈ 0) is NOT met and the residuals are v2 SCOPE

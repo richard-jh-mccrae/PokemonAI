@@ -1,68 +1,13 @@
 """`stadium_clauses_for` before and after Issue #424's extraction, executed side by side.
 
-Issue #424 split `board_delta.stadium_clauses_for` into a thin `current["stadium"]` read plus a new
-card-keyed core, `stadium_clauses_of`. The claim made for that split was *"a pure extraction — zero
-behaviour change to any existing caller"*, and the evidence offered was a green suite and flat
-watchdog gates. **That is inference from an absence of failures, not a demonstration of
-equivalence**, and `stadium_clauses_for` is not a function that gets accepted on inference: it is a
-shared apply-seam predicate on the parity path, reached by `board_delta._evolve` and
-`board_delta._play` (twice).
+The vendored pre-change copy runs against the CURRENT module's collaborators, so this is a
+differential on `stadium_clauses_for` ALONE, holding everything it calls fixed. Both halves of each
+outcome are compared — a refusal that became a return shows up as a kind mismatch — and the refusal
+MESSAGE lost four words on purpose, so message-only differences are counted separately.
 
-So this file executes both versions over the whole input space and compares them exactly.
-
-## What is compared
-
-**Both outcomes, not just return values.** Each call is reduced to either ``("return", value)`` or
-``("raise", <exception type>, <message>)``. A refusal that silently became a return — the precise
-regression class `/code-review`'s Spec axis alleged for this diff, and which was refuted by reading
-the code — would show up here as a kind mismatch. This is the executing version of that refutation.
-
-**The refusal MESSAGE changed on purpose and this file says so rather than hiding it.** The old text
-read *"a Stadium is in play whose effect the seam cannot model"*, which is false of a card still in
-hand — the counterfactual caller `pilot._stadium_hp_shift` asks about exactly that. The new text
-drops the four words. Message differences are therefore counted and reported SEPARATELY from
-outcome-kind and return-value differences, which must be zero.
-
-## What is deliberately out of scope
-
-The ``"static"`` event is **new**, so it has no old counterpart and cannot appear in a differential
-comparison by construction. The pre-change `STADIUM_EVENTS` does not contain it, so the old function
-raises for it while the new one answers — a difference that is the feature, not a regression. It is
-asserted directly in :func:`test_the_static_event_is_new_by_construction` rather than silently
-omitted from the sweep.
-
-## The vendored copy
-
-`_PRE_424_SOURCE` is the CODE of `stadium_clauses_for` copied verbatim from
-``git show 55017df0:src/common/board_delta.py`` (its docstring, which is prose only, replaced by a
-one-line marker). `55017df0` is the correct pre-change ref: it is this commit's parent, and
-`board_delta.py` is byte-identical there to `278063cc` (PR #430's merge) because Issue #425's commit
-in between touched only `strategy.py` and one test file — asserted at 61369 characters.
-
-It is executed against the CURRENT module's collaborators (`_admits`, `card_clauses`,
-`_one_clause_writes`, `_TRIGGER_EVENTS`), which is the honest scope: this is a differential test of
-`stadium_clauses_for` itself, holding everything it calls fixed. Of those collaborators only
-`STADIUM_EVENTS` changed at all, and this file overrides it back to its pre-change value and asserts
-the two differ by exactly ``{"static"}``.
-
-## What Issue #433 changed here, and why the diff is in the COVERAGE half
-
-Issue #433 added a ``basic`` resolver to `board_delta._APPLIES_TO`, which changes what `_admits`
-answers under **Lively Stadium (1251)** — from *unknown* (fail-closed: the clause comes back) to a
-real class test. That is a deliberate behaviour change, and this file is one of the places it is
-supposed to be visible.
-
-It does **not** show up in the old-vs-new sweep, and the reason is structural rather than convenient:
-`_admits` is a *collaborator*, held fixed by construction, so both versions see the resolver and the
-comparison stays at zero differences — the extraction is still a pure one, which is what that sweep
-exists to say. It shows up in the **coverage assertion**, which counts the CURRENT function only:
-**65 non-empty cells became 59**. The six are Lively Stadium against a Stage 1, a Stage 2 and the
-(Stage 1, Stage 2) pair, on ``bench_play`` and ``stage_change`` — bodies its *"Each Basic Pokémon"*
-clause does not reach and which it previously returned anyway for want of a resolver. They are named
-individually in :data:`_RESOLVED_AWAY` rather than absorbed into a changed total, together with the
-**fifteen** 1251 cells that must NOT have moved (4 ``bench_play`` + 4 ``stage_change`` + 7
-``displace``), so a resolver that over- or under-reached fails on the cell that is wrong instead of
-on an arithmetic that happens to balance.
+The `"static"` event is NEW and therefore outside the differential by construction; Issue #433's
+`basic` resolver is likewise invisible to it (`_admits` is a fixed collaborator) and shows up instead
+in the coverage half, cell by cell in `_RESOLVED_AWAY`.
 """
 from __future__ import annotations
 
@@ -118,11 +63,8 @@ _COMPARABLE_EVENTS = ("bench_play", "stage_change", "displace")
 
 
 def _pre424(mutation: tuple[str, str] | None = None):
-    """The pre-Issue-#424 `stadium_clauses_for`, built over the CURRENT module's collaborators.
-
-    ``mutation`` is ``(old, new)`` applied to the vendored source — the positive control's lever.
-    Asserted to actually change the text, so a typo in the mutation cannot masquerade as a passing
-    control."""
+    """`mutation` is `(old, new)` applied to the vendored source — the positive control's lever, and
+    asserted to change the text so a typo cannot masquerade as a passing control."""
     source = _PRE_424_SOURCE
     if mutation is not None:
         assert mutation[0] in source, f"mutation target {mutation[0]!r} is not in the vendored source"
@@ -152,18 +94,13 @@ def combat():
 
 @pytest.fixture(scope="module")
 def bodies(combat):
-    """A body-class spread that actually exercises `_admits`, plus the two shapes it accepts.
-
-    Real cards, every class verified at source in `data/EN_Card_Data.csv`: Riolu is a Basic
-    non-{D}, Zorua a Basic **{D}** (the one class `_admits_basic_non_dark` answers False for),
-    Hariyama a Stage 1, Dragapult ex a Stage 2. `None` is the no-body-class case, which `_admits`
-    resolves to *unknown*; the tuples are the `stage_change` form, where an old and a new body are
-    asked together. Read through `board_delta._stat`, the module's OWN accessor (ADR-0056's Stat
-    Provider seam), so the bodies reach `_admits` exactly as they do in production."""
+    """`None` is the no-body-class case (`_admits` resolves it to *unknown*); the tuples are the
+    `stage_change` form, where an old and a new body are asked together."""
     riolu, zorua = bd._stat(combat, 677), bd._stat(combat, 136)
     hariyama, dragapult = bd._stat(combat, 674), bd._stat(combat, 121)
     assert riolu and zorua and hariyama and dragapult, "the stat provider did not return a body"
     # The classes are the whole point of the spread — assert them rather than trusting the ids.
+    # Zorua is the one class `_admits_basic_non_dark` answers False for.
     assert riolu.stage == "basic" and zorua.stage == "basic"
     assert zorua.energyType == 7 and riolu.energyType != 7        # EnergyType.DARKNESS
     assert hariyama.stage == "stage1" and dragapult.stage == "stage2"
@@ -180,10 +117,8 @@ def bodies(combat):
 
 @pytest.fixture(scope="module")
 def stadium_states():
-    """Every Stadium in the pool as the in-play card, plus the EMPTY zone.
-
-    Card ids 1242–1267 are the 26 Stadiums in `data/EN_Card_Data.csv`; the empty zone is the
-    early-return path the extraction moved, so it is the one state most worth including."""
+    """Card ids 1242–1267 are every Stadium in the pool; the EMPTY zone is the early-return path the
+    extraction moved, so it is the one state most worth including."""
     return [("none", {})] + [(str(cid), {"stadium": [{"id": cid}]}) for cid in range(1242, 1268)]
 
 
@@ -204,22 +139,16 @@ def _sweep(new_fn, old_fn, combat, bodies, stadium_states):
     return same, message_only, real
 
 
-#: The six cells Issue #433's `basic` resolver moved from NON-EMPTY to empty, measured. All six are
-#: Lively Stadium (1251) against a body its clause does not reach, on the two body-scoped events;
-#: ``displace`` is absent because it returns every writing clause regardless of `applies_to`, and the
-#: four Basic-or-unknown classes are absent because the clause still reaches them.
+#: The cells Issue #433's `basic` resolver moved from NON-EMPTY to empty: Lively Stadium (1251)
+#: against a body its clause does not reach, on the two body-scoped events only.
 _RESOLVED_AWAY = frozenset({("1251", event, body)
                             for event in ("bench_play", "stage_change")
                             for body in ("stage1", "stage2", "tuple_stage1_stage2")})
 
 
 def _assert_the_only_movement_is_the_1251_resolver(non_empty: set) -> None:
-    """Assert the `basic` resolver's effect CELL BY CELL, not just as a count.
-
-    A bare ``== 59`` would be satisfied by any six cells going quiet, including six that had nothing
-    to do with this change. These assertions say which six, and — more importantly — which fifteen
-    1251 cells must still be non-empty, so a resolver that had gone too far (answering False for a
-    Basic) fails here rather than passing on an unchanged total."""
+    """A bare count would be satisfied by any six cells going quiet. Naming which six, and which 1251
+    cells must still be non-empty, catches a resolver that reached too far."""
     assert not (_RESOLVED_AWAY & non_empty), (
         f"{sorted(_RESOLVED_AWAY & non_empty)} should have been resolved AWAY by `_admits_basic` — "
         f"Lively Stadium does not reach an evolved body")
@@ -235,14 +164,8 @@ def _assert_the_only_movement_is_the_1251_resolver(non_empty: set) -> None:
 
 
 def test_the_extraction_changed_no_outcome_on_any_input(combat, bodies, stadium_states):
-    """27 stadium states × 3 pre-existing events × 7 body classes = **567 cells**, both versions.
-
-    Zero may differ in outcome KIND or RETURN VALUE. Message-only differences would be permitted —
-    the refusal text deliberately lost the words *"is in play"*, which are false of a card still in
-    hand — but **measured, there are none**, because no cell in the comparable space reaches the
-    re-raise at all (see the coverage assertions below). The rewording is therefore provably
-    unobservable here; the other refusal path, an unrecognised ``event``, is covered by
-    :func:`test_an_unknown_event_still_refuses_before_the_zone_is_read`."""
+    """27 stadium states × 3 pre-existing events × 7 body classes, both versions. Message-only
+    differences are permitted; outcome KIND and RETURN VALUE differences are not."""
     new_fn, old_fn = bd.stadium_clauses_for, _pre424()
     same, message_only, real = _sweep(new_fn, old_fn, combat, bodies, stadium_states)
 
@@ -251,9 +174,8 @@ def test_the_extraction_changed_no_outcome_on_any_input(combat, bodies, stadium_
     for cell, old_msg, new_msg in message_only:                  # permitted, but assert the shape
         assert new_msg == old_msg.replace("a Stadium is in play whose", "a Stadium whose", 1), cell
 
-    # ── the sweep DESCRIBES ITS OWN COVERAGE, so "567 matched" cannot be 567 trivial cells ──
-    # Without this, a provider that returned no clauses at all would make every cell an identical
-    # empty tuple and the test would pass while proving nothing.
+    # A provider returning no clauses at all would make every cell an identical empty tuple, so the
+    # sweep must describe its own coverage or "all matched" means nothing.
     cells = [((sname, event, body),
               _outcome(new_fn, current, combat, event=event, stat=bodies[body]))
              for (sname, current), event, body in itertools.product(
@@ -269,11 +191,8 @@ def test_the_extraction_changed_no_outcome_on_any_input(combat, bodies, stadium_
 
 
 def test_the_comparator_can_actually_fail(combat, bodies, stadium_states):
-    """**The positive control, and it is mandatory.** *"Found no differences"* and *"my comparator is
-    broken"* produce identical output, so the sweep above proves nothing until this passes.
-
-    Two independent mutations of the vendored old function, each of which MUST make the comparator
-    report real differences: inverting the trigger event filter, and inverting the `_admits` gate."""
+    """The positive control: "found no differences" and "my comparator is broken" produce identical
+    output, so the sweep above proves nothing until this passes."""
     for mutation in [("if on != event:", "if on == event:"),
                      ("if _admits(clause, stats) is not False:",
                       "if _admits(clause, stats) is False:")]:
@@ -283,10 +202,8 @@ def test_the_comparator_can_actually_fail(combat, bodies, stadium_states):
 
 
 def test_the_static_event_is_new_by_construction(combat, bodies):
-    """`"static"` has no old counterpart, so it is out of the sweep by construction rather than by
-    omission — the old vocabulary refuses it, the new one answers.
-
-    Asserted here so the exclusion is visible instead of implicit."""
+    """The old vocabulary refuses `"static"` and the new one answers, so the exclusion from the sweep
+    is by construction rather than by omission."""
     assert bd.STADIUM_EVENTS - _PRE_424_EVENTS == {"static"}, "only `static` may have been added"
     assert _PRE_424_EVENTS - bd.STADIUM_EVENTS == set(), "no event may have been removed"
 
@@ -299,11 +216,8 @@ def test_the_static_event_is_new_by_construction(combat, bodies):
 
 
 def test_an_unknown_event_still_refuses_before_the_zone_is_read(combat):
-    """The regression `/code-review`'s Spec axis alleged and this file exists to settle by executing.
-
-    The claim was that the extraction moved the `event` validation AFTER the empty-zone early
-    return, so a typo'd event on a board with no Stadium would fail OPEN. Both versions must raise,
-    with and without a Stadium in play."""
+    """The alleged regression: `event` validation moved AFTER the empty-zone early return, so a
+    typo'd event on a Stadium-less board would fail OPEN."""
     for current in ({}, {"stadium": [{"id": 1252}]}):
         for fn in (bd.stadium_clauses_for, _pre424()):
             assert _outcome(fn, current, combat, event="stage_chnage", stat=None)[0] == "raise"

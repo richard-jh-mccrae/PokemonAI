@@ -30,24 +30,16 @@ _MAX_STEPS = 5000          # runaway-game backstop; a real Match resolves in ~10
 
 @dataclass(frozen=True)
 class MatchResult:
-    """One Match outcome: winner seat (0=A, 1=B, None=draw) and which seats crashed.
-
-    A crash already decides the Match — the crashing seat loses — so `winner` is the other
-    seat; `crashed` only carries the flag so the Report can surface it separately.
-    """
+    """One Match outcome: winner seat (0=A, 1=B, None=draw) and which seats crashed. A crash already
+    decides the Match, so `winner` is the other seat and `crashed` is only the flag."""
     winner: int | None
     crashed: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
 class BattleMatch:
-    """One seat-balanced Match outcome, A/B-relative plus the seat A occupied.
-
-    ``winner`` is contestant-relative (0=A, 1=B, None=draw) — already mapped out of the
-    engine seat by `run_battle` using ``a_seat`` (which engine seat 0/1 contestant A sat in).
-    ``a_seat`` is what makes seat-balancing *auditable* (ADR-0021): per-seat win-rates stay
-    visible instead of being averaged away.
-    """
+    """One seat-balanced Match outcome. ``winner`` is CONTESTANT-relative (0=A, 1=B, None=draw),
+    already mapped out of the engine seat; ``a_seat`` keeps seat-balancing auditable (ADR-0021)."""
     a_seat: int
     winner: int | None
     crashed: tuple[int, ...] = ()
@@ -78,9 +70,8 @@ def to_battle_match(a_seat: int, result: "MatchResult") -> "BattleMatch":
 
 
 def seat_plan(n: int) -> list[int]:
-    """Which engine seat contestant A occupies in each of `n` Matches: ~N/2 in seat 0, ~N/2 in
-    seat 1 (an odd Match goes to seat 0). Deterministic, so any first/second-player advantage
-    cancels across the run instead of being handed to one contestant (ADR-0021)."""
+    """Which engine seat contestant A occupies in each of `n` Matches, ~half each. Deterministic, so
+    the first/second-player advantage cancels across the run rather than favouring one (ADR-0021)."""
     half = (n + 1) // 2
     return [0 if i < half else 1 for i in range(n)]
 
@@ -93,11 +84,8 @@ def parse_spec(spec: str) -> tuple[str, str | None]:
 
 
 def resolve_contestant(spec: str, rows: list[dict]) -> dict:
-    """Resolve a CLI contestant `spec` to a Build row from the ledger `rows`.
-
-    An all-digit `spec` is a **Build id** (`submission_id`); anything else is an **agent
-    name**, resolved to that agent's *latest* build. Raises ValueError naming the miss.
-    """
+    """Resolve a CLI contestant `spec` to a Build row. All-digit is a Build id; anything else is an
+    agent NAME, resolved to that agent's latest build. Raises ValueError naming the miss."""
     if spec.isdigit():
         sid = int(spec)
         match = [r for r in rows if r.get("submission_id") == sid]
@@ -184,11 +172,8 @@ def read_deck(bundle: Path) -> list[int]:
 
 
 class AgentServer:
-    """A contestant running in its own process: feed it an observation, get back its choice.
-
-    Isolation (own cwd / `sys.path` / `sys.modules`) is the whole point — it lets two
-    *different* Bundles play one Match without colliding, which an in-process load cannot.
-    """
+    """A contestant in its own process. The isolation (own cwd / `sys.path` / `sys.modules`) is the
+    whole point: two DIFFERENT Bundles can play one Match, which an in-process load cannot do."""
 
     def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None):
         env = dict(os.environ, AGENT_NO_TELEMETRY="1", PYTHONIOENCODING="utf-8")
@@ -229,13 +214,8 @@ class AgentServer:
 
 def play_match(server_a: AgentServer, server_b: AgentServer,
                deck_a: list[int], deck_b: list[int], *, recorder=None) -> MatchResult:
-    """Drive one Match on the native engine: seat A vs B, ask whichever seat is to move, until
-    the engine reports a `result`. A crashed/illegal seat loses the Match (and is flagged).
-
-    Pass a `MatchRecorder` (`sim.record`) to capture the game into a training film off THIS loop —
-    the process-isolated path that lets two different decks play without the in-process two-deck
-    `sys.modules` collision (the Tier-5 gauntlet corpus, grilled 2026-07-05). `recorder=None` (the
-    A/B path) leaves behaviour byte-identical."""
+    """Drive one Match on the native engine until it reports a `result`. A crashed or illegal seat
+    loses and is flagged. Pass a `sim.record.MatchRecorder` to film the game off this loop."""
     from cg.game import battle_finish, battle_start, battle_select
 
     obs, start = battle_start(deck_a, deck_b)
@@ -275,9 +255,8 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
 
 
 def _play_seated(server_a, server_b, deck_a, deck_b, a_seat: int) -> BattleMatch:
-    """Play one Match with contestant A in engine seat `a_seat` (B in the other), returning a
-    contestant-relative `BattleMatch`. Alternating the seat across a run cancels the
-    first/second-player advantage instead of handing it to one contestant (ADR-0021)."""
+    """Play one Match with contestant A in engine seat `a_seat`, returning a CONTESTANT-relative
+    `BattleMatch`."""
     if a_seat == 0:
         res = play_match(server_a, server_b, deck_a, deck_b)
     else:
@@ -313,9 +292,8 @@ def _run_serial(dir_a: Path, dir_b: Path, deck_a, deck_b, n, extra_syspath,
 
 def run_battle(dir_a: Path, dir_b: Path, deck_a, deck_b, n, *, jobs=1,
                extra_syspath=(), overlay_a=None, overlay_b=None) -> list[BattleMatch]:
-    """Run a Battle of `n` seat-balanced Matches, fanned across `jobs` worker processes (each with
-    its own engine + server pair, since the native engine keeps per-process state). Order-independent.
-    `overlay_a`/`overlay_b` are the per-contestant experiment overlays (the configs under test)."""
+    """Run a Battle of `n` seat-balanced Matches across `jobs` worker processes — each needs its own
+    engine + server pair, since the native engine keeps PER-PROCESS state. Order-independent."""
     if jobs <= 1 or n <= 1:
         return _run_serial(dir_a, dir_b, deck_a, deck_b, n, extra_syspath, overlay_a, overlay_b)
     procs = []

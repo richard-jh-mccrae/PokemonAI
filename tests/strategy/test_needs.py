@@ -1,11 +1,8 @@
-"""Needs — the fifth Ubiquitous Language seam (keep-value v2 grill, ruled 2026-07-19).
+"""Needs — the fifth Ubiquitous Language seam: deadline-tagged slots valued in the ONE currency.
 
-WHAT the position requires: deadline-tagged slots derived from board state, valued in the ONE
-currency. A card's keep-value (WP-N2) will be its MARGINAL slot coverage under exact assignment;
-this module (WP-N1) owns the slot vocabulary, the derivation primitives, the card→slot SUPPLIES
-mapping, and the two soundness nets the grill ruled: the COVERAGE LINT (every worth source maps to
-≥1 slot kind — a missed slot sheds a good card, the wrong fail direction) and the DISSOLUTION
-LEDGER (every gate names the slot that re-derives it).
+A card's keep-value is its MARGINAL slot coverage under exact assignment. Two soundness nets: the
+COVERAGE LINT (every worth source maps to ≥1 slot kind — a missed slot sheds a good card, the wrong
+fail direction) and the DISSOLUTION LEDGER (every gate names the slot that re-derives it).
 """
 import pytest
 
@@ -16,9 +13,8 @@ from common.card_worth import ROLE_TIER, TAG_TIER, ENERGY_TIER
 # ============================================================ slot primitives
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_fund_attack_slots_carry_quota_deadlines():
-    """A body missing k Energy opens k fund-attack slots; unit j's deadline is j−1 turns out
-    (1 manual attach/turn, rules.md §3), +1 across the board when this turn's attach is spent —
-    the quota gate re-derived as slot structure."""
+    """A body missing k Energy opens k slots; unit j's deadline is j−1 turns out (1 manual attach
+    per turn, rules.md §3), +1 across the board once this turn's attach is spent."""
     slots = needs.fund_attack_slots("active:112", cost_remaining=3, quota_spent=False)
     assert [s.deadline for s in slots] == [0, 1, 2]
     assert all(s.kind == "fund_attack" and s.value == ENERGY_TIER for s in slots)
@@ -29,18 +25,14 @@ def test_fund_attack_slots_carry_quota_deadlines():
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_deploy_now_slot_is_a_this_turn_deadline():
-    """The deploy-now spike re-derived: an eligible evolution play is a slot with deadline 0 at the
-    evolution's own tier."""
     s = needs.deploy_now_slot("evolve:120", value=ROLE_TIER["win_condition_base"])
     assert s.kind == "deploy_now" and s.deadline == 0 and s.value == 20.0
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_line_slots_carry_succession_for_the_wincon_class():
-    """"Copy 2's marginal = its next-best slot" (the grill spec): a wincon-class line opens the
-    primary assembly slot at full tier PLUS a half-tier SUCCESSION slot — the plan must survive
-    attrition, so a spare copy is never free. An in-play copy MEETS the primary (the in_play gate
-    as slot absence) but the succession need stands; a non-wincon class gets the primary only."""
+    """A wincon-class line opens the primary assembly slot at full tier PLUS a half-tier SUCCESSION
+    slot: the plan must survive attrition, so a spare copy is never free."""
     both = needs.line_slots("line:1031", value=30.0, succession=True)
     assert [s.value for s in both] == [30.0, 15.0] and all(s.kind == "line" for s in both)
     met = needs.line_slots("line:1031", value=30.0, succession=True, primary_met=True)
@@ -51,10 +43,8 @@ def test_line_slots_carry_succession_for_the_wincon_class():
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_urgent_succession_is_full_tier_at_a_this_turn_deadline():
-    """The answer-doom ruling (2026-07-20): when MY Active is doomed and this class is the
-    successor with its base in play, the succession slot goes FULL tier at deadline 0 (the old
-    answer-doom successor spike, re-derived as the line's own worth) instead of the half-tier
-    no-deadline insurance — a doomed wincon's replacement is needed imminently, not banked."""
+    """When MY Active is doomed and this class is its successor, the succession slot goes FULL tier
+    at deadline 0: the replacement is needed imminently, not banked as half-tier insurance."""
     urgent = needs.line_slots("line:1031", value=30.0, succession=True,
                               primary_met=True, succession_urgent=True)
     assert len(urgent) == 1 and urgent[0].value == 30.0 and urgent[0].deadline == 0
@@ -64,16 +54,13 @@ def test_urgent_succession_is_full_tier_at_a_this_turn_deadline():
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_answer_doom_slot_from_the_threat_read():
-    """The pressure gate re-derived: a doomed Active opens an answer slot (heal/switch/successor)
-    with the threat's deadline."""
     s = needs.answer_doom_slot(value=TAG_TIER["clutch_heal"], deadline=0)
     assert s.kind == "answer_doom" and s.deadline == 0 and s.value == 20.0
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_supply_wincon_slot_absent_when_the_wincon_is_in_hand():
-    """The need-met gate re-derived: the tutor's slot exists only while the wincon is NOT in hand
-    (and something remains to fetch). Absent slot = zero marginal for the tutor, no gate needed."""
+    """An ABSENT slot is zero marginal for the tutor, so no gate is needed."""
     s = needs.supply_wincon_slot(wincon_in_hand=False, target_reachable=True)
     assert s is not None and s.kind == "supply_wincon" and s.value == ROLE_TIER["tutor"]
     assert needs.supply_wincon_slot(wincon_in_hand=True, target_reachable=True) is None
@@ -82,18 +69,15 @@ def test_supply_wincon_slot_absent_when_the_wincon_is_in_hand():
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_fuel_slot_is_supplied_by_pitching():
-    """The zone sign re-derived: a discard-source accel's fuel need is a slot FILLED BY PITCHING —
-    the pitch side of the marginal, not a keep."""
+    """A discard-source accel's fuel need is FILLED BY PITCHING — the pitch side of the marginal."""
     s = needs.fuel_slot("fuel:F", value=ENERGY_TIER)
     assert s.kind == "fuel" and s.supplied_by_pitch is True
 
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_general_worth_slot_floors_a_spare_role_card():
-    """WP-N5 (the general-worth floor the refresh-SHED sweep proved missing): a held card with role
-    worth but no SPECIFIC need still carries LATENT board value — a discounted general slot that
-    sits BELOW a specific need (a need-filler assigns to its need first) and is de-duplicated (one
-    per distinct card, so spare COPIES price marginally — sets-not-sums)."""
+    """Role worth with no SPECIFIC need is still latent board value: a discounted general slot that
+    sits BELOW a specific need and is de-duplicated per distinct card, so spare COPIES price low."""
     line = needs.Slot("line", 30.0, 99, "s")
     gen = needs.general_worth_slot("general:X", value=6.0)
     assert gen.kind == "general" and gen.value == 6.0 and "general" in needs.SLOT_KINDS
@@ -105,8 +89,6 @@ def test_general_worth_slot_floors_a_spare_role_card():
 
 @pytest.mark.req("REQ-NEEDS-0001")
 def test_draw_engine_slot_saturates():
-    """The engine-supporter premise re-derived: one recurring draw-engine slot; with an engine
-    already in play/hand the slot's value drops (saturation — the readiness leaf's term)."""
     fresh = needs.draw_engine_slot(engines_online=0)
     sat = needs.draw_engine_slot(engines_online=1)
     assert fresh.kind == "draw_engine" and sat.value < fresh.value
@@ -115,9 +97,8 @@ def test_draw_engine_slot_saturates():
 # ============================================================ the opponent-side read (Round 3)
 @pytest.mark.req("REQ-NEEDS-0002")
 def test_turns_to_ready_is_the_basic_visible_lookahead():
-    """The ruled opponent read: turns until an in-play body is fully energized (deficit at the
-    attach quota) AND evolved (forward hops, one per turn) — attach and evolve run in PARALLEL, so
-    the read is the max, never the sum. Visible facts only."""
+    """Attach and evolve run in PARALLEL, so the read is the MAX of the two and never the sum.
+    Visible facts only."""
     assert needs.turns_to_ready(energy_deficit=2, evolve_hops=1) == 2
     assert needs.turns_to_ready(energy_deficit=1, evolve_hops=2) == 2
     assert needs.turns_to_ready(energy_deficit=0, evolve_hops=0) == 0
@@ -126,9 +107,8 @@ def test_turns_to_ready_is_the_basic_visible_lookahead():
 
 @pytest.mark.req("REQ-NEEDS-0002")
 def test_deny_slot_value_grades_by_their_closeness():
-    """The Hammer ruling (86091435-68) with TIMING: a denial slot consumes the shipped oracle's
-    value (ADR-0062 — never re-derived) and grades UP as their body nears ready — deadline = their
-    turns-to-ready, value scaled toward full as the deadline closes."""
+    """A denial slot CONSUMES the shipped oracle's value (ADR-0062, never re-derived) and grades up
+    as their body nears ready."""
     near = needs.deny_slot("deny:opp-active", oracle_value=30.0, turns_to_ready=0)
     far = needs.deny_slot("deny:opp-active", oracle_value=30.0, turns_to_ready=3)
     assert near.kind == "deny" and near.deadline == 0 and far.deadline == 3
@@ -137,10 +117,8 @@ def test_deny_slot_value_grades_by_their_closeness():
 
 @pytest.mark.req("REQ-NEEDS-0010")
 def test_gust_target_slot_carries_the_real_per_body_value_at_a_this_turn_deadline():
-    """ADR-0076: `gust_target` is a SEPARATE instrument from `deny` — its value is whatever the
-    caller computed via the two-term `opponent_target_value` marginal (not a flat disruption tier),
-    and it always carries deadline 0 (no ruled timing discount for this instrument, unlike deny's
-    turns-to-ready halving) — an un-graded value passes through unchanged."""
+    """ADR-0076: `gust_target` is a SEPARATE instrument from `deny` — the caller's computed value
+    passes through UNGRADED, always at deadline 0, with no turns-to-ready discount."""
     s = needs.gust_target_slot("gust_target:opp-bench0", value=1.9)
     assert s.kind == "gust_target" and s.deadline == 0 and s.value == 1.9
     zero = needs.gust_target_slot("gust_target:opp-bench1", value=0.0)
@@ -149,9 +127,8 @@ def test_gust_target_slot_carries_the_real_per_body_value_at_a_this_turn_deadlin
 
 @pytest.mark.req("REQ-NEEDS-0010")
 def test_gust_tag_supplies_both_deny_and_gust_target_kinds():
-    """The SUPPLIES schema change (ADR-0076 Amendment): `gust` names BOTH kinds it could ever fill —
-    which one is actually LIVE for a decision is the Pilot's kill-switched call, not this module's;
-    the coverage lint only needs ≥1 real kind, and this asserts both are present and real."""
+    """`gust` names BOTH kinds it could ever fill; which one is LIVE for a decision is the Pilot's
+    kill-switched call, not this module's (ADR-0076 Amendment)."""
     assert needs.SUPPLIES["gust"] == ("deny", "gust_target")
     assert set(needs.SUPPLIES["gust"]) <= needs.SLOT_KINDS
 
@@ -159,10 +136,7 @@ def test_gust_tag_supplies_both_deny_and_gust_target_kinds():
 # ============================================================ the soundness nets (Round 1 ruling)
 @pytest.mark.req("REQ-NEEDS-0003")
 def test_coverage_lint_every_worth_source_maps_to_a_slot_kind():
-    """The COVERAGE LINT: every ROLE_TIER role and TAG_TIER tag names ≥1 slot kind it can supply
-    (`needs.SUPPLIES`), and every named kind is a real slot kind — so no card class can be silently
-    priced 0 by a missed slot (the wrong fail direction). The `test_role_coverage` pattern, one
-    level up."""
+    """No card class may be silently priced 0 by a missed slot — the wrong fail direction."""
     for role in ROLE_TIER:
         assert needs.SUPPLIES.get(role), f"ROLE_TIER role {role!r} maps to no slot kind"
     for tag in TAG_TIER:
@@ -174,9 +148,8 @@ def test_coverage_lint_every_worth_source_maps_to_a_slot_kind():
 
 @pytest.mark.req("REQ-NEEDS-0003")
 def test_dissolution_ledger_every_gate_names_its_deriving_slot():
-    """The DISSOLUTION LEDGER: every shipped gate/flag of the v1 equation names the slot kind that
-    re-derives it — so no gate's corpus-anchored knowledge can silently evaporate in the migration.
-    Retiring a gate without a deriving slot is a red test, by design."""
+    """Retiring a v1 gate without naming the slot kind that re-derives it is a red test by design —
+    otherwise its corpus-anchored knowledge evaporates silently."""
     expected_gates = {
         "evolution_gate", "fetcher_gate", "need_met_gate", "pressure_gate", "quota_gate",
         "deploy_now_spike", "spent_burst", "engine_supporter_floor", "fuel_sign",
@@ -189,9 +162,8 @@ def test_dissolution_ledger_every_gate_names_its_deriving_slot():
 # ============================================================ WP-N2: exact assignment + marginals
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_marginal_is_counterfactual_with_reassignment():
-    """The Round-2 counterexample that refuted greedy: card A supplies S1(20) and S2(15), card B
-    supplies only S1. Exact assignment covers both (V=35); the marginals re-assign — losing B costs
-    15 (A slides to S1, S2 goes bare), NOT 0."""
+    """The counterexample that refuted greedy: losing B costs 15 because A slides to S1 and S2 goes
+    bare, NOT 0."""
     slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
     elig = [{0, 1}, {0}]                                # A: S1+S2; B: S1 only
     resupply = [0.0, 0.0]
@@ -202,9 +174,8 @@ def test_marginal_is_counterfactual_with_reassignment():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_duplicate_copies_price_marginally_and_as_a_set():
-    """Sets-not-sums, natively: two identical wincons, one line slot (20). Each copy's SOLO marginal
-    is 0 (the sibling covers); the PAIR's set marginal is the full 20 — so a forced discard-2 never
-    reads both as free. The duplicate-wincon naivety dies here."""
+    """Sets-not-sums: each copy's SOLO marginal is 0 because the sibling covers, while the PAIR's set
+    marginal is the full slot — so a forced discard-2 never reads both as free."""
     slots = [needs.Slot("line", 20.0, 99, "s1")]
     elig = [{0}, {0}, set()]                            # wincon, wincon, dreg
     resupply = [0.0]
@@ -219,9 +190,8 @@ def test_duplicate_copies_price_marginally_and_as_a_set():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_resupply_discounts_the_uncovered_loss():
-    """The Closure re-enters as slot RESUPPLY: a slot the deck can re-fill by its deadline at odds r
-    only loses value ×(1−r) when its held card leaves — the old re-access discount, derived. A
-    deadline-0 slot with no resupply (deploy-now) loses full value — the spike, derived."""
+    """A slot the deck can re-fill by its deadline at odds r loses only ×(1−r) when its held card
+    leaves; a deadline-0 slot with no resupply loses full value."""
     slots = [needs.Slot("line", 20.0, 2, "s")]
     assert needs.keep_v2(slots, [{0}], [0.7], 0) == pytest.approx(20.0 * 0.3)
     spike = [needs.Slot("deploy_now", 20.0, 0, "d")]
@@ -230,9 +200,8 @@ def test_resupply_discounts_the_uncovered_loss():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_hedge_floors_the_marginal_at_the_intrinsic_tier():
-    """The Round-1 transitional hedge (discretionary per the dev-window ruling): a card the slot
-    model prices at 0 keeps its intrinsic tier as a floor while migrating; the floor's firing is
-    missing-slot telemetry."""
+    """A card the slot model prices at 0 keeps its intrinsic tier as a floor while migrating, and the
+    floor firing is missing-slot telemetry."""
     slots = [needs.Slot("line", 20.0, 99, "s")]
     elig = [{0}, set()]
     assert needs.keep_v2(slots, elig, [0.0], 1) == 0.0
@@ -242,9 +211,8 @@ def test_hedge_floors_the_marginal_at_the_intrinsic_tier():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_cheapest_removal_ties_break_by_residual_worth():
-    """The 83967840-54 corpus ruling, re-derived (v1's worth tie-break): among EQUAL-marginal
-    removals the lower Σ tiebreak (residual worth) sheds first — a worth-10 redundancy is worth
-    preserving over a worth-8 one; raw index order never decides while a tiebreak discriminates."""
+    """Among EQUAL-marginal removals the lower residual worth sheds first; raw index order never
+    decides while a tiebreak discriminates."""
     slots = [needs.Slot("line", 10.0, 99, "s1"), needs.Slot("line", 8.0, 99, "s2")]
     elig = [{0}, {0}, {1}, {1}]                         # dup pair A (10), dup pair B (8)
     resupply = [0.0, 0.0]
@@ -257,10 +225,8 @@ def test_cheapest_removal_ties_break_by_residual_worth():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_deadness_ranks_an_exact_tie_the_index_used_to_decide():
-    """ADR-0106 / Issue #294, the seam-D Finding-3 case: a role-less spare and a card whose role has
-    EXPIRED both cover nothing, so both price 0 and both carry residual worth 0. The equation is
-    right to call them equal — `P(met | keep) == P(met | pitch) == 0` for each — so the preference
-    "shed the dead one" rides the ranking key, and the menu index stops deciding."""
+    """A role-less spare and an EXPIRED-role card both price 0 at residual worth 0, and the equation
+    is right to call them equal — so "shed the dead one" rides the ranking key (ADR-0106)."""
     slots = [needs.Slot("line", 20.0, 99, "s")]
     elig = [set(), set(), {0}]                          # spare, dead card, the line's own supplier
     resupply = [0.0]
@@ -272,10 +238,8 @@ def test_deadness_ranks_an_exact_tie_the_index_used_to_decide():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_deadness_outranks_residual_worth_which_reads_a_corpse_as_valuable():
-    """`83454549-36`: residual worth is a card's CATALOG tier, which a dead card still carries — a
-    spent burst Energy prices 30 against a role-less spare's 0, so worth-first sheds the LIVE spare
-    and keeps the corpse. Deadness therefore sits ABOVE residual worth in the key; the worth leg
-    still decides where nothing is dead (`test_cheapest_removal_ties_break_by_residual_worth`)."""
+    """Residual worth is a CATALOG tier a dead card still carries, so worth-first sheds the live
+    spare and keeps the corpse; deadness therefore sits ABOVE worth in the key."""
     elig = [set(), set()]                               # spare, spent burst — neither covers a slot
     args = ([], elig, [], [0.0, 0.0], 1)
     assert needs.cheapest_removal(*args, tiebreak=[0.0, 30.0]) == [0]            # worth alone: WRONG
@@ -284,10 +248,8 @@ def test_deadness_outranks_residual_worth_which_reads_a_corpse_as_valuable():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_deadness_is_ordering_only_and_never_beats_a_real_cost():
-    """The property that lets a CATEGORICAL fact rank without being handed a magnitude: the deadness
-    leg is consulted only where `removal_score` TIES, so no amount of deadness can make a removal
-    look cheaper than one that genuinely costs less. This is what a signed credit inside the score
-    could not promise without a tuned constant — and the constant is what ADR-0092 deletes."""
+    """The deadness leg is consulted only where `removal_score` TIES, so no amount of it can make a
+    removal look cheaper than one that genuinely costs less."""
     slots = [needs.Slot("line", 20.0, 99, "s")]
     elig = [{0}, set()]                                 # the dead card is the line's ONLY supplier
     picks = needs.cheapest_removal(slots, elig, [0.0], [0.0, 0.0], 1, deadness=[9, 0])
@@ -296,11 +258,8 @@ def test_deadness_is_ordering_only_and_never_beats_a_real_cost():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight():
-    """`83966336|0|decision|27`, the defect found while building ADR-0106. A fuel Energy that ALSO
-    covers the only `fund_attack` slot nets to a tie — the pitch gain and the keep loss cancel — so
-    whatever ranks that tie decides it. Passing the whole `pitch` count (which carries the fuel zone
-    sign) prices fuel TWICE and sheds the attack's only funder; the deadness leg carries the five
-    expired-role bits only, so the tie falls through to residual worth and the Energy survives."""
+    """A fuel Energy that ALSO covers the only `fund_attack` slot nets to a TIE, so passing the whole
+    pitch count into the deadness leg prices fuel twice and sheds the attack's only funder."""
     slots = [needs.fuel_slot("fuel", value=8.0), needs.Slot("fund_attack", 8.0, 0, "unit0")]
     elig = [{0, 1}, set()]                              # the Energy (fuel AND funder), a role-less spare
     resupply, intrinsics = [0.0, 0.0], [0.0, 0.0]
@@ -315,9 +274,8 @@ def test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
-    """A supplied_by_pitch slot never enters keep coverage; it feeds `pitch_gain` (pitching the
-    matching card is progress) and `cheapest_removal` prefers pitching the fuel card among
-    otherwise-equal removals."""
+    """A `supplied_by_pitch` slot never enters keep coverage: it feeds `pitch_gain`, and
+    `cheapest_removal` prefers pitching it among otherwise-equal removals."""
     fuel = needs.fuel_slot("fuel:F", value=8.0)
     line = needs.Slot("line", 20.0, 99, "s")
     slots = [line, fuel]
@@ -335,13 +293,8 @@ def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
 
 @pytest.mark.req("REQ-NEEDS-0010")
 def test_capacity_bounds_how_many_cards_can_be_assigned_at_once():
-    """The Bench holds 5, and that cap is what makes a deploy DISPLACE anything at all.
-
-    The DP assigns each card to at most ONE slot, so the number of cards assigned is exactly the
-    number of slots covered — `popcount(mask)`. A capacity bound is therefore a popcount bound, which
-    is why this is an exact extension rather than a heuristic. Without it a candidate's marginal is
-    identical whether the Bench is empty or full, which IS the defect Issue #197 exists to fix (every
-    bench rule gating on a binary `my_bench < _BENCH_MAX`)."""
+    """The DP assigns each card to at most ONE slot, so a capacity bound is a popcount bound — an
+    exact extension rather than a heuristic (Issue #197)."""
     slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
     elig = [{0}, {1}]                                   # A covers S1 only, B covers S2 only
     resupply = [0.0, 0.0]
@@ -363,17 +316,8 @@ def test_capacity_keeps_the_resupply_base_which_no_bench_slot_can_change():
 
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_deploy_marginal_is_gain_minus_the_marginal_slot_cost():
-    """ADR-0086 amendment E: `net(X) = gain(X) − displacement(X)`.
-
-    Decision 2's written form (`V(C) − V(C, X pinned)`) is ≤ 0 for every candidate — forcing a card
-    into an optimal assignment can only lower it — so it can rank bodies but can never clear the
-    turn-ender floor, which is `ms_free_bench_evolve_f17`'s failure mode. The corrected form is the
-    one under which decision 2's own sentence ("the cost of the 5th slot is emergent: exactly the
-    contribution of the supplier it displaces") is literally true of a computed quantity.
-
-    Here A covers a 20 slot, B a 15 slot. With Bench room for BOTH, deploying A displaces nothing and
-    nets its full 20. With room for only ONE, deploying A costs B its 15 — and deploying the WORSE
-    body nets negative, which is how the take-fewer decline and the turn-ender floor refuse it."""
+    """ADR-0086 amendment E: `net(X) = gain(X) − displacement(X)`. The written form
+    `V(C) − V(C, X pinned)` is ≤ 0 for every candidate, so it ranks bodies but never clears a floor."""
     slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
     elig = [{0}, {1}]
     resupply = [0.0, 0.0]
@@ -384,26 +328,16 @@ def test_deploy_marginal_is_gain_minus_the_marginal_slot_cost():
 
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_deploy_marginal_prices_a_redundant_body_at_zero_however_free_the_bench():
-    """The f51 shape, in miniature: the engine slot is already covered by a sibling, so a second copy
-    GAINS nothing — and that is true on an empty Bench too, because redundancy is a property of the
-    board rather than of scarcity.
-
-    It nets exactly 0 at EVERY capacity, which is worth stating because it is easy to expect a
-    penalty at tight capacity and wrong: with one free slot and two interchangeable bodies, the slot
-    gets filled either way, so choosing this copy costs nothing. The penalty for a redundant body
-    appears only when something BETTER wanted the slot — which is the test below, and is f51's real
-    shape (the second Solrock displaced a Makuhita, not another Solrock)."""
+    """Redundancy is a property of the board, not of scarcity: with one free slot and two
+    interchangeable bodies the slot is filled either way, so this copy costs nothing at ANY capacity."""
     slots = [needs.Slot("line", 20.0, 99, "engine")]
     elig = [{0}, {0}]                                   # two interchangeable engine bodies
     resupply = [0.0]
     assert needs.deploy_marginal(slots, elig, resupply, 1, capacity=5) == 0.0
     assert needs.deploy_marginal(slots, elig, resupply, 1, capacity=1) == 0.0
 
-    # ...and the real f51 shape. On that board the engine is COMPLETE (Solrock and Lunatone both in
-    # play), so `line_slots`' `primary_met` leaves no engine slot at all and the second Solrock
-    # supplies nothing — while the last Bench slot is exactly what the Makuhita->Hariyama line wants.
-    # Deploying it therefore nets the full displacement, which is the CRITICAL correction's own
-    # sentence ("clogs the bench needed for the Makuhita->Hariyama line") as arithmetic.
+    # ...and the penalty shape: the redundant body supplies nothing while the last Bench slot is
+    # exactly what another line wants, so deploying it nets the full displacement.
     f51 = [needs.Slot("line", 20.0, 99, "second_line")]
     elig_f51 = [set(), {0}]                             # 2nd Solrock (supplies nothing), Makuhita
     assert needs.deploy_marginal(f51, elig_f51, [0.0], 0, capacity=1) == pytest.approx(-20.0)
@@ -412,14 +346,8 @@ def test_deploy_marginal_prices_a_redundant_body_at_zero_however_free_the_bench(
 
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_deploy_marginal_is_zero_with_no_free_slot_because_the_deploy_cannot_happen():
-    """A full Bench has no counterfactual: `V(X deployed)` is not a state the board can reach, so the
-    marginal is exactly 0 rather than X's slot value.
-
-    The branch that credits X its own slot enumerates X's ELIGIBLE slots without asking whether X can
-    take one, so at capacity 0 it priced a full positive marginal for an impossible play. Latent
-    while only `_PLAY` was wired — the engine never offers an illegal placement — and reachable from
-    the `_TO_BENCH` greedy multi-pick, where the capacity is OUR hypothetical after an earlier pick
-    rather than the engine's menu (Issue #261 item 2d)."""
+    """A full Bench has no counterfactual — `V(X deployed)` is unreachable — so the marginal is 0.
+    Reachable from `_TO_BENCH`'s greedy multi-pick, where capacity is OUR hypothetical, not the menu's."""
     slots = [needs.Slot("line", 20.0, 99, "s1")]
     assert needs.deploy_marginal(slots, [{0}], [0.0], 0, capacity=0) == 0.0
     assert needs.deploy_marginal(slots, [{0}], [0.0], 0, capacity=1) == 20.0   # ...and one slot pays
@@ -438,9 +366,8 @@ def test_deploy_marginal_displacement_reads_the_BEST_rival_not_a_constant():
 
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_supporter_tutor_supplies_a_slot_kind_so_a_bench_drop_tutor_is_not_priced_zero():
-    """Meowth ex's Last-Ditch Catch fetches a SUPPORTER, and `supporter_tutor` was absent from
-    SUPPLIES entirely — so the coverage lint's promise ("no card class is silently priced 0 by a
-    missed slot") did not hold for it. It supplies the draw/engine need the fetched Supporter serves."""
+    """A Supporter tutor supplies the draw/engine need the fetched Supporter serves; absent from
+    SUPPLIES, the coverage lint's promise did not hold for it."""
     assert "supporter_tutor" in needs.SUPPLIES
     assert set(needs.SUPPLIES["supporter_tutor"]) <= needs.SLOT_KINDS
     assert needs.SUPPLIES["supporter_tutor"]

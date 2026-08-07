@@ -20,11 +20,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 AGENTS = ["mega_lucario", "mega_starmie", "dragapult_ex"]
 
-# Behavioural (NON-worth) roles: they route tag/context rungs (the gust doctrine, retreat-tool
-# selection, disruption/recovery reads), NOT the worth oracle, so `role_value` prices them 0
-# by design. Listed here so a NEW role string that is really a TYPO of a worth tier fails the lint.
-# `starter` was REMOVED 2026-07-28 (ADR-0079 retired the Role — a deck names its openers with
-# `Strategy.starter_priority`). Keeping it in this allowlist would let it be re-added and lint clean.
+# Behavioural (NON-worth) roles: they route tag/context rungs, not the worth oracle, so `role_value`
+# prices them 0. Listed so a NEW role string that is really a TYPO of a worth tier fails the lint.
 BEHAVIOURAL_ROLES = frozenset({"gust", "retreat_tool", "disruption", "recovery"})
 
 
@@ -37,10 +34,8 @@ def _shipped_pilot(agent):
 @pytest.mark.req("REQ-WORTH-0003")
 @pytest.mark.parametrize("agent", AGENTS)
 def test_every_declared_role_is_known_vocabulary(agent):
-    """No card silently priced at zero from a typo: every declared role (the compiled
-    `pilot.strategy.roles`) is either a `card_worth.ROLE_TIER` worth tier or a documented behavioural
-    role. Reads the roles through the built Pilot — NOT a bare ``import agents.<x>.strategy``, which
-    collides with `kaggle_environments`' own top-level ``agents`` module in the CI env."""
+    """Read through the BUILT Pilot, never a bare ``import agents.<x>.strategy``, which collides with
+    `kaggle_environments`' own top-level ``agents`` module in the CI env."""
     from common.card_worth import ROLE_TIER
     known = set(ROLE_TIER) | BEHAVIOURAL_ROLES
     roles_map = _shipped_pilot(agent).strategy.roles

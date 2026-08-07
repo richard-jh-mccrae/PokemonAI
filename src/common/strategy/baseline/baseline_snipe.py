@@ -1,39 +1,16 @@
-"""BASELINE cluster: SNIPE — the COUNTER-placement selects (ADR-0025).
-
-Since ADR-0085 (Issue #188) this module owns only the counter contexts: the DAMAGE_COUNTER_ANY(14)
-"place a counter in any way you like" spread placement (Phantom Dive / Munkidori —
-`place-counter-to-convert`), plus the counter-mover's SOURCE(16) and AMOUNT(40) picks. The DAMAGE(15)
-bench-snipe target pick that used to live here is now decided by `common/snipe_relevance.py`; see the
-note in `HYPOTHESES` for what was deleted and why. Pure data, no Mixin.
-
-`EVOLVING_THREAT_DMG` was removed with the rungs — the surviving reader is
-`common/strategy/context.py`'s own `_EVOLVING_THREAT_DMG`, which the Snipe Relevance forward leg
-reaches through `target_is_strongest_forward`.
-"""
+"""BASELINE cluster: SNIPE — the COUNTER-placement selects only (ADR-0025, ADR-0085): contexts 13/14
+(placement) plus the counter-mover's SOURCE(16) and AMOUNT(40). The DAMAGE(15) bench-snipe target
+pick is `common/snipe_relevance.py`'s. Pure data, no Mixin."""
 from common.strategy.context import (_DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY,
                                      _REMOVE_DAMAGE_COUNTER, _REMOVE_DAMAGE_COUNTER_COUNT)
 from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
-    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0085, Issue #188);
-    # per-rung fold map in `tools/rung_registry.py` (`FOLDED`, ADR-0085 group). They were an ADDITIVE
-    # stack, and the stack itself was the defect: bonuses firing on DIFFERENT bodies summed and
-    # out-voted a free prize (115 on an un-KO-able Grookey vs 60 on the KO-able Applin, ms 82754241
-    # f45), which is why five of the six carried a hand-written stand-down clause. Every such clause
-    # is a guard bolted on to stop the sum, not a statement about the board.
-    #
-    # `common/snipe_relevance.py` replaces all six with ONE `[0,1]` scalar under hard gates —
-    # `relevance = tera_veto (x) (their_plan * my_route)` — where the ordering is a PRODUCT of two
-    # conjunctive sides, so nothing sums and no stand-down clause is needed.
-    #
-    # Deleted, not suppressed (#136 standing directive 1). `snipe_relevance` therefore ships ON and
-    # OFF is documented DEGRADED MODE, never a rollback — the `attach_value` / `evolve_value` /
-    # `promote_retreat_value` precedent. The THREE counter rungs below are out of scope (decision 5)
-    # and untouched: they own different select contexts (13/14/16/40), not the DAMAGE(15) pick.
+    # The six DAMAGE(15) target rungs are DELETED (ADR-0085, Issue #188; fold map in
+    # `tools/rung_registry.py`) — `common/snipe_relevance.py` replaces that additive stack, and ships ON.
 
-    # --- DAMAGE_COUNTER_ANY: distribute a "put N counters in any way you like" spread (Phantom Dive)
-    # or a counter-mover's "onto opponent" target (Munkidori). Distinct engine context (14) from the
-    # snipe DAMAGE(15) select — one counter (10) per select, budget in `remainDamageCounter`. ---
+    # DAMAGE_COUNTER_ANY (14): a "put N counters in any way you like" spread, or a counter-mover's
+    # "onto opponent" target. One counter (10) per select; the budget is `remainDamageCounter`.
     Hypothesis(
         id="place-counter-to-convert",
         rationale="At a DAMAGE_COUNTER_ANY spread-placement select (Phantom Dive's 6 counters, one per "
@@ -49,8 +26,7 @@ HYPOTHESES = [
                         and c.counter_is_best_placement),
         weight=30, status="assumed"),
 
-    # --- Counter-mover (Munkidori Adrena-Brain: move <=3 counters ours->theirs). The ADD target is
-    # `place-counter-to-convert` above (ctx 13); these two own the SOURCE (ctx 16) + AMOUNT (ctx 40). ---
+    # Counter-mover (Munkidori Adrena-Brain): these two own the SOURCE (16) and AMOUNT (40) picks.
     Hypothesis(
         id="move-counters-off-the-damaged",
         rationale="At a REMOVE_DAMAGE_COUNTER source select (Munkidori's 'from 1 of your Pokémon'), pull "

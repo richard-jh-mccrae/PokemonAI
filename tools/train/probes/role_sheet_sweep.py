@@ -1,58 +1,12 @@
-"""Opponent role-sheet sweep. **Not a gate.**
+"""Opponent role-sheet sweep (Issue #395). **Not a gate.**
 
-Answers what Issue #395's derived tier owes its own change: does the ORDINAL role sheet actually
-reorder the agent's removal targets, or does it merely break Flat Ties the way any number of that
-size would?
+Does the ORDINAL role sheet reorder the agent's removal targets, or does it merely break Flat Ties?
+OFF patches the SHIPPED `MatchupPlan.priority` — the ONE call every consumer goes through. D8's three
+corrections to ADR-0118's bar: measure the FULL gust path, SPARSITY-match each sham to the candidates
+the real leg lifted, and count ties on the field the ranking SORTS.
 
-The bar is ADR-0118's sham policy — **a movement number published without its sham baseline is not
-evidence** — and Issue #395 D8 adds three corrections to it, each earned by a specific past failure
-on this exact seam:
-
-1. **Measure the FULL gust path, `doctrine_gust` included** — not `_opponent_target_rows`' `value`
-   in isolation. The rows carry no role signal at all, while `doctrine_gust._gust_target_tactical`
-   already layers `matchup_plan.priority` on top of its own prize reading. A rows-only sweep would
-   compare a seam with no role signal against one with a signal and miss that the layer above
-   already had one — the same class of error the Issue #398 probe made twice (wrong denominator,
-   then wrong field). So the arm patch is at `MatchupPlan.priority`, which is the ONE place every
-   consumer of the sheet reads it, and the ranked quantity is the doctrine's own target score.
-2. **Sham-controlled and SPARSITY-matched.** A band-matched sham perturbs every candidate; a sparse
-   real leg does not, and the sham then wins on volume alone. The `[sparsity]` arms confine each
-   sham to exactly the candidates the real leg lifted — same band, same COUNT of perturbed rows,
-   meaningless CHOICE of magnitude within them. Those are the honest controls; the unmasked shams
-   are printed for continuity, not as the bar.
-3. **The tie population counted on the field the ranking sorts** — here the composed gust score —
-   with the `row["value"]` population printed BESIDE it rather than in place of it. Issue #398 had
-   to correct that error twice.
-
-## Arms
-
-    OFF    every role priority collapsed to 0 — no role signal anywhere, including inside
-           `doctrine_gust`. Reconstructed by patching the SHIPPED `MatchupPlan.priority` for the
-           duration of the frame, so it is the real code path answering the OLD question rather
-           than a hand-rebuilt imitation (ADR-0117's second-oracle rule).
-    ON     the sheet as it now ships.
-    S_cid  sham — (cid % 7), band-matched to ON's own measured effect. No causal claim.
-    S_hp   sham — (hp % 70), same band. No causal claim.
-    S_pos  sham — position index. The degenerate case: a leg that cannot beat LIST ORDER is not
-           ordering anything, and list order is precisely what a Flat Tie falls back to.
-
-**The pre-registration.** Before the first run this docstring predicts the sheet SHOULD clear its
-sparsity-matched shams on the gust path, on the reasoning that it separates bodies by which ROLE
-their card facts put them in — a distinction that varies across an opponent's board — rather than by
-a removal Δ that is a Structural Zero for every non-leading body. Whatever the run says, **this
-paragraph is left standing rather than edited into agreement with the result**, which is the
-discipline `line_prize_sweep.py` recorded after its own prediction failed.
-
-**What a null result would and would not mean.** Issue #395's commits 1 and 2 are correctness fixes
-standing on measured defects — eleven tag instances a documented command deletes, 530 role
-assignments resolving to 0, a −80 steer landing on 2- and 3-prize bodies. None of them needs this
-sweep. Only the widened derived tier (commit 3) rests on it. If the sheet moves nothing, that is the
-answer and it gets recorded as the answer.
-
-    python tools/train/probes/role_sheet_sweep.py
-
-Reads what SHIPS: a fresh stateful Pilot per arm, deployment profile untouched. Offline, read-only,
-always exits 0.
+**The pre-registration stands rather than being edited into agreement with the result**: the sheet
+SHOULD clear its sparsity-matched shams. Only the widened derived tier rests on this sweep.
 """
 from __future__ import annotations
 
@@ -73,13 +27,8 @@ from common.strategy.context import _BENCH, _CARD, _SWITCH     # noqa: E402
 
 
 class _NoRoleSignal(ArmPatch):
-    """Collapses every role priority to 0 — the board as it reads with no role sheet at all.
-
-    Patched at `MatchupPlan.priority` rather than at the derivation, and that is the whole of D8
-    correction 1: `priority` is the ONE call every consumer of the sheet goes through, so turning it
-    off here turns it off in `doctrine_gust`, in the snipe relevance multiplier, in the Brief
-    tiebreak and on the target rows at once. Patching the derivation would have left the tiers above
-    it still carrying a signal, which is the comparison that reads as a measurement and is not one."""
+    """Collapses every role priority to 0. Patched at `MatchupPlan.priority` — the ONE call every
+    consumer goes through, so patching the derivation would leave the tiers above it still signalling."""
 
     target, name = MatchupPlan, "priority"
 
@@ -89,13 +38,7 @@ class _NoRoleSignal(ArmPatch):
 
 
 def _gust_menu(obs: dict):
-    """A synthetic SWITCH select over every opponent BENCH body, plus the bodies it names.
-
-    The gust path is only reachable through a SWITCH select, and most corpus frames are not one — so
-    the frames are re-posed as the question the doctrine answers rather than filtered down to the
-    handful that already ask it. The option shape is the engine's own (`type=_CARD`, `area=_BENCH`,
-    `playerIndex` = theirs), which is what `_option_pokemon` resolves against; nothing about the
-    board is altered."""
+    """A synthetic SWITCH select over every opponent BENCH body — the only shape the gust path is reachable through."""
     state = obs.get("current") or {}
     players = state.get("players") or []
     yi = state.get("yourIndex", 0)
@@ -109,21 +52,15 @@ def _gust_menu(obs: dict):
 
 
 def _scores(pilot, obs, select, options) -> list[float]:
-    """`doctrine_gust._gust_target_tactical` for every candidate — the SHIPPED composition, called
-    rather than re-derived. Its KO-oracle gate is part of what is being measured: a body the Active
-    cannot knock out scores 0 however its role reads, which is D7's *"the KO oracle keeps refusing
-    an impossible gust"* stated as an arithmetic rather than as a hope."""
+    """`doctrine_gust._gust_target_tactical` per candidate — the SHIPPED composition, called rather than
+    re-derived. Its KO-oracle gate is measured too: an un-KO-able body scores 0 however its role reads."""
     board = pilot._board(obs, select)
     return [float(pilot._gust_target_tactical(obs, select, board, o) or 0.0) for o in options]
 
 
 def _tie_population(scores, values) -> tuple[int, int, int]:
-    """``(equal-prize groups, tied on the SORTED field, tied on row value)``.
-
-    D8 correction 3. The first two are the honest count: the ranking sorts the composed gust score,
-    so that is the field a Flat Tie has to be counted on. The third is the `row["value"]` population
-    the previous probes on this seam reported — kept BESIDE it rather than in place of it, because
-    reporting only the sub-population is the error Issue #398 had to correct twice."""
+    """``(equal-prize groups, tied on the SORTED field, tied on row value)``. The ranking sorts the
+    composed gust score, so that is where a Flat Tie is counted; row value is kept BESIDE, not instead."""
     by_prize: dict = {}
     for score, (prize, value) in zip(scores, values):
         by_prize.setdefault(prize, []).append((score, value))
@@ -151,9 +88,8 @@ def main(argv=None) -> int:
             select, bench = _gust_menu(obs)
             if select is None:
                 continue
-            # A FRESH stateful Pilot per arm: the two must not share a per-decision memo or any board
-            # cache, or the second would answer with the first's numbers and the comparison would
-            # silently be a null control.
+            # A FRESH stateful Pilot per arm: the two must not share a per-decision memo or board
+            # cache, or the second would answer with the first's numbers and prove nothing.
             with _NoRoleSignal():
                 p_off = tune._build_pilot(replay_agent(rec))[0]
                 p_off._planning = False

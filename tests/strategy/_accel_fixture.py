@@ -1,10 +1,7 @@
 """A real accel-stranded board for the Deploy Marginal's accel-unlock leg (ADR-0086 decision 8).
 
-Built on the REAL mega_lucario pilot rather than a hand-stubbed one, because the leg reads card
-facts the stub would have to re-assert: Mega Lucario ex's Aura Jab is the rider ("Attach up to 3
-Basic {F} Energy cards from your discard pile to your Benched Pokémon in any way you like"), Riolu is
-the Line pre-evolution that receives, and Mega Brave's `{F}{F}` is the need that bounds how much
-Energy the recipient can actually use. Same approach as `test_setup_bench_decline.py`.
+Built on the REAL mega_lucario pilot, not a stub: the leg reads card facts (Aura Jab's rider, Riolu
+as the receiving pre-evolution, Mega Brave's `{F}{F}` need) a stub would have to re-assert.
 """
 from __future__ import annotations
 
@@ -30,10 +27,8 @@ def _mega_lucario_pilot():
 
 
 def accel_obs(*, recipient_benched: bool = False, discard_energy: int = 3) -> dict:
-    """Mega Lucario ex Active (the accelerator), Riolu in hand, {F} Energy in the discard.
-
-    With `recipient_benched` the Bench already holds a Riolu, so the rider is NOT stranded and the
-    unlock must price 0 — the rule's hand-written stand-down, derived."""
+    """Mega Lucario ex Active, Riolu in hand, {F} in the discard. With `recipient_benched` the rider
+    is NOT stranded, so the unlock must price 0."""
     bench = [{"id": RIOLU, "hp": 80, "energies": []}] if recipient_benched else []
     me = {"active": [{"id": MEGA_LUCARIO_EX, "hp": 340, "energies": [BASIC_F]}],
           "bench": bench,

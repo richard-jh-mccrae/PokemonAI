@@ -1,86 +1,9 @@
-"""The **State Value** scalar (`common/state_value.py`, POC-T3 / Issue #262, ADR-0092 §4-T3).
+"""`common/state_value.py` — the State Value scalar (ADR-0092 §4-T3, Issue #262).
 
-T0 (Issue #259) froze the contract; T3 fills in the equations. So this file now has two jobs. The
-first is unchanged from T0 — the coverage map, the double-counting rule, the unit basis — because
-those are what stop the scalar from silently pricing one fact twice or no times.
-
-    The two tests that matter most are `test_no_fact_is_priced_twice` and
-    `test_no_fact_is_priced_by_nobody`. They are the executable form of T0's headline rule, and the
-    rule earned its enforcement — an empty Bench under a knock-outable Active reached the draft
-    sound-rule whitelist through THREE mechanisms simultaneously (a terminal rung, an order filter
-    and a +60 weight), and nothing about writing that list prompted the question (ADR-0096).
-
-The second job is T3's, and it is dominated by ONE class: **mid-turn monotonicity**. Issue #263's
-composer orders every candidate by 1-ply differencing, so `state_value` is evaluated on half-finished
-turns far more often than on finished ones. A term that quietly assumed a completed turn would not
-crash — it would produce garbage orderings and prune good lines before the leaf could vindicate them,
-which is invisible from any test that only ever scores end-of-turn boards.
-
-Construction follows `test_state_model.py`: a dict-backed Stat Provider and hand-built zone dicts, no
-Pilot and no engine boot. Card facts VERIFIED at source (`data/EN_Card_Data.csv`) — never recalled:
-  * Riolu (677) Basic HP 80, {F}; Mega Lucario ex (678) Stage 1 HP 340, evolvesFrom **Riolu** —
-    a SINGLE hop, with no intermediate Lucario in this set (`docs/rulebook.txt` Appendix 1).
-    Aura Jab ``{F}`` 130 / Mega Brave ``{F}{F}`` 270.
-  * Dragapult ex (121) Stage 2 HP 320, {N} — Jet Headbutt ``●`` 70 / Phantom Dive ``{R}{P}`` 200.
-    Its **Category** column reads ``Tera(Dragon)`` and it prints a ``[Tera]`` ability — *"As long as
-    this Pokémon is on your Bench, prevent all damage done to this Pokémon by attacks"* — so
-    `CardStat.tera` is True. Verified twice, at `data/EN_Card_Data.csv` Card ID 121 and against the
-    engine's own `CardData.tera` through `EngineCardStatProvider`. (The ``Rule`` column on that row
-    is ``Pokémon ex``; the two are different columns and Issue #284's first draft of this line cited
-    the wrong one.) Declared here from Issue #284, which is the first case that reads the flag: every
-    board in this file before then had Dragapult ex ACTIVE, where it says nothing — `docs/rules.md`
-    §11 scopes the immunity to a BENCHED body.
-  * Munkidori (112) Basic HP **110**, **{P}**, Weakness {D}, Resistance {F}, Retreat 1. Corrected by
-    Issue #284 from a fixture that had declared HP 70 / {D} — neither of which is what the row says,
-    and the module header claims these are verified. No board moved: every `_poke` sets `hp`
-    explicitly, so the stat's HP was never the number under test, and Munkidori declares no attacks
-    here for a Weakness or Resistance to apply to.
-  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and {F} is added here as 6 ({W} as 3).
-  * Prize values: Mega ex 3, ex 2, else 1 (`docs/rules.md` §6).
-
-Issue #285 adds the three PRE-EVOLUTIONS the denial credit is about, and the hop counts are the whole
-point of declaring them — a fixture built on the mainline chains would silently test nothing:
-  * Staryu (1030) Basic HP 70, {W}, Weakness {L}, Retreat 1 — Water Gun ``{W}`` 20, its only attack,
-    so `maxDamage` 20. **Staryu → Mega Starmie ex is ONE hop**: 1031's ``Previous stage`` column reads
-    ``Staryu``, and **1031 is the only card in the pool whose ``Previous stage`` is ``Staryu``** —
-    swept, not recalled. (The pool DOES print a *Misty's* Starmie, id 361, but its ``Previous stage``
-    is ``Misty's Staryu`` (360), a different line: the owner prefix is part of the printed name,
-    `docs/rules.md` §9. An earlier draft of this line claimed the set prints no "Starmie" at all,
-    which is false — the kind of from-memory mainline claim CLAUDE.md's verify-at-source rule exists
-    to catch, found by review.)
-  * Dreepy (119) Basic HP 70, Dragon, **no Weakness and no Resistance** — Petty Grudge ``{P}`` 10 /
-    Bite ``{R}{P}`` 40, so `maxDamage` 40.
-  * Drakloak (120) Stage 1, evolvesFrom **Dreepy**, HP 90, Dragon, no Weakness/Resistance, Retreat 1
-    — Recon Directive (Ability) / Dragon Headbutt ``{R}{P}`` 70, so `maxDamage` 70.
-  * So **Dreepy → Drakloak → Dragapult ex is TWO hops** and Drakloak → Dragapult ex is one, which is
-    the pair that isolates the hop discount. Both chains verified in `data/EN_Card_Data.csv`'s
-    ``Previous stage`` column, alongside the standing `Riolu → Mega Lucario ex` single hop above.
-
-Issue #281 adds four more, every field read off `data/EN_Card_Data.csv` (the numbers are Card IDs):
-  * Mega Starmie ex (1031) Stage 1 *Mega Pokémon ex*, evolvesFrom **Staryu**, HP 330, {W},
-    Weakness {L} — Jetting Blow ``{W}`` 120 (+50 to one Benched) / Nebula Beam ``●●●`` 210,
-    whose text is *"isn't affected by Weakness or Resistance, or by any effects on your opponent's
-    Active"* → `ignoresWeakness` + `ignoresResistance` + `ignoresEffects`.
-  * Gouging Fire ex (46) Basic *Pokémon ex*, HP 230, {R}, **Weakness {W}** — Heat Blast ``{R}●``
-    60 / Blaze Blitz ``{R}{R}●`` 260. The under-claim defender: Jetting Blow's printed 120 misses,
-    its doubled 240 does not.
-  * Crustle (345, DRI) Stage 1, HP 150, {G}, Weakness {R}, Ability *Mysterious Rock Inn*: *"Prevent
-    all damage done to this Pokémon by attacks from your opponent's Pokémon {ex}"* →
-    `preventsDamageFrom="ex"`. The over-claim defender.
-  * Larry's Braviary (1008) Stage 1, HP 130, {C}, Weakness {L}, **Resistance {F}** — the −30
-    defender (`docs/rules.md` §5: a uniform flat −30 in this set).
-
-Issue #280 adds ONE, and it is the attacker the Damage Formula's context exists for:
-  * Alakazam (743, MEG 56) Stage 2, evolvesFrom **Kadabra**, HP 140, {P}, Weakness {D},
-    Resistance {F}, Retreat 1 — **Powerful Hand** ``{P}``, printed damage *n/a*:
-    *"Place 2 damage counters on your opponent's Active Pokémon for each card in your hand."*
-    Read through `card_text.parse_attack_scaling`, that sentence is
-    ``("atk_hand", 20, True, None)`` — the Damage Formula scaler ``atk_hand`` at **20 per card**
-    (2 counters), and the trailing ``True`` is *counter-placement*, which
-    `provider.build_attack_stats` turns into ``ignoresWeakness/Resistance/Effects`` because
-    counters are not damage. So this attacker's output is EXACTLY ``20 x hand`` with no
-    Weakness/Resistance leg to disentangle, which is what makes it the clean instrument for a
-    context test. Rank 2 by play-rate in the tracked meta (`docs/matchups/alakazam.md`).
+Two jobs: the coverage map (no fact priced twice or by nobody), and MID-TURN monotonicity, since the
+composer differences half-finished turns far more often than finished ones. Construction follows
+`test_state_model.py` — dict-backed Stat Provider, hand-built zones, no Pilot and no engine boot. Every
+`CardStat` literal below is audited against `data/EN_Card_Data.csv` by `test_cardstat_fixture_facts.py`.
 """
 from __future__ import annotations
 
@@ -88,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
+from card_facts import ignition_tags                    # the committed tags, ONE copy
 from common import currency, needs as _needs, state_value as sv
 from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
@@ -107,43 +30,25 @@ ALAKAZAM = 743
 SLOWKING, BRAVE_BANGLE = 163, 1175
 STARYU, DREEPY, DRAKLOAK = 1030, 119, 120
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
-#: Riolu's ONLY attack, and the cast used to drop it (`attacks=()`). Verified at
-#: `data/EN_Card_Data.csv` Card ID 677: **Accelerating Stab ``{F}`` 30**, *"During your next turn,
-#: this Pokémon can't use Accelerating Stab."* -> ``nextTurnSameAttackLock``, by the shipped parser.
-#: It is the cast's ONE body whose only affordable attack locks, which makes it the only honest
-#: instrument for the lone-attack guard on the next-turn clock cost (Issue #384).
+#: Riolu's ONLY attack — Accelerating Stab ``{F}`` 30 with ``nextTurnSameAttackLock``, so it is the
+#: cast's one body whose only affordable attack locks (Issue #384).
 ACCELERATING_STAB = 9677
 SUPER_PSY_BOLT = 214
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
-WATER_GUN = 91030          # Staryu's only attack (Issue #286)
+WATER_GUN = 91030          # Staryu's only attack
 HEAT_BLAST, BLAZE_BLITZ, POWERFUL_HAND = 946, 947, 9743
 E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
-IGNITION = 17               # Issue #286 — the pool's ONE `discard_eot` Energy
-#: The bench-GATED pair, and the ONE the shipped decks actually expose (Issue #287). Verified at
-#: source: Solrock (676) Basic HP 110 {F}, weak {G}, retreat 1 — Cosmic Beam ``{F}`` 70, *"If you
-#: don't have Lunatone on your Bench, this attack does nothing. This attack's damage isn't affected
-#: by Weakness or Resistance."* — its only attack. Lunatone (675) Basic HP 110 {F}, weak {G},
-#: retreat 1 — Ability Lunar Cycle, and Power Gem ``{F}{F}`` 50. `mega_lucario` runs 3x Solrock and
-#: 2x Lunatone, and they are each other's enablers: Lunar Cycle needs Solrock in play, Cosmic Beam
-#: needs Lunatone on the Bench.
+IGNITION = 17               # the pool's ONE `discard_eot` Energy
+#: The bench-GATED pair (Issue #287): Cosmic Beam does nothing without Lunatone benched, and Lunar
+#: Cycle needs Solrock — `mega_lucario` runs 3x Solrock / 2x Lunatone, so they enable each other.
 SOLROCK, LUNATONE = 676, 675
 COSMIC_BEAM, POWER_GEM = 9676, 9675
-#: The conditional-BONUS shape, as opposed to the conditional-ZERO one above — Metagross (276)
-#: Stage 2 HP 170 {P}, `evolvesFrom` Metang: Wrack Down ``{P}`` 60 and Conjoined Beams ``{P}{P}``
-#: **130**, *"If Beldum and Metang are on your Bench, this attack does 150 more damage."* Verified
-#: at source. `slowking` runs 2x and neither partner, so the bonus is unpayable for the whole match.
+#: The conditional-BONUS shape, against the conditional-ZERO one above: Conjoined Beams prints 130 and
+#: +150 more if Beldum and Metang are benched — `slowking` runs neither, so it is never payable.
 METAGROSS = 276
 WRACK_DOWN, CONJOINED_BEAMS = 9276, 9277
-#: Issue #384's COIN attacker, and it is a real card rather than a shaped one. Eevee (43) Basic
-#: HP 50, **{C}**, Weakness **{F}**, no Resistance, Retreat 1 — verified at
-#: `data/EN_Card_Data.csv`. Two attacks: Ascension ``●`` (damage *n/a* -> 0, *"Search your deck for
-#: a card that evolves from this Pokémon…"*) and **Quick Attack ``●●●`` 20**, *"Flip a coin. If
-#: heads, this attack does 20 more damage."*
-#:
-#: Run through the SHIPPED parser (`provider.build_attack_stats` over that exact sentence) the coin
-#: clause reads ``damageMin=20, damageMax=40`` — a floor and a ceiling, and **no flip count and no
-#: probability anywhere in the record**. That absence is the whole reason `attack_ev_legs` needs a
-#: declared bound policy, so the instrument for it is a card that really prints a coin.
+#: Issue #384's COIN attacker, a real card: Quick Attack parses to ``damageMin=20, damageMax=40`` with
+#: NO flip count and no probability anywhere, which is why `attack_ev_legs` needs a declared bound.
 EEVEE = 43
 ASCENSION, QUICK_ATTACK = 9043, 9044
 
@@ -154,9 +59,6 @@ _STATS = {
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
     MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=110, energyType=PSYCHIC,
                         weakness=DARKNESS, resistance=FIGHTING, retreatCost=1, cardType=0),
-    # ``attacks``/``minAttackCost``/``maxDamageCost`` corrected by Issue #384: Riolu really does
-    # print an attack — Accelerating Stab ``{F}`` 30 — so cost 1, not the 2 this row used to claim,
-    # and the attack list is not empty. Measured behaviour-neutral for every other test in this file.
     RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=1,
                     maxDamage=30, maxDamageCost=1, minCostDamage=30,
                     attacks=(ACCELERATING_STAB,), cardType=0),
@@ -194,11 +96,7 @@ _STATS = {
     BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
                            damageBoostVsEx=True, holderNoRuleBox=True),
     # ── Issue #285's cast: the PRE-EVOLUTIONS whose removal denies a forward payoff ────────────
-    # ``attacks`` added by Issue #286: Water Gun ``{W}`` 20, Staryu's ONLY attack
-    # (`data/EN_Card_Data.csv` Card ID 1030). Issue #285 introduced this row purely as a
-    # forward-payoff pre-evolution and read only its `maxDamage`, so the attack was never declared.
-    # It is load-bearing here: `readiness_p` must be able to ask whether a COLOURLESS unit pays a
-    # ``{W}`` slot, and a body with no attacks answers 0.0 for the wrong reason.
+    # Staryu's ``attacks`` is load-bearing: a body with no attacks answers `readiness_p` 0.0 wrongly.
     STARYU: CardStat(STARYU, synthetic=True, name='Staryu', hp=70, energyType=WATER, weakness=LIGHTNING,
                      retreatCost=1, maxDamage=20, maxDamageCost=1, minAttackCost=1,
                      minCostDamage=20, attacks=(WATER_GUN,), cardType=0),
@@ -209,12 +107,7 @@ _STATS = {
                        evolvesFrom="Dreepy", retreatCost=1, maxDamage=70, maxDamageCost=2,
                        minAttackCost=2, minCostDamage=70, cardType=0),
     # ── Issue #286's one card: the Energy that is GONE at the end of the turn ─────────────────
-    # Ignition Energy (17), verified at `data/EN_Card_Data.csv`: *Special Energy*, `Type` {C}{C}{C},
-    # *"If this card is attached to 1 of your Pokémon, discard it at the end of your turn. … it
-    # provides {C} Energy. If this card is attached to an Evolution Pokémon, it provides {C}{C}{C}
-    # Energy instead."* `energyType` is COLORLESS — the units it supplies pay colourless slots only,
-    # which is why it arms Nebula Beam ``{C}{C}{C}`` outright and does nothing at all for Mega
-    # Brave ``{F}{F}``. `cardType=6` is SPECIAL_ENERGY (`cg.api.CardType`).
+    # `energyType` COLORLESS — it arms Nebula Beam ``{C}{C}{C}`` outright and nothing for ``{F}{F}``.
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     SOLROCK: CardStat(SOLROCK, synthetic=True, name='Solrock', hp=110, energyType=FIGHTING, weakness=GRASS,
@@ -237,22 +130,8 @@ _STATS = {
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
-    # ── Issue #384: the three riders/locks the fixture used to DROP ──────────────────────────
-    # Each was verified by running the shipped parsers (`provider.build_attack_stats`) over the
-    # card's own `Effect Explanation` text in `data/EN_Card_Data.csv` — not recalled, and not
-    # hand-derived from the sentence either, so the fixture carries what the runtime carries.
-    #   Phantom Dive (121)  *"Put 6 damage counters on your opponent's Benched Pokémon in any way
-    #                       you like."*                     -> benchSpread 60 (6 counters x 10)
-    #   Aura Jab (678)      *"Attach up to 3 Basic {F} Energy cards from your discard pile to your
-    #                       Benched Pokémon in any way you like."*
-    #                       -> recoverN 3, recoverEnergyType {F}, recoverTarget "bench",
-    #                          recoverSource "discard"
-    #   Mega Brave (678)    *"During your next turn, this Pokémon can't use Mega Brave."*
-    #                       -> nextTurnSameAttackLock. **NOT `nextTurnSelfLock`** — the card names
-    #                          ITSELF, so the lock forbids one attack and not the turn. Issue #384's
-    #                          body (and `attack_ev`'s docstring) call it "`nextTurnSelfLock`-class",
-    #                          which is the CLASS; the field is the other one, and the two price
-    #                          differently by design (`strategy/sequence.py`: 270+130 == 130+270).
+    # ── Issue #384: the riders and locks the fixture used to DROP ────────────────────────────
+    # Mega Brave is `nextTurnSameAttackLock`, NOT `nextTurnSelfLock` — the two price differently.
     PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC),
                              benchSpread=60),
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,),
@@ -271,8 +150,7 @@ _ATTACKS = {
     HEAT_BLAST: AttackStat(HEAT_BLAST, damage=60, cost=2, energyTypes=(FIRE, COLORLESS)),
     BLAZE_BLITZ: AttackStat(BLAZE_BLITZ, damage=260, cost=3,
                             energyTypes=(FIRE, FIRE, COLORLESS)),
-    # Counter placement, so all three ignore flags are set — see the module docstring. Printed 0:
-    # with no context this attack deals NOTHING, which is precisely the flat axis Issue #280 removes.
+    # Counter placement, so all three ignore flags are set. Printed 0: with no context it deals NOTHING.
     POWERFUL_HAND: AttackStat(POWERFUL_HAND, damage=0, cost=1, energyTypes=(PSYCHIC,),
                               scaleVar="atk_hand", scalePerUnit=20,
                               ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
@@ -283,12 +161,9 @@ _ATTACKS = {
                             ignoresResistance=True),
     POWER_GEM: AttackStat(POWER_GEM, damage=50, cost=2, energyTypes=(FIGHTING, FIGHTING)),
     WRACK_DOWN: AttackStat(WRACK_DOWN, damage=60, cost=1, energyTypes=(PSYCHIC,)),
-    # `damageMax` 280 is the +150 leg, exactly as the provider carries it: the bonus is REACHABLE
-    # through the oracle's "max" bound and must not be reachable through this read.
+    # ``damageMax`` 280 is the +150 leg: reachable through the oracle's "max" bound, never through this.
     CONJOINED_BEAMS: AttackStat(CONJOINED_BEAMS, damage=130, cost=2,
                                 energyTypes=(PSYCHIC, PSYCHIC), damageMax=280),
-    # Eevee's pair (Issue #384). The bounds on Quick Attack are the SHIPPED parser's output for its
-    # printed sentence, not a hand-reading of it — see the constant's note above.
     ACCELERATING_STAB: AttackStat(ACCELERATING_STAB, damage=30, cost=1, energyTypes=(FIGHTING,),
                                   nextTurnSameAttackLock=True),
     ASCENSION: AttackStat(ASCENSION, damage=0, cost=1, energyTypes=(COLORLESS,)),
@@ -297,47 +172,28 @@ _ATTACKS = {
                              damageMin=20, damageMax=40),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
-#: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
-#: against, so the deck-fetch leg of `readiness_p` sees the Energy the pair actually runs.
+#: `mega_lucario`'s single-prize core, so the deck-fetch leg of `readiness_p` sees the pair's Energy.
 LUNAR_DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
 
-#: The deck's DECLARED Roles as Worth (`card_worth.ROLE_TIER`), supplied through the model's
-#: `role_worth=` resolver. Roles are declaration, not card data — `card_worth.role_value` says so
-#: outright ("the Pilot supplies ``roles``") and `CardStat` carries no such field — so a fixture that
-#: tried to put them on the stat would be testing an API that does not exist.
+#: The deck's DECLARED Roles as Worth, through the model's `role_worth=` resolver. Roles are
+#: declaration, not card data — `CardStat` carries no such field.
 _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condition_base"],
                MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
                MEGA_STARMIE: ROLE_TIER["win_condition"],
                SOLROCK: ROLE_TIER["secondary_attacker"], LUNATONE: ROLE_TIER["engine"],
                METAGROSS: ROLE_TIER["secondary_attacker"]}
 
-#: Issue #282's two boost cards, as the ``(amount, attackerEnergyType|None, vsExOnly)`` triple
-#: `CardStat.damageBoost` / `damageBoostType` / `damageBoostVsEx` carries and `strategy/damage.py`
-#: consumes. Written as the triple rather than as a `CardStat` row because the boost reaches a
-#: snapshot through the tracker, never through a card in a zone — and the triples themselves are
-#: pinned against the REAL 1267-card pool one seam over
-#: (`tests/scouting/test_tool_holder_facts.py`: `carriers("damageBoost") == {1141: 30, 1158: 50,
-#: 1171: 30, 1211: 40}`), so these are a restatement of a parsed fact, not a second opinion about it.
-#:
-#: Premium Power Pro (1141, **Item**), verified at `data/EN_Card_Data.csv`: *"During this turn,
-#: attacks used by your {F} Pokémon do 30 more damage to your opponent's Active Pokémon (before
-#: applying Weakness and Resistance)."* — amount 30, attacker-type gate {F}, no defender gate.
+#: Issue #282's boosts as the ``(amount, attackerEnergyType|None, vsExOnly)`` triple `strategy/damage.py`
+#: consumes — a boost reaches a snapshot through the tracker, never through a card in a zone.
 POWER_PRO_ID = 1141
 POWER_PRO = (30, FIGHTING, False)
-#: Black Belt's Training (1211, **Supporter**), same source: *"During this turn, attacks used by your
-#: Pokémon do 40 more damage to your opponent's Active Pokémon {ex} (before applying Weakness and
-#: Resistance)."* — amount 40, no attacker-type gate, defender-{ex} gate. The {ex} scope INCLUDES a
-#: Mega Evolution Pokémon ex (`docs/rulebook.txt` L337: *"Mega Evolution Pokémon ex are considered to
-#: be Pokémon ex, so any card effects that affect Pokémon ex also affect Mega Evolution Pokémon ex"*).
+#: Black Belt's Training: +40, no attacker gate, defender-{ex} gate. That {ex} scope INCLUDES a Mega
+#: Evolution Pokémon ex (`docs/rulebook.txt` L337).
 BLACK_BELT = (40, None, True)
 
 
-#: Ignition Energy's two committed records, as `CardFunctions` / `CardEffects` entries (Issue #286).
-#: BOTH are needed and they answer different halves: the CLAUSE's ``rider`` says the card evaporates
-#: (the parametric record, ADR-0032), the TAG's ``provides`` pair says how many units it supplies
-#: (`CardFunctions.energy_provision`, the accessor the Attach Budget already sizes a hand attach
-#: with). Restated here rather than loaded from disk for the same reason every other fact in this
-#: file is: a fixture that read the shipped stores would move whenever they did.
+#: Ignition's two committed records, and they answer different halves: the CLAUSE's ``rider`` says the
+#: card evaporates, the TAG's ``provides`` pair says how many units it supplies.
 _IGNITION_TAGS = {IGNITION: ignition_tags()}
 _IGNITION_CLAUSES = {IGNITION: [{"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3,
                                  "type": "colorless", "rider": "discard_eot"}]}
@@ -350,17 +206,8 @@ def _combat():
 
 
 def _poke(cid, *, hp, energies=(), serial=1, damage=0, tools=(), energy_cards=None):
-    """One in-play body. ``tools`` is the raw ``tools`` key `_SideBase.tool_ids` reads (Issue #260's
-    homed `attached_tools` zone) — the route by which a Tool's boost, unlike a Trainer's, reaches a
-    snapshot as BOARD state rather than through the turn tracker. Defaults to empty, so every
-    existing board in this file is byte-identical.
-
-    ``energy_cards`` is the OTHER attached-Energy key (Issue #286) and it is separate from
-    ``energies`` because the engine keeps them separate: ``energies`` is the ``EnergyType`` UNITS
-    the attached cards PROVIDE, ``energyCards`` is the CARDS (`common/board_cards.py`). One Ignition
-    on an Evolution is ``energy_cards=[17]`` and ``energies=[0, 0, 0]``. Omitted by default, which
-    leaves every board that predates this issue byte-identical AND leaves the expiring-Energy strip
-    making no claim about them — card identity is what a rider is read from."""
+    """``tools`` is the raw `_SideBase.tool_ids` key. ``energy_cards`` is the attached CARDS while
+    ``energies`` is the `EnergyType` UNITS they provide — the engine keeps the two separate."""
     body = {"id": cid, "hp": hp - damage, "energies": list(energies), "serial": serial}
     if tools:
         body["tools"] = [{"id": t} for t in tools]
@@ -379,11 +226,8 @@ def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, deck_count=2
 
 
 class _Boosts:
-    """`TurnBoostTracker`'s one duck-typed method — the shape `StateModel.build` resolves per seat.
-
-    A this-turn Trainer boost is a LOG fact, not a board one ("During this turn, attacks used by
-    your … Pokémon do N more damage" leaves no trace in any zone once the card reaches the discard),
-    so the tracker is how it reaches a snapshot at all. Side 0 is mine on every board in this file."""
+    """`TurnBoostTracker`'s one duck-typed method. A this-turn Trainer boost is a LOG fact and not a
+    board one, so the tracker is how it reaches a snapshot at all. Side 0 is mine on every board here."""
 
     def __init__(self, boosts=()):
         self._boosts = tuple(boosts)
@@ -403,8 +247,7 @@ def _model(me, opp, *, energy_attached=False, turn=5, needs=None, boosts=None, d
 
 def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_prizes=4,
                    their_active=None, hand=(), energy_attached=False, boosts=None):
-    """MY Mega Lucario ex Active against THEIR Dragapult ex — the fixture every monotonicity case
-    perturbs by exactly one fact."""
+    """MY Mega Lucario ex against THEIR Dragapult ex — the fixture the monotonicity cases perturb."""
     return _model(
         _player(active=_poke(MEGA_LUC, hp=my_hp, energies=my_energies), bench=list(bench),
                 hand=list(hand), prize=my_prizes),
@@ -414,9 +257,7 @@ def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_pr
 
 
 def _starmie_board(their_active, *, my_energies=(E_W,), boosts=None):
-    """MY Mega Starmie ex Active against a chosen defender, with the turn's Energy already spent so
-    the Attach Budget adds nothing — the board is exactly what is attached, and reachability is
-    therefore a fact about the fixture rather than about the deck's colours."""
+    """MY Mega Starmie ex, with the turn's Energy already spent so the Attach Budget adds nothing."""
     return _model(
         _player(active=_poke(MEGA_STARMIE, hp=330, energies=list(my_energies)), prize=4),
         _player(active=their_active, prize=4),
@@ -424,16 +265,8 @@ def _starmie_board(their_active, *, my_energies=(E_W,), boosts=None):
 
 
 def _alakazam_board(their_hand: int, *, my_active=None, my_hand=()):
-    """THEIR Alakazam Active — the ``atk_hand`` attacker — against a chosen body of mine.
-
-    Their hand is a COUNT with no contents, which is the engine's own shape for a hidden zone
-    (`TheirSide.hand_size` reads ``handCount``, and the opponent's ``hand`` is never populated);
-    mine is real cards. So the two directions of the Damage Formula's hand variable are
-    DISTINGUISHABLE on this board by construction — which is what lets a direction error be a test
-    failure rather than a plausible-looking number.
-
-    One {P} is attached, which is exactly Powerful Hand's cost, so affordability is settled and the
-    only thing moving between boards is the hand."""
+    """THEIR Alakazam Active — the ``atk_hand`` attacker. Their hand is a bare COUNT (the engine's
+    hidden-zone shape) and mine is real cards, so a direction error FAILS rather than looks plausible."""
     theirs = _player(active=_poke(ALAKAZAM, hp=140, energies=[E_P], serial=9), prize=4)
     theirs["hand"], theirs["handCount"] = [], int(their_hand)
     return _model(
@@ -446,30 +279,20 @@ def _alakazam_board(their_hand: int, *, my_active=None, my_hand=()):
 
 @pytest.mark.req("REQ-STATEVALUE-0001")
 def test_no_fact_is_priced_twice():
-    """`every board fact enters through exactly ONE term family` (ADR-0092 §4-T0).
-
-    A fact priced by two families is counted twice in the scalar, and the error is invisible: the
-    number still looks plausible, which is precisely how the empty-Bench fact acquired three guards
-    without anyone noticing while writing them down.
-
-    T3 widened this to span BOTH registries, so `attack_ev` cannot re-price what `threat` already
-    prices — which matters because `score(sequence)` literally adds the two together."""
+    """Every board fact enters through exactly ONE term family (ADR-0092 §4-T0), across BOTH
+    registries — `score(sequence)` literally adds `attack_ev` to `threat`."""
     assert sv.double_counted() == []
 
 
 @pytest.mark.req("REQ-STATEVALUE-0001")
 def test_no_fact_is_priced_by_nobody():
-    """The rule's other half. A play that changes state and that no family reads prices 0 — and a
-    silent 0 is indistinguishable from a correct 0. `does_not_read` is what gives a gap an address:
-    a fact one family disclaims and no family claims is a hole, reported here rather than discovered
-    as a mis-priced decision three tracks later."""
+    """The rule's other half: a silent 0 is indistinguishable from a correct 0, so a gap needs an
+    address rather than turning up as a mis-priced decision three tracks later."""
     assert sv.registry_gaps() == []
 
 
 @pytest.mark.req("REQ-STATEVALUE-0001")
 def test_the_registry_holds_exactly_the_six_families_the_plan_names():
-    """The families are ADR-0092 §4-T0's, and the set is the contract other tracks build against —
-    T3 implements these and no others, and `working` carries exactly these keys."""
     assert [f.name for f in sv.REGISTRY] == [
         "prize_race", "survival", "threat", "readiness", "hand", "development"]
     assert set(sv.FAMILIES) == {f.name for f in sv.REGISTRY}
@@ -477,10 +300,8 @@ def test_the_registry_holds_exactly_the_six_families_the_plan_names():
 
 @pytest.mark.req("REQ-STATEVALUE-0001")
 def test_the_terminal_term_is_a_SEPARATE_registry_not_a_seventh_family():
-    """`attack_ev` prices an ACTION, the six price a BOARD, and `score = state_value(end) +
-    EV(terminal)` adds one of each. Folding it into `REGISTRY` would make `state_value(model)`
-    answerable only for models that arrived with an action attached — the provenance-dependence
-    Issue #262 forbids in the same breath."""
+    """`attack_ev` prices an ACTION and the six price a BOARD. Folding it in would make
+    `state_value(model)` answerable only for models that arrived with an action attached."""
     assert [f.name for f in sv.TERMINAL_REGISTRY] == ["attack_ev"]
     assert "attack_ev" not in sv.FAMILIES
     assert set(sv.TERMINAL_FAMILIES) == {"attack_ev"}
@@ -488,8 +309,8 @@ def test_the_terminal_term_is_a_SEPARATE_registry_not_a_seventh_family():
 
 @pytest.mark.req("REQ-STATEVALUE-0001")
 def test_every_family_states_what_it_refuses_as_well_as_what_it_prices():
-    """A family declaring no `does_not_read` has opted out of the gap-detection above — it can never
-    contribute a named hole, so the coverage map would silently weaken as families were added."""
+    """A family with no `does_not_read` can never contribute a named hole, so the coverage map would
+    weaken silently as families were added."""
     for f in sv.REGISTRY + sv.TERMINAL_REGISTRY:
         assert f.reads, f.name
         assert f.does_not_read, f.name
@@ -498,13 +319,8 @@ def test_every_family_states_what_it_refuses_as_well_as_what_it_prices():
 
 @pytest.mark.req("REQ-STATEVALUE-0005")
 def test_every_family_publishes_an_ACTIONABLE_blind_spot_list():
-    """Issue #263's ordering ruling makes this a deliverable, not documentation: its composer reads
-    `blind_spots()` as its blind-spot checklist, because a play moving state no family reads prices
-    at exactly 0 delta and at ordering time 0 means *never explored*.
-
-    "Actionable" is asserted rather than trusted: every family contributes at least one entry, and
-    every entry has to be long enough to name a dimension AND say who owns closing it — a bare word
-    would be a checklist item nobody could act on."""
+    """The composer reads `blind_spots()` as its checklist: a play no family reads prices at 0 delta,
+    and at ordering time 0 means never explored. Length plus an em-dash is the actionable bar."""
     spots = sv.blind_spots()
     assert set(spots) == {f.name for f in sv.REGISTRY + sv.TERMINAL_REGISTRY}
     for name, entries in spots.items():
@@ -519,43 +335,20 @@ def test_every_family_publishes_an_ACTIONABLE_blind_spot_list():
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_is_reconciled_against_its_anchor_not_pinned_as_a_literal():
-    """ADR-0097 decision 1: the rate is authored, but it must be STATED against the incumbents
-    rather than dropped in beside them. Asserting the arithmetic instead of the number is what makes
-    that binding — if `currency.py` re-derives `DEPLOY_BAND` or `DEPLOY_WORTH_SCALE`, this fails
-    loudly instead of leaving a fourth silent rate behind.
-
-    Modelled on `test_currency.py`, which recomputes `PRIZE_DAMAGE_RATE` from the CSV rather than
-    asserting the literal, for exactly the same reason."""
+    """ADR-0097 decision 1: the rate is authored but must be STATED against the incumbents. Asserting
+    the arithmetic is what binds it — re-deriving `DEPLOY_BAND` fails here rather than silently."""
     assert sv.POC_WORTH_PRIZE_RATE == pytest.approx(
         currency.DEPLOY_BAND / currency.DEPLOY_WORTH_SCALE / currency.PRIZE_DAMAGE_RATE)
-    # Re-stated as damage-per-worth-point, the form ADR-0097 requires the reconciliation in.
     per_worth_damage = sv.POC_WORTH_PRIZE_RATE * currency.PRIZE_DAMAGE_RATE
     assert per_worth_damage == pytest.approx(25.0 / 30.0, rel=1e-6)
-    # Inside the catalogued spread (deploy 0.83 .. energy 6.67), which is the honesty condition —
-    # a value outside it would be evidence about the incumbents, per ADR-0078's own rule.
+    # Inside the catalogued spread (deploy 0.83 .. energy 6.67) — ADR-0078's own honesty condition.
     assert 25.0 / 30.0 <= per_worth_damage <= (160.0 / 3.0) / 8.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_by_averaging():
-    """`currency.py` names this constant as the one that must settle the ~39x prize↔worth
-    disagreement ADR-0107 recorded. It settles it by showing the two rates answer DIFFERENT
-    questions — neither moves.
-
-    `GUST_TARGET_WORTH_RATE` converts a prize-equivalent INTO Worth so an opponent-target slot can be
-    ranked inside a Worth-denominated DP against other slots. `POC_WORTH_PRIZE_RATE` converts a HELD
-    CARD's Worth into prizes so spending it can be priced against a board. Same scale pair, opposite
-    directions, different referents — the resolution the energy outlier already got.
-
-    The reductio is the assertion that matters: adopt the gust seam's rate for the hand and a held
-    win-condition prices at **more than the entire game**. That is not a constant needing a split, it
-    is evidence that Worth is an ORDINAL priority scale inside the assignment rather than a quantity
-    globally exchangeable with prizes — which is `currency.py`'s own reading ("that scale's whole
-    range is 0–30 by construction … Pricing the hand ON ITS OWN SCALE is what the DP is for").
-
-    Guards the tempting fix: averaging the two into one "general" rate would silently break both
-    seams at once, and would manufacture the general Worth Damage Rate ADR-0080 ran a gate to
-    establish does not exist."""
+    """The two rates answer DIFFERENT questions, so neither moves: `GUST_TARGET_WORTH_RATE` converts a
+    prize INTO Worth, `POC_WORTH_PRIZE_RATE` a held card's Worth into prizes (ADR-0107)."""
     from common.card_worth import ROLE_TIER
 
     mine_worth_per_prize = 1.0 / sv.POC_WORTH_PRIZE_RATE
@@ -563,13 +356,11 @@ def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_
     assert mine_worth_per_prize / gust_worth_per_prize > 40.0, (
         "the disagreement is real and RECORDED — if it ever closes, say so deliberately")
 
-    # My rate sits with the composed shipped legs (PRIZE_DAMAGE_RATE / ITEM_HOLD_WORTH_RATE = 100
-    # worth per prize) — within 20%, the precision an authored POC scaffold can honestly claim.
+    # Within 20% of the composed shipped legs — the precision an authored POC scaffold can claim.
     composed = currency.PRIZE_DAMAGE_RATE / currency.ITEM_HOLD_WORTH_RATE
     assert abs(mine_worth_per_prize - composed) / composed <= 0.20
 
-    # The reductio. A held wincon is a quarter of a prize on this scaffold; on the gust seam's rate
-    # it would be worth nearly twice the six prizes that END the match (`docs/rulebook.txt` L57).
+    # The reductio: on the gust seam's rate a held wincon outvalues the six prizes that END the match.
     wincon = ROLE_TIER["win_condition"]
     assert wincon * sv.POC_WORTH_PRIZE_RATE == pytest.approx(0.25)
     assert wincon / gust_worth_per_prize > 6.0
@@ -577,12 +368,8 @@ def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_never_migrates_into_currency():
-    """`common/currency.py`'s contract is "DERIVED and never tuned"; this constant is the opposite,
-    and ADR-0080's underivability measurement stands as the historical record of what was true.
-
-    Asserted rather than trusted to review, because the migration is the tempting one: a second
-    consumer arrives, someone hoists it "where the other rates live", and the module that promises
-    derivation is quietly holding an invention."""
+    """`currency.py`'s contract is DERIVED and never tuned; this constant is the opposite. The
+    tempting migration is a second consumer arriving and someone hoisting it in beside the others."""
     assert not hasattr(currency, "POC_WORTH_PRIZE_RATE")
     assert not hasattr(currency, "WORTH_DAMAGE_RATE"), (
         "ADR-0080 ran the anchor gate and it FAILED — the constant is absent BY DESIGN, not pending")
@@ -590,19 +377,14 @@ def test_the_worth_scaffold_never_migrates_into_currency():
 
 @pytest.mark.req("REQ-STATEVALUE-0004")
 def test_the_worth_leg_is_scale_invariant():
-    """THE test T0 owed, modelled on `test_deploy_value.py::test_the_worth_legs_are_dimensionless`:
-    re-point the rate and assert what does and does not move.
-
-    `hand` is LINEAR in the rate and every other family is INDEPENDENT of it. A regression
-    reintroducing a raw Worth magnitude in another family — or a raw damage magnitude inside `hand` —
-    would otherwise be silent, because the numbers would still look plausible."""
+    """`hand` is LINEAR in the rate and every other family INDEPENDENT of it. A raw Worth magnitude
+    elsewhere, or a raw damage magnitude inside `hand`, would otherwise be silent."""
     legs = dict(assignment_coverage=30.0, re_access=4.0, hand_worth=2.0)
     base = sv.hand(**legs, worth_prize_rate=0.01)
     assert sv.hand(**legs, worth_prize_rate=0.02) == pytest.approx(2.0 * base)
     assert sv.hand(**legs, worth_prize_rate=0.0) == 0.0
 
-    # The other families never see the rate at all — asserted by re-pointing the MODULE constant and
-    # checking they are unmoved, which is stronger than checking their signatures.
+    # Re-pointing the MODULE constant is stronger than checking the families' signatures.
     original = sv.POC_WORTH_PRIZE_RATE
     try:
         before = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=5),
@@ -623,20 +405,13 @@ def test_the_worth_leg_is_scale_invariant():
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_readiness_scale_is_the_planners_own_weight_carried_at_the_same_band():
-    """Old Issue #145's seeding methodology, method 1 — *anchor to the retired predecessor's
-    magnitude* (the currency-zone rule: replace at the same band, never stack).
-
-    `_READINESS_W` cannot be imported from the planner at runtime (the planner's leaf imports this
-    module, so the edge would be a cycle), which is exactly why the anchor has to be asserted here
-    instead of expressed in code. Without this, a planner retune would silently leave the two
-    readiness scales disagreeing."""
+    """`_READINESS_W` cannot be imported from the planner (its leaf imports this module, so the edge
+    would be a cycle), which is why the same-band anchor is asserted here instead of expressed."""
     from common.strategy.context import KO_SCORE
     from common.strategy.planner import _READINESS_ATTACK_W, _READINESS_SATURATED
     assert sv._READINESS_W == pytest.approx(
         _READINESS_ATTACK_W * currency.PRIZE_DAMAGE_RATE / KO_SCORE)
-    # The repeated-utility-body discount is a straight carry-over, so it must stay equal, not merely
-    # close: `planner._readiness_saturation` and `state_value._saturation` answer the same question
-    # about the same board, and two different answers would be a divergence nothing reports.
+    # A straight carry-over, so it must stay EQUAL: two answers to one question is a silent divergence.
     assert sv._SATURATED == _READINESS_SATURATED
 
 
@@ -645,46 +420,24 @@ def test_the_readiness_scale_is_the_planners_own_weight_carried_at_the_same_band
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_a_predicted_loss_outscales_every_other_family_combined():
-    """`ko-score-band`'s terminal half, and the reason `LOSS_PRIZES` is DERIVED rather than
-    transcribed. The incumbent rung returned a flat −KO_SCORE and leaned on a positional band of
-    590 < 1000; two of these families are prize-denominated and uncapped, so a transcribed −1.0
-    would be out-scaled by two exposed ex bodies and the agent would walk into a loss to save a
-    Pokémon.
-
-    The bound is computed from the same constants the equations use, so moving any of them moves
-    this test rather than silently breaking the invariant."""
+    """`ko-score-band`'s terminal half, and why `LOSS_PRIZES` is DERIVED: two families are
+    prize-denominated and uncapped, so a transcribed −1.0 is out-scaled by two exposed ex bodies."""
     worst_survival = sv._MAX_BODIES * sv._MAX_PRIZE_VALUE
     worst_race = sv._PRIZES_START + sv._PROXIMITY_W
     assert sv.LOSS_PRIZES > worst_survival + worst_race + sv.POSITIONAL_MAX
 
-    # And in the shape a caller actually meets it: a doomed board still ranks below a board that has
-    # simply lost every body it owns.
     doomed = sv.survival([sv.ExposedBody(3.0, 1)], predicted_loss=True)
     merely_awful = sv.survival([sv.ExposedBody(3.0, 1)] * sv._MAX_BODIES)
     assert doomed < merely_awful
 
-    # …and end-to-end through the scalar on a board that is PRIZE-lethal rather than bench-empty
-    # (ADR-0064 Amendment B) — the second case must inherit the same dominance, not merely the same
-    # constant. Every positional family is free to be as favourable as this fixture allows; the
-    # scalar still has to rank the lethal board below the identical board they cannot yet win on.
+    # …and end-to-end on a PRIZE-lethal board (ADR-0064 Amendment B), which must inherit the dominance.
     lethal = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=3)
     survivable = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=4)
     assert sv.state_value(survivable) - sv.state_value(lethal) > sv.POSITIONAL_MAX
 
 
-# ── the band's OTHER half, owed and unbuilt: the prize-denominated pair (Issue #369, split from #330) ──
-#
-# The test directly above is `ko-score-band`'s terminal half, and it is ONE-SIDED: it asserts that
-# `LOSS_PRIZES` out-scales every other family, which is a bound on the term that is already derived
-# to dominate. Nothing above it — and nothing anywhere else in this file — asserts the band on the
-# pair the whitelist entry is actually owed a ruling about.
-#
-# `ko-score-band`'s `fact` reads *"a prize is worth more than any POSITIONAL term"*. `survival` is
-# prize-denominated and deliberately uncapped, so the entry does not bind it, and the two tests
-# below are that gap stated as the assertions that will pass the day it closes. Both use the
-# strict-xfail TARGET idiom already established in this file at
-# `test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit` — green while
-# the gap is open, and a red XPASS is the signal to delete the mark.
+# ── the band's OTHER half, owed and unbuilt: the prize-denominated pair (Issue #369) ──────────────
+# The two tests below are that gap as the assertions that pass the day it closes (strict-xfail).
 
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
@@ -693,43 +446,18 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
                                        "wiring — see the test body for why it is xfail rather than "
                                        "a retune")
 def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
-    """**A banked prize is never declined** — `ko-score-band` made executable for the
-    prize-denominated pair (`prize_race` against `survival`), which is the half the whitelist entry
-    at `sound_rules.py` records as OWED A RULING.
-
-    Taking a prize moves `prize_race` by exactly 1.0 — the unit slope that makes the whole scalar
-    prize-denominated. Nothing bounds what `survival` may charge against the same line, so a line
-    that banks a real prize can be out-scored by one that banks nothing and merely keeps a body
-    safer. That is the defect Issue #330 measured, and Issue #190 named before `state_value` existed.
-
-    **Why this is `xfail` rather than a fix here.** Making it pass means bounding `survival` per-play
-    (Issue #369's per-play bound, née Issue #330's option 2) or completing the composition the module
-    header already claims — see
-    lines 63-66, *"converting their exposure into a prize takes an ATTACK, and `attack_ev` prices
-    that attack at the terminal action"* — which the developer ruled on 2026-08-02 belongs to
-    Issue #263, not here. Hand-tuning either constant against the 12 corpus frames that exposed this
-    would be fitting the equation to the corpus, which the post-POC learning phases exist to do
-    against a held-out set.
-
-    **The two paths are distinguishable, and that is deliberate.** This assertion is on the SHIPPED
-    CONSTANTS of the end-board pair, so Issue #263's terminal-action wiring does not by itself move
-    it: if `attack_ev` lands and this still xfails, that is the honest report that the wiring did not
-    discharge the pair invariant and the per-play bound is still owed. The companion test below is
-    the one the wiring moves directly."""
-    # The whole of what banking one prize can add, on the side of the line that takes it.
+    """A banked prize is never declined — `ko-score-band` for the prize-denominated pair. xfail rather
+    than a fix: closing it means bounding `survival` per-play (Issue #369) or Issue #263's sum."""
     banked = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=6)
               - sv.prize_race(my_prizes_remaining=4, their_prizes_remaining=6))
     assert banked >= 1.0, "the lead leg has lost its unit slope — this test is measuring the wrong thing"
 
-    # The whole of what `survival` can charge against it. RANK-GRADED, so the bound is ~2x the worst
-    # single body rather than `_MAX_BODIES` x `_MAX_PRIZE_VALUE`; computed from the equation rather
-    # than transcribed, so moving the grading moves this test.
+    # What `survival` can charge against it, computed from the equation rather than transcribed.
     worst_survival_charge = -sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES)
 
     assert banked > worst_survival_charge
 
-    # And in the shape a caller actually meets it: the line that banks the prize and exposes
-    # everything must still outrank the line that banks nothing and is perfectly safe.
+    # …and in the shape a caller meets it: bank the prize and expose everything.
     takes_the_prize = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=6)
                        + sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES))
     declines_it = (sv.prize_race(my_prizes_remaining=4, their_prizes_remaining=6)
@@ -743,49 +471,14 @@ def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
                                        "wiring — the end board is the only thing scored today and "
                                        "it prices a non-lethal attack at <= `_THREAT_CAP`")
 def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
-    """**Attack vs retreat on an otherwise-equal board** — the leaf-picks-`Retreat` frames of
-    Issue #330's table, stated as the class rather than as fixtures.
-
-    **Scope, stated because it is narrower than the issue body's prose.** This asserts nothing about
-    the AGENT's committed decision. Issue #356 established that `family_diag` ranks the LEAF's argmax
-    and never reads `chosen`. Re-derived here rather than taken from that issue
-    (`family_diag.py --source decider`, at this commit): the agent retreated on **none** of these
-    frames — its picks are Play Harlequin, Jetting Blow, Nebula Beam, Play Lillie's Determination, an
-    Ignition Energy attach, and Jetting Blow. A decision-scoped version of this test would therefore
-    be vacuously green and would measure nothing the defect is about. What these frames genuinely
-    show is a property of the equations, and that is what is written here.
-
-    Two counts in the issue body do not survive that re-derivation, and are corrected here because a
-    docstring repeating them would be the same defect one layer down. The body's prose says *"on five
-    frames the leaf's pick is literally `Retreat`"*; its own table lists **six**
-    (`82225643|57`, `83037962|49`, `83038055|51`, `85164131|31`, `82227388|43`, `83053965|6`). And
-    `Δ prize_race` is `0.0000` on five of those six — **not** on `82225643|57`, which reads
-    **+1.2500** and whose ruled option is a Trainer card rather than an attack. That frame is the
-    banked-prize case and belongs to the test above; the five zero-delta frames are this one's.
-
-    The class, on those five: the ruled play deals damage (or develops) without banking a prize, so
-    the only end-board family that can credit it is `threat` — capped at `_THREAT_CAP` = 0.1 AND
-    saturated to `{0.0, 0.1}` (see the strict-xfail target for `threat` below). Measured, the
-    `Δ threat` column reads exactly `+0.1000` on five of the six and `+0.0000` on the last, never a
-    value between, which is that saturation visible in the corpus. Against it, one retreat lengthens
-    the clock on my most-exposed body and `survival` pays for it uncapped. A 210-damage Nebula Beam
-    is worth at most 0.1 prizes to the leaf; shuffling a body out of the front is worth over two.
-
-    Verified at source, because the "one retreat" bound is what makes this the whole of the defensive
-    side rather than an arbitrary comparison: `docs/rules.md` §3 — *Retreat (manual): 1 per turn*,
-    and *Attack: 1, and it ends the turn* (`[RULE: rulebook L105-148]`, `[ENGINE-LEGAL]`).
-
-    **This is the test Issue #263's wiring moves directly.** `attack_ev` prices the terminal attack,
-    which is exactly the credit missing on the left-hand side. Until it is wired, `threat` pays the
-    cap's price for a double-count that no shipped code path performs."""
-    # Offence, on the end board, for an attack that does NOT knock out: `threat` and nothing else.
-    # Taken at `_MAX_PRIZE_VALUE` — their biggest possible body — so this is the ceiling, not a case.
+    """Attack against retreat on an otherwise-equal board (Issue #330). Only `threat` can credit a
+    play that banks no prize, at `_THREAT_CAP` 0.1, while one retreat moves uncapped `survival`."""
+    # Offence on the end board for a non-KO attack: `threat` and nothing else, at their biggest body.
     best_offence_the_end_board_prices = sv.threat([sv._MAX_PRIZE_VALUE])
     assert best_offence_the_end_board_prices == pytest.approx(sv._THREAT_CAP), (
         "the ceiling moved — re-derive it before trusting the comparison")
 
-    # Defence, for the one retreat a turn allows: my worst-exposed body stops being reachable now.
-    # Clock 1 -> 3 is the modest reading (a fresh Active in front of it), not the generous one.
+    # Defence for the one retreat a turn allows; clock 1 -> 3 is the modest reading, not the generous.
     exposed = sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)])
     after_retreating = sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 3)])
     one_retreat_buys = after_retreating - exposed
@@ -796,35 +489,12 @@ def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
-    """`ko-score-band`'s OTHER terminal half, and the one :data:`LOSS_PRIZES` never got (Issue #362).
-
-    The loss side was derived at the T3 swap precisely because a transcribed magnitude stopped
-    dominating once two families went uncapped. The WIN side kept the leaf's hand-composed
-    `KO_SCORE * (start_prizes + 1)` — and `start_prizes` counts prizes still REMAINING, so the old
-    magnitude ran BACKWARDS as well as small: most generous six prizes from home, stingiest with the
-    win one turn away. Either way a merely WINNING position out-scored a won GAME. Measured on the
-    committed corpus at the fix's parent commit: 26 frames reach a coin-free simulated win and on
-    **4** of them a non-winning option scored higher, worst `82749168|1|decision|88` at a won 2000
-    against a non-win 6789.9. Re-runnable: `tools/train/probes/win_band_sweep.py`.
-
-    Same construction as the loss side, and asserted the same way — from the constants the equations
-    use, so moving any of them moves this test rather than silently breaking the invariant. Two of the
-    three summands differ from `LOSS_PRIZES`' and the difference is the argument:
-
-      * `survival` is ABSENT because it is non-positive by construction (it returns the negated
-        exposure), so it can never push a board UP toward the win band. Asserted below rather than
-        asserted in prose.
-      * `_MAX_BODIES x _MAX_PRIZE_VALUE` is therefore absent with it — that summand exists on the
-        loss side because the terminal charge sits INSIDE `survival` and has to out-dominate that
-        family's own exposure sum. A win replaces the whole scalar, so it has nothing to out-dominate.
-    """
+    """`ko-score-band`'s WIN half (Issue #362). `survival` is absent from the bound because it is
+    non-positive by construction — swept below — so it can never push a board UP toward the band."""
     worst_race = sv._PRIZES_START + sv._PROXIMITY_W
     assert sv.WIN_PRIZES > worst_race + sv.POSITIONAL_MAX
 
-    # The dropped summand, asserted rather than argued, and SWEPT rather than sampled — three lucky
-    # examples would not carry the words "by construction". Every prize yield the set can print,
-    # against every clock a body can read, at every legal body count: `survival` never returns a
-    # positive number, so it can never push a board UP toward the win band.
+    # The dropped summand, SWEPT rather than sampled: `survival` never returns a positive number.
     assert sv.survival([]) == 0.0
     for prize in (0.0, 1.0, 2.0, sv._MAX_PRIZE_VALUE):
         for clock in range(1, sv.HORIZON + 3):
@@ -833,38 +503,24 @@ def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
     assert sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES) < 0.0, (
         "non-vacuity: the sweep must contain a board the family actually charges for")
 
-    # …and the literal, asserted the way Issue #329 asserted the band it moved: legible failure beats
-    # a tautology, and every summand here is a constant somebody could later move.
+    # …and the literal, so a moved summand fails legibly rather than tautologically.
     assert sv.WIN_PRIZES == 10.9
     assert sv.WIN_PRIZES == pytest.approx(sv.LOSS_PRIZES - sv._MAX_BODIES * sv._MAX_PRIZE_VALUE), (
         "the two terminal constants are ONE construction differing by exactly the survival summand")
 
 
 # ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
-#
-# `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they
-# are at 3 and my Active is a 3-prize Mega" identically to "they are at 6": `survival` owns
-# `prize_at_risk`, `prize_race` owns the counts, and the double-counting rule forbids the two of
-# them to form the product between them. The terminal term is the one licensed to.
-#
-# Every board below carries a NON-EMPTY Bench, so case 2 is structurally out of the picture and only
-# case 1 can be moving the number. The doomed reading is the fixture's own: my Mega Lucario ex at 60
-# HP under a fully-funded Phantom Dive 200.
+# Every board below carries a NON-EMPTY Bench, so case 2 is structurally out of the picture.
 
 
-#: Half of the terminal charge — the epsilon every assertion below uses to say *"this gap is the
-#: terminal term firing, not positional drift"*. Named rather than repeated inline because a bare
-#: `LOSS_PRIZES / 2.0` reads as arithmetic when what it means is a THRESHOLD, and the whole point of
-#: `LOSS_PRIZES` being DERIVED is that no positional sum can cross it.
+#: Half the terminal charge — the epsilon that says a gap is the terminal term firing rather than
+#: positional drift. Named because a bare `LOSS_PRIZES / 2.0` reads as arithmetic, not a THRESHOLD.
 _TERMINAL_JUMP = sv.LOSS_PRIZES / 2.0
 
 
 def _survival_of(me, opp) -> float:
-    """The `survival` leg alone, off a full `state_value` evaluation of the two player dicts.
-
-    Read through `working` rather than by calling `sv.survival` directly, deliberately: the point of
-    every case below is what the SCALAR does with the board, and a test that composed the family by
-    hand could pass while `_terms` fed it something else."""
+    """The `survival` leg off a full `state_value` of the two player dicts. Read through `working`
+    rather than by calling `sv.survival`, so the SCALAR is what every case below is testing."""
     working: dict = {}
     sv.state_value(_model(me, opp), working=working)
     return working["survival"]
@@ -884,11 +540,8 @@ def _survival_at(**kw) -> float:
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_the_same_doomed_body_is_a_LOSS_at_three_prizes_and_merely_exposed_at_six():
-    """The headline: identical body, identical clock, only THEIR prize count differs.
-
-    My Mega Lucario ex is worth 3 prizes (`megaEx`, `docs/rules.md` §6) and is doomed at 60 HP. At 3
-    prizes remaining that Knock Out yields exactly the 3 they need and the match ends; at 6 it is an
-    expensive body and no more. Before this term the two scored the same."""
+    """Identical body, identical clock, only THEIR prize count differs: a 3-prize Mega doomed at 60 HP
+    ends the match at 3 remaining and is merely expensive at 6."""
     assert _survival_at(my_hp=60, their_prizes=3) < _survival_at(my_hp=60, their_prizes=6) - _TERMINAL_JUMP
     # The boundary is `>=`, not `>`: 3 prizes for a 3-prize body ends it, 4 does not.
     assert _survival_at(my_hp=60, their_prizes=4) == _survival_at(my_hp=60, their_prizes=6)
@@ -896,14 +549,8 @@ def test_the_same_doomed_body_is_a_LOSS_at_three_prizes_and_merely_exposed_at_si
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_the_mega_lucario_prize_trade_shape_a_one_prize_body_is_not_a_loss():
-    """`mega_lucario`'s CRITICAL doctrine (its STRATEGY.md §4, user-ruled 2026-06-29): interleave a
-    1-prize body between Mega exposures, because *"Solrock → Lucario → Lucario"* hands them 7 and
-    loses while *"Solrock → Lucario → Hariyama → Lucario"* buys the turn that wins.
-
-    Same clock, same 3 prizes remaining: the 3-prize Mega Active is a predicted loss and a 1-prize
-    Riolu Active is not. **Exactly when** is the other half of the doctrine and is asserted too — at
-    6 prizes the separation vanishes, so the interleave is not a standing preference this term
-    manufactures. It appears only once their count makes the Mega's loss lethal."""
+    """`mega_lucario`'s interleave doctrine (its STRATEGY.md §4): a 1-prize body between Mega
+    exposures. At 6 prizes the separation vanishes, so it is lethality and not a standing preference."""
     def _survival(active, their_prizes):
         return _survival_of(
             _player(active=active, bench=[_bench_riolu()], prize=4),
@@ -912,20 +559,13 @@ def test_the_mega_lucario_prize_trade_shape_a_one_prize_body_is_not_a_loss():
 
     mega, riolu = _poke(MEGA_LUC, hp=60), _poke(RIOLU, hp=60, serial=3)
     assert _survival(mega, 3) < _survival(riolu, 3) - _TERMINAL_JUMP
-    # …and the separation is a LETHALITY effect, not a preference: at 6 it is only the prize values.
     assert _survival(mega, 6) - _survival(riolu, 6) > -_TERMINAL_JUMP
 
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_prize_lethality_is_BINARY_two_of_their_three_prizes_is_not_a_loss():
-    """Issue #283's explicit POC ruling, and the reason `_predicted_loss` returns a BOOL: a 2-prize
-    `ex` against 3 remaining is worse than the flat exposure above, but it is not a loss and the
-    terminal term must not claim it is. A graded form is the named post-POC question, recorded in
-    `survival`'s `blind_to` so the composer sees the margin as a named zero rather than an accident.
-
-    Dragapult ex is a real 2-prize body (`data/EN_Card_Data.csv` id 121, Rule "Pokémon ex", 320 HP)
-    — a fabricated prize value would contradict `docs/rules.md` §6 in the one test whose whole
-    subject is a prize value."""
+    """Issue #283's POC ruling and why `_predicted_loss` returns a BOOL: a 2-prize `ex` against 3
+    remaining is worse than flat exposure but is not a loss. A graded form is the post-POC question."""
     def _survival(their_prizes):
         return _survival_of(
             _player(active=_poke(DRAGAPULT, hp=60), bench=[_bench_riolu()], prize=4),
@@ -940,28 +580,14 @@ def test_prize_lethality_is_BINARY_two_of_their_three_prizes_is_not_a_loss():
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_prize_lethality_needs_the_CLOCK_and_not_only_the_count():
-    """It is a predicted LOSS, not an exposure re-priced. At full 340 HP the same 3-prize Mega
-    out-lives Phantom Dive's 200, so their being at 3 prizes claims nothing — and the guard is
-    ADR-0064's own `evo_min_energy=1`, shared with case 2 verbatim rather than re-derived."""
+    """A predicted LOSS, not an exposure re-priced: at full HP the same Mega out-lives Phantom Dive."""
     assert _survival_at(my_hp=340, their_prizes=3) == _survival_at(my_hp=340, their_prizes=6)
 
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_prize_lethality_covers_a_BENCHED_body_through_the_snipe_rider():
-    """§7 case 1 is about a BODY, not the Active Spot. Their Mega Starmie ex's Jetting Blow carries a
-    50 bench-snipe rider (verified at source), so my chipped 3-prize Mega on the BENCH is reachable
-    and its Knock Out takes their last 3 prizes.
-
-    The area is declared to the clock (`my_benched=`), which is what keeps the read honest: the
-    printed 120 lands on the Active only, and the rider is what reaches the Bench. The control is
-    the same board one HP higher — 60 > the 50 rider, so nothing is reachable there and the count
-    alone must claim nothing.
-
-    Their attached ``{W}`` is the right type code for Jetting Blow but is NOT what makes the attack
-    reachable: the ceiling energy policy credits an attack a body can pay under ``attached + 1``
-    attach, and this one costs 1. Said here rather than implied, because a reader would otherwise
-    take the Energy for the load-bearing part and a later change to the policy would look like a
-    change to this test."""
+    """§7 case 1 is about a BODY, not the Active Spot: their Jetting Blow's 50 bench rider reaches my
+    chipped 3-prize Mega on the BENCH. The control is the same board one HP above the rider."""
     def _survival(bench_hp):
         return _survival_of(
             _player(active=_poke(RIOLU, hp=80),       # 1 prize — the ACTIVE leg cannot fire
@@ -973,34 +599,22 @@ def test_prize_lethality_covers_a_BENCHED_body_through_the_snipe_rider():
 
 @pytest.mark.req("REQ-LOSSRUNG-0001")
 def test_case_2_is_untouched_by_the_new_case_including_where_they_would_overlap():
-    """Issue #283's third test bullet — *"Case 2 (bench-empty) behaviour unchanged"* — asserted
-    rather than left to the pre-existing fixtures, because the two cases now share one function and
-    a caller cannot see which of them fired.
-
-    Three readings of the SAME bench-empty doomed board, at prize counts that respectively cannot
-    fire case 1 (6), sit exactly on its boundary (3) and are inside it (2). Case 2 already charges
-    `LOSS_PRIZES`, the charge is a bool, and so the board scores identically at all three — the new
-    case can neither double-charge nor mask the old one. The `>` control is the same board with a
-    Bench, which must NOT carry the charge at 6."""
+    """The two cases share one function and a caller cannot see which fired. Three prize counts on one
+    bench-empty doomed board: case 2 already charges `LOSS_PRIZES`, so all three read equal."""
     def _bench_empty(their_prizes):
         return _survival_of(_player(active=_poke(MEGA_LUC, hp=60), prize=4),
                             _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
                                     prize=their_prizes))
 
     assert _bench_empty(6) == _bench_empty(3) == _bench_empty(2)
-    # positive control: the board IS carrying the case-2 charge, so the equality above is not
-    # three readings of an inert term.
+    # positive control: the board IS carrying the case-2 charge.
     assert _survival_at(my_hp=60, their_prizes=6) > _bench_empty(6) + _TERMINAL_JUMP
 
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_the_bench_slot_price_escalates_so_the_last_slot_is_the_expensive_one():
-    """Issue #232's spare-body cliff, priced instead of ruled. The deleted flat +60 `keep-a-bench`
-    rung read 1.96 on a non-empty Bench against 61.96 on an empty one — the entire gap was the rung.
-
-    Two properties: the marginal RISES with each slot consumed, and the LAST slot costs a full
-    maximum-relevance deploy, so filling it with a spare Basic is a measured loss rather than a
-    free action."""
+    """Issue #232's spare-body cliff, priced instead of ruled: the marginal RISES with each slot
+    consumed, and the LAST slot costs a full maximum-relevance deploy."""
     prices = [sv._bench_slot_price(k) for k in range(sv._BENCH_MAX + 1)]
     marginals = [b - a for a, b in zip(prices, prices[1:])]
     assert marginals == sorted(marginals), marginals
@@ -1010,12 +624,8 @@ def test_the_bench_slot_price_escalates_so_the_last_slot_is_the_expensive_one():
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_no_positional_family_saturates_on_a_realistic_body():
-    """The failure that made the incumbent caps un-transcribable. A saturated term has zero
-    derivative, so under 1-ply differencing every play touching it prices at exactly 0 delta and is
-    never explored — pruning-by-cap, arriving where a missing equation would have.
-
-    Mega Lucario ex is the strongest body in the fixture set (270 printed damage, win_condition
-    role), so if the caps do not bite here they do not bite anywhere in it."""
+    """A saturated term has zero derivative, so under 1-ply differencing every play touching it prices
+    at 0 delta and is never explored. Mega Lucario ex is the strongest body in the fixture set."""
     payoff = 270.0 / currency.PRIZE_DAMAGE_RATE
     low = sv.readiness([sv.ReadyBody(payoff, 0.4, 1.0)])
     high = sv.readiness([sv.ReadyBody(payoff, 0.8, 1.0)])
@@ -1028,8 +638,7 @@ def test_no_positional_family_saturates_on_a_realistic_body():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_prices_a_knockout_at_the_targets_prize_value():
-    """The KO band. Mega Brave (270) against a 320 HP Dragapult ex does NOT knock out; Phantom Dive
-    territory does. Both card facts verified at source in this file's header."""
+    """The KO band: Mega Brave's 270 does not fell a 320 HP Dragapult ex; 340 does."""
     ko = sv.attack_ev(damage=340.0, target_hp=320.0, target_prizes=2.0)
     assert ko.knockout == pytest.approx(2.0) and ko.chip == 0.0
     chip = sv.attack_ev(damage=270.0, target_hp=320.0, target_prizes=2.0)
@@ -1038,9 +647,8 @@ def test_attack_ev_prices_a_knockout_at_the_targets_prize_value():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_is_an_EXPECTATION_so_a_coin_attack_needs_no_archetype_branch():
-    """Old Issue #145 amendment B: attack value is a random variable, and printed fixed damage is
-    the degenerate certain case. A half-odds Knock Out is worth half the prize — the same equation,
-    no branch, which is what lets a coin attack and a copy attack plug in as damage MODELS."""
+    """Attack value is a random variable and printed fixed damage the degenerate certain case, which
+    is what lets a coin attack and a copy attack plug in as damage MODELS with no branch."""
     certain = sv.attack_ev(damage=340.0, target_hp=320.0, target_prizes=2.0)
     coin = sv.attack_ev(damage=340.0, target_hp=320.0, target_prizes=2.0, ko_probability=0.5)
     assert coin.knockout == pytest.approx(certain.knockout / 2.0)
@@ -1048,13 +656,8 @@ def test_attack_ev_is_an_EXPECTATION_so_a_coin_attack_needs_no_archetype_branch(
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_rider_can_beat_raw_damage_and_a_self_lock_can_lose_to_a_recycle():
-    """Issue #263's acceptance shapes, at the term level: both trade-offs must be REPRESENTABLE
-    here, or the composer cannot express them however good its search is.
-
-    Mega Lucario ex is the worked case (card facts at source): Aura Jab ``{F}`` 130 with its
-    energy-recycle rider against Mega Brave ``{F}{F}`` 270 with a next-turn self-lock. Neither
-    attack knocks out a 320 HP Dragapult ex, so the comparison is chip + riders vs chip − lock —
-    exactly the two legs the ruling requires to appear in both EVs."""
+    """Both trade-offs must be REPRESENTABLE at the term or the composer cannot express them: Aura Jab
+    130 plus its recycle against Mega Brave 270 minus its lock, neither of them a Knock Out here."""
     aura_jab = sv.attack_ev(damage=130.0, target_hp=320.0, target_prizes=2.0, economy_value=0.4)
     mega_brave = sv.attack_ev(damage=270.0, target_hp=320.0, target_prizes=2.0, next_turn_cost=0.9)
     assert aura_jab.total > mega_brave.total
@@ -1076,24 +679,11 @@ def test_attack_ev_working_decomposes_the_total_rather_than_narrating_it():
 
 
 # ── the terminal-action term's EXTRACTOR (POC-T4/3, Issue #384) ───────────────────────────────────
-#
-# `attack_ev` above takes seven plain floats and, until this issue, NOTHING in `src/` produced them.
-# Every board family has a model->kwargs extractor (`_exposed_bodies`, `_reachable_target_values`,
-# `_ready_bodies`, `_hand_legs`, `_development_legs`); the terminal family had none, so the term was
-# complete, tested and unreachable. `attack_ev_legs` is that missing bridge.
-#
-# It landed INERT at Issue #384: nothing called `attack_ev` in production, because the SUM was the
-# composer's. POC-T4/4 (Issue #385) built that composer, so the caller now exists and is exactly one
-# — `common/composer.py:terminal_ev`. `test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else`
-# asserts that rather than assuming it, which is the same claim narrowed rather than retired.
+# `attack_ev` takes seven plain floats; `attack_ev_legs` is the model->kwargs bridge that makes them.
 
 def _starmie_rider_board(*, bench_hp=50):
-    """MY Mega Starmie ex against their Dragapult ex, with a 3-prize body on THEIR Bench.
-
-    The Issue #263 acceptance shape "rider beats raw damage", built at source: Jetting Blow ``{W}``
-    120 *"also does 50 damage to 1 of your opponent's Benched Pokémon"* against Nebula Beam ``●●●``
-    210, which prints no rider at all. Neither knocks out a 320 HP Dragapult ex, so the straight
-    hit is 90 damage BIGGER and the question is whether the rider's board value beats that."""
+    """MY Mega Starmie ex against their Dragapult ex with a 3-prize body on THEIR Bench: Jetting Blow
+    120 plus a 50 rider against Nebula Beam 210 and no rider, neither of which knocks out 320 HP."""
     return _model(
         _player(active=_poke(MEGA_STARMIE, hp=330, energies=[E_W, E_W, E_W]), prize=4),
         _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
@@ -1102,11 +692,8 @@ def _starmie_rider_board(*, bench_hp=50):
 
 
 def _dive_board(*, bench):
-    """MY Dragapult ex against their Mega Lucario ex — the Phantom Dive allocation fixture.
-
-    Phantom Dive ``{R}{P}`` 200, *"Put 6 damage counters on your opponent's Benched Pokémon in any
-    way you like"* -> a SHARED, distributable 60-counter budget. Jet Headbutt ``●`` 70 is the
-    rider-free alternative on the same body."""
+    """MY Dragapult ex against their Mega Lucario ex. Phantom Dive's 6 counters are a SHARED,
+    distributable 60 budget; Jet Headbutt 70 is the rider-free alternative on the same body."""
     return _model(
         _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P]), prize=4),
         _player(active=_poke(MEGA_LUC, hp=340, serial=9), bench=list(bench), prize=4),
@@ -1114,11 +701,8 @@ def _dive_board(*, bench):
 
 
 def _eevee_board(*, their_hp):
-    """MY Eevee against their Dragapult ex — the COIN fixture.
-
-    Quick Attack ``●●●`` 20, *"Flip a coin. If heads, this attack does 20 more damage."* Eevee is
-    {C} and Dragapult ex prints neither Weakness nor Resistance, so nothing modifies the bounds and
-    the floor/ceiling pair reaching the policy is the record's own 20/40."""
+    """MY Eevee against their Dragapult ex — the COIN fixture. Eevee is {C} and Dragapult prints
+    neither Weakness nor Resistance, so the record's own 20/40 bounds reach the policy unmodified."""
     return _model(
         _player(active=_poke(EEVEE, hp=50, energies=[E_F, E_F, E_F]), prize=4),
         _player(active=_poke(DRAGAPULT, hp=their_hp, serial=9), prize=4),
@@ -1132,9 +716,8 @@ def _leg(model, attack_id):
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_legs_produces_exactly_attack_evs_kwargs():
-    """The bridge's contract: what comes out SPLATS into the term. Asserted against the signature
-    itself rather than a copied key list, so a kwarg added to `attack_ev` fails here rather than
-    silently defaulting for every attack in the game."""
+    """What comes out SPLATS into the term, asserted against the signature rather than a copied key
+    list — so a kwarg added to `attack_ev` fails here instead of silently defaulting."""
     import inspect
     expected = set(inspect.signature(sv.attack_ev).parameters)
     legs = sv.attack_ev_legs(_lucario_board(my_energies=[E_F, E_F]))
@@ -1146,9 +729,8 @@ def test_attack_ev_legs_produces_exactly_attack_evs_kwargs():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_legs_covers_the_affordable_attacks_and_only_those():
-    """One leg per attack my Active can actually PAY for. Affordability is the shipped Attach
-    Budget's answer — `threat.blind_to` forbids a raw energy-count second opinion — so an attack
-    off the menu produces no leg and cannot be scored into a line I could not play."""
+    """Affordability is the shipped Attach Budget's answer (`threat.blind_to` forbids a raw
+    energy-count second opinion), so an attack off the menu produces no leg."""
     both = {l.attack_id for l in sv.attack_ev_legs(_lucario_board(my_energies=[E_F, E_F]))}
     assert both == {AURA_JAB, MEGA_BRAVE}
     # One {F} with the turn's attach already spent: Aura Jab {F} is payable, Mega Brave {F}{F} is not.
@@ -1162,9 +744,7 @@ def test_attack_ev_legs_covers_the_affordable_attacks_and_only_those():
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_legs_is_empty_when_there_is_nothing_to_attack_with():
     """Fail-closed at both ends: no Active, and an Active the rules forbid an attack to. Turn 1 for
-    the starting player is the second one (`docs/rules.md` §first-turn), and it is `attack_blocked`'s
-    question rather than a cost — an extractor that answered it in Energy would offer a line the
-    engine will not present."""
+    the starting player is `attack_blocked`'s question rather than a cost."""
     assert sv.attack_ev_legs(
         _model(_player(prize=4), _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4))) == ()
     assert sv.attack_ev_legs(
@@ -1176,13 +756,8 @@ def test_attack_ev_legs_is_empty_when_there_is_nothing_to_attack_with():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_snipe_rider_outprices_the_bigger_straight_hit_on_a_real_board():
-    """Issue #263 acceptance 1, end to end through the extractor rather than at the term.
-
-    Mega Starmie ex, both attacks affordable, against a 320 HP Dragapult ex neither can knock out.
-    Nebula Beam is 90 damage bigger — worth ``2 x 90/320 = 0.5625`` prizes of chip — while Jetting
-    Blow's 50-damage rider finishes a benched **Mega Lucario ex** sitting at 50 HP, which is 3
-    prizes. The rider wins by more than five times the damage gap, and it wins because of WHERE it
-    lands rather than how hard it hits."""
+    """Issue #263 acceptance 1, end to end through the extractor. Nebula Beam is 90 damage bigger
+    (0.5625 prizes of chip) while Jetting Blow's 50 rider finishes a benched 3-prize Mega Lucario ex."""
     m = _starmie_rider_board()
     jetting, nebula = _leg(m, JETTING_BLOW), _leg(m, NEBULA_BEAM)
     assert jetting is not None and nebula is not None
@@ -1194,9 +769,8 @@ def test_a_snipe_rider_outprices_the_bigger_straight_hit_on_a_real_board():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_snipe_rider_that_finishes_nothing_prices_as_a_FRACTION_not_a_prize():
-    """Out of reach, the rider is not worthless — it is worth the fraction of the body it removes,
-    the SAME band the core leg uses (`prize_value x min(1, dmg/hp)`). One 3-prize body at 250 HP
-    takes 50: ``3 x 50/250 = 0.6`` prizes, strictly under the 3 a finish would pay."""
+    """Out of reach the rider is worth the fraction of the body it removes — the SAME band the core
+    leg uses, ``prize_value x min(1, dmg/hp)``."""
     m = _starmie_rider_board(bench_hp=250)
     jetting = _leg(m, JETTING_BLOW)
     assert jetting.kwargs["rider_value"] == pytest.approx(3.0 * 50.0 / 250.0)
@@ -1207,14 +781,8 @@ def test_a_snipe_rider_that_finishes_nothing_prices_as_a_FRACTION_not_a_prize():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_bench_spread_is_priced_by_WHERE_the_counters_land():
-    """Issue #263 acceptance 2. The SAME 60 counters, the same two attacks, the same everything but
-    one benched body's remaining HP — and the rider is worth 3 prizes or 1.
-
-    `benchSpread` is a SHARED budget across their whole Bench, so which bodies it can finish is a
-    knapsack, and the knapsack is shipped (`CombatMath.spread_ko_prizes` over `best_ko_subset`).
-    With their Mega Lucario ex at 60 HP the budget buys it outright — 3 prizes, beating the 2 that
-    spending the same 60 on a Riolu (40) plus a Staryu (20) would take. Ten more HP on that body and
-    the only affordable set is the two singles."""
+    """`benchSpread` is a SHARED budget across their Bench, so which bodies it finishes is a knapsack
+    (`CombatMath.spread_ko_prizes`): 3 prizes at 60 HP, 2 once that body has ten more."""
     reachable = _leg(_dive_board(bench=[_poke(RIOLU, hp=40, serial=10),
                                         _poke(STARYU, hp=20, serial=11),
                                         _poke(MEGA_LUC, hp=60, serial=12)]), PHANTOM_DIVE)
@@ -1230,28 +798,20 @@ def test_a_bench_spread_is_priced_by_WHERE_the_counters_land():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_bench_immune_body_is_no_rider_target_at_all():
-    """`docs/rules.md` §11 — a Tera body takes NO damage from attacks while BENCHED, so a spread
-    that could otherwise finish it credits nothing. Dragapult ex's own `[Tera]` ability
-    (*"As long as this Pokémon is on your Bench, prevent all damage done to this Pokémon by
-    attacks"*) is the case, verified at source in this file's header, and it is the fail-closed
-    direction: a phantom bench prize is exactly what could lock a false lethal."""
+    """`docs/rules.md` §11 — a Tera body takes NO damage from attacks while BENCHED, so a spread that
+    could otherwise finish it credits nothing. A phantom bench prize is what locks a false lethal."""
     immune = _leg(_dive_board(bench=[_poke(DRAGAPULT, hp=30, serial=12)]), PHANTOM_DIVE)
     assert immune.kwargs["rider_value"] == 0.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_the_rider_converts_where_threat_only_stands_and_neither_pays_twice():
-    """The no-double-count half of acceptance 2, asserted at the registry AND on a board.
-
-    Since Issue #284 `threat` reads their Bench too — but it prices the STANDING position (chip
-    already sitting there makes a body one rider from dead) and never the CONVERSION, which is this
-    term's. The registries are walked together for exactly this seam, so the rule is executable:
-    `attack_ev` names `opponent_target_value` in its `does_not_read` and never reads it."""
+    """`threat` prices the STANDING position and never the CONVERSION, which is this term's. Walked at
+    the registries as well as on a board, so the rule is executable rather than argued."""
     assert sv.double_counted() == []
     assert set(sv.TERMINAL_FAMILIES["attack_ev"].reads).isdisjoint(sv.FAMILIES["threat"].reads)
     assert "opponent_target_value" in sv.TERMINAL_FAMILIES["attack_ev"].does_not_read
-    # And on a board: the rider's prizes are the terminal term's; the board scalar does not move
-    # with the attack I happen to be pricing, because it is a function of the board alone.
+    # The board scalar is a function of the board alone, not of the attack being priced.
     m = _dive_board(bench=[_poke(MEGA_LUC, hp=60, serial=12)])
     assert sv.state_value(m) == sv.state_value(m)
 
@@ -1260,17 +820,8 @@ def test_the_rider_converts_where_threat_only_stands_and_neither_pays_twice():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_recycle_rider_and_a_next_turn_lock_BOTH_appear_in_the_two_EVs():
-    """Issue #263 acceptance 3, and the requirement is that both legs are VISIBLE — not merely that
-    the right attack wins.
-
-    Mega Lucario ex, verified at source: Aura Jab ``{F}`` 130 *"Attach up to 3 Basic {F} Energy
-    cards from your discard pile to your Benched Pokémon"* versus Mega Brave ``{F}{F}`` 270
-    *"During your next turn, this Pokémon can't use Mega Brave."*
-
-    Aura Jab's rider is bounded three ways and the NEED binds at 2: my Riolu holds no Energy and its
-    forward form's dearest attack is Mega Brave at {F}{F}. Mega Brave's lock forfeits the gap
-    between the best follow-up a lock-free pick would leave (270) and the one it leaves (130), at
-    ADR-0061's ``FOLLOWUP_W`` — ``0.5 x 140 = 70`` damage, 0.7 prizes."""
+    """Issue #263 acceptance 3: BOTH legs must be VISIBLE, not merely that the right attack wins. The
+    lock forfeits the gap between the best lock-free follow-up (270) and the one it leaves (130)."""
     m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
                        bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4, prize=4),
                _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
@@ -1282,16 +833,15 @@ def test_a_recycle_rider_and_a_next_turn_lock_BOTH_appear_in_the_two_EVs():
     # Mega Brave: the clock cost APPEARS, and it carries no economy.
     assert brave.kwargs["economy_value"] == 0.0
     assert brave.kwargs["next_turn_cost"] == pytest.approx(0.5 * (270.0 - 130.0) / 100.0)
-    # ADR-0061's own ruling, reproduced through the composed term: fuelled Aura Jab beats bare
-    # Mega Brave, and it does so on the two legs above rather than on the damage.
+    # ADR-0061's ruling through the composed term: fuelled Aura Jab beats bare Mega Brave.
     assert brave.kwargs["damage"] > jab.kwargs["damage"]
     assert sv.attack_ev(**jab.kwargs).total > sv.attack_ev(**brave.kwargs).total
 
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_the_recycle_rider_is_bounded_by_the_fuel_and_by_the_need():
-    """The three closed-form bounds, each shown to BIND. Energy nobody can pay an attack with is not
-    development (ADR-0061): three {F} onto an empty Bench credit nothing at all."""
+    """The three closed-form bounds, each shown to BIND — Energy nobody can pay with is not
+    development (ADR-0061)."""
     def jab_economy(*, discard, bench):
         m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
                            bench=list(bench), discard=list(discard), prize=4),
@@ -1308,15 +858,8 @@ def test_the_recycle_rider_is_bounded_by_the_fuel_and_by_the_need():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_lone_affordable_attack_is_never_charged_for_its_own_lock():
-    """The invariant `_lock_sequence_cost` holds and this leg preserves: chipping must still beat
-    passing. A lock forfeits the gap between the best follow-up a LOCK-FREE pick would have left and
-    the one this pick leaves — and with a single attack on the menu there is no lock-free pick to
-    forfeit anything to, so the gap is not a cost, it is the attack's own damage counted against it.
-
-    **Riolu is the real case**, and it is the only one in this cast: Accelerating Stab ``{F}`` 30,
-    *"During your next turn, this Pokémon can't use Accelerating Stab"* — its ONLY attack, verified
-    at `data/EN_Card_Data.csv`. Beside it, the two-attack charge on the same lock kind, so the test
-    shows the guard biting rather than merely a zero."""
+    """A lock forfeits the gap to the best LOCK-FREE pick, and with a single attack on the menu there
+    is no such pick — so the gap would be the attack's own damage counted against it."""
     lone = _model(_player(active=_poke(RIOLU, hp=80, energies=[E_F]), prize=4),
                   _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
                   energy_attached=True)
@@ -1332,12 +875,8 @@ def test_a_lone_affordable_attack_is_never_charged_for_its_own_lock():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_coin_attacks_damage_is_the_MEAN_of_its_two_bounds():
-    """`attack_ev`'s docstring says *"coin branches already averaged by the caller"* and this IS
-    that caller. The mean of the model's floor and ceiling is ADR-0039's shipped ranking convention
-    (`pilot.py`: *"a coin/conditional CHIP ranks by its mean"*), composed rather than re-invented.
-
-    Quick Attack's record reads 20/40, so the averaged damage is 30 — and a DETERMINISTIC attack's
-    bounds collapse, so the same expression returns its printed damage with no branch."""
+    """The mean of the model's floor and ceiling is ADR-0039's shipped ranking convention. A
+    DETERMINISTIC attack's bounds collapse, so the same expression returns its printed damage."""
     coin = _leg(_eevee_board(their_hp=320), QUICK_ATTACK)
     assert coin.kwargs["damage"] == pytest.approx(30.0)
     flat = _leg(_lucario_board(my_energies=[E_F, E_F]), MEGA_BRAVE)
@@ -1346,8 +885,7 @@ def test_a_coin_attacks_damage_is_the_MEAN_of_its_two_bounds():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_the_ko_probability_is_1_when_the_FLOOR_already_kills():
-    """No residual uncertainty to carry: whatever the coin does, the body falls. This is the leg
-    that keeps the policy from taxing a certain Knock Out for being printed on a coin attack."""
+    """Whatever the coin does the body falls, so a certain KO is not taxed for being printed on one."""
     leg = _leg(_eevee_board(their_hp=20), QUICK_ATTACK)
     assert leg.kwargs["ko_probability"] == 1.0
     assert sv.attack_ev(**leg.kwargs).knockout == pytest.approx(2.0)
@@ -1355,16 +893,8 @@ def test_the_ko_probability_is_1_when_the_FLOOR_already_kills():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_the_ko_probability_is_the_DECLARED_bound_when_only_the_mean_kills():
-    """**The declared bound, and it is declared because nothing else is available.**
-
-    `AttackStat` carries `damageMin` / `damageMax` and NOTHING about the distribution between them —
-    no flip count, no probability, in the parsed record or in the engine-audit override table. So
-    the equiprobable two-branch reading is a POLICY rather than a derivation, it is written down in
-    `attack_ev`'s `blind_to` where a reader will find it, and it is asserted here so it cannot drift
-    into an unstated default.
-
-    At 30 HP the averaged 30 crosses and the floor of 20 does not, so the Knock Out is worth half a
-    2-prize body."""
+    """`AttackStat` carries `damageMin` / `damageMax` and NOTHING about the distribution between them,
+    so the equiprobable two-branch reading is a POLICY — declared in `attack_ev`'s `blind_to`."""
     leg = _leg(_eevee_board(their_hp=30), QUICK_ATTACK)
     assert leg.kwargs["ko_probability"] == sv._COIN_KO_BOUND == 0.5
     assert sv.attack_ev(**leg.kwargs).knockout == pytest.approx(1.0)
@@ -1372,12 +902,8 @@ def test_the_ko_probability_is_the_DECLARED_bound_when_only_the_mean_kills():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_ceiling_only_knockout_UNDER_reads_and_that_is_the_declared_direction():
-    """The cost of the policy, stated as a test rather than left to be discovered.
-
-    At 35 HP the ceiling (40) would finish the body and the mean (30) does not, so the term takes
-    its chip branch and the Knock Out is never credited at all. That is an UNDER-read — the
-    fail-closed direction for an offensive estimate, and the same direction `threat.blind_to`
-    already chooses one seam over. It is recorded in `attack_ev.blind_to`."""
+    """At 35 HP the ceiling would finish the body and the mean does not, so the Knock Out is never
+    credited at all. That UNDER-read is the fail-closed direction for an offensive estimate."""
     leg = _leg(_eevee_board(their_hp=35), QUICK_ATTACK)
     ev = sv.attack_ev(**leg.kwargs)
     assert ev.knockout == 0.0
@@ -1386,12 +912,8 @@ def test_a_ceiling_only_knockout_UNDER_reads_and_that_is_the_declared_direction(
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_the_coin_policy_and_the_recoil_gap_are_both_in_the_blind_spot_checklist():
-    """Issue #263's Ceiling 2 consumes `blind_spots()` as its checklist, so a knowingly-uncovered
-    dimension that is NOT written down is invisible to the thing that exists to catch it.
-
-    Two go in with this issue: the declared coin bound above, and self-damage — `AttackStat.recoil`
-    is on no board the apply-seam hands back (attack is TERMINAL, so there is no post-attack board)
-    and is in no kwarg of `attack_ev`, so a recoiling attack's cost to me prices at exactly 0."""
+    """A knowingly-uncovered dimension that is NOT written down is invisible to the checklist that
+    exists to catch it. `AttackStat.recoil` is on no board and in no kwarg, so it prices exactly 0."""
     entries = " ".join(sv.blind_spots()["attack_ev"]).lower()
     assert "coin" in entries and "recoil" in entries
     assert sv.registry_gaps() == []
@@ -1402,9 +924,7 @@ def test_the_coin_policy_and_the_recoil_gap_are_both_in_the_blind_spot_checklist
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_a_consumer_must_read_total_and_never_the_working_dicts_sum():
     """`AttackEV.working()` is FROZEN in a shape that does not add up: it omits `total` and emits
-    `next_turn_cost` POSITIVE while `total` SUBTRACTS it, so summing the dict returns
-    ``total + 2 x next_turn_cost``. Shown here on real extractor output, on the one attack in the
-    fixture that actually carries a lock, because that is the case where the gap is not zero."""
+    `next_turn_cost` POSITIVE while `total` SUBTRACTS it, so the dict sums to ``total + 2 x cost``."""
     m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
                        bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4, prize=4),
                _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
@@ -1418,50 +938,14 @@ def test_a_consumer_must_read_total_and_never_the_working_dicts_sum():
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
 def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
-    """Issue #384's acceptance, KEPT rather than deleted when the composer landed.
-
-    It shipped as *"`attack_ev` still has zero production callers"* — the extractor was Issue #384's
-    and the SUM was the composer's, so an early caller would have meant something wired the terminal
-    leg before the seam that consumes it existed. That test named its own successor: *"the day the
-    composer wires it, this test is the reminder to retire this line rather than a mystery
-    failure."* POC-T4/4 (Issue #385) is that day, and `common/composer.py:terminal_ev` is that
-    caller — it is `score(sequence) = state_value(end board) + EV(terminal action)`'s second summand.
-
-    Narrowed rather than dropped, because the assertion the original was really making is still
-    worth making: the terminal leg has EXACTLY ONE consumer. A second one would be a second opinion
-    on the same prize, which is the double-counting rule this module's whole registry exists to
-    enforce.
-
-    **Narrowed a SECOND time at ADR-0129, and the distinction is the whole point.** There are now
-    two call SITES, both inside that one consumer: `terminal_ev` prices the action a line ENDED on,
-    `continuation_ev` prices the one a line CUT short still has ahead of it. That is one consumer
-    reading one equation at two seams, not two opinions on one prize — and it is not an argument,
-    it is structural: `_terminal_candidate` and `_gap_or_reveal_candidate` are different branches of
-    `_expand`, so **no Candidate can ever carry both** (a terminal candidate has ``terminal`` set and
-    a truncated one has it None; `tests/strategy/test_composer.py` asserts each side directly).
-
-    So the assertion is by (file, enclosing function) rather than by file alone. A THIRD site, or
-    either of these two moving to a new function, still fails — which a bare "the file list is
-    [composer.py]" would not, and which is exactly the drift this test exists to catch.
-
-    **A negative result needs a positive control**, so the same scan is pointed at `survival`, which
-    MUST match (`state_value.py`'s `_terms` calls it). If the control goes quiet the instrument is
-    broken and the empty result means nothing. `src/cg/` is excluded — the native-engine wrapper is
-    off-limits to every sweep in this repo.
-
-    Parsed rather than grepped, and that is not fastidiousness: a line-level scan for ``attack_ev(``
-    matches this very module's own docstrings (it fired on one while this test was being written)
-    and would miss a call spelled through `getattr`. `ast` sees CALLS, which is what the claim is
-    about."""
+    """The terminal leg has EXACTLY ONE consumer; a second would be a second opinion on one prize.
+    Asserted by (file, enclosing function): `terminal_ev` and `continuation_ev` (ADR-0129)."""
     import ast
     from pathlib import Path
 
     def _called(tree, name):
-        """``[(enclosing def name or '<module>', lineno)]`` for every CALL of ``name``.
-
-        The enclosing function is resolved by descending the def tree rather than by line-number
-        arithmetic, so a nested helper reports its own name and a call at module scope is not
-        silently attributed to whichever def happens to sit above it."""
+        """``[(enclosing def name or <module>, lineno)]`` for every CALL of ``name``, resolved by
+        descending the def tree rather than by line-number arithmetic."""
         out = []
 
         def walk(node, where):
@@ -1500,10 +984,8 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
 
 @pytest.mark.req("REQ-STATEVALUE-0004")
 def test_the_working_breakdown_sums_to_the_returned_scalar():
-    """The contract `state_value`'s docstring states. Unassertable at T0 because the entry point
-    raised by design; now it is the check that the breakdown is the DECOMPOSITION and not a parallel
-    narrative about it — a debugging surface that disagreed with the number it explains would send
-    wave-3 triage after the wrong term."""
+    """The breakdown must BE the decomposition and not a parallel narrative about it — one that
+    disagreed with the number it explains would send wave-3 triage after the wrong term."""
     model = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)])
     working: dict = {}
     total = sv.state_value(model, working=working)
@@ -1513,22 +995,15 @@ def test_the_working_breakdown_sums_to_the_returned_scalar():
 
 @pytest.mark.req("REQ-STATEVALUE-0004")
 def test_passing_no_working_dict_returns_the_same_number():
-    """The out-parameter is a diagnostic, never a mode. A caller on the planner's hot path pays
-    nothing for it and must not get a different answer for not asking."""
+    """The out-parameter is a diagnostic, never a mode."""
     model = _lucario_board(my_energies=[E_F])
     assert sv.state_value(model) == pytest.approx(sv.state_value(model, working={}))
 
 
 @pytest.mark.req("REQ-STATEVALUE-0008")
 def test_the_scalar_is_PROVENANCE_AGNOSTIC_over_two_models_of_one_board():
-    """Ruled 2026-08-01. Issue #259 §3b's apply-seam has three fates, two of which yield a model —
-    MODELLED (closed-form) and ENGINE-RESOLVED (an engine readback for a clause-vocabulary gap) —
-    and `state_value` must not be able to tell them apart.
-
-    Asserted as the property that actually matters: two INDEPENDENTLY CONSTRUCTED models of the same
-    board content score identically. §3c's completeness audit is what guarantees the two paths
-    produce the same content; this is the guard that nothing in the scoring reads identity, object
-    ordering or construction history on top of it."""
+    """MODELLED and ENGINE-RESOLVED both yield a model and `state_value` may not tell them apart, so
+    two INDEPENDENTLY CONSTRUCTED models of one board must score identically."""
     def board():
         return _lucario_board(my_energies=[E_F, E_F], bench=[_poke(MUNKIDORI, hp=70, serial=3)],
                               hand=[E_F, RIOLU])
@@ -1541,18 +1016,8 @@ def test_the_scalar_is_PROVENANCE_AGNOSTIC_over_two_models_of_one_board():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_state_value_returns_a_BIT_IDENTICAL_float_on_every_call():
-    """Issue #262's fourth amendment, and the only half of old Issue #145's amendment D this track
-    owns — *"the actual amendment D rule moved to Issue #263, this track only owns the function's own
-    determinism"*.
-
-    The spec's words: *"for a fixed StateModel, `state_value` returns a BIT-IDENTICAL float on every
-    call — fixed term-iteration order (never dict/set iteration that could reorder), no clock/random/
-    hidden global state read by any term."* Bit-identical, not approximately equal: floating-point
-    addition is not associative, so a term order that varied would move the last bits, and a
-    selection key built on a value whose last bits wobble is not a fix.
-
-    Asserted on a model that exercises every family — two bodies, a bench, a hand, both sides
-    populated — because a term that read a global would most likely be one the empty board skips."""
+    """Bit-identical, not approximately equal: float addition is not associative, so a varying term
+    order moves the last bits, and a selection key built on wobbling last bits is not a fix."""
     model = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)],
                            hand=[MEGA_LUC, E_F])
     values = [sv.state_value(model) for _ in range(32)]
@@ -1560,8 +1025,7 @@ def test_state_value_returns_a_BIT_IDENTICAL_float_on_every_call():
     # Bit-identical, asserted through the repr so a difference below `==`'s notice would still show.
     assert len({repr(v) for v in values}) == 1
 
-    # And a FRESHLY built model of the same board agrees bit-for-bit, so the answer is a function of
-    # the board rather than of the memo's fill order.
+    # …and a FRESHLY built model agrees bit-for-bit, so the answer is not the memo's fill order.
     fresh = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)],
                            hand=[MEGA_LUC, E_F])
     assert repr(sv.state_value(fresh)) == repr(values[0])
@@ -1569,36 +1033,22 @@ def test_state_value_returns_a_BIT_IDENTICAL_float_on_every_call():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_term_iteration_order_is_FIXED_not_a_set_or_a_dict_scan():
-    """The mechanism behind the test above, asserted directly rather than inferred from one board.
-
-    `working`'s keys must come out in the registry's declared order every time. A term set assembled
-    by iterating a `set` — or by a comprehension over anything unordered — would still produce a
-    stable answer inside one interpreter run and could reorder across runs, which is precisely the
-    failure a same-process repeat test cannot see."""
+    """A term set assembled by iterating a `set` is stable within one interpreter run and can reorder
+    across runs — precisely the failure a same-process repeat test cannot see."""
     model = _lucario_board(my_energies=[E_F])
     working: dict = {}
     sv.state_value(model, working=working)
     assert list(working) == [f.name for f in sv.REGISTRY]
 
 
-# ── MID-TURN MONOTONICITY — the class Issue #263's ordering ruling requires ────────────────────────
-#
-# Every case below perturbs the SAME fixture board by exactly ONE beneficial fact and asserts the
-# scalar moves in the obvious direction. They are deliberately cheap and deliberately obvious: the
-# failure they catch is not a wrong number, it is a term that implicitly assumed a completed turn and
-# therefore prices a half-finished board at zero. That failure is invisible to any test that only
-# ever scores end-of-turn boards, and its consequence is a good line pruned before the leaf sees it.
+# ── MID-TURN MONOTONICITY — the class Issue #263's ordering ruling requires ───────────────────────
+# Each case perturbs ONE beneficial fact. The failure caught is a term that assumed a completed turn.
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_an_attach_toward_an_attack_cost_raises_readiness_MID_TURN():
-    """The headline case from the ruling, set up as the real transition rather than as two boards:
-    BEFORE is the live mid-turn board with the manual attach still available and one {F} down;
-    AFTER is that board with the attach SPENT and the second {F} on the body. Mega Brave costs
-    ``{F}{F}`` (verified at source), so before the attach the payoff is one Energy away.
-
-    A half-built attacker must score PARTIAL readiness — not zero, which would prune the attach
-    before the leaf ever saw it, and not full, which would make the second Energy free."""
+    """The real transition rather than two boards: BEFORE still has the manual attach available. A
+    half-built attacker scores PARTIAL — 0 prunes the attach, full makes the second Energy free."""
     before, after = {}, {}
     sv.state_value(_lucario_board(my_energies=[E_F]), working=before)
     sv.state_value(_lucario_board(my_energies=[E_F, E_F], energy_attached=True), working=after)
@@ -1608,13 +1058,8 @@ def test_an_attach_toward_an_attack_cost_raises_readiness_MID_TURN():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_readiness_survives_the_turns_one_manual_attach_being_spent():
-    """The failure mode `_readiness_odds` exists for, asserted directly. `readiness_p` is a
-    THIS-TURN probability and fails closed at 0.0, so once the attach is spent every body one Energy
-    short of its payoff reads 0 and the whole mid-turn board goes flat — and a flat term prunes
-    every subsequent play in the sequence, which is the failure the ordering ruling names.
-
-    The forward clock (`turns_to_afford`, graded by the same `halve` `EvolveBody.p_arrive` uses) is
-    what keeps the term alive: one Energy from the payoff still beats a bare body."""
+    """`readiness_p` is a THIS-TURN probability that fails closed at 0.0, so once the attach is spent
+    the forward clock is what keeps the term alive rather than flat — and a flat term prunes."""
     spent, richer = {}, {}
     sv.state_value(_lucario_board(my_energies=[E_F], energy_attached=True), working=spent)
     sv.state_value(_lucario_board(my_energies=[E_F, E_F], energy_attached=True), working=richer)
@@ -1626,20 +1071,8 @@ def test_readiness_survives_the_turns_one_manual_attach_being_spent():
 
 
 def _expiring_board(cid, *, energies, energy_cards, hp, benched=False, turn=5):
-    """MY body holding a chosen Energy set, the turn's manual attach already SPENT and my hand empty.
-
-    Both are deliberate: with the attach spent and nothing in hand the Attach Budget adds nothing, so
-    `readiness_p`'s answer is a fact about what is ON the body rather than about what the fixture's
-    deck happens to hold. Their side is a bare Dragapult ex, the same defender every other board in
-    this file uses.
-
-    ``benched`` (Issue #351) puts the SAME body on the Bench behind a bare Staryu instead of in the
-    Active spot, which is the one fact that decides whether it may attack this turn. Staryu is the
-    line's real Basic, so the benched shape is `mega_starmie`'s own — the corpus frame this fixture
-    stands for (`83664991|…|43`) is a benched Mega Starmie ex. ``turn`` is the other fact —
-    ``turn=1`` is the first player's turn, where the rules skip the attack step outright
-    (`MySide.attack_blocked`). Both default to the pre-Issue #351 shape, so every board above is
-    byte-identical."""
+    """MY body holding a chosen Energy set, the turn's attach SPENT and my hand empty, so `readiness_p`
+    answers about what is ON it. ``benched`` and ``turn`` are the two legality facts (Issue #351)."""
     body = _poke(cid, hp=hp, energies=energies, energy_cards=energy_cards)
     mine = (_player(active=_poke(STARYU, hp=70, serial=4), bench=[body], prize=4) if benched
             else _player(active=body, prize=4))
@@ -1651,15 +1084,8 @@ def _expiring_board(cid, *, energies, energy_cards, hp, benched=False, turn=5):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_forward_clock_no_longer_counts_an_energy_that_will_be_DISCARDED():
-    """Gouging Fire ex holds ONE Ignition. It is a **Basic**, so the card provides ``{C}`` — one
-    colourless unit, which fills exactly the ``{C}`` slot of Blaze Blitz ``{R}{R}{C}`` and pays
-    neither ``{R}``. So the payoff is unreachable THIS turn (the now-leg is an honest 0) and the
-    whole of `readiness` here rides on the forward clock.
-
-    The incumbent clock counted that unit and said *two more attaches*. It will not be there next
-    turn — the rules discard it at the end of this one — so the honest answer is three, and the
-    family must fall accordingly. The control below is the same board funded by a Basic {R}, where
-    nothing expires and nothing may move."""
+    """Gouging Fire ex is a Basic, so one Ignition provides ``{C}``: it fills Blaze Blitz's colourless
+    slot and neither ``{R}``, the now-leg is an honest 0, and the family rides the forward clock."""
     loan, real = {}, {}
     sv.state_value(_expiring_board(GOUGING_FIRE, energies=[COLORLESS], energy_cards=[IGNITION],
                                    hp=230), working=loan)
@@ -1678,25 +1104,8 @@ def test_the_forward_clock_no_longer_counts_an_energy_that_will_be_DISCARDED():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward():
-    """Issue #286's own T1-going-first test, on `mega_starmie`'s real cards — and the proof that the
-    fix is live on a shipped deck rather than only on a fixture.
-
-    The deck runs 3 Staryu and 4 Ignition. Staryu is a **Basic**, so an Ignition on it provides
-    ``{C}`` — ONE unit — while the line's deepest payoff is Mega Starmie ex's Nebula Beam
-    ``{C}{C}{C}``. That is a PARTIAL loan: the unit fills one colourless slot and the clock still
-    owes two, so the incumbent read *two attaches away* and the honest answer is three.
-
-    The now-leg reads 0.0 for a card-true reason and not a fixture accident: Staryu's only attack is
-    Water Gun ``{W}``, and a colourless unit pays colourless slots ONLY (`combat.unit_colours`), so
-    the Ignition arms nothing this turn. Which is exactly the doctrine's rule — *"Going first: attach
-    Water (never Ignition — it'd discard unused)"* — and `docs/rules.md`'s worked example of a
-    reason-only rule (correction ep81903490 f5).
-
-    Both halves are asserted: the Water board must outscore the Ignition board (it did BEFORE this
-    change too, so that alone would be a vacuous test), **and the gap must WIDEN**, which is the part
-    only this change produces. The Ignition board lands exactly on the BARE-Staryu value — an
-    evaporating Energy buys no forward readiness at all, which is the correction stated as a
-    number."""
+    """On `mega_starmie`'s real cards: an Ignition on a Basic Staryu provides one ``{C}``, which pays
+    no part of Water Gun ``{W}``. The Ignition board must land exactly on the BARE-Staryu value."""
     ign, water, bare = {}, {}, {}
     sv.state_value(_expiring_board(STARYU, energies=[COLORLESS], energy_cards=[IGNITION], hp=70),
                    working=ign)
@@ -1709,48 +1118,15 @@ def test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward
     assert board.mine.turns_to_afford(body) == 2                       # the incumbent, unmoved
     assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
     assert ign["readiness"] < water["readiness"]
-    # The part that is NEW: the Ignition board falls all the way to the bare board. Before this
-    # change it sat strictly between the two, crediting a card that will be in the discard.
+    # The NEW part: before this change the Ignition board sat strictly between the two.
     assert ign["readiness"] == pytest.approx(bare["readiness"])
     assert bare["readiness"] < water["readiness"]
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
-    """The measured finding, executable — Issue #286's fix is correct and, wherever the expiring
-    Energy FULLY arms the body, invisible.
-
-    `_readiness_odds` is ``max(now, halve(arm))`` and the two legs read the SAME attached Energy
-    through the SAME matcher (`matched_slots` documents itself as *"the matcher `reachable_attach`
-    uses"*). So whenever the expiring Energy is enough to zero the clock it is also enough to pin
-    the now-leg at 1.0, and the ``max`` discards the forward leg entirely. Mega Starmie ex holding
-    one Ignition is exactly that: ``{C}{C}{C}`` on an Evolution pays Nebula Beam ``{C}{C}{C}``
-    outright.
-
-    Swept over the committed corrections corpus (Issue #286, 2026-08-03): **25 of 1015** of my
-    bodies hold a `discard_eot` Energy, the forward clock moves on **all 25**, and `_readiness_odds`
-    moves on **none** — every one of them reads ``now == 1.0``, because every one of them sits on an
-    EVOLUTION. The partial-loan case above is the deck's other half and is NOT masked; the corpus
-    simply holds no frame of it.
-
-    **Issue #351 landed and this test stayed GREEN — deliberately, and the prediction it replaces was
-    wrong.** Issue #351's acceptance criteria called this test *"the tripwire; it was written to fail
-    here"*, and the paragraph that stood here said it *"turns red the day either lands"*. It did not,
-    because the fixture's body is the **ACTIVE** on ``turn=5``: it may legally attack this turn, its
-    ``{C}{C}{C}`` pays Nebula Beam outright, and so ``readiness_p == 1.0`` is a TRUE statement about
-    it. The ``max`` discarding the forward leg here is the family answering its own question
-    correctly — *P(this body gets to its payoff attack)* is 1.0 when the body attacks this turn.
-
-    So what survives is the honest half: masking is CORRECT wherever the body can cash the Energy,
-    and it was only ever a defect where the body cannot. Issue #351 gated exactly that — the now-leg
-    is asked only of a body the AREA and the RULES both permit an attack to (`_may_attack_now`) — and
-    the four corpus bodies that failed the gate are covered by the tests below this block. This board
-    is not one of them, which is why the assertion is unchanged and this docstring is what moved.
-
-    Kept rather than deleted because it is now the ANTI-regression: a later change that gates the
-    now-leg more aggressively — stripping the expiring Energy from it (Issue #351's rejected option
-    2), say — would break this, and it should, because it would be telling an armed Active attacker
-    it is not ready to swing."""
+    """`_readiness_odds` is ``max(now, halve(arm))`` and both legs read the same attached Energy, so
+    where it fully arms an ACTIVE body the mask is CORRECT — 1.0 is a true statement about it."""
     board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
     body = board.mine.active
     assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
@@ -1764,43 +1140,14 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
         "the now-leg no longer masks the forward leg — re-read the packet line, this is the unlock")
 
 
-# ── Issue #351 — the NOW leg may not credit a body the rules will not let attack ─────────────────
-#
-# `readiness_p` has NO legality leg, and that is the defect. Verified at source rather than recalled:
-# `MySide.readiness_p` -> `CombatMath.readiness_p` -> `reachable_attach_p` -> `reachable_attach`,
-# whose only non-affordability gates are the ADR-0033 transient `self_lock`/`same_lock`. Nothing on
-# that path reads
-# the body's AREA, the turn number, or the first-player attack ban. `MySide.active_famine` is the
-# shipped proof it is missing: that property checks `attack_blocked` BEFORE calling the oracle, and
-# its docstring says why — *"only the RULE leg may claim a famine without one"*. The rules leg lives
-# in the caller, so the oracle does not have it, and `_readiness_odds` is a caller that never added
-# it.
-#
-# MEASURED at this commit over the committed corrections corpus, through the shipped Pilot (372
-# frames / 1018 of my bodies; positive control 536 bodies reading `readiness_p == 0.0`, so a silent
-# 1.0 everywhere is not what is being counted): 25 bodies hold a `discard_eot` Energy, the forward
-# clock moves on all 25, and `_readiness_odds` moved on NONE. Of those 25, **4** are bodies the rules
-# forbid an attack to — 1 BENCHED (`83664991|43`, a Mega Starmie ex, the issue's named frame) and
-# **3 `attack_blocked`** (`81903490|8`, `81903490|10`, `81904451|9` — the first player on turn 1,
-# which is the very episode `docs/rules.md` cites as its worked example of a reason-only rule,
-# correction `ep81903490 f5`). The other 21 are ACTIVE on an unblocked turn and their 1.0 is HONEST,
-# which is why the fix is a legality gate and not a strip of the now-leg.
+# ── Issue #351 — the NOW leg may not credit a body the rules will not let attack ──────────────────
+# `readiness_p` has NO legality leg: nothing on its path reads the AREA, the turn, or the first-player ban.
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_BENCHED_body_is_not_READY_to_attack_however_much_energy_it_holds():
-    """The issue's named frame as a fixture — `83664991|…|43`, a **BENCHED** Mega Starmie ex holding
-    one Ignition, reading `readiness_p == 1.0`.
-
-    A benched Pokémon cannot attack. `docs/rules.md` §3 — *"Attack: 1, and it ends the turn"* — is a
-    thing the ACTIVE does; the Bench is where a body waits. So the now-leg's claim *"P(this body is
-    READY to use the attack this turn)"* is false for every benched body, whatever its Energy says,
-    and the family must fall back to the forward clock.
-
-    Asserted on the SAME body in both spots so the only difference is the area: identical card,
-    identical Energy, identical everything. The Active reading is the control — it must NOT move,
-    because an Active Mega Starmie ex with ``{C}{C}{C}`` genuinely can swing Nebula Beam right
-    now."""
+    """A benched Pokémon cannot attack, so the now-leg's claim is false for it whatever its Energy
+    says. The SAME body in both spots, so the only difference is the area; the Active is control."""
     benched = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
                               hp=330, benched=True)
     body = benched.mine.bench[0]
@@ -1808,12 +1155,10 @@ def test_a_BENCHED_body_is_not_READY_to_attack_however_much_energy_it_holds():
     assert body.is_active is False
     assert benched.mine.attack_blocked is False, "turn 5 — the RULES allow an attack; area is the fact"
 
-    # The incumbent oracle is UNTOUCHED and still says 1.0. That is the point: the fix is a gate in
-    # the caller, not a retune of a probability `promote_retreat_value` (ADR-0073) also reads.
+    # The incumbent oracle is UNTOUCHED and still says 1.0 — the fix is a gate in the caller.
     assert benched.mine.readiness_p(body, aid) == 1.0
 
-    # …and the composed answer no longer repeats it. It rides the forward clock, which Issue #286
-    # already taught to drop the evaporating Energy.
+    # …and the composed answer rides the forward clock, which already drops the evaporating Energy.
     assert sv._readiness_odds(benched, body, aid) < 1.0
 
     # The ACTIVE control: same body, same Energy, in the spot where 1.0 is true.
@@ -1825,17 +1170,8 @@ def test_a_BENCHED_body_is_not_READY_to_attack_however_much_energy_it_holds():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_now_leg_is_zero_when_the_RULES_forbid_an_attack_at_all():
-    """The first player on turn 1 — three of the four corpus bodies, and `docs/rules.md`'s own worked
-    example of a reason-only rule.
-
-    Verified at source: *"Player going FIRST, turn 1 — restrictions: CANNOT attack (the starting
-    player skips the attack step on turn 1)"* (`docs/rules.md` §2, `[RULE: rulebook L152]`,
-    `[PROJECT-VERIFIED: ep81903490 f5]`). `MySide.attack_blocked` is the shipped read and it carries
-    all three rule facts — Asleep, Paralyzed, and ``turn <= 1``.
-
-    This is the case the deck doctrine names outright — *"don't attach Ignition T1-going-first, you
-    can't attack, so it's discarded for nothing"* — and the ACTIVE body makes it independent of the
-    area gate above: it is in the attacking spot and still may not swing."""
+    """The first player on turn 1. `MySide.attack_blocked` carries all three rule facts — Asleep,
+    Paralyzed, ``turn <= 1`` — and this body is ACTIVE, so it is independent of the area gate."""
     board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330,
                             turn=1)
     body = board.mine.active
@@ -1846,8 +1182,7 @@ def test_the_now_leg_is_zero_when_the_RULES_forbid_an_attack_at_all():
     assert board.mine.readiness_p(body, aid) == 1.0        # the oracle, still legality-blind
     assert sv._readiness_odds(board, body, aid) < 1.0      # the composed answer, no longer
 
-    # Non-vacuity: the SAME board on a turn the rules allow reads the full 1.0, so this test is
-    # measuring the rule and not some other property of the fixture.
+    # Non-vacuity: the SAME board on a turn the rules allow reads the full 1.0.
     allowed = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
                               hp=330, turn=5)
     a_body = allowed.mine.active
@@ -1857,16 +1192,8 @@ def test_the_now_leg_is_zero_when_the_RULES_forbid_an_attack_at_all():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_legality_gate_UNMASKS_issue_286s_forward_leg_on_a_benched_body():
-    """Issue #351's headline: the correction Issue #286 built becomes VISIBLE.
-
-    On a body that cannot attack, the now-leg is gone and `readiness` rides the forward clock alone —
-    so the clock's `exclude_expiring` strip finally reaches the family. The Ignition board must now
-    fall to exactly the BARE board, the same equality Issue #286's own T1 test asserts for the
-    partial-loan case, because an Energy that evaporates buys no FORWARD readiness at all.
-
-    The Basic-Energy control is what makes it a statement about evaporation rather than about the
-    gate: three real ``{W}`` on the same benched body do not expire, so that board must stay strictly
-    above both."""
+    """On a body that cannot attack the now-leg is gone, so `exclude_expiring` finally reaches the
+    family. The Basic-Energy control makes it a statement about evaporation, not about the gate."""
     ign, water, bare = {}, {}, {}
     sv.state_value(_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
                                    hp=330, benched=True), working=ign)
@@ -1882,19 +1209,8 @@ def test_the_legality_gate_UNMASKS_issue_286s_forward_leg_on_a_benched_body():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn():
-    """The absent-fact direction, which `test_value_stack_integration`'s query census requires an
-    answer for before a new model read joins `state_value` — made executable here rather than left
-    as the comment beside its `CONSUMED` entry.
-
-    `MySide.attack_blocked` reads `self.turn <= 1` over `self.turn = int(turn or 0)`, so a board
-    that states no turn at all reads turn 0, which is blocked. The now-leg then claims nothing and
-    the family falls back to the forward clock. That is the SAFE direction for this gate — the
-    failure it must never have is crediting a body that cannot swing — and it is the opposite of the
-    `RULED_COLLAPSES` hazard, where an absent fact arrives as a number that reads like a
-    measurement.
-
-    Both spellings of absent are asserted, because `int(turn or 0)` collapses them and a reader
-    should not have to trust that it does."""
+    """`attack_blocked` reads `self.turn <= 1` over `int(turn or 0)`, so a board stating no turn reads
+    0 and is blocked — the SAFE direction. Both spellings of absent are asserted."""
     for missing in (None, 0):
         board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
                                 hp=330, turn=missing)
@@ -1906,15 +1222,8 @@ def test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_gate_leaves_readiness_p_ITSELF_byte_identical():
-    """The standing discipline's *"add a sibling accessor — never retune the incumbent"*, executable.
-
-    `readiness_p` is shared: `promote_retreat_value` (ADR-0073) reads it to price a promote, and it
-    is right for that caller precisely BECAUSE it is area-blind — a promote's whole question is what
-    a body would do once it reaches the Active spot, so an oracle that returned 0 for a benched body
-    would break it. That is the argument for gating in `_readiness_odds` rather than in the oracle,
-    and this test is that argument as an assertion.
-
-    Walks the four boards the gate discriminates between and pins the oracle at 1.0 on every one."""
+    """`readiness_p` is shared, and `promote_retreat_value` (ADR-0073) needs it area-BLIND — which is
+    the argument for gating in `_readiness_odds` rather than in the oracle."""
     for board, benched, turn in ((_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
                                                   energy_cards=[IGNITION], hp=330), False, 5),
                                  (_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
@@ -1934,10 +1243,8 @@ def test_the_gate_leaves_readiness_p_ITSELF_byte_identical():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_basic_energy_is_never_stripped_from_the_forward_clock():
-    """The regression guard the issue names. Nothing about a Basic Energy expires, so the flagged
-    and unflagged clocks must return the SAME number on every board that holds only Basic Energy —
-    including the boards this file was already built on, which carry no ``energyCards`` key at all
-    and where the strip must therefore make no claim."""
+    """Nothing about a Basic Energy expires, so both clocks must agree — including on the boards that
+    carry no ``energyCards`` key at all, where the strip must make no claim."""
     for board in (_expiring_board(GOUGING_FIRE, energies=[E_R], energy_cards=[E_R], hp=230),
                   _expiring_board(MEGA_STARMIE, energies=[E_W, E_W], energy_cards=[E_W, E_W],
                                   hp=330),
@@ -1947,33 +1254,17 @@ def test_a_basic_energy_is_never_stripped_from_the_forward_clock():
                 == board.mine.turns_to_afford(body, exclude_expiring=True))
 
 
-# ── Issue #332 — readiness must not fund a body the opponent removes next turn ───────────────────
-#
-# The measured misplay is `83037962|0|decision|48` (`mega_starmie`, category `misattachment`), where
-# `readiness` was the SOLE decider — every other family read exactly 0.0000 on both sides — and it
-# preferred a second Energy on a doomed Active over the first Energy on the benched successor. The
-# developer's rationale is a survivability argument the term could not see: *"Placed second energy on
-# active doomed mega starmie. this deosnt allow it to attack with Nebula Beam … therefor should start
-# powering up our reserve benched staryu"*.
+# ── Issue #332 — readiness must not fund a body the opponent removes next turn ────────────────────
+# On the corpus frame `readiness` was the SOLE decider and it funded a doomed Active over its successor.
 
-#: A deck the Starmie line can actually fund from, so `turns_to_afford`'s deck-fetch leg has {W} to
-#: find. The default `DECK` is `mega_lucario`'s and holds only {F}, which would make every clock here
-#: read "unknown" for a reason that has nothing to do with the fact under test.
+#: A deck the Starmie line can fund from, so `turns_to_afford`'s deck-fetch leg has {W} to find. The
+#: default `DECK` holds only {F}, which reads "unknown" for a reason unrelated to the fact tested.
 STARMIE_DECK = [E_W] * 6 + [STARYU] * 3 + [MEGA_STARMIE] * 3
 
 
 def _successor_board(*, active_energies=(), bench_energies=(), active_damage=0):
-    """MY Mega Starmie ex Active with the Staryu that becomes its successor on the Bench behind it,
-    the turn's manual attach already SPENT, against a fully-funded Dragapult ex.
-
-    ``active_damage`` is the ONE fact the doomed and safe boards differ by. Verified at source:
-    Phantom Dive is ``{R}{P}`` for 200 (`data/EN_Card_Data.csv` Card ID 121) and this Mega Starmie ex
-    prints 330 HP with no Weakness to Dragon, so an undamaged Active needs two swings (clock 2) and
-    one damaged to 200 remaining needs one (clock 1). Nothing else on the board moves — same bodies,
-    same Energy total, same deck, same prizes.
-
-    The two FUNDING choices are then the same board with one Energy in two places: on the Active, or
-    on the Bench. That is exactly the option pair the corpus frame offers."""
+    """MY Mega Starmie ex Active with the Staryu that becomes its successor benched behind it, the
+    turn's attach SPENT. ``active_damage`` is the ONE fact the doomed and safe boards differ by."""
     return _model(
         _player(active=_poke(MEGA_STARMIE, hp=330, damage=active_damage,
                              energies=list(active_energies)),
@@ -1989,10 +1280,8 @@ def _clock(model, body):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_doomed_active_and_the_safe_one_differ_by_EXACTLY_the_clock():
-    """The fixture's own control, asserted before anything is concluded from it. If the damaged and
-    undamaged boards did not actually differ in `turns_to_ko_me` the two tests below would pass or
-    fail for a reason that has nothing to do with survivability — the classic instrument that reports
-    a clean result because it is pointed at nothing."""
+    """The fixture's own control: if the two boards did not differ in `turns_to_ko_me`, the tests
+    below would pass or fail for a reason that has nothing to do with survivability."""
     doomed = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
     safe = _successor_board(active_energies=[E_W], bench_energies=[E_W])
     assert _clock(doomed, doomed.mine.active) == 1, "the damaged Active is not actually doomed"
@@ -2003,13 +1292,8 @@ def test_the_doomed_active_and_the_safe_one_differ_by_EXACTLY_the_clock():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
-    """The corpus frame, as a fixture. Both boards hold the same two Energy; they differ only in
-    WHICH body carries the second one, and the Active is one the opponent Knocks Out on their very
-    next turn.
-
-    A payoff the body only reaches on a LATER turn cannot be spent by a body that is gone before that
-    turn arrives, so the Energy has to be worth more on the successor. Before Issue #332 the forward
-    leg paid the doomed Active in full and this comparison ran the other way."""
+    """Same two Energy, differing only in WHICH body carries the second, with the Active one the
+    opponent removes next turn. A LATER-turn payoff cannot be spent by a body that is gone."""
     funded_active, funded_successor = {}, {}
     sv.state_value(_successor_board(active_energies=[E_W, E_W], active_damage=130),
                    working=funded_active)
@@ -2021,12 +1305,8 @@ def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_SAFE_board_still_prefers_funding_the_active_wincon():
-    """The control that makes the test above mean something. The discount is a survivability read,
-    not a blanket preference for the Bench — on the identical board with the Active undamaged, the
-    3-prize wincon in front is still the better place for the Energy, because its payoff is ten times
-    the Staryu's and it now survives to spend it.
-
-    Without this half, zeroing `readiness` outright would pass the doomed case too."""
+    """The discount is a survivability read, not a blanket preference for the Bench. Without this
+    half, zeroing `readiness` outright would pass the doomed case too."""
     funded_active, funded_successor = {}, {}
     sv.state_value(_successor_board(active_energies=[E_W, E_W]), working=funded_active)
     sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W]),
@@ -2037,12 +1317,8 @@ def test_the_SAFE_board_still_prefers_funding_the_active_wincon():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_survivability_discount_is_GRADED_rather_than_a_gate():
-    """`1 - halve(turns_to_ko_me - 1)`, the exact complement of the grade `survival` puts on the same
-    clock — so the same shipped decay convention, no new curve and no new constant.
-
-    Graded rather than binary for the reason the constants block gives: a term with no derivative is
-    never explored under 1-ply differencing, so a body two turns from a Knock Out has to score
-    strictly between a doomed one and a safe one rather than falling off a cliff."""
+    """``1 - halve(turns_to_ko_me - 1)``, the exact complement of `survival`'s grade on the same
+    clock. Graded because a term with no derivative is never explored under 1-ply differencing."""
     assert sv._survives_to_spend.__doc__                      # the argument lives on the function
     board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
     assert sv._survives_to_spend(board, board.mine.active) == 0.0
@@ -2056,11 +1332,8 @@ def test_the_survivability_discount_is_GRADED_rather_than_a_gate():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_survival_and_readiness_read_ONE_clock_and_cannot_disagree():
-    """The sole-supplier half of the fix, and the reason `_survival_clock` was extracted rather than
-    the call copied. `survival` grades a body's exposure by this clock and `readiness` discounts its
-    forward potential by the same one; two independently-written argument lists (the Bench-Harvest
-    pair, `opp_active`, the THEIRS-direction Damage Formula context) is exactly how two families come
-    to believe a body dies on different turns."""
+    """The sole-supplier half, and why `_survival_clock` was extracted rather than the call copied:
+    two independently-written argument lists is how two families come to disagree about one clock."""
     board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
     exposed = {round(b.prize_at_risk): b.turns_to_ko_me for b in sv._exposed_bodies(board)}
     for body in board.mine.bodies:
@@ -2070,16 +1343,8 @@ def test_survival_and_readiness_read_ONE_clock_and_cannot_disagree():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_NOW_leg_takes_NO_survivability_discount():
-    """The half of `_readiness_odds` this must not touch, pinned as a number rather than argued.
-
-    A body that can fire its payoff THIS turn attacks before the opponent's turn happens at all, so
-    its clock says nothing about whether the potential is spendable — `readiness_p` stays the answer.
-    Mega Starmie ex holding ``{W}{W}{W}`` pays Nebula Beam ``{C}{C}{C}`` outright, so the now-leg
-    reads 1.0; damaging it to a one-shot clock must not move `readiness` by anything at all.
-
-    This is also where Issue #351's masking bites, and the assertion is written to fail loudly if it
-    ever stops: the same `max(now, forward)` that exempts a real attacker here also exempts a BENCHED
-    body that cannot attack at all."""
+    """A body that fires its payoff THIS turn attacks before their turn happens at all, so its clock
+    says nothing about whether the potential is spendable — `readiness_p` stays the answer."""
     doomed, safe = {}, {}
     sv.state_value(_successor_board(active_energies=[E_W] * 3, active_damage=130), working=doomed)
     sv.state_value(_successor_board(active_energies=[E_W] * 3), working=safe)
@@ -2094,17 +1359,8 @@ def test_the_NOW_leg_takes_NO_survivability_discount():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
-    """Issue #332's first acceptance criterion, executable. `readiness_odds` consults
-    `turns_to_ko_me`, which `survival` prices, and the one-fact-one-family rule is this module's
-    headline — so the call has to be argued rather than assumed.
-
-    The registry fact stays `readiness_odds`: the clock is an INPUT to that probability exactly as
-    `turns_to_afford` is, and the two families price two different CONSEQUENCES of it in two
-    different currencies (the prizes handed over when the body falls, against the potential that
-    dies with it). That is `survival`'s own shipped precedent — its `_predicted_loss` consults
-    `prize_race`'s counts as a win-condition TEST and keeps `predicted_loss` as the fact — and both
-    places refuse the alternative, because a fact renamed to dodge the detector makes the detector
-    pass VACUOUSLY."""
+    """The clock is an INPUT to `readiness_odds` exactly as `turns_to_afford` is, and the two families
+    price two different CONSEQUENCES of it — `survival`'s own `_predicted_loss` precedent."""
     assert sv.double_counted() == []
     assert sv.registry_gaps() == []
     assert sv.FAMILIES["readiness"].reads == ("body_payoff", "readiness_odds", "role_relevance")
@@ -2112,9 +1368,7 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
     assert "turns_to_ko_me" not in sv.FAMILIES["readiness"].reads
     # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
     assert "turns_to_ko_me" in sv.FAMILIES["readiness"].composition
-    # …and the consultation it argues for is REAL. Without this the assertions above would hold on a
-    # module that never consults the clock at all — a contract describing something that does not
-    # happen, which is the vacuity the whole `reads` map exists to prevent.
+    # …and the consultation is REAL: otherwise the contract describes something that never happens.
     board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
     body = board.mine.active
     attack = board.mine.attack_payoff(body).attack_id
@@ -2126,20 +1380,8 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_ADR_0069_attach_decider_is_STRUCTURALLY_unable_to_move_under_this_module():
-    """Issue #332's owed *"`attach_value` unmoved"* guard, in the form that is not a re-measurement.
-
-    ADR-0069's attach marginal is `Pilot._attach_value`, and Issue #278's standing discipline forbids
-    retuning it. The strongest available statement is not *"the corpus did not move"* — a corpus can
-    fail to move for the wrong reason — but that `pilot.py` cannot READ this module at all: no
-    import, no reference, so a change to `state_value` is unable to reach the attach decider however
-    it is written.
-
-    Asserted over the parsed module rather than a substring search, because `pilot.py` does mention
-    `state_value` in prose (a docstring explaining why it does NOT thread a context into it) and a
-    raw `in` check would fail on the documentation.
-
-    **A negative result needs a positive control** (CLAUDE.md): the same instrument is pointed at two
-    deciders `pilot.py` genuinely does consume, and must find both."""
+    """`pilot.py` cannot READ this module at all — parsed rather than substring-searched, because it
+    mentions the name in prose. The control points the same instrument at two deciders it does use."""
     import ast
     from pathlib import Path
 
@@ -2165,9 +1407,8 @@ def test_the_ADR_0069_attach_decider_is_STRUCTURALLY_unable_to_move_under_this_m
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_heal_above_the_incoming_raises_survival():
-    """The second case the ruling names, and the family that motivated differencing in the first
-    place: a heal has no bespoke equation anywhere in the codebase, so if the survival delta does
-    not move, T4's heal family prices at 0 and is never played."""
+    """A heal has no bespoke equation anywhere, so if this delta does not move, T4's heal family
+    prices at 0 and is never played."""
     hurt, whole = {}, {}
     sv.state_value(_lucario_board(my_hp=60), working=hurt)
     sv.state_value(_lucario_board(my_hp=340), working=whole)
@@ -2176,23 +1417,8 @@ def test_a_heal_above_the_incoming_raises_survival():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_an_ON_LINE_body_outdevelops_an_off_line_one_by_TOPOLOGY_not_by_role():
-    """Re-homed at POC-T4/5 (Issue #386) from `tests/strategy/test_leaf_development.py`, which tested
-    `planner._board_development` — deleted with the rung ladder. Its headline fact was that at equal
-    material the board advancing the WIN-CONDITION line must outrank one that builds junk, because
-    the original term was body-count + attached-Energy only and scored the two identically.
-
-    **The fact survives; the MECHANISM does not, and that is the finding.** This family declares
-    ``does_not_read=("role_relevance", ...)`` — it is role-BLIND by design, roles being `readiness`'s
-    jurisdiction. The ordering holds anyway, through `line_topology` and the evolve marginal: Riolu
-    is my Active's pre-evolution, so benching it advances a line the model can see structurally,
-    while Crustle is simply a body. Six tests keyed on DECLARED Roles could not have detected that
-    the mechanism had changed underneath them, which is why they are not carried over verbatim.
-
-    **Reported, not asserted: the ordering does NOT survive into the total on this fixture** — the
-    off-line Crustle's 140 HP buys more from `survival` than the line piece buys from `development`,
-    so the composed scalar prefers it by ~0.006. That is a composed-scalar trade the old unit test
-    was structurally unable to see, and it is a legitimate reading (a beefier body does soak better),
-    not a defect to tune out. Left as a measurement in Issue #386's report."""
+    """This family is role-BLIND by design, so the ordering holds through `line_topology` and the
+    evolve marginal instead: Riolu is my Active's pre-evolution, Crustle is simply a body."""
     line_piece, off_line = {}, {}
     sv.state_value(_lucario_board(bench=[_poke(RIOLU, hp=80, serial=2)]), working=line_piece)
     sv.state_value(_lucario_board(bench=[_poke(CRUSTLE, hp=140, serial=2)]), working=off_line)
@@ -2203,10 +1429,8 @@ def test_an_ON_LINE_body_outdevelops_an_off_line_one_by_TOPOLOGY_not_by_role():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom():
-    """A deploy is priced by two facts at once and both must move: the body itself is development,
-    and a Bench that is no longer empty removes the `_predicted_loss` terminal term (ADR-0064,
-    `docs/rules.md` §7 case 2). The doomed board is constructed to BE doomed — a 60 HP Active under
-    a fully-funded Phantom Dive — so the second half is exercised rather than assumed."""
+    """A deploy moves two facts and both must show: the body is development, and a Bench that is no
+    longer empty removes the `_predicted_loss` term (ADR-0064, `docs/rules.md` §7 case 2)."""
     alone, benched = {}, {}
     sv.state_value(_lucario_board(my_hp=60), working=alone)
     sv.state_value(_lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)]), working=benched)
@@ -2217,9 +1441,8 @@ def test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_taking_a_prize_moves_the_scalar_by_a_full_prize():
-    """The dominance anchor. `prize_race`'s lead leg has unit slope, which is what preserves the
-    incumbent leaf's `KO_SCORE * prizes_taken` term across the swap and what makes `ko-score-band`
-    hold: no amount of board shape reaches a whole prize."""
+    """`prize_race`'s lead leg has unit slope, which is what makes `ko-score-band` hold: no amount of
+    board shape reaches a whole prize."""
     before = sv.state_value(_lucario_board(my_prizes=4))
     after = sv.state_value(_lucario_board(my_prizes=3))
     assert after - before > 1.0                       # the lead, plus proximity sharpening
@@ -2228,19 +1451,8 @@ def test_taking_a_prize_moves_the_scalar_by_a_full_prize():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is():
-    """The `POC_WORTH_PRIZE_RATE` sanity the whole ADR-0097 argument rests on. Pricing the hand at
-    zero makes every free Item strictly worth playing (the defect `_DENIAL_ITEM_COST` patches);
-    pricing it too high makes the agent hoard. With no Needs resolution supplied the hand leg is a
-    real zero — there are no slots for a card to cover — and that is asserted here rather than left
-    to be discovered as a mystery in wave-3 triage.
-
-    ⚠️ **The claim is about the MARGINAL, not the level, and it was asserted on the level until
-    Issue #400 Phase 2.** The family is a LEDGER — held supply minus the position's unmet demand —
-    so a hand that exactly covers the position's only need nets to 0 and one that covers nothing
-    nets to `-demand`. Reading the level made "holding a useful card is worth something" look false
-    the moment the demand half existed, while the sentence it is defending has always been a
-    statement about the DIFFERENCE between holding the card and not holding it. That difference is
-    what this asserts now, and it is also the only reading a differencing leaf can support."""
+    """The claim is about the MARGINAL, not the level: the family is a LEDGER (held supply minus unmet
+    demand), so a hand exactly covering the position's only need nets to 0 (Issue #400 Phase 2)."""
     model = _lucario_board(hand=[MEGA_LUC, E_F])
     working: dict = {}
     sv.state_value(model, working=working)
@@ -2268,13 +1480,8 @@ def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is():
 
 
 def _resolution_for_one_wincon_slot(*, covered: bool = True):
-    """A minimal `needs.Resolution`: one Line slot at the win-condition tier, covered by the held
-    Mega Lucario ex. The Pilot's `_resolve_needs` is what builds these in production; this is the
-    smallest one that exercises the `hand` family's spine.
-
-    ``covered=False`` is the same position with the covering card gone from hand — the counterfactual
-    the ADR-0097 marginal is taken against. The SLOT stays: not holding the wincon does not stop the
-    position needing one, which is the whole point of the demand half."""
+    """The smallest `needs.Resolution` that exercises the `hand` family's spine. ``covered=False`` is
+    the same position with the covering card gone — the SLOT stays, which is the demand half."""
     from common import needs
     if not covered:
         return needs.Resolution(
@@ -2290,13 +1497,8 @@ def _resolution_for_one_wincon_slot(*, covered: bool = True):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_evolution_topology_credits_a_line_that_can_still_arrive_over_one_that_cannot():
-    """`development`'s `line_topology` leg. Riolu evolves to Mega Lucario ex in a SINGLE hop with no
-    intermediate Lucario in this set (`docs/rulebook.txt` Appendix 1) — the worked example CLAUDE.md
-    uses for verify-don't-recall — so a Riolu on the board owes 270 − 30 damage of forward payoff.
-
-    Burying every Mega Lucario ex in the discard makes that line topologically dead however well
-    funded the base is, and the term has to notice: `unseen_counts` is the sound read of "not
-    provably gone" the rest of the snapshot already uses."""
+    """`development`'s `line_topology` leg: burying every Mega Lucario ex in the discard makes the line
+    topologically dead however well funded the base is. `unseen_counts` is the sound read."""
     live = _model(_player(active=_poke(RIOLU, hp=80), prize=4), _player(prize=4))
     dead = _model(_player(active=_poke(RIOLU, hp=80), discard=[MEGA_LUC] * 3, prize=4),
                   _player(prize=4))
@@ -2308,10 +1510,8 @@ def test_evolution_topology_credits_a_line_that_can_still_arrive_over_one_that_c
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_reachable_knockout_on_their_active_raises_threat_but_never_by_a_prize():
-    """`threat`'s two properties in one case. It must MOVE when their Active becomes reachable —
-    otherwise nothing prices pressure — and it must stay inside its cap, because the prize for
-    converting the exposure belongs to `attack_ev` at the terminal action and
-    `score = state_value(end) + EV(terminal)` would otherwise pay for one Knock Out twice."""
+    """`threat` must MOVE when their Active becomes reachable and must stay inside its cap: the prize
+    for CONVERTING the exposure belongs to `attack_ev` at the terminal action."""
     safe, exposed = {}, {}
     sv.state_value(_lucario_board(my_energies=[E_F, E_F]), working=safe)
     sv.state_value(_lucario_board(my_energies=[E_F, E_F],
@@ -2321,10 +1521,7 @@ def test_a_reachable_knockout_on_their_active_raises_threat_but_never_by_a_prize
 
 
 # ── `threat`'s reachability gate asks the DAMAGE MODEL, not the printed number (Issue #281) ───────
-#
-# The gate is a STEP, so a wrong reading of it is not a mis-scaling — it is the difference between
-# the family answering and the family returning `()`. It was wrong in BOTH directions at once,
-# because the printed number knows nothing about who is being hit.
+# The gate is a STEP, and it was wrong in BOTH directions: a printed number knows nothing about who is hit.
 
 
 def _threat_of(model) -> float:
@@ -2343,18 +1540,8 @@ def _reach(model):
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_a_weakness_knockout_the_printed_number_calls_unreachable_now_prices():
-    """The UNDER-claim, and `mega_starmie`'s own doctrine: *lead Jetting Blow when the Active is
-    Water-weak with <= 240 HP*. Jetting Blow prints 120 and Gouging Fire ex has 230 HP, so the
-    printed gate says "cannot reach" — while the rules say Weakness doubles it to 240 and the
-    Knock Out is there (`docs/rules.md` §5; S&V prints x2, not +N).
-
-    TWO controls, because the gate must be shown to still say NO:
-
-    * ``out_of_reach`` — **the same card**, chipped to 250 rather than 230. One fact differs
-      (remaining HP), and 240 does not reach it. This is the honest one-fact control.
-    * ``not_weak`` — a different defender at the same 230 HP that is not {W}-weak. More than the
-      Weakness type differs between the two cards, so this one is a sanity check on the direction
-      rather than a controlled comparison, and is labelled as such."""
+    """The UNDER-claim: Jetting Blow prints 120 into 230 HP and Weakness doubles it to 240
+    (`docs/rules.md` §5, x2 not +N). ``out_of_reach`` is the one-fact control, ``not_weak`` a sanity check."""
     weak = _starmie_board(_poke(GOUGING_FIRE, hp=230, serial=9))
     out_of_reach = _starmie_board(_poke(GOUGING_FIRE, hp=250, serial=9))
     not_weak = _starmie_board(_poke(DRAGAPULT, hp=230, serial=9))
@@ -2370,15 +1557,8 @@ def test_a_weakness_knockout_the_printed_number_calls_unreachable_now_prices():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_a_knockout_the_defender_PREVENTS_no_longer_prices_as_pressure():
-    """The OVER-claim, from `docs/matchups/crustle.md` Seam 1: *a pure-ex deck cannot damage an
-    active Crustle at all*. Mega Lucario ex is a Pokémon {ex} (`docs/rulebook.txt` L337 — a Mega
-    Evolution Pokémon ex IS an {ex}), Crustle's *Mysterious Rock Inn* prevents all damage from
-    attacks by opponent {ex}, and Mega Brave carries no ignore flag. Printed 270 against 150 HP
-    reads as pressure; the real damage is 0.
-
-    Nebula Beam is the standing proof that this is a per-ATTACK fact and not a per-card one — it
-    *"isn't affected by ... any effects on your opponent's Active"* and lands its 210 through the
-    same wall — so it is asserted here rather than left to the oracle's own tests."""
+    """The OVER-claim: Crustle's Mysterious Rock Inn prevents all damage from {ex} attacks and Mega
+    Brave carries no ignore flag. Nebula Beam is the proof this is a per-ATTACK and not per-card fact."""
     board = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
                            their_active=_poke(CRUSTLE, hp=150, serial=9))
     printed, modelled = _reach(board)
@@ -2393,9 +1573,8 @@ def test_a_knockout_the_defender_PREVENTS_no_longer_prices_as_pressure():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_resistance_takes_its_flat_30_off_the_reachability_read():
-    """Resistance is a uniform flat −30 in this set (`docs/rules.md` §5, project-verified over 47
-    cards), and it is enough on its own to turn an exact-lethal into a miss: Aura Jab prints 130
-    into Larry's Braviary's 130 HP, and Braviary resists {F}."""
+    """Resistance is a uniform flat −30 in this set (`docs/rules.md` §5), enough on its own to turn an
+    exact-lethal into a miss: Aura Jab prints 130 into Larry's Braviary's 130 HP."""
     board = _lucario_board(my_energies=[E_F], energy_attached=True,
                            their_active=_poke(BRAVIARY, hp=130, serial=9))
     printed, modelled = _reach(board)
@@ -2406,14 +1585,8 @@ def test_resistance_takes_its_flat_30_off_the_reachability_read():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_new_read_keeps_the_incumbents_BUDGET_affordability_filter():
-    """The sibling swaps the damage read and NOTHING else — the affordability filter is the
-    incumbent's, unchanged. With one {W} attached and the turn's attach already spent, the
-    three-Energy Nebula Beam is not reachable and may not enter EITHER read; fund it and it enters
-    both.
-
-    This is why `can_ko_affordable` was NOT composed for the gate — it asks affordability of the
-    *attached* Energy, while this family's reachability has always been the Attach BUDGET. Two
-    opinions about affordability inside one family is what the sole-supplier ruling forbids."""
+    """The sibling swaps the damage read and NOTHING else. `can_ko_affordable` was NOT composed here:
+    it asks affordability of the ATTACHED Energy, while this family has always used the BUDGET."""
     starved = _starmie_board(_poke(CRUSTLE, hp=150, serial=9), my_energies=(E_W,))
     printed, modelled = _reach(starved)
     assert printed == 120, "only Jetting Blow is reachable on one Energy"
@@ -2425,20 +1598,12 @@ def test_the_new_read_keeps_the_incumbents_BUDGET_affordability_filter():
 
 
 # ── `survival` threads the DAMAGE CONTEXT into its clocks (Issue #280) ────────────────────────────
-#
-# `survival` takes two damage reads — the `turns_to_ko_me` clock and `_predicted_loss`'s Incoming —
-# and both took a `context` nobody gave them, so every context-scaled term of the Damage Formula
-# contributed 0 on THEIR attack: an opponent holding twelve cards and one holding two produced the
-# same `turns_to_ko_me`. The direction is THEIRS — their attack on my body — and getting it
-# backwards reads MY hand as THEIR damage scaler, which is silently plausible. So every case below
-# is built on a board whose two hands DIFFER.
+# The direction is THEIRS; backwards reads MY hand as THEIR scaler, so both hands DIFFER on every board.
 
 
 def _survival_of_model(model) -> float:
-    """The `survival` leg off an already-built model (Issue #280's context cases).
-
-    A sibling of :func:`_survival_of`, which takes the two player dicts — these cases need the model
-    itself because the board they perturb is built by `_alakazam_board`, not by `_player` pairs."""
+    """The `survival` leg off an already-built model — the sibling of `_survival_of`, which takes the
+    two player dicts."""
     working: dict = {}
     sv.state_value(model, working=working)
     return working["survival"]
@@ -2446,14 +1611,8 @@ def _survival_of_model(model) -> float:
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_survivals_clock_shortens_as_THEIR_hand_grows():
-    """Powerful Hand deals ``20 x hand`` and nothing else (module docstring, verified at source), so
-    against my Mega Lucario ex's 340 HP the ACCUMULATING clock (ADR-0071 decision 4) is exactly
-    ``ceil(340 / (20 x hand))``, answering ``max_t + 1 = 9`` beyond the 8-turn horizon.
-
-    Without the context that scaler contributes 0, Powerful Hand's PRINTED damage is 0, and every
-    hand size answers 9 — the flat axis this issue exists to remove. The ladder is asserted
-    value-by-value rather than as a trend because the trend alone would also pass on a term that
-    moved for some other reason."""
+    """Powerful Hand deals ``20 x hand`` and nothing else, so the ACCUMULATING clock (ADR-0071
+    decision 4) is ``ceil(340 / (20 x hand))``. Blind, every hand size answers the same 9."""
     ladder = {1: 9, 2: 9, 3: 6, 4: 5, 5: 4, 6: 3, 9: 2, 17: 1}
     for hand, turns in ladder.items():
         exposed = sv._exposed_bodies(_alakazam_board(hand))
@@ -2464,13 +1623,8 @@ def test_survivals_clock_shortens_as_THEIR_hand_grows():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_survival_clock_reads_THEIR_hand_and_never_MINE():
-    """The direction regression the issue asks for, stated as a pair of boards that a single shared
-    context would price EXACTLY BACKWARDS rather than merely differently.
-
-    Both boards hold the same twelve-and-two hands; they differ only in who holds which. With
-    ``attacker="theirs"`` the clock follows THEIR hand (12 cards => 240/turn => turn 2; 2 cards =>
-    40/turn => the body survives the horizon). With ``attacker="mine"`` the two answers swap. There
-    is no assignment of one dict to both directions that passes this."""
+    """Both boards hold the same twelve-and-two hands and differ only in who holds which, so a single
+    shared context prices them EXACTLY BACKWARDS rather than merely differently."""
     theirs_big = _alakazam_board(12, my_hand=[E_F, E_F])
     mine_big = _alakazam_board(2, my_hand=[E_F] * 12)
 
@@ -2480,24 +1634,16 @@ def test_the_survival_clock_reads_THEIR_hand_and_never_MINE():
 
     assert sv._exposed_bodies(theirs_big)[0].turns_to_ko_me == 2
     assert sv._exposed_bodies(mine_big)[0].turns_to_ko_me == 9
-    # Mega Lucario ex yields 3 prizes (`docs/rules.md` §6), and one body ranks first, so `survival`
-    # is `-(3 x halve(t - 1))` on both boards.
+    # Mega Lucario ex yields 3 prizes and one body ranks first, so `survival` is -(3 x halve(t - 1)).
     assert _survival_of_model(theirs_big) == pytest.approx(-3.0 * 0.5)
     assert _survival_of_model(mine_big) == pytest.approx(-3.0 / 256)
     assert _survival_of_model(theirs_big) < _survival_of_model(mine_big)
 
 
-# `tests/strategy/test_predicted_loss_rung.py` is DELETED (POC-T4/5, Issue #386): it tested
-# `planner._predicted_loss`, and this term is the port of that rung. All five of its cases live
-# in the pair below plus `test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom`.
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
-    """`_predicted_loss` is the second call site and the more consequential one: it is a TERMINAL
-    term at `-LOSS_PRIZES`, so damage it cannot see is a game loss it cannot see.
-
-    Munkidori's 70 HP sits between a three-card hand (60) and a four-card hand (80), so one card
-    decides the rung. The third board is the direction control: twelve cards in MY hand is
-    ``def_hand`` here and must move nothing at all."""
+    """`_predicted_loss` is TERMINAL at `-LOSS_PRIZES`, so damage it cannot see is a game loss it
+    cannot see. Munkidori's 70 HP sits between a three-card hand (60) and a four-card one (80)."""
     safe = _alakazam_board(3, my_active=_poke(MUNKIDORI, hp=70, serial=3))
     doomed = _alakazam_board(4, my_active=_poke(MUNKIDORI, hp=70, serial=3))
     my_hand_big = _alakazam_board(3, my_active=_poke(MUNKIDORI, hp=70, serial=3),
@@ -2513,21 +1659,8 @@ def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_bench_empty_doom_stands_down_on_a_phantom_and_on_an_empty_board():
-    """The two FAIL-DIRECTION cases, re-homed here at POC-T4/5 (Issue #386) from
-    `tests/strategy/test_predicted_loss_rung.py`, which tested `planner._predicted_loss` — the rung
-    this term is a port of, deleted with the ladder. The other three cases that file carried (fires
-    when doomed, stands down when a bench body can soak, stands down when the Active survives) were
-    already asserted above and in `test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom`;
-    these two were not, and a terminal `-LOSS_PRIZES` term firing where it should not is the worst
-    error this scalar can make, so they come across rather than being dropped as duplicates.
-
-    * **No Active at all.** A board with nothing in the Active slot is a board mid-promotion, not a
-      predicted loss — the rung makes no claim and the whole scalar is a clean zero.
-    * **A PHANTOM evolution is not doom.** Their Active is a bare pre-evolution carrying no Energy.
-      It could become a next-turn game-ender, but only via an evolution in their hand PLUS a
-      from-scratch attach. The ordinary survival term may still read pessimistically; the terminal
-      catastrophe term must NOT, or a lone Active reads as a turn-2 game loss off a card nobody has
-      seen."""
+    """The two FAIL-DIRECTION cases: no Active at all is mid-promotion rather than a loss, and a bare
+    zero-Energy pre-evolution is not doom, or a lone Active reads as a turn-2 loss off unseen cards."""
     empty = _model(_player(active=None, bench=[], prize=4),
                    _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4))
     assert sv._predicted_loss(empty) is False
@@ -2542,9 +1675,8 @@ def test_the_bench_empty_doom_stands_down_on_a_phantom_and_on_an_empty_board():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_more_cards_in_THEIR_hand_never_improves_survival():
-    """The monotonicity class Issue #262 requires, on this issue's axis. Hands 1..12 keep the sweep
-    clear of the bench-empty doom (340 HP needs a 17-card hand), so this is the POSITIONAL term
-    alone."""
+    """Hands 1..12 keep the sweep clear of the bench-empty doom (340 HP needs a 17-card hand), so this
+    is the POSITIONAL term alone."""
     values = [_survival_of_model(_alakazam_board(n)) for n in range(1, 13)]
     assert all(after <= before for before, after in zip(values, values[1:])), values
     assert values[-1] < values[0], "the axis is flat — the context is not reaching the clock"
@@ -2552,31 +1684,8 @@ def test_more_cards_in_THEIR_hand_never_improves_survival():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit():
-    """The regression guard for Issue #329, and the ex-strict-xfail TARGET it discharges.
-
-    `threat`'s inputs are `needs.opponent_target_value`, which at the fail-closed
-    ``survival_shift=0`` this module passes returns the target's PRIZE value plus Issue #285's small
-    forward credit — so a single target sits between 1.0 and ~3.09 (`docs/rules.md` §6, verified at
-    source: regular / ex / Mega ex). Against a 0.1-prize cap with **no weight in front of it**,
-    `min(cap, sum)` bound on every non-empty input and the family answered one bit — *is anything of
-    theirs reachable at all* — so a 1-prize Basic priced the same as a 3-prize Mega ex.
-
-    Measured on one full leaf-lab pass over the 371-frame corpus, 2061 `threat()` calls: **614
-    non-empty inputs spanning 33 distinct sums collapsed to exactly 2 distinct outputs** (0.0 x1447,
-    0.1 x614), with the cap binding on 614/614. That is the defect, and this test is the assertion
-    that could not hold while it stood.
-
-    The fix is :data:`sv._THREAT_W` = ``_THREAT_CAP / needs.TARGET_VALUE_CEILING`` — both terms
-    already-shipped constants, so it is DERIVED rather than authored and adds no scaffold debt. It
-    goes in FRONT of the cap, never into it: :data:`sv.POSITIONAL_MAX` sums the four positional caps
-    and :data:`sv.LOSS_PRIZES` is derived from that sum, so moving `_THREAT_CAP` itself would
-    silently move the predicted-loss dominance constant.
-    `test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved` is that guard.
-
-    The assertion is STRICT monotonicity, which is exactly what the saturated form cannot satisfy,
-    plus the band property any fix must preserve. The 3-prize case is asserted against the anchor's
-    own value rather than against the cap: under `/3.9` a maximum-value SINGLE target reads
-    0.076923, not the band — the cap is reached only by a multi-target SUM."""
+    """Issue #329: against a 0.1 cap with no weight in front of it, `min(cap, sum)` bound on every
+    non-empty input and the family answered one bit. `_THREAT_W` goes in FRONT of the cap."""
     assert sv.threat([1.0]) < sv.threat([2.0]) < sv.threat([3.0])
     assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_W * sv._MAX_PRIZE_VALUE)
     assert sv.threat([sv._MAX_PRIZE_VALUE]) < sv._THREAT_CAP, (
@@ -2587,19 +1696,8 @@ def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_threat_anchor_is_DERIVED_from_the_two_shipped_constants():
-    """`_THREAT_W` is a quotient of numbers this module and `needs` already verify at source, not a
-    seed. Asserted against the operands rather than against `0.025641…`, because a literal would
-    agree with a hand-typed constant as readily as with the derivation.
-
-    `TARGET_VALUE_CEILING` is the divisor because it is the true ceiling of `opponent_target_value`
-    *as a function* — `MAX_PRIZE_VALUE` 3 plus `_SURVIVAL_CAP` 0.9 — and because ADR-0107 already
-    chose it for `gust_target`, the sibling member of the opponent-target family. Measured both ways
-    over 614 non-empty corpus inputs: `/3.9` yields 28 distinct outputs with the guard biting on
-    45 (7.3%), `/3.0` yields 26 with the guard biting on 180 (29.3%).
-
-    The third assertion is what keeps this from testing a definition: without it, deleting
-    `_THREAT_W` from `threat()`'s body — leaving the constant defined and unused — would still pass.
-    """
+    """`_THREAT_W` is a quotient of constants both modules already verify at source, asserted against
+    the operands. The third assertion is what stops a defined-but-unused anchor from passing."""
     assert sv._THREAT_W == sv._THREAT_CAP / _needs.TARGET_VALUE_CEILING
     assert _needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
     assert sv.threat([1.0]) == pytest.approx(sv._THREAT_W), (
@@ -2609,12 +1707,8 @@ def test_the_threat_anchor_is_DERIVED_from_the_two_shipped_constants():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved():
-    """The guard that proves Issue #329 scaled the INPUT rather than shrinking the guard.
-
-    `POSITIONAL_MAX` sums the four positional runaway guards, and `LOSS_PRIZES` — the predicted-loss
-    dominance constant — is derived from it. Had the anchor been folded into `_THREAT_CAP` (say
-    `0.1/3.9`), both would have moved silently and `ko-score-band`'s two-band argument would have
-    shifted with them. Pinned as the literals so the failure is legible rather than tautological."""
+    """`LOSS_PRIZES` is derived from `POSITIONAL_MAX`, so folding the anchor INTO `_THREAT_CAP` would
+    have moved the terminal band silently. Pinned as literals so the failure is legible."""
     assert sv._THREAT_CAP == 0.1
     assert sv.POSITIONAL_MAX == 3.4
     assert sv.LOSS_PRIZES == 28.9
@@ -2622,16 +1716,8 @@ def test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_runaway_guard_still_guards_a_multi_target_SUM():
-    """The cap is not decoration after the anchor — it binds on 45 of 614 non-empty corpus inputs
-    (7.3%), and the reason is structural: `threat` sums over up to six targets while
-    `TARGET_VALUE_CEILING` is ONE target's ceiling. Reaching a 3-prize Mega ex *and* a 2-prize body
-    sums to 5.0, which is 1.28x the divisor — five prizes of simultaneously-reachable exposure, which
-    is exactly the extreme board a runaway guard exists for.
-
-    The threshold is stated honestly: the edge is at a sum of `TARGET_VALUE_CEILING`, not at `2 x
-    _MAX_PRIZE_VALUE`. `[3.0, 3.0]` would clamp too, but it would not say where the edge is — so the
-    edge is asserted from BOTH sides, which is also what stops this test being arithmetic on
-    literals that never reaches the implementation."""
+    """`threat` sums over up to six targets while `TARGET_VALUE_CEILING` is ONE target's ceiling — the
+    cap BINDS on 7.3% of non-empty corpus inputs, so it is load-bearing, not decoration."""
     ceiling = _needs.TARGET_VALUE_CEILING
     assert sv.threat([ceiling]) == pytest.approx(sv._THREAT_CAP), "at the edge, the guard binds"
     assert sv.threat([ceiling - 0.1]) < sv._THREAT_CAP, "…and just below it, it does not"
@@ -2643,16 +1729,8 @@ def test_the_runaway_guard_still_guards_a_multi_target_SUM():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_no_legal_input_drives_the_family_outside_its_BAND():
-    """The band property, swept rather than sampled at two points.
-
-    Every legal input is between 1 and `_MAX_BODIES` targets, each a `opponent_target_value` in
-    `[1.0, TARGET_VALUE_CEILING]` — `prize_value` is 1, 2 or 3 (`docs/rules.md` §6) plus a forward
-    credit the corpus caps at 0.0855, and `_MAX_BODIES` is 6 because the Bench holds 5
-    (`docs/rulebook.txt` L75). Sweeping that whole space, the family must stay inside
-    `[0, _THREAT_CAP]` — the guarantee `POSITIONAL_MAX` and the module's two-band argument rest on.
-
-    Monotone in every argument too, which the point assertions elsewhere cannot show: adding a target
-    or raising one never lowers the answer."""
+    """Swept rather than sampled: 1..`_MAX_BODIES` targets, each in ``[1.0, TARGET_VALUE_CEILING]``,
+    must stay inside ``[0, _THREAT_CAP]`` and be monotone in every argument."""
     ladder = [1.0, 2.0, 3.0, _needs.TARGET_VALUE_CEILING]
     assert sv.threat(()) == 0.0
     for v in ladder:
@@ -2666,31 +1744,14 @@ def test_no_legal_input_drives_the_family_outside_its_BAND():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_threat_grades_the_COUNT_of_reachable_targets_not_merely_their_existence():
-    """The property Issue #284's widening created and this anchor makes readable. While the cap bound
-    on every non-empty input a second reachable body added exactly 0, so a chipped bench under a
-    reachable Active scored identically to a fresh one. Measured on the corpus: 74 of 614 non-empty
-    calls carry 2 or 3 targets, and all 74 were flattened."""
+    """While the cap bound on every non-empty input a second reachable body added exactly 0, so a
+    chipped bench under a reachable Active scored identically to a fresh one."""
     assert sv.threat([1.0]) < sv.threat([1.0, 1.0]) < sv.threat([1.0, 1.0, 1.0])
     assert sv.threat([1.0, 1.0, 1.0]) < sv._THREAT_CAP, "three 1-prize bodies is not an extreme board"
 
 
 # ── a live Trainer damage-BOOST reaches the scalar, gates and all (Issue #282) ────────────────────
-#
-# The class this guards is the epic's headline: *an unpriced effect is worse than a no-op*. `_PLAY`
-# is modelled as "the card leaves hand" (`apply_option.KIND_COVERAGE`), so a boost card whose effect
-# no term reads prices at MINUS the hand value of the card spent — playing Premium Power Pro would
-# score as a mistake. The path that stops that is `_SideBase.damage_boosts` -> `SideFacts` ->
-# `damage_context`'s `atk_boosts` -> `strategy/damage.py` -> Issue #281's
-# `best_reachable_damage_vs` -> `threat`, and every link of it shipped with Issue #279 and
-# Issue #281 rather than with this one.
-#
-# What did NOT ship is any assertion that the whole path holds END TO END, at the scalar. Each link
-# is covered in isolation — `test_damage_context.py` tests the context key,
-# `test_tool_holder_facts.py` tests the parsed triples against the real pool,
-# `test_damage_oracle.py` tests the oracle's gates — and a chain of separately-green links is
-# exactly the shape that breaks silently in the middle. So these assert on `state_value` itself, and
-# each one is built so that the GATE is the only thing standing between the fixture and a crossing:
-# a broken gate is a failure here, not a plausible number.
+# Each link ships covered in isolation, and a chain of separately-green links breaks in the middle.
 
 
 def _boosts_of(model) -> tuple:
@@ -2698,9 +1759,8 @@ def _boosts_of(model) -> tuple:
 
 
 def _vs_dragapult_at(hp, *, boosts=None, hand=()):
-    """MY funded Mega Lucario ex against a Dragapult ex chipped to ``hp`` — the one board every case
-    below perturbs. `{F}{F}` attached with the turn's attach already spent, so Mega Brave's 270 is
-    reachable and nothing the Attach Budget could add moves it."""
+    """MY funded Mega Lucario ex against a Dragapult ex chipped to ``hp``, the attach already spent so
+    Mega Brave's 270 is reachable and nothing the Attach Budget could add moves it."""
     return _lucario_board(my_energies=[E_F, E_F], energy_attached=True, hand=list(hand),
                           their_active=_poke(DRAGAPULT, hp=hp, serial=9), boosts=boosts)
 
@@ -2708,15 +1768,7 @@ def _vs_dragapult_at(hp, *, boosts=None, hand=()):
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
     """Premium Power Pro's +30 turns Mega Brave's 270 into the 300 that reaches a 300 HP Dragapult ex.
-
-    The card leaving my hand is the only thing `_PLAY` structurally models, so without this the play
-    is priced at a hand loss and nothing else. With it the boost enters through exactly ONE family —
-    `threat`, whose reachability gate is Issue #281's `best_reachable_damage_vs` — which is asserted
-    here as well as the total, because a fact that moved two families would be double-counted.
-
-    Mega Lucario ex is {F} (`data/EN_Card_Data.csv`), so Power Pro's attacker-type gate is met;
-    Dragapult ex carries no Weakness to {F} in this fixture, so 270 and 300 are the raw numbers with
-    no W/R leg to disentangle."""
+    Asserted per-family too, because a fact that moved two families would be double-counted."""
     plain = _vs_dragapult_at(300)
     boosted = _vs_dragapult_at(300, boosts=[POWER_PRO])
 
@@ -2735,35 +1787,8 @@ def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss():
-    """**The issue's headline sentence, as an arithmetic claim about the whole transition.**
-
-    The cases around this one hold the hand fixed and vary only the live boost, which shows the
-    boost is READ but not what playing the card comes out at. This one models the actual `_PLAY`:
-    before, Premium Power Pro is in hand and no boost is live; after, the card is gone and the boost
-    is live. That is exactly what `apply_option` will difference, and it is the only arrangement in
-    which the epic's failure mode can appear at all —
-    *"a card whose effect no term reads prices at MINUS the hand value of the card spent"*.
-
-    The hand leg has to be real for the claim to mean anything, so a `needs.Resolution` supplies the
-    held card's latent Worth at `card_worth.TAG_TIER["gust"]` — the shipped tier for a situational
-    Trainer, cited rather than invented (its own comment: *"reach (Boss's Orders) — the ladder's −10
-    keep floor"*, the band this ladder gives a held utility Trainer). At `POC_WORTH_PRIZE_RATE` that
-    is 1/12 of a prize (0.083333) the play gives up.
-
-    ⚠️ **This test asserted `total_after > total_before` until Issue #329, and that margin was a
-    windfall.** The old `threat` had no scale anchor, so ANY reachable target priced at the full
-    `_THREAT_CAP` 0.1 and the transition read +0.016667 — 0.1 against the 0.083333 hold. With the
-    anchor a 2-prize Dragapult ex prices `_THREAT_W x 2 = 0.051282` and the POSITIONAL half of the
-    transition is −0.032051. That is not a regression, it is the double-count `_THREAT_CAP` exists
-    to prevent: `threat` prices the exposure STANDING on the board and the prize for CONVERTING it
-    is `attack_ev`'s, under `score = state_value(end board) + EV(terminal action)`. A boost played
-    and never cashed genuinely is a spent card for a position; the old form paid the conversion
-    prize twice and called the difference a gain.
-
-    So the claim is now made where it actually lives, in three parts: the positional half is priced
-    as the BOOST (exactly `threat` gained minus `hand` lost, to the float), the boost recovers most
-    of the card's cost rather than none of it, and on the full sequence score — the surface the
-    planner ranks — playing and cashing it is a large gain."""
+    """The `_PLAY` transition itself: before, the card is in hand and no boost is live; after, it is
+    gone and the boost is live. `threat` prices the exposure STANDING, `attack_ev` the conversion."""
     from common import needs
 
     def _held(worth):
@@ -2788,10 +1813,8 @@ def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss(
         "Dragapult ex is a 2-prize body (`docs/rules.md` §6), priced at the anchor and not at the "
         "band — asserting the operand is what makes the arithmetic above a claim about the anchor")
 
-    # The boost is READ: it recovers 0.051282 of the 0.083333 the card cost, where an unpriced
-    # effect recovers exactly nothing. `unpriced` is the SAME post-play board scored as though no
-    # term read the boost — which is what the epic's failure mode actually is — so the two identities
-    # below are the epic's sentence, and they hold at any scale of the anchor.
+    # `unpriced` is the SAME post-play board scored as though no term read the boost, which is what
+    # the failure mode actually is — so the two identities below hold at any scale of the anchor.
     unpriced = sv.state_value(_vs_dragapult_at(300))     # boost gone from BOTH hand and board
     assert total_after - unpriced == pytest.approx(a["threat"]), (
         "priced, the played boost is worth exactly the exposure it creates")
@@ -2799,11 +1822,8 @@ def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss(
         "…and unpriced it is worth nothing, so the play would score at MINUS the whole hand value "
         "of the card spent — the epic's failure mode, stated as the counterfactual")
 
-    # …and on the sequence score the planner actually ranks, the play is a gain outright. The boost
-    # is what makes Mega Brave's 270 into the 300 that Knocks Out the fixture's Dragapult ex — whose
-    # PRINTED HP is 320 (`data/EN_Card_Data.csv` id 121); `_vs_dragapult_at(300)` chips it to 300
-    # remaining, which is the number the breakpoint is against. So the terminal leg the boost unlocks
-    # dwarfs the positional half either equation produces.
+    # …and on the sequence score the planner ranks, the play is a gain outright: the terminal leg the
+    # boost unlocks dwarfs the positional half either equation produces.
     ko = sv.attack_ev(damage=300.0, target_hp=300.0, target_prizes=2.0)
     no_ko = sv.attack_ev(damage=270.0, target_hp=300.0, target_prizes=2.0)
     assert ko.knockout == pytest.approx(2.0) and no_ko.knockout == 0.0
@@ -2812,12 +1832,8 @@ def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss(
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_a_live_boost_that_crosses_nothing_leaves_the_scalar_untouched():
-    """The other half of the same claim, and the one that keeps `threat` a GATE rather than a slope.
-
-    Against a 260 HP Dragapult ex, Mega Brave's 270 already reaches, so the boost buys nothing that
-    this family prices — the extra damage above lethal is overkill, and converting the exposure is
-    `attack_ev`'s job at the terminal action. The scalar must therefore be BIT-identical, not merely
-    close: a boost that nudged the board value would be pricing overkill as position."""
+    """The half that keeps `threat` a GATE rather than a slope: 270 already reaches a 260 HP body, so
+    the extra is overkill. BIT-identical, or the scalar would be pricing overkill as position."""
     plain = _vs_dragapult_at(260)
     boosted = _vs_dragapult_at(260, boosts=[POWER_PRO])
     assert _reach(boosted)[1] == _reach(plain)[1] + 30, "the boost IS reaching the damage read"
@@ -2826,13 +1842,8 @@ def test_a_live_boost_that_crosses_nothing_leaves_the_scalar_untouched():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_the_attacker_TYPE_gate_refuses_a_boost_the_attacker_does_not_qualify_for():
-    """*"attacks used by your {F} Pokémon"* — Premium Power Pro pays a {F} attacker and nobody else.
-
-    The fixture is one gate away from a crossing on purpose: Mega Starmie ex reaches Jetting Blow's
-    120 against Larry's Braviary's 130 HP, and 120 + 30 = 150 would cross. The control is the SAME
-    amount on the SAME board with the gate re-pointed at the attacker's own {W} — a probe,
-    not a card, and labelled as one — so the only difference between passing and failing is the gate
-    itself rather than two different boards being compared."""
+    """Premium Power Pro pays a {F} attacker and nobody else. The control is the SAME amount on the
+    SAME board with the gate re-pointed at {W} — a probe, not a card — so only the gate differs."""
     unqualified = _starmie_board(_poke(BRAVIARY, hp=130, serial=9), boosts=[POWER_PRO])
     assert _boosts_of(unqualified) == (POWER_PRO,), "the boost IS in the context — it is the gate "\
                                                     "that must refuse it, not a missing supplier"
@@ -2846,19 +1857,8 @@ def test_the_attacker_TYPE_gate_refuses_a_boost_the_attacker_does_not_qualify_fo
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neither():
-    """*"do 40 more damage to your opponent's Active Pokémon {ex}"* — Black Belt's Training, and the
-    rulebook-337 case the `{ex}` scope exists to get right.
-
-    `docs/rulebook.txt` L337: *"Mega Evolution Pokémon ex are considered to be Pokémon ex, so any
-    card effects that affect Pokémon ex also affect Mega Evolution Pokémon ex."* Mega Starmie ex
-    carries `megaEx` and not `ex`, so a gate written as `stat.ex` would read it as an ordinary
-    Pokémon and silently drop 40 damage against the single biggest target in the format — which is
-    asserted below rather than assumed, because that is the whole content of the case.
-
-    The non-ex control is the same attacker, the same boost, and a defender the boost WOULD have
-    crossed: Aura Jab's 130 against Larry's Braviary is 100 after its flat −30 {F} Resistance
-    (`docs/rules.md` §5), and 130 + 40 − 30 = 140 reaches its 130 HP. It stays at 100 because
-    Braviary is not an {ex}."""
+    """`docs/rulebook.txt` L337: a Mega Evolution Pokémon ex IS a Pokémon ex, so a gate written as
+    `stat.ex` would silently drop 40 damage against the biggest target in the format."""
     from common.scouting.provider import CardStat as _CardStat
     starmie = _STATS[MEGA_STARMIE]
     assert (starmie.megaEx, starmie.ex) == (True, False), "the fixture must BE the rulebook-337 case"
@@ -2882,31 +1882,17 @@ def test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neit
 
 
 # ── an ATTACHED boost Tool, and the HOLDER gate that decides it (Issue #345) ──────────────────────
-#
-# Every case above supplies the boost through the turn tracker, which is how a Trainer PLAY reaches a
-# snapshot. A Tool's boost takes the other route — it is board state, read off the holder — and it
-# carries a condition the tracker's boosts never do: `applies_to_holder`. Brave Bangle (1175) is the
-# card that makes that route load-bearing, because `slowking` runs it alongside five Rule-Box bodies
-# it must NOT reach.
-#
-# Card text verified at `data/EN_Card_Data.csv`, Card ID 1175, WHT 80, Pokémon Tool: *"If the Pokémon
-# this card is attached to doesn't have a Rule Box, the attacks it uses do 30 more damage to your
-# opponent's Active Pokémon {ex} (before applying Weakness and Resistance). (Pokémon {ex}, Pokémon
-# {V}, etc. have Rule Boxes.)"* — TWO gates on one +30: a HOLDER gate (no Rule Box) and the same
-# defender-{ex} gate Black Belt's Training carries. Slowking (163, `slowking`'s own attacker, Stage 1
-# from Slowpoke, HP 120, {P}) has no Rule Box, and its Super Psy Bolt `{P}{P}●` prints 120.
+# Brave Bangle carries TWO gates on one +30: a HOLDER gate (no Rule Box) and the defender-{ex} gate.
 
 
-#: The two holders these cases straddle, each with the Energy that funds its own real attack —
-#: Slowking has no Rule Box (Super Psy Bolt `{P}{P}●`), Mega Lucario ex has one (Aura Jab `{F}`).
-#: Carried as data rather than branched on inside the board builder, so the only thing that differs
-#: between the two arms is the holder itself.
+#: The two holders these cases straddle, each with the Energy that funds its own attack — Slowking has
+#: no Rule Box, Mega Lucario ex has one. Data rather than a branch, so only the holder differs.
 _HOLDERS = {SLOWKING: (120, [E_P, E_P, E_P]), MEGA_LUC: (340, [E_F])}
 
 
 def _slowking_board(their_active, *, bangle=True, holder=SLOWKING):
-    """MY ``holder`` Active carrying Brave Bangle (or not) against ``their_active``, with the turn's
-    attach already spent so reachability is exactly what is on the board."""
+    """MY ``holder`` Active carrying Brave Bangle (or not), with the turn's attach already spent so
+    reachability is exactly what is on the board."""
     hp, energies = _HOLDERS[holder]
     return _model(
         _player(active=_poke(holder, hp=hp, energies=energies,
@@ -2917,14 +1903,8 @@ def _slowking_board(their_active, *, bangle=True, holder=SLOWKING):
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_an_attached_boost_tool_crosses_the_breakpoint_its_holder_qualifies_for():
-    """The end-to-end claim: a Tool's +30 reaches `threat` by the same path a played Trainer's does.
-
-    120 is 30 short of a Mega Starmie ex chipped to 150 remaining HP (its printed HP is 330) and the
-    Bangle is exactly 30 — so the Knock Out is there or it is not, with nothing in between for a
-    partly-wired path to land on. The `{ex}` half of the gate is satisfied by `megaEx`
-    (`docs/rulebook.txt` L337), which is the same reading
-    `test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neither` pins for the
-    tracker-supplied boost — the two suppliers must not disagree about one card's scope."""
+    """A Tool's +30 reaches `threat` by the same path a played Trainer's does, and the two suppliers
+    must not disagree about one card's {ex} scope. 120 is exactly 30 short of 150 remaining HP."""
     defender = _poke(MEGA_STARMIE, hp=150, serial=9)
     bare = _slowking_board(defender)
     bare_no_tool = _slowking_board(defender, bangle=False)
@@ -2937,36 +1917,23 @@ def test_an_attached_boost_tool_crosses_the_breakpoint_its_holder_qualifies_for(
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_the_HOLDER_gate_refuses_the_same_tool_on_a_body_that_has_a_Rule_Box():
-    """The gate this issue exists for, as a ONE-FACT control: same Tool, same defender, same board —
-    only whether the Bangle is attached changes — run on a holder that HAS a Rule Box.
-
-    Mega Lucario ex is `megaEx`, so the card's condition is not met and the +30 must not appear. An
-    ungated read would put a phantom 30 on precisely the deck's biggest attackers, which is a
-    strictly worse error than the silent zero this issue replaced: it manufactures lethals rather
-    than missing them — and this board is exactly that case, which is why it is the one chosen. With
-    one `{F}` attached only Aura Jab is affordable, so the reach is 130 against 150 remaining HP: no
-    Knock Out. Drop the holder gate and the Bangle lifts it to 160, claiming one that is not there."""
+    """Mega Lucario ex is `megaEx`, so the card's condition is not met. An ungated read manufactures
+    lethals rather than missing them, which is strictly worse than the zero this issue replaced."""
     defender = _poke(MEGA_STARMIE, hp=150, serial=9)
     ruled_out = _slowking_board(defender, holder=MEGA_LUC)
     without = _slowking_board(defender, holder=MEGA_LUC, bangle=False)
     assert _boosts_of(ruled_out) == (), "a Rule-Box holder gets nothing from this Tool"
     assert _reach(ruled_out) == _reach(without), "attaching it must move no number at all"
     assert sv.state_value(ruled_out) == sv.state_value(without)
-    # …and the docstring's arithmetic, asserted rather than described: the board really is one the
-    # gate decides. 130 falls short of 150, and the ungated 160 would not — so a build that dropped
-    # the gate fails the reach assertion above, it does not merely score differently.
+    # The board really is one the gate decides: 130 falls short of 150 and the ungated 160 would not.
     assert _reach(ruled_out)[1] == 130 < 150 < 130 + 30
     assert _threat_of(ruled_out) == 0.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_the_attached_tools_defender_gate_is_read_too_so_both_conditions_must_hold():
-    """The second gate on the same +30. Against Larry's Braviary — not an `{ex}` — the boost is in
-    the context and still contributes nothing, so a build that honoured the holder gate while
-    dropping the defender gate fails here rather than passing on the first case alone.
-
-    Braviary's Resistance is {F} (`docs/rules.md` §5, a flat −30) and this attacker is {P}, so no
-    Weakness/Resistance leg is in play to confuse the reading: 120 is 120."""
+    """The second gate on the same +30: against a non-{ex} defender the boost is in the context and
+    still contributes nothing. This attacker is {P}, so no Weakness leg confuses the reading."""
     plain = _slowking_board(_poke(BRAVIARY, hp=130, serial=9))
     assert _boosts_of(plain) == ((30, None, True),), "the boost IS present — the gate is what refuses"
     assert _reach(plain)[1] == 120, "the {ex} gate refuses the 30 against a non-{ex} defender"
@@ -2975,17 +1942,8 @@ def test_the_attached_tools_defender_gate_is_read_too_so_both_conditions_must_ho
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
-    """The regression half: an EMPTY tracker must be indistinguishable from no tracker at all, so a
-    board with no live boost is scored by the same arithmetic it always was.
-
-    This is the in-tree half of the claim; the cross-COMMIT half — that Issue #281's shipped numbers
-    did not move — is the byte-identical gate A/B recorded in
-    `docs/archive/plans/issue-sequence-281-wave3-packet.md`, because no assertion inside one commit can
-    reach a value from another.
-
-    Bit-identical rather than approximate, and over the whole per-family breakdown rather than the
-    total, because the failure being guarded is a term that quietly gained a boost-shaped leg — which
-    a total could hide by cancellation."""
+    """An EMPTY tracker must be indistinguishable from no tracker at all. Bit-identical over the whole
+    per-family breakdown, because a term that gained a boost-shaped leg could hide in the total."""
     no_tracker = _vs_dragapult_at(320)
     empty_tracker = _vs_dragapult_at(320, boosts=[])
     assert _boosts_of(no_tracker) == () == _boosts_of(empty_tracker)
@@ -2997,35 +1955,15 @@ def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
 
 
 # ── standing chip on THEIR bench is an asset (Issue #284) ─────────────────────────────────────────
-#
-# `_reachable_target_values` used to return AT MOST ONE element — their Active — so damage already
-# standing on their Bench was invisible between turns. `dragapult_ex`'s win plan is exactly that
-# asset: *"Phantom Dive pre-loads benched mons with softening chip you cash into prizes on LATER
-# turns"*, and the board carrying six counters scored identically to a fresh one.
-#
-# The bench leg is a DIFFERENT damage route from the Active leg and not a wider version of it. An
-# attack's printed damage lands on the Active; a benched body is reachable only through the attack's
-# snipe RIDER, which ignores Weakness and Resistance by rule (ADR-0022, and `damage.py`'s own module
-# note), so it never routes through `predicted_damage` — `combat.py`'s oracle says so outright:
-# *"Jetting Blow is zeroed (its bench rider is a separate path)"*.
-#
-# Card facts verified at `data/EN_Card_Data.csv`:
-#   * Mega Starmie ex (1031) Jetting Blow ``{W}`` 120 — *"This attack also does 50 damage to 1 of
-#     your opponent's Benched Pokémon."*  The fixture's only bench route.
-#   * Mega Lucario ex (678) Aura Jab / Mega Brave — no rider of any kind. The negative control.
-#   * Dragapult ex (121) is **Tera(Dragon)**: no attack damage while Benched (`docs/rules.md` §11).
+# A DIFFERENT damage route: a snipe RIDER ignores W/R and never routes through `predicted_damage`.
 
 
 UNREADABLE_CARD = 909909          # deliberately absent from `_STATS` — the fail-closed case
 
 
 def _bench_board(their_bench, *, my_active=None, my_energies=(E_W,), their_active=None):
-    """MY Mega Starmie ex Active — the fixture's one bench rider — against THEIR chosen Bench.
-
-    Their Active defaults to a 320-HP Dragapult ex, which Jetting Blow's exact 120 cannot reach, so
-    the ACTIVE leg contributes nothing and every non-zero `threat` on these boards is the BENCH leg.
-    The turn's Energy is already spent (`energy_attached=True`), so the Attach Budget adds nothing
-    and reachability is a fact about the fixture rather than about the deck's colours."""
+    """MY Mega Starmie ex — the fixture's one bench rider. Their Active defaults to a 320-HP Dragapult
+    ex that Jetting Blow's exact 120 cannot reach, so every non-zero `threat` here is the BENCH leg."""
     return _model(
         _player(active=my_active or _poke(MEGA_STARMIE, hp=330, energies=list(my_energies)),
                 prize=4),
@@ -3036,13 +1974,8 @@ def _bench_board(their_bench, *, my_active=None, my_energies=(E_W,), their_activ
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_counters_standing_on_their_benched_body_are_worth_something_to_me():
-    """The headline. Two boards identical but for the counters on ONE benched body, and the chipped
-    one must score better for me.
-
-    Six counters is Phantom Dive's payload exactly (*"Put 6 damage counters on your opponent's
-    Benched Pokémon in any way you like"* — 60 damage, `data/EN_Card_Data.csv` row 121), and a
-    70-HP Munkidori carrying them sits at 10 HP, inside Jetting Blow's 50. Fresh, it is not: 50 does
-    not reach 70, so the family reads exactly 0 and the whole scalar cannot tell the boards apart."""
+    """Two boards identical but for the counters on ONE benched body. Six counters is Phantom Dive's
+    payload, and a 70-HP Munkidori carrying them sits at 10 HP, inside Jetting Blow's 50 rider."""
     fresh = _bench_board([_poke(MUNKIDORI, hp=70, serial=11)])
     chipped = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
 
@@ -3053,20 +1986,8 @@ def test_counters_standing_on_their_benched_body_are_worth_something_to_me():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_the_bench_leg_still_stops_short_of_a_prize():
-    """The cap, on the worst board the widened loop can be handed: every one of their six bodies
-    chipped to 10 HP and every one of them a 3-prize Mega Evolution Pokémon ex.
-
-    Six bodies is the maximum — *"Each player may have up to 5 Pokemon on the Bench at any one
-    time"* (`docs/rulebook.txt` L75) plus the Active — so this is the largest sum the family can be
-    asked for. It must stay under one prize: converting any of these takes an ATTACK, `attack_ev`
-    prices that at the terminal action, and `score = state_value(end) + EV(terminal)` adds the two.
-    Widening the loop is exactly the change that could have broken the two-band argument.
-
-    **The cap is asserted to BITE, not merely to hold.** ``threat`` is `min(_THREAT_CAP, sum)`, so
-    `threat <= _THREAT_CAP` is true of every board ever built and asserting it alone would be a
-    tautology — the test would pass against a bench leg that had been deleted. What has to be shown
-    is that the RAW sum this widening produces genuinely exceeds a prize, i.e. that the bound is what
-    stops it rather than the inputs being small. That is the `raw > 1.0` line."""
+    """The worst board the widened loop can be handed: six 3-prize bodies at 10 HP. The cap is asserted
+    to BITE — `threat <= _THREAT_CAP` alone is a tautology — which is the ``raw > 1.0`` line."""
     bench = [_poke(MEGA_STARMIE, hp=330, damage=320, serial=11 + i) for i in range(5)]
     board = _bench_board(bench, their_active=_poke(MEGA_STARMIE, hp=330, damage=320, serial=9))
 
@@ -3078,34 +1999,23 @@ def test_the_bench_leg_still_stops_short_of_a_prize():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_a_TERA_body_on_their_bench_contributes_nothing_however_damaged():
-    """Bench immunity, failing CLOSED. *"Tera Pokémon ex take NO attack damage while Benched"*
-    (`docs/rules.md` §11, `[RULE: Appendix 6]`), so a Dragapult ex one counter from death is not a
-    target at all — and the same card in the ACTIVE seat is, which is what makes this a fact about
-    the seat rather than about the card.
-
-    The control is a body at the SAME 10 HP that is not Tera. Without it, a bench leg that had
-    quietly stopped firing altogether would pass this test."""
+    """Bench immunity, failing CLOSED (`docs/rules.md` §11). The control is a body at the SAME 10 HP
+    that is not Tera, without which a bench leg that had stopped firing entirely would pass."""
     tera = _bench_board([_poke(DRAGAPULT, hp=320, damage=310, serial=11)])
     plain = _bench_board([_poke(MEGA_STARMIE, hp=330, damage=320, serial=11)])
 
     assert _threat_of(tera) == 0.0
     assert _threat_of(plain) > 0.0, "the control: a non-Tera body at the same 10 HP DOES price"
 
-    # …and the immunity is scoped to the BENCH. The same Tera body Active is reachable, through the
-    # Active leg's own damage read (Jetting Blow's exact 120 against 10 HP).
+    # …and the immunity is scoped to the BENCH: the same Tera body Active is reachable.
     active = _bench_board([], their_active=_poke(DRAGAPULT, hp=320, damage=310, serial=9))
     assert _threat_of(active) > 0.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_an_UNREADABLE_benched_body_contributes_nothing():
-    """The other half of failing closed, and the one the rules cannot help with. `CardStat` has **no
-    immunity field** beyond `tera` (`docs/rules.md` §11's own ⚠️, ADR-0020), so a body whose card
-    does not resolve could be an Antique Plume Fossil or a Misty's Magikarp — both carry
-    unconditional prevent-all-while-Benched. A body that makes no claim is not credited.
-
-    Note the direction: an unknown card's `hp` is still on the board and `prize_value` fails open at
-    1, so WITHOUT the guard this board would price as a reachable 1-prize Knock Out."""
+    """`CardStat` has no immunity field beyond `tera`, so a body whose card does not resolve is not
+    credited. Direction: `hp` is on the board and `prize_value` fails OPEN at 1."""
     unknown = _bench_board([_poke(UNREADABLE_CARD, hp=10, serial=11)])
     known = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
 
@@ -3115,12 +2025,8 @@ def test_an_UNREADABLE_benched_body_contributes_nothing():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_without_a_bench_RIDER_their_bench_prices_at_nothing_however_soft():
-    """The gate is a snipe ROUTE, not proximity to death. Mega Lucario ex prints no rider on either
-    attack, so a 10-HP body on their bench is untouchable by it this turn and the family must say
-    so — otherwise the widened loop would credit every deck with a bench route it does not have.
-
-    Both boards carry the identical bench; only my Active differs, and Mega Brave's 270 misses their
-    320-HP Active on both, so the Active leg is silent either way."""
+    """The gate is a snipe ROUTE, not proximity to death. Both boards carry the identical bench and
+    Mega Brave misses their 320-HP Active on both, so the Active leg is silent either way."""
     bench = [_poke(MUNKIDORI, hp=70, damage=60, serial=11)]
     riderless = _bench_board(bench, my_active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]))
     rider = _bench_board(bench)
@@ -3131,11 +2037,8 @@ def test_without_a_bench_RIDER_their_bench_prices_at_nothing_however_soft():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_the_bench_rider_never_leaks_into_the_ACTIVE_reachability_read():
-    """The two legs stay separate. Their Active at 170 HP is out of Jetting Blow's exact 120 and
-    would be inside 120 + the 50 rider — but the rider does not land on the Active, and the oracle
-    that prices the Active already zeroes it (`combat.predicted_damage`).
-
-    A widening that reached for one damage number per body, rather than one per SEAT, fails here."""
+    """A widening that reached for one damage number per BODY rather than per SEAT fails here: 170 HP
+    is outside Jetting Blow's exact 120 and inside 120 plus the 50 rider."""
     board = _bench_board([], their_active=_poke(DRAGAPULT, hp=320, damage=150, serial=9))
     assert board.theirs.active.hp_remaining == 170
     assert _threat_of(board) == 0.0
@@ -3147,14 +2050,8 @@ def test_the_bench_rider_never_leaks_into_the_ACTIVE_reachability_read():
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
 def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_after():
-    """`dragapult_ex`'s doctrine, as two boards a turn apart: *"Phantom Dive is the turn-ender, so
-    Munkidori / Boss's / Cruel Arrow resolve BEFORE it and convert **prior-turn** chip."*
-
-    The AFTER half was never the gap — once the gust puts the chipped body in the Active seat, the
-    Active leg reads its remaining HP and has done since Issue #281. The BEFORE half is this issue:
-    while the body is still benched, the chip is an asset the board carries between turns, and
-    nothing priced it. Both halves are asserted so the distinction is executable rather than
-    argued."""
+    """The AFTER half was never the gap — the Active leg reads a gusted body's remaining HP. The
+    BEFORE half is this issue: while it is still benched, the chip is an asset carried between turns."""
     pre_fresh = _bench_board([_poke(MUNKIDORI, hp=70, serial=11)])
     pre_chipped = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
     post_fresh = _bench_board([], their_active=_poke(MUNKIDORI, hp=70, serial=9))
@@ -3167,31 +2064,7 @@ def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_a
 
 
 # ── sniping a pre-evolution denies a forward payoff (Issue #285) ──────────────────────────────────
-#
-# `_reachable_target_values` priced a target by `prize_value` alone — what the body yields NOW — so
-# killing a Staryu scored exactly as much as killing any other 1-prize body, while the doctrine's
-# whole point is that it erases three. Seven of the eight matchup docs make this their primary or
-# secondary lever (*"snipe/gust a Staryu before it rush-evolves … to trade 1 prize for a denied 3"*).
-#
-# The credit was `development.evolve_marginal`'s own expression — `_READINESS_W x (owed_damage /
-# PRIZE_DAMAGE_RATE) x halve(hops)` — against `TheirSide.forward_payoff`.
-#
-# **ADR-0119 replaced the QUANTITY and kept every claim.** That expression priced forward
-# DAMAGE, which `CombatMath.incoming` already credits all-descendants — so it was inside `survival`'s
-# clock, and this module differences, so it was one quantity counted twice at a band 11x off the
-# live ranking's. The leg that survives prices the LINE's PRIZE
-# (`needs.line_prize_advance` over `TheirSide.forward_line_prize`), which is the half nothing priced
-# and the half the doctrine docs are actually describing: *"trade 1 prize for a denied 3"* is a
-# statement about prizes. Still no new constant — `halve` is ADR-0070 §6's, and the bound is
-# `MAX_PRIZE_VALUE`.
-#
-# **These assertions are made at `_reachable_target_values`, not at `threat`, and that is deliberate
-# rather than a convenience.** Every appended target carries `prize_advance >= 1.0` (`prize_value` is
-# 1, 2 or 3), so `min(_THREAT_CAP, sum)` with `_THREAT_CAP` 0.1 binds on every frame the loop touches
-# and the largest credit measured anywhere on the corpus — 0.054 prizes, Riolu (30) → Mega Lucario ex
-# (270) — is invisible in the capped family by construction.
-# `test_the_denial_credit_is_INVISIBLE_once_the_cap_binds` asserts exactly that, so the choice of seam
-# is itself a claim under test rather than an unexamined one.
+# ADR-0119 re-pointed the credit from forward DAMAGE (already inside `survival`) to the LINE's PRIZE.
 
 
 def _target_values(model) -> tuple:
@@ -3200,20 +2073,8 @@ def _target_values(model) -> tuple:
 
 
 def _credit_for(model, card_id: int) -> float:
-    """The denial credit for the body carrying ``card_id`` — how much MORE than its own prize its
-    LINE is worth, off the SHIPPED primitives.
-
-    **Re-pointed by ADR-0119.** It used to read `_denied_forward_payoff`, which priced the
-    forward DAMAGE a removal denies at the `_READINESS_W` band. That leg is deleted: `incoming()`'s
-    availability gate is all-descendants, so the damage was already inside `survival`'s clock and
-    this module DIFFERENCES, making it one quantity counted twice. The surviving denial leg is the
-    LINE's PRIZE, and every behavioural claim below is unchanged — a pre-evolution still outranks a
-    dead-end body, hops still discount, a best-form body still earns nothing.
-
-    Read rather than re-derived on purpose: a test that recomputed the formula would agree with a
-    broken implementation as readily as with a correct one. That the credit actually reaches
-    `prize_advance` is a separate claim, asserted against `_target_values` on boards with exactly
-    one reachable target."""
+    """The denial credit for the body carrying ``card_id`` — how much MORE than its own prize its LINE
+    is worth. Read off the SHIPPED primitives, since a re-derivation agrees with a broken build."""
     body = next(b for b in model.theirs.bodies if b.card_id == card_id)
     best, hops = model.theirs.forward_line_prize(card_id)
     own = float(body.prize_value)
@@ -3226,14 +2087,8 @@ def _their_hops(model, card_id: int) -> int:
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_a_pre_evolution_prices_above_an_identical_body_that_evolves_into_nothing():
-    """The headline. Two 1-prize bodies at the same 70 HP in the same seat, both inside Jetting
-    Blow's 120, differing only in what their line becomes.
-
-    Staryu (1030) evolves into Mega Starmie ex — ONE hop, and 1031 is the only card in the pool whose
-    `Previous stage` is ``Staryu`` (Misty's Starmie 361 evolves from Misty's *Staryu*, a different
-    line). Munkidori (112) is a Basic that evolves into nothing at all, so it is the control the
-    comparison needs: without it a credit that fired on *every* body would pass this test just as
-    happily."""
+    """Two 1-prize bodies at the same HP in the same seat, differing only in what their line becomes.
+    Munkidori evolves into nothing, so a credit that fired on EVERY body would fail here."""
     staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
     dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
 
@@ -3248,22 +2103,8 @@ def test_a_pre_evolution_prices_above_an_identical_body_that_evolves_into_nothin
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_a_two_hop_base_prices_below_a_one_hop_base_on_the_SAME_terminal_payoff():
-    """The hop discount, on a pair that terminates on the same card.
-
-    Both bodies' lines end at Dragapult ex — a 2-prize `ex` — but Dreepy is two hops from it and
-    Drakloak is one (`data/EN_Card_Data.csv`: 120's `Previous stage` is ``Dreepy``, 121's is
-    ``Drakloak``). Both are 1-prize Basics, so both are owed the SAME prize gap of 1, and the only
-    thing separating them is `halve(hops)`.
-
-    **This test got weaker when ADR-0119 changed the quantity, and that is stated rather than
-    papered over.** Against owed DAMAGE the pair genuinely inverted — Dreepy's own printed damage is
-    lower (40 vs 70), so it was owed MORE (160 vs 130) and would have priced ABOVE Drakloak
-    undiscounted, which made the ordering itself proof the discount was applied to the right
-    quantity. Prize gaps do not invert that way: this set has no two-hop line to a 3-prize Mega ex
-    (Riolu → Mega Lucario ex and Staryu → Mega Starmie ex are both ONE hop, `docs/rulebook.txt`
-    Appendix 1), so no real pair can reproduce the inversion. An equal-gap pair passes under any
-    monotone discount, so this now asserts that the discount is MONOTONE IN HOPS and no longer that
-    it is applied to the right quantity — the exact values below carry that second claim instead."""
+    """Both lines end at Dragapult ex and both bases are 1-prize, so the only difference is
+    `halve(hops)`. Equal gaps pass under ANY monotone discount, so the exact values carry that."""
     dreepy = _starmie_board(_poke(DREEPY, hp=70, serial=9))
     drakloak = _starmie_board(_poke(DRAKLOAK, hp=90, serial=9))
 
@@ -3272,24 +2113,15 @@ def test_a_two_hop_base_prices_below_a_one_hop_base_on_the_SAME_terminal_payoff(
     assert _credit_for(drakloak, DRAKLOAK) > _credit_for(dreepy, DREEPY), (
         "one hop from the same terminal form must price above two — the discount, doing work")
 
-    # The exact values, since the ordering alone no longer pins the quantity: a 1-prize Basic whose
-    # line reaches a 2-prize ex is owed a gap of exactly 1, discounted by halve(hops).
+    # A 1-prize base whose line reaches a 2-prize ex is owed a gap of exactly 1, discounted by hops.
     assert _credit_for(drakloak, DRAKLOAK) == pytest.approx(1 * 0.5)
     assert _credit_for(dreepy, DREEPY) == pytest.approx(1 * 0.25)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_the_hop_counts_are_THIS_SETS_and_a_mainline_chain_would_fail_here():
-    """The card-fact guard the issue asks for, executable.
-
-    The mainline TCG runs Riolu → Lucario → Mega Lucario and Staryu → Starmie → Mega Starmie; this set
-    runs neither, and `docs/rulebook.txt` Appendix 1 says so outright — *"Mega Lucario ex doesn't
-    evolve from Lucario or Lucario ex—just Riolu"*. A fixture carrying the three-stage chain would
-    still produce a plausible credit, just a wrongly-discounted one, so the hop counts are asserted by
-    number rather than left implied by the fixture's shape.
-
-    Dreepy → Drakloak → Dragapult ex is the counter-example that keeps this from being a test that
-    everything is one hop: it is a genuine two."""
+    """A mainline three-stage chain would still produce a plausible credit, just a wrongly-discounted
+    one, so the hop counts are asserted by number. Dreepy → Dragapult ex is a genuine two."""
     board = _starmie_board(_poke(MUNKIDORI, hp=110, serial=9))
     assert _their_hops(board, RIOLU) == 1, "Riolu → Mega Lucario ex, no intermediate Lucario"
     assert _their_hops(board, STARYU) == 1, "Staryu → Mega Starmie ex, no intermediate Starmie"
@@ -3300,16 +2132,8 @@ def test_the_hop_counts_are_THIS_SETS_and_a_mainline_chain_would_fail_here():
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_reachability_fails_OPEN_on_their_side_and_CLOSED_on_mine():
-    """The one leg of the mirror that cannot be computed, and the direction it degrades in.
-
-    `MySide.forward_payoff` proves a line dead from `unseen_counts` — every copy of the forward form
-    visible outside the deck — and `development.line_topology` then CANCELS the credit. Their deck is
-    untracked and their hand is a count, so the same proof is unavailable and `TheirSide` fails OPEN.
-
-    Asserted as an asymmetry on ONE card with all three Mega Lucario ex in my discard, so both sides
-    answer about the same line on the same board. A test that only checked `reachable is True` on
-    their side would pass against a stub that hardcoded True for both sides, which is exactly the
-    mistake this shape rules out."""
+    """`MySide` proves a line dead from `unseen_counts`; their deck is untracked, so `TheirSide` fails
+    OPEN. Asserted on ONE card, so a stub hardcoding True for both sides would fail here."""
     board = _model(
         _player(active=_poke(MEGA_STARMIE, hp=330, energies=[E_W]),
                 discard=[MEGA_LUC, MEGA_LUC, MEGA_LUC], prize=4),
@@ -3320,27 +2144,15 @@ def test_reachability_fails_OPEN_on_their_side_and_CLOSED_on_mine():
         "the control: my side CAN prove this line dead — all three copies are in my discard")
     assert board.theirs.forward_payoff(RIOLU).reachable is True
     assert board.theirs.forward_payoff(RIOLU).owed_damage > 0.0
-    # The PRIZE leg inherits the same fail-OPEN, by construction rather than by a second decision:
-    # `TheirSide.forward_line_prize` is threaded through the identical closure and carries no
-    # reachability gate at all, so a line we cannot prove dead keeps its credit.
+    # The PRIZE leg inherits the same fail-OPEN by construction: same closure, no reachability gate.
     assert board.theirs.forward_line_prize(RIOLU) == (3, 1), "Riolu → Mega Lucario ex, one hop"
     assert _credit_for(board, RIOLU) > 0.0, "…and the credit survives: we cannot prove otherwise"
 
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_a_body_already_in_its_best_form_gets_no_credit():
-    """Mega Starmie ex is the end of its own line, so removing it denies nothing beyond the three
-    prizes it already yields — a credit that fired here would pay twice for the same card, once as
-    the payoff and once as the denial of itself.
-
-    **This is a NEGATIVE assertion and it cannot bite on the guard it looks like it covers.** Review
-    established the accounting: it survives deleting the `hops > 0 and owed_damage > 0` guard, and it
-    survives deleting the whole credit — both leave the credit at 0, which is what it asserts. What
-    it DOES catch is the regression it is named for: a credit that fired unconditionally, or one
-    whose `owed_damage` floor at 0 was lost so a softer forward form read negative-then-credited. Its
-    positive control is the sibling above, where the same helper must return a non-zero number on a
-    body that IS a pre-evolution; `_forward_credit`'s own docstring records that the guard is a
-    defensive no-op today, so nothing here reads as tested when it is not."""
+    """A credit here would pay twice for one card. It cannot bite on the guard it looks like it
+    covers — what it catches is an unconditional credit, or a lost `owed_damage` floor at 0."""
     board = _starmie_board(_poke(MEGA_STARMIE, hp=330, damage=220, serial=9))
 
     assert _target_values(board) == (3.0,), "exactly its prize count, with nothing added"
@@ -3349,12 +2161,8 @@ def test_a_body_already_in_its_best_form_gets_no_credit():
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_the_credit_reaches_a_BENCHED_pre_evolution_which_is_where_they_actually_sit():
-    """The seat that matters. The doctrine is *snipe the pre-evo* — a pre-evolution is on their
-    Bench, not in front of me — and before Issue #284 this loop never saw a benched body at all.
-
-    Jetting Blow's 50 rider does not cover a fresh 70-HP Staryu, so the board carries the two counters
-    that bring it inside. Their Active is a 320-HP Dragapult ex the 120 cannot reach, so the Active
-    leg contributes nothing and every value here is the bench leg's."""
+    """The seat that matters: a pre-evolution sits on their Bench. The 50 rider does not cover a fresh
+    70-HP Staryu, so the board carries the two counters that bring it inside."""
     board = _bench_board([_poke(STARYU, hp=70, damage=20, serial=11)])
 
     assert len(_target_values(board)) == 1, "the benched Staryu, reached by the rider alone"
@@ -3364,19 +2172,8 @@ def test_the_credit_reaches_a_BENCHED_pre_evolution_which_is_where_they_actually
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_the_two_forward_payoff_suppliers_agree_and_diverge_only_where_the_DECKLIST_does():
-    """The word "mirror" made executable — because two implementations of one quantity is exactly the
-    shape that drifts, and `MySide._forward_payoff` (a DFS over my decklist's children map, no hop
-    cap) and `CombatMath.forward_payoff_terms` (the pool closure plus `_forward_hop_depths`, capped
-    at 3) really are two implementations.
-
-    On Riolu both are computable and must agree: `DECK` runs 3 Riolu and 3 Mega Lucario ex, so my
-    decklist index and the pool closure see the same single hop to the same card.
-
-    On Staryu they must NOT agree, and that is the deck-agnostic over-read `threat.blind_to` names:
-    my side runs no Staryu line, so `MySide.forward_index` has no ``Staryu`` key and the my-side
-    reading is the fail-closed `(0.0, 0)` — while their side credits Mega Starmie ex anyway, because
-    the pool index cannot know what they run. Asserting BOTH halves is what makes this a test of the
-    divergence rather than of the agreement alone."""
+    """Two implementations of one quantity: a DFS over my decklist against the pool closure. On Riolu
+    they must agree; on Staryu they must NOT, which is the over-read `threat.blind_to` names."""
     board = _starmie_board(_poke(RIOLU, hp=80, serial=9))
 
     mine, theirs = board.mine.forward_payoff(RIOLU), board.theirs.forward_payoff(RIOLU)
@@ -3390,20 +2187,8 @@ def test_the_two_forward_payoff_suppliers_agree_and_diverge_only_where_the_DECKL
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_the_denial_credit_REACHES_the_family_once_the_anchor_is_in_front_of_the_cap():
-    """The wall this test used to record, now measured from the far side.
-
-    Until Issue #329 `threat` was `min(_THREAT_CAP, sum)` with no scale anchor, and every appended
-    target carries `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less — so the
-    cap bound on every frame this loop touches and the credit was invisible in the family on ANY
-    board, not merely on already-firing ones. This test asserted exactly that, and was written to
-    turn red the day the anchor landed. It did.
-
-    With `_THREAT_W` in front of the cap the seam's discrimination survives into the family: a
-    1-prize body whose line becomes Mega Starmie ex now outscores a 1-prize dead end by the credit
-    times the anchor. That product is SMALL — the largest single-target credit measured anywhere on
-    the corrections corpus is 0.054 prizes, so its `threat` contribution tops out near 0.0014 — which
-    is why the assertion is a strict inequality and not a magnitude claim. Small and read beats
-    larger and erased."""
+    """With `_THREAT_W` in front of the cap the seam's discrimination survives into the family. The
+    product is SMALL, which is why this is a strict inequality and not a magnitude claim."""
     staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
     dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
 
@@ -3414,9 +2199,8 @@ def test_the_denial_credit_REACHES_the_family_once_the_anchor_is_in_front_of_the
     assert _threat_of(staryu) - _threat_of(dead_end) == pytest.approx(
         sv._THREAT_W * (_target_values(staryu)[0] - _target_values(dead_end)[0])), (
         "the gap the family shows IS the seam's gap, scaled by the anchor and nothing else")
-    # Not asserted on `state_value` itself: these two boards differ in their Active's own attacks, so
-    # `survival` moves between them for a reason that has nothing to do with this credit. The claim
-    # under test is about `threat`, and it is made about `threat`.
+    # Not asserted on `state_value`: these boards differ in their Active's own attacks, so `survival`
+    # moves between them for a reason that has nothing to do with this credit.
 
 
 # ── inertness is over; the seam is not ────────────────────────────────────────────────────────────
@@ -3424,10 +2208,8 @@ def test_the_denial_credit_REACHES_the_family_once_the_anchor_is_in_front_of_the
 
 @pytest.mark.req("REQ-STATEVALUE-0003")
 def test_the_per_body_inputs_are_NAMED_so_a_frozen_contract_cannot_be_transposed():
-    """`survival` and `readiness` take three-and-two-field records, not anonymous tuples. This is a
-    contract T3 implemented against months after T0 wrote it: a transposed `(payoff, odds,
-    relevance)` would still type-check, still run, and price the board wrong in a direction nobody
-    would look."""
+    """A transposed ``(payoff, odds, relevance)`` would still type-check, still run, and price the
+    board wrong in a direction nobody would look."""
     body = sv.ExposedBody(prize_at_risk=2.0, turns_to_ko_me=1)
     assert (body.prize_at_risk, body.turns_to_ko_me) == (2.0, 1)
 
@@ -3440,9 +2222,8 @@ def test_the_per_body_inputs_are_NAMED_so_a_frozen_contract_cannot_be_transposed
 
 @pytest.mark.req("REQ-STATEVALUE-0003")
 def test_the_module_reaches_for_no_engine_no_obs_and_no_pilot():
-    """The seam, asserted at import: `state_value` takes a StateModel and the families take plain
-    numbers, so nothing here may pull in the Pilot, the native engine or cgpy. A value equation that
-    can reach for the board it was handed facts about stops being testable with numbers."""
+    """The seam, asserted at import. A value equation that can reach for the board it was handed facts
+    about stops being testable with numbers."""
     import inspect
     src = inspect.getsource(sv)
     for forbidden in ("from cg import", "import cgpy", "from common.pilot", "import pilot"):
@@ -3450,16 +2231,7 @@ def test_the_module_reaches_for_no_engine_no_obs_and_no_pilot():
 
 
 # ── the SAME monotonicity, on REAL corpus frames ──────────────────────────────────────────────────
-#
-# Issue #262's ordering-ruling amendment asks for this class "on a handful of CORPUS frames", and the
-# cases above are not a substitute: a fixture board is one I chose, and the failure mode
-# being guarded — a term that quietly assumes a completed turn — is likeliest on the boards nobody
-# designed. These perturb a real frame by exactly one beneficial fact and assert the direction.
-#
-# Asserted as `>=` per frame with at least one STRICT move required across the corpus. A real board
-# can be genuinely indifferent to one more Energy (the attacker is already maxed) or to a heal (the
-# clock does not move a whole turn), and demanding `>` everywhere would fail on correct behaviour.
-# The "at least one strict" floor is what stops the whole class from passing vacuously.
+# `>=` per frame with at least one STRICT move: a real board can be genuinely indifferent to a fact.
 
 def _corpus_models():
     """`(key, pilot, obs)` for a sample of replayable corpus frames, through THE Corpus Reader."""
@@ -3494,8 +2266,7 @@ def _my_active(obs):
 
 def _perturbed(obs, mutate):
     """A deep-enough copy of ``obs`` with ``mutate`` applied to MY Active. The original is shared
-    across the whole test session (`corpus_index` caches it), so mutating in place would corrupt
-    every later test — the helper's own docstring says so."""
+    across the session (`corpus_index` caches it), so mutating in place would corrupt later tests."""
     import copy
     fresh = copy.deepcopy(obs)
     active = _my_active(fresh)
@@ -3513,8 +2284,7 @@ def _score(pilot, obs, term):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_on_real_frames_one_more_energy_never_lowers_readiness(corpus_models):
-    """An attach toward an attack cost raises readiness — the ruling's first named case, on boards
-    nobody designed for it."""
+    """The ruling's first named case, on boards nobody designed for it."""
     strict = 0
     for key, pilot, obs in corpus_models:
         active = _my_active(obs)
@@ -3530,25 +2300,8 @@ def test_on_real_frames_one_more_energy_never_lowers_readiness(corpus_models):
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_on_real_frames_the_incumbent_printed_read_still_returns_a_PRINTED_number(corpus_models):
-    """Issue #281's *incumbent untouched* guard, and the reason it is stated on the corpus rather
-    than on a fixture: `best_reachable_damage` is the counterfactual leg of the attach marginal
-    (ADR-0069 §2) and `attach_value` is corpus-RULED, so the claim that matters is about the boards
-    the rulings were made on.
-
-    Two properties rather than a re-implementation of the read (which would be a tautological join
-    — ADR-0088), and BOTH halves of the incumbent's contract are covered:
-
-    * the DAMAGE read — the value must be exactly the biggest number the attacks `reachable_attach`
-      admits actually PRINT. A Weakness-doubled, Resistance-reduced or prevention-zeroed value is
-      not, so the incumbent quietly acquiring the damage model fails here;
-    * the AFFORDABILITY filter — the expected value is built from ``MySide.reachable_attach``, the
-      model's own shipped accessor for that question, so a filter that silently widened (or
-      narrowed to the cheapest attack) fails too. Composed from a different public accessor rather
-      than a private re-derivation, which is what keeps it a check and not a copy.
-
-    The last assertion is the positive control the negative claim needs (CLAUDE.md): on the same
-    frames the NEW sibling must diverge from the incumbent somewhere. If it never did, everything
-    above would be passing because nothing changed at all."""
+    """`best_reachable_damage` is the counterfactual leg of the corpus-RULED attach marginal (ADR-0069
+    §2). Two properties — the printed DAMAGE and the AFFORDABILITY filter — plus a positive control."""
     diverged, compared = 0, 0
     for key, pilot, obs in corpus_models:
         my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
@@ -3577,36 +2330,8 @@ def test_on_real_frames_the_incumbent_printed_read_still_returns_a_PRINTED_numbe
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_on_real_frames_their_context_only_ever_SHORTENS_the_survival_clock(corpus_models):
-    """Issue #280's wiring and fail-direction guard, on boards nobody designed for it.
-
-    Three properties, all about the clock `survival` actually reads:
-
-    * **The extractor asks the threaded question.** ``_exposed_bodies``' clock must equal the clock
-      the model gives for the same body WITH their context. Composed from the model's own public
-      accessor rather than re-derived, which is what keeps it a check and not a copy (Issue #281's
-      incumbent guard has the same shape one side over).
-    * **The direction is theirs.** ``atk_hand`` must be THEIR hand and ``def_hand`` MINE, asserted
-      per frame with a positive control that the two actually differ somewhere — on a board where
-      the hands happen to be equal, the assertion cannot fail however wrong the direction is.
-    * **Monotone the safe way.** Every clock read reaches the oracle at ``bound="max"`` and every
-      Damage Formula scaler the parser can emit ADDS, so threading the context can shorten a clock
-      and never lengthen one. On a SURVIVAL read a longer clock is the one direction that must
-      never appear from better information (ADR-0064's bounded pessimism).
-
-      That monotonicity is PARSER-contingent rather than rule-contingent, and is asserted here
-      rather than assumed for exactly that reason: `data/EN_Card_Data.csv` does contain
-      *reducing* scaler text (*"does 30 less damage for each {C} in your opponent's Active
-      Pokémon's Retreat Cost"*, *"does 60 less damage for each Energy attached to your opponent's
-      Active Pokémon"*), and `card_text._SCALE_FAMILIES` has no pattern for either, so today they
-      parse to no scaler at all and contribute 0. The day one does parse, this assertion is the
-      thing that says so.
-
-    The strict-shortening count is the positive control the first property needs (CLAUDE.md): where
-    the blind and threaded clocks agree, "the extractor is threaded" and "the extractor is not"
-    produce identical evidence.
-
-    This sample carries no `handSizeDamage` attacker — measured, not assumed — so the issue's own
-    archetype is covered by the sibling below, which scans the whole corpus for it."""
+    """Three properties: the extractor asks the threaded question, the direction is THEIRS, and a
+    scaler only ADDS — so threading can shorten a clock and never lengthen one. Controls asserted."""
     shortened, hands_differ, bodies = 0, 0, 0
     for key, pilot, obs in corpus_models:
         my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
@@ -3638,13 +2363,8 @@ def test_on_real_frames_their_context_only_ever_SHORTENS_the_survival_clock(corp
 
 
 def _hand_scaler_frames():
-    """``(key, pilot, obs, my_index)`` for every corpus frame with a `handSizeDamage` attacker
-    across the table — Issue #280's named archetype (`docs/matchups/alakazam.md`, rank 2 by
-    play-rate), FOUND rather than assumed.
-
-    Scans the whole index rather than reusing `corpus_models`' 40-frame sample, because the
-    archetype is absent from that sample; the scan itself is card-id lookups against an
-    already-built Stat Provider, not model builds, and measures ~0.6 s over the full corpus."""
+    """``(key, pilot, obs, my_index)`` for every corpus frame with a `handSizeDamage` attacker across
+    the table. Scans the whole index, because the archetype is absent from `corpus_models` sample."""
     from corpus_helpers import corpus_index
     from train.tune import _build_pilot
     out, built = [], {}
@@ -3681,17 +2401,8 @@ def hand_scaler_frames():
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_on_real_frames_a_hand_size_attacker_shortens_the_clock_as_their_hand_grows(
         hand_scaler_frames):
-    """Issue #280's headline case, on the boards it was filed about rather than on a fixture:
-    *"an opponent holding twelve cards and one holding two produce the same `turns_to_ko_me`"*.
-
-    Their hand is a COUNT and nothing else (`TheirSide.hand_size` reads ``handCount``), so the
-    perturbation is exactly one integer — which is what makes this a controlled comparison on a real
-    board rather than a second fixture wearing a corpus costume.
-
-    Asserted as monotone non-increasing PER FRAME with at least one strict move across the set: a
-    frame can be genuinely indifferent (my Active already falls on turn 1, or the scaling attacker
-    is Benched behind a shut promotion gate), and demanding strictness everywhere would fail on
-    correct behaviour. Measured: 8 frames carry the archetype and 3 of them move."""
+    """Their hand is a COUNT and nothing else, so the perturbation is exactly one integer. Monotone
+    per frame with at least one strict move: a frame can be genuinely indifferent."""
     import copy
     hands = (1, 3, 6, 10, 20)
     strict = 0
@@ -3712,9 +2423,7 @@ def test_on_real_frames_a_hand_size_attacker_shortens_the_clock_as_their_hand_gr
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
-    """A heal above the incoming raises survival — the ruling's second named case, and the family
-    that motivated differencing: a heal has no bespoke equation anywhere, so if this term does not
-    move, T4's heal family prices at 0 and is never played."""
+    """The ruling's second named case: a heal has no bespoke equation anywhere in the codebase."""
     strict = 0
     for key, pilot, obs in corpus_models:
         active = _my_active(obs)
@@ -3729,26 +2438,13 @@ def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"
 
 
-# ── the LEAF PATH's `hand` zero, asserted as RULED rather than merely documented (Issue #331) ──────
-#
-# `test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is` above already asserts a
-# `hand` zero, but a DIFFERENT one: it scores a hand-built model with no Needs resolution passed in,
-# at the `state_value` layer. The zero below is the LEAF PATH's, and its cause lives one module over
-# in `planner`. The two propositions are independent, and until Issue #331 only the first was tested.
+# ── the LEAF PATH's `hand` zero, asserted as RULED rather than merely documented (Issue #331) ─────
+# A DIFFERENT zero from the one asserted above: this one's cause lives one module over, in `planner`.
 
 
 def _leaf_end_boards(want_blind: int = 20, want_live: int = 2):
-    """``(key, pilot, my_index, end)`` for corpus frames FORWARD-SIMULATED to my end-of-turn board,
-    split into the two shapes the sim actually produces: ``blind`` (my turn passed to the opponent)
-    and ``live`` (the line ENDED THE GAME, so the board never changed perspective).
-
-    Driven through the leaf lab's own offline seam rather than a second harness — `_search_api` +
-    `train.leaf_lab._PLACEHOLDER_SBI` are exactly what `leaf_lab.board_leaf_values` injects to
-    re-score a correction board without the native engine, so this reads the same leaf the
-    Discrimination Gate grades. cgpy is deterministic (`SeededRng(0)`), so the split is stable.
-
-    Stops as soon as both shapes are stocked (measured: ~4 s, against ~11 s for the whole corpus);
-    the caps are floors on the sample, not an assumption about where in the corpus each shape sits."""
+    """``(key, pilot, my_index, end)`` for corpus frames forward-simulated to my end-of-turn board,
+    split into ``blind`` (my turn passed over) and ``live`` (the line ENDED THE GAME)."""
     from cgpy.compat import api as cgpy_api
     from corpus_helpers import corpus_index
     from train.leaf_lab import _PLACEHOLDER_SBI
@@ -3797,37 +2493,8 @@ def _my_side(end, my_index):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_leaf_paths_hand_zero_is_the_RULED_one_and_says_so_when_it_stops_being(leaf_end_boards):
-    """The leaf path prices `hand` at exactly 0.0, and that is **RULED, not broken** — Issue #331,
-    developer ruling 2026-08-02 (option 1 of three: leave the ruling, let Issue #263 absorb it).
-
-    The chain, asserted link by link rather than assumed, because each link is the one a future
-    change would break silently:
-
-      1. `_simulate_line` stops when the select passes to the opponent, so the end observation is
-         **opponent-perspective** and my hand is hidden — `handCount` survives, the `hand` list does
-         not. That is the substrate fact `planner._simulate_line`'s comment block records, and it is
-         why `leaf_hand_value` (the capture that works around it) stays off in every production path.
-      2. `planner._leaf_needs_resolution` therefore returns **None** (`if not me.get("hand")`).
-      3. `_hand_legs` returns all zeros for a `None` resolution, so the family prices `0.0` — the
-         REAL zero `state_value.REGISTRY`'s `hand.blind_to` names in as many words: *"MY HAND on a
-         simulated end board — the whole family prices 0 there."*
-
-    **Why this test exists.** Issue #331 is held open for a re-measurement once Issue #263's 1-ply
-    ordering scores boards where `hand` is expected to be live, and 15 gate frames are held out
-    against exactly that expectation. Until now the ruled zero was documented in three places
-    (`planner.py`'s comment block, `hand.blind_to`, the hold-out ledger's `why` strings) and asserted
-    in none — and documentation is not a regression guard. If Issue #263 makes `hand` live on this
-    path, or a change flips `leaf_hand_value`'s default, or `_leaf_needs_resolution` starts returning
-    a resolution, this test fails LOUDLY and names the ruling instead of letting the 15 held-out
-    frames quietly stop measuring what they were held out to measure.
-
-    The `handCount` assertion is what stops the zero from being read off an empty hand — a hand with
-    no cards in it prices zero for a reason that has nothing to do with this ruling. And the second
-    loop is the positive control the negative claim needs (CLAUDE.md): a line that ENDS THE GAME never
-    hands the select over, so its end board stays MY perspective, carries a real `hand`, resolves, and
-    prices strictly above zero. Same instrument, same leaf-built model, non-zero answer — so the zeros
-    above are a measurement rather than a broken reader. Measured on the full corpus: 282 frames blind
-    and 19 game-over, and the two sets partition exactly on `result != -1`."""
+    """The leaf path prices `hand` at exactly 0.0 and that is RULED (Issue #331): the simulated end
+    board is opponent-perspective, so `_leaf_needs_resolution` returns None. `live` is the control."""
     blind, live = leaf_end_boards
 
     for key, pilot, my_index, end in blind:
@@ -3859,20 +2526,12 @@ def test_the_leaf_paths_hand_zero_is_the_RULED_one_and_says_so_when_it_stops_bei
 
 
 # ── a companion-GATED payoff (Issue #287) ─────────────────────────────────────────────────────────
-#
-# `readiness` prices *what this body achieves once it is online*. Read off `CardStat.maxDamage` that
-# number is PRINTED, and a printed number cannot carry a board condition — so a Solrock with no
-# Lunatone benched scored exactly the Solrock that had one, and losing the Lunatone moved nothing.
-#
-# The repair is composition, not vocabulary: `AttackStat.requiresBench` already parses Cosmic Beam's
-# own sentence and `strategy/damage.py` already zeroes the attack when the partner is absent, so the
-# term asks the damage oracle (through `StateModel.payoff`) instead of forming a second opinion.
+# A PRINTED `maxDamage` cannot carry a board condition, so the term asks the damage oracle instead.
 
 
 def _lunar_board(*, bench=(), solrock_energies=(E_F,), energy_attached=False):
-    """MY Solrock Active against THEIR Dragapult ex, with a caller-chosen Bench — the one fact the
-    gated payoff turns on. One {F} is already down, so Cosmic Beam's ``{F}`` cost is PAID and the
-    only thing standing between this body and its 70 is the Bench."""
+    """MY Solrock Active against THEIR Dragapult ex with a caller-chosen Bench — the one fact the
+    gated payoff turns on. One {F} is already down, so Cosmic Beam's ``{F}`` cost is PAID."""
     return _model(
         _player(active=_poke(SOLROCK, hp=110, energies=solrock_energies),
                 bench=list(bench), prize=4),
@@ -3882,9 +2541,8 @@ def _lunar_board(*, bench=(), solrock_energies=(E_F,), energy_attached=False):
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_a_companion_gated_attacker_is_not_ready_without_its_companion():
-    """The symptom, asserted at the term. Cosmic Beam is Solrock's ONLY attack, so with no Lunatone
-    on the Bench this body achieves nothing — and `readiness` must say so rather than price the
-    printed 70 it will never deal."""
+    """Cosmic Beam is Solrock's ONLY attack, so with no Lunatone benched this body achieves nothing
+    and `readiness` must say so rather than price the printed 70 it will never deal."""
     bare, paired = {}, {}
     sv.state_value(_lunar_board(bench=[_poke(RIOLU, hp=80, serial=2)]), working=bare)
     sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=paired)
@@ -3893,9 +2551,8 @@ def test_a_companion_gated_attacker_is_not_ready_without_its_companion():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_benching_the_companion_is_what_raises_readiness():
-    """The play the old reading could not see. Dropping Lunatone onto an EMPTY Bench is exactly the
-    develop that arms the attacker, and under 1-ply differencing a play no term reads prices at 0
-    delta — which at ordering time means never explored, not merely undervalued."""
+    """The play the old reading could not see: under 1-ply differencing a play no term reads prices at
+    0 delta, which at ordering time means never explored rather than merely undervalued."""
     empty, benched = {}, {}
     sv.state_value(_lunar_board(bench=[]), working=empty)
     sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=benched)
@@ -3904,9 +2561,8 @@ def test_benching_the_companion_is_what_raises_readiness():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_losing_the_companion_lowers_readiness():
-    """The mirror, and the half that makes the term a defence: their Boss's Orders on my Lunatone —
-    or a Knock Out that removes it — has to cost me something, or the agent will trade the enabler
-    away for free."""
+    """The mirror, and the half that makes the term a defence: losing the enabler has to cost me
+    something, or the agent trades it away for free."""
     with_luna, without = {}, {}
     sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=with_luna)
     sv.state_value(_lunar_board(bench=[]), working=without)
@@ -3915,14 +2571,8 @@ def test_losing_the_companion_lowers_readiness():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
-    """The regression half. The gate is a new REASON to price 0, never a new number on a card that
-    carries no condition — so on every body of a board holding no conditional attack the new read
-    must return `CardStat.maxDamage` exactly, which is the value the retired printed path produced.
-
-    Asserted against `maxDamage` rather than against `state_value` called twice: comparing the
-    scalar to itself would pass on any implementation whatsoever (it is a determinism check, and
-    `test_state_value_is_BIT_IDENTICAL...` already owns that question). `maxDamage` is the number
-    this change replaced, so it is the only honest witness to "nothing moved"."""
+    """The gate is a new REASON to price 0, never a new number. Asserted against `maxDamage` — the
+    value this change replaced — because comparing the scalar to itself passes on any build."""
     model = _lucario_board(my_energies=[E_F, E_F],
                            bench=[_poke(RIOLU, hp=80, energies=[E_F], serial=2),
                                   _poke(MUNKIDORI, hp=70, serial=3)])
@@ -3938,17 +2588,8 @@ def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_a_conditional_BONUS_is_not_credited_by_the_payoff_read():
-    """The bound this read takes, pinned — and the other half of Issue #287's refutation.
-
-    Metagross's Conjoined Beams is *"130 … If Beldum and Metang are on your Bench, this attack does
-    150 more damage"* (verified at source, id 276), which the provider carries as ``damage=130`` with
-    ``damageMax=280``. `slowking` runs the card and neither partner, so the +150 can never be paid —
-    and it never was, because `CardStat.maxDamage` is the printed number. That is why the issue's
-    Metagross scope item was retired as already-true.
-
-    Retired is not the same as safe. The bonus IS reachable through this read, on one character: at
-    ``bound="max"`` the oracle returns ``damageMax`` and readiness would price 280 for a body that
-    can land 130. So the exact bound gets a test rather than a comment."""
+    """Conjoined Beams prints 130 with ``damageMax=280``, and the bonus IS reachable through this read
+    on one character: at ``bound="max"`` readiness would price 280 for a body that lands 130."""
     model = _model(_player(active=_poke(METAGROSS, hp=170, energies=[E_P, E_P]), prize=4),
                    _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
                    deck=[METAGROSS, E_P, E_P])
@@ -3959,10 +2600,8 @@ def test_a_conditional_BONUS_is_not_credited_by_the_payoff_read():
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
-    """Payoff and odds must name the SAME attack. Pairing one attack's damage with another's
-    probability is the saturation defect the payoff read was split out to avoid, and the gate makes
-    it reachable for the first time: a body whose max-damage attack is dead still has the lesser
-    one, and its cost is what the odds leg owes an answer about."""
+    """Payoff and odds must name the SAME attack: pairing one attack's damage with another attack's
+    probability is the saturation defect the payoff read was split out to avoid."""
     model = _lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)])
     assert model.mine.attack_payoff(model.mine.active).attack_id == COSMIC_BEAM
 
@@ -3971,9 +2610,8 @@ def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
 
 
 def _fund_attack_resolution(*, slots, covering_card: bool):
-    """A `needs.Resolution` with ``slots`` live `fund_attack` slots, optionally covered by one held
-    Energy. The shape `_resolve_needs` produces for an unfunded Active, minimised to the two facts
-    the ledger reads: how much the position NEEDS and how much the hand COVERS."""
+    """``slots`` live `fund_attack` slots, optionally covered by one held Energy — minimised to the
+    two facts the ledger reads: how much the position NEEDS and how much the hand COVERS."""
     from common import needs
     return needs.Resolution(
         slots=tuple(needs.Slot("fund_attack", 8.0, n, f"active:unit{n}") for n in range(slots)),
@@ -3985,16 +2623,8 @@ def _fund_attack_resolution(*, slots, covering_card: bool):
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_attaching_an_energy_that_retires_two_fund_slots_is_a_GAIN_not_a_loss():
-    """The Issue #400 Phase 2 defect, as its smallest reproduction.
-
-    An Active needing two Energy units carries two `fund_attack` slots (16 Worth of DEMAND) and one
-    held Energy covers them (8 Worth of SUPPLY). Attaching it retires BOTH slots — the attack is
-    funded — and costs the one card. Supply falls 8, demand falls 16, so the play is worth +8 Worth.
-
-    Before the demand leg existed the family priced supply alone and read **-8** Worth
-    (-0.0667 prizes), which is the sign inversion measured on 31 corpus frames where the human ruled
-    exactly this attach. The equation is asserted here rather than the corpus number, so the fix
-    cannot be undone by a fixture drifting."""
+    """Two `fund_attack` slots are 16 Worth of DEMAND and one held Energy 8 of SUPPLY, so attaching it
+    is worth +8. Supply alone read -8 — the sign inversion of Issue #400 Phase 2."""
     before = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=2, covering_card=True)))
     after = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=0, covering_card=False)))
     assert after - before == pytest.approx(8.0 * sv.POC_WORTH_PRIZE_RATE), (
@@ -4004,9 +2634,8 @@ def test_attaching_an_energy_that_retires_two_fund_slots_is_a_GAIN_not_a_loss():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_play_that_retires_no_need_is_still_charged_its_hold():
-    """The counterweight ADR-0097 exists for, preserved. A card that covers nothing and retires
-    nothing still costs its latent Worth to play, so the demand leg cannot be read as "every play is
-    free now" — which is the defect `_DENIAL_ITEM_COST` patched and `common.hold_value` generalises."""
+    """The ADR-0097 counterweight, preserved: a card that covers and retires nothing still costs its
+    latent Worth to play, so the demand leg cannot be read as every play being free now."""
     from common import needs
     holding = needs.Resolution(slots=(), eligibility=(), resupply=(), hand_ids=(E_F,),
                                latent_worth=9.0)
@@ -4017,9 +2646,8 @@ def test_a_play_that_retires_no_need_is_still_charged_its_hold():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_demand_half_excludes_FUEL_because_the_supply_half_does():
-    """One rule, both sides. `needs._keep_slot_dp` assigns over the ``supplied_by_pitch is False``
-    slots only, so a fuel slot never contributes to coverage; counting it as demand would credit its
-    retirement against a supply that never credited holding the fuel."""
+    """`needs._keep_slot_dp` assigns over the non-pitch slots only, so counting a fuel slot as demand
+    would credit its retirement against a supply that never credited holding the fuel."""
     from common import needs
     with_fuel = needs.Resolution(
         slots=(needs.Slot("fund_attack", 8.0, 0, "active:unit0"),
@@ -4033,25 +2661,19 @@ def test_the_demand_half_excludes_FUEL_because_the_supply_half_does():
 
 
 def _hand_legs_of(resolution):
-    """`_hand_legs` over a bare Resolution — the extractor reads `model.mine.needs` and nothing
-    else, so a stub with that one attribute exercises it exactly."""
+    """`_hand_legs` over a bare Resolution — the extractor reads `model.mine.needs` and nothing else."""
     return sv._hand_legs(SimpleNamespace(mine=SimpleNamespace(needs=resolution)))
 
 
 def _hand_reading_supplier():
-    """A board-bound `needs` supplier whose Resolution is a pure function of MY HAND.
-
-    Deliberately minimal: one `fund_attack` slot per held Energy, so the legs it produces cannot
-    coincide across two boards with different hands. A supplier that read anything else would let
-    this fixture pass for a reason other than the one under test."""
+    """A board-bound `needs` supplier whose Resolution is a pure function of MY HAND: one
+    `fund_attack` slot per held Energy, so its legs cannot coincide across two different hands."""
     def supplier(obs, my_index):
         seat = ((obs.get("current") or {}).get("players") or [{}])[my_index] or {}
         hand = list(seat.get("hand") or ())
         energy = [c for c in hand if c.get("id") == E_F]
-        # DEMAND tracks the Energy specifically; latent Worth tracks the WHOLE hand. Keeping the two
-        # on different inputs is what lets a non-Energy card be a clean gain — with `eligibility=()`
-        # there is no assignment, so coverage is 0 and an added Energy would book 8.0 of demand
-        # against 1.0 of Worth. That is a property of this stub, not of `hand`.
+        # DEMAND tracks the Energy; latent Worth tracks the WHOLE hand. With `eligibility=()` there is
+        # no assignment, so a non-Energy card is a clean gain — a property of this stub, not of `hand`.
         return _needs.Resolution(
             slots=tuple(_needs.Slot("fund_attack", 8.0, i, f"active:unit{i}")
                         for i in range(len(energy))),
@@ -4063,18 +2685,8 @@ def _hand_reading_supplier():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_the_hand_legs_MOVE_when_the_hand_moves_across_a_rebuild():
-    """Issue #400 Phase 2's acceptance, end to end through the sanctioned seam.
-
-    `test_state_model.py` asserts the SUPPLIER is re-asked about the board being rebuilt. This
-    asserts the CONSEQUENCE, which is the thing that was actually broken: `_hand_legs` — the
-    extractor `state_value.hand` reads — must return different numbers for two boards that differ
-    only in my hand. Under the pinned build every hypothetical inherited the ROOT board's
-    Resolution, so these three numbers were CONSTANT across a whole `composer.compose` call and
-    every hand-moving play differenced to exactly 0.0.
-
-    **A test that only asserted "it changed" would pass on the pinned build too** — the pinned build
-    changes plenty, just never this. So the emptied-hand board is compared against the FULL one
-    through `rebuilt`, which is the exact path that forwarded the stale kwarg."""
+    """Under the pinned build every hypothetical inherited the ROOT board's Resolution, so these
+    numbers were CONSTANT across a whole `compose()` call. It-changed would pass on that build too."""
     import copy
     me = _player(active=_poke(MEGA_LUC, hp=340), hand=[E_F, E_F], prize=4)
     opp = _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4)
@@ -4095,20 +2707,14 @@ def test_the_hand_legs_MOVE_when_the_hand_moves_across_a_rebuild():
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_hand_ONLY_difference_moves_the_LEAF_so_a_fetch_can_never_difference_to_zero():
-    """The defect stated as the composer meets it. Two boards differing in nothing but my hand must
-    produce different `state_value` scalars — otherwise a fetch, whose entire effect is on the hand,
-    prices at exactly 0.0 and *"a 0 delta is never explored, not undervalued"*.
-
-    Measured on the corpus before the fix: the ruled fetch differenced to exactly 0.0 on **all 12**
-    frames where a human ruled one, with `Expectation.best()` equal to `expected()` to the last bit
-    across five different fetched cards — because every outcome class scored the same number."""
+    """Two boards differing in nothing but my hand must produce different scalars, or a fetch prices
+    at exactly 0.0 — and a 0 delta is never explored, not merely undervalued."""
     import copy
     me = _player(active=_poke(MEGA_LUC, hp=340), hand=[E_F, E_F], prize=4)
     opp = _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4)
     model = _model(me, opp, needs=_hand_reading_supplier())
 
-    # A NON-Energy card, so the fetch is pure latent Worth and books no new demand — see the
-    # supplier's own note for why an Energy would not be a clean gain in this stub.
+    # A NON-Energy card, so the fetch is pure latent Worth and books no new demand.
     drawn = copy.deepcopy(model.source_obs)
     drawn["current"]["players"][0]["hand"] = (
         drawn["current"]["players"][0]["hand"] + [{"id": MEGA_LUC, "serial": 4242,
@@ -4119,8 +2725,7 @@ def test_a_hand_ONLY_difference_moves_the_LEAF_so_a_fetch_can_never_difference_t
     assert after != before, (
         "a board differing ONLY in my hand scored identically — every fetch differences to exactly "
         "0.0 and the beam never explores one")
-    # Direction as well as movement: the fetched card adds latent Worth and no demand, so holding it
-    # must price ABOVE not holding it. Movement alone would be satisfied by a sign error.
+    # Direction as well as movement: movement alone would be satisfied by a sign error.
     assert after > before
     assert sv._hand_legs(model.rebuilt(drawn))["slot_demand"] == 16.0, (
         "the control: demand is UNCHANGED, so the whole delta is the Worth of the fetched card")

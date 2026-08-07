@@ -146,10 +146,8 @@ def test_bench_rider_prize_math():
 
 @pytest.mark.req("REQ-COMBAT-0005")
 def test_bench_ko_indices_names_the_bodies_and_the_prize_read_derives_from_it():
-    """Issue #199 (ADR-0080): the Deny Relevance redundancy gate needs to know WHICH benched body dies —
-    *"no hammer on that specific pokemon"* — which the aggregate prize read cannot say. The bench
-    Knock Out rule is therefore stated ONCE here, and `snipe_ko_prizes` is derived from it, so the
-    two cannot drift (the `_build_standing` / `_affords` one-function-owns-the-fact lesson)."""
+    """The bench Knock Out rule is stated ONCE and `snipe_ko_prizes` is DERIVED from it, so the
+    per-body and aggregate reads cannot drift."""
     o = _oracle()
     bench = ((CINDERACE, 50), (STARMIE, 40))
     assert o.bench_ko_indices(bench, 50) == frozenset({0, 1})
@@ -185,7 +183,7 @@ def test_best_affordable_ko_value_scores_the_ko_band_and_prefers_cheap():
     assert v1 == pytest.approx(KO_SCORE + 1 - 0.1)
     # 3 Energy: Nebula also KOs but costs 3 — the CHEAPER equal-prize KO keeps the best value.
     assert o.best_affordable_ko_value(opp, STARMIE, 3) == pytest.approx(KO_SCORE + 1 - 0.1)
-    assert o.best_affordable_ko_value(opp, STARMIE, 0) == 0.0    # nothing affordable
+    assert o.best_affordable_ko_value(opp, STARMIE, 0) == 0.0
 
 
 @pytest.mark.req("REQ-COMBAT-0006")
@@ -238,11 +236,8 @@ def test_best_affordable_ko_value_type_guard_and_boost_rider():
 
 @pytest.mark.req("REQ-COMBAT-0007")
 def _cur(oracle, ma, oa):
-    """What their Active, IN ITS CURRENT FORM, hits my Active for next turn.
-
-    POC-T1 (Issue #260) folded `incoming_active_damage` onto the curve and then deleted it once the
-    census moved its only production consumer onto the snapshot; this is the same read spelled the
-    way production spells it — the doom policy with the forward-availability gate emptied."""
+    """What their Active, IN ITS CURRENT FORM, hits my Active for next turn — spelled the way
+    production spells it: the doom policy with the forward-availability gate emptied."""
     return int(oracle.incoming(ma, [oa], 1, charged=UNCHARGED, forward_ids=CURRENT_FORMS_ONLY))
 
 
@@ -253,8 +248,7 @@ def test_the_current_form_incoming_reads_transient_locks_and_bonuses():
     base = _oracle()
     oa = {"id": STARMIE, "energies": [1], "serial": 9}
     ma = {"id": CINDERACE, "hp": 160}
-    # Unlocked worst case vs my Water-weak Cinderace: Jetting 120 x2 = 240 (beats Nebula's
-    # weakness-blind 210 — Incoming reads the ceiling over ALL their attacks).
+    # Incoming reads the CEILING over all their attacks: Jetting 120 x2 beats Nebula's blind 210.
     assert _cur(base, ma, {"id": STARMIE, "energies": [1]}) == 240
     # A self-lock grant on THEIR Active: no attack next turn -> 0 threat.
     locked = _oracle(transients=_Grants({"self_lock": True}))
@@ -283,10 +277,6 @@ def test_active_doomed_sees_the_forward_evolution_threat():
     oa = {"id": riolu, "energies": [1]}                     # 1 Energy + next attach pays the 2
     # Riolu's own attack can't KO — but the line it evolves INTO (270) dooms my 130-HP Active.
     assert o.incoming(ma, [oa], 1, charged=UNCHARGED) >= ma["hp"]
-    # POC-T1 (Issue #260): the vestigial third `opp` positional is GONE. It was never read — its
-    # only effect was that passing None silently disabled the whole forward leg, so a caller that
-    # simply did not have an opponent dict to hand got a quieter survival read for free. The forward
-    # threat above is a fact about `oa`'s own line, and it is now read as one.
     bare = {"id": riolu, "energies": []}          # 0 Energy: the 2-cost forward form is out of
     assert o.incoming(ma, [bare], 1, charged=UNCHARGED) < ma["hp"]   # reach even with one attach
 

@@ -1,7 +1,6 @@
-"""The closed-form combat scorers: what an attack, a copied attack or a top-deck play is worth on this board.
+"""The closed-form combat scorers: what an attack, a copied attack or a top-deck play is worth here.
 
-Every KO / damage judgment delegates to `CombatMath` (ADR-0052) — the methods here shape its inputs and price the
-result, they never re-derive damage."""
+Every KO / damage judgment delegates to `CombatMath` (ADR-0052); nothing here re-derives damage."""
 from __future__ import annotations
 
 
@@ -16,45 +15,30 @@ from common.strategy.context import ENERGY_RECOVER, KO_SCORE, _ATTACK, _CARD, _T
 _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
                            # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
 
-# `_FOLLOWUP_W` is GONE (Issue #384). ADR-0061's weight on the FORCED follow-up a locking attack
-# leaves behind now lives — value unchanged — as `FOLLOWUP_W` in `strategy/context.py`, imported by
-# this module's star import above, because `state_value`'s terminal `next_turn_cost` leg prices the
-# same forfeited follow-up as `_lock_sequence_cost` below and two copies of one weight is what
-# nothing stops drifting. A local alias was written first and DELETED on review: it preserved
-# exactly the two-spellings state the move existed to end, which is the `_DENIAL_ITEM_COST` lesson
-# (a rate that never meets an expression is a rate nothing stops drifting) one level up.
 _LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
 
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
 
-_RESISTANCE = 30           # damage Resistance subtracts when defender resists attacker's type.
-                           # Printed per-card fact, not in CSV (type only) — verified uniform -30 across 47
-                           # resistant Pokémon via tools/sim/probe_resistance.py. Applied AFTER Weakness.
+_RESISTANCE = 30           # subtracted when the defender resists the attacker's type, AFTER Weakness. Not
+                           # in the CSV; verified uniform across all 47 (tools/sim/probe_resistance.py).
 
-_SELF_RETURN_ESCAPE = 50   # per-prize CREDIT for a self-return attack (Meowth ex Tuck Tail) that bounces a
-                           # DOOMED multi-prize Active to hand, denying the opponent the prize(s); non-KO
-                           # branch only, so a real KO always wins (mirror of _RECOIL_DOOM, a survival credit)
+_SELF_RETURN_ESCAPE = 50   # per-prize CREDIT for a self-return attack bouncing a DOOMED multi-prize Active
+                           # to hand. Non-KO branch only, so a real KO always wins.
 
 
 class TacticalMixin:
     """The per-option combat value, over the `CombatMath` oracle."""
 
     def _tactical(self, obs: dict, board: Board, option: dict) -> float:
-        """Closed-form combat value (Tier-0): printed damage (x2 on Weakness) vs the opponent
-        Active's HP. A knockout dominates; otherwise the chip is worth its damage. A bench-snipe rider
-        that KNOCKS OUT a benched Pokémon banks a full PRIZE — it is a knockout, scored KO_SCORE-class
-        like any other (ADR-0022 #14, ep82749168 f62: a 120+50-snipe that finishes a benched Dreepy
-        beats a 210 chip on an un-KO-able Active); a rider that only chips adds a sub-prize tiebreak. A
-        game-winning KO whose forced recoil is a SIMULTANEOUS double-KO is a draw, not a win (#2)."""
+        """Closed-form combat value (Tier-0). A bench-KO rider is a full PRIZE, scored KO_SCORE-class
+        like any other (ADR-0022); a rider that only chips adds a sub-prize tiebreak."""
         if option.get("type") != _ATTACK:
             return 0
         attack_id = option.get("attackId")
         opp = self._opp_active(obs)
         hp = (opp or {}).get("hp", 0)
-        # Damage oracle (ADR-0032): prevention/W/R pierced by the attack's own ignore flags; a
-        # prevented ACTIVE hit (0) no longer hides bench-snipe credit below. Context scores scalers exactly.
         dmg_ctx = self._my_damage_context(obs)
         if self.copy_top_value and self._is_seek_inspiration(obs, attack_id):
             copied = self._copy_top_tactical(obs, board, dmg_ctx)
@@ -176,16 +160,13 @@ class TacticalMixin:
 
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (the KO oracle's read)."""
-        # DELIBERATE CombatMath bypass (POC-T1's documented list): card knowledge, constant all
-        # game. `PrizeRace`'s own docstring keeps per-body prize YIELD on the oracle and only the
-        # RACE on the model (ADR-0052) — and every caller of this adapter passes a SYNTHETIC
-        # `{"id": cid}`, which is a card question, not a board one.
+        # DELIBERATE CombatMath bypass (POC-T1's list): prize YIELD is card knowledge, constant all
+        # game, so it stays on the oracle while only the RACE lives on the model (ADR-0052).
         return self.combat.prize_value(poke)
 
     def _attached_type_counts(self, target: dict) -> dict:
-        # DELIBERATE CombatMath bypass (POC-T1's documented list): pure typed arithmetic over a
-        # body's own `energies`, with no other board input — so two readers cannot disagree, which
-        # is the drift this track's census exists to prevent. Called with synthetic bodies.
+        # DELIBERATE CombatMath bypass (POC-T1's list): pure typed arithmetic over a body's own
+        # `energies`, no other board input. Called with synthetic bodies.
         return self.combat.attached_type_counts(target)
 
     def _attack_type_payable(self, aid, target: dict | None, *, extra_type=None,
@@ -245,9 +226,8 @@ class TacticalMixin:
         return len(have) >= sum(1 for t in cost_types if t == 0)
 
     def _body_doomed_affordable(self, obs: dict, board) -> bool:
-        """SCOPED doom read (evolve carve-out only): the opponent's Active can ACTUALLY KO next turn —
-        `active_doomed` AND their Active can afford its biggest attack NOW (count check). Deliberately
-        NOT the global affordability-blind doom oracle (docs/todo/incoming-affordability.md)."""
+        """SCOPED doom read (evolve carve-out only): `active_doomed` AND they can afford the attack NOW.
+        Deliberately NOT the global affordability-blind oracle (ADR-0064)."""
         if not board.active_doomed:
             return False
         oa = self._opp_active(obs)
@@ -256,43 +236,8 @@ class TacticalMixin:
         return cost is not None and len(oa.get("energies") or []) >= cost
 
     def _stadium_hp_shift(self, obs: dict, card_id, defender_stat) -> int | None:
-        """How playing this Stadium MOVES the defender's rendered HP — ``delta_after − delta_now``.
-
-        The COUNTERFACTUAL half of `board_delta.stadium_hp_delta`, which prices the Stadium already
-        in play. Both readings come from that one shipped function, so the `applies_to` class test
-        (`board_delta._admits`; ``stage2`` for Gravity Mountain) decides which bodies a Stadium
-        reaches by the shipped predicate rather than by a second branch here. A Stadium that does not
-        reach this defender therefore contributes 0 structurally.
-
-        **A DIFFERENCE of two readings, because playing a Stadium DISPLACES the one in play** —
-        *"Only one Stadium can be in play at a time—if a new one comes into play, discard the old one
-        and end its effects"* (`docs/rulebook.txt` L136), which `board_delta._play`'s Stadium branch
-        models. Without the subtraction, replacing an opponent's Gravity Mountain with our own would
-        read as a fresh −30 when the −30 was already on the board and the true gain is 0.
-
-        ``delta_now`` is SUBTRACTED rather than added because the engine's observation already
-        renders the in-play Stadium into the body it reports: `cgpy/render.py:pokemon_dict` returns
-        ``hp = p.hp + delta`` and ``maxHp = p.max_hp + delta``, never storing either (`ml_dx_2001`:
-        Dragapult ex 290/290 at f172 with Gravity Mountain out, 320/320 at f181 without it). So
-        ``opp_hp`` arrives with the current delta baked in and the shift is what CHANGES.
-
-        None — *unknown, refuse* — when either reading names a clause the seam cannot price, which
-        includes a defender with no `CardStat` (the `applies_to` test cannot be evaluated).
-
-        ⚠️ **The subtraction stopped being a forward contract at Issue #433, and the change of state
-        is the point.** It shipped INERT: only two cards in the pool carry an `hp_delta` clause at
-        all — 1252 and 1251 — and neither could put a non-zero ``delta_now`` under a legal play.
-        1252 over 1252 is not one (*"You can't play a Stadium card if a Stadium with the same name is
-        already in play"*, `docs/rulebook.txt` L137, enforced at `cgpy/options.py`), and **1251
-        refused**, for want of a ``basic`` resolver in `board_delta._APPLIES_TO`.
-
-        That resolver now exists, so ``delta_now`` is LIVE: with Lively Stadium out, a Basic defender
-        is rendered 30 HP above its printed maximum, and playing **any** other Stadium ends that lift.
-        Measured on the shipped term — a Basic rendered at 300 with Mega Brave's 270 on the board is
-        out of reach until Risky Ruins displaces the Lively, at which point the shift is −30, the bar
-        falls to 270 and the play is priced KO_SCORE-class. A one-sided add would have read that
-        board as 0 and missed the knockout, which is exactly the case the subtraction was written
-        for before one existed."""
+        """How playing this Stadium MOVES the defender's RENDERED HP — ``delta_after − delta_now``. The
+        subtraction is required: a new Stadium DISPLACES the old, and `obs` bakes the current one in."""
         current = obs.get("current") or {}
         try:
             now = board_delta.stadium_hp_delta(
@@ -308,12 +253,8 @@ class TacticalMixin:
         return after - now
 
     def _recoil_flips_doom(self, attack_id, obs: dict, board: Board) -> bool:
-        """True when this NON-KO attack's unconditional recoil turns my currently-SAFE Active into a
-        free KO for the opponent — outright self-KO (recoil >= my HP on a chip attack), or the
-        post-recoil HP falls inside their next-turn reach (`_active_doomed` re-asked at hp−recoil).
-        The Wild-Press survival guard: 210 self-70 is fine as a prize trade (the KO branch is never
-        charged) but not as a chip that leaves an 80-HP Psychic-weak body for nothing. Stands down
-        when the Active is ALREADY doomed — chipping big before it dies is right."""
+        """Does this NON-KO attack's recoil turn my currently-SAFE Active into a free KO? Stands down
+        when it is ALREADY doomed — chipping big before it dies is right."""
         recoil = self.combat.rider_recoil(attack_id)
         hp = board.my_active_hp
         if recoil <= 0 or not hp or board.active_doomed:
@@ -332,12 +273,8 @@ class TacticalMixin:
         return bool(self._active_doomed(dict(ma, hp=hp - recoil), oa, opp))
 
     def _self_return_escape_credit(self, attack_id, board: Board) -> float:
-        """Tactical CREDIT for a self-returning attack (Meowth ex Tuck Tail: "Put this Pokémon and all
-        attached cards into your hand") when the Active is a DOOMED multi-prize body — bouncing it to
-        hand denies the opponent the 2 (ex) / 3 (Mega ex) prizes it was about to bank, and re-arms a
-        bench-drop Ability. Mirror of `_RECOIL_DOOM` but a survival CREDIT: it lives in the NON-KO
-        branch only, so a real KO (scored KO_SCORE) always wins. 0 unless the attack self-returns, the
-        Active is ex/megaEx, and it is doomed — so a healthy Meowth never scoops itself away for tempo."""
+        """CREDIT for a self-returning attack when the Active is a DOOMED multi-prize body — bouncing it
+        denies the prizes. NON-KO branch only, so a real KO always wins."""
         st = self._attack_stat(attack_id)
         if not (st and getattr(st, "selfReturn", False)) or not board.active_doomed:
             return 0

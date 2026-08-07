@@ -53,45 +53,12 @@ def _wincon_strat():
                     lines=[])
 
 
-# --- tracer: +HP Tool deploys proactively onto the Active win-condition --------------------------
-# ── the Tool Doctrine — DELETED (POC-T4/5, Issue #386) ───────────────────────────────────────────
-#
-# `src/common/strategy/doctrines/doctrine_tool.py` is GONE — all five of its rungs are on Issue
-# #386's list (`deploy-hp-tool` +40, `save-tool-for-the-attacker` −15,
-# `equip-the-retreat-tool-on-the-active` +8, `hold-the-retreat-tool-with-no-retreat` −12,
-# `protect-ace-spec-tool` −10), and those rungs WERE the module. Ten tests died with it, including
-# the survival-turns target picker, because `_predicted_next_attacker` and the rest of ADR-0028's
-# board-math helpers lived inside the deleted rungs and have no definition anywhere now.
-#
-# Two of the ten were already passing VACUOUSLY before deletion, and they are the reason this note
-# is long. `test_no_deploy_onto_a_body_that_dies_even_with_the_boost` and
-# `test_wall_does_not_get_the_cape_when_it_gains_no_turn` each asserted only
-# `"deploy-hp-tool" not in _fired(...)`. Once the rung is deleted that is true of every board in the
-# game, so both went green while checking nothing — and no failure count anywhere would ever have
-# shown it. A negative assertion about a deleted mechanism is not a weakened test, it is dead text.
-#
-# WHERE THE FACTS WENT:
-#
-#   "a Tool goes on the body that carries the game" .... `deploy_value` (ADR-0086) prices a deploy,
-#       and under differencing a Tool that buys a survival turn shows up as `survival` on the end
-#       board rather than as a +40 endorsement. Corpus evidence: `test_tool_holder_facts.py`.
-#   "a Cape deploy NEVER forgoes a lethal KO" .......... structural, and stronger than the rung was.
-#       The win rung and the closed-form KO pool sit ABOVE the composer in `plan_turn`'s ladder
-#       (Issue #386 §3), so a positional play cannot outrank a lethal by construction rather than by
-#       weight. Asserted on real captured boards by `tests/strategy/test_lethal_recover.py` (four
-#       frames, green) and on live engine drives by `test_lethal_engine.py`.
-#   "don't shuffle away an irreplaceable Tool" ......... NOT deleted. `hold-irreplaceable-tool-dont-shuffle`
-#       survives and its two tests remain below — which is why this file still exists.
-# --- correction #1: deploy Cape BEFORE a hand-shuffle Supporter shuffles it away ------------------
-# --- anti-shuffle belt: no good carrier -> HOLD Cape, don't shuffle it away -----------------------
+# The Tool Doctrine module was DELETED (Issue #386) along with its five rungs and ten tests; only
+# the anti-shuffle belt below survives, which is why this file still exists.
 @pytest.mark.req("REQ-GEN-0049")
 def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
-    """The belt for the case the positive deploy can't reach: holding the irreplaceable Cape with NO
-    win-condition body to equip (only an off-line opener Active), a hand-shuffle Supporter would shuffle
-    the ACE SPEC into the deck. The graded SHED (ADR-0065) prices the held ACE SPEC at its
-    ACE_SPEC_TIER worth × how UN-recoverable it is (a one-per-deck, discard-irretrievable Tool ⇒ near
-    its full worth), so the refresh scores NEGATIVE — the fold of the retired
-    `hold-irreplaceable-tool-dont-shuffle` guard — and the agent holds the Cape (ends)."""
+    """Holding the irreplaceable Cape with NO win-condition body to equip: the graded SHED (ADR-0065)
+    prices the held ACE SPEC so the hand-shuffle refresh scores NEGATIVE and the agent holds."""
     stats = DictCardStatProvider({
         CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         LILLIES: CardStat(LILLIES, hp=0),
@@ -120,8 +87,3 @@ def test_hold_irreplaceable_tool_silent_without_an_irreplaceable_tool():
     assert "hold-irreplaceable-tool-dont-shuffle" not in _fired(pilot.explain(obs).options[0])
 
 
-# --- correction #2: at-risk targeting picks body where +100 buys the MOST survival turns ----------
-# --- Active doomed even at +100 -> redirect Cape to the promotable successor ----------------------
-# --- wall (off-line body) earns Cape ONLY when +100 buys a real survival turn ----------------------
-# --- predict-next-attacker: incoming sees opponent BENCHED promotion, not just current Active -----
-# --- KO invariant: a positional Cape deploy never forgoes a knockout (corr 82756664-36) ------------

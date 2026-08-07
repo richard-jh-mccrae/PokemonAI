@@ -30,27 +30,13 @@ def _n_satisfied(constraints, weights) -> int:
 
 
 def tune(corrections, pilot, seeds: dict, *, reg: float = DEFAULT_REG) -> TuneResult:
-    """Route each Correction by derived attribution: `hypothesis:*` → a ranking constraint
-    (W, fed to the weight fit); `missing_hypothesis` → a Hypothesis proposal (H); `tactical`
-    or no-obs → skipped. A **scoped** Correction (turn, ADR-0049) bypasses the router
-    entirely — it is an open plan-layer blunder, never a weight.
-
-    The fit is soft-margin (regularised), so a contradictory W corpus no longer overfits silently.
-    Two guards make the output trustworthy:
-    - **Adoption gate** — the fitted weights are shipped *only if* they satisfy strictly more
-      corrections than the authored seeds; otherwise the drift bought nothing (or traded laterally)
-      and we keep the legible priors. (This is why a hand-curated `tuned.json` kept getting reset.)
-    - **`unsatisfied`** — the corrections the *shipped* weights still can't honour: genuine conflicts,
-      or blunders that need a new Hypothesis (H), not a weight.
-
-    ``reg`` is the conservatism knob (see ``fit.DEFAULT_REG``): higher keeps weights near the authored
-    seeds (won't gut a doctrine for a few extra ranks); lower lets clean corrections move them more."""
+    """A scoped Correction (ADR-0049) BYPASSES the router — a plan-layer blunder, never a weight. The
+    ADOPTION GATE ships fitted weights only when they satisfy strictly MORE than the authored seeds."""
     constraints, w_corrs, proposals, skipped = [], [], [], []
     for corr in corrections:
         if corr.scope != "decision":
-            # A turn blunder is a plan-layer error (ADR-0049): it short-circuits BEFORE
-            # `ranking_constraint`, so a sequencing error can never move a Tier-0 weight. The
-            # Anchor's fired-Hypothesis diff still travels along, as information for the routing.
+            # Short-circuits BEFORE `ranking_constraint`, so a sequencing error can never move a
+            # Tier-0 weight; the Anchor's fired diff still travels along as routing INFORMATION.
             info = (featurize(corr, pilot).attribution
                     if corr.obs is not None and corr.correct else None)
             proposals.append(propose_hypothesis(corr, attribution=info))

@@ -62,10 +62,8 @@ def test_union_verify_passes_when_independent_rules_each_fix_their_cluster():
 
 
 def test_union_verify_catches_a_cross_cluster_regression(monkeypatch):
-    """REQ-TUNER-0010: the hazard the join exists for — each cluster is satisfied in the union, yet a
-    previously-satisfied (e.g. ``covered``) Correction regresses. Per-cluster verify misses it; the
-    union gate must fail the round. (``_satisfied`` is stubbed: the fit's nonlinearity is verify-level
-    behaviour already covered above; here we pin ``union_verify``'s base-vs-union wiring.)"""
+    """The hazard the join exists for: every cluster is satisfied in the union, yet a previously-
+    satisfied Correction regresses. `_satisfied` is stubbed to pin `union_verify`'s wiring."""
     seq = iter([[True, True, True],           # base (seeds-only): all three satisfied
                 [True, True, False]])          # union: clusters a & b hold, covered Correction breaks
     monkeypatch.setattr(verify_mod, "_satisfied", lambda *a, **k: next(seq))

@@ -84,14 +84,8 @@ def _background(obs) -> dict[int, float]:
 
 
 def _matchups(episodes, now, half_life_days, *, marginal_prior, pair_prior, mean=0.5):
-    """Recency-weighted win-rate per archetype and per ordered matchup.
-
-    Each *decisive* episode (``winner_index`` 0/1; draws and unknowns excluded)
-    contributes to both sides. Marginals shrink toward ``mean`` (=0.5) and each pairwise
-    cell shrinks toward its archetype marginal, so a 1-game record reads near-neutral,
-    not 100%. Bands are pooled on purpose: win-rate is a ratio, so an over-sampled band
-    doesn't bias it the way it biases play-rate (hence no band-balancing here).
-    """
+    """Recency-weighted win-rate per archetype and per ordered matchup. Marginals shrink toward 0.5 and
+    each pairwise cell toward its marginal, so a 1-game record reads near-neutral. Bands are pooled."""
     m_win: dict = defaultdict(float)   # weighted wins, per archetype
     m_dec: dict = defaultdict(float)   # weighted decisive games, per archetype
     p_win: dict = defaultdict(float)   # weighted wins, per (archetype, opponent)

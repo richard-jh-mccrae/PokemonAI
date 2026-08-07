@@ -1,29 +1,9 @@
-"""Effect Clauses on the committed NATIVE engine — the measured-magnitude smoke gate.
+"""Effect Clauses on the committed NATIVE engine — the measured-magnitude smoke gate (ADR-0032).
 
-NATIVE-ONLY, enforced below (#178). These tests do not check cgpy; they DERIVE what a card does by
-probing the engine (ADR-0032, the engine-audited effect compendium). Point them at the twin and they
-measure cgpy against cgpy — circular, and the twin's `probe_card` scenarios do not align anyway, so
-under `CG_ENGINE=py` they simply fail with a heal that was measured on nothing.
-
-
-Engine-backed (drives the real probe, like ``test_lethal_engine.py``), offline on
-Windows + Linux. Proves the probe→classify pipeline reads the *quantities* the boolean
-tags discard: an unambiguous draw trainer measures its printed count, unambiguous heal
-trainers measure their printed amounts. Card texts verified at source (cg.api
-``all_card_data``), never memory:
-
-  * 1224 Cheren (Supporter): "Draw 3 cards." — stable pass, with bounded retry if
-    the probe deck itself caps the draw.
-  * 1112 Super Potion (Item): "Heal 60 damage from 1 of your Pokémon. If you healed
-    any damage in this way, discard an Energy from that Pokémon." — combat pass;
-    also carries the measured ``discard_own_energy`` rider.
-  * 1117 Potion (Item): "Heal 30 damage from 1 of your Pokémon." — combat pass.
-
-Heal needs the combat scenario to align (a damaged Pokémon when the card is drawn),
-which happens ~1-in-N games — the same variance the functions builder absorbs with
-``_COMBAT_PASSES``. These tests retry a bounded number of passes and *skip* if the
-scenario never aligned (alignment is stochastic infrastructure, not the claim under
-test); a *wrong measured amount* always fails.
+NATIVE-ONLY, enforced below: pointed at the twin these would measure cgpy against cgpy, and the
+twin's `probe_card` scenarios do not align anyway. Heal needs the combat scenario to align (a
+damaged Pokémon when the card is drawn), so those tests retry a bounded number of passes; a WRONG
+measured amount always fails.
 """
 import pytest
 
@@ -35,11 +15,6 @@ from meta_tracker.probe_cards import probe_card
 if on_cgpy_twin():
     pytest.skip("engine-audited effect probes: circular on the cgpy twin", allow_module_level=True)
 
-# Re-sized from measurement, not from the estimate (#178). The old value was 30 on an assumed
-# p(align) ~ 0.2/pass -> p(never) ~ 0.1%; running the module 25× showed the two heal probes failing
-# to align ~4% of the time, so the real p(align) is ~0.10/pass and 30 passes was ~40× flakier than
-# the comment claimed. That went unnoticed because a miss was a `pytest.skip` — invisible in CI.
-# Now that a miss is a FAILURE the budget has to match the measured rate: 0.9^120 ~ 3e-6.
 _HEAL_PASSES = 120  # p(align) ~ 0.10/pass MEASURED -> p(never) ~ 3e-6; passes ~ms on native engine
 
 
@@ -58,12 +33,8 @@ def test_cheren_measures_draw_3(cards):
     assert {"kind": "draw", "amount": 3} in clauses
 
 
-# A FAILURE, not a skip (#178). These probes drive the live native engine, so alignment is
-# stochastic in principle — but `_HEAL_PASSES`=30 puts p(never) around 0.1%, and measured
-# 2026-07-27 it aligned 25/25. A skip at that rate is not protecting the suite from bad luck; it
-# is hiding the case that matters, a probe-harness regression that stops the scenario aligning at
-# all — after which these tests report green-ish forever without measuring a thing. The module
-# already takes this line elsewhere ("Cheren never became playable — probe harness regression?").
+# A FAILURE, not a skip: a skip hides the case that matters, a probe-harness regression that stops
+# the scenario aligning at all — after which these tests report green forever, measuring nothing.
 _NEVER_ALIGNED = ("combat scenario never aligned in %d passes — the claim was MEASURED on nothing. "
                   "For the rider case this also fires when the heal aligned but the RIDER never "
                   "did (Super Potion only discards an Energy if the healed body had one). Suspect "
@@ -72,20 +43,8 @@ _NEVER_ALIGNED = ("combat scenario never aligned in %d passes — the claim was 
 
 
 def _measured_heal(cid, cards, *, rider=None):
-    """Max heal clause across bounded combat passes (None if never aligned).
-
-    ``rider`` names a rider the CALLER is going to assert. Pass it, or this loop stops one
-    observation too early: a rider is a per-resolution fact (Super Potion only discards an Energy
-    if the healed body had one), and `merge_clauses` keys on ``(kind, restriction, condition,
-    rider)`` — so a riderless heal and a riderful heal are two SEPARATE clauses. Breaking on "any
-    heal" could therefore stop before the rider was ever seen, and `next(... kind == "heal")` could
-    return the riderless clause even when both were observed. Both bugs, one symptom: `assert None
-    == 'discard_own_energy'` on a heal that measured 60 correctly.
-
-    Caught by the #178 determinism backstop on its 11th repeat, ~2 weeks after the assertion was
-    written — it was invisible before because a miss surfaced as a `pytest.skip`. The loop now
-    stops on the clause the caller will actually assert.
-    """
+    """Max heal clause across bounded combat passes (None if never aligned). ``rider`` names a rider
+    the CALLER will assert — pass it, or the loop can stop before that clause was ever observed."""
     def _pick(clauses):
         heals = [c for c in clauses if c["kind"] == "heal"]
         if rider is not None:
@@ -121,12 +80,8 @@ def test_potion_measures_heal_30(cards):
 
 @pytest.mark.req("REQ-EFFECT-0017")
 def test_wallys_compassion_observes_mega_only(cards):
-    # Restriction-observation board (ADR-0032 item 6): a damaged Mega Lucario ex
-    # retreated to Bench behind a damaged non-Mega Active. Wally's Compassion
-    # ("Heal all damage from 1 of your Mega Evolution Pokemon ex") must OFFER only the
-    # bench Mega — damaged Active's exclusion is the observed `mega_only`. Drive
-    # handles both setup cases deterministically; retries absorb shuffle noise
-    # (mulligans), a wrong offer always fails
+    # A damaged Mega on the Bench behind a damaged non-Mega Active: the Active's exclusion from the
+    # offer is the observed `mega_only`. Retries absorb shuffle noise; a wrong offer always fails.
     from meta_tracker.card_effects import derive_restriction
     from meta_tracker.probe_restrictions import probe_heal_restriction
 

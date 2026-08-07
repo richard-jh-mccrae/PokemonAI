@@ -17,43 +17,17 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-# REQ-GEN-0001's `test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table` stood here
-# until POC-T4/5 (Issue #386). Its subject was `dig-before-commit` (+20), the blanket "a search is
-# good during SETUP" endorsement, and that rung is deleted: a free dig is now worth the board its
-# extra cards reach, which the composer prices by differencing.
-#
-# It is DELETED rather than re-pointed, and the attempt to re-point is why. Rewritten to assert only
-# the half in its own name — that the tag table is load-bearing — it failed: on this bare synthetic
-# board, with the blanket endorsement gone, NO rung fires on a tagged search at all. There was
-# nothing left to observe the tag through here.
-#
-# Named successors, both stronger than what was deleted:
-#   * `tests/cards/test_card_functions_oracle.py` — every tag's declared consumers really read it,
-#     and a tag declared INERT is read by nothing. That is the tag table being load-bearing, checked
-#     against the whole source tree rather than through one rung on one board.
-#   * `tests/strategy/test_fetch_doctrine.py` — builds tagged fetchers and asserts the endorsements
-#     that DO survive (`fetch-when-it-fills-a-need`, `search-the-confirmed-hit`) fire and rank.
+# REQ-GEN-0001's `dig-before-commit` test went with the rung (Issue #386). Successors:
+# `tests/cards/test_card_functions_oracle.py` and `tests/strategy/test_fetch_doctrine.py`.
 
-
-
-# REQ-GEN-0002's two `dont-bench-multiprize` tests stood here until ADR-0086 deleted the rung. Its
-# job — a loose multi-prizer is a worse body to bench than a single-prizer, and the win-condition is
-# exempt — is the Deploy Marginal's EXPOSURE leg, which prices the same liability in prizes rather
-# than asserting a flat −15. `test_deploy_value.py` covers the leg; the corpus frames cover the pick.
+# REQ-GEN-0002's `dont-bench-multiprize` tests went with the rung (ADR-0086). Its job is now the
+# Deploy Marginal's EXPOSURE leg — `test_deploy_value.py`.
 
 
 @pytest.mark.req("REQ-GEN-0003")
 def test_the_empty_bench_guard_is_the_filter_and_no_longer_also_a_rung():
-    """ONE guard per fact (ADR-0096 decision 1). An empty Bench under a knock-outable Active reached
-    the whitelist through THREE mechanisms — `_predicted_loss`, `Pilot._empty_bench_forced`, and
-    `keep-a-bench` (+60) — in direct violation of the POC's headline rule.
-
-    `keep-a-bench` is the one that went (decision 2): it guarded nothing the filter does not already
-    guarantee, because the filter runs AFTER `_finish_turn_last` and so wins outright, and per Issue
-    #231's own numbers it WAS the spare-body cliff (a spare body priced 1.96 on a non-empty Bench
-    against 61.96 on an empty one — the whole gap was that rung).
-
-    What must still hold is the BEHAVIOUR: on an empty Bench the deploy is taken, not ranked."""
+    """ONE guard per fact (ADR-0096). The FILTER runs after `_finish_turn_last`, so it wins outright
+    and `keep-a-bench` guarded nothing — but the BEHAVIOUR must still hold."""
     stats = DictCardStatProvider({700: CardStat(700, synthetic=True, hp=70)})   # a Pokémon (hp > 0)
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     play_basic = opt(PLAY, area=HAND, index=0)
@@ -68,10 +42,8 @@ def test_the_empty_bench_guard_is_the_filter_and_no_longer_also_a_rung():
 
 @pytest.mark.req("REQ-GEN-0004")
 def test_attach_energy_last_defers_attachments_during_setup():
-    """`attach-energy-last` is no longer a −5 weight (#139, ADR-0069 §7) — it is a decide()-only
-    ORDERING deferral in `_finish_turn_last`'s tiers, so an attach keeps its full marginal and simply
-    happens AFTER the free development that might reveal a better target. Score-invisible, which is
-    what freed the desperation floor from having to out-score that −5."""
+    """`attach-energy-last` is a decide()-only ORDERING deferral, not a weight: the attach keeps its
+    full marginal and simply happens after the development that might reveal a better target."""
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   functions=CardFunctions({222: ["energy_accel"]}))
     obs = make_select([opt(ATTACH), opt(PLAY, area=HAND, index=0)],
@@ -81,9 +53,8 @@ def test_attach_energy_last_defers_attachments_during_setup():
     assert order == [1, 0], "the free development no longer sequences ahead of the blind attach"
 
 
-# REQ-GEN-0005's `pre-position-attacker` test stood here until ADR-0086 deleted the rung. Keeping the
-# next attacker coming is now the ASSIGNMENT leg: a body that covers an unmet Line slot earns its
-# relevance, and one that covers nothing earns none — the rung's flat +25 could not tell those apart.
+# REQ-GEN-0005's `pre-position-attacker` test went with the rung (ADR-0086). Keeping the next
+# attacker coming is now the ASSIGNMENT leg, which a flat +25 could not express.
 
 
 @pytest.mark.req("REQ-GEN-0011")
@@ -135,9 +106,8 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
     assert by_tag.decide(mull) == [1]
     assert "keep-a-startable-hand" in _fired(by_tag.explain(mull).options[0])
 
-    # (The `starter` Role was a second accepted signal here until ADR-0079 retired it. It never
-    #  changed an outcome: it was only ever declared on Basics, and a hand holding any Basic never
-    #  reaches this prompt at all -- `docs/rulebook.txt` L224. The `opener` Tag above is the real one.)
+    # (The `starter` Role was retired here by ADR-0079: it was only declared on Basics, and a hand
+    #  holding any Basic never reaches this prompt at all — `docs/rulebook.txt` L224.)
 
     # neither signal -> ungoverned, defaults to redraw blunder.
     baseline = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
@@ -146,11 +116,8 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
 
 @pytest.mark.req("REQ-GEN-0056")
 def test_open_the_declared_starter_prefers_the_decks_ranked_opener_at_setup_active():
-    # Re-pointed from the deleted `open-the-accelerator` (ADR-0079). Same requirement — the deck gets
-    # the body it wants in the Active Spot — through a declaration instead of an `accel_source` Role,
-    # so the deck orders its WHOLE field rather than tripping one rung. Deck-keyed opt-in, and
-    # card-name-free: the ids live in Strategy.starter_priority, the trigger reads only the resolved
-    # board.top_starter_id. Behaviour on the shipped agents: test_setup_active_placement.py.
+    # Card-name-free: the ids live in Strategy.starter_priority and the trigger reads only the
+    # resolved board.top_starter_id. Shipped-agent behaviour: test_setup_active_placement.py.
     ACCEL, PLAIN = 666, 700
     pilot = Pilot(Strategy(starter_priority=[ACCEL, PLAIN]), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY)
@@ -173,11 +140,8 @@ def test_open_the_declared_starter_prefers_the_decks_ranked_opener_at_setup_acti
 
 @pytest.mark.req("REQ-GEN-0057")
 def test_use_acceleration_is_the_one_home_for_advancing_an_accel_piece():
-    """`advance-the-accel-pieces` is DELETED (#139, ADR-0069 §7). Its ATTACH half folded into the
-    decider's accel-routing term; its PLAY half is `use-acceleration`'s job, and that rung keys on the
-    `energy_accel` FUNCTION TAG rather than on an `accel_source` ROLE — one card fact, one home. A deck
-    that wants its accelerator advanced tags it (as every shipped deck does); a ROLE alone no longer
-    lifts a PLAY, which is the ruled disposition, not an oversight."""
+    """`use-acceleration` keys on the `energy_accel` FUNCTION TAG, not an `accel_source` ROLE — one
+    card fact, one home. A ROLE alone lifting a PLAY is the ruled disposition, not an oversight."""
     pilot = Pilot(Strategy(roles={17: ["accel_source"]}), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY,
                   functions=CardFunctions({17: ["energy_accel"]}))
@@ -213,37 +177,19 @@ def test_honor_preferred_start_penalizes_the_coin_toss_option_that_contradicts_t
 @pytest.mark.req("REQ-GEN-0007")
 def test_power_up_attacker_attaches_energy_rather_than_passing():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    # SETUP, options = [attach Energy, do-nothing play]. Attaching must still win. Both rungs that used
-    # to net this out (`power-up-attacker` +15 over `attach-energy-last` −5) are DELETED (#139,
-    # ADR-0069 §7): the attach now wins on ORDERING — an unendorsed do-nothing play sequences with the
-    # turn-enders while the attach holds its own tier, so a blind attach is never passed over for
-    # nothing.
+    # The attach wins on ORDERING, not score: an unendorsed do-nothing play sequences with the
+    # turn-enders while the attach holds its own tier.
     obs = make_select([opt(ATTACH), opt(PLAY)], current=state())   # state() -> SETUP
     assert pilot.decide(obs) == [0]
 
 
-# `test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy` was DELETED by ADR-0085's deletion pass:
-# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
-# carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` (test_snipe_relevance.py) —
-# an energized body is nearer to attacking, which the `imminence` leg reads off `turns_to_afford`
-# as a continuous quantity rather than the retired `_ENERGIZED_SNIPE_TIER` step.
-
-# `test_snipe_the_top_threat_hits_the_fragile_preevo_over_the_weakest_deadend` was DELETED by ADR-0085's deletion pass:
-# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
-# carried by `test_a_pre_evo_carrying_a_wincon_outranks_one_carrying_nothing` (test_snipe_relevance.py) — the
-# `forward` leg, ADR-0085 decision 1's own worked pair (Riolu banks toward Mega Lucario ex 270;
-# a Solrock's line reaches nothing).
-
-# `test_snipe_the_top_threat_tiers_an_energized_body_above_a_bigger_latent_one` was DELETED by ADR-0085's deletion pass:
-# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
-# carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` and
-# `test_no_sum_of_positional_legs_can_out_vote_a_single_stronger_one` (test_snipe_relevance.py).
+# Three snipe TARGET rung tests were DELETED with their rungs (ADR-0085). The requirements survive
+# in `test_snipe_relevance.py`'s `imminence` and `forward` legs.
 
 @pytest.mark.req("REQ-GEN-0022")
 def test_only_snipe_rules_fire_at_a_damage_select():
-    # No-double-count gate is whitelist-by-omission: a future DAMAGE hypothesis could silently
-    # stack. Guard it — at a DAMAGE select, only snipe rules may ever fire. Derive whitelist
-    # from the snipe cluster itself so adding a 5th snipe rule can't silently drift this guard.
+    # The no-double-count gate is whitelist-by-omission, so the whitelist is DERIVED from the snipe
+    # cluster itself and a 5th snipe rule cannot silently drift it.
     allowed = {h.id for h in SNIPE_HYPOTHESES}
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
@@ -258,36 +204,18 @@ def test_only_snipe_rules_fire_at_a_damage_select():
         assert _fired(o) <= allowed
 
 
-# NOTE: `build-before-attack` was removed — `_finish_turn_last` ("attack last") now sequences
-# development ahead of turn-ending attack structurally, so a blanket chip penalty is redundant
-# (and was suppressing a useful chip below End when no development was available). See
-# tests/test_search_discipline.py::test_a_weak_chip_is_taken_when_no_development_is_available.
+# `build-before-attack` was removed: `_finish_turn_last` sequences development ahead of the
+# turn-ending attack structurally, so a blanket chip penalty suppressed useful chips for nothing.
 
-
-# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
-#
-# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
-# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
-# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
-# not what the agent played.
-#
-# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
-# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
-# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
-# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
-# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
-# --- deploy-hp-tool (general Tool Doctrine deploy, ADR-0028; reads the parsed CardStat.hpBonus) ----
-# PROACTIVE survival-turns deploy (no longer the reactive breakpoint): +HP Tool goes onto the
-# Active win-condition whenever the boost banks a survival turn — or as the anti-shuffle default —
-# and stands down only on a body doomed even at +boost (with no successor) or off the win-condition.
+# `doctrine_tool.py` and its five rungs are gone (Issue #386). A Tool that buys a survival turn is
+# now `survival` on the composed end board (`deploy_value`, ADR-0086).
 _WATER, _LIGHTNING, _FIRE = 3, 4, 2
 _HP_TOOL, _WINCON = 1159, 900
 
 
 def _hp_tool_pilot(*, hp_bonus=100, opp_type=_FIRE, opp_dmg=400, wincon_role=True):
-    """A Pilot whose Active win-condition (HP 330, Weak to Lightning) faces an attacker dealing
-    `opp_dmg`, with a +`hp_bonus` Tool in hand. `opp_type` == the wincon's weakness doubles the
-    incoming hit (the weakness-aware breakpoint)."""
+    """Active win-condition (330 HP, Weak to Lightning) vs an attacker dealing `opp_dmg`, with a
+    +`hp_bonus` Tool in hand. `opp_type` == the wincon's weakness doubles the incoming hit."""
     stats = DictCardStatProvider({
         _WINCON: CardStat(_WINCON, synthetic=True, hp=330, energyType=_WATER, weakness=_LIGHTNING),
         _HP_TOOL: CardStat(_HP_TOOL, synthetic=True, hp=0, hpBonus=hp_bonus),
@@ -305,16 +233,7 @@ def _attach_hp_tool():
                                      hand=[_HP_TOOL]))
 
 
-# REQ-GEN-0024's two `deploy-hp-tool` silence tests are DELETED here (POC-T4/5, Issue #386). The
-# rung went with the Tool doctrine's MAIN half, and each test's ONLY assertion was
-# `"deploy-hp-tool" not in _fired(...)` — true of every board in the game once the rung is gone. They
-# would have gone on passing while checking nothing, which no failure count can surface.
-#
-# Named successors, and the second is the honest half:
-#   * The Tool's HP grant landing on the attach is `board_delta._attach`, asserted by
-#     `tests/strategy/test_apply_option.py` — the +HP fact itself is better covered than it was.
-#   * The DECISION the rung made — "this Tool would not save the body, so don't spend it" — has NO
-#     successor. It is a survival-breakpoint read, and no term computes it today. Recorded here
-#     rather than implied, the same way `test_dragapult_ex_triggers.py` records the unpriced Stadium.
+# REQ-GEN-0024's two `deploy-hp-tool` silence tests went with the rung (Issue #386). The DECISION it
+# made — "this Tool would not save the body, so don't spend it" — has NO successor today.
 
 

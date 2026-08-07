@@ -1,87 +1,34 @@
-"""**Is this follow-up frame gradeable at all?** — the shared off-policy detector (Issue #412).
+"""**Is this follow-up frame gradeable at all?** — the shared detector (Issue #412, ADR-0123).
 
-A non-MAIN select exists because the agent played something at an earlier decision. *A follow-up
-select is only gradeable if the decision that opened it was correct.* If that earlier play was
-itself the blunder, the board is one the agent should never have reached, and a Correction filed on
-the follow-up is not evidence about the follow-up decider — it is evidence about a board state that
-should not exist. This is `retest_span`'s own doctrine (ADR-0049) — *"it stops at the first
-divergence, because every later obs was produced by the line the agent originally played"* — applied
-WITHIN a turn instead of across one.
+A non-MAIN select exists because the agent played something earlier in the turn, so it is only
+gradeable if THAT decision was correct. ADR-0049's doctrine applied within a turn instead of across.
 
-**Why this module exists rather than one sweep's private helper.** The detector shipped inside
-`grab_sweep.py` scoped to ctx 7, and `composer_lab.py` already reaches across to import it. 93+ of
-the corpus's correction frames are non-MAIN and every sweep and gate that grades them inherits the
-exposure; a second implementation per consumer is the drift ADR-0087 charges for one store over.
+The test is a DEPENDENCY test, not a same-turn test: a candidate is ungradeable only when the
+ruled-CORRECT predecessor would have **(a)** prevented this select from opening at all, or **(b)**
+changed a board fact the follow-up ruling NAMES. Anything else is orthogonal and stays gradeable.
 
-## The test is a DEPENDENCY test, not a same-turn test (Decision 1, ruled 2026-08-06)
-
-Issue #412 proposed *"any ruled Correction on an earlier frame of the same episode AND turn"*, and
-called that detector "sound but incomplete". Measured over the whole corpus it is **incomplete AND
-over-broad**, and the over-broad half is the expensive one — it deletes evidence that is perfectly
-good. `mega_starmie 81785223-39` is the clean case:
-
-* predecessor f38 ruled *"Should play Pokégear 3.0 to dig for supporter earlier in turn"*
-* follow-up f39 ruled *"Should snipe highest threat Pokemon … the only benched pokemon with energy"*
-
-Pokégear 3.0 is `Look at the top 7 cards of your deck … reveal a Supporter` (`EN_Card_Data.csv` id
-1122). It cannot touch the opponent's Bench, so the snipe ruling is fully gradeable and the
-same-turn detector kills it anyway. Four more ctx-15 frames have that exact shape.
-
-So a candidate is only ungradeable when the ruled-CORRECT predecessor play would have:
-
-* **(a) prevented this select from opening at all** — the Ultra Ball whose search this is, ruled
-  "should not have been played"; or an alternative line ending in an attack with no bench-damage
-  rider, so no `DAMAGE` select is posed (`Nebula Beam` vs `Jetting Blow`, ids 1031); or
-* **(b) changed a board fact the follow-up ruling NAMES** — `Boss's Orders` (id 1182,
-  `Switch in 1 of your opponent's Benched Pokémon to the Active Spot`) moving the very Riolu the
-  follow-up rules to snipe off the Bench.
-
-Anything else is **orthogonal** and stays gradeable.
-
-That test cannot be computed from the corpus: it needs the predecessor's card text and the
-follow-up's prose read together. So this module SEPARATES the two halves it used to conflate —
-:func:`candidates` is the mechanical scan, and :data:`RULINGS` is the human's verdict on each
-candidate. A candidate nobody has ruled is `UNRULED`: reported, never silently filtered. That is the
-same shape the two main-watchdog gates already use for a baseline — a ruling record, never derived
-(CLAUDE.md).
-
-## Two bugs the scan carried, both measured
-
-* **Endorsement records were read as blunders.** 15 committed Corrections have ``chosen ==
-  correct`` — the human agreeing with the play, filed as a note or a regression guard
-  (`85058574-109` is an explicit *"match planner note"*). Reading one as *"an earlier decision was
-  ruled wrong"* inverts its meaning. Clears one flag outright and thins two more.
-* **``episode_id is None`` collided across sources.** Three ctx-17 records carry no episode: they
-  come from committed engine-parity captures (`v2_ms_mirror_5000` / `_5001`), not games. Keyed
-  ``(agent, None)`` they all landed in one bucket, so f82 of one trace was scanned as a predecessor
-  of f100 of ANOTHER. A null episode is not an episode identity, so no predecessor relation can be
-  asserted over one — see :func:`candidates`.
-
-Neither is a judgement call; both are the detector claiming a relation the corpus does not record.
+That cannot be computed from the corpus — it needs the predecessor's card text read against the
+follow-up's prose. So the halves are separate: :func:`candidates` is the mechanical scan and
+:data:`RULINGS` is the human's verdict. An unruled candidate is `UNRULED`, never silently filtered.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-#: The verdicts a follow-up frame can carry. `UNRULED` is a first-class answer, not a failure: the
-#: dependency test needs a human, and an instrument that guessed would manufacture exactly the
-#: unfounded confidence this module exists to remove.
+#: `UNRULED` is a first-class answer, not a failure: the dependency test needs a human, and a guess
+#: would manufacture the unfounded confidence this module exists to remove.
 GRADEABLE = "GRADEABLE"
 OFF_POLICY = "OFF_POLICY"
 UNRULED = "UNRULED"
 
-#: The MAIN select context. A MAIN decision is not a follow-up — nothing "opened" it — so the whole
-#: doctrine is about the non-MAIN population. Spelled from `board_delta`'s vocabulary by
-#: :func:`is_follow_up` rather than as a literal here.
+#: A MAIN decision is not a follow-up — nothing "opened" it — so the doctrine is about non-MAIN only.
 _CONTEXT_MAIN = 0
 
 
 @dataclass(frozen=True)
 class Candidate:
-    """One earlier ruled decision in the same turn that MIGHT invalidate a follow-up frame.
-
-    A candidate is a *question*, never a verdict: it says the human ruled against something earlier
-    in this turn, not that this frame is therefore ungradeable. :data:`RULINGS` answers it."""
+    """One earlier ruled decision in the same turn that MIGHT invalidate a follow-up frame — a
+    QUESTION, never a verdict. :data:`RULINGS` answers it."""
     frame: int
     context: int | None
     category: str
@@ -94,51 +41,35 @@ class Candidate:
 
 @dataclass(frozen=True)
 class Ruling:
-    """The developer's verdict on ONE candidate frame, with the reason that justifies it.
-
-    ``reason`` is mandatory and is the whole value of the record: a bare `GRADEABLE` is
-    indistinguishable from a frame nobody looked at, and the reasons are what let a later reader
-    check the ruling against the card text rather than re-deriving it."""
+    """The developer's verdict on ONE candidate frame. ``reason`` is mandatory: a bare `GRADEABLE`
+    is indistinguishable from a frame nobody looked at."""
     verdict: str
     reason: str
 
 
 def select_context(correction) -> int | None:
-    """The Anchor select's context, read off the OBS the frame carries.
-
-    Never off the human-written ``select_context`` label, which is prose — the same rule
-    `grab_sweep._ctx7` states and for the same reason."""
+    """The Anchor select's context, read off the OBS — never off the human-written
+    ``select_context`` label, which is prose."""
     return ((getattr(correction, "obs", None) or {}).get("select") or {}).get("context")
 
 
 def is_follow_up(correction) -> bool:
-    """Is this frame a follow-up select — i.e. one some earlier play in the turn opened?
-
-    A frame with no recorded context is NOT treated as a follow-up: an unknown context cannot
-    establish that anything opened it, and guessing would put frames into the population this module
-    is here to protect."""
+    """Is this frame a follow-up select? A frame with NO recorded context is not one: an unknown
+    context cannot establish that anything opened it."""
     ctx = select_context(correction)
     return ctx is not None and ctx != _CONTEXT_MAIN
 
 
 def endorses_the_play(correction) -> bool:
-    """Does this Correction AGREE with what was played (``chosen == correct``)?
-
-    Such a record is a note or a regression guard, not a blunder — 15 of them are committed, and
-    `85058574-109` says so in its own rationale. It can never be evidence that an earlier decision
-    was wrong, because it asserts the opposite. Compared as SETS: ``correct`` is a list of option
-    indices whose order the human never ruled on (ADR-0086), so ``[1, 4]`` and ``[4, 1]`` are one
-    ruling."""
+    """Does this Correction AGREE with what was played? Such a record is a note or a regression
+    guard, never evidence of a blunder. Compared as SETS — index order is unruled (ADR-0086)."""
     correct = list(getattr(correction, "correct", None) or [])
     return bool(correct) and sorted(correct) == sorted(getattr(correction, "chosen", None) or [])
 
 
 def episode_index(corrections) -> dict:
-    """``{(agent, episode id): [every Correction in that episode]}`` — the input the scan takes.
-
-    Built over the whole store rather than inside a row loop because it is a property of the corpus:
-    the scan asks *"did the human rule against an EARLIER decision in this same turn?"*, which no
-    single frame can answer about itself."""
+    """``{(agent, episode id): [every Correction in that episode]}`` — a property of the corpus, so
+    it is built over the whole store rather than inside a row loop."""
     by_ep: dict = {}
     for c in corrections:
         by_ep.setdefault((c.agent, c.episode_id), []).append(c)
@@ -146,19 +77,8 @@ def episode_index(corrections) -> dict:
 
 
 def candidates(correction, by_ep: dict) -> list[Candidate]:
-    """Every earlier ruled decision in ``correction``'s own turn — the MECHANICAL half.
-
-    Three narrowings, each closing a way the scan claimed a relation the corpus does not record:
-
-    * **a null episode is not an episode identity.** ``episode_id is None`` means the record came
-      from somewhere that has no episode — the committed parity captures — so two such records
-      cannot be shown to share a game and no predecessor relation may be asserted between them.
-      Returns empty rather than scanning a bucket that merges every trace file at once.
-    * **an endorsement is not a blunder** (:func:`endorses_the_play`).
-    * **a frame is not its own predecessor**, and neither is a later one: strictly ``of < frame``,
-      same ``turn``.
-
-    What survives is a QUESTION for :data:`RULINGS`, not an answer."""
+    """Every earlier ruled decision in ``correction``'s own turn — the MECHANICAL half. A null
+    ``episode_id`` is NOT an identity (parity captures share it), so it yields nothing."""
     decision = getattr(correction, "decision", None) or {}
     frame, turn = decision.get("frame"), decision.get("turn")
     if frame is None or correction.episode_id is None:
@@ -177,27 +97,13 @@ def candidates(correction, by_ep: dict) -> list[Candidate]:
 
 
 def ruling_key(correction) -> tuple:
-    """``(agent, episode id, frame)`` — how :data:`RULINGS` addresses one frame.
-
-    Deliberately NOT `gates.correction_frame_key`: that key is ADR-0049's *identity* (which folds
-    scope and subject), while a ruling here is about one Anchor frame of one game and must not
-    collapse a Turn-scoped record onto a Decision-scoped one."""
+    """``(agent, episode id, frame)`` — deliberately NOT `gates.correction_frame_key`, which folds
+    scope and subject and would collapse a Turn-scoped record onto a Decision-scoped one."""
     return (correction.agent, correction.episode_id, (getattr(correction, "decision", None) or {}).get("frame"))
 
 
-#: The developer's verdict on each candidate follow-up frame, with the reason (Issue #412).
-#:
-#: AUTHORED, never derived — the dependency test needs the predecessor's card text read against the
-#: follow-up's prose, which no corpus scan can do. Every entry names the card or mechanic that
-#: settles it so a later reader can check the ruling rather than trust it.
-#:
-#: An `OFF_POLICY` entry may also be recorded for a frame the SCAN cannot see, the way
-#: `mega_lucario 84889011-7` needed one: nobody filed a Correction on the play that opened it, so
-#: there is no earlier ruled frame to detect. That is the "incomplete" half Issue #412 documented,
-#: and it is why this ledger is keyed on the frame rather than on a candidate.
-#: Every entry below was ruled 2026-08-06 against Issue #412's review packet
-#: (`tools/train/off_policy_census.py --review`), and every card fact cited was read from
-#: `data/EN_Card_Data.csv` at ruling time rather than recalled (CLAUDE.md).
+#: AUTHORED, never derived (Issue #412). Keyed on the FRAME, not on a candidate, so a verdict can
+#: also be recorded for a frame the scan cannot see. Rule new ones with the census tool's --review.
 RULINGS: dict[tuple, Ruling] = {
 
     # ── OFF-POLICY (a): the ruled-correct play PREVENTS this select from opening ─────────────────
@@ -286,9 +192,7 @@ RULINGS: dict[tuple, Ruling] = {
         "an additional evolved body into exactly that recipient set."),
 
     # ── GRADEABLE: the flag is a FALSE POSITIVE; the predecessor is orthogonal ───────────────────
-    # Recorded explicitly rather than left to fall out of an empty scan. A bare "no candidates" is
-    # indistinguishable from a frame nobody looked at, and these frames DO have candidates -- the
-    # ruling is what makes them gradeable again.
+    # These frames DO have candidates, so the ruling is what makes them gradeable again.
     ("mega_starmie", 81785223, 39): Ruling(
         GRADEABLE,
         "f38 rules 'Should play Pokegear 3.0 to dig for supporter earlier in turn'. Pokegear (id "
@@ -401,15 +305,8 @@ RULINGS: dict[tuple, Ruling] = {
 
 
 def classify(correction, by_ep: dict) -> str:
-    """`GRADEABLE` | `OFF_POLICY` | `UNRULED` for one follow-up frame.
-
-    A recorded :data:`RULINGS` entry always wins — including on a frame the scan flags nothing for,
-    which is how a developer-ruled off-policy frame the corpus cannot see is honoured. Otherwise a
-    frame with candidates is `UNRULED` (a question nobody has answered) and a frame with none is
-    `GRADEABLE`.
-
-    **Never returns OFF_POLICY on its own reasoning.** The scan's output is a candidate list; only a
-    human turns one into a verdict."""
+    """`GRADEABLE` | `OFF_POLICY` | `UNRULED`. A :data:`RULINGS` entry always wins; otherwise
+    candidates mean `UNRULED`. NEVER returns OFF_POLICY on its own reasoning — only a human does."""
     ruling = RULINGS.get(ruling_key(correction))
     if ruling is not None:
         return ruling.verdict
@@ -417,11 +314,8 @@ def classify(correction, by_ep: dict) -> str:
 
 
 def reasons(correction, by_ep: dict) -> list[str]:
-    """Why this frame is not cleanly gradeable, or ``[]`` — the back-compatible string view.
-
-    Kept because `grab_sweep` and `composer_lab` both print it, and because "is this list empty" is
-    the honest question a printer asks. A `GRADEABLE` ruling returns ``[]`` even when candidates
-    exist: that is the whole point of ruling one."""
+    """Why this frame is not cleanly gradeable, or ``[]`` — the string view its printers take. A
+    `GRADEABLE` ruling returns ``[]`` even when candidates exist."""
     verdict = classify(correction, by_ep)
     if verdict == GRADEABLE:
         return []
@@ -432,11 +326,8 @@ def reasons(correction, by_ep: dict) -> list[str]:
 
 
 def census(corrections) -> dict:
-    """The per-context off-policy census — Issue #412 scope item 2, over EVERY non-MAIN context.
-
-    ``{context: {"n", "ruled", "candidates", "off_policy", "gradeable", "unruled", "frames"}}``.
-    ``frames`` holds ``(key, verdict, [Candidate])`` so a caller can print the working rather than
-    the tally; a bare count is what let ctx 7 be measured and the other eleven contexts assumed."""
+    """The per-context census over EVERY non-MAIN context. ``frames`` holds
+    ``(key, verdict, [Candidate])`` so a caller can print the working rather than the tally."""
     by_ep = episode_index(corrections)
     out: dict = {}
     for c in corrections:
@@ -456,16 +347,8 @@ def census(corrections) -> dict:
 
 
 def control(corrections) -> dict:
-    """The POSITIVE CONTROL: does the scan still fire on the ctx-7 population it was ruled on?
-
-    *"Found nothing"* and *"my instrument is broken"* return the same empty output (CLAUDE.md), so
-    any census reading is worth nothing without this. Issue #412 measured 15 of 30 ctx-7 frames
-    flagged by the same-turn scan; if this comes back silent, every number this module produces is an
-    artifact and must not be reported as a finding.
-
-    Counts CANDIDATES, not verdicts, deliberately — the whole point of :data:`RULINGS` is that a
-    ruled candidate stops being off-policy, so keying the control on verdicts would make it fade to
-    zero exactly as the review succeeds."""
+    """The POSITIVE CONTROL: does the scan still fire on the ctx-7 population it was ruled on? If
+    this is silent, every census number is an artifact. Counts CANDIDATES, never verdicts."""
     from train.grab_sweep import _TO_HAND
     by_ep = episode_index(corrections)
     ctx7 = [c for c in corrections if select_context(c) == _TO_HAND]

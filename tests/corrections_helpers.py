@@ -18,14 +18,8 @@ import json
 def correction_record(episode, frame, *, seat=0, scope="decision", subject=None,
                       agent="mega_starmie", agent_build=None, correct=None, obs=True,
                       category="wasted_resource", corr_id=None):
-    """One raw corrections.jsonl record, in the on-disk shape. ``seat`` is TOP-LEVEL — the whole
-    point: the ``decision`` snapshot has no ``seat`` field, which is why reading it off there
-    yielded 0 forever.
-
-    ``corr_id`` defaults to ``"<episode>-<frame>"``, which is deliberately the *anchor* string —
-    a record whose `id` collides with another record's anchor form is exactly the collision
-    `reviewed.resolve_locator` has to rank, so the default keeps that case one line away.
-    """
+    """One raw corrections.jsonl record, in the on-disk shape. ``seat`` is TOP-LEVEL: the
+    ``decision`` snapshot has no ``seat`` field, which is why reading it off there yielded 0."""
     return {"id": corr_id if corr_id is not None else f"{episode}-{frame}", "source": "own",
             "episode_id": episode, "seat": seat,
             "agent": agent, "agent_build": agent_build, "submission_id": None,

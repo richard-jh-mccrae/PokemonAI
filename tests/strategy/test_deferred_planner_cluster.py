@@ -1,20 +1,10 @@
-"""Deferred-planner cluster — four opponent-model-driven / new-planner consumers. They were wired
-DEFAULT-OFF; three now SHIP ARMED (`ko_target_whiff`, `opp_resource_reads`, `enabler_item_composer`
-are True in runtime.PROFILE) and do change live behaviour (cf. tests/agents/test_runtime.py for the
-PROFILE contract):
+"""Deferred-planner cluster — four opponent-model-driven / new-planner consumers.
 
-  * BUILD 1 `ko_target_whiff`       — KO/snipe-target TIEBREAK toward the body the opponent is least able
-                                      to replace (lowest `copies_left_odds`); pure tiebreak, fails OPEN.
-  * BUILD 2 `opp_resource_reads`    — a sub-prize nudge toward pressing KO/grind lines when the opponent
-                                      is near deck-out (`opp_deckout_in_turns`, SOUND).
-  * BUILD 3 `enabler_item_composer` — the ko_for_prizes Item-tutor→evolve→KO composer (prefer a cheaper
-                                      Item enabler over the scarce Supporter tutor).
-  * BUILD 4 `Board.turn_goal_satisfied` — the fail-SAFE-to-False predicate. Its weight-0 Hypothesis
-                                      consumer (`dont-spend-unneeded-supporter`) was deleted by
-                                      POC-T4/5 with the whole SEQUENCING cluster.
-
-These tests exercise the FLAG DEFAULTS (all off), the inert code paths, and the trigger — never a live
-score delta (every seam is off / weight 0).
+`ko_target_whiff`, `opp_resource_reads` and `enabler_item_composer` now SHIP ARMED in
+`runtime.PROFILE` and do change live behaviour (see `tests/agents/test_runtime.py` for the PROFILE
+contract); `Board.turn_goal_satisfied` is the fail-SAFE-to-False predicate whose weight-0 Hypothesis
+consumer was deleted with the SEQUENCING cluster. These tests exercise the flags, the inert code
+paths and the triggers — never a live score delta.
 """
 import types
 
@@ -166,11 +156,7 @@ def test_composer_no_ops_without_stats():
 
 
 # ══════════════════════════════ BUILD 4 — one-Supporter-per-turn slot accounting ══════════════════════════════
-#
-# Replaces the flat `_PLANNER_ENABLER_ITEM=4` proxy: the Item enabler's advantage over the Supporter-tutor
-# path is CONDITIONAL on actually preserving the scarce one-Supporter-per-turn slot. The gap WIDENS only when
-# a slot-competing Supporter (a `gust` Boss's Orders / another high-value Supporter) is in hand, and SHRINKS
-# otherwise. Everything stays sub-prize — a same-KO enabler tiebreak, never a reorder over a real prize.
+# The gap widens only when a slot-competing Supporter is in hand, and stays sub-prize either way.
 
 def _slot_pilot(hand_ids, stat_by_id):
     return _pilot(stats=DictCardStatProvider(stat_by_id),
@@ -215,11 +201,7 @@ def test_item_gap_shrinks_when_no_supporter_competes():
 
 
 # ══════════════ BUILD 3+5 — SOUND energy-enabler chaining (tutor_energy unlock; accel under-fired) ══════════════
-#
-# The composer caps the attacker's Energy at body_energy + extra (extra ≤ 1 manual attach). A KO that needs
-# MORE Energy becomes visible ONLY when that extra attach is PROVABLY available this turn: a playable
-# `tutor_energy` card can fetch the single manual attach the plain line lacks. An accelerator's extra Energy
-# is deliberately NOT counted (unbounded for a composed attacker) — the line under-fires instead.
+# An accelerator's extra Energy is deliberately NOT counted (unbounded) — the line under-fires.
 
 _EVO_ID, _BASE_ID, _ITEM_ID, _ETUTOR_ID, _AID = 202, 201, 203, 204, 9902
 _ENERGY_ID = 205                          # the Basic Energy the tutor actually fetches
@@ -238,9 +220,8 @@ def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
         _ENERGY_ID: CardStat(synthetic=True, cardId=_ENERGY_ID, cardType=5, energyType=2),        # a Basic Energy
     }, {_AID: AttackStat(attackId=_AID, damage=200, cost=2, damageMax=200)})      # 2-Energy 200-dmg KO
     fns = _CardFunctions({_ITEM_ID: ["tutor_mega"], _ETUTOR_ID: ["tutor_energy"]})
-    # The Attach Budget reads the YIELD off an Effect Clause, never off the tag — tags only route
-    # (ADR-0067). A tagged card with no clause contributes ZERO, so the fixture has to say what its
-    # tutor actually fetches, exactly as `test_attach_budget_coverage.py` demands of a shipped deck.
+    # The Attach Budget reads the YIELD off an Effect Clause, never off the tag (ADR-0067) — a tagged
+    # card with no clause contributes ZERO, so the fixture must say what its tutor fetches.
     effects = _CardEffects({_ETUTOR_ID: [{"kind": "fetch", "target": "basic_energy",
                                           "zone": "deck"}]})
     return _deck_pilot([_EVO_ID] + (deck or [_BASE_ID] * 49 + [_ENERGY_ID] * 10),
@@ -249,9 +230,8 @@ def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
 
 
 def _prime(pilot, obs):
-    """Build the StateModel the planner reads. In production `_board` always runs first; a test that
-    calls a planner internal straight has to establish the same precondition or it is measuring a
-    fail-closed zero."""
+    """Build the StateModel the planner reads. In production `_board` always runs first; without it a
+    planner internal measures a fail-closed zero."""
     pilot._board(obs, obs.get("select"), carried=pilot.carried())
     return pilot
 
@@ -287,9 +267,8 @@ def test_composer_finds_the_ko_only_with_the_tutored_attach():
 
 
 def test_energy_chain_line_appears_only_with_the_flag_on():
-    # Drive the real dispatch (`_ko_for_prizes_lines`): the tutored-attach composite is a line WITH the flag
-    # on, and NOTHING with it off (the branch is gated, and the item is not an energy-tutor so the fallback
-    # `_supporter_ko_candidate` produces nothing either).
+    # Drive the real dispatch (`_ko_for_prizes_lines`): the item is not an energy-tutor, so with the
+    # flag off the `_supporter_ko_candidate` fallback produces nothing either.
     obs, sel, option = _energy_chain_obs(hand=[_ITEM_ID, _ETUTOR_ID])
     board = _chain_board()
 
@@ -303,17 +282,7 @@ def test_energy_chain_line_appears_only_with_the_flag_on():
 
 
 # ══════════════════════════════ BUILD 1 — Rare Candy (Basic→Stage-2 skip) ══════════════════════════════
-#
-# Rare Candy (id 1079) is NOT a tutor: the Stage-2 must ALREADY be in hand. Legal line: play Rare Candy →
-# choose an in-play Basic (not appearThisTurn, not turn ≤ 1) → put an in-hand Stage-2 whose chain roots at
-# that Basic onto it, SKIPPING the Stage-1 → attach → KO.
-#
-# These cover the MECHANISM on a synthetic pool, and since 2026-08-06 they are the ONLY coverage it
-# has. `grimmsnarl_ex` was the one shipped deck running Rare Candy plus a real Basic→Stage-1→Stage-2
-# line; PR #436 deleted it, taking `tests/agents/test_grimmsnarl_ex_triggers.py` (the Issue #288
-# follow-up, which drove this branch through a real engine-backed Pilot) with it. No surviving deck
-# runs Rare Candy, so the branch is forward-looking generality again — see
-# `planner._rare_candy_ko_candidate`'s HONEST NOTE.
+# No SHIPPED deck runs Rare Candy — see `planner._rare_candy_ko_candidate`'s HONEST NOTE.
 
 _RC_BASIC, _RC_MID, _RC_TOP, _RC_AID = 210, 211, 212, 9903
 _RARE_CANDY_ID = 1079        # Rare Candy (Item, SVI 191), carried locally now that the planner
@@ -408,9 +377,5 @@ def test_turn_goal_satisfied_derivation_fails_safe_to_false():
     board = Board(game_plan=GamePlan(directed_goal="ko_on_path", confidence=0.9), line_ready=True)
     assert pilot._turn_goal_satisfied(board, None) is False          # even a confident plan → False (sound)
 
-# BUILD 4's `dont-spend-unneeded-supporter` Hypothesis and its trigger tests are DELETED with the
-# whole SEQUENCING cluster (POC-T4/5, Issue #386). It shipped at weight 0 — WIRED and INERT — and
-# what it was waiting for is precisely what landed: the composer prices holding a scarce Supporter as
-# the `hand` term of the end board it declines to spend it from. `Board.turn_goal_satisfied` above
-# survives and is still asserted here: it is a board FACT with other readers, and its fail-safe-False
-# derivation is the property worth guarding.
+# `Board.turn_goal_satisfied` survives its deleted `dont-spend-unneeded-supporter` consumer because it
+# is a board FACT with other readers, and its fail-safe-False derivation is worth guarding.

@@ -1,14 +1,8 @@
 """cgpy game state: zones, in-play stacks, per-seat log outboxes, select plumbing (ADR-0059).
 
-Everything is plain data (no closures/generators), so `clone()` is a straight deepcopy — the
-property the verification API (M3) needs. Serials follow the pinned native scheme: seat 0's
-submitted position i -> serial 3+i, seat 1 -> 63+i (docs/pyeng/determinism.md §1). Deck lists
-are bottom-first: THE TOP OF THE DECK IS THE LIST END (§ deck-top pin).
-
-Log emission happens at the mutation sites via `emit()`, which appends the viewer-correct
-rendering (full vs REVERSE) to each seat's outbox; `render.py` drains an outbox when that seat
-receives a select. Visibility is decided per call site (e.g. a mulligan hand returns to deck
-revealed, an effect shuffle-in does not), matching observed native behavior.
+Everything is plain data — no closures or generators — so `clone()` can be a straight deepcopy.
+Deck lists are bottom-first: THE TOP OF THE DECK IS THE LIST END. Log visibility is decided per
+call site, not centrally, matching native behavior.
 """
 from __future__ import annotations
 
@@ -36,25 +30,19 @@ class PokemonInPlay:
     tools: list[int] = field(default_factory=list)
     hp: int = 0
     max_hp: int = 0
-    entered_turn: int = 1   # turn number it entered play / evolved (setup counts as turn 1);
-                            # appearThisTurn renders as entered_turn >= current turn (pinned)
-    ability_used_turn: int = -1   # once-per-turn activated-ability gate
+    entered_turn: int = 1  # setup counts as turn 1; appearThisTurn renders as entered_turn >= the current turn
+    ability_used_turn: int = -1
     attack_locks: dict = field(default_factory=dict)  # attackId(str) -> global turn locked
-    moved_active_turn: int = -1   # turn it moved bench->active (switch/promotion) — the
-                                  # "moved from your Bench to the Active Spot this turn" cond
+    moved_active_turn: int = -1   # the turn it moved bench -> active
     retreat_lock_turn: int = -1   # global turn this mon cannot RETREAT (lockDefenderRetreat)
-    take_less_turn: int = -1      # "takes N less damage" transient: the global turn it
-    take_less: int = 0            # applies (the attacker's turn after the granting attack)
-    protect_turn: int = -1        # Dig-family "prevent all damage from and effects of
-                                  # attacks" transient: the global turn it applies
-    outgoing_less_turn: int = -1  # Intimidating-Stare transient on the DEFENDING mon:
-    outgoing_less: int = 0        # its attacks do N less (pre-W/R) on this global turn
-    no_attack_turn: int = -1      # Snotted-Up transient: this mon can't attack on this
-                                  # global turn (menu-enforced, like sleep/paralysis)
-    attack_gate_turn: int = -1    # Sand-Attack transient: on this global turn, this
-                                  # mon's attacks need a heads first (tails = nothing)
-    no_weakness_turn: int = -1    # Metal-Defender transient: on this global turn,
-                                  # this mon has no Weakness
+    take_less_turn: int = -1      # the global turn the "takes N less damage" transient applies
+    take_less: int = 0
+    protect_turn: int = -1        # the global turn the Dig-family prevent-all transient applies
+    outgoing_less_turn: int = -1  # the global turn this mon's own attacks do N less, pre-W/R
+    outgoing_less: int = 0
+    no_attack_turn: int = -1      # the global turn this mon cannot attack (menu-enforced)
+    attack_gate_turn: int = -1    # the global turn this mon's attacks need a heads first
+    no_weakness_turn: int = -1    # the global turn this mon has no Weakness
 
     @property
     def top(self) -> int:
@@ -80,15 +68,13 @@ class PlayerBoard:
     paralyzed_since_turn: int = -1   # for auto-recovery after the owner's next turn
     mulligans: int = 0
     mulligan_asked: bool = False
-    items_locked_turn: int = -1   # Itchy-Pollen class: the global turn this seat cannot
-                                  # play ITEM cards ("During your opponent's next turn,
-                                  # they can't play any Item cards from their hand")
+    items_locked_turn: int = -1  # the global turn this seat cannot play ITEM cards
 
 
 @dataclass
 class EffectFrame:
     """A resumable chain-program frame: plain data only (clone-safe)."""
-    program: list          # list of op dicts
+    program: list
     pc: int
     vars: dict
     seat: int
@@ -107,8 +93,8 @@ class PendingSelect:
     remain_damage_counter: int = 0
     remain_energy_cost: int = 0
     deck_listing: list[int] | None = None   # serials, when the select reveals the deck
-    context_card: int | None = None         # serial
-    effect_card: int | None = None          # serial
+    context_card: int | None = None
+    effect_card: int | None = None
 
 
 @dataclass
@@ -130,12 +116,12 @@ class GameState:
     turn_markers: dict = field(default_factory=dict)   # this-turn effects, cleared at begin_turn
     ko_turn: list[int] = field(default_factory=lambda: [-1, -1])  # per-seat: turn a KO was suffered
     attach_seq: dict[int, int] = field(default_factory=dict)  # energy serial -> attach tick
-    attach_tick: int = 0        # energy-discard selects list targets in global attach order
+    attach_tick: int = 0
     looking: list[int] | None = None
     looking_owner: int = -1
     pending: PendingSelect | None = None
-    frames: list = field(default_factory=list)   # EffectFrame stack (chain programs)
-    pending_triggers: list = field(default_factory=list)  # queued bench/evolve triggers
+    frames: list = field(default_factory=list)
+    pending_triggers: list = field(default_factory=list)
     last_posed: tuple[int, int, int, int] = (0, 0, 1, 1)   # (seat, context, min, max)
                                                            # of the last posed select
     outbox: list[list[dict]] = field(default_factory=lambda: [[], []])
@@ -190,14 +176,13 @@ class GameState:
 
     def emit(self, entry: dict, *, reverse: dict | None = None,
              actor: int | None = None) -> None:
-        """Append `entry` to every seat's outbox; the non-actor seat gets `reverse` instead
-        when given. Entries are final rendered dicts (sparse keys, int enums)."""
+        """The non-actor seat gets `reverse` instead when given. Entries are FINAL rendered dicts."""
         for seat in (0, 1):
             if reverse is not None and actor is not None and seat != actor:
                 self.outbox[seat].append(dict(reverse))
             else:
                 self.outbox[seat].append(dict(entry))
-        self.outbox_god.append(dict(entry))   # god view always sees the full entry
+        self.outbox_god.append(dict(entry))
 
     # ---------------------------------------------------------------- zone mutations
 
@@ -207,7 +192,6 @@ class GameState:
             self.emit({"type": int(LogType.SHUFFLE), "playerIndex": seat})
 
     def draw(self, seat: int) -> int | None:
-        """Draw the top deck card into the hand (owner sees ids, opponent sees DRAW_REVERSE)."""
         board = self.players[seat]
         if not board.deck:
             return None
@@ -222,8 +206,7 @@ class GameState:
 
     def move_card(self, serial: int, from_area: int, to_area: int, *,
                   seat: int, visible_to_owner: bool, visible_to_opponent: bool) -> None:
-        """Emit the MOVE_CARD/_REVERSE pair for a card movement (zone lists are mutated by
-        the caller, which knows list positions); visibility is per call site."""
+        """Zone lists are mutated by the CALLER, which knows list positions; visibility is per call site."""
         full = {"type": int(LogType.MOVE_CARD), "playerIndex": seat,
                 "cardId": self.card_id(serial), "serial": serial,
                 "fromArea": int(from_area), "toArea": int(to_area)}
@@ -235,28 +218,26 @@ class GameState:
         self.outbox_god.append(dict(full))
 
     def note_attach(self, serial: int) -> None:
-        """Record energy-attach order (Crushing Hammer-class selects list the opponent's
-        energies oldest-attach-first, pinned ml_dx_2001 f175 / ml_dx_2000 f95)."""
+        """Records attach order: energy-discard selects list targets OLDEST-attach-first."""
         self.attach_tick += 1
         self.attach_seq[serial] = self.attach_tick
 
     def coin_flip(self, seat: int) -> bool:
         try:
-            head = self.rng.coin(seat=seat)   # replay binds per-OWNER (checkup flips
-        except TypeError:                     # belong to the condition owner, not the
-            head = self.rng.coin()            # frame's mover — pinned collapse_9740 f17)
+            head = self.rng.coin(seat=seat)   # replay binds per-OWNER: a checkup flip belongs to
+        except TypeError:                     # the condition's owner, not the frame's mover
+            head = self.rng.coin()
         self.emit({"type": int(LogType.COIN), "playerIndex": seat, "head": bool(head)})
         return head
 
     def set_result(self, result: int, reason: int) -> None:
-        from .state import PendingSelect  # local import keeps dataclass order simple
+        from .state import PendingSelect
 
         self.result = result
         self.result_reason = reason
         self.emit({"type": int(LogType.RESULT), "result": int(result), "reason": int(reason)})
-        # The native terminal frame carries a degenerate EMPTY select (type 0, the last
-        # posed context AND min/max, no options) rather than select=null — pinned
-        # (v2_ms_mirror_5000 f147: min/max 2 after a 2-prize pick).
+        # The native terminal frame carries a degenerate EMPTY select — type 0, the LAST POSED
+        # context and min/max, no options — rather than select=null.
         last_seat, last_ctx, last_min, last_max = self.last_posed
         self.pending = PendingSelect(seat=last_seat, type=0, context=last_ctx,
                                      min_count=last_min, max_count=last_max, options=[])

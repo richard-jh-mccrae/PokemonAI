@@ -1,9 +1,7 @@
-"""WP6 — the replaceability-floor keep-value (hypergeometric-fetch-closure §Rounds 6-8).
+"""The replaceability-floor keep-value: `keep_cost(X) = role_value(X) x (1 - re-access_odds(X))`.
 
-`keep_cost(X) = role_value(X) × (1 − re-access_odds(X))` — the gamble's gain-side closure pointed
-BACKWARDS: a card that shuffles into the deck costs its role value scaled by how UN-recoverable it is.
-A wincon with two Mega Signal live shuffles cheap; a closure-unreachable one-of shuffles at ~full role
-value. The `common.card_worth` tier table is the ONE tuned currency; the closure supplies the redundancy.
+The `common.card_worth` tier table is the ONE tuned currency; the fetch closure, pointed BACKWARDS,
+supplies the redundancy.
 """
 import sys
 from pathlib import Path
@@ -21,28 +19,19 @@ def _shipped_pilot(agent):
 
 @pytest.mark.req("REQ-WORTH-0001")
 def test_reaccess_outs_are_the_closure_pointed_backwards():
-    """`_card_reaccess_outs(X)` = X's own deck copies PLUS every deck-search tutor whose FETCH clause
-    reaches X (`_fetch_target_matches`) — Mega Lucario ex is reached by Ultra Ball (any Pokémon) and
-    Mega Signal (mega) but NOT Poké Pad (no-Rule-Box), exactly the closure the gamble gain side uses."""
+    """X's own deck copies PLUS every deck-search tutor whose FETCH clause reaches X."""
     ml = _shipped_pilot("mega_lucario")
     counts = {678: 1, 1121: 4, 1145: 2, 1152: 4, 6: 10}   # Mega Lucario ex + Ultra Ball + Mega Signal
     assert ml._card_reaccess_outs(678, counts) == 1 + 4 + 2       # Poké Pad (1152) excluded: Rule Box
-    # A {F} Basic Energy: reached by Fighting Gong ({F}) and (were it in deck) Energy Search — here just
-    # its own copies plus Fighting Gong, which fetches a Basic {F} Energy.
-    assert ml._card_reaccess_outs(6, {6: 10, 1142: 4}) == 10 + 4
+    assert ml._card_reaccess_outs(6, {6: 10, 1142: 4}) == 10 + 4  # + Fighting Gong, a Basic {F} fetch
     assert ml._card_reaccess_outs(6, {6: 10, 1152: 4}) == 10        # Poké Pad fetches Pokémon, not energy
     assert ml._card_reaccess_outs(999999, counts) == 0             # unknown card -> no outs
 
 
 @pytest.mark.req("REQ-WORTH-0007")
 def test_role_value_derives_worth_for_an_undeclared_line_member():
-    """Line-member worth DERIVATION (Round 9 'derive first', the discard-shadow finding on
-    86091435-68): a non-payoff win-condition Line member is worth its `win_condition_base` tier even
-    when the deck declared only the base — a middle Line stage (Drakloak on Dreepy→Drakloak→Dragapult
-    ex) is a plan piece, not junk. WORTH-ONLY: the Line-membership fact enters the value currency
-    (the keep-cost sites + the shadow) but NOT `_roles_of` / `c.roles` — the discard-ladder rungs keep
-    their tuned routing, so the covered-vs-uncovered Drakloak discrimination (83686860-18) stays the
-    gated seam-D migration, never flipped here."""
+    """A middle Line stage is a plan piece even when the deck declared only the base. WORTH-ONLY: the
+    Line-membership fact enters the value currency but NOT `_roles_of` / `c.roles`."""
     from common.card_worth import ROLE_TIER
     dx = _shipped_pilot("dragapult_ex")
     assert dx._role_value(121) == ROLE_TIER["win_condition"]        # payoff: unchanged (30)
@@ -56,9 +45,7 @@ def test_role_value_derives_worth_for_an_undeclared_line_member():
 
 @pytest.mark.req("REQ-WORTH-0001")
 def test_role_value_reads_the_tuned_tier_table():
-    """Base worth = the general role→points tier (`common.card_worth.ROLE_TIER`), max over a card's
-    declared/derived roles, with the energy and ACE-SPEC fallbacks. Deck-agnostic: deck-genie never
-    invents numbers (spec §Round 9)."""
+    """MAX over a card's declared/derived roles, with the energy and ACE-SPEC fallbacks."""
     from common.card_worth import ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
     ml = _shipped_pilot("mega_lucario")
     assert ml._role_value(678) == ROLE_TIER["win_condition"]       # Mega Lucario ex: the wincon tier
@@ -70,16 +57,13 @@ def test_role_value_reads_the_tuned_tier_table():
 
 @pytest.mark.req("REQ-WORTH-0001")
 def test_role_value_pure_function_owns_the_tier_and_fallbacks():
-    """`card_worth.role_value(roles, is_ace_spec, is_typed_basic_energy)` is the Pilot-free worth
-    primitive the Pilot's `_role_value` delegates to (WP7): the tier max over roles, the ACE-SPEC and
-    typed-Basic-Energy fallbacks for an un-Roled card, 0 otherwise — deck-agnostic, zero card facts."""
+    """The Pilot-free primitive `_role_value` delegates to: deck-agnostic, zero card facts."""
     from common.card_worth import role_value, ROLE_TIER, ENERGY_TIER, ACE_SPEC_TIER
     assert role_value(["win_condition", "accel_source"]) == ROLE_TIER["win_condition"]   # max over roles
     assert role_value([]) == 0.0
     assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
     assert role_value([], is_ace_spec=True) == ACE_SPEC_TIER
-    # MAX semantics (revised with the TAG_TIER build): the best claim wins — an ACE SPEC that also
-    # declares a modest role is still one-per-deck irreplaceable (25 > engine 12).
+    # MAX semantics: an ACE SPEC that also declares a modest role is still one-per-deck irreplaceable.
     assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER
     assert role_value(["not_a_real_role"]) == 0.0                            # unknown role -> no worth
     # parity: the Pilot delegator reproduces the pure function on real cards
@@ -94,11 +78,8 @@ def test_role_value_pure_function_owns_the_tier_and_fallbacks():
 
 @pytest.mark.req("REQ-WORTH-0004")
 def test_role_value_reads_tag_derived_worth():
-    """The worth-coverage fix (ADR-0065 §Build status, TAG_TIER): situational Trainers / special Energy carry
-    their keep-value in behavioural TAGS the discard ladder already trusts (`keep-key` −30 covers
-    `discard_eot`; `dont-waste-clutch-heal`; `keep-gust-and-recovery` −10) — `role_value` now reads a
-    TAG_TIER so the ONE currency covers them. Worth = the MAX claim across roles, tags, and the
-    ACE-SPEC / energy fallbacks."""
+    """Situational Trainers / Special Energy carry their keep-value in behavioural TAGS, so worth is
+    the MAX claim across roles, tags, and the ACE-SPEC / energy fallbacks (ADR-0065)."""
     from common.card_worth import role_value, ROLE_TIER, TAG_TIER, ACE_SPEC_TIER
     assert role_value([], tags=["discard_eot"]) == TAG_TIER["discard_eot"]      # the Ignition burst
     assert role_value([], tags=["clutch_heal"]) == TAG_TIER["clutch_heal"]      # Wally's Compassion
@@ -114,9 +95,7 @@ def test_role_value_reads_tag_derived_worth():
 
 @pytest.mark.req("REQ-WORTH-0001")
 def test_keep_cost_is_role_value_scaled_by_irreplaceability():
-    """`keep_cost = role_value × (1 − re-access odds)` over the shuffle-grown pool (+1 for the shuffled
-    held copy rejoining the deck). The SAME wincon costs almost nothing to shuffle with its tutors live
-    and near its full role value with them gone — the replaceability floor, graded, zero new constants."""
+    """Over the shuffle-grown pool: +1 out for the shuffled held copy rejoining the deck."""
     from math import isclose
     from common.card_worth import ROLE_TIER
     from common.deck_odds import draw_hit_probability
@@ -135,13 +114,8 @@ def test_keep_cost_is_role_value_scaled_by_irreplaceability():
 
 @pytest.mark.req("REQ-WORTH-0005")
 def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_once():
-    """The duplicate-copy reconciliation (ADR-0065 §Build status): BOTH keep-value sites (the gamble
-    keep-floor, the refresh SHED) read the ONE `_hand_keep` summation. k held copies of a card each
-    charge with all k shuffled siblings as outs (the first sets-not-sums step, spec §Round 7) — dearer
-    than the retired SHED frozenset dedup (one charge per distinct card, duplicates free) and cheaper
-    than the retired gamble form (k independent one-ofs at +1 out each). The played refresh is
-    excluded ONCE — a second held copy of it still shuffles and still charges. A duplicate-free hand
-    prices exactly as before the reconciliation."""
+    """BOTH keep-value sites read the ONE `_hand_keep` summation: k held copies each charge with all k
+    shuffled siblings as outs, and the played refresh is excluded ONCE."""
     from math import isclose
     from common.card_worth import ROLE_TIER
     from common.deck_odds import draw_hit_probability
@@ -150,10 +124,8 @@ def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_
     counts = {678: 1, 1121: 4, 1145: 2}                   # wincon + Ultra Ball + Mega Signal in deck
     single = ml._keep_cost(678, counts, pool, draws)      # the lone-copy charge (+1 out), unchanged
     assert single > 0
-    # duplicate-free hand: the summation IS the old per-copy sum — behaviour unchanged
     assert isclose(ml._hand_keep([678], None, counts, pool, draws), single)
-    # two held copies: each charges with BOTH shuffled siblings as outs — 2 × the (+2 outs) charge,
-    # strictly between one dedup charge and two independent one-of charges
+    # two held copies: each charges with BOTH shuffled siblings as outs
     outs2 = ml._card_reaccess_outs(678, counts) + 2
     per_copy2 = ROLE_TIER["win_condition"] * (1 - draw_hit_probability(outs2, pool, draws))
     dup = ml._hand_keep([678, 678], None, counts, pool, draws)
@@ -167,13 +139,8 @@ def test_hand_keep_prices_duplicates_marginally_and_excludes_the_played_refresh_
 
 @pytest.mark.req("REQ-WORTH-0006")
 def test_pre_anchor_keep_cost_weights_the_prize_split():
-    """PRE-ANCHOR the cost side prices the prize split exactly like the gain side (`_prize_split_hit`):
-    the unseen re-access outs split hypergeometrically over deck + face-down prizes, while the
-    shuffled held copy joins the pool as a CERTAIN out (a hand card is never prize-assignable).
-    Before this, the cost side counted possibly-prized outs at full strength against a prize-free
-    pool — re-access overestimated, keep under-charged, a pre-anchor pro-gamble bias the
-    prize-weighted gain side never had. Weighting can only LOWER re-access, so keep-cost RISES
-    pre-anchor; with no hidden prizes the plain window draw is reproduced exactly."""
+    """PRE-ANCHOR, unseen re-access outs split hypergeometrically over deck + face-down prizes while
+    the shuffled held copy joins as a CERTAIN out — a hand card is never prize-assignable."""
     from math import comb, isclose
     from common.card_worth import ROLE_TIER
     from common.deck_odds import draw_hit_probability
@@ -195,8 +162,7 @@ def test_pre_anchor_keep_cost_weights_the_prize_split():
     # _hand_keep threads the split through to each copy
     assert isclose(ml._hand_keep([678], None, counts, pool, draws,
                                  prizes_hidden=k, deck_count=d), got)
-    # `certain` edges of the split primitive: the gain side (certain=0) is unchanged; zero unseen
-    # outs still redraw the certain shuffled copy
+    # `certain` edges: the gain side (certain=0) is unchanged, and zero unseen outs still redraw it.
     assert (ml._prize_split_hit(u, d, k, pool, draws)
             == ml._prize_split_hit(u, d, k, pool, draws, certain=0))
     assert isclose(ml._prize_split_hit(0, d, k, pool, draws, certain=1),
@@ -206,9 +172,7 @@ def test_pre_anchor_keep_cost_weights_the_prize_split():
 
 @pytest.mark.req("REQ-WORTH-0001")
 def test_keep_cost_deadline_odds_gates_the_worth():
-    """The gate library's deadline factor (ADR-0065 Stage 1): ``keep_cost`` scales by ``deadline_odds``
-    — 1.0 (default) leaves the closure value unchanged, 0.0 collapses it to nothing (an undeployable
-    evolution is a dead card, free to shuffle), and it factors linearly in between."""
+    """``deadline_odds`` factors LINEARLY: 0.0 collapses the worth (an undeployable evolution is dead)."""
     from common.card_worth import keep_cost
     base = keep_cost(30.0, 0.4)                       # deadline_odds defaults to 1.0
     assert keep_cost(30.0, 0.4, 1.0) == base

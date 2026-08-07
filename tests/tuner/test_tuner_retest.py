@@ -56,9 +56,7 @@ def test_retest_surfaces_layer_verdicts():
 
 
 def test_retest_treats_indistinguishable_duplicate_species_as_fixed():
-    """Duplicate-species reconciliation: two byte-identical bench bodies (the f75 shape) are
-    interchangeable snipe targets, so picking either satisfies the doctrine — the strict-index bar
-    wrongly re-flagged the equally-valid twin the engine deterministically lands on."""
+    """Two byte-identical bench bodies are interchangeable snipe targets, so either satisfies doctrine."""
     twin = lambda: poke(677, energy=0, hp=80, max_hp=80)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
                       context=DAMAGE, current=state(opp_bench=[twin(), twin()]))
@@ -78,10 +76,8 @@ def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
                                               poke(677, energy=2, hp=80, max_hp=80)]))
     corr = _correction(obs, correct=[0], live_trace={"chosen": [1], "margin": 0})
 
-    # The guard's actual subject, asserted directly rather than through whichever copy the pick lands
-    # on: attached Energy is game-visible, so the two options are in NO shared class. Since ADR-0103 a
-    # bare Pilot (both options 0.0) settles the pick by the canonical tie-break rather than the menu
-    # index, and pinning that index here would pin the tie-break, not the reconciliation.
+    # The guard's subject, asserted directly: attached Energy is game-visible, so the two options share
+    # NO class. Pinning the pick index would pin ADR-0103's tie-break, not the reconciliation.
     from common.option_equivalence import option_equivalence
     assert option_equivalence(obs["select"]["option"], obs) == {}   # not one decision — no class
 
@@ -91,9 +87,7 @@ def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
 
 
 def test_retest_reconciles_the_reopened_f75_duplicate_riolu_snipe():
-    """The reopened f75 case end-to-end: the shipped mega_starmie Pilot snipes a Riolu, but an
-    identical twin, so its slot differs from correct=[3]. Body reconciliation reports it FIXED,
-    mirroring tests/strategy/test_snipe_the_real_attacker.py's by_card_id assertion."""
+    """The shipped Pilot snipes an identical twin Riolu, so its slot differs from `correct`; still FIXED."""
     repo = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo / "tools"))
     from train.tune import _build_pilot
@@ -144,9 +138,8 @@ def test_retest_fixed_is_unknown_when_the_correction_names_no_correct_option():
 
 
 def test_retest_span_re_drives_the_turn_and_stops_at_the_first_divergence():
-    """ADR-0049: the Span is re-driven Decision by Decision. Once the candidate Pilot diverges, every
-    later `obs` was produced by the OLD line — off-policy — so its verdict is meaningless and is
-    never computed. An agreeing Pilot walks the whole turn with no divergence."""
+    """ADR-0049: once the candidate Pilot diverges, every later `obs` came from the OLD line — off-
+    policy — so its verdict is meaningless and is never computed."""
     corr = _turn_correction(correct=[1], span=_span())
 
     agrees = retest_span(corr, _pilot())

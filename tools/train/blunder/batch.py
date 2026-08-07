@@ -27,11 +27,8 @@ def _episode_id(path: Path) -> int | None:
 
 
 def discover_replays(path: Path | str) -> list[Path]:
-    """A single Replay file -> ``[it]``; a directory -> its Replay files ordered by episode id.
-
-    Recognises both the collect naming (``episode-<id>-replay.json[.gz]``) and the bare
-    ``<id>.json[.gz]`` layout; agent logs and other files are ignored.
-    """
+    """A Replay file -> ``[it]``; a directory -> its Replay files ordered by episode id. Recognises
+    both ``episode-<id>-replay.json[.gz]`` and bare ``<id>.json[.gz]``; other files are ignored."""
     path = Path(path)
     if path.is_file():
         return [path]
@@ -40,12 +37,8 @@ def discover_replays(path: Path | str) -> list[Path]:
 
 
 def load_game(path: Path | str) -> dict:
-    """Load one Replay into a self-contained tagging context.
-
-    Bundles the replay, its parsed live Decision Telemetry + own-seat (ADR-0019, per Replay),
-    and the build identity (from the directory stem, shared across a batch) — everything the
-    shell needs to serve and tag this Replay.
-    """
+    """One Replay as a self-contained tagging context: the replay, its live Decision Telemetry and
+    own-seat (ADR-0019), and the build identity read off the directory stem."""
     path = Path(path)
     log_path, live_seat = find_log_any(path)
     bid = build_identity(path)

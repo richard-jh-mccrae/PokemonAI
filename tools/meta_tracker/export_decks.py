@@ -42,12 +42,8 @@ def _cluster_covers(merge: dict[str, str]) -> dict[str, list[str]]:
 
 def export_decks(eps: list[dict], *, now: str, top_n: int, out_dir,
                  half_life_days: float = 21.0) -> list[dict]:
-    """Write the top-N clusters' decks + ``index.json`` under ``out_dir``; return the index.
-
-    Merges variants, ranks clusters by play-rate, and for each of the top-N ships its
-    pooled-modal Representative Build. A cluster whose modal build isn't a legal 60 is
-    skipped with a warning (never a malformed deck.csv). Raises on a slug collision.
-    """
+    """Write the top-N clusters' decks + ``index.json`` under ``out_dir``; return the index. A cluster
+    whose modal build is not a legal 60 is skipped with a warning. Raises on a slug collision."""
     out_dir = Path(out_dir)
     merge = merge_map(eps)
     covers = _cluster_covers(merge)

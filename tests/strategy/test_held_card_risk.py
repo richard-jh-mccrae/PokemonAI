@@ -1,22 +1,11 @@
-"""Held-card risk — fetch-early vs fetch-late (hypergeometric-fetch-closure §Round 8 §5;
-built 2026-07-19, its `seam-held-card-risk.md` plan doc retired — git history).
+"""Held-card risk — fetch-early vs fetch-late, the two legs of one closed form.
 
-Fetching a key card the turn BEFORE it can be played buys nothing this turn (the fetch succeeds
-identically next turn — a whole-deck search cares only that the target remains in deck) while it
-pays the discard cost a turn early and holds the fetched key across the opponent's turn, exposed to
-their symmetric refreshes (Judge / Harlequin). Two rungs price the two legs of the one closed form:
+Fetching a key card the turn BEFORE it can be played buys nothing (a whole-deck search only needs
+the target to stay in deck), pays the discard cost a turn early, and holds the key across the
+opponent's turn exposed to their symmetric refreshes:
 
-* ``dont-fetch-before-the-deadline`` — the fetch-EARLY leg: a fetch whose every needed target is
-  provably unplayable this turn (`Context.fetch_target_deferred`, the rules.md §4 evolution-timing
-  read) stands down when it pays a discard cost now (always wasted) or the matched Read prices a
-  live hand-strip (`Board.opp_hand_strip_odds`, fail-open 0.0).
-* ``dont-shuffle-away-the-deferred-fetch`` — the fetch-LATE leg's re-access risk realised by OUR OWN
-  refresh: while a held fetch's needed grab is deferred to next turn, a self-shuffle destroys the
-  deferred plan exactly like the opponent's Judge would — hold the hand, attack instead.
-
-Acceptance: the recorded mega_starmie blunder ep85163634 f17 (Ultra Ball one turn early; the human:
-"we dont need the Starmie now … there is no cost to just wait a turn") — the corpus target promoted
-to a PIN by this build.
+* ``dont-fetch-before-the-deadline`` — the fetch-EARLY leg.
+* ``dont-shuffle-away-the-deferred-fetch`` — the same re-access risk realised by OUR OWN refresh.
 """
 from __future__ import annotations
 
@@ -95,10 +84,8 @@ def _real_pilot(agent: str):
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.xfail(strict=True, reason=marks("ms_fetch_one_turn_early_judge_exposure_f17")[0].kwargs["reason"])
 def test_fetch_one_turn_early_stands_down_and_the_attack_fires_f17():
-    """ms 85163634 f17: turn 2 (our first turn), both Staryu benched THIS turn, Mega Starmie ex the
-    only needed Ultra Ball target — unplayable until next turn (rules.md §4). The human: attack with
-    Turbo Flare; fetch next turn. The fetch-early rung drives Ultra Ball ≤ 0 and the deferred-fetch
-    hold drives the Lillie's/Harlequin refreshes ≤ 0, so the +266.9 attack is chosen."""
+    """Both Staryu benched THIS turn, so the only needed Ultra Ball target is unplayable until next
+    turn (rules.md §4): fetch-early drives the Ball <= 0 and the deferred hold drives the refreshes down."""
     fx = json.loads((FIXTURES / "ms_fetch_one_turn_early_judge_exposure_f17.json")
                     .read_text(encoding="utf-8"))
     d = _real_pilot("mega_starmie").explain(fx["obs"])
@@ -152,9 +139,8 @@ def test_deadline_holds_on_my_first_turn_even_with_an_eligible_base():
 
 @pytest.mark.req("REQ-GEN-0059")
 def test_free_fetch_holds_only_under_a_live_strip_read():
-    """The exposure leg (Round 8 §5): a FREE tutor before the deadline is silent with no Read
-    (fail-open — no rep → no exposure claimed → no veto) and stands down once the matched Read
-    prices a live symmetric refresh (`opp_hand_strip_odds` from `copies_left_odds`)."""
+    """A FREE tutor before the deadline is silent with no Read (fail-open) and stands down once the
+    matched Read prices a live symmetric refresh."""
     bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1)]
     # no Read: the free early fetch is NOT vetoed (waiting costs nothing, but neither does fetching)
     pilot = _pilot_for(cost_discard=False)
@@ -172,9 +158,7 @@ def test_free_fetch_holds_only_under_a_live_strip_read():
 
 @pytest.mark.req("REQ-GEN-0059")
 def test_deadline_rung_leaves_the_starved_and_developed_board_to_its_own_rung():
-    """The currency-zone rule (replace, not stack): on the starved-and-developed board that
-    `dont-costly-tutor-when-starved-and-developed` (−30) already prices, the deadline rung stays
-    silent — one rung per jurisdiction, never both."""
+    """Replace, not stack: one rung per jurisdiction, never both."""
     pilot = _pilot_for(cost_discard=True)
     bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1), poke(VAN2)]
     obs = _menu([FETCH, VAN1, VAN2], bench=bench, active=poke(900, energy=0))
@@ -187,9 +171,8 @@ def test_deadline_rung_leaves_the_starved_and_developed_board_to_its_own_rung():
 
 @pytest.mark.req("REQ-GEN-0060")
 def test_refresh_stands_down_while_a_held_fetch_is_deferred():
-    """Holding a live tutor whose needed grab is deferred to next turn, a self-refresh (Lillie's)
-    would shuffle the plan's vehicle away — the very strip the deferral is guarding against. The
-    hold cancels the speculative draw credit; the refresh nets ≤ 0."""
+    """A self-refresh shuffles the deferred plan's own vehicle away — the very strip the deferral is
+    guarding against — so the hold cancels the speculative draw credit."""
     pilot = _pilot_for(cost_discard=True)
     bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1)]
     obs = _menu([REFRESH, FETCH, VAN1, VAN2], bench=bench)

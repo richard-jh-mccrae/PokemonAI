@@ -1,20 +1,9 @@
-"""Decision Telemetry reorder markers (ADR-0019): the @T record must SAY when the chosen option
-did not come from a plain argmax over the emitted scores.
+"""Decision Telemetry reorder markers (ADR-0019): the @T record must SAY when `chosen` did not
+come from a plain argmax over the emitted scores.
 
-Three decide()-only selection steps make ``chosen`` diverge from the highest-``score`` option, so a
-blunder-buster reading the live trace would otherwise see a "top-scored option not chosen" record
-with no explanation and misread it as a scoring bug:
-
-  * attack-last sequencing (``_finish_turn_last``): a turn-ending attack is held behind free
-    development, so a lower-score develop is chosen — the held attack is marked ``deferred``.
-  * the needy-Line attach tie-break (``attach_to_needy_line``): among EQUAL-score attaches, feed the
-    win-condition Line base first.
-  * the greedy grab (``_greedy_grab``): a multi-pick set chosen by dynamic gap-scoring, not top-N
-    static score.
-
-Behaviour is verified through the wire contract ``telemetry.to_record`` (what the tuner/inspector and
-/blunder-buster actually read) — the markers are sparse (absent when the mechanism didn't fire), so an
-untouched record stays byte-identical to the pre-marker era.
+Three decide()-only steps make it diverge — attack-last sequencing, the needy-Line attach tie-break,
+the greedy grab — so a blunder-buster reading the trace would otherwise call it a scoring bug.
+Verified through `telemetry.to_record`; the markers are sparse, so an untouched record is unchanged.
 """
 import pytest
 
@@ -95,21 +84,8 @@ def test_greedy_grab_decision_carries_a_top_level_flag():
 
 @pytest.mark.req("REQ-SUB-0006")
 def test_a_composer_decided_record_carries_the_composer_block_as_its_why():
-    """**Was `test_real_attack_last_decision_emits_deferred_and_reordered` until POC-T4/5 (#386).**
-
-    ADR-0019's claim is legibility: a reader must never have to misread "top-score not chosen" as a
-    scoring bug, so the record carries the 'why'. `deferred`/`reordered` were that 'why' because
-    `_finish_turn_last` was what produced `chosen`. On a composer-decided frame it is not —
-    `_composer_line` returns its own `Decision` before the sequencer runs, so neither marker is even
-    computed, and asserting them here would be asserting a mechanism that did not decide.
-
-    The 'why' on this path is the sparse `composer` block: the chosen line's first step, its margin
-    to the k-th candidate, and the coverage gaps. That is what is asserted, and the claim is the same
-    claim — the record explains its own pick.
-
-    The markers are NOT unpinned: the unit-level tests above still pin their shape, and the
-    sequencer's behaviour is pinned where it still decides (`test_blunder_20260629.py`,
-    `test_supporter_sequencing.py`, `test_information_before_commitment.py`)."""
+    """A composer-decided frame: `_composer_line` returns its own `Decision` before the sequencer runs,
+    so `deferred`/`reordered` are never computed — the sparse `composer` block is the 'why'."""
     board = state(active=poke(ATTACKER, energy=1, hp=200, max_hp=200),
                   bench=[poke(BASIC, hp=60, max_hp=60)],
                   hand=[BALL],
@@ -123,8 +99,7 @@ def test_a_composer_decided_record_carries_the_composer_block_as_its_why():
     comp = rec.get("composer")
     assert comp, "a composer-decided record carries no `composer` block — the pick has no 'why'"
     # `first_index`, not `steps`: a TERMINAL line (an attack, an End) has no steps, so `steps` is
-    # `[]` and the block would explain a pick it could not identify. That gap was found by this test
-    # and closed in `_composer_line`.
+    # `[]` and the block would explain a pick it could not identify.
     assert comp.get("first_index") == rec["chosen"][0], (
         f"the composer block names a different committed option than the record chose: "
         f"{comp.get('first_index')} vs {rec['chosen']}")

@@ -1,13 +1,8 @@
-"""Evolve DECIDER on real frames (common/evolve_value.py) — ADR-0070, #140.
+"""Evolve DECIDER on real frames (common/evolve_value.py) — ADR-0070, Issue #140.
 
-The equation's per-option TERM row, read off `OptionTrace.evolve_working` with the decider's
-kill-switch forced ON. These assert it RANKS the corpus frames correctly — the design proof that
-must hold before the `baseline_evolution` rungs are deleted. The algebra itself is pinned at the
-pure-function seam (`test_evolve_decider.py`); this is the same claims through the real Pilot.
-
-Card facts verified at source (data/EN_Card_Data.csv): Drakloak (120) HP 90, Dragon Headbutt {R}{P}
-70, Recon Directive "top 2, put 1 in hand"; Dragapult ex (121) HP 320, Phantom Dive {R}{P} 200 —
-the IDENTICAL cost that makes the doctrine derive.
+The equation's per-option TERM row off `OptionTrace.evolve_working`, kill-switch forced ON: does it
+RANK the corpus frames? The algebra itself is pinned at the pure-function seam,
+`test_evolve_decider.py`.
 """
 from __future__ import annotations
 
@@ -48,9 +43,8 @@ def test_income_on_evolve_is_endorsed_f40():
 
 
 def test_hold_the_income_off_unready_evolve_f35():
-    """f35: Drakloak→Dragapult on {R}{D} — a wincon that CAN'T pay Phantom Dive {R}{P}, forfeiting the
-    Recon stream. deploy is the UNREADY tier and the income loss nets it low — below the Recon ability
-    (~+18), so once the equation drives the score the premature evolve is suppressed (hold)."""
+    """f35: Drakloak→Dragapult on {R}{D} cannot pay Phantom Dive {R}{P} and forfeits the Recon
+    stream, so the income loss must net it below the Recon ability itself (~+18)."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
     (only_evolve,) = evolve.values()
     assert only_evolve < 18, evolve            # below the Recon dig — will not be chosen
@@ -58,22 +52,8 @@ def test_hold_the_income_off_unready_evolve_f35():
 
 
 def test_which_body_prefers_the_energized_f82():
-    """f82: two mid-line Dreepy→Drakloak evolves — the equation must prefer the ACTIVE body.
-
-    PROMOTED from strict-xfail to PIN by ADR-0071 (#163). It was xfailed on the reading that the
-    frame is a Turn-Planner maneuver and the standalone deploy `30.0 Active vs 37.5 benched` was
-    CORRECT (ADR-0070 amendment C). **That 37.5 was the shared-budget inflation.** The bench held
-    Dreepy 50, Dunsparce 50, Dreepy 50 against a 60 spread, so evolving one Dreepy out of range
-    merely redirected the counters onto the other — it bought nothing. With the Harvest read at
-    UNAVOIDABLE both bodies read `ko = 2`, so evolving buys exactly ZERO survival: the benched
-    option falls to **25.0** against the Active's **30.0** (measured), and the equation reaches the
-    human's answer on its own terms. The residual 25.0 is deploy value that is not the survival leg
-    — the inflation removed is the 37.5 -> 25.0, not the whole score.
-
-    The maneuver claim itself is untouched and still belongs to #165: the chain is a better play for
-    a reason no single-action equation can see. What is discharged is the CROSS-LAYER REQUIREMENT
-    this xfail carried — the pin no longer depends on a lethal tier reaching a counter-moving
-    Ability, because it no longer depends on the inflated benched credit."""
+    """f82: two mid-line Dreepy→Drakloak evolves; the equation must prefer the ACTIVE body. Evolving
+    one bench Dreepy out of a spread's range only redirects the counters, so it buys no survival."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_evolve_energized_line_body_first_f82")
     best = max(evolve, key=evolve.get)
     assert best == fx["correct"][0], evolve
@@ -83,9 +63,7 @@ def test_advance_the_line_beats_spreading_f29():
     """f29: advancing the started line (evolve Drakloak) out-values a spread attach onto a bare base."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_charge_the_line_f29")
     assert evolve[fx["correct"][0]] > 0
-    # The DECISION is the claim. Since the attach swap (#139, ADR-0069) an attach's score is a real
-    # damage currency rather than a flat rung, so a build step can out-NUMBER an evolve rung — and it
-    # no longer needs to lose on score to lose the turn: free development is tier 0 and the
+    # An attach may out-SCORE an evolve without winning the turn: free development is tier 0 and the
     # irreversible attach is tier 2, so the evolve is taken first and the attach follows.
     assert d.chosen == fx["correct"], (
         f"the evolve lost the turn to a non-evolve option: chosen={d.chosen}, correct={fx['correct']}")
@@ -95,19 +73,8 @@ def test_advance_the_line_beats_spreading_f29():
 
 @pytest.mark.req("REQ-GEN-0091")
 def test_the_dig_income_term_is_not_structurally_dead():
-    """`_evolve_income_delta` was IDENTICALLY ZERO on every board — measured across the whole
-    corpus, 49 priced evolve options on 31 frames returned a non-zero income term exactly 0 times.
-
-    The cause: `mine.deck_energy_counts` holds `CountTriple`s, which deliberately refuse to be bare
-    numbers (ADR-0068: "a consumer must NAME its epistemic"). The value went straight into
-    `draw_hit_probability`, whose `int(copies)` raised TypeError into its own documented
-    "bad input -> 0.0" guard — so §3's odds read, §7's split-horizon loss and amendment B's `typed=`
-    fix all silently computed nothing.
-
-    f35 is the case: the machinery correctly identifies that a **{P}** is the enabler the Drakloak's
-    line lacks (Phantom Dive / Dragon Headbutt are both {R}{P} while it holds {R}{D}), with ~2.6
-    expected copies left in a 39-card deck — and then threw that answer away. Recon Directive digs 2,
-    so the hold has to be worth something."""
+    """`deck_energy_counts` holds `CountTriple`s, which refuse to be bare numbers (ADR-0068), so
+    `draw_hit_probability`'s `int(copies)` raised into its bad-input guard and the income half died."""
     fx = json.loads((FIXTURES / "dp_hold_evolve_until_typed_ready_f35.json").read_text(encoding="utf-8"))
     pilot = _pilot("dragapult_ex")
     pilot.evolve_value = True
@@ -122,14 +89,8 @@ def test_the_dig_income_term_is_not_structurally_dead():
 
 @pytest.mark.req("REQ-GEN-0092")
 def test_an_ability_still_on_the_menu_is_detected_by_its_SLOT_not_a_cardId():
-    """`_ability_on_menu` matched `option["cardId"]`, but an ABILITY option carries **area/index**
-    and no `cardId` at all — so it returned False on every board ever. Two ADR-0070 inputs died with
-    it: `body_ability_on_menu` (§7's "this turn's use is forfeit" half of the split-horizon loss) and
-    `result_ability_now` (which un-halves an income gain that fires THIS turn).
-
-    f35's menu carries `{'area': 4, 'index': 0, 'type': 10}` — the Active Drakloak's Recon Directive,
-    demonstrably unused this turn. The docstring's intent ("the MENU is the fact") was right; the key
-    was wrong."""
+    """An ABILITY option carries **area/index** and no `cardId` at all, so matching on `cardId`
+    returns False on every board (killing `body_ability_on_menu` and `result_ability_now`)."""
     fx = json.loads((FIXTURES / "dp_hold_evolve_until_typed_ready_f35.json").read_text(encoding="utf-8"))
     pilot = _pilot("dragapult_ex")
     assert pilot._ability_on_menu(fx["obs"], 120) is True     # Drakloak, at area 4 / index 0
@@ -155,13 +116,8 @@ def _sequence(agent, fixture):
 
 @pytest.mark.req("REQ-GEN-0093")
 def test_a_benched_evolve_priced_at_zero_is_free_development_not_a_turn_ender():
-    """`_finish_turn_last`'s tier 0 already NAMES this: "free informative development — draw /
-    search, fill the Bench, **evolve a benched Pokémon**". The `score <= 0 -> tier 4` gate starved
-    it, because a same-line bench evolve nets to exactly 0.0 (the pre-evolution is pre-credited with
-    the LINE's payoff by `_line_payoff_stat`, so the deploy delta cancels).
-
-    Measured cost of that on 82229122|0|decision|17 (#167's sitting): the agent never evolves the
-    Staryu, so its turn ends with three bare 70 HP Staryu instead of a 330 HP Mega Starmie ex."""
+    """A same-line bench evolve nets exactly 0.0 (`_line_payoff_stat` pre-credits the pre-evolution
+    with the LINE's payoff, so the deploy delta cancels), which a `score <= 0 -> tier 4` gate starves."""
     fx, d, options, order = _sequence("mega_starmie", "ms_free_bench_evolve_f17")
     ev = [i for i, o in enumerate(options)
           if o.get("type") == 9 and o.get("inPlayArea") != 4]
@@ -175,10 +131,7 @@ def test_a_benched_evolve_priced_at_zero_is_free_development_not_a_turn_ender():
 
 @pytest.mark.req("REQ-GEN-0093")
 def test_an_evolve_that_MEASURABLY_weakens_the_board_stays_last():
-    """The other half of the ruling: only a move that strengthens the board rides the exemption.
-    f35's Drakloak -> Dragapult ex forfeits Recon Directive while the body still cannot pay Phantom
-    Dive {R}{P} on {R}{D}, which the income half now prices at **-30.36**. Negative, so it stays a
-    tier-4 option and the exemption must not rescue it."""
+    """Only a move that strengthens the board rides the free-development exemption."""
     fx, d, options, order = _sequence("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
     ev = [i for i, o in enumerate(options) if o.get("type") == 9]
     assert ev and d.options[ev[0]].score < 0, "f35's evolve must be priced as a weakening"
@@ -191,15 +144,8 @@ def test_an_evolve_that_MEASURABLY_weakens_the_board_stays_last():
 
 @pytest.mark.req("REQ-GEN-0094")
 def test_equal_scored_evolves_order_by_the_results_arm_clock():
-    """`evolve-the-energized-body-first` was RETIRED by the 1b swap on the premise that the equation
-    subsumes it. It does not: `deploy = result - body` cancels PER SLOT, independently of how much
-    Energy sits there, so an energised Staryu and a bare one both price at exactly 0.0 and the tie
-    breaks by option INDEX.
-
-    Measured on 81905522|0|decision|64 — the board is read correctly and freshly (after the attach,
-    bench0's arm drops 3 -> 2 while bench1 stays 3); the delta simply erases it. So the ordering
-    consults the one term that does NOT cancel: the RESULT's arm clock. Lower = arms sooner = put the
-    evolution where the Energy already is."""
+    """`deploy = result - body` cancels PER SLOT, so an energised and a bare body both price 0.0.
+    The tie consults the one term that does NOT cancel: the RESULT's arm clock, lower = sooner."""
     from types import SimpleNamespace
     opts = [{"type": 9, "inPlayArea": 5, "inPlayIndex": 0},      # energised body
             {"type": 9, "inPlayArea": 5, "inPlayIndex": 1},      # bare body
@@ -229,12 +175,8 @@ def test_equal_scored_evolves_order_by_the_results_arm_clock():
 
 @pytest.mark.req("REQ-GEN-0094")
 def test_the_tied_evolves_need_not_be_ADJACENT_in_the_score_order():
-    """The real shape, and the one an adjacent-only implementation silently misses. On
-    81905522|0|decision|64 the equal-score run is `[2, 0, 1, 6]` — a NON-evolve sits between the two
-    evolves — so a "consecutive run" tie-break never forms a run and never fires, which is exactly
-    how the first version of this passed its unit test while leaving the real frame broken.
-
-    The evolves are permuted within the positions they already occupy; every non-evolve stays put."""
+    """A NON-evolve can sit between two tied evolves, so a consecutive-run tie-break never fires.
+    The evolves are permuted within the positions they already occupy; non-evolves stay put."""
     from types import SimpleNamespace
     opts = [{"type": 9, "inPlayArea": 5, "inPlayIndex": 1},      # 0: bare body,      arm 3
             {"type": 7, "index": 0},                              # 1: a non-evolve

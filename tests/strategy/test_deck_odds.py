@@ -1,11 +1,9 @@
 """Probabilistic own-deck content estimate — `common.deck_odds` + the `Board.deck_contains_probability`
 signal and the `dont-search-a-probable-whiff` Fetch rung (ADR-0029).
 
-The COMPLEMENT to the sound deck tracker (test_deck_tracker.py): where the sound oracle is
-certain-or-silent (`deck_definitely_empty_of` stays silent on any copy that could hide in the prizes),
-this answers the *probabilistic* "is card C probably still in my deck?" by splitting a card's unseen
-copies over the hidden prize slots hypergeometrically. It NEVER contradicts the sound oracle (it agrees
-at the extremes) and never replaces the sound whiff guard — it only suppresses a *likely* whiff.
+The COMPLEMENT to the certain-or-silent deck tracker: this answers *"is card C probably still in my
+deck?"* by splitting the unseen copies over the hidden prize slots hypergeometrically. It never
+contradicts the sound oracle and never replaces the sound whiff guard.
 """
 import pytest
 
@@ -24,13 +22,8 @@ def _fired(o):
     return {h.id for h, _ in o.fired}
 
 def _ranked(pilot, obs):
-    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
-    sequence composer: the rungs in this file still SCORE every option, but they no longer pick. A
-    `decide(obs) == [n]` line here therefore stopped testing this file's subject and started testing
-    the composer, on a hand-built board no human ever ruled. The ranking is the fact this file owns.
-    """
+    """The tuned ladder's own ranking, best-first, as ``[(index, score), ...]``. Not `decide`: since
+    Issue #386 these rungs SCORE every option but no longer pick — the composer does (ADR-0131)."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
 
 
@@ -84,16 +77,11 @@ def test_p_contains_never_raises_and_stays_in_unit_interval():
 
 
 # ------------------------------------------------- the >= k generalisation (Issue #394 item F4)
-# `p_contains` answers ">=1 copy still in deck". A multi-card delivery may legally take TWO copies
-# of one card, so the enumerator needs ">= k". Same model, same split, one summation wider — and
-# `p_contains` must BE its k=1 case rather than a second spelling of it.
+# `p_contains` (">=1") must BE the k=1 case of this, never a second spelling of it.
 
 def _at_least_by_enumeration(u, hidden, deck, need) -> float:
-    """The oracle: enumerate WHICH hidden positions the `u` unseen copies occupy.
-
-    Positions ``0..deck-1`` are deck slots and ``deck..deck+hidden-1`` are face-down prize slots;
-    exchangeability says every size-`u` subset is equally likely. Counts the fraction with at least
-    `need` copies landing on a deck slot. No closed form, no simulation."""
+    """The oracle: positions ``0..deck-1`` are deck slots and the rest face-down prizes, and
+    exchangeability makes every size-`u` subset equally likely. No closed form, no simulation."""
     from itertools import combinations
     h = deck + hidden
     if u > h:
@@ -250,11 +238,8 @@ def _whiff_stats():
 
 @pytest.mark.req("REQ-GEN-0055")
 def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prized():
-    """A tutor whose only deck target is PROBABLY (not provably) prized, endorsed only by the free-dig
-    rung, is softly stood down. Here a Mega-tutor for a lone Mega ex the lineless test deck does not
-    treat as a win-condition (so no lacking-need grab driver fires): its sole driver is dig-before-commit
-    (+20), and the probable-whiff penalty drops it below End. NOT the sound guard (the target is still
-    reachable)."""
+    """PROBABLY, not provably, prized: the sole driver is dig-before-commit and the probable-whiff
+    penalty drops it below End. NOT the sound guard — the target is still reachable."""
     _fm = {SIGNAL: ["search", "tutor_mega"]}
     funcs = CardFunctions(_fm)
     pilot = Pilot(Strategy(), deck=[MEGA] + [FILLER] * 40, general_strategy=GENERAL_STRATEGY,
@@ -279,9 +264,8 @@ def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prize
 
 @pytest.mark.req("REQ-GEN-0055")
 def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
-    """The ep82524455-f6 refutation, encoded: 2 of 3 Staryu unseen could sit in the 6 hidden prizes, so
-    a 2nd Buddy-Buddy Poffin is a PROBABILISTIC read, not a whiff. The estimate is ~0.98 (well above
-    threshold) -> the rung does NOT fire and the bench-filler is played."""
+    """2 of 3 Staryu unseen could sit in the 6 hidden prizes, so a 2nd Poffin is a PROBABILISTIC read
+    rather than a whiff and the rung must not fire."""
     _fm = {BASIC_TUTOR: ["search", "bench_fill"]}
     funcs = CardFunctions(_fm)
     pilot = Pilot(Strategy(), deck=[STARYU] * 3 + [FILLER] * 57, general_strategy=GENERAL_STRATEGY,
@@ -315,15 +299,12 @@ def test_probable_whiff_is_mutually_exclusive_with_the_sound_empty_guard():
 
 
 # ── WP4: the Stage-2 draw-engine two-window closed form (hypergeometric-fetch-closure §Stage 2) ──
-# P(assemble) = P(≥1 out in n) + [P(no out in n) − P(no out ∧ no usable engine in n)] × P(≥1 out in
-# m | pool−n) — iterated per board-supported engine stage. Outs and engines are DISJOINT classes, so
-# at depth 1 the form is EXACT: pinned below against a full exhaustive enumeration, not a simulation.
+# Outs and engines are DISJOINT classes, so at depth 1 the form is EXACT — enumerated, not simulated.
 
 @pytest.mark.req("REQ-GAMBLE-0011")
 def test_two_window_form_matches_exhaustive_enumeration_at_depth_one():
-    """Universe: pool 9 = 2 outs, 2 engines, 5 blanks; refresh n=3, one engine window m=2 (Recon).
-    The oracle enumerates every C(9,3) first window and, on a missed-with-engine branch, every
-    C(6,2) second window — the exact expectation the closed form must reproduce."""
+    """Universe: pool 9 = 2 outs, 2 engines, 5 blanks; refresh n=3, one engine window m=2. The oracle
+    enumerates both windows exhaustively — the exact expectation the closed form must reproduce."""
     from itertools import combinations
     from math import comb
     from common.deck_odds import draw_hit_with_engines
@@ -348,9 +329,8 @@ def test_two_window_form_matches_exhaustive_enumeration_at_depth_one():
 
 @pytest.mark.req("REQ-GAMBLE-0011")
 def test_two_window_form_degenerates_bounds_and_fails_closed():
-    """No engines / no windows → exactly the plain window draw; engines only ever ADD (the miss
-    branch gets a second chance) and the total stays a probability; a deeper board-supported chain
-    ≥ a shallower one; garbage input → 0.0 (an endorser fails closed)."""
+    """No engines / no windows → the plain window draw; engines only ever ADD; a deeper chain ≥ a
+    shallower one; garbage → 0.0, because an endorser fails closed."""
     from common.deck_odds import draw_hit_probability, draw_hit_with_engines
     base = draw_hit_probability(3, 30, 6)
     assert draw_hit_with_engines(3, 30, 6, 0, (2,)) == pytest.approx(base)

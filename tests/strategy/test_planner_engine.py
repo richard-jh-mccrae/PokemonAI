@@ -1,19 +1,9 @@
 """Turn Planner on the committed native engine — the LIVE-OBSERVATION half of the planner's tests.
 
-Engine-backed (imports ``cg``), offline on Windows + Linux like ``test_lethal_engine.py``.
-
-**What is proved here changed at POC-T4/5 (Issue #386).** This module used to prove that the
-``_simulate_line`` / ``_engine_leaf_value`` pair drove the simulator's own forward search from a REAL
-observation to the end of my turn — stepping a candidate first move, then re-running the Pilot's
-policy on each intermediate SearchState — and read a leaf value off the resulting board. That
-rollout is deleted: nothing in a live decision sims a line any more, and ranking end states is the
-sequence composer's job, done closed-form off ``apply_option``.
-
-So the live-observation question is re-pointed rather than dropped, and it is the same question:
-does the scorer that DECIDES round-trip from a real engine observation? It is now asked of
-``_leaf_state_model`` → ``composer.compose``. ``_simulate_line`` keeps its own test because the
-OFFLINE primitive survives for the instruments that measure the engine (``family_diag``, the
-cgpy↔native agreement lane, the determinism backstop).
+Engine-backed (imports ``cg``), offline on Windows + Linux. The question: does the scorer that
+DECIDES round-trip from a real engine observation? Asked of ``_leaf_state_model`` →
+``composer.compose``. ``_simulate_line`` keeps its own test because the OFFLINE primitive survives
+for the instruments that measure the engine (Issue #386).
 """
 import json
 from pathlib import Path
@@ -46,14 +36,8 @@ def _engine_pilot(deck, **kw):
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
-    # attack facts flow through the provider's audit-overridden table (ADR-0051).
-    #
-    # `starter_priority` is DECLARED rather than left bare (ADR-0079), for the same reason as in
-    # `test_lethal_engine.py`: these drives play whole games, so the pregame Active pick sets the
-    # trajectory. Until 2026-07-28 a bare `Strategy()` opened Cinderace by ACCIDENT, via a DERIVED
-    # `accel_source` feeding the now-deleted `open-the-accelerator`; the declaration-keyed successor
-    # is silent on an undeclared pilot, which would drop the pick to the engine's option index and
-    # make every drive below wander. Declaring it keeps the trajectory AND states it outright.
+    # `starter_priority` is DECLARED (ADR-0079): these drives play whole games, and the
+    # declaration-keyed pick is silent on an undeclared pilot, so every drive below would wander.
     return Pilot(Strategy(starter_priority=[CINDERACE, STARYU]), deck,
                  general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
                  functions=fns, **kw)
@@ -75,18 +59,8 @@ def _first_open_menu(pilot, obs, limit=80):
 @pytest.mark.req("REQ-PLANNER-0011")
 @needs_live_board_search
 def test_the_shipped_leaf_round_trips_from_a_real_observation():
-    """Drive a real mirror game to its first open turn menu, then score it with the leaf that DECIDES:
-    build the StateModel off the live observation and run the composer over the live menu. It must
-    return a concrete FINITE score for a real menu option, proving the whole path — engine
-    observation → ``_leaf_state_model`` → ``apply_option`` → ``state_value`` — round-trips on a board
-    the engine produced rather than one a fixture wrote.
-
-    This replaces the ``_engine_leaf_value`` round-trip (POC-T4/5): that primitive answered the same
-    question about a scorer that no longer decides anything. NB the score may be NEGATIVE — the
-    ADR-0064 loss term prices a bench-empty-doomed end board at ``-KO_SCORE``, a legitimate leaf
-    outcome — so this asserts finiteness, not sign. A ``chosen is None`` is likewise legitimate (the
-    seam refusing to price a menu is an honest answer, not a failure), so the finiteness bar is put
-    on whatever the composer DID price."""
+    """The whole path — engine observation → ``_leaf_state_model`` → ``apply_option`` → ``state_value``
+    — on a board the engine produced. A NEGATIVE score and a ``chosen is None`` are both legitimate."""
     import math
 
     from common import composer as cp
@@ -111,16 +85,8 @@ def test_the_shipped_leaf_round_trips_from_a_real_observation():
 @pytest.mark.req("REQ-PLANNER-0012")
 @needs_live_board_search
 def test_simulate_line_reaches_a_board_and_ends_my_turn():
-    """``_simulate_line`` returns a real end-of-turn board (not None) and stops on MY side: the returned
-    tuple carries my player index and the prize count I started the turn with, and the resulting State
-    is either the opponent's turn, a later board, or a finished game — never left mid-decision on my
-    turn. Proves the policy-driven stepping terminates cleanly.
-
-    The tuple is SIX-wide since POC-T4/5, not seven. Issue #178's ``stream`` bit ("this line also
-    rode the shuffle") was read by exactly one caller — the develop rollout, which refused an
-    unreproducible ranking outright — and died with it; a bit that exists to demote a ranking has
-    nothing to demote once no rung ranks a simmed board. ``coins`` stays, because the win rung's own
-    verdict driver still speaks in it (``_rng_probe(prize=False)``)."""
+    """The policy-driven stepping terminates cleanly on MY side. The tuple is SIX-wide since Issue
+    #386: ``stream`` died with the develop rollout; ``coins`` stays for the win rung's verdict driver."""
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -143,20 +109,8 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
 
 @pytest.mark.req("REQ-PLANNER-0034")
 def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
-    """Live smoke for the DECIDER (POC-T4/5). A real mirror drive must never crash, the composer must
-    actually reach the wheel on ordinary turns, and every sequence line it commits must be
-    well-formed: its ``next_step`` IS the option the agent played, so the first action of the scored
-    sequence and the pick can never drift apart.
-
-    This replaces two tests at once, and for one reason — their subjects merged. The engine-ranking
-    drive (`planner_engine_rank=True`) and the develop-rung drive (`develop_rollout=True`) each drove
-    a live mirror to prove a rung's seam held; both rungs are deleted, and the composer is the single
-    mechanism that now answers for the boards they covered. Asserting the STEP IS THE PICK is the
-    part worth keeping — it is a decision-level property that survives the next swap, where
-    ``ranked_by in ("engine", "closed")`` pinned which rung did the valuing.
-
-    ``committed`` deliberately excludes win lines: the Lethal Solver's engine-verified lock preempts
-    the composer (ADR-0037), so it carries no composer provenance and never should."""
+    """Live smoke for the DECIDER: every committed sequence's ``next_step`` IS the pick, so the scored
+    line and the play cannot drift. ``committed`` excludes win lines — the Lethal lock preempts (ADR-0037)."""
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -182,10 +136,9 @@ def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
         battle_finish()
 
 
-# ---------------------------------------- the CRITICAL that literally asked for a turn planner (7f48)
 def _shipped_pilot():
-    """The real mega_starmie Pilot, built exactly like ``main.py`` (the canonical retest builder), so a
-    replayed correction decides the way the shipped agent would."""
+    """The real mega_starmie Pilot, built exactly like ``main.py``, so a replayed correction decides
+    the way the shipped agent would."""
     import sys
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
@@ -195,12 +148,8 @@ def _shipped_pilot():
 
 @pytest.mark.req("REQ-PLANNER-0016")
 def test_critical_7f48_is_fixed_on_its_real_replay_state():
-    """CRITICAL 7f48 ('another multi decision example showing that we need a turn planner system'): on the
-    ACTUAL captured blunder state, the agent played a card ([1]) instead of retreating the spent Cinderace
-    into the powered Mega Starmie — the first step of retreat → attach → KO Fezandipiti for 2 prizes. No
-    single option scores that KO, so the greedy scorer missed it. Replayed through the shipped Pilot, the
-    Turn Planner now commits the ``ko_for_prizes`` line and the agent takes the human's ``correct`` move
-    (the retreat). A hard regression gate on the real state, like the Lethal Solver's CRITICALs."""
+    """CRITICAL 7f48: the agent played a card instead of retreating the spent Cinderace into the
+    powered Mega Starmie — no single option scores the 2-prize KO the line reaches."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_7f48.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
@@ -209,29 +158,13 @@ def test_critical_7f48_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now takes human's correct move (the retreat)
 
 
-# ── CRITICAL 0cbc — MOVED (POC-T4/5, Issue #386) ─────────────────────
-#
-# `test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state`
-# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
-# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
-#
-# It moved rather than being rewritten in place because it turned out not to be its own
-# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
-# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
-# beam can commit — and three scattered xfails would have hidden that they are one finding.
-# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
-# deleted, and it pinned which mechanism fired rather than what the agent played.
+# CRITICAL 0cbc MOVED to `tests/strategy/test_heal_refusal_ceiling.py` (Issue #386): all three
+# clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to model Wally's Compassion.
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_critical_a212_evolution_tutor_line_is_fixed_on_its_real_replay_state():
-    """CRITICAL a212 ('we know the deck contains Mega Starmie Exs … played Salvatore, evolved Staryu,
-    retreated Cinderace, attached energy, attacked, won the game — such sequences MUST be discoverable
-    by the turn planner'): on the ACTUAL captured state the agent played Crushing Hammer ([1]) instead
-    of Salvatore ([6]) — the enabling first step of evolve-from-deck → free retreat → attach → Jetting
-    Blow, which KOs the opponent's LAST body (empty bench = the win). No hook scores a Supporter first
-    step, so the greedy scorer missed it. Replayed through the shipped Pilot, the evolution-tutor line
-    commits Salvatore — the human's ``correct`` move. (Tracker-cold here, so the rank-grade rung
-    carries it; live, the anchored deck tracker upgrades the same line to the win rung's sound lock.)"""
+    """CRITICAL a212: the enabling first step is a Supporter (Salvatore), which no hook scores, so the
+    greedy scorer missed evolve-from-deck → free retreat → attach → Jetting Blow for the win."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a212.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
@@ -242,11 +175,8 @@ def test_critical_a212_evolution_tutor_line_is_fixed_on_its_real_replay_state():
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler():
-    """f41 (planner-prefer-cheapest-evolution-enabler): on the ACTUAL captured state a benched Staryu is
-    evolvable this turn AND Mega Starmie ex is already in hand, so the FREE direct-evolve ([4]: evolve →
-    retreat → attach → KO) reaches the SAME 1-prize KO as the Salvatore evolution-tutor ([0]) but spends
-    no card and no scarce Supporter slot. Both enabler lines tie on prizes+survival, so the cheapest-
-    enabler cost tier must break the tie toward the free-evolve — the agent commits [4], not the tutor."""
+    """f41: both enabler lines reach the same 1-prize KO and tie on prizes+survival, so the cheapest-
+    enabler cost tier must break the tie toward the FREE direct-evolve, not the Salvatore tutor."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections"
                      / "ms_prefer_cheap_evolution_enabler_f41.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
@@ -256,29 +186,13 @@ def test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler():
     assert decision.chosen == fx["correct"]        # agent now direct-evolves ([4]), not the tutor
 
 
-# ── CRITICAL 6858 — MOVED (POC-T4/5, Issue #386) ─────────────────────
-#
-# `test_critical_6858_heal_before_attach_is_fixed_on_its_real_replay_state`
-# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
-# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
-#
-# It moved rather than being rewritten in place because it turned out not to be its own
-# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
-# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
-# beam can commit — and three scattered xfails would have hidden that they are one finding.
-# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
-# deleted, and it pinned which mechanism fired rather than what the agent played.
+# CRITICAL 6858 MOVED to `tests/strategy/test_heal_refusal_ceiling.py` (Issue #386), for the same
+# Wally's Compassion reason as 0cbc above.
 
 @pytest.mark.req("REQ-PLANNER-0023")
 def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
-    """CRITICAL 4298 ('our agent needs to start planning its turn ahead of time … it can KO opponent's
-    Active via Hilda for energy grab, attach to Mega Starmie, retreat to Mega Starmie, and Jetting Blow'):
-    on the ACTUAL captured state, the agent played Crushing Hammer ([1]) instead of Hilda ([2]). Cinderace
-    is Active with no Energy and two benched Mega Starmie ex sit at 0 Energy — no single option scores a
-    KO, and the enabling first step is a *Supporter* (Hilda tutors an Energy into hand), which the
-    retreat/evolve generator never produced. Replayed through the shipped Pilot, the Turn Planner's
-    tutor-energy line commits Hilda — the human's ``correct`` move — so the fetched Energy can then power
-    the retreat→Jetting-Blow KO. A hard regression gate on the real state, like 7f48 and 0cbc."""
+    """CRITICAL 4298: no single option scores a KO and the enabling first step is a Supporter (Hilda
+    tutors an Energy into hand), which the retreat/evolve generator never produced."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_4298.json").read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
     decision = pilot.explain(fx["obs"])
@@ -287,58 +201,18 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now plays Hilda (energy grab) as human marked
 
 
-# ── the develop-rung live drives — DELETED (POC-T4/5, Issue #386) ────────────────────────────────
-#
-# `test_develop_rung_commits_a_well_formed_line_on_a_live_drive` and
-# `test_flag_off_never_commits_develop_and_emits_no_candidates` (both REQ-PLANNER-0012) drove a real
-# mirror to prove the rung fired the sim from live observations and emitted `plan_candidates`, and
-# that OFF was byte-identical. The rung, its `_engine_leaf_value` scorer, the `plan_candidates`
-# stream and the `develop_rollout` switch are all gone, so neither has a subject left: there is no
-# OFF state to be byte-identical to when the mechanism is deleted rather than disarmed.
-#
-# What they were REALLY guarding — a committed line is well-formed and its step IS the pick, proved
-# against live engine observations rather than fixtures — is asserted for the composer by
-# `test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick` above, which also
-# fails if the composer never reaches the wheel at all.
+# The develop-rung live drives are DELETED with the rung, its `_engine_leaf_value` scorer, the
+# `plan_candidates` stream and the `develop_rollout` switch (Issue #386): no OFF state survives.
 
-# ── ep82227388 f43 — MOVED (POC-T4/5, Issue #386) ─────────────────────
-#
-# `test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder`
-# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
-# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
-#
-# It moved rather than being rewritten in place because it turned out not to be its own
-# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
-# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
-# beam can commit — and three scattered xfails would have hidden that they are one finding.
-# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
-# deleted, and it pinned which mechanism fired rather than what the agent played.
+# ep82227388 f43 MOVED to `tests/strategy/test_heal_refusal_ceiling.py` (Issue #386), same reason.
 
-# ── #138 Leaf Profile — the ENGINE-DRIVEN halves (ADR-0068 decision 1) ─────────────────────────
-#
-# These live here rather than beside the rest of the pin in `test_leaf_profile.py` for a reason that
-# is now HISTORICAL, and the placement is kept only because moving them back buys nothing. That
-# module collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and starting a
-# native battle ahead of those pins shifted the process's engine-RNG position and fired the ml f24
-# heisenbug (it did, in CI, on this branch). #178 removed the sensitivity at its source — the develop
-# rung no longer ranks on a sim that consumed engine randomness — so no test's position in the suite
-# decides f24's answer any more. Do NOT re-introduce an ordering workaround if a frame goes unstable:
-# a frame whose answer depends on where it sits in the run is a defect in what decides it.
+# The #138 Leaf Profile engine halves live here rather than in `test_leaf_profile.py` only because
+# moving them back buys nothing. Do NOT re-introduce an ordering workaround if a frame goes unstable.
 
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
-    """A real engine drive to a live turn menu, then a leaf evaluation, probed.
-
-    The leaf's StateModel field set must stay WITHIN the ordinary per-decision profile: reading
-    anything the ordinary decision path does not is the signal that a new consumer (#145) has arrived
-    with its per-leaf cost unmeasured. The probe must also see at least one build, so a green result
-    can't mean "measured nothing".
-
-    Probed through the composer since POC-T4/5. The reasoning is UNCHANGED in kind but not in detail:
-    the leaf used to read the model only through the policy re-run inside `_simulate_line`, so the
-    profile was the ordinary decision path's by construction. The composer reads it directly, off
-    `_leaf_state_model` and the `apply_option` transitions — which is exactly why the bound now has
-    teeth it did not have before, and why it is worth keeping."""
+    """The leaf's StateModel field set must stay WITHIN the ordinary per-decision profile — reading
+    more means a new consumer (Issue #145) arrived with its per-leaf cost unmeasured."""
     import math
 
     from common import composer as cp
@@ -368,19 +242,8 @@ def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
 
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_a_whole_turns_composition_costs_a_bounded_number_of_model_builds():
-    """The sizing fact #145 and #150 need, re-measured for the mechanism that now decides.
-
-    It used to read: a leaf's model cost is NOT one build, because the simulated line re-ran my
-    policy to end-of-turn and paid one per-decision build per decision it made (N = 4 on a real
-    turn-1 drive; the engine sim dominated the leaf's ~12.7 ms and the model's share was under 1%).
-
-    That sizing is GONE with the rollout, and the replacement has the opposite shape: the composer
-    never re-runs the policy, so the whole beam over a whole turn is priced from ONE root model plus
-    whatever `apply_option` derives per transition. The cost driver moved from *how many decisions
-    does the sim make* to *how many transitions does the beam expand*, and the engine sim no longer
-    dominates — the composer IS the wall-clock now (median ~31 ms/decision, max 1448 ms; Issue #273).
-    So the bound is asserted as a BOUND rather than as an exact N: pinning the number would make this
-    a beam-width tripwire wearing a cost test's name."""
+    """The sizing fact Issue #145 / #150 need: the composer never re-runs the policy, so a whole turn
+    is priced from ONE root model plus per-transition derivation. A BOUND, not an exact N."""
     from common import composer as cp
     from common.state_model import StateModel
     deck = _deck()
@@ -402,9 +265,8 @@ def test_a_whole_turns_composition_costs_a_bounded_number_of_model_builds():
             cp.compose(model, options, search_api=getattr(pilot, "_search_api", None))
         finally:
             StateModel.build = descriptor          # the descriptor, not the bound method
-        # The root build happens OUTSIDE the probe (above), so a count of 0 here is the honest
-        # reading of "the beam derived its states rather than rebuilding them", not a broken probe —
-        # which is why the upper bound carries the assertion and the lower one is >= 0.
+        # The root build happens OUTSIDE the probe, so a count of 0 is the honest reading of "the
+        # beam derived its states rather than rebuilding them" — the upper bound carries the claim.
         assert len(builds) <= cp.BEAM_WIDTH * cp.SEQUENCE_DEPTH * max(1, len(options)), (
             f"the beam built {len(builds)} StateModels over one turn's composition — more than one "
             f"per expanded transition, so something is rebuilding instead of deriving")

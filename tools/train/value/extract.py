@@ -14,10 +14,8 @@ from train.blunder.decisions import _film
 
 
 def rows_from_replay(pilot, replay: dict):
-    """Yield ``(features, won)`` for every MAIN decision frame of ``replay`` owned by a seat whose
-    obs is recorded — ``won`` is 1.0 if that seat won the game, else 0.0. Skips replays without a
-    decisive result (a draw carries no win label). ``pilot._board`` is pure on the obs, so this
-    never touches the live engine."""
+    """``won`` is 1.0 if the seat owning the decision won. A DRAW carries no win label, so those
+    replays are skipped. `pilot._board` is pure on the obs: this never touches the live engine."""
     winner = winner_index(replay)
     if winner is None:
         return

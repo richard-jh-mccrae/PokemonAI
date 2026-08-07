@@ -10,12 +10,8 @@ from collections import Counter
 
 
 def rank_card_usage(episodes, *, band_weights=None, exclude_ids=frozenset()) -> Counter:
-    """``Counter{cardId: weighted_count}`` over both decklists of every episode.
-
-    ``band_weights`` maps a band name → weight (default 1 each), so higher tiers (Elite/High) can
-    count for more — the meta-defining games. ``exclude_ids`` drops cards you don't want ranked
-    (e.g. basic Energy, which is in nearly every deck). Tolerates missing ``band``/``deck*`` keys.
-    """
+    """``Counter{cardId: weighted_count}`` over both decklists of every episode. ``band_weights`` maps a
+    band name → weight (default 1); ``exclude_ids`` drops cards you do not want ranked."""
     weights = band_weights or {}
     exclude = set(exclude_ids)
     counts: Counter = Counter()

@@ -1,78 +1,18 @@
 """**The apply-seam parity lane** — the recorded native engine as the answer key (POC-T4/1,
-Issue #382; ADR-0098's decision 4, Issue #263 § *Parity + retirement*).
+Issue #382; ADR-0098 decision 4). Replays the committed native traces (`tests/fixtures/parity/`,
+schema `parity-trace/1`) ONE STEP AT A TIME through `common.apply_option` and diffs the model the
+seam produced against the model built from the NEXT recorded frame.
 
-`common.apply_option` predicts the board after one option, arithmetically, without stepping an
-engine. This module is what makes that claim checkable rather than argued: it replays the committed
-native traces (`tests/fixtures/parity/*.trace.json.gz`, schema `parity-trace/1`, 377 files) ONE STEP
-AT A TIME through the seam and diffs the model the seam produced against the model built from the
-**next recorded frame**.
+The reference is the recorded NATIVE trace, never cgpy — which also keeps this lane DLL-free. A
+divergence is a ruled seam BUG (remedy: `apply_option.QUARANTINED_KINDS`), never an approximation;
+a REFUSAL is not a divergence and is counted separately, its reasons grouped as the modelling backlog.
 
-## Three properties, each load-bearing
+What is compared is the SNAPSHOT, projected from `snapshot_coverage`'s own `HOMED` registry, so a
+zone nobody declared cannot be silently skipped. DECLARED BLIND SPOTS: `transient_grants` (built
+with ``transients=None``, so it compares a constant) and `serial` (ADR-0091).
 
-**The reference is the recorded NATIVE trace, never cgpy.** Checking a hand-written model against a
-reimplementation that is itself only partly at parity would be checking a model against a model
-(`apply_option`'s own header). The trace IS the native side, which is also what keeps this lane
-DLL-free and therefore runnable on both platforms.
-
-**A divergence is a ruled seam BUG, never an accepted approximation.** The remedy is
-`apply_option.QUARANTINED_KINDS`: a kind with an open divergence refuses, so the planner degrades to
-always-expand *visibly* and the telemetry names the kind — rather than the seam quietly mis-playing
-it. The lane reports; a human rules; the registry records the ruling.
-
-**A REFUSAL is not a divergence.** The seam declaring itself blind is the honest answer and the
-contract's own always-expand path; only a seam that produced a BOARD and got it wrong is a defect.
-The two are counted separately and the refusal reasons are grouped, because that grouping IS the
-modelling backlog for POC-T4/2 and beyond.
-
-## What is compared: the facts the value layer reads
-
-Not the raw observation — the seam is allowed to differ from the engine on anything no equation
-reads (a serial ordering inside a zone, a log line). What it may not differ on is the SNAPSHOT, so
-the projection is taken from `common.snapshot_coverage`'s own registry: every `HOMED` zone's declared
-``home`` path, resolved against the real `StateModel` classes. That registry is the committed answer
-to *"what state can a card effect write, and where does the snapshot hold it?"*, so a zone this lane
-compares is a zone somebody declared, and a zone nobody declared cannot be silently skipped here —
-it is missing from the registry, which its own audit test is what catches.
-
-### DECLARED BLIND SPOTS — what a clean sweep does NOT cover
-
-Stated rather than discovered, because *"0 DIVERGED"* is exactly the result that invites over-reading.
-Each was found by injecting a defect and watching the lane stay green:
-
-* **`transient_grants`** — :func:`offline_combat` builds the oracle with ``transients=None``, so
-  `BodyView.grant` is `{}` on both sides and the zone compares a constant. Reconstructing the grant
-  tracker means replaying attack effects across the trace, which is a different instrument; no
-  modelled transition writes the zone today, which is why the gap is recorded rather than closed.
-* **`serial`** — :func:`_project` reads a body by identity-and-state (card id, HP, counters, energy,
-  tools, prizes) and not by engine instance number, deliberately: that is the same field ADR-0091's
-  Option Equivalence ignores, because two indistinguishable bodies are one decision. The cost is that
-  a transition which carried the WRONG instance of an identical card would pass here.
-
-**`appearThisTurn` was on this list and is not any more (Issue #391).** The new-in-play bit was in no
-`snapshot_coverage` zone, so the projection had no home to read at all and a `_PLAY` deploy that
-forgot it passed green — the one control of four that stayed silent when this lane was built. It is
-now the `new_in_play` zone, homed at `BodyView.new_in_play` on the Active AND the Bench of both
-sides, and `test_the_diff_BITES_when_a_transition_is_wrong` runs that same deploy defect as its
-second control. Its four legs name the FIELD rather than the body container — see :func:`_project`
-for why that spelling and not `damage_counters`'.
-
-**`my_deck_count` was on this list and is not any more.** The lane threads each trace's real 60-card
-decklist from `Trace.meta["decks"]` (see :func:`replay`), because `MySide.deck_count` is derived from
-*decklist − visible − prizes* rather than read off the observation's `deckCount`, so with ``deck=None``
-it was constant on both sides of every diff. Measured with a defect that drops an attached Energy
-CARD while keeping its units — the exact `board_cards` trap, one zone over — on 8 traces / 604 steps:
-**deck-threaded it is caught by `deck_odds` AND `my_deck_count` (792 divergences); deckless, only
-`deck_odds` sees it (396)**. So the threading bought one whole zone, and `deck_odds` was already live
-through `visible_counts`.
-
-## Running it
-
-    python tools/train/apply_parity.py                 # every committed trace
     python tools/train/apply_parity.py --limit 25      # a subset, the shape CI runs
     python tools/train/apply_parity.py --kinds 8,9     # only ATTACH and EVOLVE steps
-
-`tests/parity/test_apply_seam_parity.py` is the budget-tagged wrapper; it runs a subset per test
-session and takes the full sweep on demand.
 """
 from __future__ import annotations
 
@@ -100,15 +40,8 @@ TRACES = REPO / "tests" / "fixtures" / "parity"
 
 
 def offline_combat() -> CombatMath:
-    """A `CombatMath` over cgpy's committed card/attack tables — **no DLL**.
-
-    `EngineCardStatProvider` reads `cg.api.all_card_data()`, which maps the native library; cgpy
-    ships the same tables as JSON (`src/cgpy/defs/`, minted from the DLL by
-    `tools/parity/snapshot_tables.py`) precisely so the parity lane can be platform-free. The
-    transform is the SHIPPED one (`provider._build_cache` / `build_attack_stats` with the audit
-    overrides), not a second reading of the tables — a lane that parsed card facts its own way would
-    be testing its own parser.
-    """
+    """A `CombatMath` over cgpy's committed JSON card/attack tables — **no DLL**. The transform is
+    the SHIPPED one; a lane that parsed card facts its own way would be testing its own parser."""
     from cgpy.compat import api as cgapi
     attacks = cgapi.all_attack()
     stats = _build_cache(cgapi.all_card_data(), attacks)
@@ -122,20 +55,8 @@ def offline_combat() -> CombatMath:
 
 
 def _project(value):
-    """A comparable projection of whatever a snapshot ``home`` path resolves to.
-
-    `BodyView`s and tuples of them are the case that needs a rule: they are objects, so ``==`` is
-    identity and every comparison would "diverge". Projected to the facts a value equation actually
-    asks a body — who it is, how hurt it is, what it is carrying — which is the same standard the
-    module docstring sets for the zones themselves.
-
-    ⚠️ **This tuple is a SECOND place a zone's content can be decided**, and the two do not fail the
-    same way. A `home` that names a field (`mine.active.tool_ids`, `mine.bench.new_in_play`) is
-    resolved against the real class by `test_snapshot_coverage.py`, so deleting the field goes red. A
-    `home` that names a CONTAINER (`mine.bench`) delegates to this tuple instead — so a field dropped
-    from HERE would silently stop being compared while every home still resolved, which is the
-    vacuity the registry exists to prevent. That is why Issue #391 spelled `new_in_play` per-body on
-    all four legs rather than following `damage_counters`' container spelling."""
+    """⚠️ The `BodyView` tuple below is a SECOND place a zone's content is decided: a field dropped
+    from it stops being compared while every `home` still resolves. Prefer field `home`s to containers."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (frozenset, set)):
@@ -151,11 +72,8 @@ def _project(value):
 
 
 def _resolve(model, path: str):
-    """Walk a dotted ``home`` path off ``model``, descending into a tuple of bodies elementwise.
-
-    ``mine.bench.prize_value`` is a per-BODY read over a container, exactly as the registry writes
-    it; ``mine.active.tool_ids`` is a per-body read over a possibly-absent one. Both are handled
-    here so the registry's own spelling is what this lane consumes."""
+    """Walk a dotted ``home`` path off ``model``, descending into a tuple of bodies elementwise, so
+    the registry's own spelling (``mine.bench.prize_value``) is what this lane consumes."""
     node = model
     for part in path.split("."):
         if node is None:
@@ -168,11 +86,8 @@ def _resolve(model, path: str):
 
 
 def zone_facts(model) -> dict:
-    """``{zone id: projection}`` over every `HOMED` zone in `snapshot_coverage.WRITABLE`.
-
-    The registry is the source of what to compare, so this lane cannot quietly stop checking a zone:
-    dropping one means dropping it from `WRITABLE`, and `test_snapshot_coverage` is what refuses
-    that."""
+    """``{zone id: projection}`` over every `HOMED` zone in `snapshot_coverage.WRITABLE` — the
+    registry is the source of WHAT to compare, so this lane cannot quietly stop checking a zone."""
     out = {}
     for zone_id, paths in sc.homes().items():
         out[zone_id] = tuple(_project(_resolve(model, p)) for p in paths)
@@ -239,25 +154,15 @@ class Report:
 
 
 def load(path: Path) -> dict:
-    """One committed trace, decompressed.
-
-    **PUBLIC since Issue #392**, with :func:`chosen_option`, :func:`offline_combat` and
-    :func:`zone_facts`: `tools/train/choice_parity.py` is a second lane over the same corpus and asks
-    the same four questions of it. A second consumer means a public name — never an underscore
-    reached across a module boundary — which is the rule `board_delta`'s copy-on-write scaffolding
-    states and the reason the two lanes must not grow separate trace readers: two ideas of *"which
-    option did this frame answer"* would let them quote different denominators for one corpus."""
+    """One committed trace, decompressed. PUBLIC because `choice_parity.py` is a second lane over the
+    same corpus — two trace readers would quote different denominators for it."""
     with gzip.open(path, "rb") as fh:
         return json.loads(fh.read().decode("utf-8"))
 
 
 def chosen_option(frame: dict):
-    """The single option a frame's recorded ``choice`` answers, or None.
-
-    Multi-pick answers (``maxCount > 1`` grabs) are skipped rather than approximated: the seam models
-    ONE option, and folding a two-card grab into one transition would be measuring something else.
-
-    **PUBLIC since Issue #392** — see :func:`load`."""
+    """The single option a frame's recorded ``choice`` answers, or None. Multi-pick answers are
+    SKIPPED, not approximated: the seam models one option. PUBLIC — see :func:`load`."""
     choice = frame.get("choice")
     menu = ((frame.get("obs") or {}).get("select") or {}).get("option") or ()
     if not choice or len(choice) != 1:
@@ -282,10 +187,8 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
     report = report or Report()
     body = load(path)
     frames = body.get("frames") or []
-    # Each seat's real 60-card decklist, off the trace's own meta (`Trace.decks`). Threaded into
-    # every model so `deck_odds` and `my_deck_count` COMPARE something: built with `deck=None` the
-    # Count Triple's chain is constant on both sides of the diff, and 2 of the 22 homed zones were
-    # silently vacuous. Verified by zeroing a synthesized `deckCount` and watching the lane go red.
+    # Threaded into every model so `deck_odds` and `my_deck_count` COMPARE something: with
+    # `deck=None` the Count Triple is constant on both sides of the diff, i.e. vacuous.
     decks = (body.get("meta") or {}).get("decks") or [[], []]
     report.traces += 1
     report.frames += len(frames)

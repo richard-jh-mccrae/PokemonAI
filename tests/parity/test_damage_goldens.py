@@ -1,19 +1,9 @@
-"""ADR-0032 damage goldens re-asserted on cgpy (ADR-0059 M2 close-out), plus the
-attached-Tool `attackBonus` gates that ride the same `attack_damage` path.
+"""ADR-0032 damage goldens re-asserted on cgpy, plus the attached-Tool `attackBonus` gates that
+ride the same `attack_damage` path. REQ-CGPY-0002.
 
-Weakness x2, Resistance -30, Jetting Blow's 120-base + flat-50 bench snipe, Nebula
-Beam's 210 ignoring W/R, and the benched-Tera zero — each trace-pinned during the M2
-burn-down. The Crustle-immunity variants (Nebula Beam 210 THROUGH Crustle / Jetting
-Blow 0 into Crustle) need the defender-side effect seam, which no parity trace
-exercises yet — they land with the pool-wide fan-out (M4). REQ-CGPY-0002.
-
-Not every assertion here is trace-pinned: `test_resistance_reduces_30` sweeps the pool
-for a matching pair, and Issue #346's Tool block below is derived from printed card
-text. This module is the one home for hand-built `attack_damage` assertions, and the
-builder it uses — `make_state`, still the suite's ONLY hand-built cgpy `GameState` — now
-lives in `tests/cgpy_state_helpers.py` so the one other claim that needs a board with no
-trace behind it (`test_stadium_static_cross_engine.py`, Issue #435) can reach it without
-a second copy existing. Text-derived damage gates still live here.
+Not every assertion here is trace-pinned: `test_resistance_reduces_30` sweeps the pool for a
+matching pair, and the Tool block below is derived from printed card text. This module is the one
+home for hand-built `attack_damage` assertions; its builder lives in `tests/cgpy_state_helpers.py`.
 """
 from __future__ import annotations
 
@@ -110,15 +100,8 @@ def test_benched_tera_takes_zero():
     assert gs.players[1].bench[0].hp == before
 
 
-# --------------------------------------------------------------- attached-Tool bonuses
-# Issue #346. `damage.attack_damage` adds an attached Tool's `tool.attackBonus["n"]` to the
-# opposing Active, pre-W/R, subject to TWO independent gates read off the ChainDef:
-# `defenderEx` (the defending Active must be a Pokémon {ex}) and `holder` (a `_card_matches`
-# filter on the attacker). Brave Bangle prints BOTH and its def carried only the holder half,
-# so the twin credited +30 against every Active. The cast is `src/agents/slowking/deck.csv` —
-# the one shipped deck that runs Brave Bangle — and every pair below is W/R-neutral
-# (attacker energyType {P}=5 matches no listed weakness or resistance), so the printed
-# attack damage is the whole baseline and any delta is the Tool.
+# ------------------------------------------------------------------- attached-Tool bonuses
+# Every pair below is W/R-neutral, so the printed attack damage is the baseline and a delta is Tool.
 
 BRAVE_BANGLE = 1175        # +30, holder must have no Rule Box, defender must be {ex}
 MAXIMUM_BELT = 1158        # +50, defender must be {ex}, no holder gate — the control
@@ -148,64 +131,28 @@ def _tool_damage(holder: int, attack_id: int, defender: int, *tools: int) -> int
 ])
 def test_brave_bangle_pays_out_only_when_BOTH_of_its_gates_hold(
         holder, attack_id, defender, expected, why):
-    """Brave Bangle (1175), verbatim from `data/EN_Card_Data.csv`:
-
-        "If the Pokémon this card is attached to doesn't have a Rule Box, the attacks it
-        uses do 30 more damage to your opponent's Active Pokémon {ex} (before applying
-        Weakness and Resistance). (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)"
-
-    Two gates, so four combinations and exactly one payout. Row 2 is the regression: with
-    `defenderEx` absent from the ChainDef it read 150, a phantom +30 against every Active.
-    """
+    """Brave Bangle (1175): +30 only when the holder has NO Rule Box and the defending Active is a
+    Pokémon {ex}, pre-W/R. Two gates, so four combinations and exactly one payout."""
     assert _tool_damage(holder, attack_id, defender, BRAVE_BANGLE) == expected, why
 
 
 def test_a_Mega_Evolution_Pokemon_ex_counts_as_a_Pokemon_ex_for_the_defender_gate():
-    """`docs/rulebook.txt` Appendix 1: "Mega Evolution Pokémon ex are considered to be
-    Pokémon ex, so any card effects that affect Pokémon ex also affect Mega Evolution
-    Pokémon ex." Mega Kangaskhan ex carries `megaEx` and NOT `ex`, so a gate testing only
-    `ex` would silently exclude the 300-HP bodies the boost matters most against."""
+    """`docs/rulebook.txt` Appendix 1 makes a Mega Evolution Pokémon ex a Pokémon ex, but the
+    card carries `megaEx` and NOT `ex`, so a gate testing only `ex` silently excludes it."""
     assert DB.card(MEGA_KANGASKHAN_EX).megaEx and not DB.card(MEGA_KANGASKHAN_EX).ex
     assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, MEGA_KANGASKHAN_EX, BRAVE_BANGLE) == 150
 
 
 def test_maximum_belt_proves_the_defenderEx_gate_is_LIVE_on_this_path():
-    """The positive control for the instrument, not for the card. If `defenderEx` were dead
-    code — read from a def that `def_for` never returns, or short-circuited before the tool
-    loop — the four assertions above could go green on a change that does nothing. Maximum
-    Belt (1158) prints the identical `{ex}` restriction with no holder gate and its def has
-    always carried the flag, so it must swing 50/0 across the SAME two defenders through the
-    SAME helper. A silent instrument fails here first."""
+    """The positive control for the INSTRUMENT, not the card: Maximum Belt prints the identical
+    `{ex}` restriction with no holder gate, so it must swing across the same two defenders."""
     assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, LATIAS_EX, MAXIMUM_BELT) == 170
     assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, METAGROSS, MAXIMUM_BELT) == 120
 
 
 def test_every_attackBonus_Tool_agrees_with_its_printed_ex_restriction():
-    """The whole `tool.attackBonus` inventory, both directions — a one-card fix that leaves a
-    sibling wrong is the same bug filed twice.
-
-    The card table is the authority: a def carries `defenderEx` if and only if its text prints
-    "Active Pokémon {ex}". Three tools qualify today — Maximum Belt (True/True), Hop's Choice
-    Band (False/False) and Brave Bangle, the row this issue moved from False/True.
-
-    Reads the inventory through `chain.load_chain_defs()` itself, NOT through a local re-merge
-    of the two JSON files. A copy of the merge order would leave the sweep blind to the one
-    drift it most needs to see: overrides ceasing to win over `generated_chains.json` would
-    silently restore the unflagged seed def while this test stayed green.
-
-    The sweep also carries a positive control in the assertion: BOTH directions must be
-    populated. An instrument that silently matched nothing — wrong path, a text probe defeated
-    by the table's U+00A0 and U+2019 — would report a vacuous all-clear, so
-    `agree_true`/`agree_false` being non-empty is asserted, not assumed.
-
-    NOT in this inventory, and deliberately: Light Ball (1178) prints the same `{ex}` clause
-    but its def carries `"deferred": "tool passive unpinned"` (plus the raw `_seed` text) and no
-    `attackBonus` at all, so there is no flag to disagree with. It is a modelling gap, not a
-    gate mismatch — no shipped deck runs it and `deferred` is the file's own record of that.
-    The turn-marker family (Kieran 1191, Black Belt's Training 1211) spells the same restriction
-    `defenderExOnly` under `play`, a different key on a different mechanism; `damage.py` reads
-    both.
-    """
+    """The card table is the authority: a def carries `defenderEx` IF AND ONLY IF its text prints
+    "Active Pokémon {ex}". Read through `load_chain_defs()`, never a local re-merge."""
     printed: dict[str, str] = {}
     csv_path = Path(__file__).resolve().parents[2] / "data" / "EN_Card_Data.csv"
     with csv_path.open(newline="", encoding="utf-8") as fh:
@@ -234,15 +181,8 @@ def test_every_attackBonus_Tool_agrees_with_its_printed_ex_restriction():
     assert not mismatched, f"ChainDef disagrees with printed card text: {mismatched}"
 
 
-# ------------------------------------------------- the open FILTERED-COUNT family (Issue #361)
-# ADR-0115 grew the agent-side scaler vocabulary a filtered-count FORM: `scaleVar` names the
-# family and `AttackStat.scaleFilter` carries the predicate's argument. Two implementations of one
-# predicate now exist — `cgpy.damage.attack_damage`'s `scale` leg and
-# `common.strategy.damage.compute_active_damage` — and two implementations of one fact are the thing
-# most likely to drift, so these assert they AGREE board-for-board rather than each asserting a
-# number it computed itself. The engine names its members differently (`atk_named_attack` vs
-# `atk_in_play_with_attack`) and always has (`all_bench` vs `both_bench`, `atk_discard_basic_energy`
-# vs `atk_discard_energy`): the contract between the two vocabularies is the VALUE, not the spelling.
+# -------------------------------------------------- the open FILTERED-COUNT family (ADR-0115)
+# Two implementations of one predicate: the contract between their vocabularies is the VALUE.
 
 TR_KOFFING, TR_WEEZING = 461, 462       # the pool's ONLY two "Koffing"/"Weezing" names
 TYMPOLE, PALPITOAD, SEISMITOAD = 500, 501, 502
@@ -253,12 +193,8 @@ EXPLODE, ROUND_708 = 651, 708
 
 
 def _agent_damage(gs: GameState, attack_id: int) -> float:
-    """The AGENT's oracle on the same board — shipped `attack_overrides.json` and all.
-
-    `build_attack_stats` is pure, so it takes cgpy's own `Attack` records (`attackId`/`name`/`text`/
-    `damage`/`energies`) and folds the SHIPPED override table over them. That is the point: this is
-    the table CI ships, not a fixture that could agree with the engine while the table does not.
-    """
+    """The AGENT's oracle on the same board, folding the SHIPPED override table — not a fixture
+    that could agree with the engine while the shipped table does not."""
     from common.scouting.provider import (CardStat, build_attack_stats, load_attack_overrides)
     from common.strategy.damage import compute_active_damage
     from common.strategy.damage_context import SideFacts, damage_context
@@ -291,12 +227,8 @@ def _agent_damage(gs: GameState, attack_id: int) -> float:
     ((TR_KOFFING, TR_KOFFING), (TR_WEEZING,), 4),
 ])
 def test_explode_together_now_agrees_between_the_engine_and_the_agent(mine, theirs, units):
-    """651, verbatim (`data/EN_Card_Data.csv` 462): *"This attack does 40 damage for each Pokémon in
-    play that has "Koffing" or "Weezing" in its name (both yours and your opponent's)."* Printed
-    `damage: 0` (`src/cgpy/defs/attack_data.json`), so the scaler is the whole number.
-
-    The `units=1` row IS the defect this issue exists for: the attacker matches its own predicate, so
-    a lone Team Rocket's Weezing deals 40 and the shipped table used to promise 80."""
+    """651: 40 damage per "Koffing"/"Weezing" in play, BOTH sides, printed `damage: 0`. The
+    `units=1` row is the defect: the ATTACKER matches its own predicate."""
     gs = make_state(TR_WEEZING, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
     engine = attack_damage(gs, gs.players[0].active, DB.attacks[EXPLODE],
                            gs.players[1].active, adef=def_for(f"attack:{EXPLODE}") or {})
@@ -312,11 +244,8 @@ def test_explode_together_now_agrees_between_the_engine_and_the_agent(mine, thei
     ((), (TYMPOLE, SEISMITOAD), 1),                 # "each of YOUR Pokémon" — theirs never count
 ])
 def test_round_agrees_between_the_engine_and_the_agent(mine, theirs, units):
-    """708, verbatim (`data/EN_Card_Data.csv` 501): *"This attack does 40 damage for each of your
-    Pokémon in play that has the Round attack."* Printed `damage: 0`.
-
-    Tympole (500/`Round` 707) and Seismitoad (502/`Round` 710) carry the same attack NAME at
-    different per-unit values, which is what makes this a name predicate rather than an id list."""
+    """708: 40 damage per one of YOUR Pokémon with the Round attack. Two bodies carry that attack
+    NAME at different per-unit values, which makes it a name predicate rather than an id list."""
     gs = make_state(PALPITOAD, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
     engine = attack_damage(gs, gs.players[0].active, DB.attacks[ROUND_708],
                            gs.players[1].active, adef=def_for(f"attack:{ROUND_708}") or {})
@@ -326,9 +255,8 @@ def test_round_agrees_between_the_engine_and_the_agent(mine, theirs, units):
 
 @pytest.mark.req("REQ-SCALER-0013")
 def test_the_pool_holds_exactly_the_matching_cards_this_family_was_ruled_against():
-    """A positive control for the two predicates above: if the pool held a third "Koffing" name or a
-    fifth `Round` the parametrised counts would be reasoning about a board that cannot occur. Asserts
-    the predicate's own reach off `card_data.json`, so a set refresh that widens it fails HERE."""
+    """A positive control: if the pool widened, the parametrised counts above would be reasoning
+    about a board that cannot occur, so a set refresh fails HERE."""
     named = sorted(c.cardId for c in DB.cards.values()
                    if "Koffing" in c.name or "Weezing" in c.name)
     assert named == [TR_KOFFING, TR_WEEZING], "the name predicate's reach moved"

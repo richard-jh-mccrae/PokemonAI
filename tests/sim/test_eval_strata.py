@@ -1,7 +1,5 @@
 """Eval harness (tools/sim/eval_strata, ADR-0053 WP2 design D5): skill-sensitivity stratification.
-The pure statistics (median split, per-stratum paired delta) are unit-tested directly; the
-value-swing proxy is exercised on a real generated film with a deterministic stub model so the
-swing is non-degenerate (the committed seed model may be null in the test tree)."""
+The value-swing proxy runs against a stub model — the committed seed model may be null here."""
 import sys
 from pathlib import Path
 
@@ -14,12 +12,8 @@ FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 SRC = [REPO / "src"]
 
 
-# ---- pure statistics -------------------------------------------------------------------------
-
 @pytest.mark.req("REQ-SIM-0021")
 def test_sensitivity_split_is_strict_median_and_degenerate_safe():
-    """A strict median split puts wide-swinging games in high-swing; a run where every game scores
-    the same (the null model → swing 0) collapses entirely to low-swing rather than splitting noise."""
     from sim.eval_strata import sensitivity_split
     thr, labels = sensitivity_split([0.1, 0.2, 0.8, 0.9])
     assert labels == ["low-swing", "low-swing", "high-swing", "high-swing"]
@@ -30,8 +24,6 @@ def test_sensitivity_split_is_strict_median_and_degenerate_safe():
 
 @pytest.mark.req("REQ-SIM-0021")
 def test_strata_cells_compute_paired_delta_within_each_stratum():
-    """Within a stratum the delta is the SAME paired candidate−baseline contrast as the headline,
-    restricted to that stratum's games; high-swing here favours the candidate, low-swing is flat."""
     from sim.eval_strata import strata_cells
 
     def games(sens, cand_wins, base_wins, total):
@@ -46,50 +38,35 @@ def test_strata_cells_compute_paired_delta_within_each_stratum():
     gs = games(0.9, 70, 50, 100) + games(0.1, 50, 50, 100)          # high-swing: +20pts; low: flat
     cells = {c["name"]: c for c in strata_cells(gs)}
     assert cells["high-swing"]["n"] == 200 and cells["low-swing"]["n"] == 200
-    assert cells["high-swing"]["win_delta"] > 0.15                  # candidate clearly better on sensitive games
-    assert abs(cells["low-swing"]["win_delta"]) < 1e-9             # dead flat where decisions didn't matter
+    assert cells["high-swing"]["win_delta"] > 0.15
+    assert abs(cells["low-swing"]["win_delta"]) < 1e-9
     assert strata_cells([]) == []
 
 
 @pytest.mark.req("REQ-SIM-0021")
 def test_strata_cell_with_only_one_arm_reports_null_delta():
-    """A stratum whose games never pair (one arm only) carries no candidate−baseline signal ->
-    null-delta zero-width interval, not a crash."""
+    """Zero-width interval, not a crash."""
     from sim.eval_strata import strata_cells
     solo = [{"sensitivity": 0.5, "opponent": "o", "seat": 0, "arm": "candidate", "won": True}]
     cells = {c["name"]: c for c in strata_cells(solo)}
     assert cells["low-swing"]["win_delta"] == 0.0 and cells["low-swing"]["ci_low"] == 0.0
 
 
-# ---- value-swing proxy on a real film --------------------------------------------------------
-
 class _RampModel:
-    """A deterministic stub value model: P(win) ramps with the prize lead (feature 6 = opp−my
-    prizes), so a real game's trajectory spans a real range — unlike the possibly-null seed model."""
+    """P(win) ramps with the prize lead, so a real game's trajectory spans a real range."""
 
     def predict(self, features) -> float:
         prize_diff = features[6]                                    # opp_prizes − my_prizes
         return max(0.0, min(1.0, 0.5 + prize_diff / 12.0))
 
 
-# A generated film is a REAL self-play game, and the native engine that plays it has a
-# process-global, unseedable RNG stream — so the film is a fresh random game every run, not a
-# fixture. Most are long enough for the prize lead to move across the arm's own decisions, but a
-# short one is not: measured over 8 generated films the arm's trajectory ran 9-53 frames long and
-# one of the 8 came back swing 0.0 (a 9-frame game whose prize differential never moved). A
-# single film therefore cannot carry a POSITIVE-swing assertion — that is the ~1-in-8 flake that
-# turned this red on CI.
-#
-# So the fixture deals several films and the claim below becomes an existence claim: the proxy
-# produces a real non-degenerate swing on a real game. That is the property under test (the proxy
-# reads a live trajectory rather than a constant), and it is exactly what one flat blowout game
-# does not disprove. Bounds are still asserted on EVERY film, since those must hold universally.
+# Films are fresh random games (unseedable engine RNG); ~1 in 8 is short enough to score swing 0.0,
+# so the positive-swing claim below must be an EXISTENCE claim over several films, not one.
 _STRATA_FILMS = 5
 
 
 @pytest.fixture(scope="module")
 def films(tmp_path_factory):
-    """Several real mega_starmie mirror films (same live path as test_corpus)."""
     from sim.corpus import generate_corpus_run
     from meta_tracker.parse import load_replay
     out = tmp_path_factory.mktemp("strata")
@@ -104,9 +81,7 @@ def films(tmp_path_factory):
 
 @pytest.mark.req("REQ-SIM-0021")
 def test_game_sensitivity_is_a_real_swing_over_a_real_film(films):
-    """The proxy runs the shipped Pilot's _board over a real film through a value model and returns
-    a bounded, positive swing — the arm's own-decision trajectory spans a real range as prizes are
-    taken. Only the arm's OWN (seat) frames are scored (D5), never the opponent's."""
+    """Only the arm's OWN seat frames are scored (D5), never the opponent's."""
     from sim.eval_strata import game_sensitivity, own_winprob
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
@@ -117,7 +92,7 @@ def test_game_sensitivity_is_a_real_swing_over_a_real_film(films):
         assert all(not isinstance(p, complex) for p in traj)
         assert swing is not None and 0.0 <= swing <= 1.0
 
-    assert any(len(t) > 5 for t in trajs), (                       # a real game -> many own decisions
+    assert any(len(t) > 5 for t in trajs), (
         f"no film produced a scorable trajectory: lengths {[len(t) for t in trajs]}")
     assert any(s > 0.0 for s in swings), (                         # the trajectory is live, not constant
         f"every one of {len(films)} real films scored a flat swing ({swings}) — the proxy is "
@@ -126,8 +101,7 @@ def test_game_sensitivity_is_a_real_swing_over_a_real_film(films):
 
 @pytest.mark.req("REQ-SIM-0021")
 def test_game_sensitivity_none_when_no_scorable_frame():
-    """A film with no scorable decision (empty steps) yields None — excluded from stratification,
-    not counted as a zero-swing blowout."""
+    """None = excluded from stratification, not a zero-swing blowout."""
     from sim.eval_strata import game_sensitivity
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")

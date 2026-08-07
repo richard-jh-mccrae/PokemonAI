@@ -145,11 +145,8 @@ def episode_count(conn: sqlite3.Connection) -> int:
 
 
 def reclassify(conn: sqlite3.Connection) -> int:
-    """Recompute archetypes from the stored decklists using current logic.
-
-    Possible because decks (not just labels) are retained — lets archetype/engine
-    tweaks apply to history without re-downloading. Returns rows updated.
-    """
+    """Recompute archetypes from the stored decklists using current logic; returns rows updated.
+    Possible because decks, not just labels, are retained — no re-download needed."""
     from .archetype import classify
     rows = conn.execute("SELECT episode_id, deck0, deck1 FROM episodes").fetchall()
     n = 0

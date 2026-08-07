@@ -1,14 +1,7 @@
 """Read the agent's live Decision Telemetry (ADR-0019) and join it to a Correction.
 
-Each ladder match yields a per-seat agent log (``episode-<id>-agent-<seat>-logs.json``) whose
-stderr carries one ``@T <json>`` line per decision (see ``common.telemetry``). This maps a
-Correction's ``(seat, film frame)`` to the live record the SHIPPED agent emitted at that
-decision — the ground truth for *how the agent actually decided*, diffable against an offline
-re-derivation (the retest in ``tools/train/tuner/retest.py``).
-
-The join is positional (the record stream carries no frame id): the k-th decision-frame for a
-seat maps to the k-th ``@T`` record. It is validated by option count + chosen positions, a cheap
-guard against any telemetry/film drift.
+The record stream carries no frame id, so the join is POSITIONAL — the k-th decision-frame for a
+seat maps to the k-th ``@T`` record — validated by option count + chosen positions.
 """
 from __future__ import annotations
 
@@ -23,11 +16,7 @@ from .decisions import iter_decisions
 
 
 def parse_records(log: list) -> list[dict]:
-    """The ordered ``@T`` decision records from a loaded agent-log structure.
-
-    Flattens both shapes (downloaded single-agent ``[[{...}], ...]`` and local env logs),
-    skips the handshake and any non-``@T`` stderr.
-    """
+    """Flattens both shapes (downloaded single-agent ``[[{...}], ...]`` and local env logs)."""
     records: list[dict] = []
     for step in log or []:
         for entry in step or []:
@@ -52,12 +41,7 @@ def load_log(path: Path | str) -> list[dict]:
 
 
 def find_log(replay_path: Path | str, seat: int) -> Path | None:
-    """The sibling agent-log for ``seat`` next to a collected replay, or None.
-
-    ``collect`` writes ``episode-<id>-replay.json`` + ``episode-<id>-agent-<seat>-logs.json`` in
-    one build dir; the bare ``<id>.json`` layout is also accepted. The log name is derived from
-    the episode id in the replay filename.
-    """
+    """``collect``'s layout, plus the bare ``<id>.json`` one."""
     replay_path = Path(replay_path)
     match = re.search(r"episode-(\d+)-replay", replay_path.name) or re.match(r"(\d+)\.", replay_path.name)
     if not match:
@@ -67,11 +51,8 @@ def find_log(replay_path: Path | str, seat: int) -> Path | None:
 
 
 def find_log_any(replay_path: Path | str) -> tuple[Path | None, int | None]:
-    """The collected agent-log sibling for any seat next to a replay, with its seat (or None,None).
-
-    ``collect`` writes exactly our seat's log, so the filename's ``-agent-<seat>-`` encodes which
-    seat the telemetry is for. Used by the inspector to auto-load the live trace.
-    """
+    """``collect`` writes exactly our seat's log, so the filename's ``-agent-<seat>-`` says which
+    seat the telemetry is for."""
     replay_path = Path(replay_path)
     match = re.search(r"episode-(\d+)-replay", replay_path.name) or re.match(r"(\d+)\.", replay_path.name)
     if not match:
@@ -84,12 +65,8 @@ def find_log_any(replay_path: Path | str) -> tuple[Path | None, int | None]:
 
 
 def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> dict | None:
-    """The live ``@T`` record for the Decision at (``seat``, film ``frame``), or None if it
-    can't be matched/validated.
-
-    Join: the k-th seat decision-frame maps to ``records[k]``; accepted only when the record's
-    option count and ``chosen`` positions match the film Decision (integrity guard).
-    """
+    """Positional join: the k-th seat decision-frame maps to ``records[k]``, accepted only when the
+    record's option count and ``chosen`` positions match the film Decision."""
     seat_decisions = [d for d in iter_decisions(replay) if d.seat == seat]
     frames = [d.frame for d in seat_decisions]
     if frame not in frames:

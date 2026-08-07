@@ -1,43 +1,14 @@
 """The two engines must price a Stadium's floating HP static identically. Issue #435.
 
-`common/board_delta.py` mirrors the NATIVE engine (its evidence is the 377 committed native traces);
-`src/cgpy/` is the pure-Python twin (ADR-0059) that `tools/train/leaf_lab.py` and
-`tools/train/decider_lab.py` roll out on. Both carry a function called `stadium_hp_delta`, computing
-the same quantity from two different tables — `src/common/card_effects.json`'s clause compendium on
-one side, `src/cgpy/defs/`'s ChainDef table on the other. **Nothing checked that they agreed**, and
-they did not.
+`board_delta` and `cgpy` both carry a `stadium_hp_delta` computing the same quantity from two
+different tables, and nothing checked that they agreed. The corpus cannot: a Stadium absent from
+every committed trace is exactly where only a hand-built board can speak.
 
-## The divergence this file was written to catch
+The sweep is DERIVED from the compendium's `stadium_static` / `hp_delta` clauses rather than naming
+cards, so a third such Stadium is compared the day it lands.
 
-**Lively Stadium (1251)** — *"Each Basic Pokémon in play (both yours and your opponent's) gets +30
-HP"* (`data/EN_Card_Data.csv`). Issue #433 taught `board_delta` to price it (+30 for a Basic);
-`cgpy` did not implement the card at all — `def_for(1251)` carried no ``stadium`` key and was flagged
-``deferred: "stadium passive unpinned"``, and `chain.stadium_hp_delta` branched on a single
-``stage2HpDelta`` key. So the composer said +30 and the rollout engine said 0 for the same board.
-
-No existing test could see it. `tests/parity/test_apply_seam_parity.py` compares `board_delta`
-against **recorded native traces**, and 1251 appears in **0 of the 377** — which is exactly why the
-gap survived: the corpus is evidence, and where it is silent only a hand-built board can speak.
-That is what `tests/cgpy_state_helpers.py` is for.
-
-## Why the sweep is derived rather than enumerated
-
-The sweep reads the `stadium_static` / `hp_delta` clauses out of the compendium instead of naming
-1251 and 1252, so a **third** such Stadium — a new set, a re-parse — is compared the day it lands
-rather than the day someone remembers this file. The named tests below stay, because a derived sweep
-that quietly found nothing would pass just as loudly as one that found everything;
-:func:`test_the_cross_engine_sweep_is_not_vacuous` is the positive control that stops that.
-
-## What this does NOT establish
-
-Both `hp_delta` clauses in the pool are ``symmetric: true``, and **neither engine reads that key** —
-`board_delta._admits` branches on ``applies_to`` alone and both `stadium_hp_delta` functions take a
-body rather than a seat. Both-sides application is therefore *structural* on both sides of the seam,
-not configured, and these tests would pass unchanged if a clause said ``symmetric: false``. The
-seat-blindness is asserted (every case runs on seat 0 and seat 1); the key's meaning is not. A
-``symmetric: false`` static would need a seat dimension in both engines, and none exists in either
-— see `tests/strategy/test_lively_stadium_basic.py`, which records the same limitation for the
-common side.
+What this does NOT establish: both clauses are ``symmetric: true`` and NEITHER engine reads that
+key — both-sides application is structural, so these tests pass unchanged on ``symmetric: false``.
 """
 from __future__ import annotations
 
@@ -61,10 +32,8 @@ REPO = Path(__file__).resolve().parents[2]
 LIVELY_STADIUM = 1251     # "Each Basic Pokémon in play (both yours and your opponent's) gets +30 HP."
 GRAVITY_MOUNTAIN = 1252   # "Each Stage 2 Pokémon in play (both yours and your opponent's) gets -30 HP."
 
-#: One real body per stage class, from `data/EN_Card_Data.csv`. Riolu -> Mega Lucario ex is a single
-#: hop with no intermediate Lucario in this set (`docs/rulebook.txt` Appendix 1), so the Stage 2 has
-#: to come from another line — Dragapult ex, the class Gravity Mountain reaches. Every stage is
-#: ASSERTED below rather than trusted from the id.
+#: One real body per stage class. Riolu -> Mega Lucario ex is a SINGLE hop in this set, so the
+#: Stage 2 comes from another line. Every stage is ASSERTED below rather than trusted from the id.
 RIOLU, MEGA_LUCARIO_EX, DRAGAPULT_EX = 677, 678, 121
 BY_STAGE = {"basic": RIOLU, "stage1": MEGA_LUCARIO_EX, "stage2": DRAGAPULT_EX}
 
@@ -95,13 +64,8 @@ def _common_delta(combat, stadium_id: int, stat) -> int:
 
 
 def _seated(body_cid: int, stadium_id: int, seat: int, other: int = DRAGAPULT_EX):
-    """A board with ``body_cid`` Active on ``seat`` under ``stadium_id``, and ``other`` opposite it.
-    Returns ``(gs, body)``.
-
-    The Stadium is always owned by seat 0 while the body under test moves between seats, which is
-    what makes every caller a BOTH-SIDES case rather than an own-side one — the seat is the only
-    thing that varies, so a modifier that reached only its owner's board would show up as a seat-1
-    failure and nothing else."""
+    """Returns ``(gs, body)``. The Stadium is always owned by seat 0 while the body moves between
+    seats, which is what makes every caller a BOTH-SIDES case rather than an own-side one."""
     if other == body_cid:                      # the sweep grades Dragapult ex against itself
         other = RIOLU if body_cid != RIOLU else DRAGAPULT_EX
     pair = (body_cid, other) if seat == 0 else (other, body_cid)
@@ -121,12 +85,8 @@ def _twin_delta(stadium_id: int, body_cid: int, *, seat: int) -> int:
 @pytest.mark.parametrize("seat", (0, 1))
 def test_the_two_engines_agree_on_every_stadium_hp_static_in_the_pool(
         combat, hp_delta_stadiums, stage, seat):
-    """**The gate.** For every Stadium carrying an HP static, every body class, and both seats, the
-    composer's price and the twin's price must be the same number.
-
-    This is the test that did not exist. Before Issue #435 it fails on (1251, basic) with the
-    composer at +30 and the twin at 0 — the exact board a Kaggle opponent running Lively Stadium
-    would have put both engines on."""
+    """The gate: for every Stadium carrying an HP static, every body class and both seats, the
+    composer's price and the twin's price must be the same number."""
     body_cid = BY_STAGE[stage]
     assert bd._stat(combat, body_cid).stage == stage, f"{body_cid}: fixture stage is wrong"
 
@@ -140,12 +100,8 @@ def test_the_two_engines_agree_on_every_stadium_hp_static_in_the_pool(
 
 
 def test_the_cross_engine_sweep_is_not_vacuous(combat, hp_delta_stadiums):
-    """The positive control for the gate above.
-
-    Two ways it could pass while measuring nothing: the derived sweep finds no Stadium, or it finds
-    them and every single comparison is `0 == 0` (which is what a *second* forgotten card would look
-    like — both engines silent, agreeing perfectly, both wrong). So assert the sweep found the two
-    cards the pool actually has, and that it observed a non-zero delta from **each** of them."""
+    """Two ways the gate could pass while measuring nothing: the sweep finds no Stadium, or every
+    comparison is `0 == 0` — both engines silent, agreeing perfectly, both wrong."""
     assert hp_delta_stadiums == (LIVELY_STADIUM, GRAVITY_MOUNTAIN), \
         f"the compendium's HP statics moved to {hp_delta_stadiums} — re-derive this file's fixtures"
 
@@ -159,15 +115,8 @@ def test_the_cross_engine_sweep_is_not_vacuous(combat, hp_delta_stadiums):
 
 @pytest.mark.parametrize("seat", (0, 1))
 def test_lively_stadium_renders_a_basic_at_printed_plus_30_on_both_sides(seat):
-    """The claim at the seam that actually feeds the composer: `render.pokemon_dict`, which is what
-    turns a cgpy board into the observation dict every equation reads.
-
-    Riolu is 80 HP printed (`data/EN_Card_Data.csv`), so it must render 110/110 under Lively — and
-    the STORED body must still be 80/80, because a static is a floating modifier that is never
-    written down. That is the invariant `search._fix_stadium_deltas` depends on when it imports a
-    native observation: it subtracts the delta to recover the stored value, so a twin that renders
-    0 where native rendered +30 would store the body 30 HP too heavy and keep it there after the
-    Stadium left."""
+    """The STORED body must stay at printed HP, because a static is a floating modifier never
+    written down — the invariant `search._fix_stadium_deltas` subtracts to recover on import."""
     gs, body = _seated(RIOLU, LIVELY_STADIUM, seat)
 
     printed = DB.card(RIOLU).hp
@@ -179,10 +128,8 @@ def test_lively_stadium_renders_a_basic_at_printed_plus_30_on_both_sides(seat):
 
 
 def test_lively_stadium_leaves_both_evolution_classes_alone():
-    """The discriminating half. A def that matched everything would show up here as +30 on a Stage 1
-    and a Stage 2, and the Stage 1 is the one that matters most: under Lively, evolving Riolu must
-    land Mega Lucario ex on its printed 340, which is precisely what
-    `tests/strategy/test_lively_stadium_basic.py` asserts on the composer's side."""
+    """The discriminating half: a def that matched everything would show up here as +30 on a Stage
+    1 and a Stage 2."""
     for cid in (MEGA_LUCARIO_EX, DRAGAPULT_EX):
         gs, body = _seated(cid, LIVELY_STADIUM, 0, other=RIOLU)
         assert pokemon_dict(gs, body)["maxHp"] == DB.card(cid).hp
@@ -190,12 +137,8 @@ def test_lively_stadium_leaves_both_evolution_classes_alone():
 
 @pytest.mark.parametrize("seat", (0, 1))
 def test_gravity_mountain_still_lowers_a_stage_2_by_30(seat):
-    """The regression leg for Issue #435's key change: 1252 moved from a bespoke ``stage2HpDelta``
-    key to the general filter-based ``hpDelta``, and it must answer exactly as before.
-
-    Trace-pinned, unlike everything else in this file: `ml_dx_2001` f112 renders a 320-HP Dragapult
-    ex at 290 under Gravity Mountain (`cgpy/chain.py:stadium_hp_delta`), and f172/f181 show it back
-    at 320/320 once the Stadium leaves — the floating-modifier proof."""
+    """The regression leg for the key change: 1252 moved from a bespoke ``stage2HpDelta`` to the
+    general filter-based ``hpDelta`` and must answer exactly as before. Trace-pinned."""
     gs, body = _seated(DRAGAPULT_EX, GRAVITY_MOUNTAIN, seat, other=RIOLU)
 
     assert DB.card(DRAGAPULT_EX).hp == 320
@@ -209,17 +152,8 @@ def test_gravity_mountain_still_lowers_a_stage_2_by_30(seat):
 
 
 def test_the_twin_can_actually_play_lively_stadium():
-    """A def-less Stadium is omitted from the MAIN menu outright — *"un-def'd/deferred stadium:
-    option absent -> visible divergence"* (`cgpy/options.py`). So the HP arithmetic is only half the
-    card: without a ``stadium`` def the twin could never get 1251 onto the board to price it.
-
-    Gravity Mountain is the **positive control** — a Stadium that was already offered, drawn through
-    the identical call, so an empty option list for Lively would mean the card and not the harness.
-
-    The offered option is RESOLVED back to a card id rather than merely counted: a PLAY encodes its
-    target as an index into the hand (`{"type": 7, "index": 0}` — no ``area`` key at all), so
-    asserting only that the list is non-empty would pass on any play of anything, and would keep
-    passing if the hand ever held a second card."""
+    """A def-less Stadium is omitted from the MAIN menu outright, so the HP arithmetic is only half
+    the card. The offered option is RESOLVED back to a card id, since a PLAY encodes only a hand index."""
     for stadium_cid in (LIVELY_STADIUM, GRAVITY_MOUNTAIN):
         assert DB.card(stadium_cid).cardType == CardType.STADIUM
         gs = make_state(RIOLU, DRAGAPULT_EX)
@@ -234,12 +168,8 @@ def test_the_twin_can_actually_play_lively_stadium():
 
 
 def test_lively_stadium_is_no_longer_deferred_in_the_twin():
-    """`chain.is_deferred` means *known-unmodeled, must never run*. 1251 sat there with
-    ``"stadium passive unpinned"`` while `board_delta` priced it, which is the divergence in one
-    field.
-
-    The two controls bracket it: 1252 and 1260 were never deferred (they are the two Stadiums the
-    committed traces exercise), so this is a claim about 1251 and not about how the table loads."""
+    """`chain.is_deferred` means known-unmodeled, must never run — the divergence in one field.
+    The two controls bracket it, so this is a claim about 1251 and not about how the table loads."""
     lively = def_for(LIVELY_STADIUM)
     assert lively is not None and "deferred" not in lively, \
         "1251 is still flagged deferred — the twin refuses to run the card it is now defined for"

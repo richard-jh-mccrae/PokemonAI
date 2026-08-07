@@ -1,37 +1,11 @@
 """Issue #138 Phase 0b — the StateModel (ADR-0068).
 
-The primary seam: a dict-backed Stat Provider and hand-built zone dicts, no Pilot and no engine boot
-(the `test_reachable_incoming.py` / `test_reachable_attach.py` construction). Asserts external
-behavior only — field values, the sharing guard's verdict, the epistemic legs, the channel's
-contract — never memo internals.
+The primary seam: a dict-backed Stat Provider and hand-built zone dicts, no Pilot and no engine boot.
+Asserts external behavior only — field values, the sharing guard's verdict, the epistemic legs, the
+channel's contract — never memo internals.
 
-Card facts VERIFIED at source (`data/EN_Card_Data.csv`, re-verified for this file) — never recalled:
-  * Dragapult ex (121) Stage 2, HP 320 — Jet Headbutt ``●`` 70 / Phantom Dive ``{R}{P}`` 200.
-  * Crispin (1198, Supporter): "Search your deck for up to 2 Basic Energy cards of DIFFERENT types,
-    reveal them, and put 1 of them into your hand. Attach the other to 1 of your Pokémon."
-  * Munkidori (112) Ability "Adrena-Brain": "Once during your turn, if this Pokémon has any {D}
-    Energy attached, you may move up to 3 damage counters from 1 of your Pokémon to 1 of your
-    opponent's Pokémon."  — the my-play-moves-THEIR-damage case.
-  * Judge (1213, Supporter): "Each player shuffles their hand into their deck and draws 4 cards."
-    — moves their ``handCount``/``deckCount`` and NOTHING a hand-picked fingerprint would list.
-  * Boss's Orders (1182, Supporter): "Switch in 1 of your opponent's Benched Pokémon to the Active
-    Spot." — moves WHICH of their bodies is Active and nothing else.
-  * Riolu (677) Basic HP 80; Mega Lucario ex (678) — Aura Jab ``{F}`` 130 / Mega Brave ``{F}{F}`` 270.
-  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and Issue #384 adds 6 = {F}.
-
-Issue #384 corrects three attack records this cast used to carry INCOMPLETE. Each was re-verified by
-running the shipped parsers (`provider.build_attack_stats`) over the card's own ``Effect
-Explanation`` text in `data/EN_Card_Data.csv`, so the fixture carries what the runtime carries rather
-than a hand-reading of the sentence:
-  * **Phantom Dive** — *"Put 6 damage counters on your opponent's Benched Pokémon in any way you
-    like."* → ``benchSpread=60`` (6 counters x 10).
-  * **Aura Jab** — *"Attach up to 3 Basic {F} Energy cards from your discard pile to your Benched
-    Pokémon in any way you like."* → ``recoverN=3``, ``recoverEnergyType={F}``,
-    ``recoverTarget="bench"``, ``recoverSource="discard"``.
-  * **Mega Brave** — *"During your next turn, this Pokémon can't use Mega Brave."* →
-    ``nextTurnSameAttackLock=True``. **NOT ``nextTurnSelfLock``**: the sentence names the attack
-    ITSELF, so the lock forbids one attack rather than the turn, and `strategy/sequence.py` prices
-    the two differently on purpose (270+130 == 130+270, so a same-attack lock forfeits nothing).
+Every `CardStat` below is audited field-for-field against `data/EN_Card_Data.csv` by
+`tests/scouting/test_cardstat_fixture_facts.py`, so an invented card fact fails the build.
 """
 import copy
 
@@ -50,20 +24,15 @@ COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122
 AURA_JAB, MEGA_BRAVE = 982, 983
-#: Riolu's ONLY attack, and this cast used to drop it. `data/EN_Card_Data.csv` Card ID 677:
-#: **Accelerating Stab ``{F}`` 30**, *"During your next turn, this Pokémon can't use Accelerating
-#: Stab."* -> ``nextTurnSameAttackLock``, by the shipped parser (Issue #384).
+#: Riolu's ONLY attack: Accelerating Stab `{F}` 30, `nextTurnSameAttackLock`.
 ACCELERATING_STAB = 9677
-#: An OFF-POOL body carrying the shape a PARTIALLY-KNOWN attack table produces: a `maxDamage`
-#: roll-up with an empty `attacks` tuple. Not a card, deliberately — no id in `data/EN_Card_Data.csv`
-#: — so it makes no card-fact claim that could be wrong, which is exactly what went wrong when this
-#: case rode on Riolu's incorrectly-empty attack list (Issue #384).
+#: An OFF-POOL body carrying the shape a PARTIALLY-KNOWN attack table produces — a `maxDamage`
+#: roll-up with an empty `attacks` tuple. Deliberately no real id, so it can make no wrong card claim.
 PARTIAL = 990001
 CRISPIN = 1198
 E_R, E_P, E_D, E_F = 2, 5, 7, 6
-# The two bench-GATED attackers in the whole card set (`parse_attack_bench_requirement` over
-# `data/EN_Card_Data.csv` finds exactly these two), so the payoff gate is tested on both shapes:
-# a single named partner and an "and" list that needs BOTH.
+# The card set's only two bench-GATED attackers, so the payoff gate is tested on both shapes: a
+# single named partner, and an "and" list that needs BOTH.
 SOLROCK, LUNATONE = 676, 675
 MESPRIT, UXIE, AZELF = 216, 215, 217
 COSMIC_BEAM, POWER_GEM = 9676, 9675
@@ -75,11 +44,8 @@ _STATS = {
                         minAttackCost=1, minCostDamage=70,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
     MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=70, energyType=DARKNESS, cardType=0),
-    # ``attacks``/``minAttackCost`` corrected by Issue #384 for the reason the module docstring
-    # gives: Riolu really does print an attack — **Accelerating Stab ``{F}`` 30**, *"During your next
-    # turn, this Pokémon can't use Accelerating Stab"* — so its cheapest cost is 1, not the 2 this
-    # row used to claim, and its attack list is not empty. The sibling cast in `test_state_value.py`
-    # was corrected in the same change; leaving one of the two behind is how the pair drifts.
+    # `test_state_value.py` carries a sibling Riolu row; correcting one and not the other is how the
+    # pair drifts.
     RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=1,
                     maxDamage=30, maxDamageCost=1, minCostDamage=30,
                     attacks=(ACCELERATING_STAB,), cardType=0),
@@ -107,8 +73,8 @@ _STATS = {
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
-    # The three riders/locks corrected by Issue #384 — see the module docstring for each sentence
-    # and the parser run that produced these fields.
+    # `nextTurnSameAttackLock` is NOT `nextTurnSelfLock`: Mega Brave's sentence names the ATTACK, so
+    # the lock forbids one attack rather than the turn, and `strategy/sequence.py` prices them apart.
     PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC),
                              benchSpread=60),
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,),
@@ -142,13 +108,8 @@ def _combat():
 
 
 def _poke(cid, *, hp, energies=(), attached_energy=None, serial=1, damage=0):
-    """A board body in the engine's REAL two-field Energy shape (`cg/api.py` `Pokemon`):
-    ``energies`` are the ``EnergyType`` UNITS the attached cards provide, ``energyCards`` are the
-    CARDS. `energies=` here stays the Basic-Energy sugar — a list of Basic Energy CARD ids, each
-    providing one unit of its own id, which is right only because card 1-8 == EnergyType 1-8. Any
-    Special Energy must go through `attached_energy=`, a sequence of ``(card_id, units)`` pairs:
-    Ignition Energy is card 17 providing ``(0, 0, 0)``, Rock Fighting is card 20 providing ``(6,)``
-    (Issue #297)."""
+    """`energies=` is Basic-Energy SUGAR: card ids each providing one unit of their own id, right
+    only because card 1-8 == EnergyType 1-8. Special Energy must go through `attached_energy=`."""
     if attached_energy is None:
         attached_energy = [(c, (c,)) for c in energies]
     return {"id": cid, "hp": hp - damage, "serial": serial,
@@ -158,8 +119,7 @@ def _poke(cid, *, hp, energies=(), attached_energy=None, serial=1, damage=0):
 
 def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, hand_count=None,
             deck_count=20):
-    """One side's engine ``PlayerState``-shaped dict. ``prize`` as an int = that many FACE-DOWN
-    prizes (the pre-anchor state); a list is used verbatim."""
+    """`prize` as an int = that many FACE-DOWN prizes (pre-anchor); a list is used verbatim."""
     return {
         "active": [active] if active else [],
         "bench": list(bench),
@@ -209,13 +169,12 @@ def test_both_sides_are_read_from_one_snapshot():
     assert m.theirs.active.card_id == RIOLU
     assert len(m.theirs.bodies) == 2
     assert m.mine.prizes_remaining == 4 and m.theirs.prizes_remaining == 6
-    assert m.mine.turn == 5      # the turn's ONE home (POC-T1 retired the duplicate
-    #                             `StateModel.turn` property — a second reader of one fact)
+    assert m.mine.turn == 5      # the turn's ONE home
 
 
 def test_my_side_carries_cards_and_their_side_carries_only_a_count():
-    """Asymmetry by information is the point: the engine gives the opponent's hand as None, so a
-    contents read on their side must not exist at all rather than silently return empty."""
+    """The engine gives the opponent's hand as None, so a contents read on their side must not EXIST
+    rather than silently return empty."""
     m = _model(_player(active=_pult(), hand=[CRISPIN, E_R]),
                _player(active=_poke(RIOLU, hp=80), hand_count=7))
     assert m.mine.hand_ids == (CRISPIN, E_R)
@@ -232,13 +191,7 @@ def test_their_side_exposes_the_opponent_model_facade_rather_than_its_own_infere
 # ── the discard is public in BOTH directions (POC-T0 / Issue #259) ─────────────────────────────
 
 def test_the_full_discard_contents_are_readable_on_BOTH_sides():
-    """A discard pile is public to both players, so THEIR discard is sound knowledge and not an
-    estimate — the asymmetry that governs `hand_ids` does not apply here.
-
-    Until T0 the model exposed only `discard_energy_counts`, a Basic-Energy projection, so every
-    consumer wanting *what is actually in there* (a recur target, a Night Stretcher line, a rebuilt
-    evolution line) had to reach past the model to the raw observation — the bypass ADR-0092's
-    "the StateModel is the SOLE data supplier" ruling forbids."""
+    """A discard is public to both players, so the asymmetry governing `hand_ids` does not apply."""
     m = _model(_player(active=_pult(), discard=[CRISPIN, E_R]),
                _player(active=_poke(RIOLU, hp=80), discard=[MEGA_LUC, E_P, E_P]))
     assert m.mine.discard_ids == (CRISPIN, E_R)
@@ -246,18 +199,15 @@ def test_the_full_discard_contents_are_readable_on_BOTH_sides():
 
 
 def test_the_discard_read_is_ORDERED_and_keeps_duplicates():
-    """The zone is ordered and a consumer reasoning about the most recently discarded card cannot
-    recover that from counts — which is exactly what `discard_energy_counts` gives and why it is not
-    a substitute. Duplicates survive for the same reason a multiset would lose them."""
+    """A consumer reasoning about the most recently discarded card cannot recover that from
+    `discard_energy_counts`, which is why the projection is not a substitute."""
     m = _model(_player(active=_pult()),
                _player(active=_poke(RIOLU, hp=80), discard=[E_P, MEGA_LUC, E_P]))
     assert m.theirs.discard_ids == (E_P, MEGA_LUC, E_P)
 
 
 def test_the_discard_read_and_its_energy_projection_agree():
-    """Two readings of one zone must not be able to disagree. `discard_energy_counts` is the Basic
-    Energy projection of exactly this list, so a regression in either shows up as a mismatch here
-    rather than as two internally-consistent answers."""
+    """Two readings of one zone must not be able to disagree."""
     m = _model(_player(active=_pult()),
                _player(active=_poke(RIOLU, hp=80), discard=[E_P, MEGA_LUC, E_P, E_R]))
     assert m.theirs.discard_ids == (E_P, MEGA_LUC, E_P, E_R)
@@ -265,8 +215,8 @@ def test_the_discard_read_and_its_energy_projection_agree():
 
 
 def test_an_empty_discard_reads_as_empty_rather_than_unknown():
-    """A public zone is never unknown. Returning None for "nothing there" would make a sound read
-    look like a missing one, and the fail-open callers would then guess about a fact they can see."""
+    """None for "nothing there" makes a sound read look like a missing one, and the fail-open
+    callers then guess about a fact they can see."""
     m = _model(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80)))
     assert m.theirs.discard_ids == () and m.mine.discard_ids == ()
 
@@ -274,15 +224,8 @@ def test_an_empty_discard_reads_as_empty_rather_than_unknown():
 # ── the new-in-play bit is readable off the SNAPSHOT, both sides (POC-T4/3 / Issue #391) ───────
 
 def test_the_new_in_play_bit_is_readable_on_every_body_on_BOTH_sides():
-    """`docs/rules.md` §4 — *"Cannot evolve a Pokémon **the turn it was played/put into play**"*. The
-    engine spells it ``appearThisTurn`` and 12 sites across 5 modules read it off a RAW body dict;
-    what did not exist until Issue #391 is a read off the SNAPSHOT, which is all the value layer, the
-    apply seam's parity lane and the composer's ply-≥1 legality filter are allowed
-    (`docs/plans/value-system-poc-plan.md` §4-T0's sole-supplier ruling).
-
-    Both sides, per body, Active and Bench alike — the fact is symmetric and fully visible (the
-    engine carries the bit on the opponent's bodies too), and §4 gates their evolutions on it exactly
-    as it gates mine."""
+    """`docs/rules.md` §4 — no evolving a body the turn it was put into play. The engine spells it
+    `appearThisTurn` and carries it on the opponent's bodies too, so the fact is symmetric."""
     fresh = {**_poke(MUNKIDORI, hp=70, serial=2), "appearThisTurn": True}
     m = _model(_player(active=_pult(), bench=[fresh]),
                _player(active={**_poke(RIOLU, hp=80), "appearThisTurn": True},
@@ -294,12 +237,8 @@ def test_the_new_in_play_bit_is_readable_on_every_body_on_BOTH_sides():
 
 
 def test_a_body_with_no_appear_bit_reads_as_IN_PLAY_SINCE_LAST_TURN():
-    """Absent reads False — agreement with the tree rather than a fail-closed choice. All 12 raw
-    reads treat a missing key as *"in play since last turn"*, in two equivalent polarities (6
-    ``not b.get(...)``, 6 ``if b.get(...): skip``), so a model field answering differently about the
-    same body would be a second answer to one question.
-
-    Only a hand-built board (this one) ever reaches it: a real observation carries the bit."""
+    """Absent reads False, matching every raw read in the tree; a real observation always carries the
+    bit, so only a hand-built board reaches this."""
     body = _poke(RIOLU, hp=80)
     assert "appearThisTurn" not in body                # the positive control on the premise
     m = _model(_player(active=body), _player(active=_pult()))
@@ -309,11 +248,8 @@ def test_a_body_with_no_appear_bit_reads_as_IN_PLAY_SINCE_LAST_TURN():
 # ── the survival clock carries what the bypasses carry (POC-T0 / Issue #259) ───────────────────
 
 def test_the_survival_clock_accepts_the_kwargs_the_bypasses_carry():
-    """Every live caller used to reach `CombatMath` directly because the one-argument model route
-    could not express the Bench Harvest trio, `opp_active` or `switch_enabler` — a route that
-    silently answers a DIFFERENT question than the bypass is worse than no route.
-
-    Defaults must reproduce the old behaviour exactly, so the widening moves no decision."""
+    """A route that silently answers a DIFFERENT question than the bypass is worse than no route;
+    defaults must reproduce the old behaviour exactly, so the widening moves no decision."""
     m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),
                _player(active=_poke(MEGA_LUC, hp=340, serial=3, energies=[E_R, E_R])))
     body = m.mine.active.body
@@ -327,14 +263,8 @@ def test_the_survival_clock_accepts_the_kwargs_the_bypasses_carry():
 
 
 def test_the_survival_clock_memo_keys_on_its_arguments():
-    """A memo that ignores an argument is a trap the sibling `incoming` already had to be fixed for
-    (Issue #213): two callers passing different harvest readings must not share one answer. Asserted
-    by giving one call a distinguishing argument and requiring the oracle to be consulted again.
-
-    Counts consults of `CombatMath.survival_clock`, the method the model route reaches since
-    ADR-0117 — `turns_to_ko_me` is its `.turns` view, so ONE memo entry serves both readings and
-    this test covers both. Patching the old name here counted nothing at all and failed loudly,
-    which is the instrument doing its job rather than a reason to weaken it."""
+    """Two callers passing different harvest readings must not share one answer. Counts consults of
+    `survival_clock` — `turns_to_ko_me` is its `.turns` view (ADR-0117), so one memo serves both."""
     m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),
                _player(active=_poke(MEGA_LUC, hp=340, serial=3, energies=[E_R, E_R])))
     body = m.mine.active.body
@@ -356,8 +286,6 @@ def test_the_survival_clock_memo_keys_on_its_arguments():
 # ── laziness ───────────────────────────────────────────────────────────────────────────────────
 
 def test_build_computes_nothing_and_a_read_pays_only_for_what_it_touches():
-    """The efficiency claim, asserted through the probe: constructing the model touches no field,
-    and reading one field does not drag in the rest."""
     probe = set()
     m = _model(_player(active=_pult(energies=[E_R])), _player(active=_poke(RIOLU, hp=80)),
                probe=probe)
@@ -369,7 +297,7 @@ def test_build_computes_nothing_and_a_read_pays_only_for_what_it_touches():
 
 
 def test_a_probed_build_and_an_unprobed_build_agree():
-    """Instrumentation must not change answers — otherwise the Leaf Profile measures a fiction."""
+    """Otherwise the Leaf Profile measures a fiction."""
     args = (_player(active=_pult(energies=[E_R, E_P]), hand=[CRISPIN]),
             _player(active=_poke(RIOLU, hp=80)))
     assert (_model(*args, probe=set()).mine.deck_energy_counts
@@ -379,9 +307,7 @@ def test_a_probed_build_and_an_unprobed_build_agree():
 # ── purity ─────────────────────────────────────────────────────────────────────────────────────
 
 def test_two_builds_on_one_observation_agree_field_for_field():
-    """Purity: same board in, same answer out. Without it neither side-sharing nor the cost pin is
-    trustworthy — and the two hysteresis memories that USED to mutate during the Board build are
-    exactly why this needs asserting."""
+    """Without purity neither side-sharing nor the cost measurement is trustworthy."""
     me = _player(active=_pult(energies=[E_R]), hand=[CRISPIN], prize=4)
     opp = _player(active=_poke(RIOLU, hp=80, energies=[E_D]), prize=6)
     a, b = _model(me, opp), _model(me, opp)
@@ -407,9 +333,7 @@ def test_the_model_never_writes_the_carried_state_it_was_given():
 
 
 # ── the sharing guard: the wholesale fingerprint ────────────────────────────────────────────────
-#
-# Each MISS case is a real play of MINE that moves THEIR side. The hand-picked field list this
-# replaced ("their bodies + damage + prizes + discard") caught only the third of them.
+# Each MISS case is a real play of MINE that moves THEIR side.
 
 def _their_base():
     return _player(active=_poke(RIOLU, hp=80, serial=3),
@@ -421,15 +345,14 @@ def _fp(opp, me=None):
 
 
 def test_judge_moves_their_hand_and_deck_counts_so_reuse_must_miss():
-    """Judge shuffles both hands away and draws 4 — it touches NOTHING an enumerated body/damage/
-    prize/discard fingerprint would look at. This is the case that killed the enumerated design."""
+    """Judge touches NOTHING an enumerated body/damage/prize/discard fingerprint would look at."""
     after = _their_base() | {"handCount": 4, "deckCount": 21}
     assert _fp(_their_base()) != _fp(after)
 
 
 def test_a_gust_moves_which_body_is_active_so_reuse_must_miss():
-    """Boss's Orders swaps their Active with a benched body. A set-shaped fingerprint calls that
-    board unchanged, while every clock read keys off who is Active."""
+    """A set-shaped fingerprint calls a gusted board unchanged, but every clock read keys off who is
+    Active."""
     gusted = _player(active=_poke(MEGA_LUC, hp=340, serial=4),
                      bench=[_poke(RIOLU, hp=80, serial=3)], hand_count=5, deck_count=20)
     assert _fp(_their_base()) != _fp(gusted)
@@ -453,13 +376,8 @@ def test_inflicting_a_condition_makes_reuse_miss():
 
 
 def test_moving_a_card_into_their_discard_makes_reuse_miss():
-    """The wholesale hash earning its keep. `discard_ids` (POC-T0) is a NEW readable fact, and their
-    discard moves during MY turn — a Knock Out sends their body and its attachments there, a Hammer
-    sends an Energy. A hand-picked fingerprint would have had to be extended for it and would have
-    failed OPEN in the meantime, serving a stale discard to every shared read.
-
-    This is the "plus the next disruption card nobody thought of" clause asserted rather than
-    trusted: the field was added and the guard needed no change."""
+    """The wholesale hash earning its keep: `discard_ids` was ADDED and the guard needed no change,
+    where a hand-picked fingerprint would have failed OPEN until someone extended it."""
     discarded = _their_base() | {"discard": [{"id": MEGA_LUC}]}
     assert _fp(_their_base()) != _fp(discarded)
 
@@ -469,8 +387,7 @@ def test_taking_a_prize_makes_reuse_miss():
 
 
 def test_a_stadium_change_makes_reuse_miss():
-    """The stadium is shared rather than side-scoped, yet it can change what their bodies
-    effectively are — so it is folded into the fingerprint even though it is not in their record."""
+    """The stadium is SHARED, not side-scoped, yet it changes what their bodies effectively are."""
     me, opp = _player(active=_pult()), _their_base()
     assert (_model(me, opp).opponent_fingerprint
             != _model(me, opp, stadium=(1248,)).opponent_fingerprint)
@@ -484,8 +401,7 @@ def test_a_stadium_change_makes_reuse_miss():
     pytest.param(_player(active=_pult(), discard=[E_R]), id="i_discarded"),
 ])
 def test_my_own_plays_leave_their_half_reusable(me_after):
-    """The cache's value: the ordinary majority of my plays cannot touch their side, so their
-    expensive clock derivations survive across the selects of my turn."""
+    """The cache's value: their expensive clock derivations survive the selects of my turn."""
     opp = _their_base()
     before = _model(_player(active=_pult()), opp)
     after = _model(me_after, opp)
@@ -512,8 +428,6 @@ def test_a_reused_their_side_is_the_same_object():
 # ── the Count Triple ───────────────────────────────────────────────────────────────────────────
 
 def test_pre_anchor_the_legs_diverge():
-    """4 hidden prizes, the 3×{R}/3×{P}/2×{D} suite untouched: nothing about {D} is provable, the
-    expectation is a fraction of a card, and the ceiling is the full unseen count."""
     m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)))
     d = m.mine.deck_energy_counts[DARKNESS]
     assert d.floor == 0                      # both {D} could be prized
@@ -523,8 +437,7 @@ def test_pre_anchor_the_legs_diverge():
 
 
 def test_anchored_all_three_legs_collapse_to_the_exact_count():
-    """Once a deck-revealing search resolves the prizes, the honest answer is an integer — so no
-    consumer ever has to branch on the regime."""
+    """Anchored, the honest answer is an integer, so no consumer branches on the regime."""
     m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)),
                own_prizes={E_R: 1, DRAGAPULT: 1})
     d = m.mine.deck_energy_counts[DARKNESS]
@@ -533,22 +446,20 @@ def test_anchored_all_three_legs_collapse_to_the_exact_count():
 
 
 def test_the_pigeonhole_floor_is_sound_when_copies_outnumber_hidden_prizes():
-    """3×{R} against 2 hidden prizes: at least one {R} is PROVABLY in the deck, so the floor — the
-    only leg safe to compare against a cost — rises above zero without the prizes being resolved."""
+    """`floor` is the only leg safe to compare against a cost."""
     m = _model(_player(active=_pult(), prize=2), _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.deck_energy_counts[FIRE].floor >= 1
 
 
 def test_seen_copies_leave_the_unseen_pool():
-    """One {P} attached and one discarded: the ceiling drops to the copy that could still be there."""
     m = _model(_player(active=_pult(energies=[E_P]), discard=[E_P], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.deck_energy_counts[PSYCHIC].ceiling == 1
 
 
 def test_the_ceiling_leg_reproduces_the_sound_type_set_gate():
-    """0a's shipped gate is *not-provably-empty*; the triple must subsume it rather than introduce a
-    third epistemic — so ``possible`` and the type set agree, by construction."""
+    """The shipped gate is *not-provably-empty*; the triple must SUBSUME it, not add a third
+    epistemic."""
     m = _model(_player(active=_pult(energies=[E_P, E_P]), discard=[E_P], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     possible = {t for t, c in m.mine.deck_energy_counts.items() if c.possible}
@@ -556,8 +467,7 @@ def test_the_ceiling_leg_reproduces_the_sound_type_set_gate():
 
 
 def test_a_provably_exhausted_type_is_absent_from_both_reads():
-    """All three {P} accounted for outside the deck: no leg claims a copy, and the sound gate drops
-    the type. Fail-closed on YIELD is 0a's direction and the triple must not soften it."""
+    """Fail-CLOSED on yield is the direction; the triple must not soften it."""
     m = _model(_player(active=_pult(energies=[E_P, E_P]), discard=[E_P, E_R], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.deck_energy_counts.get(PSYCHIC, CountTriple()).possible is False
@@ -570,9 +480,8 @@ def test_count_triple_helper_fails_closed_on_unreadable_inputs():
 
 
 def test_probability_leg_tracks_the_depletion_ramp():
-    """ADR-0074 / #175: `p_any` is the honest middle the two boolean legs collapse. Reproduces the
-    issue's own table — the SAME frames where `floor` is 0 and `possible` is True throughout, so
-    neither boolean distinguishes a free bet from a coin-flip."""
+    """ADR-0074 / Issue #175: `p_any` is the honest middle the two boolean legs collapse — neither
+    boolean distinguishes a free bet from a coin flip."""
     thin, deep = count_triple(1, 6, 40), count_triple(3, 6, 51)
     assert (thin.floor, thin.possible) == (0, True)           # booleans: identical readings...
     assert (deep.floor, deep.possible) == (0, True)
@@ -581,17 +490,14 @@ def test_probability_leg_tracks_the_depletion_ramp():
 
 
 def test_probability_leg_collapses_with_the_others_once_anchored():
-    """No consumer branches on "are we anchored?" — anchored, `p_any` is exactly 1.0, and a provably
-    empty type is exactly 0.0. The weighting is a NO-OP on every anchored frame (the #175 no-regression
-    guarantee)."""
+    """The weighting is a NO-OP on every anchored frame — Issue #175's no-regression guarantee."""
     assert count_triple(2, 0, 30).p_any == 1.0                # anchored: certainly present
     assert count_triple(0, 6, 40).p_any == 0.0                # provably empty: certainly absent
     assert count_triple(7, 6, 40).p_any == 1.0                # pigeonhole surplus: certainly present
 
 
 def test_deck_energy_p_never_resurrects_a_type_the_sound_leg_dropped():
-    """A probability sharpens the uncertain middle; it may never claim a type proven gone. Same frame
-    as the exhausted-type test above — {P} is sound-empty, so its probability must read exactly 0."""
+    """A probability sharpens the uncertain middle; it may never claim a type proven gone."""
     m = _model(_player(active=_pult(energies=[E_P, E_P]), discard=[E_P, E_R], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.deck_energy_p.get(PSYCHIC, 0.0) == 0.0
@@ -599,8 +505,6 @@ def test_deck_energy_p_never_resurrects_a_type_the_sound_leg_dropped():
 
 
 def test_deck_energy_p_is_a_projection_of_the_one_derivation():
-    """The three legs must agree by construction: a type present in the fail-open set has p > 0, one
-    absent from it has p == 0, and a provable type has p == 1."""
     m = _model(_player(active=_pult(energies=[E_R]), hand=[CRISPIN], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     for t, c in m.mine.deck_energy_counts.items():
@@ -611,12 +515,8 @@ def test_deck_energy_p_is_a_projection_of_the_one_derivation():
 
 
 def test_expected_unions_additively_across_types():
-    """ADR-0077 decision 2: an UNTYPED rider (Turbo Flare, Energy Gift — "search your deck for up to
-    3 Basic Energy cards") needs a cross-type union, which ADR-0074 decision 6 forbids minting for
-    `p_any`. It is free for `expected`: every type's leg divides the same `(deck, prizes_hidden)`, so
-    the sum over types IS the aggregate, exactly — one derivation, not a second instrument.
-
-    Pinned so nobody later "optimises" the union into a per-type max or a parallel aggregate triple."""
+    """ADR-0077 decision 2: every type's leg divides the same `(deck, prizes_hidden)`, so the sum
+    over types IS the aggregate — never re-shape this into a per-type max or a parallel triple."""
     m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)))
     mine = m.mine
     union = sum(c.expected for c in mine.deck_energy_counts.values())
@@ -628,10 +528,8 @@ def test_expected_unions_additively_across_types():
 
 
 def test_p_any_does_NOT_union_additively_the_way_expected_does():
-    """The other half of decision 2, stated as a test so the asymmetry is not mistaken for an
-    oversight: summing `p_any` over types is meaningless (it can exceed 1.0), which is exactly why
-    ADR-0074 took a conservative product for the probability and why the untyped union is licensed on
-    `expected` ALONE."""
+    """Summing `p_any` over types can exceed 1.0, which is why the untyped union is licensed on
+    `expected` ALONE. Asserted so the asymmetry is not mistaken for an oversight."""
     m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)))
     assert sum(m.mine.deck_energy_p.values()) > 1.0          # not a probability — never sum these
 
@@ -647,8 +545,7 @@ def test_unseen_counts_is_one_derivation_over_every_visible_zone():
 # ── the affordability family, read through the model ───────────────────────────────────────────
 
 def test_f70_is_not_a_famine_when_read_off_the_model():
-    """The bug this whole arc exists to kill, now asked of the snapshot: Active Dragapult ex at 0
-    Energy with Crispin in hand and the manual attach unspent reaches {R}{P} Phantom Dive 200."""
+    """Dragapult ex at ZERO Energy, Crispin in hand, manual attach unspent — reaches {R}{P}."""
     m = _model(_player(active=_pult(), hand=[CRISPIN], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.reachable_attach(m.mine.active, PHANTOM_DIVE) is True
@@ -663,8 +560,7 @@ def test_a_provable_famine_still_fires():
 
 
 def test_the_budget_is_per_body_and_memoised_per_body():
-    """The Budget genuinely differs by target (a bench-restricted clause funds one body, not
-    another), which is why it is keyed per body — and the same body must hand back one object."""
+    """A bench-restricted clause funds one body and not another, so the Budget is keyed per body."""
     m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)], hand=[CRISPIN]),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.attach_budget(m.mine.active) is m.mine.attach_budget(m.mine.active)
@@ -680,9 +576,8 @@ def test_reachable_attach_answers_for_any_body_not_just_the_active():
 
 def test_readiness_p_is_certain_when_the_budget_already_reaches_and_closed_without_an_enabler():
     m = _model(_player(active=_pult(), hand=[CRISPIN]), _player(active=_poke(RIOLU, hp=80)))
-    # ADR-0074 / #175: Crispin REACHES only through a deck fetch, so "already reaches" is not
-    # certainty — the fetch can whiff. Weighted, that reads as its real odds; the boolean oracle
-    # still says reachable, and `weighted=False` recovers the pre-#175 fail-open 1.0.
+    # Crispin REACHES only through a deck fetch, which can whiff, so "already reaches" is not
+    # certainty; `weighted=False` recovers the fail-open 1.0 (ADR-0074).
     assert 0.0 < m.mine.readiness_p(m.mine.active, PHANTOM_DIVE) < 1.0
     assert m.mine.readiness_p(m.mine.active, PHANTOM_DIVE, weighted=False) == 1.0
     dry = _model(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80)),
@@ -708,8 +603,7 @@ def test_the_incoming_curve_is_memoised_per_turn_and_agrees_with_the_one_step_re
 
 
 def test_their_discard_energy_is_a_sound_public_count():
-    """Both discards are public, so this is a count and never an estimate — it is the recursion-fuel
-    input that makes a KO'd threat's line persistent."""
+    """Both discards are public, so this is a COUNT and never an estimate."""
     m = _model(_player(active=_pult()),
                _player(active=_poke(RIOLU, hp=80), discard=[E_D, E_D, CRISPIN]))
     assert m.theirs.discard_energy_counts == {DARKNESS: 2}
@@ -723,16 +617,13 @@ def test_the_prize_race_is_one_cross_side_derivation():
                        bench=[_poke(MEGA_LUC, hp=340, serial=4)], prize=5))
     race = m.prize_race
     assert (race.my_prizes_remaining, race.opp_prizes_remaining) == (2, 5)
-    # POC-T1 (Issue #260) retired `prize_diff` / `prize_map` / `ko_wins_now` — three consumer-less
-    # derivations over the two counts. The counts are the composite; the per-body prize YIELD is
-    # read off the BodyView a caller is already holding.
+    # The two counts ARE the composite; per-body prize YIELD is read off the BodyView instead.
     assert race.opp_prizes_remaining - race.my_prizes_remaining == 3     # positive = I am ahead
     assert {b.card_id: b.prize_value for b in m.theirs.bodies}[MEGA_LUC] == 3
 
 
 def test_prize_yield_stays_card_knowledge_on_the_oracle():
-    """The model holds the answer; the combat oracle owns the arithmetic (ADR-0052) — so a body's
-    yield agrees with the oracle asked directly."""
+    """The model holds the answer; the combat oracle owns the arithmetic (ADR-0052)."""
     m = _model(_player(active=_pult()), _player(active=_poke(MEGA_LUC, hp=340)))
     assert m.theirs.active.prize_value == _combat().prize_value({"id": MEGA_LUC})
 
@@ -747,18 +638,13 @@ def test_the_channel_carries_declared_members_and_defaults_absent_ones():
 
 
 def test_the_channel_rejects_undeclared_members():
-    """Narrow BY CONSTRUCTION rather than by convention — the whole point of declaring the channel."""
+    """Narrow BY CONSTRUCTION rather than by convention."""
     with pytest.raises(ValueError):
         CarriedState.of(some_new_memory=1)
 
 
 def test_an_update_returns_a_new_snapshot_and_never_mutates_the_old():
-    """A member is read in and handed back — the caller stores it. Nothing mutates as a side effect
-    of being computed, which is what keeps the model pure.
-
-    Written through `of` since POC-T1 (Issue #260) retired the single-member `with_` rebind: every
-    real caller rebuilds the WHOLE channel, which is what keeps the hand-back discipline visible at
-    the call site rather than hidden behind a mutator-shaped name."""
+    """Nothing mutates as a side effect of being computed; the caller stores what it is handed."""
     before = CarriedState.of(phase_prev="RACE")
     after = CarriedState.of(phase_prev="STABILIZE")
     assert before.get("phase_prev") == "RACE"
@@ -767,8 +653,7 @@ def test_an_update_returns_a_new_snapshot_and_never_mutates_the_old():
 
 
 def test_known_top_is_declared_so_149_attaches_without_reshaping_the_channel():
-    """#138 architects for the ordered-zone belief without building it: the seat exists, the belief
-    does not, and an unset member reads as the ordinary unknown."""
+    """The seat exists, the belief does not — an unset member reads as the ordinary unknown."""
     assert "known_top" in CarriedState.MEMBERS
     assert CarriedState.of(known_top=(163,)).get("known_top") == (163,)
     assert CarriedState().get("known_top") is None
@@ -777,9 +662,8 @@ def test_known_top_is_declared_so_149_attaches_without_reshaping_the_channel():
 # ── my armed-clock: the mirror of TheirSide's deny read (ADR-0070 §6) ──────────────────────────
 
 def test_my_turns_to_afford_is_the_hop_aware_armed_clock():
-    """**The Two Clocks**, my half: the earliest turn MY line is armed, MAX of the energy-deficit
-    leg and the FORWARD-HOP leg (never the sum). The same primitive `TheirSide` uses for the deny
-    clock, exposed for my own bodies — the evolve decider needs it to price what a hop buys."""
+    """The earliest turn MY line is armed: MAX of the energy-deficit leg and the FORWARD-HOP leg,
+    never their sum."""
     m = _model(_player(active=_pult(energies=[E_R, E_P]), bench=[], prize=4),
                _player(active=_poke(RIOLU, hp=80, serial=3), bench=[], prize=6))
     # Dragapult ex already pays Phantom Dive's {R}{P} -> armed now, no hops owed.
@@ -802,37 +686,36 @@ def test_my_armed_clock_is_none_for_an_unknown_body():
 # ── the Provable Budget and the famine read (#142, ADR-0067 amendment) ─────────────────────────
 
 def _f70_shape(**kw):
-    """The originating frame: Active Dragapult ex at ZERO Energy, Crispin the only hand card (so
-    no Energy card is in hand at all), the shipped 3x{R}/3x{P}/2x{D} suite still in the deck."""
+    """Active Dragapult ex at ZERO Energy, Crispin the only hand card, the Energy suite in deck."""
     return _model(_player(active=_pult(energies=[]), hand=[CRISPIN], prize=4),
                   _player(active=_poke(RIOLU, hp=80, serial=3), prize=6), **kw)
 
 
 def test_the_provable_deck_leg_is_empty_pre_anchor_on_a_thin_suite():
     """`floor = max(0, unseen - prizes_hidden)`, so a 3-copy type against 4 hidden prizes proves
-    nothing. ADR-0067 predicted exactly this and it is why the famine premise keeps the OPEN leg."""
+    nothing — which is why the famine premise keeps the OPEN leg (ADR-0067)."""
     m = _f70_shape()
     assert m.mine.deck_energy_types == frozenset({FIRE, PSYCHIC, DARKNESS})
     assert m.mine.deck_energy_types_provable == frozenset()
 
 
 def test_the_provable_deck_leg_fills_once_the_prizes_are_anchored():
-    """Anchored, every unseen copy is in the deck and the Count Triple's legs collapse — so the
-    two Budget legs stop differing, which is the regime ADR-0067 says no consumer should branch on."""
+    """Anchored, the two Budget legs stop differing — the regime ADR-0067 says no consumer branches
+    on."""
     m = _f70_shape(own_prizes={MUNKIDORI: 4})
     assert m.mine.deck_energy_types_provable == m.mine.deck_energy_types
     assert FIRE in m.mine.deck_energy_types_provable
 
 
 def test_the_famine_read_dissolves_on_the_f70_shape():
-    """Crispin attaches one Basic by its effect AND hands a second of a DIFFERENT type the unspent
-    manual attach then plays, so Dragapult ex reaches Phantom Dive's {R}{P} from zero."""
+    """Crispin attaches one Basic AND hands a second of a DIFFERENT type that the unspent manual
+    attach then plays, so Dragapult ex reaches {R}{P} from zero."""
     assert _f70_shape().mine.active_famine is False
 
 
 def test_the_provable_leg_still_reads_the_f70_shape_as_unreachable():
-    """Same board, sound leg: nothing about that deck fetch is PROVABLE pre-anchor, so a consumer
-    about to spend a card that expires unused gets the conservative answer."""
+    """Nothing about that deck fetch is PROVABLE pre-anchor, so a consumer about to spend a card
+    that expires unused gets the conservative answer."""
     m = _f70_shape()
     assert m.mine.reachable_attach(m.mine.active) is True
     assert m.mine.reachable_attach(m.mine.active, provable=True) is False
@@ -853,7 +736,7 @@ def test_a_provable_famine_is_a_famine_on_both_legs():
 
 def test_paralysis_is_a_famine_however_rich_the_budget():
     """`rulebook.txt` L206: a Paralyzed Pokemon "cannot attack or retreat". The Energy math says
-    Phantom Dive is paid; the rules say no attack happens, and famine must agree with the rules."""
+    Phantom Dive is paid; famine must agree with the RULES, not the math."""
     me = _player(active=_pult(energies=[E_R, E_P]), hand=[CRISPIN], prize=4)
     me["paralyzed"] = True
     m = _model(me, _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
@@ -871,8 +754,8 @@ def test_sleep_is_a_famine_however_rich_the_budget():
 
 
 def test_a_rotating_condition_that_does_not_block_attacking_is_not_a_famine():
-    """Only Asleep and Paralyzed stop a Pokemon attacking (`rulebook.txt` L215 lists them as the
-    only two that block retreat; Confused flips a coin, it does not forbid the attack)."""
+    """Only Asleep and Paralyzed stop a Pokemon attacking (`rulebook.txt` L215); Confused flips a
+    coin, it does not forbid the attack."""
     me = _player(active=_pult(energies=[E_R, E_P]), prize=4)
     me["confused"], me["poisoned"], me["burned"] = True, True, True
     m = _model(me, _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
@@ -881,8 +764,7 @@ def test_a_rotating_condition_that_does_not_block_attacking_is_not_a_famine():
 
 
 def test_the_first_player_cannot_attack_on_turn_one():
-    """`rules.md` §first-turn / rulebook L152 — the starting player skips the attack step on turn 1.
-    `turn <= 1` is the idiom every other site in the codebase already uses for it."""
+    """`rules.md` §first-turn / rulebook L152. `turn <= 1` is the idiom every other site uses."""
     m = _model(_player(active=_pult(energies=[E_R, E_P]), prize=4),
                _player(active=_poke(RIOLU, hp=80, serial=3), prize=6), turn=1)
     assert m.mine.attack_blocked is True
@@ -890,33 +772,19 @@ def test_the_first_player_cannot_attack_on_turn_one():
 
 
 def test_a_body_less_side_makes_no_famine_claim_rather_than_crashing():
-    """Fail-OPEN on an unreadable board, the opposite of the oracle underneath. `reachable_attach`
-    returns False for "I cannot tell", and negating that would turn silence into a PROVABLE famine
-    and fire the stall this premise exists to kill (the direction the retired signal spelled out:
-    "True on unknown stats ... only on a PROVABLE famine", ep83457493 f20)."""
+    """Fail-OPEN, the opposite of the oracle underneath: `reachable_attach` returns False for "I
+    cannot tell", and negating that turns silence into a PROVABLE famine and fires the stall."""
     m = _model(_player(prize=4), _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
     assert m.mine.active_famine is False
 
 
 # ── the payoff a body can actually reach — the bench-partner gate (Issue #287) ─────────────────
-#
-# Card facts VERIFIED at source (`data/EN_Card_Data.csv`), and the SET was walked rather than
-# recalled: `parse_attack_bench_requirement` over every row finds exactly TWO gated attacks.
-#   * Solrock (676) Basic HP 110 {F}, weak {G} — Cosmic Beam {F} 70: "If you don't have Lunatone
-#     on your Bench, this attack does nothing. This attack's damage isn't affected by Weakness or
-#     Resistance." Its ONLY attack. 3x in the shipped `mega_lucario` deck, beside 2x Lunatone.
-#   * Mesprit (216) Basic HP 70 {P}, weak {D} — Full Heart `●` (no damage) and Guardian Burst
-#     {P}{P} 160: "If you don't have Uxie and Azelf on your Bench, this attack does nothing."
-#     Pool-only (no shipped deck runs it), and carried here for the shape Solrock cannot test:
-#     an "and" list needing BOTH partners, on a body with a SECOND, ungated attack.
-#   * Lunatone (675) Basic HP 110 {F} — Power Gem {F}{F} 50. Uxie (215) / Azelf (217) Basic HP 70.
+# Mesprit is pool-only, carried for the shape Solrock cannot test: an "and" list on a 2-attack body.
 
 
 def test_a_bench_gated_payoff_is_zero_without_its_partner():
-    """`CardStat.maxDamage` is 70 for Solrock whether or not Lunatone is benched — it is the
-    PRINTED roll-up and no printed number can carry a board condition. The payoff read asks the
-    damage oracle instead, which already owns the gate (`strategy/damage.py`'s `requiresBench`
-    leg), so the same body prices at 0 on a bench that cannot pay it."""
+    """`CardStat.maxDamage` is a PRINTED roll-up and no printed number carries a board condition, so
+    the payoff read asks the damage oracle, which owns the `requiresBench` gate."""
     m = _model(_player(active=_poke(SOLROCK, hp=110, energies=[]),
                        bench=[_poke(RIOLU, hp=80, serial=2)], prize=4),
                _player(active=_pult(serial=3), prize=6))
@@ -925,8 +793,7 @@ def test_a_bench_gated_payoff_is_zero_without_its_partner():
 
 
 def test_benching_the_partner_restores_the_gated_payoff():
-    """The other half, and the one that makes the term MOVE: benching Lunatone is what turns
-    Cosmic Beam back into 70 damage, so the play that enables the attacker is now visible to any
+    """The half that makes the term MOVE, so the play enabling the attacker is visible to any
     consumer that differences this read."""
     m = _model(_player(active=_poke(SOLROCK, hp=110),
                        bench=[_poke(LUNATONE, hp=110, serial=2)], prize=4),
@@ -935,9 +802,8 @@ def test_benching_the_partner_restores_the_gated_payoff():
 
 
 def test_the_partner_must_be_BENCHED_not_merely_in_play():
-    """Card text is "on your Bench" (`data/EN_Card_Data.csv` 676), so a Lunatone in the ACTIVE
-    spot does not satisfy it. The oracle reads `atk_bench_names`, which is the Bench and only the
-    Bench — the distinction a "Lunatone in play" reading would silently lose."""
+    """Card text is "on your Bench", so a Lunatone in the ACTIVE spot does not satisfy it — the
+    distinction a "Lunatone in play" reading silently loses."""
     m = _model(_player(active=_poke(LUNATONE, hp=110),
                        bench=[_poke(SOLROCK, hp=110, serial=2)], prize=4),
                _player(active=_pult(serial=3), prize=6))
@@ -945,8 +811,7 @@ def test_the_partner_must_be_BENCHED_not_merely_in_play():
 
 
 def test_an_AND_list_needs_every_named_partner():
-    """Guardian Burst names two partners. One of them is not most of the way there — it is
-    nothing, and a gate that credited the 160 on a partial bench would price a phantom."""
+    """A gate that credited the 160 on a partial bench would price a phantom."""
     def _mesprit_with(*bench):
         return _model(_player(active=_poke(MESPRIT, hp=70),
                               bench=[_poke(c, hp=70, serial=i + 2) for i, c in enumerate(bench)],
@@ -959,10 +824,8 @@ def test_an_AND_list_needs_every_named_partner():
 
 
 def test_a_gated_maximum_falls_back_to_the_best_UNGATED_attack():
-    """Zeroing the BODY is the wrong repair: Mesprit still has Full Heart when Guardian Burst is
-    dead, so the payoff read must return the best attack that actually pays — attack id included,
-    because the odds leg is asked about THAT attack and a payoff paired with another attack's
-    probability is the saturation defect `payoff` exists to avoid."""
+    """Attack id included: the odds leg is asked about THAT attack, and a payoff paired with another
+    attack's probability is the saturation defect `payoff` exists to avoid."""
     m = _model(_player(active=_poke(MESPRIT, hp=70), bench=[_poke(UXIE, hp=70, serial=2)],
                        prize=4),
                _player(active=_pult(serial=9), prize=6))
@@ -970,9 +833,7 @@ def test_a_gated_maximum_falls_back_to_the_best_UNGATED_attack():
 
 
 def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
-    """The regression half: every card without a board condition must price where it always did.
-    Mega Lucario ex's Mega Brave is 270 printed and 270 here, and the payoff attack is the
-    max-damage one — matchup-free, so no Weakness/Resistance from the defender leaks in."""
+    """The payoff read is matchup-FREE, so no Weakness/Resistance from the defender leaks in."""
     m = _model(_player(active=_poke(MEGA_LUC, hp=340), bench=[], prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.attack_payoff(m.mine.active) == (MEGA_BRAVE, 270.0)
@@ -980,8 +841,7 @@ def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
 
 
 def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
-    """Fail-closed, the model's standing direction for an unresolvable card: no attack id and no
-    damage, rather than a zero that a consumer could mistake for a priced body."""
+    """Fail-CLOSED: no attack id, rather than a zero a consumer could mistake for a priced body."""
     m = _model(_player(active=_poke(9999, hp=80), prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.attack_payoff(m.mine.active) == (None, 0.0)      # card 9999 has no CardStat
@@ -989,19 +849,8 @@ def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
 
 
 def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
-    """A partial provider must not silently zero a real attacker. `PARTIAL` carries `maxDamage` 30
-    with an EMPTY attack tuple — the shape a partially-known table produces — and the read then
-    answers with the card-level roll-up under a null attack id, exactly as
-    `CombatMath.predicted_max_damage` falls back and exactly the pair the retired `payoff_attack`
-    gave. The gate is a new REASON to price 0, never a new way to reach one; and an attack whose
-    record is missing is an attack whose condition is unreadable, so no gate is being waived.
-
-    **It carries an OFF-POOL card id on purpose** (Issue #384). This case used to ride on Riolu,
-    whose row declared `attacks=()` — and that was not a partial table, it was a card fact the
-    fixture had wrong: Riolu really does print Accelerating Stab. Correcting the row broke this
-    test, which is the tell that the test was leaning on the error rather than on the shape it
-    means. A body that is in no card set cannot have its card facts be wrong, so the data shape is
-    now stated directly instead of borrowed from a real card."""
+    """A partial provider must not silently zero a real attacker. The bench gate is a new REASON to
+    price 0, never a new way to reach one — a missing record is an unreadable condition, not a fail."""
     m = _model(_player(active=_poke(PARTIAL, hp=80), prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.active.stat.maxDamage == 30 and not m.mine.active.stat.attacks
@@ -1009,9 +858,7 @@ def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
 
 
 def test_both_sides_can_be_asked_for_a_payoff():
-    """The gate is a fact about the ATTACKER's own bench, whichever seat that is. Their Solrock is
-    as dead without their Lunatone as mine is — `threat` reads the same accessor, so the question
-    lives on the side base rather than on my half of it."""
+    """The gate is a fact about the ATTACKER's own bench, so the question lives on the side base."""
     m = _model(_player(active=_pult(), prize=4),
                _player(active=_poke(SOLROCK, hp=110, serial=3),
                        bench=[_poke(LUNATONE, hp=110, serial=4)], prize=6))
@@ -1019,8 +866,7 @@ def test_both_sides_can_be_asked_for_a_payoff():
 
 
 def test_bench_names_is_the_bench_and_only_the_bench():
-    """The single home for the fact the gate reads. It was inlined in `damage_facts`; the payoff
-    read needs the same list, and two comprehensions over `self.bench` is exactly the drift the
+    """One home for the fact the gate reads: two comprehensions over `self.bench` is the drift the
     ONE-context ruling (Issue #279) exists to prevent."""
     m = _model(_player(active=_poke(SOLROCK, hp=110),
                        bench=[_poke(LUNATONE, hp=110, serial=2), _poke(RIOLU, hp=80, serial=3)],
@@ -1031,29 +877,17 @@ def test_bench_names_is_the_bench_and_only_the_bench():
 
 
 # ── the ATTACK PROFILE — Issue #384's ONE new accessor ─────────────────────────────────────────
-#
-# `attack_payoff` above answers *which attack pays best, matchup-free*, and returns
-# `(attack_id, damage)`. `attack_ev`'s extractor needs a different and larger answer about ONE named
-# attack: its damage against the body actually in front of me at all three bounds, whether I can pay
-# for it, and the rider / economy / lock facts `AttackStat` carries and NOTHING on the model used to
-# expose. So this is a sibling of `attack_payoff`, not a widening of it.
-#
-# It lives on `StateModel` rather than on `MySide` (Issue #384's body suggests the latter) because
-# the rider legs read THEIR Bench and the damage leg reads THEIR Active — a two-sided question, and
-# `damage_context` already sits on the model for exactly that reason.
+# A SIBLING of `attack_payoff`, not a widening: it answers about ONE named attack, on BOTH sides.
 
-#: My Mega Lucario ex line, so `forward_index` can see Riolu -> Mega Lucario ex (the SINGLE hop,
-#: `docs/rulebook.txt` Appendix 1) and the recover rider's recipient-need leg has a forward form to
-#: measure against.
+#: My Mega Lucario ex line, so `forward_index` sees Riolu -> Mega Lucario ex (a SINGLE hop) and the
+#: recover rider's recipient-need leg has a forward form to measure against.
 LUC_DECK = [E_F] * 4 + [RIOLU] * 3 + [MEGA_LUC] * 3
 
 
 def _luc_model(*, my_energies=(E_F, E_F), bench=(), discard=(), their_active=None,
                their_bench=(), energy_attached=True):
-    """MY Mega Lucario ex Active against THEIR Dragapult ex — the profile fixture.
-
-    ``energy_attached=True`` by default so the Attach Budget adds nothing and affordability is a
-    fact about what is attached rather than about what the deck might still supply."""
+    """`energy_attached=True` by default, so the Attach Budget adds nothing and affordability is a
+    fact about what is ATTACHED rather than about what the deck might still supply."""
     return _model(
         _player(active=_poke(MEGA_LUC, hp=340, energies=list(my_energies)), bench=list(bench),
                 discard=list(discard), prize=4),
@@ -1062,12 +896,8 @@ def _luc_model(*, my_energies=(E_F, E_F), bench=(), discard=(), their_active=Non
 
 
 def test_attack_profile_carries_the_rider_and_lock_fields_attack_payoff_drops():
-    """The substrate gap Issue #384 exists to close, stated as an assertion.
-
-    `attack_payoff` returns `(attack_id, damage)` and the model exposed NOTHING else off
-    `AttackStat` — no `benchSnipe`, no `benchSpread`, no `recoverN`, neither next-turn lock. Every
-    one of those is an input `attack_ev` takes, so `state_value` could not have produced its kwargs
-    without reaching past the model, which the sole-supplier ruling forbids."""
+    """`attack_payoff` returns `(attack_id, damage)` alone, but every rider and lock field is an
+    input `attack_ev` takes — without them `state_value` must reach past the model (Issue #384)."""
     m = _luc_model()
     jab = m.attack_profile(m.mine.active, AURA_JAB)
     brave = m.attack_profile(m.mine.active, MEGA_BRAVE)
@@ -1075,15 +905,12 @@ def test_attack_profile_carries_the_rider_and_lock_fields_attack_payoff_drops():
     assert jab.recover_n == 3                                   # Aura Jab: the recycle rider…
     assert (jab.self_lock, jab.same_attack_lock) == (False, False)      # …and no lock
     assert brave.recover_n == 0                                 # Mega Brave: no rider…
-    assert (brave.self_lock, brave.same_attack_lock) == (False, True)   # …and a SAME-ATTACK lock,
-    #                            not a full self lock — the card's sentence names the attack ITSELF
+    assert (brave.self_lock, brave.same_attack_lock) == (False, True)   # …and a SAME-ATTACK lock
 
 
 def test_attack_profile_prices_damage_against_their_active_at_all_three_bounds():
-    """The bound triple is what the caller's coin policy reads. A DETERMINISTIC attack reads its
-    printed damage under every bound (`strategy/damage.py`: *"A deterministic attack (bounds None)
-    reads printed under every bound"*), so floor == exact == ceiling here and the policy has nothing
-    to decide — the degenerate case that must not need a branch."""
+    """A DETERMINISTIC attack reads printed under every bound, so floor == exact == ceiling and the
+    caller's coin policy needs no branch for the degenerate case."""
     m = _luc_model()
     jab = m.attack_profile(m.mine.active, AURA_JAB)
     assert (jab.damage, jab.damage_floor, jab.damage_ceiling) == (130.0, 130.0, 130.0)
@@ -1092,51 +919,36 @@ def test_attack_profile_prices_damage_against_their_active_at_all_three_bounds()
 
 
 def test_attack_profile_carries_a_matchup_free_printed_read_beside_the_matchup_one():
-    """Two damage reads, and they are different questions rather than one read twice.
-
-    ``damage`` asks the damage model against the body in front of me, so Weakness, Resistance and a
-    prevention Ability all reach it; ``printed`` is matchup-FREE, and it is what the horizon-2
-    follow-up leg must use — the defender next turn is not this one. Neither Dragapult ex (no
-    Weakness, no Resistance in this set) nor Lunatone (Weakness **{G}**) doubles a {F} attacker, so
-    the pair agrees on both boards here; the point of asserting both is that a later disagreement is
-    diagnostic rather than noise."""
+    """`damage` asks against the body in front of me, so Weakness/Resistance/prevention reach it;
+    `printed` is matchup-FREE and is what the horizon-2 leg must use — that defender is not this one."""
     m = _luc_model(their_active=_poke(LUNATONE, hp=110, serial=9))
     jab = m.attack_profile(m.mine.active, AURA_JAB)
     assert jab.damage == 130.0 and jab.printed == 130.0
 
 
 def test_attack_profile_affordability_is_the_attach_budgets_answer():
-    """A COST question, answered by the shipped Budget rather than by a raw energy count —
-    `threat.blind_to` forbids a second opinion about affordability outright."""
+    """`threat.blind_to` forbids a second opinion about affordability outright."""
     m = _luc_model(my_energies=(E_F,))
     assert m.attack_profile(m.mine.active, AURA_JAB).affordable is True        # {F}: paid
     assert m.attack_profile(m.mine.active, MEGA_BRAVE).affordable is False     # {F}{F}: not
 
 
 def test_attack_profile_recover_units_is_the_min_of_the_three_closed_form_bounds():
-    """`Pilot._recover_units` re-derived from StateModel facts (Issue #384): the printed ceiling,
-    the matching Basic-Energy fuel in the rider's SOURCE zone, and the recipients' remaining NEED.
-
-    Riolu's own Accelerating Stab costs {F} = 1, but need is measured against the FORWARD form too,
-    and Mega Lucario ex's dearest attack is Mega Brave at {F}{F} = 2 — which is the point of that
-    leg: a Riolu counts the Energy its Mega Brave will cost, not the Energy its own attack costs
-    today. Riolu holds none, and four {F} sit in my discard. So the three bounds are 3 / 4 / 2 and
-    the NEED binds."""
+    """The three bounds are the printed ceiling, the SOURCE zone's matching fuel, and the recipients'
+    NEED — measured against the FORWARD form, so a Riolu counts what its Mega Brave will cost."""
     m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4)
     assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 2.0
 
 
 def test_attack_profile_recover_units_binds_on_the_fuel_when_the_discard_is_thin():
-    """The SOURCE-zone bound, isolated. Aura Jab sources from the discard pile — PUBLIC in both
-    directions, so this is a sound count and never an estimate — and one {F} there caps it at one."""
+    """The SOURCE-zone bound, isolated: Aura Jab sources from the PUBLIC discard, so a sound count."""
     m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F])
     assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 1.0
 
 
 def test_attack_profile_recover_units_is_zero_with_no_recipient_in_scope():
-    """Aura Jab's ``recoverTarget`` is **"bench"** (*"…to your Benched Pokémon"*), so an empty Bench
-    attaches nothing however full the discard is. The empty-Bench guard `_recover_units` keeps as a
-    special case of the need bound, kept here too."""
+    """Aura Jab's `recoverTarget` is "bench", so an empty Bench attaches nothing however full the
+    discard is."""
     m = _luc_model(discard=[E_F] * 4)
     assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 0.0
 
@@ -1147,10 +959,8 @@ def test_attack_profile_recover_units_is_zero_for_an_attack_with_no_rider():
 
 
 def test_attack_profile_reports_their_reachable_bench_and_the_riders_own_allocation():
-    """The rider legs. ``rider_targets`` is the (hp, prize) of their benched bodies a rider can
-    actually reach; ``spread_ko_prizes`` is the shipped knapsack's answer about WHERE the counters
-    land. The accessor answers about MY Active's attacks, so this board hands my seat the
-    Dragapult."""
+    """`rider_targets` is the (hp, prize) of their benched bodies a rider can reach;
+    `spread_ko_prizes` is the shipped knapsack's answer about WHERE the counters land."""
     m = _model(
         _player(active=_pult(energies=[E_R, E_P]), prize=4),
         _player(active=_poke(RIOLU, hp=80, serial=9),
@@ -1166,8 +976,7 @@ def test_attack_profile_reports_their_reachable_bench_and_the_riders_own_allocat
 
 
 def test_attack_profile_fails_closed_on_an_attack_that_does_not_resolve():
-    """No record, no claim — the model's standing direction. A profile is still returned so the
-    caller has no None branch to forget, and every leg reads its zero."""
+    """A profile is still RETURNED, so the caller has no None branch to forget."""
     m = _luc_model()
     ghost = m.attack_profile(m.mine.active, 999999)
     assert ghost.attack_id == 999999 and ghost.affordable is False
@@ -1186,15 +995,8 @@ def test_attack_profile_fails_closed_on_a_body_that_is_not_there():
 
 
 def test_a_board_bound_needs_supplier_is_REBOUND_by_rebuilt_not_inherited():
-    """`build` used to take ``needs`` as a zero-argument callable, and every caller built it as a
-    closure over the observation it was resolving. :meth:`StateModel.rebuilt` forwards `_origin`'s
-    kwargs verbatim, so every synthesized board inherited the ORIGINATING board's resolution —
-    `state_value`'s `hand` family reads `MySide.needs` and nothing else, so the family was CONSTANT
-    across a whole `composer.compose` call and a fetch differenced to exactly 0.0.
-
-    The supplier now takes ``(obs, my_index)`` and `build` binds it to the board it is building, so
-    the re-binding is a property of the type rather than of every caller remembering. This asserts
-    the property directly: the supplier is asked about the observation it is actually resolving."""
+    """The supplier takes `(obs, my_index)` and `build` binds it to the board it is BUILDING, so
+    re-binding is a property of the type rather than of every caller remembering (Issue #400 P2)."""
     asked = []
 
     def supplier(obs, my_index):
@@ -1217,9 +1019,8 @@ def test_a_board_bound_needs_supplier_is_REBOUND_by_rebuilt_not_inherited():
 
 
 def test_a_resolution_passed_directly_is_still_taken_verbatim():
-    """The other half of the contract, so the widening cannot be read as "needs must be callable":
-    a already-resolved `Resolution` (what every test fixture and any caller holding one passes) is
-    carried through untouched and never called."""
+    """The widening must not be read as "needs must be callable": an already-resolved `Resolution`
+    is carried through untouched and never called."""
     sentinel = object()
     model = StateModel.build(
         _obs(_player(active=_pult(), hand=[CRISPIN], prize=4),

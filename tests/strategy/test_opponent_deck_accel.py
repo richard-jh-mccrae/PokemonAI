@@ -1,21 +1,9 @@
 """Issue #257 — the opponent's own ON-EVOLVE deck-search Energy acceleration reaches the CHARGED
 Threat-Clock budget.
 
-`combat.incoming`'s charged policy assumed the opponent gets one manual attach per turn (plus the
-Ignition-class colourless burst). Marnie's Grimmsnarl ex 648's Punk Up attaches **up to 5 Basic {D}
-from the deck** when it is played to evolve — verified at `data/EN_Card_Data.csv` — and nothing in
-the threat read saw it. The card was doubly invisible: `_ACCEL_TAGS` routes exclusively into the
-*self-side* Attach Budget (Issue #137's charter), and `card_functions.json` had no entry for 648 at
-all.
-
-Three properties are pinned here, and the middle one is the point:
-
-1. The credit lands, and it is TYPED — a {D} attack becomes payable, not merely countable.
-2. It lands only on a form the opponent would EVOLVE INTO. The trigger is the hop; a body already in
-   play has had its chance, and crediting it there would manufacture reach.
-3. It is Effect-Clause-quantified and fails CLOSED — a tagged card the compendium says nothing about
-   yields zero, which is ADR-0067's self-side rule mirrored. And it stays off the worst-case CEILING
-   entirely: that policy already credits every attack a form can reach, so there is nothing to add.
+`_ACCEL_TAGS` routes exclusively into the SELF-side Attach Budget (Issue #137's charter), so an
+opponent's on-evolve accel was invisible to the threat read. The credit is typed, lands only on a
+form they would EVOLVE INTO, and stays off the worst-case ceiling, which already credits everything.
 """
 import pytest
 
@@ -58,9 +46,8 @@ def _morgrem(energy=0):
 
 @pytest.mark.req("REQ-OPPACCEL-0001")
 def test_punk_up_makes_the_evolved_form_affordable_under_the_charged_budget():
-    """A bare Marnie's Morgrem evolves into Grimmsnarl ex and Punk Up pays for Shadow Bullet the same
-    turn. Without the credit the charged read sees 0 attached + 1 manual attach against a {D}{D}
-    cost and calls the line unaffordable — which is the under-read this issue names."""
+    """Without the credit the charged read sees 0 attached + 1 manual attach against a two-Energy
+    cost and calls the line unaffordable."""
     c = _combat()
     assert c.incoming(MY_BODY, [_morgrem(0)], 1, charged=CHARGED) == 180
     # ...and the credit is what does it: strip the clause and the same board reads nothing.
@@ -69,9 +56,8 @@ def test_punk_up_makes_the_evolved_form_affordable_under_the_charged_budget():
 
 @pytest.mark.req("REQ-OPPACCEL-0002")
 def test_the_credit_is_typed_not_merely_a_count():
-    """Shadow Bullet costs {D}{D}, so two colourless units would satisfy the COUNT check and fail the
-    colour check. Punk Up searches for Basic **{D}** specifically, so the clause carries the type and
-    the credit pays the typed slots — the distinction the flat `+1` this replaces could never make."""
+    """Two colourless units satisfy the COUNT check and fail the colour check, so the clause carries
+    the searched TYPE and the credit pays typed slots."""
     c = _combat()
     etype, units = c._evolve_accel(c._card_stat(GRIMMSNARL))
     assert (etype, units) == (DARK, 5)
@@ -81,9 +67,8 @@ def test_the_credit_is_typed_not_merely_a_count():
 
 @pytest.mark.req("REQ-OPPACCEL-0003")
 def test_a_form_already_in_play_earns_nothing():
-    """The trigger IS the hop ("when you play this Pokémon from your hand to evolve"). A Grimmsnarl
-    ex already standing on their board has had its Punk Up; crediting it again would manufacture
-    reach out of a card that has already resolved."""
+    """The trigger IS the hop ("when you play this Pokémon from your hand to evolve"), so a form
+    already standing has had its chance and crediting it again manufactures reach."""
     c = _combat()
     standing = {"id": GRIMMSNARL, "hp": 340, "energies": []}
     assert c.incoming(MY_BODY, [standing], 1, charged=CHARGED) == 0
@@ -93,9 +78,8 @@ def test_a_form_already_in_play_earns_nothing():
 
 @pytest.mark.req("REQ-OPPACCEL-0004")
 def test_it_fails_closed_without_a_tag_or_without_a_clause():
-    """ADR-0067's rule, mirrored: the Function Tag only ROUTES, the clause quantifies. An untagged
-    card is never inspected; a tagged card the compendium says nothing about yields ZERO rather than
-    a guessed amount. Both matter — the tag alone cannot say 5, or {D}, or *when*."""
+    """ADR-0067 mirrored: the Function Tag only ROUTES and the clause QUANTIFIES, so a tagged card
+    the compendium says nothing about yields zero rather than a guess."""
     assert _combat(tagged=False).incoming(MY_BODY, [_morgrem(0)], 1, charged=CHARGED) == 0
     assert _combat(clauses=False).incoming(MY_BODY, [_morgrem(0)], 1, charged=CHARGED) == 0
     blind = _combat()
@@ -105,10 +89,8 @@ def test_it_fails_closed_without_a_tag_or_without_a_clause():
 
 @pytest.mark.req("REQ-OPPACCEL-0005")
 def test_the_ceiling_policies_are_untouched():
-    """The worst-case readings already credit a form's biggest attack once it can pay its cheapest
-    (ceiling) or unconditionally (the doom policy), so there is nothing for an accel to add — and an
-    unnecessary credit on a catastrophe-grade boolean is exactly the kind of change that has to be
-    ruled rather than absorbed. Byte-identical with and without the clause."""
+    """The worst-case readings already credit a form's biggest attack, so an accel has nothing to add
+    and must not move a catastrophe-grade boolean."""
     for policy in (None, UNCHARGED):
         with_clause = _combat().incoming(MY_BODY, [_morgrem(0)], 1, charged=policy)
         without = _combat(clauses=False).incoming(MY_BODY, [_morgrem(0)], 1, charged=policy)
@@ -117,9 +99,8 @@ def test_the_ceiling_policies_are_untouched():
 
 @pytest.mark.req("REQ-OPPACCEL-0006")
 def test_the_shipped_card_is_tagged_and_claused_at_source():
-    """Issue #257's own acceptance item: 648 had NO entry in `card_functions.json`, so Punk Up was
-    not merely unwired — it was untagged. Pinned against the shipped tables rather than a fixture, so
-    a rebuild that drops either half fails here."""
+    """Pinned against the SHIPPED tables rather than a fixture, so a rebuild dropping either half
+    fails here."""
     from pathlib import Path
     import json
     repo = Path(__file__).resolve().parents[2]

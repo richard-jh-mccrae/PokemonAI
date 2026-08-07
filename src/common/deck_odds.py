@@ -1,40 +1,14 @@
-"""Odds — pure own-deck math (the ADR-0065 glossary term): the chance of drawing, reaching, or
-rebuilding something by a given draw window. No opinion about value (that is Worth, `card_worth.py`).
+"""Odds — pure own-deck math (the ADR-0065 glossary term): the chance of drawing or reaching something
+by a given draw window. No opinion about value (that is Worth, `card_worth.py`).
 
-Two families, two fail directions (grader safety — nothing here ever raises):
+Two families with OPPOSITE fail directions, and nothing here ever raises:
 
-* **Draw-window hypergeometrics** — `draw_hit_probability` (P(≥1 target in the drawn window), the
-  form behind a Gamble Line's Outcome Classes, ADR-0039) and `draw_hit_with_engines` (the Stage-2
-  draw-engine two-window closed form, WP4). ENDORSERS: bad input → **0.0** — a gamble must never
-  fire on garbage.
-* **The prize-split content estimate** — `p_contains_at_least` / `p_contains` / `contains_odds`, the
-  probabilistic COMPLEMENT to the sound deck tracker (ADR-0029), detailed below. SUPPRESSORS: bad
-  input → **1.0** ("assume present") — a probabilistic suppressor must never stand a search down on
-  garbage. `p_contains_at_least` is the general form (P(≥k copies survive the split), the CDF);
-  `p_contains` is its ``k = 1`` case and delegates to it, so the two cannot drift.
+* the draw-window hypergeometrics are ENDORSERS — bad input → 0.0, so a gamble never fires on garbage.
+* the prize-split content estimate (ADR-0029) is a SUPPRESSOR — bad input → 1.0 ("assume present"), so
+  a search is never stood down on garbage. It agrees with `deck_tracker`'s sound oracle at every
+  extreme and only fills the uncertain middle that oracle declines to answer.
 
-`deck_tracker.OwnCardModel` is **certain-or-silent**: it resolves the prize split EXACTLY (only after a
-search reveals the whole deck) and otherwise reports the sound pigeonhole bounds — it never guesses
-(`Board.deck_definitely_empty_of` / `deck_definitely_has` are sound, see ADR-0023, the
-sound-deck-emptiness-oracle memory). That is the right epistemics for an availability *gate* (never
-suppress a search that COULD still hit). But prizes are usually hidden early, so the sound oracle is
-silent on the common "should I keep hunting card C?" question — e.g. play a 2nd Buddy-Buddy Poffin that
-*might* whiff because the last Staryu *might* be prized.
-
-This module answers that PROBABILISTIC question the sound oracle declines. **Model:** a card's UNSEEN
-copies (decklist − visible) are split between the hidden deck and the face-down prizes. Treating the
-``prizes_hidden`` face-down slots as a uniformly random subset of the ``deck_count + prizes_hidden``
-unseen positions (exchangeability), the count of those copies that are prized is hypergeometric, so
-
-    P(deck still holds ≥1 copy of C) = 1 − C(K, u) / C(H, u),   K = prizes_hidden, H = deck_count + K, u = unseen
-
-It **agrees with the sound oracle at the extremes** — never contradicts it, only fills the uncertain
-middle: ``u == 0`` → 0.0 (every copy seen ⇒ sound-empty), ``u > K`` → 1.0 (more unseen copies than
-prize slots ⇒ pigeonhole-present), ``K == 0`` → 1.0 (no hidden prizes ⇒ every unseen copy is in the
-deck), ``deck_count == 0`` → 0.0 (an empty deck holds nothing; all unseen copies are prized).
-
-Pure, lib-free (``math.comb``), stateless: snapshot functions of the visible board, never
-match-scoped state. Each function's docstring states its own conservative fail direction.
+Pure, lib-free (``math.comb``), stateless.
 """
 from __future__ import annotations
 
@@ -42,11 +16,8 @@ from math import comb
 
 
 def draw_hit_probability(copies, pool, draws) -> float:
-    """P(≥1 of ``copies`` target cards among ``draws`` cards drawn from a ``pool``) — the exact
-    hypergeometric ``1 − C(pool−copies, draws) / C(pool, draws)`` behind a Gamble Line's Outcome
-    Classes (ADR-0039). Draws beyond the pool are clamped; never raises — bad input → **0.0**, the
-    conservative direction for an ENDORSER (a gamble must never fire on garbage; contrast
-    ``p_contains``'s 1.0 default, which guards a SUPPRESSOR)."""
+    """P(≥1 of ``copies`` among ``draws`` from ``pool``) — exact hypergeometric (ADR-0039). Overdraws
+    clamp; bad input → 0.0, the ENDORSER direction (contrast ``p_contains``'s 1.0)."""
     try:
         c, p, n = int(copies), int(pool), int(draws)
     except Exception:
@@ -62,9 +33,8 @@ def draw_hit_probability(copies, pool, draws) -> float:
 
 
 def _none_of(k, pool, n) -> float:
-    """P(none of ``k`` marked cards among ``n`` drawn from ``pool``) — the miss ratio both bracket
-    terms of the Stage-2 form are built from. Overdraws clamp; drawing more than ``pool − k`` cards
-    must include a marked one (0.0)."""
+    """P(none of ``k`` marked cards among ``n`` drawn from ``pool``) — the miss ratio both bracket terms
+    of the Stage-2 form are built from. Overdraws clamp."""
     n = min(n, pool)
     if n <= 0:
         return 1.0
@@ -74,20 +44,8 @@ def _none_of(k, pool, n) -> float:
 
 
 def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
-    """WP4 — the Stage-2 draw-engine **two-window closed form** (hypergeometric-fetch-closure §Stage 2):
-
-        P(assemble) = P(≥1 out in n)
-                    + [P(no out in n) − P(no out ∧ no usable engine in n)] × P(≥1 out in m | pool−n)
-
-    iterated once per board-supported engine stage (``windows`` — the caller derives the depth from
-    eligible pre-evo/engine pairings, never a constant). ``outs`` and ``engines`` are DISJOINT card
-    classes, so at depth 1 the form is EXACT (conditioning on a missed window leaves the outs uniform
-    in the thinned pool — pinned against exhaustive enumeration). Deeper stages reuse the same two
-    ``comb`` ratios over the thinned pool with one engine consumed per stage — the engine-availability
-    term there is the documented approximation (the spec's measured depth-2 magnitude ≈ +0.6pp).
-    Window-2 outs are the SAME class outs (the full Stage-1 union — spec §recursion point 4).
-    Degenerates to ``draw_hit_probability`` with no engines/windows; bad input → 0.0 (an endorser
-    fails closed); the total is clamped to a probability."""
+    """WP4's Stage-2 draw-engine two-window closed form (ADR-0065). EXACT at depth 1 (``outs`` and
+    ``engines`` are DISJOINT); deeper stages approximate — measured error ≈ +0.6pp. Bad input → 0.0."""
     try:
         o, p, n, e = int(outs), int(pool), int(draws), int(engines)
         ws = tuple(int(w) for w in windows)
@@ -116,25 +74,8 @@ def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
 
 
 def p_contains_at_least(unseen_copies, prizes_hidden, deck_count, k: int = 1) -> float:
-    """P(my deck still holds **at least ``k`` copies** of a card) under the same prize split
-    ``p_contains`` uses — the hypergeometric CDF rather than only its ≥1 tail:
-
-        P(≥k in deck) = Σ_{j=k}^{min(u, d)} C(d, j)·C(K, u−j) / C(d+K, u)
-
-    ``u`` = unseen copies, ``K`` = ``prizes_hidden``, ``d`` = ``deck_count``. The summand is the
-    per-split PMF `strategy.planner._prize_split_hit` already builds for its own mixture; this is
-    that PMF summed rather than folded through a draw window.
-
-    **Why ≥1 is not enough.** A multi-card delivery (Cyrano's *"up to 3"*, Buddy-Buddy Poffin's
-    *"up to 2"*) may legally take TWO copies of one card, so an outcome class naming a card twice
-    asks whether two copies are *available* — a question ``p_contains`` cannot answer and would
-    over-report by treating one surviving copy as enough.
-
-    Agrees with the sound oracle at every extreme, exactly as the ≥1 form does: ``k <= 0`` → 1.0
-    (asking for nothing); ``u < k`` or ``d < k`` → 0.0 (unreachable); ``K == 0`` → 1.0 (nothing is
-    prized); ``u − K >= k`` → 1.0 (pigeonhole — at most ``K`` copies can be prized, so at least
-    ``u − K`` are in the deck). Never raises: any bad input → **1.0**, the SUPPRESSOR direction
-    ``p_contains`` documents."""
+    """P(my deck still holds at least ``k`` copies) — the hypergeometric CDF of the prize split, not just
+    its ≥1 tail (a multi-card delivery may take TWO copies). Bad input → 1.0, the SUPPRESSOR direction."""
     try:
         u, hidden, d, need = (int(unseen_copies), int(prizes_hidden),
                               int(deck_count), int(k))
@@ -161,20 +102,13 @@ def p_contains_at_least(unseen_copies, prizes_hidden, deck_count, k: int = 1) ->
 
 
 def p_contains(unseen_copies, prizes_hidden, deck_count) -> float:
-    """P(my deck still contains ≥1 copy of a card) from the hypergeometric split of its ``unseen_copies``
-    over the ``deck_count + prizes_hidden`` hidden positions (of which ``prizes_hidden`` are face-down
-    prizes). Returns a float in ``[0, 1]``; never raises (any bad input → 1.0, "assume present").
-
-    The ``k = 1`` case of :func:`p_contains_at_least`, and DELEGATES to it rather than restating the
-    algebra — ``1 − C(K,u)/C(H,u)`` is that sum's complement, so keeping both spellings would be two
-    closed forms for one model. The identity is asserted over the whole small grid in
-    `tests/strategy/test_deck_odds.py`."""
+    """P(my deck still contains ≥1 copy of a card) — the ``k = 1`` case of :func:`p_contains_at_least`,
+    DELEGATED rather than restated so two closed forms of one model cannot drift."""
     return p_contains_at_least(unseen_copies, prizes_hidden, deck_count, 1)
 
 
 def contains_odds(decklist, visible, deck_count, prizes_hidden) -> dict:
-    """``{card_id: p_contains(...)}`` over every card in ``decklist`` (a ``{id: count}`` mapping), using
-    ``visible`` (a ``{id: count}`` of copies provably outside deck+prizes) for the unseen count. The
-    per-card form the Board exposes as ``deck_contains_odds`` (ADR-0029)."""
+    """``{card_id: p_contains(...)}`` over ``decklist``, with ``visible`` counting copies provably
+    outside deck+prizes. The Board exposes it as ``deck_contains_odds`` (ADR-0029)."""
     return {cid: p_contains(total - visible.get(cid, 0), prizes_hidden, deck_count)
             for cid, total in decklist.items()}

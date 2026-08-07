@@ -36,9 +36,8 @@ def test_threat_turns_fully_powered_ohko_is_one_turn():
 
 @pytest.mark.req("REQ-CLOCK-0001")
 def test_threat_turns_counts_the_energy_attach_clock():
-    """A 1-Energy attacker needing a 3-Energy attack accrues Energy 1/turn; the attach on the firing turn
-    counts, so it fires on turn 2 (turn 1 → 2 Energy, turn 2 → attach the 3rd and KO). The 'attaching the
-    LAST energy' read — a 3-Energy nuke at 1 Energy is two turns out, not imminent."""
+    """A 1-Energy attacker needing a 3-Energy attack accrues Energy 1/turn; the attach on the firing
+    turn counts, so it fires on turn 2."""
     from common.strategy.objectives import threat_turns
     assert threat_turns(130, [(3, 200, 1, 0, 0)]) == 2
 
@@ -88,11 +87,8 @@ def test_threat_clock_reads_a_powered_active_that_ohkos_my_active():
 
 @pytest.mark.req("REQ-CLOCK-0003")
 def test_threat_clock_is_affordability_aware():
-    """The Threat Clock charges Energy affordability (its multi-turn PREP role): a 210-HP body facing a
-    Mega Starmie ex whose only one-shot is the 3-Energy Nebula Beam reads clock 2 at 1 Energy — the
-    attacker can only pay Jetting Blow (120 < 210) next turn — and clock 1 at 3 Energy once the nuke is
-    online. (This 1-attach/turn model is the prep read; the survival-critical `active_doomed` boolean
-    stays worst-case, since a hidden Ignition burst could beat this timeline — the planner_6858 finding.)"""
+    """Energy affordability is charged: a 210-HP body facing a Mega Starmie ex whose only one-shot is
+    the 3-Energy Nebula Beam reads 2 at 1 Energy and 1 at 3. `active_doomed` stays worst-case."""
     pilot = _shipped_pilot()
     my_body = {"id": 1031, "hp": 210, "energies": []}
     at_1 = {"active": [{"id": 1031, "hp": 330, "energies": _energies(1)}], "bench": []}
@@ -103,9 +99,8 @@ def test_threat_clock_is_affordability_aware():
 
 @pytest.mark.req("REQ-CLOCK-0004")
 def test_threat_clock_sees_the_forward_evolving_bench_threat():
-    """A benched Staryu (its own 20-damage attack is no threat) whose line forward-evolves into a Mega
-    Starmie ex SHORTENS the clock against my Cinderace — the Evolving Threat seen defensively, before it
-    comes online. Removing the Staryu lengthens the clock back to the harmless Active's own timeline."""
+    """A benched Staryu whose line forward-evolves into a Mega Starmie ex SHORTENS the clock — the
+    Evolving Threat seen defensively, before it comes online."""
     pilot = _shipped_pilot()
     cind = {"id": 666, "hp": 160, "energies": []}
     active_only = {"active": [{"id": 676, "hp": 110, "energies": []}], "bench": []}
@@ -119,8 +114,7 @@ def test_threat_clock_sees_the_forward_evolving_bench_threat():
 @pytest.mark.req("REQ-CLOCK-0005")
 def test_threat_clock_promotion_surcharge_waived_by_a_switch():
     """A benched forward threat behind the promotion surcharge lands one turn SOONER when the opponent
-    holds a Switch (revealed in their discard) — the 'promoted via retreat or Switch' read: with a Switch
-    they bring the powered attacker up without paying a retreat."""
+    holds a Switch (revealed in their discard)."""
     pilot = _shipped_pilot()
     cind = {"id": 666, "hp": 160, "energies": []}
     board = {"active": [{"id": 676, "hp": 110, "energies": []}],

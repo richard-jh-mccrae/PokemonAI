@@ -1,20 +1,13 @@
-"""The blunder-labeler CLI (S3a design §D3/§D4).
+"""The blunder-labeler CLI (S3a §D3/§D4).
 
-Two production modes plus a report:
+- ``--mode review`` — the θ-calibration pass; an explicit ``--theta`` is allowed ONLY here.
+- ``--mode emit`` — production: **requires** a committed ``thresholds.json`` and uses its θ, and
+  REJECTS ``--theta``. No thresholds file falls safe to report-only, never to a guessed θ.
+- ``--mode report`` — the played-well-lost view only, no corrections.
 
-- ``--mode review`` — the θ-calibration pass (§D3 step 1): detect at a permissive θ (an explicit
-  ``--theta`` is allowed ONLY here), write flags to the machine store with a ``mode: "review"``
-  manifest, then a human reviews precision in the blunder shell and commits ``thresholds.json``.
-- ``--mode emit`` — the production pass (§D4): **requires** a committed ``thresholds.json`` and uses
-  its θ; ``--theta`` is rejected. Per-agent caps apply (largest-|ΔV| first). No thresholds file →
-  fail-safe to report-only (nothing written), never a guessed θ.
-- ``--mode report`` — the played-well-lost view only (§D6), no corrections.
+Every mode also writes the played-well-lost report over the same corpus.
 
-Every mode also writes the played-well-lost report over the same corpus. Integration (the actual θ
-number, mass emit) is G1-gated; until then this is run-ready tooling + a dry-run smoke (§Acceptance).
-
-    python tools/train/label/run.py --replays data/replays/corpus --model src/common/value/value_model.json \
-        --mode review --theta 0.05
+    python tools/train/label/run.py --replays data/replays/corpus --mode review --theta 0.05
 """
 from __future__ import annotations
 
@@ -43,8 +36,7 @@ DEFAULT_CAP = 200
 
 
 def load_thresholds(path: Path | str = THRESHOLDS_PATH) -> dict | None:
-    """The committed θ file (§D3 step 5), or None if absent/malformed. The single source both this
-    labeler and S3b's detector read, so train and runtime can't disagree on θ."""
+    """The committed θ file, or None. The single source both this labeler and S3b's detector read."""
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except Exception:
@@ -52,13 +44,7 @@ def load_thresholds(path: Path | str = THRESHOLDS_PATH) -> dict | None:
 
 
 def resolve_gate(mode: str, thresholds: dict | None, theta_arg, theta_triage_arg) -> dict:
-    """The emission gate (§D4). Returns ``{emit, theta, theta_triage, reason}``.
-
-    - ``review``: always writes (calibration); θ = ``--theta`` or the permissive default.
-    - ``emit``: requires ``thresholds`` (else ``emit=False``, report-only); ``--theta`` is rejected —
-      the production θ comes from the committed file, never the command line.
-    - ``report``: never writes corrections.
-    """
+    """The emission gate, ``{emit, theta, theta_triage, reason}``: the production θ never comes from argv."""
     if mode == "report":
         return {"emit": False, "theta": None, "theta_triage": theta_triage_arg or DEFAULT_THETA_TRIAGE,
                 "reason": "report-only mode"}
@@ -113,8 +99,7 @@ def _pilot_cache():
 def run_label(replays, model_path, *, mode="review", theta=None, theta_triage=None,
               cap=DEFAULT_CAP, choice="recorded", out_dir=None, reports_dir=None,
               run_id=None, get_pilot=None) -> dict:
-    """Drive the labeler over ``replays`` (paths). Returns a summary dict; writes the machine store +
-    manifest (when the gate emits) and the played-well-lost report."""
+    """Drive the labeler over ``replays``: machine store + manifest when the gate emits, plus the report."""
     from train.label.detect import recorded_choice, replayed_choice
 
     model = ValueModel.load(model_path)
@@ -123,16 +108,15 @@ def run_label(replays, model_path, *, mode="review", theta=None, theta_triage=No
                          "G1-passed model (offline tools fail loud).")
     thresholds = load_thresholds()
     gate = resolve_gate(mode, thresholds, theta, theta_triage)
-    # Played-well-lost confirmation θ: real even when the gate emits nothing (report mode / fail-safe),
-    # so a triage hit can be confirmed instead of every loss reading vacuously "clean".
+    # Real even when the gate emits nothing, so a triage hit can still be confirmed rather than
+    # every loss reading vacuously "clean".
     pwl_theta = gate["theta"] if gate["theta"] is not None else DEFAULT_REVIEW_THETA
     run_id = run_id or datetime.now(timezone.utc).strftime("label-%Y%m%dT%H%M%SZ")
     get_pilot = get_pilot or _pilot_cache()
     chooser = replayed_choice if choice == "replayed" else recorded_choice
 
-    # NOTE (v2 optimization): emission (detect) and the played-well-lost screen (assess) each fork the
-    # engine over their frames independently, so overlapping frames are forked twice. Acceptable at the
-    # design's frame-sampled scale; share the per-option evaluations if forks become the bottleneck.
+    # detect and assess each fork the engine over their own frames, so an overlapping frame is forked
+    # twice. Acceptable at this scale; share the per-option evaluations if forks become the bottleneck.
     replays = [Path(p) for p in replays]
     per_agent: dict[str, list] = {}
     assessments: list[dict] = []

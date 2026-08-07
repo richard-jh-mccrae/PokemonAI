@@ -32,12 +32,8 @@ def _hyp_slim(rows: list) -> list:
 def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFAULT_BUILDS,
           agents_root: Path | None = None, submission_id: int | None = None,
           label: str | None = None) -> dict:
-    """Package `name`, append a build record to the local ledger, and return it.
-
-    `submission_id` defaults to the next monotonic id (the `N` you later pass to `submit`);
-    `label` names the experiment. The Bundle's `artifact` stem is the join key downstream.
-    The brief highlights any deck change versus this agent's previous build.
-    """
+    """Package `name`, append a build record to the local ledger, return it. The Bundle's `artifact`
+    stem is the join key downstream; `submission_id` defaults to the next monotonic id."""
     sid = submission_id if submission_id is not None else next_submission_id(builds)
     prev = _previous_build(builds, Path(name).name)        # baseline for change callouts
     prev_hyps = ({"strategy": prev.get("strategy_hyps", []), "general": prev.get("general_hyps", [])}

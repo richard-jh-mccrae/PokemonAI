@@ -4,11 +4,9 @@ The budget is 2 lines for a `#` block, 2 for a function or class docstring, 15 f
 120 characters for any prose line. `.claude/skills/code-as-docs/SKILL.md` argues for those numbers;
 `tools/doc_budget.py` computes them, and this file is the gate over that tool so the two cannot drift.
 
-**This gate is dormant until the reduction pass finishes, and it arms itself.** The 2026-08-07 audit
-counted 5,088 offences across 450 files, so a hard assertion today would fail every run and be disabled
-within a week. Instead the gate skips while offences remain — printing the live count, so `pytest -rs`
-shows progress — and becomes a real assertion the moment the count reaches zero. Nobody has to remember
-to delete a marker; finishing the cleanup is what turns it on.
+**ARMED 2026-08-08**, when the reduction pass took the tree from 5,260 offences to 0. The gate was
+written to skip while any remained and to become a real assertion at zero, so nobody had to remember
+to switch it on. It is that assertion now: a new over-budget block fails the suite.
 
 `test_the_budget_scanner_actually_measures` runs unconditionally. A dormant gate whose instrument is
 broken is worse than no gate: it would arm itself into a permanent green that means nothing.

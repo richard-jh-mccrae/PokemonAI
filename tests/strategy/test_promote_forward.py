@@ -1,23 +1,9 @@
-"""Promote with forward search (the b7e483a promote blunders) — now DECIDER claims (ADR-0100, #141).
+"""Promote with forward search (the b7e483a promote blunders) — DECIDER claims (ADR-0100, Issue #141).
 
-The three doctrines these frames encode all survive the rung deletion as EMERGENT properties of the
-promote/retreat decider, so every test asserts the DECISION and none asserts a rung firing:
-
-* bring up an accelerator that can Knock the Active Out over the win-condition itself — emergent from
-  `my_yield`, where §3b makes the accel dividend a MEASURED `_recover_units` count at `ENERGY_RECOVER`
-  rather than a flat `+50` on an `accel_source` role tag. The Knock-Out half is `_promote_ko_tactical`
-  (§11), which fires on BOTH bodies here and therefore cancels — so the residual decides, which is
-  exactly the layer split §1 rules.
-* don't promote a BARE pre-evolution to evolve a dead 0-Energy win-condition — emergent, because a
-  bare body reaches no damage at all and a body that can act does.
-* promote the most-built copy, at a forced promote and at a SWITCH alike — emergent from reachable
-  damage, which is what retires `is_best_promote_target` and its `+5` tie-break bonus (§3, and the
-  f104 fix becomes a damage fact).
-
-The accelerator fixture carries Turbo Flare's REAL rider (`recoverN=3, recoverSource="deck"`, per
-`data/EN_Card_Data.csv`: "search your deck for up to 3 Basic Energy cards and attach them to your
-Benched Pokémon"). It has to: the rung read the role TAG, the decider reads the card, and a fixture
-without the record measures a different claim than the one this frame is about.
+Every test asserts the DECISION, not a rung firing: all three doctrines are emergent properties of
+the promote/retreat decider. The accelerator fixture carries Turbo Flare's REAL rider (`recoverN=3,
+recoverSource="deck"`) — the decider reads the card, so a fixture without the record measures a
+different claim.
 """
 import pytest
 
@@ -50,25 +36,20 @@ def _pilot(hand_ids=(), energy=20):
         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50,
                             attacks=(A_CIND,)),
         678: CardStat(678, name="Mega Lucario ex", hp=340, megaEx=True),
-        # Both of Mega Starmie ex's attacks are recorded, not just the cheap one. The DEARER attack is
-        # load-bearing: `_recover_recipient_need` measures a recipient against `max(costs)` over its own
-        # and its FORWARD form's attacks, so omitting Nebula Beam made a bare Staryu (whose forward Mega
-        # needs {C}{C}{C}) report a need of 1 instead of 3 — and the accel dividend it gates was
-        # measuring a different claim than the one these frames are about.
+        # BOTH Mega Starmie ex attacks are recorded: `_recover_recipient_need` measures a recipient
+        # against `max(costs)` over its own AND its forward form's attacks.
     }, attacks={A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),        # Jetting Blow {W}
                 A_NEBULA: AttackStat(A_NEBULA, damage=210, cost=3),    # Nebula Beam {C}{C}{C}
                 A_STAR: AttackStat(A_STAR, damage=20, cost=1),         # Water Gun {W}
-                # Turbo Flare as PRINTED (`data/EN_Card_Data.csv`): "Search your deck for up to 3 Basic
-                # Energy cards and attach them to your BENCHED Pokémon" — the target scope is part of
-                # the record, and the need gate reads it.
+                # Turbo Flare as PRINTED: the BENCH target scope is part of the record, and the
+                # need gate reads it.
                 A_CIND: AttackStat(A_CIND, damage=50, cost=1, recoverN=3, recoverSource="deck",
                                    recoverTarget="bench")})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"],
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
-    # The deck holds real Basic Energy so the deck-search rider has fuel to find (`_recover_units`
-    # bounds the dividend by the fuel in its source zone). `energy` thins the suite for the
-    # ADR-0077 frames, where the point is a suite the PIGEONHOLE FLOOR cannot see behind the prizes.
+    # `_recover_units` bounds the dividend by the fuel in its source zone; `energy` thins the suite
+    # for the ADR-0077 frames, where the point is one the PIGEONHOLE FLOOR cannot see behind prizes.
     deck = [3] * energy + [STARYU] * 10 + [MEGA] * 10 + [CINDERACE] * 10 + [1] * (30 - energy)
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CINDERACE: ["opener"]}))
@@ -124,16 +105,8 @@ def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
-    """Issue #172 / ADR-0077, the f97 shape. 4 Basic {W} in the decklist, 2 of them VISIBLE on the
-    board, 5 face-down prizes: the provable pigeonhole floor is `max(0, 2 - 5)` = 0, so the shipped
-    read claimed no fuel at all and the accel dividend died — on a deck that still holds Water with
-    near-certainty.
-
-    Both bodies Knock the 20-HP Active Out, so `_promote_ko_tactical` cancels and the residual
-    decides (ADR-0100 §1). The wincon out-reaches the accelerator on raw damage (120 vs 50), so the
-    ONLY thing that can carry Cinderace is the dividend — which is exactly zero under the floor and
-    real under `CountTriple.expected`. This frame therefore fails closed on the defect and green on
-    the fix, without asserting any score."""
+    """Issue #172 / ADR-0077: the pigeonhole floor `max(0, 2 - 5)` is 0, so the shipped read claimed
+    no fuel and the dividend died. Only the dividend can carry Cinderace here, so the frame fails closed."""
     p = _pilot(energy=4)
     bench = [{"id": CINDERACE, "energies": [3], "hp": 160},      # idx0: accelerator (1 visible {W})
              {"id": MEGA, "energies": [3], "hp": 330},           # idx1: ready wincon (1 visible {W})
@@ -151,9 +124,8 @@ def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_an_anchored_board_scores_the_dividend_exactly_as_before():
-    """The degeneracy guarantee (ADR-0077 verification). With no face-down prizes the Count Triple's
-    legs collapse to one integer, so `expected` IS the old exact count and the dividend is unmoved —
-    which is what separates "thin-Energy frames moved" from "everything moved"."""
+    """The degeneracy guarantee (ADR-0077): with no face-down prizes the Count Triple's legs collapse
+    to one integer, so `expected` IS the old exact count and the dividend is unmoved."""
     p = _pilot(energy=4)
     bench = [{"id": CINDERACE, "energies": [3], "hp": 160},
              {"id": MEGA, "energies": [3], "hp": 330},

@@ -1,20 +1,7 @@
-"""BASELINE cluster: ENERGY — what is LEFT of the Energy rungs after the attach decider (ADR-0069).
-
-The energy-attach decision is no longer a pile of tuned Hypotheses. Nineteen of the 23 rungs that
-used to live here were DELETED in the Phase-1a swap (#139): their logic is now stated arithmetic in
-`Pilot._attach_value` — the axes-sum marginal (attack axis + Retreat Equity + Ability Fuel −
-evaporation loss) that DECIDES every energy attach and every accel-recipient pick. They were not
-suppressed behind a flag; a weight coincidence that no longer exists cannot re-enter tuning.
-
-Per-rung fold map: `tools/rung_registry.py` (`FOLDED`, ADR-0069 group) — data, so it is checked rather
-than believed. The full reasoning is the ADR's.
-
-What survives is STRUCTURE, not value — positional facts the marginal has no way to express. Each
-is held to an EXECUTABLE band constraint asserted in `tests/strategy/test_attach_bands.py`: a
-positional prior may break a tie, never override one real build step.
-
-NO Pilot Mixin — the valuation half of energy lives in the Pilot per ADR-0016.
-"""
+"""BASELINE cluster: ENERGY — what is LEFT after the attach decider (ADR-0069). Nineteen of 23 rungs
+were DELETED into `Pilot._attach_value`'s marginal; fold map in `tools/rung_registry.py`. What
+survives is STRUCTURE, not value, each held to an executable band in `test_attach_bands.py`: a
+positional prior may break a tie, never override one real build step. No Pilot Mixin (ADR-0016)."""
 from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACKER_ROLES, _PLAY
 from common.strategy.strategy import Hypothesis
 

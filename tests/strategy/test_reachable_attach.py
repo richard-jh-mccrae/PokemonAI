@@ -4,16 +4,8 @@
 ``reachable_incoming``, on a lib-free provider (the `test_reachable_incoming.py` seam).
 
 Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functions.json`,
-`tools/meta_tracker/effect_overrides.json`) — never recalled:
-  * Dragapult ex (121) Stage 2, HP 320 — Jet Headbutt ``●`` 70 / Phantom Dive ``{R}{P}`` 200.
-  * Crispin (1198, Supporter): "Search your deck for up to 2 Basic Energy cards of DIFFERENT types,
-    reveal them, and put 1 of them into your hand. Attach the other to 1 of your Pokémon."
-  * Fighting Gong (1142, Item): a Basic {F} Energy OR a Basic {F} Pokémon → HAND.
-  * Hilda (1225, Supporter): an Evolution Pokémon AND an Energy card → HAND.
-  * Wondrous Patch (1146, Item): a Basic {P} Energy from the DISCARD → a BENCHED {P} Pokémon.
-  * Rosa's Encouragement (1240, Supporter): up to 2 Basic Energy from the DISCARD → a STAGE 2,
-    playable only while I hold MORE Prize cards remaining than my opponent.
-  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}.
+`tools/meta_tracker/effect_overrides.json`) — never recalled. Basic Energy card ids: 2 {R}, 5 {P},
+7 {D}.
 """
 from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
@@ -87,10 +79,8 @@ def _pult(*energies):
 # ---- the f70 fixture: the primitive's reason to exist -----------------------------------------
 
 def test_f70_crispin_reaches_the_two_cost_typed_attack_this_turn():
-    """`dp_stall_gust_false_famine_accel_f70`: Active Dragapult ex at 0 Energy, Crispin in hand,
-    the manual attach unspent. Crispin attaches one Basic by its effect AND hands a SECOND of a
-    different type that the manual attach plays → {R}{P} = Phantom Dive 200 THIS turn. The famine
-    read that fired a +105 stall said 'can't attack'. It was FALSE."""
+    """Crispin attaches one Basic by its effect AND hands a SECOND of a different type the manual
+    attach plays → {R}{P} = Phantom Dive THIS turn. The famine read said 'can't attack'; FALSE."""
     c = _combat()
     budget = c.attach_budget(_pult(), [CRISPIN], deck_energy_types=DRAGAPULT_DECK_TYPES)
     assert c.reachable_attach(_pult(), PHANTOM_DIVE, budget=budget) is True
@@ -155,11 +145,8 @@ def test_a_typed_fetch_needs_that_type_still_in_the_deck():
 
 
 def test_crispin_over_a_one_colour_deck_takes_the_fail_closed_reading():
-    """"Up to 2 Basic Energy of DIFFERENT types … put 1 into your hand. Attach the other" finds only
-    ONE card when a single colour is left not-provably-empty — and no source settles whether that
-    lone card is the put-in-hand half or the attach half. Ruled fail-closed (ADR-0067): it is the
-    HAND half, so it needs the turn's manual attach and is worth nothing once that is spent. The
-    braver reading would let Crispin attach with the manual attach already gone."""
+    """No source settles whether Crispin's lone find is the put-in-hand half or the attach half.
+    Ruled fail-closed (ADR-0067): the HAND half, so it needs the turn's manual attach."""
     c = _combat()
     one_colour = frozenset({DARKNESS})
     with_attach = c.attach_budget(_pult(), [CRISPIN], deck_energy_types=one_colour)
@@ -192,10 +179,8 @@ def test_a_supporter_tutor_and_the_manual_attach_co_occur():
 
 
 def test_two_supporters_never_co_occur():
-    """Crispin AND Rosa's Encouragement in hand is still ONE Supporter this turn: each yields 2
-    units alone, so the giveaway of a double-play would be a 4-unit option. Asserted on the option
-    CONTENTS, not just the headline size — two 2-unit alternatives and one 2-unit sum look
-    identical from `size` alone."""
+    """Two Supporters in hand is still ONE this turn. Asserted on the option CONTENTS: two 2-unit
+    alternatives and one 2-unit sum look identical from `size` alone."""
     c = _combat()
     b = c.attach_budget(_pult(), [CRISPIN, ROSA], deck_energy_types=DRAGAPULT_DECK_TYPES,
                         discard_energy_counts={FIRE: 1, PSYCHIC: 1}, more_prizes_than_opp=True)
@@ -321,9 +306,8 @@ def test_rosa_is_capped_by_what_the_discard_actually_holds():
 
 
 def test_the_discard_cap_binds_by_COLOUR_not_merely_by_count():
-    """Two units off a {R:1, P:1} pile reach {R}{P} but NOT {P}{P} — the pile holds one {P}. A cap
-    that counted units without tracking which colour each consumed would call {P}{P} payable: two
-    legal units, jointly impossible. That is the catastrophic direction (ADR-0067)."""
+    """A cap that counted units without tracking which colour each consumed would call {P}{P} payable
+    off a {R:1, P:1} pile — two legal units, jointly impossible (the ADR-0067 catastrophic direction)."""
     c = _combat()
     b = c.attach_budget(_pult(), [ROSA], energy_attached=True, more_prizes_than_opp=True,
                         discard_energy_counts={FIRE: 1, PSYCHIC: 1}, deck_energy_types=())
@@ -512,9 +496,8 @@ def test_typed_deck_fuel_is_empty_without_stats():
 # ---- the payment matcher, cross-checked against brute force ------------------------------------
 
 def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
-    """`_can_pay` is a pruned search; this pins it against an exhaustive reference over random
-    slot/unit/capacity shapes. A silent over-count here is the catastrophic direction (ADR-0067):
-    it would hand a consumer a false 'can attack'."""
+    """`_can_pay` is a pruned search, checked against an exhaustive reference: a silent over-count
+    would hand a consumer a false 'can attack' (the ADR-0067 catastrophic direction)."""
     import itertools
     import random
 
@@ -555,13 +538,8 @@ def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
         assert _can_pay(slots, units, caps) is brute(slots, units, caps), (slots, units, caps)
 
 
-# ── hand SPECIAL Energy provision (#142) ───────────────────────────────────────────────────────
-#
-# Card text verified at `data/EN_Card_Data.csv`:
-#   Ignition Energy (17, Special): "As long as this card is attached to a Pokemon, it provides {C}
-#     Energy. If this card is attached to an Evolution Pokemon, it provides {C}{C}{C} Energy instead."
-#   Boomerang Energy (9, Special): "it provides {C} Energy."
-# Engine card types confirm both report energyType 0 (colourless); Telepath Psychic (19) reports {P}.
+# ── hand SPECIAL Energy provision (Issue #142) ────────────────────────────────────────────────
+# Ignition (17) and Boomerang (9) both report energyType 0 (colourless); Telepath Psychic (19) {P}.
 
 IGNITION, BOOMERANG = 17, 9
 MEGA_LUC, RIOLU = 678, 677                       # the single-hop line: Riolu (Basic) -> Mega Lucario ex
@@ -694,10 +672,8 @@ def test_realising_p_of_a_free_cost_is_certain():
     assert Budget(options=((),)).realising_p((), {}) == 1.0
 
 
-# ── #175 acceptance: the three fixture families (ADR-0074 decision 7) ─────────────────────────
-# The TAIL fixture alone cannot distinguish decision 3 (per-assignment) from the per-Budget
-# weighting the grill rejected — both discount at low `unseen`. The COMPLEMENT is what falsifies
-# the wrong design, and the DEGENERACY fixture is what discharges the no-regression claim.
+# ── Issue #175, ADR-0074 decision 7: the TAIL fixture alone cannot distinguish per-assignment from
+# per-Budget weighting; the COMPLEMENT falsifies the wrong design, DEGENERACY discharges regression.
 
 def _thin_deck_p(p_thin):
     """A probability map for a deck depleted to its last {P}: {R} plentiful, {P} nearly gone."""
@@ -716,9 +692,8 @@ def test_tail_a_deck_sourced_ko_is_discounted_at_low_unseen():
 
 
 def test_complement_the_same_frame_pays_from_hand_at_full_value():
-    """FAMILY 2 (the complement) — the load-bearing one. SAME depleted deck, but the cost is paid by
-    Energy already in hand/attached. Per-assignment pricing reads exactly 1.0; the rejected
-    per-Budget weighting would have discounted this line because a thin fetch sits in the option."""
+    """FAMILY 2 (the complement): SAME depleted deck, cost paid from hand. Per-assignment pricing
+    reads 1.0; the rejected per-Budget weighting would discount it for the thin fetch beside it."""
     in_hand_r = AttachUnit(frozenset({FIRE}))                 # certain — no source
     in_hand_p = AttachUnit(frozenset({PSYCHIC}))              # certain
     thin_fetch = AttachUnit(frozenset({PSYCHIC}), source="deck")
@@ -728,8 +703,7 @@ def test_complement_the_same_frame_pays_from_hand_at_full_value():
 
 def test_degeneracy_an_anchored_deck_is_byte_identical_to_the_unweighted_read():
     """FAMILY 3 (degeneracy): once a search anchors the prizes every `p_any` is exactly 1.0, so the
-    weighted read equals the unweighted one. This — not the tail fixture — is what discharges
-    #175's "no regression to the composed-line KO frames #142 leaves green"."""
+    weighted read equals the unweighted one — this is what discharges Issue #175's no-regression claim."""
     deck_r = AttachUnit(frozenset({FIRE}), source="deck")
     deck_p = AttachUnit(frozenset({PSYCHIC}), source="deck")
     budget = Budget(options=((deck_r, deck_p),))
@@ -740,8 +714,8 @@ def test_degeneracy_an_anchored_deck_is_byte_identical_to_the_unweighted_read():
 
 
 def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_line():
-    """ADR-0074 decision 4: the point of weighting the PRIZE term. A capped positional score could
-    never express this, which is why the hard-rung invariant had to be restated in expectation."""
+    """ADR-0074 decision 4: a capped positional score could never express this, which is why the
+    hard-rung invariant had to be restated in expectation."""
     from common.strategy.planner import _composed_rank
     shaky_two = (2.0, False, 0.40)                            # 2 prizes, 40% to land
     certain_one = (1.0, False, 1.0)                           # 1 prize, certain
@@ -753,9 +727,8 @@ def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_lin
 # ── #175 decision-6 extension: the POKEMON-presence leg is weighted too ───────────────────────
 
 def test_pokemon_presence_weight_composes_with_the_energy_weight():
-    """A composed line can whiff two independent ways — the evolution may be prized AND the Energy
-    fetch may whiff. `_composed_rank` sees one probability, so the two must be multiplied into it,
-    not chosen between."""
+    """A composed line whiffs two independent ways, and `_composed_rank` sees ONE probability — so
+    the two must be multiplied into it, not chosen between."""
     from common.strategy.planner import _composed_rank
     energy_only = (2.0, False, 0.87)                          # Energy 87%, Pokemon certain
     both = (2.0, False, 0.87 * 0.90)                          # …and the evolution 90% present

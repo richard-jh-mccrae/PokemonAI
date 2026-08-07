@@ -33,13 +33,8 @@ def test_deploy_odds_is_one_for_a_non_evolution():
 
 @pytest.mark.req("REQ-GATE-0001")
 def test_deploy_odds_prices_the_playability_verdict_and_defaults_to_keep():
-    """The gate is the ARITHMETIC only: a playable evolution keeps full worth, an unplayable one
-    collapses to 0 (ep83966336 f44 — a Mega Lucario ex with every Riolu evolved/gone is a dead card,
-    so its keep-value collapses and a refresh shuffles it to dig). WHETHER it is playable is
-    `common.playability`'s backward walk (ADR-0104, Issue #288), resolved by the caller: the three
-    zone booleans this used to OR together here were only its shallowest correct version, blind to
-    the ``evolvesFrom`` chain and to Rare Candy. The default is ``playable=True`` — an unsure caller
-    discounts nothing, the same fail-open direction as every other gate in this module."""
+    """The gate is the ARITHMETIC only; WHETHER a card is playable is `common.playability`'s backward
+    walk (ADR-0104), resolved by the caller. Default `playable=True`: an unsure caller discounts 0."""
     mega = _Stat(evolvesFrom="Riolu", name="Mega Lucario ex")
     assert gate_library.deploy_odds(mega, playable=True) == 1.0
     assert gate_library.deploy_odds(mega) == 1.0
@@ -48,9 +43,7 @@ def test_deploy_odds_prices_the_playability_verdict_and_defaults_to_keep():
 
 @pytest.mark.req("REQ-GATE-0005")
 def test_need_met_odds_gates_a_satisfied_role():
-    """The need-met gate (the fetcher gate's cousin — a role SATISFIED rather than a target dead):
-    0.0 when a card's reason-to-keep is already fulfilled by the board, 1.0 otherwise; errs toward
-    keep."""
+    """A role SATISFIED rather than a target dead; errs toward keep."""
     assert gate_library.need_met_odds(need_met=True) == 0.0
     assert gate_library.need_met_odds(need_met=False) == 1.0
     assert gate_library.need_met_odds() == 1.0
@@ -58,11 +51,8 @@ def test_need_met_odds_gates_a_satisfied_role():
 
 @pytest.mark.req("REQ-GATE-0005")
 def test_pilot_deploy_odds_gates_a_redundant_wincon_tutor():
-    """The redundant-tutor need gate (ladder-win case 82753102-16): a `rush_evolve` / `tutor_mega`
-    wincon-tutor whose wincon is already IN HAND has its role MET — it has nothing left worth
-    fetching — so `_deploy_odds` collapses to 0 and its keep-cost with it. A REAL gate: it fires
-    live wherever `keep_cost` is consumed (the gamble keep-floor, the refresh SHED), not only the
-    discard shadow. 1.0 when the wincon is not in hand (the tutor is still live)."""
+    """A wincon-tutor whose wincon is already IN HAND has its role MET, so its keep-cost collapses
+    wherever it is consumed — the gamble keep-floor and the refresh SHED, not just the discard."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
@@ -81,9 +71,7 @@ def test_pilot_deploy_odds_gates_a_redundant_wincon_tutor():
 
 @pytest.mark.req("REQ-GATE-0002")
 def test_fetch_deploy_odds_gates_a_dead_fetcher():
-    """The fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31): a fetch Trainer whose
-    every target is PROVABLY dead realises no role (0.0 → sheds freely, Ultra-Ball fodder); anything
-    less than proven deadness keeps full worth (1.0 — errs toward keep, like the evolution gate)."""
+    """Only PROVABLE deadness collapses a fetcher; anything less keeps full worth."""
     assert gate_library.fetch_deploy_odds(targets_exhausted=True) == 0.0
     assert gate_library.fetch_deploy_odds(targets_exhausted=False) == 1.0
     assert gate_library.fetch_deploy_odds() == 1.0
@@ -91,11 +79,8 @@ def test_fetch_deploy_odds_gates_a_dead_fetcher():
 
 @pytest.mark.req("REQ-GATE-0003")
 def test_closing_gate_zeroes_the_reaccess_credit():
-    """The pressure gate's primitive (spec Round 8 §3: gates CLOSE, and a closing edge SPIKES
-    keep-cost): P(met | shuffle) counts re-access only if it arrives before the gate closes. When
-    the card's gate is closing NOW, a probabilistic redraw is not an answer the plan can bank on —
-    the re-access credit is zeroed, so keep_cost charges the full role worth. Pass-through
-    otherwise."""
+    """P(met | shuffle) counts re-access only if it arrives before the gate closes; on a closing edge
+    a probabilistic redraw is not bankable, so the credit is zeroed and full role worth is charged."""
     assert gate_library.closing_gate_reaccess(0.7) == 0.7
     assert gate_library.closing_gate_reaccess(0.7, gate_closing=False) == 0.7
     assert gate_library.closing_gate_reaccess(0.7, gate_closing=True) == 0.0
@@ -104,12 +89,8 @@ def test_closing_gate_zeroes_the_reaccess_credit():
 
 @pytest.mark.req("REQ-GATE-0006")
 def test_deploy_now_spike_keeps_a_hand_evolution_with_an_eligible_base():
-    """The DEPLOY-NOW spike (the discard convergence's flagship, ep86091435 f68): a hand evolution
-    whose `evolvesFrom` base is in play AND ELIGIBLE (a matching body in play since last turn,
-    `appearThisTurn` False, turn ≥ 2) can be played THIS turn — pitching/shuffling it forfeits a live
-    tempo play its re-access can't restore (you need it NOW). So its closing gate fires and its keep
-    spikes to FULL worth, even with a same-card copy in play. A JUST-benched base (ep83686860 f18: two
-    Dreepy placed this turn) is NOT eligible — no deploy-now, the card stays sheddable."""
+    """A hand evolution whose base is in play AND eligible (`appearThisTurn` False, turn >= 2) can be
+    played NOW, so its keep spikes to FULL worth. A just-benched base is not eligible."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
@@ -135,13 +116,8 @@ def test_deploy_now_spike_keeps_a_hand_evolution_with_an_eligible_base():
 
 @pytest.mark.req("REQ-GATE-0003")
 def test_pressure_gate_spikes_the_doomed_successor_and_the_clutch_answers():
-    """The fold of `hold-successor-when-doomed` (ep83037962 f49): under a DOOMED Active, the held
-    SUCCESSOR (a win-condition with its Line pre-evolution in play — the next attacker, not a
-    redundant duplicate) and the clutch answers (`clutch_heal` / `switch` Trainers) charge their
-    FULL role worth — the closure's re-access discount is a probabilistic redraw the doom deadline
-    cannot bank on. A healthy board keeps the graded discount; a non-answer card (an Energy) never
-    spikes; and a successor whose base is provably GONE stays dead (the evolution gate outranks —
-    dead is dead, doom or not)."""
+    """Under a DOOMED Active the held successor and the clutch answers charge FULL role worth: the
+    re-access discount is a redraw the doom deadline cannot bank on. The evolution gate still wins."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
@@ -175,10 +151,8 @@ def test_pressure_gate_spikes_the_doomed_successor_and_the_clutch_answers():
 
 @pytest.mark.req("REQ-GATE-0004")
 def test_quota_window_widens_with_copy_rank_and_spent_quota():
-    """The quota gate's primitive (spec Round 8 §2: resource quotas are gates — the k-th held copy
-    of a once-per-turn card has deadline k−1 turns, so every intervening turn adds its natural draw
-    of re-access before that copy is needed). Rank 1 with the quota live keeps the plain window;
-    a spent quota shifts every rank one turn further out."""
+    """The k-th held copy of a once-per-turn card has deadline k−1 turns, so each intervening turn
+    adds its natural draw of re-access; a spent quota shifts every rank one turn further out."""
     assert gate_library.quota_window(6, 1) == 6                  # the first copy: needed now
     assert gate_library.quota_window(6, 2) == 7                  # 2nd copy: one turn of draws first
     assert gate_library.quota_window(6, 3) == 8
@@ -189,12 +163,8 @@ def test_quota_window_widens_with_copy_rank_and_spent_quota():
 
 @pytest.mark.req("REQ-GATE-0004")
 def test_hand_keep_prices_quota_duplicates_by_their_deadline_rank():
-    """The quota gate wired into `_hand_keep`: duplicate copies of a ONCE-PER-TURN card (Energy —
-    1 manual attach; Supporter — 1 per turn, rules.md §3) charge by RANK — the k-th copy's
-    re-access window widens by its k−1 turns of natural draws, so the 3rd held Energy is cheaper to
-    shuffle than the 1st (the spec's own derivation). A lone copy with the quota live is unchanged;
-    a spent quota (`energy_attached`; a Supporter refresh being the played card) widens every rank;
-    non-quota duplicates (a Pokémon) are untouched."""
+    """Duplicates of a ONCE-PER-TURN card (1 manual attach; 1 Supporter, rules.md §3) charge by RANK,
+    so the 3rd held Energy is cheaper to shuffle than the 1st. Non-quota duplicates are untouched."""
     import sys
     from math import isclose
     from pathlib import Path
@@ -235,12 +205,8 @@ def test_hand_keep_prices_quota_duplicates_by_their_deadline_rank():
 
 @pytest.mark.req("REQ-GATE-0002")
 def test_pilot_deploy_odds_collapses_a_dead_searcher_and_recycler():
-    """The Pilot resolver (`planner._deploy_odds`) mirrors the play-side rungs' SOUND predicates:
-    a Buddy-Buddy Poffin whose whole deck whiff-set sits in `Board.deck_empty_ids` prices 0
-    (`dont-search-an-empty-deck`'s premise), a Night Stretcher on an all-dead recycle pool prices 0
-    (`dont-recycle-the-dead`'s premise) — and both keep FULL worth when any target is live. The gate
-    then collapses `_keep_cost` so the dead fetcher no longer props up the refresh SHED
-    (the ep83457493 f31 pin: shed the dead hand into Harlequin)."""
+    """`planner._deploy_odds` mirrors the play-side rungs' SOUND premises (`dont-search-an-empty-deck`,
+    `dont-recycle-the-dead`), so a dead fetcher stops propping up the refresh SHED."""
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))

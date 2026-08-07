@@ -6,65 +6,13 @@
     python tools/train/reviewed_audit.py --write-allowlist  # re-seed the allowlist from today's stale set
     python tools/train/reviewed_audit.py --refresh-vocab    # re-harvest data/corrections/rung_vocabulary.json
 
-A `covered` disposition is a claim about the **shipped agent**: *"a rule we ship already handles this
-frame, so hold it off fresh work."* When the rule it names is later deleted, the claim expires — but
-it expires **silently**, because the ledger stores the justification as opaque prose and nothing ever
-reads it back. Issue #238 found 13 such closures by hand. This module is the mechanical version.
-
-## Why this REPORTS and does not gate (ADR-0114 decision 3)
-
-It flags dozens of committed entries. A hard failure would red `main` on day one with no path to
-green except re-closing them in bulk — and a bulk re-close is exactly what Issue #238 forbids
-(*"Each needs the frame opened … not a bulk re-open"*). So the ratchet is an **allowlist**: the
-flagged set must equal `data/corrections/reviewed_audit_allowlist.json`, which IS the developer's
-worklist. Ruling a frame and re-closing it against a live rule removes it from both. A *new* stale
-closure is red immediately.
-
-## The vocabulary is CURATED, never a loose regex (ADR-0114 decision 2)
-
-A review note is prose. A bare `[a-z-]+` scan over these notes matches `attack-last` (46 times),
-`first-dev-differs`, `tier-2`, `hand-quality` — none of which is a rung. So a token becomes a rung
-reference only by resolving against a harvested vocabulary:
-
-* **live** — every ``Hypothesis(id=…)`` reachable in `src/`, read by AST at audit time. Never a hand
-  list: a rung deleted tomorrow leaves the live set tomorrow.
-* **sound rules** — every ``SoundRule(id=…)`` in `src/`. A separate live namespace, harvested for one
-  reason: 15 of them are hyphenated ids that were never Hypotheses, and without this they would
-  resolve as *retired rungs*.
-* **retired** — every id that WAS a ``Hypothesis(id=…)`` at some commit and is not one now, harvested
-  from git history. This is the definitionally correct instrument — "was a rung, is not now" — and it
-  needs no prose parsing at all.
-
-Anything in none of the three is **not a rung reference** and is never flagged; the count of those is
-reported separately so the vocabulary's own blind spots stay visible.
-
-**The retired half is CACHED, and that is not laziness.** `.github/workflows/ci.yml` checks out with
-`actions/checkout@v4` at its default depth — a shallow clone, where `git log --all` sees one commit.
-So the harvest is snapshotted to `data/corrections/rung_vocabulary.json` by `--refresh-vocab`, and
-the audit reads the snapshot. Two things keep the snapshot honest:
-
-1. `load_vocabulary` adds ``live_at_capture − live_now`` to the retired set, so a rung deleted after
-   the last refresh is caught with no git access at all;
-2. a test re-runs the git harvest and asserts the snapshot still matches — skipped, loudly, on a
-   shallow clone.
-
-## The controls the harvest is worthless without
-
-`CLAUDE.md`: an instrument that finds nothing and a broken instrument return the same empty output.
-Two structural controls, both asserted by test:
-
-* every one of the **95** live ids appears in the historical harvest (a diff scan that cannot see a
-  rung that is in the tree right now cannot be trusted about one that left);
-* every name in the four decider sweeps' ``RETIRED``/``ZEROED`` tuples — the authoritative deletion
-  lists Issue #238 cross-referenced by hand — appears in it too.
-
-Both pass, which is what licenses the zeros: `dont-waste-discard-energy`,
-`concentrate-energy-on-wincon`, `build-active-wincon`, `power-up-attacker` and
-`conserve-burst-when-no-ko` have **0** live definitions while `prefer-active-attach-in-setup` and
-`use-acceleration` have **1** each.
-
-Offline, read-only, no engine and no Pilot — the audit is pure functions over plain dicts, so it runs
-in the fast cross-platform suite. `--refresh-vocab` is the one subcommand that shells out to git.
+A `covered` disposition claims a SHIPPED rule handles the frame; when that rule is deleted the claim
+expires silently. This REPORTS and never gates (ADR-0114 decision 3): the ratchet is an allowlist the
+flagged set must equal: a hard failure's only path to green is the bulk re-close Issue #238 forbids.
+A token resolves as a rung only against a harvested vocabulary of three namespaces — live
+``Hypothesis`` ids, live ``SoundRule`` ids, ids retired from git history — never a loose regex, which
+matches `attack-last` and `tier-2` alike. The retired half is CACHED because CI checks out SHALLOW,
+and `load_vocabulary` re-adds ``live_at_capture − live_now`` to catch a deletion since the refresh.
 """
 from __future__ import annotations
 
@@ -92,13 +40,8 @@ DEFAULT_REPORT = REPO / "docs" / "plans" / "covered-disposition-audit.md"
 #: excluding it up front keeps a repo-wide sweep from ever touching it.
 _SKIP_DIRS = ("cg", "__pycache__")
 
-#: The four ``*_decider_sweep.py`` probes carried an authoritative ``RETIRED`` tuple naming the rungs
-#: their deletion pass removed. All four lists were themselves deleted once the swap was done —
-#: ADR-0085 Amendment J removed the OLD arm that consumed them (`909be890`), and the deploy sweep went
-#: with the corpus-reader refactor (`4f195bb1`). They are read from history as the audit's POSITIVE
-#: CONTROL, not as its vocabulary: every name here must turn up in the historical harvest, or the
-#: harvest is broken rather than the codebase clean. Pinned by SHA on purpose — a moving ref would
-#: make the control's meaning depend on when it ran.
+#: The audit's POSITIVE CONTROL, not its vocabulary: every name in these deleted ``RETIRED`` tuples
+#: must turn up in the historical harvest, or the harvest is broken. SHAs are pinned on purpose.
 SWEEP_RETIRED_SOURCES = (
     ("909be890^", "tools/train/probes/attach_decider_sweep.py", ("RETIRED", "ZEROED")),
     ("909be890^", "tools/train/probes/evolve_decider_sweep.py", ("RETIRED",)),
@@ -106,41 +49,20 @@ SWEEP_RETIRED_SOURCES = (
     ("4f195bb1^", "tools/train/probes/deploy_decider_sweep.py", ("RETIRED",)),
 )
 
-#: A rung id: lowercase, hyphenated, starting with a letter, bounded so a longer token never yields a
-#: short false hit. Starting with a letter is what keeps dates (`2026-08-02`), damage (`120-dmg`) and
-#: frame ids (`81785223-32`) out of the token stream entirely; the ``_`` in the boundary keeps a
-#: private name (`_finish-turn-last`) from being read as the rung inside it.
-#:
-#: ``/`` and ``.`` are deliberately NOT boundary characters. Notes really do write `attack-last/tiered`
-#: and `reactive-disruption/Posture`, so excluding a slash-adjacent token would lose real rung
-#: references to buy a slightly quieter blind-spot tally. Measured both ways on the committed ledger:
-#: the flagged set is IDENTICAL at 60 either way — only the unresolved count moves.
+#: Leading letter keeps dates, damage and frame ids out; the ``_`` boundary keeps `_finish-turn-last`
+#: from reading as the rung inside it. ``/`` and ``.`` are NOT boundaries: `attack-last/tiered` is real.
 RUNG_TOKEN = re.compile(r"(?<![a-z0-9_-])[a-z][a-z0-9]*(?:-[a-z0-9]+)+(?![a-z0-9_-])")
 
-#: `^[-+]` then optional space then `id="…"` — a Hypothesis id sits on its own line inside the
-#: constructor call, so a prose mention (`# … id="x"`) cannot match. Applied to `git log -p` output.
-#:
-#: **Known blind spot, chosen deliberately:** a Hypothesis written entirely on one line
-#: (``Hypothesis(id="x", …)``) is missed, so a rung that only ever existed in that form and was later
-#: deleted would not enter the retired vocabulary. Widening the pattern to match `id="…"` anywhere on
-#: a diff line is the obvious fix and is worse: it would sweep in every prose mention and every
-#: non-Hypothesis `id=` in `src/` history, and a FALSE retired name flags a closure that is actually
-#: fine — a worse failure than missing one. Under-reporting is visible in the unresolved tally; a
-#: false flag is not visible at all. No rung in this repo's history is written that way (every
-#: `Hypothesis(` call in `src/` today spans lines, and both structural controls pass).
+#: Applied to `git log -p` output. Deliberate blind spot: a one-line ``Hypothesis(id="x", …)`` is
+#: MISSED, because a false retired name flags a healthy closure and under-reporting is at least visible.
 _DIFF_ID = re.compile(r'^[-+]\s*id="([a-z0-9][a-z0-9-]*)"', re.M)
 
 
-# ---------------------------------------------------------------------------
-# Vocabulary harvest
-# ---------------------------------------------------------------------------
+# ── Vocabulary harvest ─────────────────────────────────────────────────────
 
 def _python_files(src_root: Path):
-    """Every Python file under `src_root`, skipping `src/cg/` and caches.
-
-    The skip test is applied to the path RELATIVE to `src_root`, never the absolute one: a checkout
-    that happens to live under any directory named `cg` would otherwise skip the entire tree and
-    return nothing, which reads as "no rungs exist" rather than as a broken walk."""
+    """The skip test runs on the path RELATIVE to `src_root`: a checkout living under any directory
+    named `cg` would otherwise return nothing, which reads as "no rungs exist"."""
     src_root = Path(src_root)
     for path in sorted(src_root.rglob("*.py")):
         if any(part in _SKIP_DIRS for part in path.relative_to(src_root).parts):
@@ -149,8 +71,7 @@ def _python_files(src_root: Path):
 
 
 def _rel(path: Path) -> str:
-    """Repo-relative posix path where possible, absolute posix otherwise — `src_root` is a public
-    parameter and may legitimately point at a fixture tree outside the repo."""
+    """Absolute posix when outside the repo: `src_root` may point at a fixture tree."""
     try:
         return path.relative_to(REPO).as_posix()
     except ValueError:
@@ -158,16 +79,8 @@ def _rel(path: Path) -> str:
 
 
 def harvest_ids(src_root: Path, ctor: str) -> dict:
-    """``{id: [path, …]}`` for every ``<ctor>(id="…")`` call under `src_root`, definition sites in
-    walk order.
-
-    AST, not grep: a constructor call is a syntactic fact, and the alternative (`grep 'id="…"'`)
-    over-counts by 15 on this tree — it cannot tell a `Hypothesis` id from a `SoundRule` one, which
-    is precisely the distinction that decides whether a token is a live rung or a retired one.
-
-    Every site is kept rather than the first, so the positive control can assert what it actually
-    claims — `use-acceleration` is live **once** — instead of merely asserting the key is present.
-    """
+    """``{id: [path, …]}`` per ``<ctor>(id="…")`` call. AST, not grep: a grep cannot tell a
+    `Hypothesis` id from a `SoundRule` one. EVERY site is kept, so the control can assert a count."""
     out = {}
     for path in _python_files(src_root):
         try:
@@ -198,9 +111,7 @@ def _git(repo: Path, *args):
 
 
 def git_history_available(repo: Path = REPO) -> bool:
-    """True when this checkout carries enough history to re-derive the retired vocabulary.
-
-    Both halves matter: a shallow clone has one commit (CI), and even a full clone of a *fork* might
+    """Both halves matter: a shallow clone has one commit (CI), and a fork's full clone may still
     not carry the two pinned sweep revisions."""
     shallow = _git(repo, "rev-parse", "--is-shallow-repository")
     if shallow is None or shallow.strip() != "false":
@@ -210,21 +121,16 @@ def git_history_available(repo: Path = REPO) -> bool:
 
 
 def historical_rung_ids(repo: Path = REPO) -> set | None:
-    """Every id that has EVER been written as ``id="…"`` on its own line in a `src/` Python file.
-
-    ``sound_rules.py`` is excluded by pathspec rather than subtracted afterwards: its ids are live
-    Sound Rules, and a subtraction would only hide them while they are live — the moment one is
-    renamed it would re-appear as a phantom "retired rung"."""
+    """``sound_rules.py`` is excluded by PATHSPEC, never subtracted afterwards: a subtraction hides
+    its ids only while they are live, so a rename resurfaces one as a phantom "retired rung"."""
     out = _git(repo, "log", "--all", "--pretty=format:", "-p", "--",
                "src/*.py", ":(exclude)src/common/sound_rules.py")
     return set(_DIFF_ID.findall(out)) if out else None
 
 
 def sweep_retired_ids(repo: Path = REPO) -> set | None:
-    """The four decider sweeps' ``RETIRED``/``ZEROED`` names, read out of git history by AST.
-
-    AST rather than a regex over the blob so a re-formatted tuple (or one built as ``RETIRED +
-    (...)``, which `attach`'s ``ZEROED`` is) still reads correctly."""
+    """AST rather than a regex over the blob, so a re-formatted tuple — or one built as
+    ``RETIRED + (...)``, which `attach`'s ``ZEROED`` is — still reads correctly."""
     names = set()
     for rev, path, targets in SWEEP_RETIRED_SOURCES:
         blob = _git(repo, "show", f"{rev}:{path}")
@@ -297,11 +203,8 @@ def build_vocabulary(repo: Path = REPO, src_root: Path | None = None) -> dict:
 
 
 def load_vocabulary(path: Path = DEFAULT_VOCABULARY, src_root: Path = DEFAULT_SRC) -> Vocabulary:
-    """The committed snapshot, re-based on TODAY's `src/`.
-
-    The live half is always re-harvested, never read from the file. The retired half is the snapshot
-    PLUS anything that was live at capture and is not live now — which is how a rung deleted after
-    the last refresh is caught on a checkout with no git history."""
+    """The live half is always RE-HARVESTED; the retired half is the snapshot plus anything live at
+    capture and not live now, which catches a post-refresh deletion with no git history."""
     doc = json.loads(Path(path).read_text(encoding="utf-8"))
     live = set(harvest_ids(src_root, "Hypothesis"))
     sound = set(harvest_ids(src_root, "SoundRule"))
@@ -312,16 +215,11 @@ def load_vocabulary(path: Path = DEFAULT_VOCABULARY, src_root: Path = DEFAULT_SR
                                   "sweep_retired": sorted(doc.get("sweep_retired", ()))})
 
 
-# ---------------------------------------------------------------------------
-# Reading a review note
-# ---------------------------------------------------------------------------
+# ── Reading a review note ──────────────────────────────────────────────────
 
 def rung_tokens(note: str) -> list:
-    """The hyphenated candidate tokens in a review note, lowercased and de-duplicated, in order.
-
-    Lowercasing the haystack (not the pattern) is deliberate: rung ids are lowercase by convention,
-    and a note that opens a sentence with `Attack-last` or writes `Single-frame` should tokenize the
-    same way as one that does not."""
+    """The HAYSTACK is lowercased, not the pattern, so a note opening a sentence with `Attack-last`
+    tokenizes like one that does not."""
     seen, out = set(), []
     for token in RUNG_TOKEN.findall((note or "").lower()):
         if token not in seen:
@@ -347,9 +245,7 @@ def classify_note(note: str, vocab: Vocabulary) -> Reference:
                      retired=tuple(buckets["retired"]), unresolved=tuple(buckets[None]))
 
 
-# ---------------------------------------------------------------------------
-# The audit
-# ---------------------------------------------------------------------------
+# ── The audit ──────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class StaleEntry:
@@ -376,10 +272,8 @@ def stale_entries(reviewed: dict, vocab: Vocabulary) -> list:
 
 
 def allowlist_form(entries) -> dict:
-    """``{ledger key: [dead rung, …]}`` — the committed shape.
-
-    Keyed by entry AND carrying the rungs, so re-closing an entry against a *second* dead rung is a
-    change the allowlist notices. A bare key list would have called that green."""
+    """Carries the RUNGS as well as the key, so re-closing an entry against a second dead rung is a
+    change the allowlist notices; a bare key list would call that green."""
     return {e.key: list(e.dead) for e in sorted(entries, key=lambda e: e.key)}
 
 
@@ -392,23 +286,11 @@ def unresolved_tally(reviewed: dict, vocab: Vocabulary) -> Counter:
     return tally
 
 
-# ---------------------------------------------------------------------------
-# "what the rule became" — the column that lets a developer rule quickly
-# ---------------------------------------------------------------------------
+# ── "what the rule became" — the column that lets a developer rule quickly ──
 
 def fold_map_targets(rungs, src_root: Path = DEFAULT_SRC) -> dict:
-    """``{rung: "what it became"}`` for the rungs given, straight out of `tools.rung_registry.FOLDED`.
-
-    Empty string when the registry does not carry the rung. That is a real answer — a rung deleted with
-    no record kept — and it is better than inventing a target.
-
-    **This used to parse the prose fold maps** (a ~130-line heuristic: docstring-bullet splitting, an
-    abbreviation leg for `baseline_energy`'s ``concentrate / build-active / power-up …`` shorthand, a
-    four-key ranking to stop a live signal docstring out-bidding the real fold map, and a documented
-    limitation where 2 of 25 cells ran on into the next table row). `FOLDED` is that same information as
-    DATA, checked by `tests/test_rung_registry.py`, so the parser and every one of its edge cases are
-    gone. `src_root` is kept in the signature because callers pass it; the answer no longer depends on it.
-    """
+    """``{rung: "what it became"}`` from `tools.rung_registry.FOLDED`; empty string where the registry
+    carries no record, which beats inventing a target. `src_root` is vestigial — callers pass it."""
     from tools.rung_registry import FOLDED
 
     out = {}
@@ -418,15 +300,10 @@ def fold_map_targets(rungs, src_root: Path = DEFAULT_SRC) -> dict:
     return out
 
 
-# ---------------------------------------------------------------------------
-# The generated worklist (ADR-0114 decision 4)
-# ---------------------------------------------------------------------------
+# ── The generated worklist (ADR-0114 decision 4) ───────────────────────────
 
-#: The frames Issue #238 named by hand, kept so the generated report can RECONCILE against them
-#: (acceptance criterion 5). This is data about the ISSUE, not about the codebase — the audit never
-#: consults it to decide anything. The body's 13 and the three `refuted` re-reads are already ledger
-#: keys; the comment's 14 are Decision-Gate Frame Keys (`<ep>|<seat>|decision|<frame>`), whose ledger
-#: key is `<ep>-<frame>`.
+#: Data about the ISSUE, not the codebase: the report RECONCILES against these, and nothing consults
+#: them to decide anything. `ISSUE_238_COMMENT_14` holds Frame Keys, the other two ledger keys.
 ISSUE_238_BODY_13 = ("81903490-27", "81903490-49", "81904451-50", "81904451-6", "81905522-47",
                      "81906131-25", "82524455-27", "82750161-59", "82752045-80", "82752045-97",
                      "82756664-74", "83007714-7", "83116501-89")
@@ -553,9 +430,7 @@ def render_report(entries, vocab: Vocabulary, reviewed: dict, src_root: Path = D
     return "\n".join(out)
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+# ── CLI ────────────────────────────────────────────────────────────────────
 
 def _json(doc) -> str:
     """`ensure_ascii=False` so the `_note` fields keep their real em dashes, matching
@@ -564,15 +439,8 @@ def _json(doc) -> str:
 
 
 def _write_lf(path: Path, text: str) -> None:
-    """LF-framed UTF-8 bytes. `Path.write_text` frames per the WRITING platform, and these files are
-    committed — dev is Windows, the grader is Linux, so the framing is chosen rather than inherited
-    (the same defect `gates.write_json_artifact` documents at length).
-
-    Not `gates.write_json_artifact` itself, for three reasons that each rule it out: this writer also
-    emits Markdown, it keeps the trailing newline those files carry, and `gates` is the *gate* module
-    — ADR-0114 decision 5 is precisely that a ledger rule does not live behind a Correction-keyed
-    gate function. It is the third LF writer in the repo and the duplication is real; what it must
-    never become is a writer that frames newlines differently from the other two."""
+    """LF-framed: `Path.write_text` frames per the WRITING platform and these files are committed.
+    It must never come to frame newlines differently from the repo's other two LF writers."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
 

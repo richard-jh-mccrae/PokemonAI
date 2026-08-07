@@ -1,61 +1,14 @@
 """Issue #225 — the four remaining visible-state damage-scaler families are priced.
 
-Four attacks in the pool scale on board state the **Damage Formula** did not measure, so each read at
-its printed base. Attack 425 read at **zero damage**, which is not an under-read but a blind spot: an
-attack the oracle says deals nothing is an attack no line ever considers.
+Four attacks scale on board state the Damage Formula did not measure, so each read at its printed
+base; attack 425 read at ZERO, a blind spot rather than an under-read. The four, by attackId:
+120 Teal Mask Ogerpon ex `both_active_energy`, 390 Mamoswine ex `atk_bench_stage2`,
+292 Azelf `def_counters_all`, 425 Dudunsparce ex `def_ex_in_play` (printed `60×`, base 0).
 
-| attack | card | printed text (verified, data/EN_Card_Data.csv + src/cgpy/defs/attack_data.json) | variable |
-|---|---|---|---|
-| 120 | 96 Teal Mask Ogerpon ex | "does 30 more damage for each Energy attached to **both Active Pokémon**" | `both_active_energy` |
-| 390 | 283 Mamoswine ex | "does 40 more damage for each **Stage 2** Pokémon on your Bench" | `atk_bench_stage2` |
-| 292 | 217 Azelf | "does 10 more damage for each damage counter on **all** of your opponent's Pokémon" | `def_counters_all` |
-| 425 | 306 Dudunsparce ex | "does **60 damage for each** of your opponent's Pokémon {ex} in play" (printed `60×`, base 0) | `def_ex_in_play` |
-
-**Provenance, stated plainly.** All four SHIPPED as TEXT-VERIFIED, not engine-fitted. ADR-0083 §2
-requires that a *fit* may only claim a variable the sweep controls and records, and its Consequences
-priced these four at "a sweep capability each"; the defect that rule exists to prevent is a REGEX
-naming a plausible variable no measurement supports (Skeledirge's bench scaler fitted as `atk_hand`).
-Neither half of that failure mode is in play here: each entry is one human reading one card's own
-printed sentence into one `attackId`, which is the same seam and the same discipline
-`effect_overrides.json` already uses for clauses the probe cannot reach. What is NOT tolerable is
-leaving 425 priced at zero while waiting for a defender-side sweep driver.
-
-**Two of the four are now ENGINE-FITTED** (Issue #275): 120 and 425 were measured on the widened
-axes and both fits REPRODUCED the human reading exactly, so no shipped value moved — the debt was
-paid, not overruled. `SHIPPED` below is unchanged for that reason, and `attack_overrides.json` came
-back byte-identical from the regeneration. 390 and 292 remain text-verified, still owed by the two
-DEFERRED axes; see the corpus-status note at the bottom for why measuring them buys nothing today.
-
-**The debt has an OWNER: Issue #275** (ratified by the user 2026-08-01 — ship these, file the
-measurement). It is not a TODO in a docstring: #275 builds the two axes that can actually separate
-these variables, and it scopes them to the two cards a corpus could ever see. Two findings shape it,
-recorded here because they are the reason the gap existed rather than an oversight:
-
-  * **The harness as it stood would CONFIRM the wrong answer for 425 — but not the way POC-T1 wrote
-    it down.** Its recorded claim was that the defender panel is `{ex}`-BLIND, so the attack
-    measures 0 and fits nothing. Driving the engine says the opposite, and the real situation is
-    worse: the panel is `{ex}`-**SATURATED**. `_panel_body` and `bench_fodder` both rank by highest HP, and the
-    eight highest-HP eligible basics in the pool are all Mega Pokemon ex — which ARE Pokemon ex
-    (`docs/rulebook.txt` Appendix 1, which is why `src/cgpy/damage.py` counts `ex or megaEx`). So
-    `audit_attack(425)` deals **120**, not 0, against card 1056 Mega Zygarde ex, `def_ex_in_play` is
-    perfectly COLLINEAR with `def_bench`, and a fit names `def_bench`/60 — 60 damage per ordinary
-    Basic on the opponent's bench, invented. Separating them needs a MATCHED non-`{ex}` control at
-    the same bench count (Issue #275, REQ-AUDIT-0021); the best non-`{ex}` eligible basic is 251
-    Regigigas at 160 HP.
-  * **120 is unfittable on the current axes at all.** With the defender holding no Energy,
-    `both_active_energy` and `atk_active_energy` are indistinguishable under every point the sweep
-    can produce; separating them needs the defender-attach axis ADR-0083 §3's joining rule assumes
-    (REQ-AUDIT-0020).
-
-**Corpus status** (the issue's own bar — a corpus example or a recorded absence):
-  * **96 Teal Mask Ogerpon ex** — live meta. 12 `artifact.json` dossiers at inclusion 1.0, and 32
-    occurrences across two `mega_starmie` correction runs including in `active` and `bench`. Real.
-  * **306 Dudunsparce ex** — 3 dossiers; in the corpus only in `deck`/`hand`, never on the board. So
-    it is meta-real but has no frame in which its damage was ever priced.
-  * **283 Mamoswine ex** and **217 Azelf** — **PROVABLY ABSENT** from every shipped deck, every
-    dossier, every Brief and every correction frame. Their pricing rests on the card text alone and
-    no corpus gate can see it. That is the situation ADR-0083 already recorded for Skeledirge, and it
-    is stated here for the same reason: papering over it would make the gate look stronger than it is.
+All four shipped TEXT-VERIFIED against `data/EN_Card_Data.csv`; 120 and 425 were later ENGINE-FITTED
+(Issue #275) and both fits reproduced the human reading exactly, so no shipped value moved. 390 and
+292 stay unfittable on the current axes, and 283/217 are provably absent from every shipped deck,
+dossier, Brief and correction frame — their pricing rests on the card text alone.
 """
 import json
 from pathlib import Path
@@ -81,11 +34,8 @@ SHIPPED = {
 
 
 def _atk(aid, damage):
-    """The attack record AS THE SHIPPED PROVIDER BUILDS IT — printed damage plus the override's
-    scaler. `DictCardStatProvider` takes records directly and so does not run `build_attack_stats`'s
-    override pass; stamping `SHIPPED` here keeps this fixture equal to production by construction,
-    and `test_all_four_families_are_shipped_with_their_printed_per_unit` pins `SHIPPED` against the
-    real table so the two cannot drift."""
+    """The attack record AS THE SHIPPED PROVIDER BUILDS IT — printed damage plus the override's scaler.
+    `DictCardStatProvider` takes records directly, so it never runs `build_attack_stats`'s override pass."""
     var, per_unit = SHIPPED[aid]
     return AttackStat(aid, damage=damage, cost=2, scaleVar=var, scalePerUnit=per_unit)
 
@@ -103,25 +53,8 @@ def _defender(cid=1):
 # ── the shipped table ─────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-SCALER-0001")
 def test_all_four_families_are_shipped_with_their_printed_per_unit():
-    """The last line of defence for four HUMAN RULINGS, and the failure message has to say so.
-
-    Each of these four was read off one card's own printed sentence and cross-checked against
-    `data/EN_Card_Data.csv` and `src/cgpy/defs/attack_data.json`. Two of them — 120 and 425 — have
-    since been MEASURED on Issue #275's widened axes and the engine agreed with the reading, so the
-    values here are now corroborated twice rather than once.
-
-    That does NOT relax this test, because both are still unfittable on the NARROW axes: the panel's
-    vanilla defender is a Mega Pokemon ex, making `def_ex_in_play` collinear with `def_bench`, and it
-    holds no Energy, making `both_active_energy` indistinguishable from `atk_active_energy`. A run
-    that drops the matched non-{ex} control or the defender-attach sweep still derives the wrong
-    variable for each.
-
-    So if this goes red, the fix is essentially never to update `SHIPPED`. `merge_provenance`'s
-    REQ-PROV-0008 guard exists to stop a contradicting fit — or a NARROWER run's overwrite — reaching
-    the table at all; a red here means either that guard was bypassed (`--rule`) or the table was
-    hand-edited, and in both cases the question to answer is which reading of the card is right — not
-    which number makes the test green again.
-    """
+    """The last line of defence for four HUMAN RULINGS. If this goes red the fix is essentially never to
+    update `SHIPPED`: re-read the card, then fix whatever wrote the table."""
     overrides = json.loads((REPO / "src" / "common" / "attack_overrides.json").read_text(
         encoding="utf-8"))
     for aid, (var, per_unit) in SHIPPED.items():
@@ -140,16 +73,8 @@ def test_all_four_families_are_shipped_with_their_printed_per_unit():
 
 @pytest.mark.req("REQ-SCALER-0001")
 def test_the_oracle_reads_each_variable_as_a_plain_context_key():
-    """ADR-0083 §4's rule, held for these four: every variable name IS a context key, so the oracle
-    stays one dict lookup per scaler.
-
-    The vocabulary HAS since grown a filtered-count form (ADR-0115, Issue #361 — see
-    `tests/strategy/test_filtered_count_scalers.py`), and this test is what says these four did not
-    move onto it. The split is CLOSED vs OPEN predicates: a stage, a rule box and a damage counter
-    are finite engine-known facts that a flat name states in full, while "has 'Koffing' in its name"
-    takes an arbitrary argument that a name could only state by hardcoding a card list. Migrating
-    these four is explicitly out of scope of that ruling — they work, they are corpus-ruled, and
-    moving them would move the damage oracle for attacks Issue #361 was not about."""
+    """ADR-0083 §4: every variable name IS a context key, so the oracle stays one dict lookup per
+    scaler. These four did not move onto ADR-0115's filtered-count form — explicitly out of its scope."""
     dfn = _defender()
     for aid, (var, per_unit) in SHIPPED.items():
         stat = AttackStat(aid, damage=0, cost=2, scaleVar=var, scalePerUnit=per_unit)
@@ -201,10 +126,8 @@ def pilot():
 
 @pytest.mark.req("REQ-SCALER-0002")
 def test_both_active_energy_is_symmetric_across_the_two_Actives(pilot):
-    """The second member of the `both_` direction class ADR-0083 §4 opened — and the card §4 named.
-    The sum is direction-symmetric, so ONE key is right whichever side attacks: measured from my
-    seat and from theirs it reads the same number, which is what makes the no-mirroring rule sound
-    rather than merely convenient."""
+    """The sum is direction-symmetric, so ONE key is right whichever side attacks — which is what makes
+    the no-mirroring rule sound rather than merely convenient."""
     obs = _board(my_active=_body(OGERPON, energies=3), opp_active=_body(1, energies=2))
     mine = _pilot_ctx(pilot, obs)
     theirs = _pilot_ctx(pilot, obs, attacker_is_me=False)
@@ -229,8 +152,7 @@ def test_atk_bench_stage2_counts_only_stage_2_bodies_and_only_mine(pilot):
 @pytest.mark.req("REQ-SCALER-0004")
 def test_def_counters_all_reads_every_body_not_the_Active_alone(pilot):
     """The variable that makes this a DIFFERENT family from `def_counters`: it sums damage counters
-    across their whole board. A read that stopped at the Active would price Neurokinesis at a
-    fraction of what it hits for on a chipped board."""
+    across their whole board, not the Active alone."""
     obs = _board(my_active=_body(AZELF),
                  opp_active=_body(1, hp=70, max_hp=100),          # 3 counters
                  opp_bench=[_body(1, hp=50, max_hp=100),           # 5
@@ -244,11 +166,8 @@ def test_def_counters_all_reads_every_body_not_the_Active_alone(pilot):
 
 @pytest.mark.req("REQ-SCALER-0005")
 def test_def_ex_in_play_prices_an_attack_that_read_as_ZERO(pilot):
-    """The printed value is `60×` with a base of 0 — the engine record carries `damage: 0` and no
-    parser in the tree reads a `×`-suffixed form (`parse_attack_damage_bounds` takes an int and its
-    bonus regex carries an explicit `(?! for each)`). So before this entry Tenacious Tail computed to
-    zero under EVERY bound, which is not an under-read: an attack the oracle says deals nothing is an
-    attack no line ever considers."""
+    """The printed value is `60×` with a base of 0 and no parser in the tree reads a `×`-suffixed form,
+    so before this entry Tenacious Tail computed to zero under EVERY bound."""
     obs = _board(my_active=_body(DUDUNSPARCE),
                  opp_active=_body(2), opp_bench=[_body(2), _body(1)])
     ctx = _pilot_ctx(pilot, obs)
@@ -262,9 +181,8 @@ def test_def_ex_in_play_prices_an_attack_that_read_as_ZERO(pilot):
 
 @pytest.mark.req("REQ-SCALER-0006")
 def test_the_filtered_counts_fail_closed_on_an_unresolvable_body(pilot):
-    """`atk_bench_stage2` counts MY bench, so an over-read inflates MY damage — the direction that
-    manufactures a phantom lethal, the one error the Lethal Solver may never make. An unknown card
-    is therefore not counted. `def_ex_in_play` fails the same way for the same reason."""
+    """`atk_bench_stage2` counts MY bench, so an over-read manufactures a phantom lethal — the one error
+    the Lethal Solver may never make. `def_ex_in_play` fails the same way for the same reason."""
     obs = _board(my_active=_body(MAMOSWINE), my_bench=[_body(999999), _body(3)],
                  opp_active=_body(999999), opp_bench=[_body(2)])
     ctx = _pilot_ctx(pilot, obs)
@@ -296,16 +214,8 @@ def _ids_in_json(paths) -> set[int]:
 
 
 def _ids_in_corrections(_paths=()) -> set[int]:
-    """Card ids across every committed correction FRAME.
-
-    Read through `tests/corpus_helpers.corpus_index()` — THE Corpus Reader — never by globbing
-    `data/corrections/*/corrections.jsonl` (ADR-0087 decision 1 / ADR-0089; enforced by
-    `tests/train/test_corpus_readers.py`). Verified equivalent to the raw walk it replaces: both
-    reach 372 records and the same 273 distinct card ids, including both positive controls.
-
-    Both halves of a record are walked. `obs` is the board and `decision` is what the agent was
-    offered, and a card that appears only in the offered options is still a card the corpus can see.
-    """
+    """Card ids across every committed correction FRAME, through `corpus_helpers.corpus_index()` — THE
+    Corpus Reader. Both halves of a record are walked: the board `obs` and the offered `decision`."""
     from corpus_helpers import corpus_index
 
     found: set[int] = set()
@@ -324,23 +234,13 @@ def _deck_ids(paths) -> set[int]:
 
 
 def _briefs_naming(paths, name: str) -> list[str]:
-    """Brief filenames whose text mentions ``name``.
-
-    Briefs reference cards in PROSE, never by id — read at source rather than assumed:
-    `src/common/scouting/briefs/*.json` carry `slug`, `covers`, `summary` and `threats[].card`, and
-    every card reference in them is a printed NAME. An id walk over a Brief returns the EMPTY SET,
-    so reusing the id search here would have made this half of the assertion vacuous while looking
-    exactly like the half that works.
-    """
+    """Brief filenames whose text mentions ``name``. Briefs reference cards in PROSE, never by id, so an
+    id walk over a Brief returns the EMPTY SET — reusing the id search here would be vacuous."""
     return [p.name for p in paths if name.lower() in p.read_text(encoding="utf-8").lower()]
 
 
-#: Every store this test reads, as ``(label, paths, loader, controls)``: the loader turns the files
-#: into whatever the store keys cards BY, and `controls` are the cards that MUST be found in it.
-#: Stated as data so the docstring's claim and the assertion cannot drift apart again — the test
-#: used to check `artifact.json` and `deck.csv` only while claiming "every Brief and every
-#: correction frame" too (Issue #275). Every store carries its own positive control, because a
-#: negative result read off an instrument nobody proved was working is not a negative result.
+#: Every store this test reads, as ``(label, paths, loader, controls)``. Stated as data so the
+#: docstring's claim and the assertion cannot drift apart; every store carries its own control.
 _BRIEFS = tuple(sorted((REPO / "src" / "common" / "scouting" / "briefs").glob("*.json")))
 _ID_STORES = (
     ("artifact.json", (REPO / "src" / "common" / "scouting" / "artifact.json",), _ids_in_json,
@@ -352,34 +252,16 @@ _ID_STORES = (
     ("correction frames", (REPO / "data" / "corrections",), _ids_in_corrections,
      (OGERPON, DUDUNSPARCE)),
 )
-#: The Brief store, keyed by printed NAME. 96 Teal Mask Ogerpon ex is deliberately NOT the control
-#: here: it appears in no Brief, so using it would be a control that cannot fire. 306 Dudunsparce ex
-#: does (2 Briefs), which is what proves the search works before its silence is believed.
+#: The Brief store, keyed by printed NAME. Dudunsparce ex is the control rather than Ogerpon ex:
+#: Ogerpon appears in no Brief, so it would be a control that cannot fire.
 _BRIEF_NAMES = {OGERPON: "Teal Mask Ogerpon", DUDUNSPARCE: "Dudunsparce",
                 MAMOSWINE: "Mamoswine", AZELF: "Azelf"}
 
 
 @pytest.mark.req("REQ-SCALER-0007")
 def test_the_corpus_status_of_each_card_is_what_the_issue_recorded():
-    """The issue's bar is "a corpus example OR a recorded absence", so the absence is ASSERTED — a
-    claim nobody re-checks is a claim that rots. If 283 or 217 ever enters a shipped deck, a
-    dossier, a Brief or a correction frame this fails, which is exactly when "no gate can see it"
-    stops being true.
-
-    **Widened to match its own docstring** (Issue #275). It asserted `artifact.json` and `deck.csv`
-    while claiming "every Brief and every correction frame" too: both halves were true, but only one
-    was protected from rot — and the unprotected half is the one a meta shift moves first.
-
-    The correction-frame half goes through `tests/corpus_helpers.corpus_index()` rather than a glob
-    (ADR-0087 decision 1) — eleven near-identical private corpus walkers is the defect that contract
-    exists to prevent, and `tests/train/test_corpus_readers.py` fails on a twelfth.
-
-    Each store is checked with a POSITIVE CONTROL, and the controls are not interchangeable: the id
-    stores are keyed on `cardId`/`id` while Briefs name cards in prose, so the same search over both
-    would come back empty from the Brief half and read as a clean absence. 306 Dudunsparce ex is the
-    Brief control precisely because 96 Teal Mask Ogerpon ex appears in NO Brief and so cannot fire
-    one.
-    """
+    """The issue's bar is "a corpus example OR a recorded absence", so the absence is ASSERTED. Each
+    store carries a POSITIVE CONTROL, and the controls are not interchangeable across keyspaces."""
     found: dict[str, set[int]] = {}
     for label, paths, load, controls in _ID_STORES:
         assert controls, f"{label}: declares no positive control, so its silence proves nothing"

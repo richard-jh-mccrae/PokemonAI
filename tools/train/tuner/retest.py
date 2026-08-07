@@ -18,9 +18,8 @@ _ACTIVE, _BENCH = 4, 5
 
 
 def _body_sig(obs, option):
-    """The interchangeability signature — ``(card_id, energies, hp)`` — of the in-play Pokémon an
-    option targets, or ``None`` when the option does not resolve to a board body (a hand/deck/effect
-    option never matches by body). Two options with the SAME signature are indistinguishable picks."""
+    """``(card_id, energies, hp)`` of the in-play Pokémon an option targets; two options with the
+    SAME signature are indistinguishable picks. ``None`` for anything not a board body."""
     try:
         area, idx = option.get("area"), option.get("index")
         if area not in (_ACTIVE, _BENCH):
@@ -38,12 +37,8 @@ def _body_sig(obs, option):
 
 
 def _is_fixed(correct, chosen_after, obs):
-    """Whether the blunder is resolved: every ``correct`` slot is now chosen, OR the agent chose an
-    option targeting a board body INDISTINGUISHABLE from it (same card + attached energy + HP). The
-    body reconciliation is the duplicate-species case — f75 offers two byte-identical bench Riolus,
-    so picking either satisfies the doctrine (the strict-index bar re-flagged the equally-valid twin).
-    An energized copy vs a bare one differ in ``energies`` → NOT interchangeable, so the guard never
-    masks a real positional miss. ``None`` when the Correction names no ``correct`` (ADR-0049)."""
+    """Every ``correct`` slot chosen, or a body INDISTINGUISHABLE from it — an energized copy differs
+    in ``energies``, so this never masks a positional miss. ``None`` when there is no ``correct``."""
     if not correct:
         return None
     if not chosen_after:
@@ -65,13 +60,8 @@ def _is_fixed(correct, chosen_after, obs):
 
 
 def retest(correction, pilot, *, tier: int = 0) -> dict:
-    """Diff the decision at this Correction's state: live ``before`` vs re-derived ``after``.
-
-    ``fixed`` is True when every ``correct`` position is now chosen (or an indistinguishable
-    duplicate-species twin of it — see ``_is_fixed``), and **None when the Correction names no
-    ``correct``** — a prose-only scoped Correction (ADR-0049) asserts nothing to check, so there is
-    nothing to be fixed. Other fields degrade to None when ``obs``/``live_trace`` are absent.
-    """
+    """``fixed`` is None where the Correction names no ``correct``: a prose-only scoped Correction
+    asserts nothing to check. Other fields degrade to None when ``obs``/``live_trace`` are absent."""
     before = correction.live_trace
     after = to_record(pilot.explain(correction.obs), tier=tier) if correction.obs is not None else None
     chosen_after = after["chosen"] if after else None
@@ -84,8 +74,8 @@ def retest(correction, pilot, *, tier: int = 0) -> dict:
         "correct": list(correction.correct),
         "margin_before": (before or {}).get("margin"),
         "margin_after": after["margin"] if after else None,
-        # Layer verdicts (ADR-0030/0031), lifted so a solver/planner fix's proof is one glance —
-        # when either is non-null, scoring did NOT drive that side's pick (pilot returns early).
+        # Layer verdicts (ADR-0030/0031): when either is non-null, scoring did NOT drive that
+        # side's pick — the pilot returned early.
         "lethal_before": (before or {}).get("lethal"),
         "lethal_after": after.get("lethal") if after else None,
         "planned_before": (before or {}).get("planned"),
@@ -95,16 +85,8 @@ def retest(correction, pilot, *, tier: int = 0) -> dict:
 
 
 def retest_span(correction, pilot, *, tier: int = 0) -> dict:
-    """Re-drive a scoped Correction's Span under ``pilot``, up to the first divergence (ADR-0049).
-
-    Each Span Decision that carries an ``obs`` is re-derived and its ``chosen`` compared to the line
-    the agent actually played. The **first** Decision where they differ is the divergence: from there
-    on the recorded ``obs`` describe a board the candidate Pilot would never have reached, so those
-    steps are reported ``off_policy`` and never re-driven — the walker refuses to guess.
-
-    A Match Correction's Span holds per-Turn headers with no ``obs``: nothing to re-drive, so
-    ``steps`` is empty. That is the honest answer, and why a match blunder's gate is the ladder.
-    """
+    """Up to the FIRST divergence (ADR-0049): past it the recorded ``obs`` describe a board this
+    Pilot would never have reached, so those steps report ``off_policy`` and are never re-driven."""
     span = correction.span or []
     steps, first = [], None
     for entry in span:

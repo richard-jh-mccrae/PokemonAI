@@ -1,13 +1,9 @@
-"""The played-well-lost view over lost games (S3a design §D6).
+"""The played-well-lost view over lost games (S3a §D6).
 
-A *lost* (not drawn) game for a seat is **played-well-lost** iff, after full triage over that seat's
-own MAIN decisions and counterfactual confirmation of every triage hit ≥ ``theta_triage``, no
-confirmed blunder with ΔV ≥ θ exists — the deck lost on dice/matchup, not on doctrine. Triage is the
-cheap full-coverage screen that makes "zero flags" claimable without forking every frame.
-
-This is a REPORT, never Corrections: a high clean-loss rate in a matchup is a doctrine/matchup-table
-signal for the human and WP6's rotation loop, not a weight signal. Opponent identity is the true
-``TeamNames`` (evaluation stratification only — never a training input, per S2a §D1).
+A lost game is **played-well-lost** for a seat iff full triage over its own MAIN decisions plus
+counterfactual confirmation of every hit >= ``theta_triage`` leaves no confirmed blunder with
+ΔV >= θ. A REPORT, never Corrections: a high clean-loss rate is a doctrine/matchup signal for the
+human and WP6's rotation loop, not a weight signal.
 """
 from __future__ import annotations
 
@@ -27,8 +23,6 @@ def _as_getter(pilot_or_getter):
 
 
 def _confirm(pilot, prompt_obs, decision, model, theta):
-    """Counterfactually confirm a triage hit: fork the option menu, judge the recorded pick vs the
-    expert's best. Returns the disagreement (with ``delta``) or None."""
     select = prompt_obs.get("select")
     if not (isinstance(select, dict) and is_single_pick(select)):
         return None
@@ -39,9 +33,7 @@ def _confirm(pilot, prompt_obs, decision, model, theta):
 
 
 def assess_replay(pilot_or_getter, replay: dict, model, theta: float, theta_triage: float) -> list[dict]:
-    """One played-well-lost record per LOSING seat of ``replay`` (empty on a draw — no loss to
-    assess). Each: ``{episode_id, seat, agent, opponent, n_decisions, n_triage_hits, n_confirmed,
-    max_confirmed_delta, verdict}`` where verdict is ``clean`` (played-well-lost) or ``blundered``."""
+    """One played-well-lost record per LOSING seat; empty on a draw. Verdict ``clean`` or ``blundered``."""
     winner = winner_index(replay)
     if winner is None:                                 # a draw carries no loss (the simulator's delta)
         return []
@@ -78,8 +70,7 @@ def assess_replay(pilot_or_getter, replay: dict, model, theta: float, theta_tria
 
 
 def aggregate(assessments) -> dict:
-    """Clean-loss rate per ``agent vs opponent`` — how often each deck lost WITHOUT a confirmed
-    blunder (losing on dice/matchup, not doctrine)."""
+    """Clean-loss rate per ``agent vs opponent`` — losses with no confirmed blunder behind them."""
     from collections import defaultdict
 
     agg: dict = defaultdict(lambda: {"losses": 0, "clean": 0})

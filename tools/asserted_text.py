@@ -1,23 +1,10 @@
-"""Extract the source text and docstring literals that the SUITE asserts, so a cleanup cannot delete them.
+"""Extract the source text and docstring literals the SUITE asserts, so a cleanup cannot delete them.
 
-The 2026-08-07 audit found the suite reads source *text* in dozens of places — `inspect.getsource`,
-`__doc__`, `read_text()` — and asserts substrings over it. A comment reduction that treats all prose
-as free-to-cut turns those red. Worse, the hazard runs BOTH ways:
+The hazard runs BOTH ways: a REQUIRED literal (`assert "working()" in ...__doc__`) must survive,
+and a FORBIDDEN one (`assert "off_policy" not in getsource(...)`) must not be introduced by a
+rewrite. Derived rather than hand-listed, so it cannot drift.
 
-* **REQUIRED** — `assert "working()" in sv.attack_ev_legs.__doc__`. The literal must survive.
-* **FORBIDDEN** — `assert "off_policy" not in inspect.getsource(gates.decision_gate_verdict)`.
-  Deleting prose is safe; a REWRITE that introduces the word turns the suite red for no code change.
-
-Derived rather than hand-listed, so it cannot drift: a hand-copied roster would be a second source of
-truth about the tests, which is the failure this whole effort exists to end.
-
-    python -m tools.asserted_text            # human-readable
-    python -m tools.asserted_text --json     # for the reduction pass
-
-Detection is a local dataflow inside each test function: variables bound from a source-reading call
-are tracked, then every `in` / `not in` comparison against one of them (or against such a call
-directly) contributes its string literal.
-"""
+    python -m tools.asserted_text [--json]"""
 from __future__ import annotations
 
 import argparse

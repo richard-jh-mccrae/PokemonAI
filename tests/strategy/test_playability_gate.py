@@ -1,30 +1,11 @@
 """Backward line topology — a hand card that can NEVER be played must cover no slot (Issue #288,
-ADR-0104; the term-sufficiency audit's F12).
+ADR-0104).
 
-`development.line_topology` asks the FORWARD question (is this line's payoff still reachable?).
-Nothing asked the mirror one: is this hand card's own PRE-EVOLUTION still reachable? Without it the
-needs assignment happily hands a slot to a card that can never leave the hand — `slowking` runs 2×
-Metagross (Stage 2, ``evolvesFrom`` **Metang**, id 276, 170 HP — verified at
-``data/EN_Card_Data.csv``) with **no Metang and no Beldum** on the list, and an engine evolution
-covers the `draw_engine` slot at the engine tier even with every copy of its base in the discard.
-
-The engine half of that was written on `grimmsnarl_ex`'s Snorunt -> Froslass and re-pointed at
-`slowking`'s Slowpoke -> Slowking when PR #436 deleted the deck (2026-08-06). Two consequences are
-named where they bite rather than papered over: the `engine` Role is now the FIXTURE's declaration
-(`_engine_pilot`), because no surviving shipped deck declares it on an evolution; and the Rare
-Candy escape lost its last shipped-deck instance, because no surviving deck runs Rare Candy.
-
-Two halves, tested here together because the gate is only sound if both hold:
-
-  * ``common.playability`` — the pure oracle. Backward reachability over ``CardStat.evolvesFrom``
-    NAMES against three zones (in play / hand / the sound "not provably gone" deck read), walked to
-    full CHAIN depth, with the Rare Candy escape (a Stage 2 may skip its Stage 1 onto the root
-    Basic — card text verified at ``data/EN_Card_Data.csv`` id 1079) and fail-OPEN epistemics
-    (*unreadable is not unplayable*).
-  * ``pilot._resolve_needs`` — the consumer. An unplayable row supplies NO slot of ANY kind, which
-    is strictly more than the shipped ``deploy`` factor did: that factor zeroes the VALUE of the
-    slots keyed on the card itself (`line`, `general`), but left the row ELIGIBLE for every shared
-    slot — so a dead Froslass both covered the draw need and RAISED its price.
+Two halves, tested together because the gate is only sound if both hold: ``common.playability`` (the
+pure oracle — backward reachability over ``CardStat.evolvesFrom`` NAMES against in play / hand / the
+"not provably gone" deck read, to full CHAIN depth, with the Rare Candy escape and fail-OPEN
+epistemics) and ``pilot._resolve_needs`` (the consumer — an unplayable row supplies NO slot of ANY
+kind, where the shipped ``deploy`` factor only zeroed the value of the card's own slots).
 """
 from __future__ import annotations
 
@@ -98,8 +79,7 @@ def test_an_evolution_is_playable_from_any_one_of_the_three_zones():
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_the_walk_is_the_whole_chain_not_one_hop():
     """A Metang in HAND does not make a Metagross playable when every Beldum is gone: the Metang
-    itself can never reach the board, so neither can what sits on top of it. The one-hop reading
-    the audit's cheapest-fix line describes would call this playable."""
+    itself can never reach the board, so neither can what sits on top of it."""
     assert _playable(METAGROSS, deck=[BELDUM, METANG])
     assert _playable(METAGROSS, in_play=[METANG])          # the Stage 1 is already down
     assert not _playable(METAGROSS, hand=[METANG])         # ...but a HELD one still needs a Beldum
@@ -108,9 +88,8 @@ def test_the_walk_is_the_whole_chain_not_one_hop():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_an_unresolvable_previous_stage_fails_open():
-    """*Unreadable is not unplayable.* An evolution whose ``evolvesFrom`` names a card the pool
-    holds no printing of makes no claim either way, so it keeps its eligibility — the same fail
-    direction `gate_library.deploy_odds` documents."""
+    """*Unreadable is not unplayable.* An ``evolvesFrom`` the pool holds no printing of makes no
+    claim either way, so the card keeps its eligibility."""
     stats = DictCardStatProvider({
         METAGROSS: CardStat(METAGROSS, name="Metagross", hp=170, evolvesFrom="Metang", stage2=True),
     })                                             # no Metang printing at all
@@ -119,12 +98,8 @@ def test_an_unresolvable_previous_stage_fails_open():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_rare_candy_keeps_a_stage_two_alive_over_a_dead_stage_one():
-    """Rare Candy (Item, id 1079 — *"Choose 1 of your Basic Pokémon in play. If you have a Stage 2
-    card in your hand that evolves from that Pokémon, put that card onto the Basic Pokémon to
-    evolve it, skipping the Stage 1"*, verified at data/EN_Card_Data.csv) means a missing Stage 1
-    does NOT prove a Stage 2 dead. Without the escape this is the gate's own false-positive, and
-    `grimmsnarl_ex` — 1 Rare Candy + the Marnie's Impidimp -> Morgrem -> Grimmsnarl ex line — is a
-    SHIPPED deck that can reach it."""
+    """Rare Candy (id 1079) puts a Stage 2 onto a Basic, skipping the Stage 1, so a missing Stage 1
+    does NOT prove a Stage 2 dead. Without the escape this is the gate's own false positive."""
     assert _playable(METAGROSS, in_play=[BELDUM], candy=True)
     assert _playable(METAGROSS, deck=[BELDUM], candy=True)
     assert not _playable(METAGROSS, in_play=[BELDUM], candy=False)
@@ -134,10 +109,8 @@ def test_rare_candy_keeps_a_stage_two_alive_over_a_dead_stage_one():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_the_rare_candy_root_must_actually_be_a_basic():
-    """The card says *"Choose 1 of your **Basic** Pokémon in play"*. Reading the root as "whatever is
-    two hops down" would fire the escape on a body Rare Candy cannot legally target, so the root is
-    confirmed to evolve from nothing. Shown on a synthetic four-stage chain — no real line is this
-    deep, which is exactly why an assumption here would never be caught by a shipped deck."""
+    """The card says *"Choose 1 of your **Basic** Pokémon in play"*, so the root must evolve from
+    nothing. Shown on a synthetic four-stage chain — no real line is this deep."""
     stats = DictCardStatProvider({
         1: CardStat(1, synthetic=True, name="Root", hp=60),
         2: CardStat(2, synthetic=True, name="S1", hp=80, evolvesFrom="Root"),
@@ -153,9 +126,8 @@ def test_the_rare_candy_root_must_actually_be_a_basic():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_the_shipped_tag_table_marks_exactly_the_rare_candy_card():
-    """The tag replaced `planner._RARE_CANDY_ID`, so the two must not silently diverge: card 1079
-    carries it and nothing else does. A second tagged card would widen the escape for every deck at
-    once, which is the kind of change that should fail a test rather than pass unnoticed."""
+    """The tag replaced `planner._RARE_CANDY_ID`, so the two must not silently diverge: a second
+    tagged card would widen the escape for every deck at once."""
     table = CardFunctions.load()
     tagged = {cid for cid in range(1, 2000)
               if playability.RARE_CANDY_TAG in set(table.tags(cid))}
@@ -164,10 +136,8 @@ def test_the_shipped_tag_table_marks_exactly_the_rare_candy_card():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_an_unreadable_tag_table_is_not_a_missing_rare_candy():
-    """`Zones.rare_candy` is TRI-STATE. ``False`` means *provably no Rare Candy*; ``None`` means the
-    caller had no Function Tag table to ask. Collapsing the second into the first would let the gate
-    call a Stage 2 dead on the strength of a fact it never checked — and, because the oracle has two
-    callers, would have them fail in opposite directions on the same missing table."""
+    """`Zones.rare_candy` is TRI-STATE: ``False`` is *provably no Rare Candy*, ``None`` is *no
+    Function Tag table to ask*. Collapsing them calls a Stage 2 dead on a fact never checked."""
     stats = _pool()
     assert not _playable(METAGROSS, in_play=[BELDUM], candy=False, stats=stats)
     assert _playable(METAGROSS, in_play=[BELDUM], candy=None, stats=stats)
@@ -177,15 +147,8 @@ def test_an_unreadable_tag_table_is_not_a_missing_rare_candy():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_a_setup_only_opener_is_still_unplayable_from_hand():
-    """The `opener` route is deliberately NOT an escape. Cinderace (id 666, Stage 2, `evolvesFrom`
-    Raboot) carries Explosiveness — *"If this Pokémon is in your hand when you are setting up to
-    play, you may put it face down in the Active Spot"* (verified at data/EN_Card_Data.csv) — and
-    `mega_starmie` runs 4 with no Raboot on the list.
-
-    That route reaches only the ACTIVE spot, only during Set Up, before any consumer of this oracle
-    runs; every site that asks is one a setup-only opener genuinely cannot reach. So the shipped
-    verdict stands, and the rung built on it (`dont-fetch-the-setup-only-opener`: *"in hand it is a
-    dead card"*) keeps its premise."""
+    """The `opener` route (Cinderace's Explosiveness) is deliberately NOT an escape: it reaches only
+    the ACTIVE spot, only during Set Up, before any consumer of this oracle runs."""
     pilot = _agent_pilot("mega_starmie")
     assert 666 in pilot._stranded_evolution_set()
     rows, _slots, elig = _slots_for(pilot, _obs([666], active=1030))   # 1030 = Staryu
@@ -242,16 +205,8 @@ def _agent_pilot(agent: str):
 
 
 def _slowking_pilot(deck_extra=(), roles=None):
-    """`slowking` has no authored ``strategy.py`` (it is Issue #149's validation deck, not an agent),
-    so its Pilot is built here from the committed 60-card ``deck.csv`` plus the win-condition roles
-    a strategy would declare for Metagross. Those roles are the point: without them the line slot
-    carries no worth and the defect the audit found cannot be shown at all.
-
-    ``roles`` REPLACES that overlay for the engine-side cases below. Both halves of the Role table
-    are the fixture's, not a shipped declaration, and the docstrings that use them say so — the
-    alternative is not a more honest test, it is no test, because after PR #436 deleted
-    `grimmsnarl_ex` (2026-08-06) NO shipped deck declares the `engine` Role on an evolution, which
-    is the only shape the engine leg of the gate can bite."""
+    """`slowking` has no authored ``strategy.py``, so its Pilot is built from the committed
+    ``deck.csv`` plus the roles a strategy would declare; ``roles`` REPLACES that overlay."""
     from common.runtime import build_pilot
     agent_dir = REPO / "src" / "agents" / "slowking"
     deck = [int(x) for x in (agent_dir / "deck.csv").read_text(encoding="utf-8").splitlines()[:60] if x.strip()]
@@ -262,27 +217,15 @@ def _slowking_pilot(deck_extra=(), roles=None):
 
 
 def _engine_pilot():
-    """The engine-leg fixture: `slowking`'s committed list — 4× Slowpoke -> 3× Slowking, 4× Lillie's
-    Determination — with the `engine` Role DECLARED on Slowking so the evolution is an engine BODY
-    and Lillie's is the engine SUPPORTER beside it. That is exactly the two-tier shape the band
-    reads off (`ROLE_TIER["engine"]` = the body tier, `_ENGINE_SUPPORTER_KEEP` = the supporter one),
-    and it is the shape `grimmsnarl_ex`'s Snorunt -> Froslass + Naveen carried before the deck was
-    deleted.
-
-    Said plainly, because the Role is the load-bearing part: Slowking's own text is *Seek
-    Inspiration*, an attack, NOT a draw ability — the `engine` Role here is the FIXTURE's
-    declaration standing in for the one a doctrine would make, the same licence `_slowking_pilot`
-    already takes with Metagross. The multi-copy base is why this deck and not another: the
-    "one copy still unseen" direction needs a base the discard can partly, not wholly, account for,
-    and `dragapult_ex`'s Dudunsparce engine runs a SINGLE Dunsparce."""
+    """The `engine` Role on Slowking is the FIXTURE's declaration, not a shipped one — no surviving
+    deck declares it on an evolution, which is the only shape the engine leg of the gate can bite."""
     return _slowking_pilot(roles={SLOWKING: ["engine"]})
 
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_slowkings_metagross_covers_no_slot_but_one_with_a_metang_does():
-    """The audit's headline case. `slowking`'s list holds 2× Metagross and neither Metang nor
-    Beldum, so a held Metagross is a 170-HP card that can never be played — it must supply NOTHING.
-    Swap a Metang onto the list and the same card, on the same board, is live again."""
+    """`slowking`'s list holds 2× Metagross and neither Metang nor Beldum, so a held Metagross can
+    never be played. Swap a Metang onto the list and the same card, same board, is live again."""
     dead = _slowking_pilot()
     rows, _slots, elig = _slots_for(dead, _obs([METAGROSS], active=SLOWPOKE))
     assert rows and any(r["cid"] == METAGROSS for r in rows)
@@ -297,13 +240,8 @@ def test_slowkings_metagross_covers_no_slot_but_one_with_a_metang_does():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_a_base_in_the_discard_with_a_copy_still_unseen_stays_eligible():
-    """Soundness, the direction that matters: the deck read is *not provably gone*, never *seen*.
-    Three of `slowking`'s four Slowpoke in the discard leaves one unseen (deck or a face-down
-    prize), so the held Slowking is still a live engine and keeps its slot.
-
-    The Active is Kyurem, a Basic on no evolution line, precisely so the base is absent from PLAY —
-    a Slowpoke Active would make the Slowking playable for a reason that has nothing to do with the
-    deck read this test is about."""
+    """The deck read is *not provably gone*, never *seen*. The Active is Kyurem (a Basic on no line)
+    precisely so the base is absent from PLAY and only the deck read can keep the Slowking alive."""
     pilot = _engine_pilot()
     rows, slots, elig = _slots_for(pilot, _obs([SLOWKING], active=KYUREM,
                                                discard=[SLOWPOKE] * 3))
@@ -313,16 +251,8 @@ def test_a_base_in_the_discard_with_a_copy_still_unseen_stays_eligible():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_a_stranded_engine_neither_covers_the_draw_need_nor_raises_its_price():
-    """The live defect. With all four Slowpoke in the discard a held Slowking can never be played —
-    yet it used to (a) cover the `draw_engine` slot, so the REAL draw Supporter beside it priced at
-    0 and shed for free, and (b) set that slot's band to the engine-BODY tier (12) instead of the
-    engine-supporter band (8), because the band reads off the eligible rows. Both are gone: the slot
-    prices as if the dead body were not in hand at all.
-
-    Written against `grimmsnarl_ex`'s Snorunt -> Froslass + Naveen and re-pointed at `slowking`'s
-    Slowpoke -> Slowking + Lillie's Determination when PR #436 deleted that deck (2026-08-06). Same
-    two-tier shape, same two assertions; see `_engine_pilot` for what the fixture declares and why
-    it has to."""
+    """An unplayable engine body used to cover the `draw_engine` slot — so the REAL draw Supporter
+    priced at 0 and shed for free — and to set that slot's band to the engine-BODY tier."""
     pilot = _engine_pilot()
     gone = [SLOWPOKE] * 4
     rows, slots, elig = _slots_for(pilot, _obs([SLOWKING, LILLIES], active=KYUREM, discard=gone))
@@ -333,8 +263,7 @@ def test_a_stranded_engine_neither_covers_the_draw_need_nor_raises_its_price():
     supporter_row = next(k for k, r in enumerate(rows) if r["cid"] == LILLIES)
     assert engine[0] in elig[supporter_row], "the real draw Supporter still covers the draw need"
 
-    # and the Supporter's keep-value is the one a lone Supporter earns — the dead body no longer
-    # covers the need out from under it, nor inflates what covering it is worth.
+    # the Supporter's keep-value is the one a LONE Supporter earns
     solo = _engine_pilot()
     _r2, s2, _e2 = _slots_for(solo, _obs([LILLIES], active=KYUREM, discard=gone))
     band = next(s.value for s in s2 if s.kind == "draw_engine")
@@ -342,9 +271,8 @@ def test_a_stranded_engine_neither_covers_the_draw_need_nor_raises_its_price():
     resupply = [0.0] * len(slots)
     assert needs.keep_v2(slots, elig, resupply, supporter_row) == pytest.approx(band)
 
-    # The positive control the two assertions above need: with the base still reachable the SAME
-    # board prices the need at the strictly higher engine-BODY band. Without this a gate that simply
-    # stopped emitting an engine need at all would satisfy every assertion above.
+    # Positive control: with the base reachable the SAME board prices the need at the higher
+    # engine-BODY band, so a gate that stopped emitting the need at all cannot pass.
     live = _engine_pilot()
     _r3, s3, e3 = _slots_for(live, _obs([SLOWKING, LILLIES], active=KYUREM, discard=[SLOWPOKE] * 3))
     body_band = next(s.value for s in s3 if s.kind == "draw_engine")
@@ -354,11 +282,8 @@ def test_a_stranded_engine_neither_covers_the_draw_need_nor_raises_its_price():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_the_dragapult_inversion_no_longer_prefers_the_stranded_engine_over_its_base():
-    """The measured priority inversion `dont-strand-the-evolving-engine` was built for
-    (`dragapult_ex` STRATEGY.md §6): Dudunsparce is `card_is_support`, Dunsparce is not, so the
-    fetch doctrine preferred the Stage-1 engine over the Basic that enables it. The deck runs ONE
-    Dunsparce — discard it and the resolver must stop pricing the Dudunsparce as coverage, while a
-    held Dunsparce keeps every slot it had."""
+    """The inversion `dont-strand-the-evolving-engine` was built for: Dudunsparce is
+    `card_is_support` and Dunsparce is not, so the fetch doctrine preferred the engine over its base."""
     pilot = _agent_pilot("dragapult_ex")
     rows, _slots, elig = _slots_for(
         pilot, _obs([DUDUNSPARCE, DREEPY], active=DREEPY, discard=[DUNSPARCE]))
@@ -368,10 +293,8 @@ def test_the_dragapult_inversion_no_longer_prefers_the_stranded_engine_over_its_
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_basics_and_trainers_are_untouched_by_the_gate():
-    """Regression: the gate may only ever bite an evolution. A held Basic (Dreepy, the
-    win-condition line's base) and a held Trainer (Lillie's Determination, the draw engine) resolve
-    to exactly the slots they did before it existed — on the very board that strips the Dudunsparce
-    beside them, so the gate is provably firing and provably not touching these two."""
+    """The gate may only ever bite an evolution — asserted on the very board that strips the
+    Dudunsparce beside them, so the gate is provably firing and provably not touching these two."""
     pilot = _agent_pilot("dragapult_ex")
     obs = _obs([DREEPY, LILLIES, DUDUNSPARCE], active=MUNKIDORI, discard=[DUNSPARCE])
     rows, slots, elig = _slots_for(pilot, obs)
@@ -382,18 +305,8 @@ def test_basics_and_trainers_are_untouched_by_the_gate():
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_rare_candy_in_hand_keeps_the_stage_two_wincon_eligible():
-    """The false positive the one-hop reading of the spec would have shipped, driven through the
-    RESOLVER rather than the pure oracle. A Beldum in play and no Metang anywhere: the held
-    Metagross is still playable — onto that Beldum, skipping the Stage 1 — so the gate must NOT
-    strip it, and with the Candy gone the same board DOES.
-
-    This was `grimmsnarl_ex`'s 1 Rare Candy + Marnie's Impidimp -> Morgrem -> Grimmsnarl ex until
-    PR #436 deleted the deck (2026-08-06), and it could NOT be re-pointed at a survivor: **no
-    shipped deck runs Rare Candy at all** any more (checked across all five `deck.csv`), so the one
-    Candy and the one Beldum are added to `slowking`'s committed list here. That is a real loss of
-    altitude and worth naming — the escape now has no shipped-deck instance at either layer, only
-    `test_rare_candy_keeps_a_stage_two_alive_over_a_dead_stage_one` on the synthetic pool above and
-    this fixture-fed resolver case."""
+    """The one-hop reading's false positive, driven through the RESOLVER. No shipped deck runs Rare
+    Candy any more, so the Candy and the Beldum are added to `slowking`'s committed list here."""
     pilot = _slowking_pilot(deck_extra=(RARE_CANDY, BELDUM))
     rows, _slots, elig = _slots_for(
         pilot, _obs([METAGROSS, RARE_CANDY], active=BELDUM))
@@ -413,23 +326,15 @@ def test_rare_candy_in_hand_keeps_the_stage_two_wincon_eligible():
     ("mega_starmie", frozenset({666})),          # Cinderace, with no Raboot on the list
 ])
 def test_the_deck_static_stranded_set_is_unchanged_on_every_shipped_deck(agent, expected):
-    """`_stranded_evolution_set` now walks the SAME oracle rather than its own private copy of the
-    recursion. That consolidation also gives it the Rare Candy escape it never had — a real fix, and
-    provably a silent one here: no shipped deck holds both a Rare Candy and a stranded evolution, so
-    all three answers are byte-identical to the ones the private walk gave.
-
-    Three, not four: `grimmsnarl_ex` (which answered the empty set) was deleted by PR #436
-    (2026-08-06). Only the AUTHORED decks are walked — the parameters are the agents with a
-    `strategy.py`, which is what `_agent_pilot` loads — so `hydrapple` and `slowking` are absent
-    here for the same reason they were before, not as fallout from that deletion."""
+    """`_stranded_evolution_set` walks the SAME oracle rather than a private copy of the recursion,
+    which also gives it the Rare Candy escape. Only AUTHORED decks (those with a `strategy.py`)."""
     assert _agent_pilot(agent)._stranded_evolution_set() == expected
 
 
 @pytest.mark.req("REQ-NEEDS-0017")
 def test_the_stranded_set_honours_rare_candy():
-    """The latent bug the consolidation fixes: a deck whose Stage 1 is absent but which runs Rare
-    Candy can still play its Stage 2, so that card is NOT stranded. Shown on a synthetic list
-    because no shipped deck is shaped this way."""
+    """A deck whose Stage 1 is absent but which runs Rare Candy can still play its Stage 2. Shown on
+    a synthetic list because no shipped deck is shaped this way."""
     stats = _pool()
     deck = [BELDUM] * 4 + [METAGROSS] * 4 + [SLOWPOKE] * 52
     stranded = Pilot(Strategy(), deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,

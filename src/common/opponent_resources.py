@@ -1,18 +1,8 @@
-"""Opponent Resources — the opponent-side mirror of the own-deck models (ADR-0047).
+"""Opponent Resources — the opponent-side mirror of the own-deck models (ADR-0047): stateless
+``copies_left_odds`` (mirrors ``deck_odds``) plus the match-scoped ``OpponentResourceModel`` (mirrors
+``deck_tracker``). The asymmetry: their HAND is hidden, so it joins prizes in the non-deck pool.
 
-The **Resources** subsystem of the Opponent Model facade (`opponent_model.OpponentModel`). Two parts,
-mirroring the own side exactly:
-
-- ``copies_left_odds`` — the *stateless, probabilistic* estimate (the opponent-side ``deck_odds``): given
-  the Read's representative-build prior, P(the opponent's deck still holds ≥1 copy of a card). The key
-  asymmetry vs the own side is that the opponent's HAND is hidden (only ``handCount`` is known), so an
-  unseen copy may sit in their deck, prizes, OR hand — hand joins prizes in the hidden non-deck pool.
-- ``OpponentResourceModel`` — the *match-scoped* cross-turn tracker (the opponent-side ``deck_tracker``):
-  the SOUND/observed signals (deck-count trajectory → deck-out timing, hand-size delta, discard dumps,
-  KOs taken) that a single snapshot can't give.
-
-Pure / lib-free; **never raises** (grader safety) and every estimate **fails OPEN** — it never suppresses
-a real line on a missing read (the ADR-0047 sound-or-silent contract).
+Pure / lib-free; **never raises** and every estimate **fails OPEN**.
 """
 from __future__ import annotations
 
@@ -25,12 +15,7 @@ from .board_cards import body_card_ids, card_id as _card_id
 
 def opp_visible_counts(opp: dict) -> Counter:
     """The opponent's cards provably OUTSIDE their deck+prizes+hand — a ``{cardId: count}`` multiset.
-
-    Visible = their discard, every board Pokémon (its id + attached Energy/Tools + stacked
-    pre-evolutions) and any FACE-UP prize. Their HAND is deliberately excluded: we only know its size
-    (``handCount``), not its contents, so a copy that could be in hand stays *unseen* (and joins the
-    hidden non-deck pool in ``copies_left_odds``). Never raises.
-    """
+    Their HAND is deliberately excluded: only its size is known. Never raises."""
     c: Counter = Counter()
     try:
         for entry in (opp.get("discard") or []):
@@ -51,23 +36,8 @@ def opp_visible_counts(opp: dict) -> Counter:
 
 
 def copies_left_odds(rep_build, opp: dict) -> dict[int, float]:
-    """P(the opponent's deck still holds ≥1 copy) for every card in the representative-build prior.
-
-    The opponent-side analog of ``deck_odds.contains_odds``: split each card's unseen copies
-    (``rep_build`` count − visible) over the opponent's hidden non-deck pool. Because the opponent's
-    hand is hidden, that pool is **prizes + hand** (a card not in deck is in a prize *or* the hand), so
-    ``prizes_hidden`` passed to the hypergeometric is ``face-down prizes + handCount``.
-
-    Args:
-        rep_build: the confident archetype's representative build — a ``{cardId: count}`` mapping or an
-            iterable of card ids (a 60-card multiset); ``Counter`` is applied to an iterable.
-        opp: the opponent player dict (``deckCount`` / ``handCount`` / ``prize`` / board / ``discard``).
-
-    Returns:
-        ``{cardId: P(deck holds ≥1)}`` over the build. Fails OPEN — any bad input collapses to the
-        conservative ``1.0`` ("assume present"), exactly like ``deck_odds`` (never stand a line down on
-        a guess).
-    """
+    """``{cardId: P(deck holds ≥1)}`` over ``rep_build``. The hidden non-deck pool handed to the
+    hypergeometric is ``face-down prizes + handCount``, since their hand is hidden. Fails OPEN."""
     try:
         decklist = rep_build if isinstance(rep_build, dict) else Counter(int(c) for c in rep_build)
         visible = opp_visible_counts(opp)
@@ -82,25 +52,13 @@ def copies_left_odds(rep_build, opp: dict) -> dict[int, float]:
 
 
 class OpponentResourceModel:
-    """The opponent-side cross-turn tracker — the SOUND/observed Resources signals a single snapshot
-    can't give (the opponent-side ``deck_tracker.OwnCardModel``).
-
-    Feed every observation to :meth:`observe`; read the properties. Match-scoped: resets on the
-    deck-submission step (no ``select``) and on the turn counter going backwards (the local self-play
-    harness reuses one process; the grader forks per match). Pure / lib-free; :meth:`observe` never
-    raises. Estimates fail OPEN — an unknown value is ``None`` (the consumer does nothing), never a
-    fabricated number.
-
-    ``observe`` is called once per *decision* (many times per turn). The deltas are therefore computed
-    against the previous **distinct turn**, not the previous decision within a turn; ``took_ko_this_turn``
-    is measured against the start of the current turn.
-    """
+    """The opponent-side cross-turn tracker. ``observe`` is called once per *decision*, so the deltas
+    are against the previous **distinct turn**. Unknown is ``None``, never a fabricated number."""
 
     def __init__(self) -> None:
         self.reset()
 
     def reset(self) -> None:
-        """Forget all match state (a new game began)."""
         self._last_turn: int | None = None
         self._deck: int | None = None
         self._hand: int | None = None
@@ -114,8 +72,7 @@ class OpponentResourceModel:
         self._deck_samples: dict[int, int] = {}  # turn -> opp deckCount (latest that turn)
 
     def observe(self, obs: dict) -> None:
-        """Update from one observation. Never raises: on any error it keeps prior state (never a
-        false certainty, never a crash)."""
+        """Never raises: on any error it keeps prior state."""
         try:
             self._observe(obs)
         except Exception:
@@ -161,61 +118,50 @@ class OpponentResourceModel:
     # -- reads -----------------------------------------------------------------------------------
     @property
     def deck_count(self) -> int | None:
-        """The opponent's current deck size (sound — the latest observed ``deckCount``)."""
         return self._deck
 
     @property
     def hand_size(self) -> int | None:
-        """The opponent's current hand size (sound — the latest observed ``handCount``)."""
         return self._hand
 
     @property
     def hand_size_delta(self) -> int | None:
-        """Change in the opponent's hand size since the previous distinct turn (a big positive jump =
-        they drew/tailored a large hand); None until a prior turn is known."""
+        """Since the previous distinct turn; None until a prior turn is known."""
         if self._hand is None or self._prev_hand is None:
             return None
         return self._hand - self._prev_hand
 
     @property
     def discard_delta(self) -> int | None:
-        """Growth of the opponent's discard pile since the previous distinct turn; None until known."""
+        """Since the previous distinct turn; None until known."""
         if self._discard is None or self._prev_discard is None:
             return None
         return self._discard - self._prev_discard
 
     @property
     def last_turn_dumped(self) -> bool:
-        """Coarse proxy for an Ultra-Ball-class discard-cost play last turn: the opponent's discard grew
-        by ≥2 since the previous distinct turn. A conservative signal (the consuming proposal refines it
-        with a real discard-cost card fact); fails to False when unknown."""
+        """Coarse proxy for an Ultra-Ball-class discard-cost play last turn; False when unknown."""
         d = self.discard_delta
         return bool(d is not None and d >= 2)
 
     @property
     def took_ko_this_turn(self) -> bool:
-        """Did I take a prize (i.e. a KO) during the current turn — my prize pile shrank since the turn
-        started. Sound whenever it fires; False when unknown (never a false certainty)."""
+        """My prize pile shrank since the turn started. False when unknown."""
         return bool(self._turn_start_my_prizes is not None and self._my_prizes is not None
                     and self._my_prizes < self._turn_start_my_prizes)
 
     @property
     def my_pokemon_koed_last_turn(self) -> bool:
-        """Did the OPPONENT take ≥1 prize between the start of my previous distinct turn and the
-        start of the current one — i.e. one of MY Pokémon was Knocked Out during their last turn
-        (Unfair Stamp's own play condition; the attacker takes prize cards from their OWN pile on a
-        KO, rules.md §6). Sound-when-fired up to one rare edge: a self-recoil KO during my OWN turn
-        also lands in the measured interval (fail-open — the engine still legality-gates any actual
-        play). False when unknown."""
+        """The attacker takes prizes from their OWN pile on a KO (rules.md §6), so their pile
+        shrinking means one of MINE was KO'd. Edge: my own self-recoil KO lands here too."""
         return bool(self._prev_turn_start_opp_prizes is not None
                     and self._turn_start_opp_prizes is not None
                     and self._turn_start_opp_prizes < self._prev_turn_start_opp_prizes)
 
     @property
     def deckout_in_turns(self) -> int | None:
-        """Estimated game-turns until the opponent's deck is exhausted, from the observed deck-count
-        trajectory (``deck_count / average decrease per turn``). None until ≥2 distinct-turn samples
-        show a net decrease — an unknown estimate is silent, never fabricated."""
+        """Game-turns until their deck is exhausted, from the observed trajectory. None until ≥2
+        distinct-turn samples show a net decrease."""
         if self._deck is None or len(self._deck_samples) < 2:
             return None
         turns = sorted(self._deck_samples)

@@ -13,9 +13,8 @@ from meta_tracker.probe_restrictions import (
     find_chip_attacker, healed_serials, offered_heal_targets, pick_sturdies,
     restriction_deck, snapshot_board)
 
-# Canonical observation board: damaged Mega on Bench, damaged non-Mega
-# Active, plus undamaged benched body — disambiguates mega_only / active_only /
-# unrestricted in ONE offer.
+# Canonical observation board: it disambiguates mega_only / active_only / unrestricted in ONE
+# offer.
 MEGA_BENCH = {"serial": 11, "mega": True, "active": False, "damaged": True}
 NONMEGA_ACT = {"serial": 21, "mega": False, "active": True, "damaged": True}
 NONMEGA_BENCH = {"serial": 31, "mega": False, "active": False, "damaged": False}

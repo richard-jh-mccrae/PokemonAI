@@ -1,10 +1,4 @@
-"""The unified snipe THREAT RANK (`_target_threat_rank`) + its rules (ADR-0020 follow-up).
-
-Covers what the retired flat priorities (weakest / evolving / strongest-evolving) could not: an
-already-evolved ex attacker seen by its PRINTED damage (the descendants-only forward signal scores it
-0), a line that CERTAINLY reaches a hand-size attacker (a card-fact Posture read, not a meta guess),
-and a benched knockout valued as the prize it is. The b7e483a bad-target blunders.
-"""
+"""The unified snipe THREAT RANK (`_target_threat_rank`) and its rules (ADR-0020 follow-up)."""
 import pytest
 
 from common.cards import CardFunctions
@@ -16,45 +10,28 @@ from pilot_helpers import BENCH, card_opt, make_select, poke, state
 
 
 def _pilot(stats, functions=None, scaled_threat_rank=True):
-    # Both switches ON to match the shipped PROFILE; the constructor defaults are OFF because each is
-    # an incident lever, and a bare Pilot() would silently exercise a retired read.
-    # `scaled_threat_rank` is Issue #213's; `snipe_relevance` is ADR-0085's, and since that ADR's
-    # deletion pass removed the six DAMAGE target rungs there is no additive path left to fall back
-    # on — an unarmed Pilot scores every bench target 0 and the argmax degenerates to option index,
-    # which would make every ordering assertion below pass vacuously.
+    # Both switches ON to match the shipped PROFILE (constructor defaults are OFF). An unarmed Pilot
+    # scores every bench target 0 — ADR-0085 deleted the additive fallback — so orderings go vacuous.
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=functions, scaled_threat_rank=scaled_threat_rank, snipe_relevance=True)
 
 
 def _rank(pilot, obs, index):
-    """One option's THREAT RANK — the instrument these tests are actually about.
-
-    They used to read it off a FIRED hypothesis id (`snipe-the-top-threat`), and ADR-0085 deleted
-    that rung with the other five. The rank itself SURVIVES: `planner.py:_ko_key_threat_lines` ranks
-    the opponent bench with `_body_threat_rank` for the ADR-0031 `ko_key_threat` Goal-Ladder rung
-    (`planner_key_threat`, shipped ON). So the requirement is unchanged and still live — only its
-    reader moved from a snipe rung to the Planner.
-
-    These assertions were deliberately NOT re-pointed at Snipe Relevance. The scalar is CATEGORICAL
-    (ADR-0085 decision 1) and asks *does this body matter to their plan and my route*, not *how big
-    is it*; on these fixtures the opponent bodies carry no Energy, so `their_plan` is 0 for every
-    target and the conjunctive product is 0 for all of them. Asserting a magnitude ordering on an
-    instrument that deliberately does not price magnitude would be testing the wrong thing — this is
-    ADR-0062's wall, which is why the two instruments coexist rather than one subsuming the other.
-    """
+    """Deliberately NOT re-pointed at Snipe Relevance, which is CATEGORICAL (ADR-0085 decision 1) and
+    scores 0 for every target here; the rank's live reader is `planner.py:_ko_key_threat_lines`."""
     select = obs["select"]
     pilot._board(obs, select)      # builds `_opp_attack_context`; the scaling term is 0 without it
     return pilot._target_threat_rank(obs, select, select["option"][index], None, 0.0)
 
 
-_SNIPER = CardStat(700, synthetic=True, name="Sniper", maxDamage=120, attacks=(11,))   # my Active: a 50-snipe rider
-_ATTACKS = {11: AttackStat(11, damage=120, benchSnipe=50)}             # its attack record
+_SNIPER = CardStat(700, synthetic=True, name="Sniper", maxDamage=120, attacks=(11,))
+_ATTACKS = {11: AttackStat(11, damage=120, benchSnipe=50)}
 
 
 @pytest.mark.req("REQ-GEN-0028")
 def test_already_evolved_ex_outranks_a_low_hp_support_body():
-    # Dragapult ex is opponent's main attacker but TERMINAL, so forward_max_damage scores it 0 —
-    # rank must read its OWN printed 200 so it's top threat over a 70-HP support benchsitter.
+    # Dragapult ex is TERMINAL, so the descendants-only `forward_max_damage` scores it 0 — the rank
+    # must read its OWN printed 200.
     stats = DictCardStatProvider({
         700: _SNIPER,
         121: CardStat(121, name="Dragapult ex", hp=320, ex=True, maxDamage=200, evolvesFrom="Drakloak"),
@@ -68,15 +45,8 @@ def test_already_evolved_ex_outranks_a_low_hp_support_body():
 
 @pytest.mark.req("REQ-GEN-0028")
 def test_a_line_that_reaches_a_hand_size_attacker_outranks_a_bigger_raw_damage_line():
-    # The ep82753102 f85 blunder. Alakazam's Powerful Hand has PRINTED damage 0 — its whole threat
-    # lives in the Damage Formula's scaling term (2 counters per card in hand = 20/card), so at a
-    # 7-card hand its line is worth 140 and outranks Dunsparce's line at a printed 90.
-    #
-    # Issue #213 changed the MECHANISM, not the requirement. This used to pass on a flat +500
-    # boost keyed off the `hand_size_attacker` Function Tag, and the fixture stated Alakazam's
-    # damage as a printed 10 with no scaling attack at all — a card fact that is simply false, and
-    # which only went unnoticed because the boost swamped it. The fixture now states the real card,
-    # and `functions=None` proves the rank no longer needs a per-card tag to see the threat.
+    # Alakazam's Powerful Hand has PRINTED damage 0; its threat is entirely the Damage Formula's
+    # scaling term. `functions=None` proves the rank needs no per-card tag to see it (Issue #213).
     attacks = dict(_ATTACKS)
     attacks[1072] = AttackStat(1072, damage=0, cost=1, scaleVar="atk_hand", scalePerUnit=20)
     stats = DictCardStatProvider({
@@ -96,10 +66,8 @@ def test_a_line_that_reaches_a_hand_size_attacker_outranks_a_bigger_raw_damage_l
 
 @pytest.mark.req("REQ-GEN-0028")
 def test_the_rank_generalises_to_a_scaler_no_function_tag_covers():
-    # The generalisation the flat boost could never reach: a COMBINED-BENCH attacker (Lillie's
-    # Clefairy ex / Skeledirge, "+20 for each Benched Pokemon (both yours and your opponent's)")
-    # has no Function Tag and a printed 20. On a populated board it is the real threat, and the
-    # rank sees it for the same reason it sees Alakazam — the Damage Formula, not a special case.
+    # A COMBINED-BENCH scaler ("+20 for each Benched Pokemon, both yours and your opponent's") has no
+    # Function Tag and a printed 20; the rank sees it through the Damage Formula, not a special case.
     attacks = dict(_ATTACKS)
     attacks[371] = AttackStat(371, damage=20, cost=2, scaleVar="both_bench", scalePerUnit=20)
     stats = DictCardStatProvider({
@@ -117,8 +85,7 @@ def test_the_rank_generalises_to_a_scaler_no_function_tag_covers():
 
 @pytest.mark.req("REQ-GEN-0018")
 def test_a_benched_knockout_outranks_a_scarier_chip():
-    # 50-rider KOs a 50-HP body (a prize). Even a far scarier body that can only be CHIPPED is
-    # passed over for the free knockout — snipe-for-the-ko dominates snipe-the-top-threat.
+    # The 50-rider KOs the 50-HP body outright; the scarier body can only be CHIPPED.
     stats = DictCardStatProvider({
         700: _SNIPER,
         121: CardStat(121, name="Dragapult ex", hp=320, ex=True, maxDamage=200, evolvesFrom="Drakloak"),
@@ -127,9 +94,8 @@ def test_a_benched_knockout_outranks_a_scarier_chip():
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
                       current=state(active=poke(700), opp_bench=[poke(121, hp=320), poke(99, hp=50)]))
-    # `snipe-for-the-ko` (+60) is gone with the rest; the free prize is now the STRUCTURAL
-    # `_snipe_ko_dominator` (KO_SCORE-class), which is why it cannot be out-summed by positional
-    # weights the way the +60 rung could (ms 82754241 f45).
+    # The free prize is the STRUCTURAL `_snipe_ko_dominator` (KO_SCORE-class), so no sum of
+    # positional weights can out-vote it the way it could the retired `snipe-for-the-ko` rung.
     from common.strategy.context import KO_SCORE
     board = pilot._board(obs, obs["select"])
     ko_ctx = pilot._context(obs, obs["select"], board, obs["select"]["option"][1])
@@ -152,9 +118,8 @@ def test_forward_card_ids_collects_the_whole_descendant_line():
 
 @pytest.mark.req("REQ-GEN-0028")
 def test_the_kill_switch_off_restores_the_printed_only_read():
-    # The incident lever's contract: OFF is the historical printed-`maxDamage` read, so a scaling
-    # attacker's hidden threat is invisible again and the bigger PRINTED body wins. Pinned in both
-    # directions so the switch can't quietly become a no-op.
+    # OFF is the printed-`maxDamage` read, so the scaler's hidden threat is invisible and the bigger
+    # PRINTED body wins. Asserted in BOTH directions so the switch cannot quietly become a no-op.
     attacks = dict(_ATTACKS)
     attacks[1072] = AttackStat(1072, damage=0, cost=1, scaleVar="atk_hand", scalePerUnit=20)
     stats = DictCardStatProvider({
@@ -172,7 +137,7 @@ def test_the_kill_switch_off_restores_the_printed_only_read():
     off = _pilot(stats, scaled_threat_rank=False)
     assert _rank(on, obs, 0) > _rank(on, obs, 1)                          # Kadabra: latent threat seen
     assert _rank(off, obs, 0) < _rank(off, obs, 1)                        # OFF: bigger printed wins
-    # ...and the pair each read to get there (the damage context is per-decision, so this must be
-    # read AFTER a decision has built it — with no context the scaling term is 0 by design).
+    # The damage context is per-decision, so the pair must be read AFTER a decision has built it —
+    # with no context the scaling term is 0 by design.
     assert on._threat_damage_pair(742, stats.get(742)) == (30.0, 140.0)   # line reaches 20x7
     assert off._threat_damage_pair(742, stats.get(742)) == (30.0, 0.0)    # printed forward index

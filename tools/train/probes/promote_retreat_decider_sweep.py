@@ -1,47 +1,17 @@
-"""Promote/retreat sweep — the per-term DIAGNOSTIC for the no-shadow swap (#141, ADR-0100). **Not a gate.**
+"""Promote/retreat sweep — the per-term DIAGNOSTIC for the no-shadow swap (ADR-0100). **Not a gate.**
 
-The sibling of ``evolve_decider_sweep.py`` / ``attach_decider_sweep.py``: runs the corpus through the
-SHIPPED promote/retreat decider and reports, per frame, what it does, whether that satisfies the
-corpus ruling, and the decider's TERM BREAKDOWN behind the call. The breakdown is why this file
-outlived the gate it used to be — `decider_lab.py` records the decision, never the terms behind it.
+Runs the corpus through the SHIPPED promote/retreat decider and reports what it does per frame,
+whether that satisfies the corpus ruling, and the TERM BREAKDOWN behind the call. Comparison is by
+resolved BODY SLOT, never the raw option index (ADR-0100 §12).
 
-This REPLACES ``tools/train/promote_retreat_sweep.py``, which is not merely stale but unrunnable: it
-reads a `promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0100 decision 2 retires
-both — deleting `stay_forgone` turns the whether-site verdict from a sign test into a per-option
-score, so there is no sign left to agree with.
+Two site families, because the mass lives in both and they compare differently: **pick** (a TO_ACTIVE
+forced promote or a SWITCH retreat destination — ``PROMOTE_LANE``, and the comparison is which BODY)
+and **whether** (a MAIN menu carrying a native RETREAT — a membership test on `chosen`, not a slot).
 
-Comparison is by the resolved BODY SLOT, never the raw option index — two promote options differ only
-in which body they bring up, and the index says nothing about which (ADR-0100 §12).
+    python tools/train/probes/promote_retreat_decider_sweep.py [--all] [--quiet]
 
-Two site families, because the family's mass lives in BOTH and they compare differently:
-
-  * **pick** — a TO_ACTIVE forced promote or a SWITCH retreat destination. The lane is ``PROMOTE_LANE``
-    and the comparison is which BODY the agent picks.
-  * **whether** — a MAIN menu carrying a native RETREAT (or a switch-class Item). The comparison is
-    whether the agent RETREATS at all, which is a membership test on `chosen`, not a slot.
-
-    python tools/train/probes/promote_retreat_decider_sweep.py          # the miss table + the tally
-    python tools/train/probes/promote_retreat_decider_sweep.py --all    # every frame, not only misses
-
-Offline and read-only; one engine-backed Pilot build per frame. Always exits 0: it reports, it does
-not gate.
-
-## Why the OLD arm is GONE (ADR-0085 Amendment J, 2026-07-30)
-
-This probe used to build TWO pilots per frame — NEW (``promote_retreat_value`` ON, the eleven retired
-rungs forced to weight 0) and OLD (``promote_retreat_value`` OFF, the pile at its shipped weights) —
-and classify each disagreement `FIX` / `REGRESSION` / `DIVERGENT`. ADR-0072 called that pairing the
-**Decision Gate**, and at the swap it was right: OLD *was* the incumbent pile.
-
-The deletion commit ended that, as tracker directive 1 requires, and this pile went furthest of the
-four: **`baseline_promote` holds ZERO rungs** — 12 of 12 deleted. So OLD was
-``promote_retreat_value`` OFF over a literally empty scorer, whose argmax falls to option index. The
-probe was not comparing two deciders; it was comparing the shipped decider against the numbers 0, 1,
-2, 3 in order.
-
-Amendment I moved the gate to `tools/train/decider_lab.py diff --baseline
-data/decider_lab/baseline.json`, which diffs against a RECORDED capture. Amendment J removes the dead
-arm here. What remains is the one reading that means something: the shipped agent, against the human.
+Offline and read-only. Always exits 0. The Decision Gate is `decider_lab.py diff --baseline
+data/decider_lab/baseline.json` (ADR-0085 Amendment I).
 """
 from __future__ import annotations
 
@@ -73,16 +43,13 @@ def _names() -> dict:
 
 
 def _frames():
-    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
     from train.probes._corpus import frames
     return frames()
 
 
 
 def _agent(rec) -> str:
-    """The shared replay fallback (`_corpus.replay_agent`). It is no longer papering over a missing
-    `agent` — `from_dict` backfills that from `agent_build` — but it is not cosmetic either: the
-    corpus holds one `SkiChu` record with no agent directory."""
+    """The shared replay fallback — not cosmetic: one corpus record has no agent directory."""
     from train.probes._corpus import replay_agent
     return replay_agent(rec)
 
@@ -98,19 +65,15 @@ def _strategy_and_deck(agent: str):
 
 
 def _pilot(agent: str, *, seams):
-    """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
-    tracker, per-decision caches) and sharing one pollutes verdicts.
-
-    No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
-    deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""
+    """A fresh SHIPPED Pilot per frame — the Pilot is stateful and sharing one pollutes verdicts. No
+    params overridden, no rungs zeroed: a probe reading anything but the PROFILE reports no agent."""
     from common.runtime import build_pilot
     strategy, deck = _strategy_and_deck(agent)
     return build_pilot(strategy, deck, **seams)
 
 
 def _seams():
-    """Build the engine-backed knowledge seams ONCE and inject them into every Pilot — immutable card
-    knowledge, so sharing them is safe where sharing a Pilot is not."""
+    """The knowledge seams, built ONCE — immutable, so sharing them is safe where sharing a Pilot is not."""
     from common.scouting.artifact import load_artifact
     from common.scouting.briefs import load_briefs
     from common.scouting.provider import EngineCardStatProvider
@@ -180,8 +143,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
                            for i in (chosen or []))
             got, cor_v = _retreated(dec.chosen), _retreated(correct)
             # `correct: []` is a recorded DECLINE, not an absent label — it rules "do not retreat",
-            # which `_retreated([])` already reads as False. Only a MISSING `correct` is unlabelled,
-            # which is why this is `is not None` rather than the `bool(correct)` it used to be.
+            # which `_retreated([])` already reads as False. Only a MISSING `correct` is unlabelled.
             labelled = correct is not None
             hit = got == cor_v
         rows = [dict(t.promote_retreat_working,

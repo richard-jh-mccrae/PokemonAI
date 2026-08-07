@@ -26,8 +26,7 @@ DASHBOARD = REPORTS_DIR / "meta_dashboard.html"
 EXPORT_TOP_N = 10            # clusters exported to DECKS_DIR (head of play-rate ranking; ADR-0027)
 
 # --- Rank bands (percentile of the ladder, by participant rating) --------
-# Contiguous over top 50%; episodes below 50th percentile are "lower rated"
-# tier, dropped. (name, low_pct_inclusive, high_pct_exclusive).
+# Top 50% only; below that is dropped. (name, low_pct_inclusive, high_pct_exclusive).
 BANDS: list[tuple[str, float, float]] = [
     ("Elite", 0.0, 2.0),
     ("High", 2.0, 10.0),
@@ -50,10 +49,8 @@ MAIN_LINE_MIN_COPIES = 2     # a main line needs >= this many of its top stage
 MAX_MAIN_LINES = 3           # up to three main lines name an archetype
 SETTLED_MIN_EPISODES = 30    # sigma proxy: a submission is "settled" past this
 
-# Consistency / tech "engine" Pokémon that should never *name* an archetype —
-# appear across many decks, win-condition-agnostic. Forced to sub-line
-# (still shown in usage stats). Matched by exact name or "<name> " prefix
-# (so "Fezandipiti" also catches "Fezandipiti ex"). Editable list.
+# Consistency / tech "engine" Pokémon that must never NAME an archetype; forced to sub-line.
+# Matched by exact name or "<name> " prefix (so "Fezandipiti" also catches "Fezandipiti ex").
 ENGINE_POKEMON = {
     "Dudunsparce", "Budew", "Munkidori", "Fezandipiti",
     "Squawkabilly", "Kirlia", "Mimikyu",

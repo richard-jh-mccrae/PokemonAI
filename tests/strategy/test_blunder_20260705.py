@@ -1,10 +1,6 @@
-"""Blunder round 2026-07-05 (mega_lucario) — real-replay regression gates (/blunder-buster).
+"""Blunder round 2026-07-05 (mega_lucario) — real-replay regression gates on setup resource discipline.
 
-All six corrections this round carried the uppercase CRITICAL marker (setup resource discipline).
-Each test replays a captured state through the SHIPPED Pilot (the exact `tune._build_pilot`
-construction, SEED weights — no tuned.json) and pins the fix. Two of these depend on a
-`_finish_turn_last` sequencing THRESHOLD, not a ranking margin (Petrel f27, the undeployable-wincon
-refill f44), so they gate here rather than via the weight fit — see the rule rationales.
+Replayed through the SHIPPED Pilot at SEED weights (no tuned.json).
 """
 import json
 import sys
@@ -35,10 +31,7 @@ def _fired_ids(option):
 
 @pytest.mark.req("REQ-GEN-0068")
 def test_critical_f9_energy_beats_a_redundant_engine_grab_when_starved():
-    """CRITICAL ('we need energy, be sure to fetch it with this'): at a TO_HAND search with Riolu
-    unpowered and no Energy in hand, the agent grabbed a redundant Solrock (engine already down) over
-    the Basic {F} Energy it needed. `fetch-energy-when-starved` (+35) now DOMINATES the engine/starter
-    grabs, so the Energy wins."""
+    """`fetch-energy-when-starved` must DOMINATE the engine/starter grabs at a TO_HAND search."""
     fx = _fixture("ml0705_starved_solrock_f9")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # the Basic {F} Energy
@@ -46,16 +39,8 @@ def test_critical_f9_energy_beats_a_redundant_engine_grab_when_starved():
 
 @pytest.mark.req("REQ-GEN-0069")
 def test_critical_f14_never_play_a_damage_boost_when_it_cannot_attack():
-    """CRITICAL ('must never play Premium Power Pro when unable to attack this turn'): turn-1-going-
-    first with a 0-Energy Riolu and no Energy in hand, the agent played a dead this-turn {F} attack
-    boost over End.
-
-    **Still correct after POC-T4/5 (Issue #386), through a different mechanism.** The rung that
-    carried it — `dont-play-damage-boost-when-cant-attack` (−12) — is deleted, and its assertion is
-    not carried over: it named which rung fired. The fact is EMERGENT under differencing, exactly as
-    Issue #386 §4 predicted for this rung ("a boost that cannot be cashed"): a damage boost on a body
-    that cannot attack this turn changes no end-of-turn board, so the composer prices it at nothing
-    and End wins on its own. The ruled ACTION is what is asserted, and it still holds."""
+    """A boost that cannot be cashed changes no end-of-turn board, so the composer prices it at nothing
+    — EMERGENT since `dont-play-damage-boost-when-cant-attack` was deleted (Issue #386 §4)."""
     fx = _fixture("ml0705_ppp_cant_attack_f14")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # End turn
@@ -68,11 +53,8 @@ def test_critical_f14_never_play_a_damage_boost_when_it_cannot_attack():
 @pytest.mark.req("REQ-GEN-0070")
 @pytest.mark.xfail(strict=True, reason=marks("ml0705_petrel_over_lillies_f27")[0].kwargs["reason"])
 def test_critical_f27_refresh_wins_the_supporter_slot_over_a_needless_tutor():
-    """CRITICAL ('used Petrel to grab a supporter that we already have in hand. waste'): both Petrel
-    (narrow Trainer tutor) and Lillie's (refresh) tied at `dig-before-commit` +20, and
-    `_finish_turn_last` sequenced the non-shuffle Petrel (tier 1) ahead of the tier-3 refresh.
-    `demote-needless-search-supporter-in-setup` (−20) neutralises Petrel's dig endorsement so it drops
-    to tier 4, and the refresh — the human's `correct` — wins the mutually-exclusive Supporter slot."""
+    """`demote-needless-search-supporter-in-setup` neutralises the tutor's dig endorsement so the
+    refresh wins the mutually-exclusive Supporter slot."""
     fx = _fixture("ml0705_petrel_over_lillies_f27")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # Lillie's Determination
@@ -83,11 +65,8 @@ def test_critical_f27_refresh_wins_the_supporter_slot_over_a_needless_tutor():
 @pytest.mark.req("REQ-GEN-0047")
 @pytest.mark.xfail(strict=True, reason=marks("ml0705_refill_undeployable_f44")[0].kwargs["reason"])
 def test_critical_f44_refill_when_the_held_wincon_is_undeployable():
-    """CRITICAL ('hand contains mega lucario, we have no riolu in play, thus its worthless … should
-    refill hand'): the agent ended the turn holding a Mega Lucario ex with no Riolu anywhere, because
-    `hold-wincon-dont-shuffle` (−25) wrongly held the dead payoff. Gated on the new
-    `wincon_in_hand_undeployable`, the hold now stands down and the refresh (the human's `correct`) is
-    chosen."""
+    """`hold-wincon-dont-shuffle` stands down on `wincon_in_hand_undeployable` — a held payoff with no
+    base in play is dead weight."""
     fx = _fixture("ml0705_refill_undeployable_f44")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # Play Lillie's Determination
@@ -97,9 +76,7 @@ def test_critical_f44_refill_when_the_held_wincon_is_undeployable():
 
 @pytest.mark.req("REQ-GEN-0068")
 def test_critical_ep2_f14_energy_beats_a_redundant_lunatone_when_starved():
-    """CRITICAL ('we already have lunatone in hand but dont have any energy … only ever need a single
-    lunatone and a single solrock'): the starved-fetch sibling of f9 — the agent grabbed a redundant
-    Lunatone over the Energy. `fetch-energy-when-starved` (+35) now wins."""
+    """The starved-fetch sibling of f9, with a redundant Lunatone as the distractor."""
     fx = _fixture("ml0705_starved_lunatone_f14")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # the Basic {F} Energy
@@ -108,10 +85,7 @@ def test_critical_ep2_f14_energy_beats_a_redundant_lunatone_when_starved():
 @pytest.mark.req("REQ-GEN-0071")
 @pytest.mark.xfail(strict=True, reason=marks("ml0705_ultraball_starved_f17")[0].kwargs["reason"])
 def test_critical_ep2_f17_save_the_costly_tutor_while_starved_and_developed():
-    """CRITICAL ('still just setting up. nothing needs evolving. just save the ultra ball for next
-    turn'): energy-starved with a developed Bench, the agent paid Ultra Ball's two-card discard to
-    tutor a Pokémon it could not use this turn. `dont-costly-tutor-when-starved-and-developed` (−30)
-    nets the play below End — the human's `correct`."""
+    """`dont-costly-tutor-when-starved-and-developed` nets a two-card-discard tutor below End."""
     fx = _fixture("ml0705_ultraball_starved_f17")
     dec = _shipped_pilot().explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # End turn

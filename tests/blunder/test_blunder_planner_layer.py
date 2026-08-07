@@ -40,9 +40,8 @@ def test_proposal_carries_layer_flags():
 
 
 def test_proposal_surfaces_develop_plan_candidates():
-    """The develop rung's ranking rides into the proposal (develop-rung Phase 1 consumer): a
-    sequencing_error correction lands next to the ranked alternatives its committed plan out-scored,
-    so /blunder-buster can tell a mis-ranked leaf from a mis-chosen rung. Sparse: None without them."""
+    """A sequencing_error correction lands next to the ranked alternatives its committed plan
+    out-scored, so /blunder-buster can tell a mis-ranked leaf from a mis-chosen rung."""
     candidates = [{"step": [4], "value": 55.0, "why": "wincon attach", "committed": True},
                   {"step": [0], "value": 30.0, "why": "attack empty bench", "greedy": True}]
     p = propose_hypothesis(_c({"chosen": [0], "planned": {"step": [4], "goal": "develop", "why": "w"},

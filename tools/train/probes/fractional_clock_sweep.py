@@ -1,36 +1,12 @@
-"""Fractional-clock discrimination sweep. **Not a gate.**
+"""Fractional-clock discrimination sweep (ADR-0117). **Not a gate.**
 
-Answers the one question ADR-0117 owes its own change: does reading `turns_to_ko_me`'s crossing
-point fractionally recover REAL discrimination in the opponent-target ranking, or does it merely
-break Flat Ties the way any number of that size would?
-
-The bar is ADR-0118's sham policy, and it applies to this change exactly as it applied to the
-denial credit that change replaced: **a movement number published without its sham baseline is not
-evidence.** So every arm here is reported against a band-matched meaningless leg.
-
-## Arms
-
-    INT    the pre-ADR-0117 ranking — `SurvivalClock.exact` collapsed back to `.turns`.
-           Reconstructed by patching the model route for the duration of the frame, so it is the
-           shipped code path answering the OLD question, not a hand-rebuilt imitation of it.
-    FRAC   the ranking as it now ships.
-    S_cid  sham — (cid % 7), band-matched to FRAC's own measured effect on `value`. No causal claim.
-    S_hp   sham — (hp % 70), same band. No causal claim.
-    S_pos  sham — position index. The degenerate case: a leg that cannot beat LIST ORDER is not
-           ordering anything, and list order is precisely what a Flat Tie falls back to.
-
-Both control kinds are required and are not interchangeable (ADR-0118): the shams prove
-movement is attributable, and the tie-population rows prove WHY the floor is as high as it is.
-
-Scoped BENCH-ONLY by default because that is the seam `gust_target_slot` actually reads — the
-opponent's Active is never a legal gust target, and ranking Active+Bench together lets the Active
-dominate the argmax. `all` is printed beside it for continuity with
-`opponent_target_credit_sweep.py`, whose headline was wrong for exactly that reason.
+Does reading `turns_to_ko_me`'s crossing point fractionally recover REAL discrimination in the
+opponent-target ranking, or does it merely break Flat Ties? INT is the pre-ADR-0117 reading,
+reconstructed by patching the shipped model route rather than rebuilt; the sham arms are ADR-0118's
+mandatory null. Scoped BENCH-ONLY — the opponent's Active is never a legal gust target, and ranking
+both areas lets it dominate the argmax.
 
     python tools/train/probes/fractional_clock_sweep.py
-
-Reads what SHIPS: a fresh stateful Pilot per frame, deployment profile untouched. Offline,
-read-only, always exits 0.
 """
 from __future__ import annotations
 
@@ -77,9 +53,8 @@ def main(argv=None) -> int:
     for key, rec in frames:
         try:
             obs = rec.obs
-            # A FRESH stateful Pilot per arm (the `snipe_decider_sweep` discipline): the two arms
-            # must not share a per-decision memo or any board cache, or the second would answer with
-            # the first's numbers and the comparison would silently be a null control.
+            # A FRESH stateful Pilot per arm: the two must not share a per-decision memo or board
+            # cache, or the second would answer with the first's numbers and prove nothing.
             with _IntegerClock():
                 p_int = tune._build_pilot(replay_agent(rec))[0]
                 before = p_int._opponent_target_rows(obs, p_int._board(obs, obs.get("select") or {}))
@@ -113,8 +88,7 @@ def main(argv=None) -> int:
                 moved[("FRAC", scope)] += 1
             for k, _label in SHAMS:
                 # `opponent_target_value` is LINEAR in `prize_advance`, so adding the sham leg to the
-                # finished value is exactly adding it to that term — one fewer re-derivation to get
-                # wrong, and it keeps the arms differing only by the leg under test.
+                # finished value is exactly adding it to that term — one fewer re-derivation.
                 shammed = [r["value"] + legs(k, band=band, card_id=r["id"],
                                              hp=(r["body"] or {}).get("hp"), index=i, of=len(pre))
                            for i, r in enumerate(pre)]

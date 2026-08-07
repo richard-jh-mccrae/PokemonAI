@@ -1,22 +1,20 @@
-"""Two turn-level reads the Pilot takes before it scores anything: which Plan we are on, and how much to trust the Read.
+"""Two turn-level reads taken before anything is scored: which Plan we are on, and how far to trust the Read.
 
-Split out of `pilot.py` so the fact assemblers can call them without importing the Pilot back."""
+Separate from `pilot.py` so the fact assemblers can call them without importing the Pilot back."""
 from __future__ import annotations
 
 
 from common.strategy import Plan
 
 
-# Posture confidence (ADR-0026): continuous γ ∈ [0,1] the generic-core levers scale by. Ramp the
-# Read's top posterior over [LO, HI], discount by unmatched mass -> unknown opponent → γ≈0.
+# Posture confidence (ADR-0026): γ ∈ [0,1] the generic-core levers scale by.
 _POSTURE_GAMMA_LO = 0.5     # below this top-posterior, Posture off (recognition too weak to act on)
 
 _POSTURE_GAMMA_HI = 0.85    # at/above this, Posture at full strength
 
 def _posture_gamma(read) -> float:
-    """Posture confidence γ ∈ [0,1] from the Read (ADR-0026): ramp the top posterior over
-    [_POSTURE_GAMMA_LO, _POSTURE_GAMMA_HI], discounted by the unmatched (unknown) mass. 0 when there is no
-    Read or it is unrecognized — so an unknown opponent makes Posture contribute nothing (no-regression)."""
+    """Posture confidence γ ∈ [0,1] (ADR-0026). An unknown/unrecognized opponent gives 0, so Posture
+    contributes nothing rather than guessing."""
     if read is None or not read.candidates:
         return 0.0
     top = read.confidence[0] if read.confidence else 0.0
@@ -24,9 +22,7 @@ def _posture_gamma(read) -> float:
     return ramp * (1.0 - read.unknown_mass)
 
 def choose_plan(state: dict, strategy, stats=None) -> Plan:
-    """Pick this turn's Plan. SETUP until a win-condition Line's payoff is in play with enough
-    energy to attack; then RACE. A Line's `ready.energy` is the threshold; when unset (None) it is
-    derived from the engine — the payoff's cheapest attack cost, so a 1-Energy attack counts.
+    """SETUP until a win-condition Line's payoff is in play with enough Energy to attack; then RACE.
     (STABILIZE / CLOSE arrive with their own signals.)"""
     me = state["players"][state["yourIndex"]]
     board = [p for p in (me.get("active") or []) + (me.get("bench") or []) if p]
@@ -39,8 +35,7 @@ def choose_plan(state: dict, strategy, stats=None) -> Plan:
     return Plan.SETUP
 
 def _min_attack_cost(stats, payoff: int, default: int = 1) -> int:
-    """The payoff's cheapest attack's energy cost, read off the engine CardStat (`default` when
-    unknown — never 0, so a Pokémon is never 'online' with no Energy)."""
+    """The payoff's cheapest attack cost. `default` when unknown — never 0, so nothing is 'online' bare."""
     stat = stats.get(payoff) if stats else None
     cost = getattr(stat, "minAttackCost", None) if stat else None
     return cost if cost is not None else default

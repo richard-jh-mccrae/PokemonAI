@@ -1,127 +1,78 @@
-"""mega_lucario — Strategy (declarative doctrine). See docs/agent-architecture.md and
-src/agents/mega_lucario/STRATEGY.md (the grilled playing doctrine, deck-genie 2026-06-29;
-re-baselined vs the merged general layer 2026-07-02, STRATEGY.md §5b; trainer-swap re-run
-2026-07-03, STRATEGY.md §9 T9').
+"""mega_lucario — the deck overlay ONLY: Roles, the Lines, params and the genuinely deck-bound
+Hypotheses. Pure data, no control flow. Weights are seeds, ladder-tuned (ADR-0009).
 
-Trainer-swap 2026-07-03 (Pokémon core unchanged): OUT Maximum Belt (ACE SPEC) + Team Rocket's
-Watchtower; IN Unfair Stamp (ACE SPEC Item), Black Belt's Training (+40 vs ex), Team Rocket's Petrel
-(Trainer tutor), Wally's Compassion (Mega clutch-heal). All four are COVERED by the general layer
-(damage-boost model / clutch_heal heal doctrine / general search / aceSpec+shuffle guards) — no new
-deck rule. Meowth ex was RE-MODELED general (`supporter_tutor` tag + `bench-the-supporter-tutor`),
-replacing the mis-assigned `tutor` Role that made the Pilot bench the 2-prize ex for a wincon dig.
+Doctrine: src/agents/mega_lucario/STRATEGY.md. Architecture: docs/agent-architecture.md.
+Flexible Fighting multi-attacker. Riolu -> Mega Lucario ex is a SINGLE hop (there is no Lucario in
+this set), alternating Mega Brave with Aura Jab, whose bench-load is the deck's sole energy engine.
+Solrock<->Lunatone is a co-dependent draw engine; Hariyama is the 210-for-one-prize trade star with a
+free gust on evolve.
 
-Flexible Fighting multi-attacker. Win-condition: Mega Lucario ex (Riolu -> Mega ex, single hop,
-340 HP / 3 prizes) — alternate Mega Brave (FF 270) with Aura Jab (F 130 + load up to 3 Basic {F}
-from discard onto the Bench, the deck's sole energy engine). The Solrock<->Lunatone pair is a
-self-contained draw engine + early 70 attacker + discard-fuel source; Hariyama is the prize-trade
-star (210 for 1 prize) + a free gust on evolve (Heave-Ho Catcher).
-
-Most of the doctrine is COVERED by the General Strategy (STRATEGY.md §5/§5b), including the parts
-that LOOK deck-specific:
-  - Aura-Jab-vs-Mega-Brave choice   -> the Tactical energy-recover credit + self-lock cost
-    (AttackStat.recoverN / nextTurnSameAttackLock; pilot._tactical)
-  - Aura Jab's bench-load targeting -> the ADR-0069 attach marginal's ATTACK AXIS
-    (`pilot._attach_value`), which prices each recipient directly
-  - dual-Mega retreat-swap          -> the ADR-0100 promote/retreat equation
-    (`promote_retreat_value`); the two rungs this named are deleted
-  - prize-trade interleaving        -> `interpose-the-cheap-attacker-to-preserve-the-wincon` +
-    `dont-promote-into-their-prize-reach` at TO_ACTIVE
-  - Heave-Ho's TARGET pick          -> the context-keyed gust target tacticals (KO / stall / keystone)
-This file holds only the deck overlay: Roles, the Line, params, and the genuinely deck-bound
-Hypotheses. Pure data: no engine, no control flow. Weights are seeds (status="assumed") —
-ladder-tuned (ADR-0009).
+The Aura-Jab-vs-Mega-Brave choice, Aura Jab's bench-load targeting, the dual-Mega retreat-swap,
+prize-trade interleaving and Heave-Ho's target pick all LOOK deck-specific and are all covered by the
+general layer (ADR-0069 attach marginal, ADR-0100 promote/retreat equation, gust target tacticals).
 """
 from common.strategy import Hypothesis, Line, Plan, Strategy
 
-# --- Card ids (mega_lucario/deck.csv; verified against the engine 2026-06-29) -------------
+# Card ids — mega_lucario/deck.csv.
 RIOLU, MEGA_LUCARIO_EX = 677, 678
 SOLROCK, LUNATONE, MAKUHITA, HARIYAMA, MEOWTH_EX = 676, 675, 673, 674, 1071
 FIGHTING_ENERGY = 6
 ULTRA_BALL, FIGHTING_GONG, POKE_PAD, PREMIUM_POWER_PRO, SWITCH = 1121, 1142, 1152, 1141, 1123
 LILLIES, JUDGE, BOSS_ORDERS = 1227, 1213, 1182
 AIR_BALLOON = 1174
-# GRAVITY_MOUNTAIN=1252 dropped with `gravity-mountain-vs-stage2` (Issue #424): the rung was its only
-# reader, and `_boost_lethal_tactical` reaches the card through its `card_effects.json` clause rather
-# than through an id, so nothing deck-side keys off it any more.
-# Trainer-swap 2026-07-03 — all covers-as-is (general layer), so no const keys off them:
-#   UNFAIR_STAMP=1080 (ACE SPEC, aceSpec+hand_disruption guards), BLACK_BELTS=1211 (damage-boost model),
-#   PETREL=1219 (general search), WALLYS=1229 (clutch_heal heal doctrine).
-# REMOVED from the deck: MAX_BELT=1158, WATCHTOWER=1256.
+# Deliberately id-LESS: Gravity Mountain, Unfair Stamp, Black Belt's, Petrel and Wally's are in the
+# deck but reached through a tag / `card_effects.json` clause, so nothing deck-side keys off an id.
 
-_TO_HAND = 7        # SelectContext.TO_HAND — a search: choose which card to take into hand
-_EVOLVE = 9         # OptionType.EVOLVE — evolve a Pokémon in play
-_ABILITY = 10       # OptionType.ABILITY — use an in-play Ability (Lunar Cycle at the MAIN menu)
-_PLAY = 7           # OptionType.PLAY — play a card from hand (the Stadium plays)
-_ACTIVATE = 43      # SelectContext.ACTIVATE — "use the Ability?" (YES/NO; select.contextCard = owner)
-_YES = 1            # OptionType.YES — the affirmative at an ACTIVATE / coin-toss select
-_FIGHTING = 6       # EnergyType.FIGHTING — the deck's only Energy type
-_ATTACH = 8         # OptionType.ATTACH — the turn's manual Energy attach
-_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON — the pregame Active pick
-_BENCH = 5          # AreaType.BENCH — the attach target's area (inPlayArea)
+_TO_HAND = 7        # SelectContext.TO_HAND
+_EVOLVE = 9         # OptionType.EVOLVE
+_ABILITY = 10       # OptionType.ABILITY
+_PLAY = 7           # OptionType.PLAY
+_ACTIVATE = 43      # SelectContext.ACTIVATE — YES/NO, contextCard = the owner
+_YES = 1            # OptionType.YES
+_FIGHTING = 6       # EnergyType.FIGHTING
+_ATTACH = 8         # OptionType.ATTACH
+_SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON
+_BENCH = 5          # AreaType.BENCH (inPlayArea)
 
-# The co-dependent one-of-each engine (STRATEGY.md §0): Solrock = the 70 attacker (Cosmic Beam needs a
-# benched Lunatone), Lunatone = the benched draw engine (Lunar Cycle needs Solrock in play). Neither is
-# worth investing in without its partner in play OR reachable. Drives the 7-seat pairing doctrine below.
+# Co-dependent one-of-each engine: Cosmic Beam needs a benched Lunatone, Lunar Cycle needs Solrock in
+# play. Neither is worth investing in without its partner in play OR reachable.
 _ENGINE_IDS = {SOLROCK, LUNATONE}
 _ATTACKER_ROLES = {"secondary_attacker", "primary_attacker", "win_condition",
                    "win_condition_base", "accel_source"}
 
 
 def _partner(cid):
-    """The one-of-each engine partner of a Solrock/Lunatone (None for any other card)."""
     return LUNATONE if cid == SOLROCK else (SOLROCK if cid == LUNATONE else None)
 
 
 def _reachable(board, cid):
-    """True iff card `cid` is still gettable THIS game: in play / hand / the current search's revealed
-    pool (`search_deck_ids`, an exact within-frame test), else the sound deck oracle
-    (`not deck_definitely_empty_of`) when no search pool is revealed."""
+    """True iff `cid` is still gettable THIS game: in play / hand / this search's revealed pool (an
+    EXACT within-frame test), else the sound deck oracle when no pool is revealed."""
     if cid in board.in_play_ids or cid in board.hand_ids:
         return True
     sd = board.search_deck_ids
     return (cid in sd) if sd is not None else (not board.deck_definitely_empty_of(cid))
 
-# Per-deck Role overlay on the universal Function Tags (sparse — only deck-intentional cards).
-# Roles drive deck Hypotheses + the universal role-keyed general rules (win_condition exemptions,
-# accel_source promote/bench rules etc.).
+# Sparse Role overlay on the universal Function Tags — only deck-intentional cards. Roles drive deck
+# Hypotheses plus the universal role-keyed general rules.
 ROLES = {
+    # accel_source because Aura Jab IS the energy engine (3 Basic {F} from discard to the Bench).
     MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
-    #                  accel_source: Aura Jab IS the deck's energy engine (attach 3 F from discard
-    #                  to the Bench) -> the ADR-0086 Deploy Marginal endorses benching the 2nd
-    #                  Riolu while a Mega is Active; the KO-promote is `_promote_ko_tactical`.
-    RIOLU:    ["win_condition_base"],            # Line pre-evo (the Line drives line-piece rules)
-    SOLROCK:  ["secondary_attacker", "engine"],  # early Cosmic Beam 70 + Lunar Cycle enabler
-    LUNATONE: ["engine"],                         # native draw engine (Lunar Cycle, Ability)
-    HARIYAMA: ["secondary_attacker", "gust"],     # prize-trade star (210/1-prize) + Heave-Ho gust
+    RIOLU:    ["win_condition_base"],
+    SOLROCK:  ["secondary_attacker", "engine"],
+    LUNATONE: ["engine"],
+    HARIYAMA: ["secondary_attacker", "gust"],
     MAKUHITA: ["evolution_base"],
-    # MEOWTH_EX: no Role. Its Last-Ditch Supporter tutor is driven by the general `supporter_tutor`
-    # TAG + `bench-the-supporter-tutor` rule (2026-07-03 re-model). The old `tutor` Role MISFIRED —
-    # `play-a-tutor-for-the-unfound-wincon` (+25) read it as a WINCON dig, benching the 2-prize ex in
-    # setup for the wrong reason (Last-Ditch fetches a SUPPORTER, not the wincon). See STRATEGY.md §3.
-    BOSS_ORDERS: ["gust"],                         # the `gust` TAG drives the shipped general doctrine
+    BOSS_ORDERS: ["gust"],
     AIR_BALLOON: ["retreat_tool"],
-    # Black Belt's / Wally's / Petrel / Unfair Stamp: NO Role — covered by tag/CardStat-keyed general
-    # rules (damage-boost model / clutch_heal doctrine / general search / aceSpec guards).
+    # Deliberately role-LESS: Meowth ex rides the `supporter_tutor` TAG — a `tutor` Role misfired as a
+    # WINCON dig. Black Belt's / Wally's / Petrel / Unfair Stamp ride tag/CardStat-keyed general rules.
 }
 
 HYPOTHESES = [
-    # ── Solrock ↔ Lunatone one-of-each pairing doctrine (7 corrections, 4 CRITICAL) ─────────────────
-    # The pair is a co-dependent engine (Solrock = attacker/Cosmic-Beam-needs-Lunatone; Lunatone = draw
-    # engine/needs-Solrock). Fix every seat: start the attacker, power the attacker not the engine, skip
-    # a partnerless Solrock, and fetch toward EXACTLY one of each in play. Replaces `fetch-the-engine-
-    # first` (its `not line_ready` gate + blanket-engine grab caused f41/f12/f26).
-    # (start-solrock-over-lunatone RETIRED 2026-07-28 — FOLDED into the deck's `starter_priority`
-    #  declaration below + the general `open-the-declared-starter` (baseline_opening, +40), ADR-0079.
-    #  It was gated on `card_id == SOLROCK` — the card-id reflex, shipped. The whole ml f1 finding
-    #  ("both score 0, so the option-index tie-break opened Lunatone") is now the ORDER of the
-    #  declaration: Solrock outranks Lunatone, and the general rule reads only the resolved
-    #  `board.top_starter_id`, never an id. The +12 could only lift Solrock above a 0-scoring field;
-    #  the ranking additionally orders Riolu, Makuhita and Meowth ex, which the rung never could.)
-    # (dont-attach-to-the-engine RETIRED 2026-07-10 — FOLDED into the general
-    #  role gate inside `_attach_value` (ADR-0069), which reads the same engine-only Role universally
-    #  AND covers the ATTACH_FROM seam this rule was blind to (ml f121, CRITICAL: Aura Jab's bench-load
-    #  put Energy on Lunatone). It ZEROES the attack axis rather than adding a weight, so the old
-    #  −12/−24 stacking arithmetic no longer applies.)
+    # Solrock<->Lunatone pairing doctrine: start the attacker, power the attacker not the engine, skip
+    # a partnerless Solrock, and fetch toward EXACTLY one of each in play.
+
     Hypothesis(
         id="attach-solrock-over-line-base",
         rationale="At a benched attach, prefer powering Solrock (the bridge attacker: secondary_attacker "
@@ -136,38 +87,10 @@ HYPOTHESES = [
         and c.attach_target_area == _BENCH
         and "secondary_attacker" in c.attach_target_roles and "engine" in c.attach_target_roles,
         weight=3, status="assumed"),
-    # (aurajab-skip-partnerless-solrock (−20) and aurajab-load-the-wincon-line (+10) RETIRED
-    #  2026-08-06, Issue #425 / epic Issue #421 — SUPERSEDED by the ATTACH DECIDER's own equation
-    #  (`pilot._attach_value`'s `is_from` branch, ADR-0069), which was already deciding this select.
-    #  Both were `assumed`, both were authored off ml f87, and both claimed the same cause: "all bench
-    #  targets tied → the option index picked". That tie is gone. `_partner_absent` — deck-declared
-    #  data (`partners=` below), read on the RECIPIENT leg of `_attach_value` — is the disjunct of
-    #  `non_attacking` that role-gates a Lunatone-less Solrock's attack axis to 0, and
-    #  `_line_payoff_stat` + `_build_standing`'s convex `(matched/slots)**2` prices a bare Riolu by
-    #  Mega Brave's 270, not Accelerating Stab's 30.
-    #  MEASURED before deletion. Base first, per ADR-0121 Decision 0 (a follow-up select is gradeable
-    #  only if the MAIN decision that opened it was correct): of the three ruled 678 ctx-21 frames,
-    #  `train.grab_sweep._off_policy` cleared ml f87 and 86088989-63 and flagged 85058574-121 —
-    #  **2/2 gradeable, 3 raw**.
-    #  CORRECTED 2026-08-07, Issue #442 — the base is **3/3 gradeable**, and this note used to state
-    #  the pre-correction reading as fact. `main`'s Issue #412 (`1e4e5243`) rebuilt the detector and a
-    #  developer ruled 85058574-121 GRADEABLE, so it is IN the base, not excluded; and it has ONE
-    #  candidate predecessor (`f114`), never the "two earlier ruled blunders" this note claimed —
-    #  `f109` is an ENDORSEMENT (`chosen == correct == [9]`) and no longer scans. The retirement
-    #  nonetheless STANDS on the enlarged base: 85058574-121 is still the one frame where neither rung
-    #  fires, re-measured in both arms with the other two as the positive control that the restored
-    #  rungs are otherwise loud. The decider MISSES that frame, which is pre-existing (the Decision
-    #  Gate has graded it as a non-voided disagreement all along) and is filed as Issue #443.
-    #  Then all 70 committed mega_lucario
-    #  Corrections replayed through the shipped Pilot and through the same Pilot with both ids removed:
-    #  ZERO decisions moved, agreement identical on both arms at 50/64 by `satisfies_human` (49/64
-    #  strict — 64, not 70, because six records are prose-only and carry no `correct`), and the two
-    #  rungs were observed firing in the shipped arm on exactly the two gradeable frames (the positive
-    #  control). At ml f87 the equation alone ranks the partnerless Solrock 3.00 against the Riolu's
-    #  18.38; at 86088989-63 the `+10` was actively WRONG, lifting a correctly-computed 0.00 (a Riolu
-    #  already at Mega Brave's full {F}{F}) to 10.00 — deleting it WIDENED the correct margin from
-    #  63.0 to 64.0. `_ATTACH_FROM` went with them: they were its only readers. Covered by the
-    #  "Aura Jab's bench-load" tests in tests/strategy/test_attach_decider.py.)
+    # `_attach_value`'s equation (ADR-0069) reads `partners=` below, so deleting that declaration
+    # silently un-retires the gap the equation closed.
+
+    # The one frame where neither the rungs nor the decider fires is Issue #443, pre-existing.
     Hypothesis(
         id="fetch-the-missing-engine-half",
         rationale="At a search, fetch the MISSING half of the Solrock↔Lunatone engine — an engine piece "
@@ -267,9 +190,6 @@ HYPOTHESES = [
         and c.option_type == _YES
         and (c.board.gust_best_ko_prizes > 0 or c.board.stall_target_exists),
         weight=15, status="assumed"),
-    # (dont-cosmic-beam-without-lunatone RETIRED 2026-07-02: the oracle now models the bench-partner
-    # condition itself — AttackStat.requiresBench + the live `atk_bench_names` context zero the
-    # attack's SCORED damage, and the phantom-KO vs a <=70-HP Active with it. Covered-as-is.)
     Hypothesis(
         id="fire-lunar-cycle",
         rationale="Lunar Cycle (Lunatone's Ability at the MAIN menu: with Solrock in play, discard a "
@@ -322,9 +242,8 @@ HYPOTHESES = [
                       or (c.board.my_hand_size <= 1
                       and (not c.board.active_attack_provable or c.board.active_doomed)
                       and not c.board.active_arm_available))),
-        # ^ ALSO stands down on a DEAD-HAND famine (engine online, hand ≤ 1, and the lone {F} can't arm a
-        #   this-turn Active attack): draw 3 beats sinking the last card into a premature bench attach —
-        #   the discarded {F} is Aura-Jab-recoverable (ml f42 Makuhita-active / f54 Lunatone-active).
+        # ^ also stands down on a DEAD-HAND famine (engine online, hand <= 1, lone {F} cannot arm a
+        #   this-turn attack): the discarded {F} is Aura-Jab-recoverable, so draw 3 wins.
         weight=-30, status="assumed"),
     Hypothesis(
         id="lunar-cycle-the-weak-preevo-last-f",
@@ -344,71 +263,36 @@ HYPOTHESES = [
              or (c.board.my_hand_size <= 1
                       and (not c.board.active_attack_provable or c.board.active_doomed)
                       and not c.board.active_arm_available)),
-        # ^ fires on the SAME broadened condition as the guard's stand-down (weak pre-evo OR dead-hand
-        #   famine), so the two stay mutually exclusive. +30 (was +20) clears `concentrate-energy-on-wincon`
-        #   (+25) landing on the benched-Mega attach in the famine case (ml f42/f54); the weak-preevo case's
-        #   weaker Riolu-active competitor is unaffected.
+        # ^ the EXACT complement of the guard's stand-down, so the two are mutually exclusive by
+        #   construction. +30 clears `concentrate-energy-on-wincon` (+25) in the famine case.
         weight=30, status="assumed"),
-    # (gravity-mountain-vs-stage2 RETIRED 2026-08-06, Issue #424 — `_boost_lethal_tactical` now
-    # COMPUTES the question the +15 could only gesture at. The rung's own rationale named the
-    # arithmetic it could not perform — "the −30 crosses our breakpoints (Mega Brave 270 reaches a
-    # 300-HP Stage 2, Wild Press 210 a 240)" — and a flat weight cannot tell a board where that
-    # crossing happens from one where it does not. The term reads the delta through
-    # `board_delta.stadium_hp_delta`, so the `applies_to: stage2` class test is the shipped predicate
-    # (which is also why the symmetric half is structurally 0 for THIS deck: Makuhita→Hariyama and
-    # Riolu→Mega Lucario ex are both single-hop Basic→Stage 1, so no body of ours is ever admitted),
-    # and it DIFFERENCES against the Stadium already in play, because playing one discards the other
-    # and ends its effects (`docs/rulebook.txt` L136).
-    # (watchtower-vs-colorless-abilities REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the
-    # deck. The general Board.opp_has_colorless_ability signal remains for any deck that runs it.)
+    # RETIRED 2026-08-06, Issue #424: `gravity-mountain-vs-stage2` — `_boost_lethal_tactical` COMPUTES
+    # the breakpoint crossing the flat +15 could only gesture at, differenced vs the Stadium in play.
+
+    # `Board.opp_has_colorless_ability` is deliberately unused here — this deck cut the card that
+    # read it; the general signal remains for any deck that runs one.
 ]
 
 STRATEGY = Strategy(
     name="mega_lucario",
-    # readiness engine-derived: online at 1 F (Aura Jab 130), not the FF of Mega Brave.
+    # No Ready() override: readiness is engine-derived at one {F} (Aura Jab 130), not Mega Brave's {F}{F}.
     lines=[Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition"),
-           # Cheap prize-wall secondary attacker (ADR-0048): Hariyama = 210-for-1-prize. A NON-wincon Line
-           # (role="secondary_attacker"), so the win-condition machinery ignores it — only the broadened
-           # FETCH recognition + `develop-the-cheap-prize-wall-line` read it (kill-switched, default on).
+           # A NON-wincon Line (ADR-0048), so the win-condition machinery ignores it — only FETCH
+           # recognition and `develop-the-cheap-prize-wall-line` read it.
            Line(path=[MAKUHITA, HARIYAMA], payoff=HARIYAMA, role="secondary_attacker")],
     roles=ROLES,
-    # The co-dependent one-of-each engine (STRATEGY.md §0): each half is a dead attach target without
-    # its partner in play. Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock /
-    # Lunatone (attach Ruling 6). This is now the SOLE expression of that fact — it used to be the
-    # value-side complement of `aurajab-skip-partnerless-solrock`, and Issue #425 retired the rung
-    # once `_attach_value` was measured deciding ml f87 off this declaration alone.
+    # Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock/Lunatone (attach Ruling
+    # 6). SOLE expression of that fact since Issue #425 retired the rungs that duplicated it.
     partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
-    # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
-    # startable bodies (ADR-0079). Read by the general `open-the-declared-starter`; the ids live here,
-    # never in a trigger. Transcribed from the doctrine it replaces:
-    #   Solrock (110 HP, Cosmic Beam 70 for one {F}) — the attacker half of the pair; was
-    #     `start-solrock-over-lunatone` (+12, ml f1 CRITICAL).
-    #   Riolu (80 HP, Accelerating Stab {F} 30) — ONE hop from Mega Lucario ex (340 HP, Aura Jab 130)
-    #     and it can attack now. The constraint ADR-0079 is written around: open-Riolu must survive,
-    #     and it does here as a LINE-SHAPE read, not a card-id gate.
-    #   Makuhita (80 HP, {F} 10) — the secondary-line base; a body, not a plan.
-    #   Lunatone (110 HP) — the DRAW ENGINE. Belongs on the Bench powering Lunar Cycle; was
-    #     `dont-open-with-the-engine` (−12).
-    #   Meowth ex (170 HP, 2 prizes) — last. A multi-prize liability in the most-exposed slot, and
-    #     opening it forfeits Last-Ditch Catch (triggers only on an in-game bench-from-hand). Was
-    #     `dont-open-multiprize-active` (−15); the residual-blunder audit caught it opening ~4/25 games.
-    # A forced single pick still places whatever is offered when nothing better is (minCount 1).
+    # The COMPLETE pregame ACTIVE ranking, best first (ADR-0079). Lunatone is the DRAW ENGINE and
+    # belongs benched; Meowth ex is last (2 prizes, and opening it forfeits Last-Ditch Catch).
     starter_priority=[SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX],
-    params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
-            "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
-                                          # functional consumer). The remaining engine sims
-                                          # (lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
-                                          # hold the submission manifest at Tier-0 (test-pinned).
+    params={"setup_energy_target": 2,    # {F}{F} — toward the first Mega Brave
+            "search_budget": 0,           # INERT since ADR-0064 deleted Tier-6 escalation, its only
+                                          # consumer; held at 0 to keep the manifest Tier-0 (test-pinned).
             "preferred_start": "first",  # setup-heavy evolution deck: take the develop turn
-                                         # (general `honor-preferred-start` reads this at the coin toss)
-            "reactivity": "solitaire",   # deck-personality (learnthetcg): a linear evolution-beatdown
-                                         # prioritises its OWN setup; don't over-play-around the opponent.
-                                         # UNCONSUMED since POC-T4/5 (Issue #386): its one reader was the
-                                         # planner's forgo-KO gate, and that gate is DELETED — under
-                                         # differencing, declining a KO is one sequence out-scoring
-                                         # another, so no opt-out is needed to stop over-reacting. Kept as
-                                         # a DECLARATION (it is deck doctrine, and the Read layer is the
-                                         # natural next consumer), not as a live lever.
+            "reactivity": "solitaire",   # UNCONSUMED since Issue #386 deleted its one reader (the
+                                         # planner's forgo-KO gate). A declaration, not a live lever.
             "my_archetype": "Hariyama / Mega Lucario ex / Solrock"},  # Posture favorability key (ADR-0026)
     hypotheses=HYPOTHESES,
 )

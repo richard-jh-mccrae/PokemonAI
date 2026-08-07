@@ -1,14 +1,9 @@
 """Turn Planner (ADR-0031): the eager whole-turn optimizer that generalizes the Lethal Solver to a
-Goal Ladder. Behaviour through the Pilot's PUBLIC interface (``decide`` / ``explain``): when a
-multi-step Turn Line reaches a valuable outcome the greedy per-option scorer would miss,
-``explain(obs).planned`` names the line and ``decide`` takes its next step.
+Goal Ladder, through the Pilot's PUBLIC interface.
 
-Lib-free (the closed-form layers); the engine-sim slices live in the engine-backed suite
-(``test_planner_engine.py``). The Planner is layer-on-top: it commits ONLY when a line beats what the
-tuned scoring would already play, so a decision no rung reaches leaves ``planned`` on the COMPOSER —
-`common.composer`, armed as the MAIN decider by POC-T4/5 (Issue #386). Read every "stands down"
-assertion through the `rung()` helper below: it strips a `goal="compose"` line, which is what these
-tests always meant by "the planner did not commit".
+Lib-free; the engine-sim slices live in ``test_planner_engine.py``. Read every "stands down"
+assertion through `rung()` below: it strips a `goal="compose"` line, which is what these tests mean
+by "the planner did not commit".
 """
 from dataclasses import dataclass, field
 
@@ -24,15 +19,8 @@ from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
 
 def rung(planned):
-    """The HEURISTIC rung's committed line, or None when only the COMPOSER answered.
-
-    POC-T4/5 (Issue #386) armed `common.composer` as the MAIN decider, so `plan_turn` no longer
-    returns None at a MAIN single-pick menu — the bottom rung always has an opinion, which is the
-    whole point of the swap. These tests are about the rungs ABOVE it (win / KO-for-prizes /
-    KO-the-key-threat / gamble), and for them *"the planner stands down"* now means *"no rung above
-    the composer committed"*. Reading that through one named helper keeps the property each test was
-    written to assert intact, rather than re-pointing thirty assertions at a composer line whose
-    value they never meant to grade."""
+    """The HEURISTIC rung's committed line, or None when only the COMPOSER answered — the bottom rung
+    always has an opinion, so "the planner stands down" means "no rung ABOVE the composer committed"."""
     return None if (planned is not None and planned.goal == "compose") else planned
 
 
@@ -77,9 +65,8 @@ def _stats():
         # cardType 5 = Basic Energy. Without it `is_typed_basic_energy` is False and the Attach
         # Budget sees no manual-attach source at all (ADR-0075).
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),
-        # The two energy tutors need a stat as well as a tag: `_attach_contribution` rejects an
-        # unknown card BEFORE it reads tags (`stat is None -> return None`, fail-CLOSED per
-        # ADR-0067), so a tutor with no CardStat contributes nothing and its KO line vanishes.
+        # A tutor needs a stat as well as a tag: `_attach_contribution` rejects an unknown card BEFORE
+        # it reads tags (fail-CLOSED, ADR-0067), so a statless tutor's KO line vanishes.
         HILDA: CardStat(HILDA, name="Hilda", hp=0, cardType=3),              # 3 = Supporter
         _ENERGY_SEARCH: CardStat(_ENERGY_SEARCH, name="Energy Search", hp=0, cardType=1),  # 1 = Item
     }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
@@ -88,14 +75,8 @@ def _stats():
                 OPEN_ATK: AttackStat(OPEN_ATK, damage=30, cost=1)})
 
 
-#: Hilda's real Effect Clause (`src/common/card_effects.json` id 1225). The Attach Budget's YIELD
-#: leg fails CLOSED without a clause row (ADR-0067), so a clause-less Pilot cannot model her deck
-#: fetch at all and every tutor-energy KO line silently vanishes. Supplied by default here so these
-#: tests exercise the same path the shipped agent does.
-#: Real deck-fetch clauses for the two tutors these tests use (Hilda's is verbatim from
-#: `src/common/card_effects.json` id 1225). The Attach Budget's YIELD leg fails CLOSED without a
-#: clause row (ADR-0067), so a clause-less Pilot cannot model the fetch at all and every
-#: tutor-energy KO line silently vanishes.
+#: Real deck-fetch clauses for the two tutors these tests use. The Attach Budget's YIELD leg fails
+#: CLOSED without a clause row (ADR-0067), so every tutor-energy KO line silently vanishes without one.
 _TUTOR_CLAUSES = {cid: [{"kind": "fetch", "target": "energy", "zone": "deck"}]
                   for cid in (HILDA, _ENERGY_SEARCH)}
 
@@ -118,11 +99,8 @@ _ENERGY_DECK = [WATER] * 8 + [1] * 52
 
 @pytest.mark.req("REQ-PLANNER-0001")
 def test_retreat_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken():
-    """Tracer bullet (corpus 7f48 shape): my Active is a spent opener that can't KO. A benched Mega
-    Starmie at 2 Energy can't KO the 180-HP Active either (Jetting Blow 120). But retreating into it
-    and attaching the 3rd Energy unlocks Nebula Beam (210) = a 1-prize KO. No existing hook sees this
-    two-step enabling line (retreat alone doesn't reach the KO), so the greedy scorer would waste the
-    turn. The Planner recognises the ``ko_for_prizes`` line and takes the retreat now."""
+    """No hook sees a TWO-step enabling line — retreat alone does not reach the KO — so the greedy
+    scorer would waste the turn."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -138,10 +116,8 @@ def test_retreat_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken
 
 @pytest.mark.req("REQ-PLANNER-0002")
 def test_planner_stands_down_when_the_tuned_scoring_already_reaches_the_ko():
-    """Layer-on-top (ADR-0031 decision 6): the same board, but the benched Mega is at 3 Energy — retreat
-    ALONE unlocks Nebula, which the existing ``_retreat_to_lethal_tactical`` hook already scores
-    KO_SCORE-class. The tuned machinery reaches the KO, so the Planner defers (``planned is None``) — it
-    never duplicates or fights what the greedy scorer would already play."""
+    """Layer-on-top (ADR-0031 decision 6): the Planner never duplicates or fights what the tuned
+    machinery would already play."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=3, hp=330)],
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -152,10 +128,7 @@ def test_planner_stands_down_when_the_tuned_scoring_already_reaches_the_ko():
 
 @pytest.mark.req("REQ-PLANNER-0003")
 def test_evolve_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken():
-    """The evolve sibling of the tracer (corpus a211 shape, generalised to a non-winning KO): my Active
-    is a bare Staryu whose 20-damage attack can't KO. Evolving to Mega Starmie (the Energy carries
-    through) and attaching the 3rd Energy unlocks Nebula (210) = a 1-prize KO. No hook scores an
-    evolve-unlock, so the Planner does the lookahead and takes the evolve now."""
+    """Evolving carries the attached Energy through, and no hook scores an evolve-unlock."""
     pilot = _pilot()
     evolve = opt(EVOLVE, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # Staryu -> Mega (hand[0])
     board = state(active=poke(PREEVO, energy=2, hp=70), opp_active=poke(OPP, hp=180),
@@ -168,9 +141,7 @@ def test_evolve_then_attach_unlocks_an_otherwise_missed_ko_is_planned_and_taken(
 
 @pytest.mark.req("REQ-PLANNER-0004")
 def test_no_planned_line_when_no_enabling_step_reaches_a_ko():
-    """Soundness: the opponent's Active is too healthy (330 HP) — even the retreat-into-Mega + attach
-    tops out at Nebula 210, short of a KO. There is no KO-for-prizes line, so the Planner produces
-    nothing and defers to the tuned scoring (``planned is None``)."""
+    """With no KO reachable there is no line, so the Planner defers to the tuned scoring."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                   opp_active=poke(OPP, hp=330), opp_bench=[poke(BENCHIE, hp=100)],
@@ -181,8 +152,7 @@ def test_no_planned_line_when_no_enabling_step_reaches_a_ko():
 
 @pytest.mark.req("REQ-PLANNER-0005")
 def test_planner_only_acts_at_the_single_pick_main_menu():
-    """Guard: like the Lethal Solver, the Planner acts only at the single-pick MAIN menu. A multi-pick
-    MAIN select (maxCount > 1) — a batch context the greedy grab owns — is left untouched."""
+    """A multi-pick MAIN select is a batch context the greedy grab owns, and is left untouched."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -193,9 +163,8 @@ def test_planner_only_acts_at_the_single_pick_main_menu():
 
 @pytest.mark.req("REQ-PLANNER-0006")
 def test_no_planned_line_when_the_enabling_attach_is_not_available():
-    """Soundness: the retreat→attach→KO line needs this turn's one Energy attach, but the hand holds no
-    reusable Energy — so the attach can't happen and the KO isn't actually reachable. The Planner must
-    NOT commit a line it can't execute (``planned is None``); the Mega at 2 Energy can't KO on its own."""
+    """The Planner must NOT commit a line it cannot execute: with no reusable Energy in hand the
+    enabling attach cannot happen."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -206,11 +175,8 @@ def test_no_planned_line_when_the_enabling_attach_is_not_available():
 
 @pytest.mark.req("REQ-PLANNER-0007")
 def test_planned_line_is_emitted_in_decision_telemetry():
-    """The Planner's committed line rides in the @T Decision Telemetry (ADR-0019) — the SAME
-    ``to_record`` feeds the live stderr line, a Correction's ``live_trace``, and the tuner retest — so a
-    blunder correction on a planned decision carries the plan for analysis. A committed line surfaces
-    its step + goal + rationale; a decision with no plan surfaces ``planned: None`` (the key is always
-    present so corrections can filter on it, like the Lethal Solver's verdict)."""
+    """One `to_record` feeds the stderr line, a Correction's `live_trace` and the tuner retest
+    (ADR-0019); the `planned` key is always present so corrections can filter on it."""
     pilot = _pilot()
     won = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                 opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -219,9 +185,8 @@ def test_planned_line_is_emitted_in_decision_telemetry():
     assert rec["planned"] == {"step": [0], "goal": "ko_for_prizes",
                               "why": "plan (ko_for_prizes): retreat unlocks a 1-prize KO"}
 
-    # No rung reaches a KO here, so the COMPOSER commits (POC-T4/5) and the record says so — with the
-    # margin telemetry Issue #263 § *Beam-quality package* item 3 requires beside it. The `planned`
-    # key is still always present, which is the filterability property this test is really about.
+    # No rung reaches a KO here, so the COMPOSER commits and the record says so, with the margin
+    # telemetry Issue #263 requires beside it.
     safe = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                  opp_active=poke(OPP, hp=330), opp_bench=[poke(BENCHIE, hp=100)], hand=[WATER],
                  prizes=2, opp_prizes=2)
@@ -234,10 +199,8 @@ def test_planned_line_is_emitted_in_decision_telemetry():
 # ------------------------------------------------------------------ P2: survival + threat leaf terms
 @pytest.mark.req("REQ-PLANNER-0008")
 def test_planned_line_value_reflects_post_ko_survival():
-    """The leaf-eval sees 1-ply survival (ADR-0031 decision 2): the SAME retreat→attach→KO line is
-    assessed higher when my Mega survives next turn than when a benched opponent attacker will KO it
-    after I take the prize. Prizes still dominate — the KO is committed either way — but the plan's
-    value carries the survival term (Incoming over the opponent's Bench, their predicted next promotion)."""
+    """Prizes still dominate — the KO is committed either way — but the plan's VALUE carries a 1-ply
+    survival term over the opponent's Bench (ADR-0031 decision 2)."""
     pilot = _pilot()
     safe = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                  opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
@@ -254,10 +217,8 @@ def test_planned_line_value_reflects_post_ko_survival():
 
 @pytest.mark.req("REQ-PLANNER-0009")
 def test_leaf_value_prizes_dominate_positional_terms():
-    """The leaf-eval ranking contract (ADR-0031 decision 3), the analog of the Lethal Solver's
-    no-false-lethal invariant: the prize term dominates every positional term, so a bigger KO always
-    ranks first and no survival/threat combination can outrank a real prize. Survival only breaks ties
-    AMONG equal-prize lines."""
+    """The prize term DOMINATES every positional term, so survival only breaks ties among equal-prize
+    lines and no threat combination can outrank a real prize (ADR-0031 decision 3)."""
     lv = _pilot()._leaf_value
     assert lv(prizes=2, active_survives=False) > lv(prizes=1, active_survives=True)      # more prizes win
     assert lv(prizes=1, active_survives=True) > lv(prizes=1, active_survives=False)       # survival breaks tie
@@ -274,9 +235,7 @@ def _ko_obs(opp_hp=180):
 
 @pytest.mark.req("REQ-PLANNER-0013")
 def test_committed_plan_is_cached_as_turn_scoped_state():
-    """Turn-scoped committed-plan state (ADR-0031 decision 5): committing a line records it on the Pilot;
-    re-deciding the SAME board returns the cached line object (no re-plan), so the ranking runs once per
-    board — not once per decision — beside the match-scoped Scout / deck-tracker state."""
+    """The ranking runs once per BOARD, not once per decision (ADR-0031 decision 5)."""
     pilot = _pilot()
     obs = _ko_obs()
     line1 = pilot.explain(obs).planned
@@ -286,9 +245,8 @@ def test_committed_plan_is_cached_as_turn_scoped_state():
 
 @pytest.mark.req("REQ-PLANNER-0014")
 def test_plan_is_recomputed_when_the_board_reveals_new_information():
-    """Re-plan on reveal (ADR-0031 decision 5): a changed board (a draw/search reveal, a KO, a new turn)
-    changes the plan fingerprint, so the Planner re-plans rather than returning the stale cached line —
-    here the opponent's Active is now too healthy to KO, so the plan correctly collapses to None."""
+    """A changed board changes the plan fingerprint, so the Planner re-plans rather than returning a
+    stale cached line."""
     pilot = _pilot()
     assert pilot.explain(_ko_obs(opp_hp=180)).planned is not None
     assert rung(pilot.explain(_ko_obs(opp_hp=330)).planned) is None   # reveal invalidates cached KO line
@@ -296,10 +254,8 @@ def test_plan_is_recomputed_when_the_board_reveals_new_information():
 
 @pytest.mark.req("REQ-PLANNER-0015")
 def test_no_nested_plan_or_cache_while_simulating():
-    """Reentrancy guard: while an engine sim re-runs my policy (``_planning`` set), ``plan_turn`` takes
-    the closed-form path only — it never launches a nested search from inside a search (which would
-    corrupt the shared engine state) and never writes the turn cache. It still returns the closed-form
-    KO line, so the simulated continuation stays coherent."""
+    """A nested search from inside a search would corrupt the shared engine state, so mid-sim
+    `plan_turn` takes the closed-form path only and never writes the turn cache."""
     pilot = _pilot()
     pilot._planning = True
     try:
@@ -313,12 +269,8 @@ def test_no_nested_plan_or_cache_while_simulating():
 # ------------------------------------------- Supporter-enabled KO line (4298): the tutor supplies the attach
 @pytest.mark.req("REQ-PLANNER-0021")
 def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_taken():
-    """Tracer (corpus 4298 shape): my Active is a spent opener; a benched Mega Starmie has NO Energy, so
-    it can't KO and no retreat-KO line exists — the hand holds no Energy to attach. But it holds Hilda, a
-    Supporter that searches an Energy into hand (``tutor_energy``). Playing Hilda supplies the attach, so
-    retreat-into-Mega + that attach unlocks Jetting Blow (120) = a 1-prize KO the greedy scorer can't see
-    (no single option scores it, and the enabling first step is a Supporter, not a retreat/evolve). The
-    Planner recognises the ``ko_for_prizes`` line and plays Hilda now."""
+    """The enabling first step is a SUPPORTER rather than a retreat or evolve, and no single option
+    scores it, so the greedy scorer cannot see this line at all."""
     pilot = _pilot(deck=_ENERGY_DECK)
     play_hilda = opt(PLAY, area=HAND, index=0)
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
@@ -335,11 +287,8 @@ def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_ta
 
 @pytest.mark.req("REQ-PLANNER-0021")
 def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
-    """The Supporter-enabled KO line is driven by the ``tutor_energy`` *tag*, not by Hilda's id: the
-    same 4298-shape line fires for any of the nine deck-search-Energy Trainers now carrying the tag
-    (Energy Search, Colress's Tenacity, Crispin, …). Same board, a different tutor id — the Planner
-    still plays it to supply the attach that unlocks the retreat→attach→KO. Guards against a
-    regression that hardcodes a single card."""
+    """The line is driven by the ``tutor_energy`` TAG, never by a card id, so it fires for any
+    deck-search-Energy Trainer carrying it."""
     energy_search = _ENERGY_SEARCH                     # tutor_energy sibling (Item) — not Hilda
     pilot = _pilot(functions=CardFunctions({energy_search: ["search", "tutor_energy"]}),
                    deck=_ENERGY_DECK)
@@ -370,7 +319,7 @@ def _snipe_stats():
         BENCHIE: CardStat(BENCHIE, synthetic=True, name="opp benchie", hp=100, energyType=7),
         THREATB: CardStat(THREATB, synthetic=True, name="benched glass cannon", hp=90, energyType=7,
                           minAttackCost=1, minCostDamage=340, maxDamage=340),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # cardType 5 = Basic Energy: without it `is_typed_basic_energy` is False and the Attach Budget sees no manual-attach source (ADR-0075)
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # 5 = Basic
     }
     return DictCardStatProvider(base, attacks={
         JETTING: AttackStat(JETTING, damage=120, cost=1),
@@ -386,11 +335,8 @@ def _snipe_pilot(**kw):
 
 
 def _key_threat_obs():
-    """No KO reachable vs the 330-HP Active (even Nebula 210 after retreat+attach falls short), and
-    my spent opener can't do anything — but retreating into the benched Mega brings its SNIPE online,
-    whose 100 bench rider KOs the opponent's benched 340-damage glass cannon (90 HP), the bench's top
-    threat. A snipe-KO ON the menu is the Tactical layer's turf (it credits the prize KO_SCORE-class);
-    the RETREAT that reaches one is scored by no hook — the rung's gap."""
+    """A snipe-KO ON the menu is the Tactical layer's turf; the RETREAT that reaches one is scored by
+    no hook, which is the rung's gap."""
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                   opp_active=poke(OPP, hp=330),
                   opp_bench=[poke(THREATB, energy=1, hp=90), poke(BENCHIE, hp=100)],
@@ -400,11 +346,8 @@ def _key_threat_obs():
 
 @pytest.mark.req("REQ-PLANNER-0031")
 def test_key_threat_rung_commits_the_retreat_that_unlocks_the_threat_snipe():
-    """The `KO the opponent's key threat` rung (the Goal Ladder's unbuilt middle rung, CONTEXT.md):
-    with no KO on the menu and no Active-KO enabling line, the retreat that brings the sniper online
-    against the benched TOP-threat body (by the shared threat rank) is committed — the KO-for-prizes
-    generators test the opponent's ACTIVE only, so this line is otherwise invisible. Kill-switched
-    (`planner_key_threat`): OFF (the default) leaves the board to the tuned scoring."""
+    """The KO-for-prizes generators test the opponent's ACTIVE only, so a benched-threat line is
+    otherwise invisible. `planner_key_threat` defaults OFF."""
     on = _snipe_pilot(planner_key_threat=True)
     d = on.explain(_key_threat_obs())
     assert d.planned is not None and d.planned.goal == "ko_key_threat"
@@ -417,10 +360,8 @@ def test_key_threat_rung_commits_the_retreat_that_unlocks_the_threat_snipe():
 
 @pytest.mark.req("REQ-PLANNER-0031")
 def test_key_threat_rung_counts_a_forward_damage_only_threat():
-    """The review-caught basis mismatch: the top threat is RANKED by max(own, forward) damage, so
-    the magnitude gate must use the same basis — a 0-printed benched base whose evolution line
-    reaches a monster attack (the Evolving-Threat case the rank exists for) is still a key threat
-    worth the snipe, not a silent skip."""
+    """The top threat is RANKED by max(own, forward) damage, so the magnitude gate must use the same
+    basis or a 0-printed base with a monster evolution is silently skipped."""
     DREEPY, DRAGA = 704, 705
     stats = _snipe_stats()
     stats._stats[DREEPY] = CardStat(DREEPY, synthetic=True, name="Dreepy", hp=60, energyType=7, maxDamage=0)
@@ -440,10 +381,8 @@ def test_key_threat_rung_counts_a_forward_damage_only_threat():
 
 @pytest.mark.req("REQ-PLANNER-0032")
 def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
-    """(a) Layer-on-top: a status-quo KO on the menu (the 120-HP Active — Jetting KOs, and the
-    on-menu SNIPE itself banks the benched KO) stands the rung down: the greedy scorer already takes
-    a prize. (b) No benched body that actually THREATENS (a 0-damage fat wall): the rung stays
-    silent — it never snipes a non-threat just because it can."""
+    """A KO already on the menu stands the rung down, and nothing benched that actually THREATENS
+    keeps it silent — it never snipes a non-threat just because it can."""
     pilot = _snipe_pilot(planner_key_threat=True)
     ko_on_menu = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
                        opp_bench=[poke(THREATB, energy=1, hp=90)], prizes=3, opp_prizes=3)
@@ -462,9 +401,8 @@ def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
     assert rung(d2.planned) is None                          # nothing benched threatens -> no rung
 
 
-# ── the `stream` bit itself: what `_simulate_line` counts as engine randomness (#178) ────────────
-# Driven through the injectable `_search_api` seam (the leaf lab's), so this stays in the lib-free
-# suite: a bare `import cg.api` maps the native library (ADR-0072 amendment B).
+# Driven through the injectable `_search_api` seam so this stays lib-free: a bare `import cg.api`
+# maps the native library (ADR-0072 amendment B).
 
 @dataclass
 class _FakeLog:
@@ -526,11 +464,8 @@ A = _FakeSearchApi.AreaType
 
 @pytest.mark.req("REQ-PLANNER-0037")
 def test_the_verdict_probe_ignores_a_prize_take_the_board_probe_counts():
-    """The one place the two consumers legitimately differ (#178). A face-down prize's id is our own
-    prediction, so revealing it can change a resulting BOARD — but not a WIN VERDICT, which is
-    invariant to which prize is taken (ADR-0050). If `_engine_confirms_win` counted it, every real win
-    would demote itself the moment it took its own prize, and `test_agreement_is_not_vacuous`'s f110
-    anchor — whose cascade's ONLY hidden-zone traffic is that take — would go undetermined."""
+    """A face-down prize's id is our own prediction, so revealing it can change a resulting BOARD but
+    not a WIN VERDICT, which is invariant to which prize is taken (ADR-0050)."""
     from common.strategy.planner import _rng_probe
 
     take = _FakeObservation(logs=[_FakeLog(L.MOVE_CARD, playerIndex=0,
@@ -555,10 +490,8 @@ def _salvatore_pilot(deck=None, stats=None, **kw):
 
 
 def _salvatore_obs(options=None, *, anchored=False):
-    """The a212 shape: spent opener Active, a bare benched Staryu, Salvatore + a {W} Energy in hand,
-    the opponent's last body (70 HP) Active with an EMPTY bench — Salvatore evolves the Staryu into
-    the deck's Mega Starmie, the free retreat + attach bring Jetting Blow (120) online: KO empties
-    their board. ``anchored=True`` rides the deck-tracker's exact prize resolution (`own_prizes`)."""
+    """Salvatore evolves the benched pre-evolution straight from the deck; the retreat + attach then
+    bring the attacker online against their last body. ``anchored=True`` sets `own_prizes`."""
     board = state(active=poke(OPENER, energy=0, hp=110), bench=[poke(PREEVO, energy=0, hp=70)],
                   opp_active=poke(THREAT, hp=70), opp_bench=[],
                   hand=[SALV, WATER], prizes=6, opp_prizes=6, deck_count=44)
@@ -571,10 +504,7 @@ def _salvatore_obs(options=None, *, anchored=False):
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_evolution_tutor_win_lock_on_deck_certainty():
-    """The win rung's tier-4 (a212): with the deck-tracker ANCHORED (`own_prizes`) the Mega Starmie
-    is PROVABLY still in the deck, so Salvatore -> evolve the benched Staryu -> retreat -> attach ->
-    Jetting Blow empties the opponent's board — a sound, guaranteed win. The Lethal Solver locks the
-    Supporter as the line's first step."""
+    """ANCHORED, the evolution is PROVABLY still in the deck, so the line is a guaranteed win."""
     pilot = _salvatore_pilot(lethal_family=True)
     obs = _salvatore_obs(anchored=True)
     d = pilot.explain(obs)
@@ -585,9 +515,8 @@ def test_evolution_tutor_win_lock_on_deck_certainty():
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_evolution_tutor_win_needs_positive_deck_certainty():
-    """Soundness: without the tracker's positive certainty (no `own_prizes` anchor) the evolution
-    could be prized — the win rung must NOT lock it (the heuristic ko_for_prizes rung may still
-    rank-commit the line, but never as a guaranteed win)."""
+    """Unanchored, the evolution could be PRIZED, so the heuristic rung may still rank-commit the
+    line but the win rung must never lock it."""
     pilot = _salvatore_pilot(lethal_family=True)
     d = pilot.explain(_salvatore_obs())
     assert rung(d.planned) is None or d.planned.goal != "win"
@@ -595,9 +524,8 @@ def test_evolution_tutor_win_needs_positive_deck_certainty():
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_evolution_tutor_excludes_ability_bearing_evolutions():
-    """Salvatore's own filter: it can only fetch a card with NO Abilities. A deck whose only
-    evolution of the benched Staryu carries an Ability yields no line — neither the win rung nor
-    the heuristic rung may plan on an ineligible fetch."""
+    """Salvatore's own filter fetches only a card with NO Abilities, and neither rung may plan on an
+    ineligible fetch."""
     stats = _stats()
     stats._stats[ABIL] = CardStat(ABIL, synthetic=True, name="Abil Starmie ex", hp=330, energyType=3,
                                   minAttackCost=1, minCostDamage=120, maxDamage=120,
@@ -609,9 +537,7 @@ def test_evolution_tutor_excludes_ability_bearing_evolutions():
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_evolution_tutor_benched_target_needs_the_retreat_on_the_menu():
-    """Soundness: the winning attacker evolves on the BENCH, so the line needs this turn's retreat
-    to bring it Active. With no retreat offered (e.g. already spent), the line can't execute —
-    nothing is planned."""
+    """The attacker evolves on the BENCH, so with no retreat offered the line cannot execute."""
     pilot = _salvatore_pilot(lethal_family=True)
     obs = _salvatore_obs(options=[opt(PLAY, area=HAND, index=0), opt(END)], anchored=True)
     assert rung(pilot.explain(obs).planned) is None
@@ -619,10 +545,8 @@ def test_evolution_tutor_benched_target_needs_the_retreat_on_the_menu():
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_evolution_tutor_heuristic_commits_the_ko_line_without_certainty():
-    """The rank-grade half (the retest path — tracker cold): no `own_prizes`, but the Mega is
-    majority-LIKELY still in the deck (deck odds), so the KO-for-prizes rung commits Salvatore as
-    the enabling first step of the evolve -> retreat -> attach -> KO line the greedy scorer can't
-    see."""
+    """Tracker cold: majority-LIKELY (deck odds) is enough for the rank-grade KO-for-prizes rung,
+    though not for a win lock."""
     pilot = _salvatore_pilot()
     obs = _salvatore_obs()
     d = pilot.explain(obs)
@@ -634,10 +558,8 @@ def test_evolution_tutor_heuristic_commits_the_ko_line_without_certainty():
 
 @pytest.mark.req("REQ-PLANNER-0022")
 def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
-    """Soundness: the tutor-energy line only works because the fetched Energy can be attached THIS turn.
-    If the turn's one Energy attach is already spent (``energyAttached``), Hilda's Energy can't reach the
-    Mega and the KO isn't reachable this turn — so the Planner must NOT commit a line it can't execute.
-    Same board as the tracer, but the attach is gone: ``planned is None`` and the tuned scoring decides."""
+    """The line only works because the fetched Energy can be attached THIS turn, so a spent
+    `energyAttached` quota makes the KO unreachable and the Planner must not commit."""
     pilot = _pilot()
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
                   opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],

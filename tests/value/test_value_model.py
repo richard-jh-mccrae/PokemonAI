@@ -42,9 +42,7 @@ def test_features_are_stable_and_total():
 
 @pytest.mark.req("REQ-VALUE-0003")
 def test_logistic_learns_a_separable_signal_and_round_trips():
-    """The pure-Python logistic fits a linearly-separable toy (feature 1 = the label) to near-zero
-    holdout log-loss, and a trained model round-trips through the JSON wire into a predictor whose
-    P(win) ranks a winning-feature row above a losing one."""
+    """A trained model round-trips through the JSON wire into a predictor ranking a win above a loss."""
     from common.value.features import FEATURE_NAMES
     from common.value.model import ValueModel
     from train.value.logistic import fit, standardize, log_loss
@@ -74,19 +72,8 @@ def _neutral_board(pilot):
 
 @pytest.mark.req("REQ-VALUE-0004")
 def test_the_value_model_is_off_and_now_reaches_no_decision_at_all():
-    """**Was `test_leaf_blend_is_capped_below_a_prize_and_off_by_default` until POC-T4/5 (#386).**
-
-    The old test asserted the learned leaf term's CAP: at its extreme (P=1 → value 0.5) it added
-    `_PLANNER_VALUE_W * 0.5`, which with every other capped positional term maxed still summed below
-    one KO_SCORE, so a real prize always outranked it. That invariant has no subject any more —
-    `_value_term` is deleted with the develop rollout it blended into, so there is no leaf blend to
-    cap. Asserting the cap would have been arithmetic about a term nothing computes.
-
-    What survives is the stronger statement, and it is the one worth having: the model was ALREADY
-    default-off (it ships 92k rows dark, A/B −0.55%, CI [−1.27, +0.16]), and it is now structurally
-    unable to move a decision even if switched on. `_win_prob` is its only remaining reader and that
-    is telemetry — legibility and calibration, never a score. If a leaf blend is ever rebuilt, this
-    test is where the cap invariant should come back."""
+    """The model is default-OFF and cannot move a decision: there is no leaf blend, and `_win_prob` —
+    its only reader — is telemetry. If a blend is rebuilt, the cap invariant belongs back here."""
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
@@ -100,11 +87,8 @@ def test_the_value_model_is_off_and_now_reaches_no_decision_at_all():
 
 @pytest.mark.req("REQ-VALUE-0007")
 def test_extraction_pilot_carries_the_read_so_matchup_features_are_live():
-    """The pilot the value extractor mines through (`_build_pilot`) must wire the Read exactly as
-    main.py does — without a Scout, `favorability` and `posture_confidence` (γ) collapse to their
-    neutral defaults in EVERY training row, so the model's two matchup features are dead no matter how
-    varied the corpus. Regression guard for the 2026-07-05 fix (the extraction pilot silently dropped
-    the Read, which is why the seed's favorability weight never moved)."""
+    """Without a Scout, `favorability` and `posture_confidence` collapse to neutral defaults in EVERY
+    training row, so the model's two matchup features are dead however varied the corpus."""
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
@@ -114,10 +98,8 @@ def test_extraction_pilot_carries_the_read_so_matchup_features_are_live():
 
 @pytest.mark.req("REQ-VALUE-0006")
 def test_favorability_sanity_gate_detects_a_live_matchup_weight():
-    """The cross-deck retrain's proof-of-fix (grilled 2026-07-05): favorability's fitted |weight| must
-    clear ``eps`` — it sat at ~0 in the mirror-only seed because favorability never varied, so the model
-    could not learn its matchup signal. A dead weight FAILS the gate → park T5 pointing at the T4
-    favorability feature, don't flip a model that can't use the signal the gauntlet exists to surface."""
+    """Favorability's fitted |weight| must clear `eps`; it sat at ~0 in the mirror-only seed because
+    favorability never varied. A dead weight FAILS the gate — park T5 rather than flip it."""
     from train.value.sanity import favorability_is_live
     live = {"features": ["bias", "favorability", "prize_diff"], "weights": [0.1, 0.42, 0.3]}
     dead = {"features": ["bias", "favorability", "prize_diff"], "weights": [0.1, 0.001, 0.3]}
@@ -133,15 +115,8 @@ def test_favorability_sanity_gate_detects_a_live_matchup_weight():
 
 @pytest.mark.req("REQ-VALUE-0005")
 def test_hypothetical_board_build_does_not_pollute_live_memory():
-    """`_board_hypothetical` (used by the value leaf on SIMMED boards) must not perturb the live
-    turn-scoped memory: a hypothetical future must never rewrite the live phase hysteresis or sticky
-    path.
-
-    The ASSERTION is unchanged by #138 — the guarantee is the same one — but the MECHANISM under it
-    is now structural rather than defensive (ADR-0068 decision 2): the build is handed the **Carried
-    State** snapshot, reads both memories from it, and writes neither, instead of writing them and
-    restoring afterwards. Same observable behavior, minus the per-site guard that every future
-    hypothetical-build caller would have had to remember."""
+    """`_board_hypothetical` must not perturb the live turn-scoped memory. Structural since ADR-0068
+    decision 2: the build reads both memories off the Carried State snapshot and writes neither."""
     from common.strategy.strategy import Plan
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot

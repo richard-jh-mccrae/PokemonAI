@@ -1,7 +1,7 @@
 """Tier 3 — Match Objectives (ADR-0040): KO Race, Prize Path, Path Denial, derived phases.
 
 The KO Race is closed-form turns-to-KO arithmetic over attack SEQUENCES
-(docs/architecture/tier-3-match-objectives.md): against a standing wall no affordable attack
+(docs/architecture/tiers.md): against a standing wall no affordable attack
 KOs this turn, so the biggest single hit is fake value — every min-turn sequence fells the wall
 in the same number of turns, and the real differentiator is the incidental chip (bench-snipe /
 spread riders) the sequence banks along the way. The Tactical layer prices a wall attack as
@@ -28,12 +28,8 @@ def _shipped_pilot(agent="mega_starmie"):
 
 @pytest.mark.req("REQ-OBJ-0001")
 def test_critical_a21472_wall_race_picks_jetting_on_its_real_replay_state():
-    """CRITICAL a21472 (deferred-multi-turn-criticals.md → ADR-0040): on the ACTUAL captured state
-    my Mega Starmie ex (6 Energy) faces a 440-HP Mega Lucario ex wall with a benched Riolu. Nebula
-    Beam (210) cannot KO — the wall takes three of my turns under EVERY ordering — so the greedy
-    biggest-hit pick threw away Jetting Blow's free, on-tempo 50/turn bench snipe onto the
-    pre-evolution of their SECOND wall. The KO-Race sharpen re-prices wall attacks by sequence:
-    Jetting-first banks 100 chip in the same three turns. The agent now takes the human's move."""
+    """A wall that takes three turns under EVERY ordering makes the biggest-hit pick free of charge:
+    the KO Race re-prices wall attacks by SEQUENCE, so the on-tempo chip is banked (ADR-0040)."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a21472.json")
                     .read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
@@ -45,10 +41,8 @@ def test_critical_a21472_wall_race_picks_jetting_on_its_real_replay_state():
 
 @pytest.mark.req("REQ-OBJ-0002")
 def test_race_values_prices_the_a21472_shape():
-    """The a21472 arithmetic exactly: Jetting (120, chip 50) and Nebula (210, chip 0) vs a 440 wall
-    both start 3-turn sequences; Jetting's best remainder banks 50 more chip (J,N with one more J
-    available), Nebula's best remainder is J,J = 100. Both t_star = 3 — the caller's tempo discount
-    on LATER chip is what breaks the tie toward chipping now."""
+    """Both openers start 3-turn sequences, so it is the CALLER's tempo discount on later chip that
+    breaks the tie toward chipping now."""
     from common.strategy.objectives import race_values
     vals = race_values({1487: (120, 50), 1488: (210, 0)}, 440)
     assert vals[1487] == (3, 50)     # Jetting-first: rem 320, 2 hits ≥ 320 → J+N (chip 50)
@@ -57,8 +51,7 @@ def test_race_values_prices_the_a21472_shape():
 
 @pytest.mark.req("REQ-OBJ-0002")
 def test_race_values_t_star_is_ceil_over_the_hardest_hitter():
-    """t_star = 1 + ceil((hp − own damage) / max damage): the follow-up is always the hardest
-    hitter when only speed matters."""
+    """t_star = 1 + ceil((hp − own damage) / max damage) — the follow-up is the hardest hitter."""
     from common.strategy.objectives import race_values
     vals = race_values({1: (60, 0), 2: (200, 0)}, 400)
     assert vals[1] == (3, 0)         # 60 first → 340 left → two 200s
@@ -67,15 +60,14 @@ def test_race_values_t_star_is_ceil_over_the_hardest_hitter():
 
 @pytest.mark.req("REQ-OBJ-0002")
 def test_race_values_one_shot_kill_has_no_rest_chip():
-    """A first hit that already fells the wall is a 1-turn sequence — no follow-up chip."""
     from common.strategy.objectives import race_values
     assert race_values({1: (500, 30)}, 440)[1] == (1, 0)
 
 
 @pytest.mark.req("REQ-OBJ-0002")
 def test_race_values_drops_beyond_horizon_and_zero_damage():
-    """An attack that cannot start a within-horizon KO is absent; zero-damage attacks never
-    enter; nothing dealing damage → empty table."""
+    """An attack that cannot start a within-horizon KO is absent, and zero-damage attacks never
+    enter at all."""
     from common.strategy.objectives import race_values
     vals = race_values({1: (10, 99), 2: (0, 50)}, 1000, horizon=4)
     assert vals == {}                              # 10/turn vs 1000 = 100 turns; 0-dmg excluded
@@ -90,9 +82,7 @@ def _obs(me: dict, opp: dict, turn: int = 6) -> dict:
 
 @pytest.mark.req("REQ-OBJ-0005")
 def test_snipe_target_on_my_path_sets_target_on_path():
-    """Mega Starmie (6 Energy) vs a 440 Mega Lucario wall + three benched Riolu, five prizes left:
-    my cheapest path is the wall + two Riolu, so a DAMAGE-select Riolu target reads on-path; the
-    kill-switch zeroes the signal."""
+    """The kill-switch zeroes the consumer signal rather than changing the path."""
     from common.strategy.context import _DAMAGE
     pilot = _shipped_pilot()
     me = {"active": [{"id": 1031, "hp": 330, "energies": [6] * 6}],
@@ -114,10 +104,8 @@ def test_snipe_target_on_my_path_sets_target_on_path():
 
 @pytest.mark.req("REQ-OBJ-0006")
 def test_benching_the_body_that_completes_their_path_is_flagged():
-    """Path Denial ('force 7, not 6'): opponent needs 3 prizes; my lone Cinderace is worth 1, so
-    their visible path is incomplete — benching a 2-prize ex from hand COMPLETES their exact 3 and
-    the play is flagged. When they need only 1 (Cinderace already suffices), the same bench play
-    improves nothing and stays silent."""
+    """Path Denial: benching a body that COMPLETES their exact remaining prize count is flagged;
+    the same play stays silent when what is already in play suffices."""
     from common.strategy.context import _PLAY
     pilot = _shipped_pilot()
     me = {"active": [{"id": 666, "hp": 210, "energies": []}],
@@ -142,11 +130,8 @@ def test_benching_the_body_that_completes_their_path_is_flagged():
 
 @pytest.mark.req("REQ-OBJ-0009")
 def test_predicted_attacker_overlay_shortens_their_path_gamma_gated():
-    """The 'second Mega Lucario' read: their board shows only a Riolu, but the Read PREDICTS the
-    Mega Lucario ex attacker (seen=False). At γ=1 the predicted attacker joins their-side
-    turns-to-KO behind a 2-turn deploy lead, shortening their path over my bodies; at γ=0 (or no
-    Read) the math is byte-identical to the visible-only read — the structural no-regression the
-    ADR-0026 pattern requires, made CONTINUOUS (lead = ceil(2/γ))."""
+    """A PREDICTED (unseen) attacker joins their-side turns-to-KO behind a deploy lead of
+    ceil(2/γ); at γ=0 or with no Read the math is byte-identical to the visible-only read."""
     from common.scouting.read import Intel, Read
     pilot = _shipped_pilot()
     me = {"active": [{"id": 666, "hp": 210, "energies": []}], "bench": [],
@@ -167,10 +152,8 @@ def test_predicted_attacker_overlay_shortens_their_path_gamma_gated():
 
 @pytest.mark.req("REQ-OBJ-0007")
 def test_phase_derivation_stabilize_hysteresis_and_close():
-    """The Schmitt trigger: enter STABILIZE only clearly behind (≤ −1) with a doomed Active; hold it
-    inside the band (race 0); leave only clearly ahead (≥ +1). CLOSE fires with the payoff online and
-    ≤2 prizes left; backwards transitions are free (memoryless base each derivation); the kill-switch
-    returns the readiness base untouched."""
+    """A Schmitt trigger: enter STABILIZE only clearly behind, hold inside the band, leave only
+    clearly ahead. Backwards transitions are free — the base is memoryless each derivation."""
     from common.strategy.strategy import Plan
     pilot = _shipped_pilot()
     pilot._phase_prev = None
@@ -188,9 +171,8 @@ def test_phase_derivation_stabilize_hysteresis_and_close():
 
 @pytest.mark.req("REQ-OBJ-0008")
 def test_phase_bands_fire_and_gate_ban_holds():
-    """The two baseline_phases bands fire on their phase + trigger (STABILIZE heal-play up, CLOSE
-    develop down) and are the ONLY rules reading the phase: the gate ban — no strategy rule keys
-    `c.plan` — is enforced by scanning every rule module (baseline, doctrines, deck strategies)."""
+    """The gate ban (ADR-0040): no strategy rule may key on `c.plan`, enforced by scanning every
+    rule module. The two phase bands stay SMALL because they are advisory."""
     import re
     from common.pilot import Board, Context
     from common.strategy.context import _PLAY
@@ -223,9 +205,7 @@ def test_phase_bands_fire_and_gate_ban_holds():
 
 @pytest.mark.req("REQ-OBJ-0003")
 def test_prize_paths_picks_the_fewest_turn_subset():
-    """Your Lucario example in miniature: 6 prizes over (Mega 3pz/6t, Mega 3pz/9t, small 1pz/1t ×3):
-    one Mega + three smalls (6+3=9 turns... vs two Megas 15) — avoid the second Mega, snipe the
-    smalls."""
+    """One big body plus small ones can beat two big ones on turns, so the second wall is avoided."""
     from common.strategy.objectives import prize_paths
     keys, turns = prize_paths(
         [("mega1", 3, 6.0), ("mega2", 3, 9.0), ("s1", 1, 1.0), ("s2", 1, 1.0), ("s3", 1, 1.0)], 6)
@@ -234,7 +214,6 @@ def test_prize_paths_picks_the_fewest_turn_subset():
 
 @pytest.mark.req("REQ-OBJ-0003")
 def test_prize_paths_tie_prefers_fewer_bodies():
-    """Equal turns → the compact path (fewer KOs to land)."""
     from common.strategy.objectives import prize_paths
     keys, turns = prize_paths([("ex", 2, 4.0), ("a", 1, 2.0), ("b", 1, 2.0)], 2)
     assert keys == {"ex"} and turns == 4.0
@@ -242,8 +221,8 @@ def test_prize_paths_tie_prefers_fewer_bodies():
 
 @pytest.mark.req("REQ-OBJ-0003")
 def test_prize_paths_edge_cases():
-    """Already-won → empty/0; visible board worth too few prizes → (empty, None) — the path runs
-    through bodies not yet in play, consumers stay silent."""
+    """Too few visible prizes returns (empty, None): the path would run through bodies not yet in
+    play, so consumers stay silent."""
     from common.strategy.objectives import prize_paths
     assert prize_paths([("a", 1, 1.0)], 0) == (frozenset(), 0.0)
     keys, turns = prize_paths([("a", 1, 1.0)], 3)
@@ -252,9 +231,7 @@ def test_prize_paths_edge_cases():
 
 @pytest.mark.req("REQ-OBJ-0004")
 def test_board_carries_the_two_sided_path_on_the_real_a21472_state():
-    """On the captured a21472 board (prizes 5–5, a 440 wall + benched Riolu among others) the Board
-    exposes both paths: my cheapest path is a concrete set of their card ids with finite turns, the
-    denial side lists my exposed bodies, and race_ahead is their total minus mine."""
+    """`race_ahead` is their path total minus mine."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a21472.json")
                     .read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
@@ -266,9 +243,7 @@ def test_board_carries_the_two_sided_path_on_the_real_a21472_state():
 
 @pytest.mark.req("REQ-OBJ-0002")
 def test_race_values_rest_chip_maximizes_within_min_turns():
-    """The remainder DP trades damage overkill for chip but never a turn: vs 300, starting with
-    the 100-dmg chipper (chip 40) leaves 200 over two more hits — two more chippers (100+100,
-    chip 80) beat one 200-dmg plain hit + filler, because both fell the wall in the same 3 turns."""
+    """The remainder DP trades damage overkill for chip but never a turn."""
     from common.strategy.objectives import race_values
     vals = race_values({1: (100, 40), 2: (200, 0)}, 300)
     assert vals[1] == (2, 0)         # 100 first → 200 left → ONE 200 (min turns: 2, no chip room)
@@ -279,9 +254,8 @@ def test_race_values_rest_chip_maximizes_within_min_turns():
 
 @pytest.mark.req("REQ-OBJ-0011")
 def test_path_stickiness_holds_the_previous_path_within_the_band():
-    """Path stickiness: a body newly seen this turn makes a marginally-cheaper path, but last
-    decision's path (still feasible, within _PATH_STICKY turns) is kept — coherent targeting. A
-    CLEARLY better path (> the band) always switches; an infeasible previous path drops instantly."""
+    """A still-feasible previous path inside the `_PATH_STICKY` band is kept, for coherent targeting;
+    a clearly better path always switches and an infeasible one drops instantly."""
     pilot = _shipped_pilot()
     # two disjoint 1-prize routes, a hair apart: A={10} at 2t, B={20} at 2.4t (within the 0.5 band)
     mine = [(1, 1, 2.4, 20), (2, 1, 2.0, 10)]
@@ -301,10 +275,8 @@ def test_path_stickiness_holds_the_previous_path_within_the_band():
 
 @pytest.mark.req("REQ-OBJ-0012")
 def test_unfavored_read_relaxes_the_stabilize_enter_bar():
-    """Tier-4 favorability into phases (Lever A): at race_ahead −0.5 (inside the neutral enter bar,
-    normally RACE) a sufficiently-covered UNFAVORED Read shifts the enter threshold out a turn and
-    the phase becomes STABILIZE; a neutral/unknown matchup (low coverage) leaves it RACE — the
-    structural no-regression."""
+    """A sufficiently-covered UNFAVORED Read shifts the STABILIZE enter bar out a turn; below the
+    coverage floor the matchup is unknown and nothing shifts."""
     from common.strategy.strategy import Plan
     pilot = _shipped_pilot()
     pilot._phase_prev = None
@@ -322,9 +294,8 @@ def test_unfavored_read_relaxes_the_stabilize_enter_bar():
 
 @pytest.mark.req("REQ-OBJ-0010")
 def test_promote_onto_their_path_is_flagged_and_switched():
-    """Path Denial promote half: at a TO_ACTIVE promote, a candidate body that sits on the
-    opponent's cheapest path is flagged (`dont-promote-onto-their-path`); the kill-switch and the
-    empty-path case zero it."""
+    """A promote candidate sitting on the opponent's cheapest path is flagged; the kill-switch and
+    the empty-path case both zero it."""
     from common.pilot import Board
     from common.strategy.context import _TO_ACTIVE
     pilot = _shipped_pilot()
@@ -345,13 +316,8 @@ def test_promote_onto_their_path_is_flagged_and_switched():
 
 @pytest.mark.req("REQ-OBJ-0014")
 def test_soft_83661649_30_ko_race_prices_jetting_over_nebula_on_its_real_state():
-    """SOFT 83661649-30 (ADR-0044, same shape as a21472): on the ACTUAL captured state the wall
-    can't be one-shot, so Nebula's raw 210 is fake value — the KO Race re-prices the attack by its
-    best min-turn SEQUENCE, banking Jetting Blow's on-tempo bench chip. This state has an EMPTY
-    Prize Path (`path_target_ids` frozen empty), so it exercises the no-path race-credit branch that
-    a21472/REQ-OBJ-0001 (which has a live path) does not. The gate is the ORDERING invariant, not
-    the raw `chosen` — the Pilot correctly DEVELOPS first (attack-is-turn-ender), so `chosen != [2]`
-    even though Jetting is the better attack; toggling `objectives_race` off restores the blunder."""
+    """An EMPTY Prize Path here, so this exercises the no-path race-credit branch. The gate is the
+    ORDERING invariant, not `chosen` — the Pilot correctly develops first (attack is the turn-ender)."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_83661649_30.json")
                     .read_text(encoding="utf-8"))
     pilot = _shipped_pilot()
@@ -369,8 +335,7 @@ def test_soft_83661649_30_ko_race_prices_jetting_over_nebula_on_its_real_state()
 
 @pytest.mark.req("REQ-OBJ-0013")
 def test_objectives_trace_rides_the_decision_and_telemetry():
-    """The Tier-3 objectives trace (race delta + both paths) rides the Decision and the telemetry
-    record when a path resolves; it is None (and absent from the record) on an empty early board."""
+    """None, and absent from the record, on an empty early board where no path resolves."""
     from common.telemetry import to_record
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_a21472.json")
                     .read_text(encoding="utf-8"))
@@ -383,15 +348,8 @@ def test_objectives_trace_rides_the_decision_and_telemetry():
 
 @pytest.mark.req("REQ-OBJ-0006")
 def test_the_path_delta_survives_as_a_MAGNITUDE_not_only_its_sign():
-    """ADR-0086 decision 5: the exposure leg of the Deploy Marginal is the AMOUNT by which benching
-    this body shortens the opponent's cheapest Prize Path — and that amount was already being
-    computed here and thrown away, with only `new_turns < old_turns` returned to a flat −10 rung.
-
-    Completing a previously-UNCOMPLETABLE route is the biggest case ("the second Mega hands them
-    their exact 6"), so it cannot report as a bare 1-turn improvement; `their_path_turns is None`
-    grades against the shared `HORIZON` rather than a constant invented here.
-
-    Silent when the play gifts nothing, so a body they cannot even damage costs zero."""
+    """Completing a previously UNCOMPLETABLE route is the biggest case, so it cannot report as a bare
+    1-turn improvement: `their_path_turns is None` grades against the shared `HORIZON` (ADR-0086)."""
     from common.grading import HORIZON
     from common.strategy.context import _PLAY
     pilot = _shipped_pilot()
@@ -417,19 +375,8 @@ def test_the_path_delta_survives_as_a_MAGNITUDE_not_only_its_sign():
 
 @pytest.mark.req("REQ-OBJ-0006")
 def test_a_benched_body_is_reached_by_the_bench_harvest_not_only_by_being_promoted():
-    """ADR-0086 decision 5's `bench_harvest` sharpening (Issue #261 item 2d).
-
-    `_their_turns_to_ko` measures PRINTED damage, which lands on the Active — so the Prize Path could
-    only ever describe a benched body of mine being dragged up and hit, and charged
-    `_PATH_BENCH_EXTRA` for the promotion. Riders reach the Bench directly and come out of ONE shared
-    per-turn budget (ADR-0071), which no per-body read can express — which is also why the clock is
-    solved for the whole Bench at once rather than per body.
-
-    Fezandipiti ex is the clean case, verified at source (`data/EN_Card_Data.csv` 140): Cruel Arrow's
-    ONLY damage is 100 to one of the opponent's Pokémon — printed damage is n/a, so the promote route
-    answers None and my 190-HP benched Lillie's Clefairy ex was invisible to their path entirely. The
-    harvest route sees it fall on turn 1, with no promotion surcharge, because that is what actually
-    happens."""
+    """PRINTED damage lands on the Active, so it can only describe a benched body being dragged up;
+    riders reach the Bench directly out of ONE shared per-turn budget (ADR-0071)."""
     pilot = _shipped_pilot()
     bench = [{"id": 272, "hp": 70, "energies": []}]          # Lillie's Clefairy ex, chipped to 70
     me = {"active": [{"id": 666, "hp": 210, "energies": []}],
@@ -446,8 +393,7 @@ def test_a_benched_body_is_reached_by_the_bench_harvest_not_only_by_being_promot
 
 @pytest.mark.req("REQ-OBJ-0006")
 def test_the_path_delta_is_zero_when_the_objectives_kill_switch_is_off():
-    """The leg inherits `objectives_path`, so the Deploy Marginal has a DEFINED exposure of zero when
-    the Prize-Path machinery is dark — fail-closed, never an estimate (ADR-0069 decision 5)."""
+    """With the Prize-Path machinery dark the exposure is a DEFINED zero, never an estimate."""
     from common.strategy.context import _PLAY
     pilot = _shipped_pilot()
     me = {"active": [{"id": 666, "hp": 210, "energies": []}],

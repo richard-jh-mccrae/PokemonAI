@@ -1,23 +1,14 @@
-"""The readiness leaf's per-body constants. NO methods: POC-T4/5 deleted all twelve, and these are what
-outlived them.
+"""The readiness leaf's per-body constants. NO methods: POC-T4/5 deleted all twelve.
 
-Only `_READINESS_CAP` still has a production reader (`leaf`). The other eight are imported by the
-planner spine purely to keep the old import path working, and their real consumer is
-`tests/strategy/test_state_value.py`, which reads two of them to prove `state_value`'s own constants
-are DERIVED from these rather than copied. That is a reason to keep them and a reason to leave them
-here, where the emptiness is visible, instead of scattered through a module that still has code."""
+Only `_READINESS_CAP` has a production reader (`leaf`); the rest are imported by the planner spine to
+keep the old path working, and read by `tests/strategy/test_state_value.py` to prove `state_value`'s
+own constants are DERIVED from these rather than copied."""
 from __future__ import annotations
 
 
 
-# ═══ READINESS LEAF + SPEND ACCOUNT (board-state-valuation-grill.md / t0-planner-disposition.md,
-#     decided 2026-07-16) ═════════════════════════════════════════════════════════════════════════
-# The MY-side "how close am I to executing my win" positional term. NO PRODUCTION CALLER since
-# POC-T3: `_engine_leaf_value` is `KO_SCORE x state_value(end board) + min(_LINE_CAP, line)`. Gated-
-# additive: every term capped so Σ readiness < one prize (KO_SCORE), preserving the hard-rung invariant
-# (a positional board never outranks a real prize). The opponent is NOT modelled here (the survival term
-# + the later 2-ply own that). The measured problem it fixes: full within-turn search reaches ~36 distinct
-# end-boards but the old leaf collapsed them to ~5 values (SOLE-top ~5%). See the grill spec.
+# The MY-side "how close am I to executing my win" positional term. NO PRODUCTION CALLER since POC-T3.
+# Gated-additive: every term capped so Σ readiness < one prize (KO_SCORE), preserving the hard rung.
 _READINESS_CAP = 300.0        # Σ readiness ceiling — the dominant positional term, but < KO_SCORE.
                               # Max positional stack (readiness 300 + survival 50 + threat 100 +
                               # value 40) = 490 < 1000 = KO_SCORE — no positional board outranks a prize.
@@ -25,33 +16,15 @@ _READINESS_CAP = 300.0        # Σ readiness ceiling — the dominant positional
 _READINESS_BODY_CAP = 120.0   # per-body contribution cap — one fully-loaded attacker can't dominate the
                               # sum (a 2nd attacker / the engine stays legible in the total).
 
-_READINESS_BENCH_DISCOUNT = 0.45   # bench position weight FLOOR for attack readiness (Active = 1.0).
-                              # v2 (the who's-Active term, 2026-07-20): the FLOOR of `_bench_position_w`'s
-                              # PROMOTION-EASE lift toward `_READINESS_PROMO_MAX` — a benched attacker is
-                              # nearer-Active when the Active can vacate freely. Degrades to this flat v1
-                              # weight when the Active can't retreat free and no switch is visible (or
-                              # stats are unknown).
+_READINESS_BENCH_DISCOUNT = 0.45   # bench position weight FLOOR for attack readiness (Active = 1.0) —
+                              # the floor of `_bench_position_w`'s promotion-ease lift toward
+                              # `_READINESS_PROMO_MAX`, used when the Active cannot vacate freely.
 
-_READINESS_PROMO_MAX = 0.5    # ceiling of the lifted bench weight — promotion is never free (it still
-                              # costs the once-per-turn retreat action + the tempo of the swap), so a
-                              # benched attacker must NEVER read equal to the same attacker Active.
-                              # Measured on the leaf lab (2026-07-20): 1.0 let "hide the loaded attacker
-                              # behind a free-retreat wall" boards overtake the human's attacker-in-front
-                              # boards (39→37 SOLE / 190→184 shared); 0.75/0.6 still lost frames; 0.5 is
-                              # the frontier with ZERO regressed frames (40/190, E 83.8→84.7).
+_READINESS_PROMO_MAX = 0.5    # ceiling on the lifted bench weight — a benched attacker must never read
+                              # equal to the same attacker Active. 0.5 is the frontier: 1.0/0.75/0.6 regressed.
 
 _READINESS_MOBILITY_W = 2.5   # the who's-Active micro-credit: `_active_quality` × this, once per board
-                              # (a bench must exist — a good Active with nowhere to go is nothing). The
-                              # second who's-Active facet the lift can't reach: a free-retreat body UP
-                              # FRONT (Cinderace r0, Lunatone+Air Balloon) or a building line pre-evo is
-                              # what the human boards consistently keep, and the dissected residual ties
-                              # differ by exactly this when the bench is unloaded. Micro-sized: it splits
-                              # exact-value ties, never outranks a real readiness gap (smallest genuine
-                              # attack contribution ≈ a 30-chip × 0.45 × 0.45 ≈ 6). HAND-ARMED
-                              # (`leaf_hand_value`): measured hand-blind it nets sole +4 but trades a
-                              # shared-top frame whose label pivots on HIDDEN-hand context (the held
-                              # Lunar-Cycle {F} / the Mega-in-hand attach) — with the injected hand the
-                              # context is readable, so the credit rides the hand-visibility arm.
+                              # (bench must exist). Ties only: below the ~6 smallest real gap. `leaf_hand_value`.
 
 _READINESS_ATTACK_W = 0.45    # damage → readiness scale (Mega Brave 270 × 0.45 = 121 → body cap 120; a
                               # 70 chip → 31): keeps attack readiness the dominant, legible term.

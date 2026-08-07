@@ -1,23 +1,15 @@
 """Prove a refactor MOVED code without changing it.
 
-The planned `pilot.py` split relocates ~300 methods into mixin modules. "Pure movement" is easy to
-claim and hard to verify by review, so this makes it mechanical: snapshot the resolved method surface
-of a class before, compare after, and report any method whose CODE changed rather than its address.
+Snapshot the resolved method surface of a class before, compare after, and report any method
+whose CODE changed rather than its address.
 
     python -m tools.move_equivalence snapshot --out .move.json
-    ...refactor...
     python -m tools.move_equivalence verify --against .move.json
 
-Why the resolved surface and not a per-file scan: `Pilot` is a mixin composition, so walking
-`__mro__` yields the same method set whether a method sits in `pilot.py` or in a `decide_*.py`
-sibling. Moving code between those files is invisible here by construction, which is the point —
-anything this tool DOES report is a real edit.
-
-Bodies are compared as normalized ASTs (`ast.dump` without attributes), so indentation, line numbers
-and comments are ignored while every expression, constant and docstring is significant. A pure move
-is therefore silent even though the file and line number changed; an "and while I was in there"
-tweak is not.
-"""
+`Pilot` is a mixin composition, so walking `__mro__` yields the same method set wherever a
+method sits — moving code between those files is invisible here by construction. Bodies compare
+as normalized ASTs (`ast.dump` without attributes), so line numbers and comments are ignored
+while every expression, constant and docstring is significant."""
 from __future__ import annotations
 
 import argparse

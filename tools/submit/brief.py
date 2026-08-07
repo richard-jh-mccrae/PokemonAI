@@ -19,15 +19,8 @@ from submit.package import REPO, _git_hash, artifact_stem  # reuse build-stamp h
 
 def render_brief(manifest: dict, *, prev_deck: dict | None = None,
                  prev_build_id: int | None = None, prev_hyps: dict | None = None) -> str:
-    """Render the Manifest into a self-contained Agent Brief (HTML) that also embeds it.
-
-    The machine-readable Manifest is inlined in a `<script type="application/json">` (with `<`
-    escaped so it cannot break out), so the single file is both human- and machine-readable.
-    `prev_deck` (the previous build's deck) drives a highlighted **deck-change** callout, and
-    `prev_hyps` (`{"strategy": [...], "general": [...]}` — the previous build's Hypothesis rows) a
-    **strategy-change** callout (weights/rules/status changed since build `prev_build_id`). Omit
-    both for the first build.
-    """
+    """Render the Manifest into a self-contained Agent Brief (HTML) that also EMBEDS it, in a
+    `<script type="application/json">` with `<` escaped so it cannot break out."""
     payload = json.dumps(manifest, ensure_ascii=False).replace("<", "\\u003c")
     p, caps = manifest["provenance"], manifest["capabilities"]
     flags = (f"Tier-{caps['tier']} · card_functions:{'✓' if caps['card_functions']['present'] else '✗'}"
@@ -62,9 +55,8 @@ def render_brief(manifest: dict, *, prev_deck: dict | None = None,
 
 
 def _hyp_details(hyps: list[dict], marks: dict | None = None) -> str:
-    """Each Hypothesis as an expandable `<details>` row carrying all of its info.
-
-    `marks` (id -> badge, e.g. `30→2` or `new`) highlights rows that changed since the last build."""
+    """Each Hypothesis as an expandable `<details>` row. `marks` (id -> badge, e.g. `30→2`) is what
+    highlights rows changed since the last build."""
     marks = marks or {}
     rows = []
     for h in hyps:
@@ -106,9 +98,8 @@ def _trigger_src(fn) -> str:
 
 
 def _hyp_row(h, tuned: dict, seed_overrides: dict) -> dict:
-    """One Hypothesis as a manifest row — all of its decision-steering info. ``effective``
-    resolves the ADR-0035 chain: learned tuned.json > authored Strategy.weight_overrides >
-    authored default."""
+    """One Hypothesis as a manifest row. ``effective`` resolves the ADR-0035 chain: learned
+    tuned.json > authored `Strategy.weight_overrides` > authored default."""
     seed = seed_overrides.get(h.id, h.weight)
     effective = tuned.get(h.id, seed)
     return {
@@ -161,10 +152,8 @@ _DECK_SECTIONS = [
 
 
 def _deck_html(deck: dict, badges: dict | None = None) -> str:
-    """The decklist grouped into Pokémon / Trainer / Energy, counts first — like a real list.
-
-    `badges` maps a card id to a change marker (`new` / `+1` / `-2`); marked rows are highlighted.
-    Returns "" when no names resolved (no card db at build time); the size line still shows."""
+    """The decklist grouped into Pokémon / Trainer / Energy, counts first. Returns "" when no names
+    resolved (no card db at build time) — the size line still shows."""
     cards = deck.get("cards", [])
     if not any(c.get("name") for c in cards):
         return ""
@@ -191,11 +180,8 @@ def _deck_li(card: dict, badge: str | None) -> str:
 
 
 def _deck_diff(prev_deck: dict | None, cur_deck: dict) -> tuple[list, list, list, dict]:
-    """The deck delta vs a baseline -> (added, removed, changed, badges).
-
-    `added`/`removed` are whole cards; `changed` carries `from`/`to` counts; `badges` maps a
-    *current* card id to its inline marker. Empty across the board when nothing changed (or no
-    baseline) — the brief then shows no callout."""
+    """The deck delta vs a baseline -> (added, removed, changed, badges), all empty when nothing
+    changed or there is no baseline. `badges` keys the CURRENT card ids."""
     if not (prev_deck or {}).get("cards"):
         return [], [], [], {}      # no previous build to diff against (e.g. first build)
     prev = {c["id"]: c for c in prev_deck["cards"]}
@@ -227,11 +213,8 @@ def _deck_diff_html(prev_build_id, added: list, removed: list, changed: list) ->
 
 
 def _hyp_diff(prev_hyps: dict | None, cur_strategy: list, cur_general: list):
-    """The Hypothesis delta vs a baseline -> (weights, added, removed, status, marks).
-
-    Compares **effective** weight (authored merged with `tuned.json`) and `status` across both the
-    deck and general Strategies. `marks` maps a *current* Hypothesis id to its inline badge. All
-    empty when there's no prior hypothesis baseline (the first build after this field exists)."""
+    """The Hypothesis delta vs a baseline -> (weights, added, removed, status, marks). Compares
+    EFFECTIVE weight (authored merged with `tuned.json`) and `status`; all empty with no baseline."""
     prev = {h["id"]: h for h in ((prev_hyps or {}).get("strategy", []) + (prev_hyps or {}).get("general", []))}
     if not prev:
         return [], [], [], [], {}
@@ -278,13 +261,8 @@ def _hyp_diff_html(prev_build_id, weights: list, added: list, removed: list, sta
 
 def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None,
                    agent_name=None, cards=None) -> dict:
-    """The agent's decision-steering Manifest (ADR-0019).
-
-    `general_strategy` defaults to the shared `GENERAL_STRATEGY` shipped in `common/`;
-    `when` / `git_hash` / `agent_name` default to now / `HEAD` / the dir name — pass them to
-    stamp deterministically in tests. `cards` (the card cache) defaults to the local `cards.json`
-    and resolves the decklist's names; inject it in tests.
-    """
+    """The agent's decision-steering Manifest (ADR-0019). Every keyword defaults to the live value
+    (now / `HEAD` / the dir name / the local `cards.json`) and exists to be injected in tests."""
     agent_dir = Path(agent_dir)
     if general_strategy is None:
         from common.strategy.general_strategy import GENERAL_STRATEGY

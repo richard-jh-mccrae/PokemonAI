@@ -23,9 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = ROOT / "data" / "EN_Card_Data.csv"
 TESTS_ROOT = ROOT / "tests"
 
-#: The one CSV column carrying BOTH the Pokémon stage and the Trainer/Energy type — read twice
-#: below (through `CARD_TYPES` for `cardType`, through `STAGE_LABELS` for `stage`), so the two
-#: facts are drawn from one source and cannot disagree.
+#: The one CSV column carrying BOTH the Pokémon stage and the Trainer/Energy type, read twice
+#: below — so the two facts are drawn from one source and cannot disagree.
 STAGE_COLUMN = "Stage (Pokémon)/Type (Energy and Trainer)"
 
 TYPE_CODES = {
@@ -49,9 +48,8 @@ CARD_TYPES = {
     "Basic Energy": _BASIC_ENERGY,
     "Special Energy": _SPECIAL_ENERGY,
 }
-#: The Pokémon half of `STAGE_COLUMN`, in the CANONICAL vocabulary production emits (Issue #408).
-#: The printed label is what the audit must MAP, not what it demands: a fixture declaring
-#: `stage="Basic Pokémon"` would be claiming a value `_build_cache` cannot produce.
+#: The Pokémon half of `STAGE_COLUMN` in the CANONICAL vocabulary production emits: the printed
+#: label is what the audit MAPS, since `_build_cache` can never produce `stage="Basic Pokémon"`.
 STAGE_LABELS = {
     "Basic Pokémon": "basic",
     "Stage 1 Pokémon": "stage1",
@@ -79,17 +77,8 @@ COVERED_FIELDS = {
     "retreatReduction",
 }
 UNCOVERED_FIELDS = sorted({f.name for f in fields(CardStat)} - COVERED_FIELDS - {"cardId", "synthetic"})
-#: Fixture rows that deliberately keep a source card NAME while declaring `synthetic=True`, because
-#: the test exercises topology or card-effect lookup keyed by that name. The row is still arbitrary:
-#: at least one other declared source-covered fact differs from the CSV.
-#:
-#: Keyed `(path, enclosing def, cardId)` — POSITION-INDEPENDENT. It was keyed by line number until
-#: Issue #408, where three unrelated edits to `test_retreat_cost_grants.py` (a docstring paragraph, a
-#: constant, a test) shifted three entries and failed two tests with a message about fixture hygiene
-#: — describing a violation that had not occurred. Line numbers now appear only in failure messages,
-#: where they help. `(path, cardId)` is NOT sufficient on its own and neither is adding `name` (a row
-#: is here BECAUSE its name matches the CSV, so name is a function of cardId): 22 rows share a
-#: `(path, cardId)`, and `test_the_ledger_key_identifies_exactly_one_row_each` holds that line.
+#: Fixture rows deliberately keeping a source card NAME while declaring `synthetic=True`. Keyed
+#: `(path, enclosing def, cardId)` — POSITION-INDEPENDENT, and `(path, cardId)` alone collides.
 SYNTHETIC_SOURCE_NAME_SITES = {
     ("tests/agents/test_mega_starmie_triggers.py", "<module>", 665),
     ("tests/scouting/test_retreat_cost_grants.py", "_pilot", 170),
@@ -211,19 +200,8 @@ def _damage(value):
 
 
 def _stage_flags(stage_text, effect_texts):
-    """The engine's three stage booleans (`CardData.basic`/`.stage1`/`.stage2`), read off the CSV.
-
-    The audit's ground truth has to stay INDEPENDENT of the code it grades, so the flags come from
-    the source column — but the fold from three booleans to one string is `stage_from_card`, reused
-    rather than respelled, exactly as this function already reuses `_parse_tool_hp_bonus`. One
-    derivation, two inputs: the engine's own booleans in production, the CSV's here.
-
-    The five Antique Fossils print as `Item` yet the engine reports `basic=True`, and it is right —
-    *"Play this card as if it were a 60-HP Basic {C} Pokémon."* Read from the effect text, which is
-    where the CSV states it, rather than from a hardcoded id list. Over all 1267 cards this agrees
-    with the engine exactly (`test_csv_stage_truth_matches_the_engine_pool`); without it the audit
-    would demand `None` from a Fossil fixture that production stamps `"basic"`.
-    """
+    """The engine's three stage booleans, read off the CSV so the audit's ground truth stays
+    INDEPENDENT. The Fossils print as `Item` yet are Basic, which the effect TEXT is read for."""
     canonical = STAGE_LABELS.get(stage_text)
     if canonical is None and any("as if it were" in t and "Basic" in t for t in effect_texts):
         canonical = "basic"
@@ -313,9 +291,8 @@ def _csv_truth(*, hp_shift=0):
 
 
 def _scopes(tree):
-    """``{id(CardStat call node) -> dotted enclosing def/class path}`` — the STABLE half of a site's
-    identity. ``ast.walk`` flattens the tree and loses this, so descend explicitly, carrying the
-    prefix. A row at module scope reports ``"<module>"``."""
+    """``{id(CardStat call node) -> dotted enclosing def/class path}``; module scope is
+    ``"<module>"``. ``ast.walk`` flattens the tree and loses this, hence the explicit descent."""
     found = {}
 
     def descend(node, prefix):
@@ -332,11 +309,8 @@ def _scopes(tree):
 
 
 def _cardstat_calls():
-    """Yield ``(path, line, scope, cardId, kwargs)`` for every literal ``CardStat(...)`` in tests.
-
-    ``line`` is for HUMANS — it goes in failure messages so a reader can jump to the row. ``scope``
-    is for the LEDGER key: a site's line number changes whenever anything above it in the file does,
-    which made an unrelated docstring edit fail two tests with a message about fixture hygiene."""
+    """Yield ``(path, line, scope, cardId, kwargs)`` per literal ``CardStat(...)``. ``line`` is for
+    HUMANS; ``scope`` is the LEDGER key, because a line number moves whenever anything above does."""
     for path in sorted(TESTS_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         constants = _constants(tree)
@@ -411,15 +385,8 @@ def test_source_named_synthetic_site_ledger_matches_live_rows():
 
 
 def test_the_ledger_key_identifies_exactly_one_row_each():
-    """The ledger is a SET, so two rows sharing a key would collapse into one entry and a newly
-    added source-named row could hide behind an existing one — the audit would read green for the
-    wrong reason. Guard the key's discriminating power directly rather than trusting it.
-
-    This is why the key is `(path, scope, cardId)` and not the more obvious `(path, cardId, name)`:
-    a row only reaches this ledger BECAUSE its `name` equals the CSV name for its `cardId`, so name
-    is a function of cardId here and adds nothing — and `(path, cardId)` alone collides 9 times
-    across 22 rows (`test_reachable_attach.py` declares card 163 four separate times). The enclosing
-    def is what actually separates them."""
+    """The ledger is a SET, so two rows sharing a key collapse and a new source-named row could
+    hide behind an existing one. `name` adds nothing: a row is here BECAUSE its name matches."""
     rows = _source_named_synthetic_rows(_csv_truth())
     duplicated = sorted(k for k, n in Counter(site for site, _ in rows).items() if n > 1)
     assert duplicated == []
@@ -428,8 +395,7 @@ def test_the_ledger_key_identifies_exactly_one_row_each():
 
 def test_the_ledger_key_survives_a_line_shift():
     """The property the old line-number key lacked: inserting a line above a listed row must not
-    change its identity. Simulated by re-deriving one file's keys from a copy of its source with a
-    blank line spliced in at the top — same keys, different line numbers."""
+    change its identity."""
     path = ROOT / "tests" / "scouting" / "test_tool_holder_facts.py"
     original = path.read_text(encoding="utf-8")
     shifted = "\n" * 5 + original

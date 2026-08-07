@@ -35,11 +35,8 @@ def parse_telemetry(stderr: str) -> list[dict]:
 
 
 def _log_entries(log) -> list[dict]:
-    """Flatten a match log to our agent's per-decision entries.
-
-    Handles both shapes: a downloaded single-agent log `[[{...}], ...]` and a local
-    `env.logs` `[[seat0, seat1], [], ...]` (self-play — every seat is our agent).
-    """
+    """Flatten a match log to our agent's per-decision entries. Handles BOTH shapes: a downloaded
+    single-agent log and a local `env.logs` (self-play, where every seat is ours)."""
     return [e for step in (log or []) for e in step if e]
 
 
@@ -58,11 +55,8 @@ def _timing(durations: list[float]) -> dict:
 
 
 def aggregate_matches(matches: list[dict]) -> dict:
-    """Many `parse_match` results -> one Performance Log sample (record, matchups, efficiency).
-
-    `efficiency` summarises per-match medians/maxes (a tracking summary, not a pooled
-    distribution); `matchups` is the per-Archetype win/loss dropdown.
-    """
+    """Many `parse_match` results -> one Performance Log sample. `efficiency` summarises per-match
+    medians/maxes — a tracking summary, NOT a pooled distribution."""
     tally = {"wins": 0, "losses": 0, "draws": 0}
     matchups: dict[str, dict] = {}
     tier: Counter = Counter()
@@ -111,10 +105,8 @@ def _to_float(x):
 
 
 def _run_kaggle(args: list[str]) -> str:
-    """Run a `kaggle` CLI command and return stdout — surfacing the real cause on failure.
-
-    The raw CLI is `check=True` + `capture_output`, which hides *why* it failed; here a non-zero
-    exit raises a clean `SystemExit` carrying the CLI's own stderr (auth failures get the hint)."""
+    """Run a `kaggle` CLI command -> stdout. A non-zero exit raises `SystemExit` carrying the CLI's
+    own stderr, which `check=True` + `capture_output` would otherwise swallow."""
     import subprocess
     try:
         proc = subprocess.run(["kaggle", *args], capture_output=True, text=True)
@@ -154,11 +146,8 @@ def fetch_from_dir(replays_dir) -> list[tuple[dict, list]]:
 
 def collect(submission_id: int, *, score_fn, fetch_fn, parse_fn=None, seat: int = 0,
             when=None, perf_path=DEFAULT_PERF, cards: dict | None = None) -> dict:
-    """Score + fetch + parse this Submission's matches, then append one Performance Log sample.
-
-    `score_fn`/`fetch_fn` are injected (default Kaggle CLI / a local dir) so the orchestration is
-    testable without the network; `parse_fn` defaults to `parse_match`.
-    """
+    """Score + fetch + parse this Submission's matches, then append one Performance Log sample. The
+    `*_fn` keywords are injected so the orchestration is testable without the network."""
     parse_fn = parse_fn or parse_match
     score = score_fn(submission_id)
     matches = [parse_fn(replay, log, seat=seat, cards=cards)
@@ -170,11 +159,8 @@ def collect(submission_id: int, *, score_fn, fetch_fn, parse_fn=None, seat: int 
 
 def record_sample(submission_id: int, matches: list[dict], *, kaggle_ref=None,
                   public_score=None, rank=None, when=None, perf_path=DEFAULT_PERF) -> dict:
-    """Append one time-stamped Performance Log sample for a Submission (append-only, ADR-0019).
-
-    `matches` are `parse_match` results; score/rank/`kaggle_ref` come from `submissions --csv`.
-    Keyed by `submission_id` so it joins the Agent History row.
-    """
+    """Append one time-stamped Performance Log sample (append-only, ADR-0019), keyed by
+    `submission_id` so it joins the Agent History row."""
     sample = {
         "submission_id": submission_id,
         "kaggle_ref": kaggle_ref,
@@ -228,13 +214,8 @@ def _resolve_submitted(history, submission_id):
 def collect_submission(submission_id: int | None = None, *, history=None,
                        replays_root=DEFAULT_REPLAYS, perf_path=DEFAULT_PERF, max_replays: int = 20,
                        download_fn=None, score_fn=None, parse_fn=None, cards=None, when=None) -> dict:
-    """Resolve a submitted build (default: the most recently submitted), download up to
-    `max_replays` of its matches into `data/replays/<artifact>/`, parse them, and append a
-    Performance Log sample. `download_fn`/`score_fn` are injectable for testing.
-
-    `download_fn(row, dest, max_replays, kaggle_ref) -> [(replay, log, seat), …]` — `seat` is our
-    agent's index in that episode (it varies match to match), threaded into `parse_match`.
-    """
+    """Resolve a submitted build, download up to `max_replays` matches, parse them, append a
+    Performance Log sample. `download_fn` yields `(replay, log, seat)` — `seat` VARIES per match."""
     if history is None:
         from submit.build import DEFAULT_HISTORY
         history = DEFAULT_HISTORY
@@ -262,13 +243,8 @@ def _our_seat(episode, sub_id: int) -> int:
 
 def _kaggle_download(row: dict, dest, max_replays: int, *, kaggle_ref=None, api=None,
                      sleep=None) -> list[tuple[dict, list, int]]:
-    """Download up to `max_replays` of OUR submission's episodes (replay + our agent's log) into
-    `dest`; return (replay, log, our_seat) triples. **Incremental**: an episode whose replay + log
-    are already on disk is reused, not re-fetched — only new matches hit the network (so re-running
-    `collect` picks up just the latest games). Public Kaggle API (token auth, kaggle-cli >= 2.0.2):
-    list_episodes / episode_replay / episode_agent_logs. Throttled (<=1/sec) on actual fetches.
-
-    `api`/`sleep` are injectable for testing (default: an authenticated KaggleApi / time.sleep)."""
+    """Download up to `max_replays` of OUR episodes into `dest` -> (replay, log, our_seat) triples.
+    INCREMENTAL: an episode already on disk is reused. Throttled to <=1/sec on actual fetches."""
     import time
 
     sleep = sleep or time.sleep

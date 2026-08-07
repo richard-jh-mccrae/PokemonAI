@@ -13,9 +13,8 @@ _rush = next(h for h in GENERAL_STRATEGY.hypotheses if h.id == "prefer-rush-evol
 
 
 def test_play_from_hand_option_resolves_its_card_id():
-    """REQ-PILOT-0022: a play option is a bare hand index with no `area` (`{"index":N,"type":7}`);
-    it must resolve to `hand[N]` — otherwise card_id is None and every roles/tags/stat Hypothesis is
-    silently dead on plays (why Salvatore was never played)."""
+    """REQ-PILOT-0022: a play option is a bare hand index with no `area` (`{"index":N,"type":7}`), so
+    it resolves to `hand[N]`; otherwise card_id is None and every rung is silently dead on plays."""
     p = Pilot(Strategy(), deck=[])
     obs = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 111}, {"id": 1189}]}]}}
     assert p._option_card_id(obs, {}, {"index": 1, "type": _PLAY}) == 1189

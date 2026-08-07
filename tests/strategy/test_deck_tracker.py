@@ -30,11 +30,8 @@ def _take(cid, serial, player=0):
 def _obs(*, deck_count, prize, hand=(), discard=(), active=None, bench=(),
          reveal=None, effect=None, turn=2, logs=(), active_serial=None,
          effect_serial=None, context_card=None):
-    """An observation the tracker reads: my zones + `deckCount` + (optionally) a search that reveals
-    the deck (`reveal`) and names the resolving card (`effect`), plus the engine's `logs` delta.
-
-    `active_serial` / `effect_serial` / `context_card` model an ABILITY resolving off a Pokémon that
-    is still in play — the engine names it by `serial`, and it is already counted in its zone."""
+    """My zones + `deckCount` + optionally a deck `reveal`, the resolving card (`effect`) and the
+    `logs` delta. The three serial args model an ABILITY resolving off a body still in play."""
     me = {
         "hand": [{"id": c} for c in hand],
         "discard": [{"id": c} for c in discard],
@@ -105,10 +102,8 @@ def test_prize_take_falls_back_when_ambiguous():
 
 @pytest.mark.req("REQ-GEN-0034")
 def test_resolving_ability_card_still_in_play_is_not_double_counted():
-    """An ABILITY resolves off a Pokémon that is STILL IN PLAY (Drakloak's Recon Directive), so the
-    `effect` rider's premise — "it has left the deck but sits in no zone" — is false and the card is
-    already counted in its zone. Counting it twice pushed `visible` past the decklist and dropped the
-    anchor for a desync that never happened. The engine names it by `serial`, so dedupe on that."""
+    """The `effect` rider's premise — *"it has left the deck but sits in no zone"* — is false for an
+    Ability, and counting it twice pushes `visible` past the decklist. Dedupe on `serial`."""
     m = OwnCardModel(DECK)
     # All 3× id1 visible: 2 in hand + the Active (serial 7). Prizes {2:1, 3:2}.
     anchor = dict(deck_count=4, prize=3, hand=[1, 1], active=1, active_serial=7)

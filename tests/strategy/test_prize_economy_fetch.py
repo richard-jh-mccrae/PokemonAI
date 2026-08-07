@@ -48,9 +48,8 @@ def _fired(option):
 
 @pytest.mark.req("REQ-GEN-0075")
 def test_prefers_the_cheap_secondary_line_over_a_redundant_wincon_base():
-    """Mega online + a Riolu already in hand (base deployable → 2nd Riolu redundant): the tie-break tips
-    the pick to Makuhita (the cheap Hariyama line) over a 2nd Riolu — the case the solrock `card_is_redundant`
-    gate (needs Riolu IN PLAY) misses."""
+    """Mega online + a Riolu already in hand: the tie-break tips the pick to Makuhita over a 2nd
+    Riolu — the case the solrock `card_is_redundant` gate (needs Riolu IN PLAY) misses."""
     dec = _pilot().explain(_fetch_obs(riolu_in_hand=True))
     assert dec.chosen == [1]                                   # Makuhita, not the redundant 2nd Riolu
     assert "develop-the-cheap-prize-wall-line" in _fired(dec.options[1])

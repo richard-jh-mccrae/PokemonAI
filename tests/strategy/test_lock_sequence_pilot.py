@@ -1,18 +1,7 @@
 """Horizon-2 lock oracle (ADR-0061) through the SHIPPED Pilot — real captured boards.
 
-The two lock branches, each on a real correction:
-
-  ml f88   Active alive, Mega Brave (270, SAME-ATTACK lock) is a KO and Aura Jab (130, lock-free)
-           is not. The lock charge is now DERIVED -- 0.5 x (270 - 130) = 70, the damage the lock
-           actually forfeits next turn -- rather than the flat 40 that was charged whatever the
-           Pokemon's other attack happened to be.
-
-  ml f111  Active is `active_doomed`. There IS no next turn for it, so a cooldown costs nothing and
-           we front-load: the lock charge collapses to 0. The flat 40 charged it anyway, docking a
-           lethal Mega Brave for a flexibility it was never going to get to use.
-
-The arithmetic of the follow-up itself is pinned in test_lock_sequence.py against the printed card
-text; these two pin that the Pilot reads the board when it applies it.
+The follow-up arithmetic itself is pinned in test_lock_sequence.py against the printed card text;
+these two pin that the Pilot reads the board when it applies it.
 """
 import json
 import sys
@@ -49,10 +38,8 @@ def _attacks(pilot, fx):
 
 
 def test_a_same_attack_lock_is_charged_the_damage_it_actually_forfeits():
-    """f88: Mega Brave locks only ITSELF, so next turn Aura Jab (130) remains. It forfeits the
-    difference to a lock-free pick (270 - 130 = 140), discounted -> 70. Aura Jab locks nothing and is
-    charged 0. Neither number is 40, and neither is a constant: swap the Pokemon's other attack and
-    both move."""
+    """Mega Brave locks only ITSELF, so it forfeits the difference to the lock-free pick, discounted;
+    neither charge is a constant — swap the Pokemon's other attack and both move."""
     pilot = _shipped_pilot()
     board, attacks = _attacks(pilot, _fx("ml_dont_wake_the_giant_with_the_locking_ko_f88.json"))
     assert not board.active_doomed                       # the follow-up is real here
@@ -61,8 +48,6 @@ def test_a_same_attack_lock_is_charged_the_damage_it_actually_forfeits():
 
 
 def test_a_doomed_active_pays_no_cooldown_charge():
-    """f111: our Active dies to their next attack, so it will never USE the turn Mega Brave's lock
-    takes away. Charging it is charging for a flexibility that does not exist -- front-load instead."""
     pilot = _shipped_pilot()
     board, attacks = _attacks(pilot, _fx("ml_dont_judge_away_the_bigger_hand_f111.json"))
     assert board.active_doomed
@@ -72,8 +57,6 @@ def test_a_doomed_active_pays_no_cooldown_charge():
 @pytest.mark.xfail(strict=True,
                    reason=marks("ml_dont_wake_the_giant_with_the_locking_ko_f88")[0].kwargs["reason"])
 def test_the_locking_ko_is_still_declined_when_the_line_is_better():
-    """The behavioural gate the charge exists to serve: f88's human correction is Aura Jab over the
-    locking Mega Brave KO. Re-derived through the full shipped menu, not a hand-built probe."""
     fx = _fx("ml_dont_wake_the_giant_with_the_locking_ko_f88.json")
     chosen = _shipped_pilot().explain(fx["obs"]).chosen
     assert all(c in chosen for c in fx["correct"]), (

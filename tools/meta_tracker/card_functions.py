@@ -33,16 +33,8 @@ _AREA_LOOK = 12                # AreaType.LOOKING (cards being looked at)
 _INTO_PLAY = frozenset((2, 4, 5))   # HAND / ACTIVE / BENCH — fetch destinations
 _CTX_DAMAGE_COUNTER_ANY = 14   # SelectContext.DAMAGE_COUNTER_ANY
 
-#: **Every tag :func:`classify_functions` can emit from a probe record** — i.e. exactly the tags a
-#: ``--fresh`` rebuild re-derives without help from `function_overrides.json`.
-#:
-#: Exported because `common.card_tags.unsourced_tag_instances` needs it and **must not re-transcribe
-#: it** (Issue #395 D6.1): a second copy of this set is the drift that check exists to detect, and it
-#: would go stale the first time a classify rule changed. The Special Conditions are composed from
-#: :data:`_CONDITION_TAG` rather than re-listed here for the same reason, one scale down.
-#:
-#: `tests/cards/test_card_functions.py` holds it honest in BOTH directions — every tag a synthetic
-#: probe record produces is in here, and every tag in here is produced by one.
+#: Every tag :func:`classify_functions` can emit from a probe record. Exported because
+#: `common.card_tags.unsourced_tag_instances` needs it and must NOT re-transcribe it (#395).
 DERIVED_TAGS = frozenset({
     "switch", "gust",                       # SWITCH log, by side
     "hand_disruption", "energy_denial",     # opponent-side forced moves during resolution
@@ -55,9 +47,8 @@ DERIVED_TAGS = frozenset({
 
 def classify_functions(card: dict, *, probe: dict | None = None,
                        overrides: list[str] | None = None) -> list[str]:
-    """Return the sorted *behavioral* function tags for one card. Pure; never raises on sparse
-    input. Structural facts (ex / trainer subtype / ACE SPEC) are intentionally *not* tagged —
-    the runtime reads them off ``CardData`` directly (see the module docstring)."""
+    """The sorted behavioral function tags for one card. Pure; never raises on sparse input. Structural
+    facts (ex / trainer subtype / ACE SPEC) are deliberately NOT tagged — the runtime reads CardData."""
     tags: set[str] = set()
 
     # --- Behavioral tags (from the engine probe record) ---
@@ -121,10 +112,8 @@ def build_function_table(cards: dict[int, dict], probes: dict[int, dict] | None 
 
 def accumulate_tables(new: dict[int, list[str]],
                       prior: dict[int, list[str]]) -> dict[int, list[str]]:
-    """Union this run's table with a prior run's — **monotonic**: a once-observed tag is never
-    dropped, so successive (stochastic) probe builds only *add* coverage for the rng-gated tags
-    (recycle/energy_denial/heal/…). Sorted; cards with no tags omitted. (To discard stale tags
-    after a classify-rule change, rebuild ``--fresh`` instead of accumulating.)"""
+    """Union this run's table with a prior run's — MONOTONIC, so successive stochastic probe builds
+    only add coverage. To discard stale tags after a classify-rule change, rebuild ``--fresh``."""
     out: dict[int, set] = {cid: set(tags) for cid, tags in prior.items()}
     for cid, tags in new.items():
         out.setdefault(cid, set()).update(tags)

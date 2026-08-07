@@ -21,12 +21,8 @@ from train.blunder.decisions import _film
 
 
 def own_winprob(pilot, model, replay, arm_seat: int) -> list[float]:
-    """P(win for ``arm_seat``) at each of the arm's OWN decision frames — frames where the acting
-    seat IS ``arm_seat``. That frame's obs is seat-relative to the actor, so ``model.predict`` gives
-    P(win for the arm) directly (no flipping, no scoring the opponent's positions through the arm's
-    doctrine — D5's "swing across OWN decisions"). Mirrors the extractor's frame walk
-    (``train.value.extract``): the choice for frame ``i`` and its aligned obs live in frame ``i+1``.
-    Pure on the film — never touches the live engine, never raises."""
+    """P(win for ``arm_seat``) at the arm's OWN decision frames only. The obs is seat-relative to the
+    actor, so no flipping. The choice for frame ``i`` and its aligned obs live in frame ``i+1``."""
     film = _film(replay)
     traj: list[float] = []
     for i, frame in enumerate(film):
@@ -50,10 +46,8 @@ def own_winprob(pilot, model, replay, arm_seat: int) -> list[float]:
 
 
 def game_sensitivity(pilot, model, replay, *, arm_seat: int = 0) -> float | None:
-    """The value-swing sensitivity of one game: ``max − min`` of the arm's own-decision win-prob
-    trajectory (``arm_seat`` = the engine seat the arm occupied). ``None`` when the film yields no
-    scorable own decision (excluded from stratification, not counted as zero — a hole is not a
-    blowout)."""
+    """``max − min`` of the arm's own-decision win-prob trajectory. ``None`` when nothing scored —
+    EXCLUDED from stratification rather than counted as zero, because a hole is not a blowout."""
     traj = own_winprob(pilot, model, replay, arm_seat)
     if not traj:
         return None
@@ -61,10 +55,8 @@ def game_sensitivity(pilot, model, replay, *, arm_seat: int = 0) -> float | None
 
 
 def sensitivity_split(scores: list[float]) -> tuple[float, list[str]]:
-    """Median-threshold each score into ``high-swing`` / ``low-swing``. The split is STRICT
-    (``score > median`` is high) so a degenerate run where every game scores the same — e.g. the
-    null model, which predicts 0.5 everywhere → swing 0 — lands entirely in ``low-swing`` rather
-    than splitting noise. Returns ``(threshold, labels)`` aligned to ``scores``."""
+    """Median-threshold into ``high-swing`` / ``low-swing`` -> ``(threshold, labels)``. STRICT
+    (``score > median``), so an all-equal run lands entirely in ``low-swing`` rather than split."""
     if not scores:
         return 0.0, []
     thr = median(scores)
@@ -88,11 +80,8 @@ def _paired_pairs(games: list) -> list:
 
 
 def strata_cells(games: list) -> list[dict]:
-    """The C3 ``strata`` block: split ``games`` at the median sensitivity, then within each stratum
-    compute the paired candidate−baseline win-delta + CI over shared cells (same contrast as the
-    headline). ``games`` are dicts ``{sensitivity, opponent, seat, arm, won}``. A stratum with no
-    paired cell reports a null-delta zero-width interval (its games didn't pair up). Empty in →
-    empty out (C3 allows ``strata: []``)."""
+    """The C3 ``strata`` block: split ``{sensitivity, opponent, seat, arm, won}`` games at the median,
+    then take the headline's paired contrast within each. An unpaired stratum reports a null delta."""
     if not games:
         return []
     _, labels = sensitivity_split([g["sensitivity"] for g in games])

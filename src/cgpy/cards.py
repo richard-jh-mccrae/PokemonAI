@@ -1,9 +1,5 @@
-"""CardDB — the engine's card/attack tables, loaded from the committed snapshot (ADR-0059).
-
-Backed by `src/cgpy/defs/{card_data,attack_data}.json` (minted by
-`tools/parity/snapshot_tables.py` from the DLL's AllCard/AllAttack), so cgpy needs no native
-lib. Deck validation reproduces the native `BattleStart` error codes pinned in
-`defs/tables_meta.json` / docs/pyeng/determinism.md.
+"""CardDB — the engine's card/attack tables, read from `defs/{card_data,attack_data}.json` so cgpy
+needs no native lib (ADR-0059). Codes and shapes are pinned in docs/pyeng/determinism.md.
 """
 from __future__ import annotations
 
@@ -96,9 +92,8 @@ class CardDB:
         return c.cardType == CardType.POKEMON and c.basic
 
     def is_setup_starter(self, card_id: int) -> bool:
-        """Eligible for the setup Active Spot: a Basic, or an Explosiveness-class ability
-        ("...setting up to play, you may put it face down in the Active Spot") — pinned by
-        trace ms_mirror_1002 (Cinderace 666, a Stage 2, offered at SETUP_ACTIVE)."""
+        """Eligible for the setup Active Spot: a Basic, OR an Explosiveness-class ability — a Stage 2
+        can legally open (pinned against the native engine)."""
         c = self.cards[card_id]
         if c.cardType != CardType.POKEMON:
             return False
@@ -111,11 +106,8 @@ class CardDB:
         return self.cards[card_id].cardType in (CardType.BASIC_ENERGY, CardType.SPECIAL_ENERGY)
 
     def validate_deck(self, deck: list[int]) -> int:
-        """Native BattleStart validation: the errorType for `deck`, ERR_NONE if legal.
-
-        Check precedence mirrors the probe order; the 60-card length rule lives in the
-        Python shim (cg/game.py), not the native lib, so it is not enforced here.
-        """
+        """The native BattleStart errorType for `deck`, ERR_NONE if legal. The 60-card length rule
+        lives in the Python shim, not the native lib, so it is deliberately NOT enforced here."""
         for cid in deck:
             if cid not in self.cards:
                 return ERR_UNKNOWN_ID

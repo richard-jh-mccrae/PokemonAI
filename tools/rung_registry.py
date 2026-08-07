@@ -1,16 +1,9 @@
-"""Where every retired scoring rung went, and which module owns each decision seam — as DATA, not prose.
+"""Where every retired scoring rung went, and which module owns each decision seam — as DATA, not
+prose, because only the WHAT can be machine-verified. `tests/test_rung_registry.py` asserts it; the
+ADR keeps the WHY.
 
-Supersedes the prose fold maps. A fold map in a module docstring cannot be checked, so it rots silently;
-these two registries are checked by `tests/test_rung_registry.py` on every run. Prose keeps the WHY (and
-the ADR keeps all of it); this file keeps the WHAT, because only the WHAT can be machine-verified.
-
-`FOLDED` answers *"I see `power-up-attacker` in a comment — is it real?"* in one lookup. `DECIDERS`
-answers *"where is the attach decision made?"* without reading 10k lines of `pilot.py`.
-
-Lives in `tools/` because a retirement record is build-time history, not runtime data: `tools/submit`
-packages only `src/common` and `src/cg`, so nothing here reaches a Kaggle submission (ADR-0004). Both
-`tests/test_rung_registry.py` (which asserts it) and `tools/train/reviewed_audit.py` (which reads it to
-rule a stale correction) import from here, so `tools/` is also the only home that layers correctly.
+Lives in `tools/` because a retirement record is build-time history: `tools/submit` packages only
+`src/common` and `src/cg`, so nothing here reaches a Kaggle submission (ADR-0004).
 """
 from __future__ import annotations
 
@@ -42,9 +35,8 @@ class Decider(NamedTuple):
     adr: str
 
 
-#: Decision seam -> its owner. The first thing to read when wiring into an existing decision: six equation
-#: deciders (each with its own kill-switch), three archetype doctrines (Mixins, ADR-0008), one turn planner.
-#: The TOOL doctrine was a fourth until PR #447 deleted `doctrine_tool.py`; ADR-0028 is its record.
+#: Decision seam -> its owner. The first thing to read when wiring into an existing decision: equation
+#: deciders (each kill-switched), doctrine Mixins (ADR-0008), and the turn planner.
 DECIDERS: dict[str, Decider] = {
     "attach": Decider("common.pilot:Pilot._attach_value", "attach_value", "0069"),
     "evolve": Decider("common.evolve_value:evolve_value", "evolve_value", "0070"),
@@ -72,18 +64,16 @@ FOLDED: dict[str, Fold] = {
     "attach-energy-last": Fold(
         "0069", "common.pilot:Pilot._finish_turn_last",
         "the -5 rung became a structural tier: free development, then Supporter, then ATTACH"),
-    # Both RETIRED by PR #432, reverted by PR #447, restored by PR #448 — the rungs stay retired, so the
-    # records stand. They were dropped here for exactly one commit while the revert was live: a fold
-    # record tracking a MERGE rather than a measurement is a record that can be un-made by one.
+    # A fold record tracks the MEASUREMENT that retired a rung, never the merge that landed it — so
+    # these two stand even though a revert briefly un-landed them.
     "aurajab-skip-partnerless-solrock": Fold(
         "", "common.pilot:Pilot._attach_value",
         "Issue #425: Strategy.partners alone decided ml f87, so the deck rung was measured redundant"),
     "gravity-mountain-vs-stage2": Fold(
         "", "common.pilot:Pilot._boost_lethal_tactical",
         "Issue #424: the boost reaches the card through its card_effects.json clause, not a deck-side id"),
-    # --- PR #447 (POC-T4/5, Issue #386) deleted the rung LADDER. Destinations are main's own notes,
-    #     transcribed rather than inferred: `strategy/baseline/__init__.py`, `doctrine_gust.py`'s
-    #     "WHETHER-TO-PLAY band is DELETED" block, and the tombstone in `dragapult_ex/strategy.py`.
+    # --- PR #447 (Issue #386) deleted the rung LADDER. Destinations below are transcribed from
+    #     main's own tombstone notes, never inferred.
     "dig-before-commit": Fold(
         "0092", "common.composer:compose",
         "a beam over within-turn sequences scores the dig's successor states by construction"),
@@ -283,19 +273,10 @@ FOLDED: dict[str, Fold] = {
     "tutor-the-wincon": Fold("0034", "play-a-tutor-for-the-unfound-wincon", "general once the wincon Role carried it"),
 }
 
-#: Id-SHAPED tokens in `src/` prose that were never scoring rungs. Recorded so a reduction pass does not
-#: "fix" correct prose by deleting them, and so `FOLDED` is not asked to explain a retirement that never happened.
-NOT_A_RUNG: dict[str, str] = {
-    "risk-scales-with-prize-position": "a learnthetcg digest proposal id; baseline_posture is its authored half",
-}
+#: Id-SHAPED tokens in `src/` prose that were never scoring rungs — so `FOLDED` is not asked to
+#: explain a retirement that never happened. Unlike `FOLDED`, an entry here may be removed.
+NOT_A_RUNG: dict[str, str] = {}
 
-#: Ratchet on how many `src/` SITES still name a retired rung, backticked or not. Lower it as the reduction
-#: pass deletes stale mentions. A tombstone is legitimate; this many is prose nobody re-read.
-#:
-#: RAISED, 181 -> 228, across the PR #447/#448 pair: `_bare_mentions` scans the REGISTERED set, so
-#: registering 19 newly-retired rungs makes their EXISTING prose visible to a scan that was blind to it.
-#: The prose did not grow — the instrument's reach did. That is the ONLY legitimate reason to raise this
-#: number, and it must be stated, because "the ceiling went up" and "the rot got worse" are
-#: indistinguishable from the number alone. Five of the 19 could not be registered at all until PR #448
-#: deleted the tiers naming them, which is why this took two raises rather than one.
-MAX_MENTIONS = 228
+#: RATCHET on how many `src/` sites still name a retired rung: it may only SHRINK. The one legitimate
+#: reason to raise it — registering newly-retired rungs widens the scan's reach — must be stated here.
+MAX_MENTIONS = 39                        # 228 -> 39: the 2026-08-08 prose reduction drained the rest

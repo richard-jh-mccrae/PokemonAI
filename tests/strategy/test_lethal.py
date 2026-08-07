@@ -58,17 +58,12 @@ def _pilot(**kw):
 
 
 def _win(decision):
-    """The Decision's locked win line (``planned`` with ``goal=="win"``), or None — the Lethal
-    Solver's verdict under ADR-0037's unified line type."""
     p = decision.planned
     return p if (p is not None and p.goal == "win") else None
 
 
 @pytest.mark.req("REQ-LETHAL-0001")
 def test_immediate_prize_out_ko_is_a_locked_lethal_line_taken_now():
-    """Tracer bullet: my Active can KO the opponent's Active (Jetting Blow 120 vs 120 HP) and it takes
-    my LAST prize -> a guaranteed win THIS turn. The Solver locks the 1-step line and the Pilot takes
-    the attack; ``explain(obs).lethal`` surfaces the line."""
     pilot = _pilot()
     # Active powered for Jetting Blow (1 W); opp Active at 120 HP (a KO); my last prize (1 left).
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
@@ -83,8 +78,7 @@ def test_immediate_prize_out_ko_is_a_locked_lethal_line_taken_now():
 
 @pytest.mark.req("REQ-LETHAL-0002")
 def test_empty_bench_ko_is_lethal_even_when_prizes_are_not_last():
-    """A KO of the opponent's Active while their Bench is EMPTY wins the game (they have no Pokémon
-    left to promote) — a win even though it does NOT take my last prize. The Solver locks it."""
+    """A KO with their Bench EMPTY wins outright — they have no Pokémon left to promote."""
     pilot = _pilot()
     # 3 prizes left (not prize-out), but opponent's Bench empty: KO their Active = they lose.
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
@@ -104,10 +98,8 @@ def test_empty_bench_ko_is_lethal_even_when_prizes_are_not_last():
 
 @pytest.mark.req("REQ-LETHAL-0003")
 def test_enabling_attach_is_locked_and_the_breaker_is_vetoed():
-    """CRITICAL 040c shape: the Active needs ONE more Energy to KO for the win. Attaching it unlocks
-    Nebula Beam (210 vs 180); the Solver locks the 2-step line (attach -> KO), takes the attach, and
-    VETOES Wally's Compassion (clutch_heal) — which would BOUNCE the Energy the KO needs and blow the
-    win. The enabling step, not the finishing attack, is this decision's next step."""
+    """Wally's Compassion (`clutch_heal`) BOUNCES the Energy the KO needs, so it is vetoed; the
+    enabling step, not the finishing attack, is this decision's next step."""
     pilot = _pilot()
     play_wallys = opt(PLAY, area=HAND, index=0)                              # the breaker
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
@@ -129,10 +121,8 @@ def test_enabling_attach_is_locked_and_the_breaker_is_vetoed():
 
 @pytest.mark.req("REQ-LETHAL-0004")
 def test_evolve_that_unlocks_the_ko_is_a_locked_lethal_line():
-    """a211/aae4 shape: my Active is a Staryu (its own 20-damage attack can't KO). Evolving it to Mega
-    Starmie ex — the Energy carries through — lets Jetting Blow (120) KO for the win. No existing hook
-    sees an evolve-unlock, so the Solver does its own lookahead: it locks `evolve -> KO` and takes the
-    evolve."""
+    """Evolving carries the attached Energy through, so the evolved body's attack reaches a KO the
+    pre-evolution's own attack cannot. No other hook sees an evolve-unlock."""
     pilot = _pilot()
     evolve = opt(EVOLVE, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)  # Staryu -> Mega (hand[0])
     staryu_attack = attack_opt(STARYU)                                          # 20 dmg — no KO
@@ -152,9 +142,7 @@ def test_evolve_that_unlocks_the_ko_is_a_locked_lethal_line():
 
 @pytest.mark.req("REQ-LETHAL-0005")
 def test_snipe_that_does_not_take_enough_prizes_is_not_lethal():
-    """SOUNDNESS: I need 2 prizes. My attack snipes a benched 1-prize body (a KO) but does NOT KO the
-    2-prize ex Active — so it takes only ONE prize, not the win. The Solver must NOT lock it: a false
-    lethal that committed the turn is the one catastrophic direction."""
+    """A false lethal that committed the turn is the one catastrophic direction."""
     pilot = _pilot()
     snipe = attack_opt(SNIPE)                                    # 50 to Active (survives) + 100 snipe KO
     looks_won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(EXOPP, hp=330),
@@ -171,9 +159,8 @@ def test_snipe_that_does_not_take_enough_prizes_is_not_lethal():
 
 @pytest.mark.req("REQ-LETHAL-0006")
 def test_simultaneous_double_ko_is_a_draw_not_a_locked_win():
-    """SOUNDNESS: my KO takes my last prize, but its recoil also KOs my Active and hands the opponent
-    their last prize at the same Checkup — the competition scores that a DRAW, not a win (ADR-0022 #2).
-    The Solver must NOT lock it. Dedicated fixtures so the recoil attack can't perturb other slices."""
+    """Both players taking their last prize at the same Checkup is scored a DRAW by the competition
+    deltas (ADR-0022 #2), not a win."""
     RECOILER, ROPP, RECOIL_ATK = 950, 951, 20
     stats = DictCardStatProvider({
         RECOILER: CardStat(RECOILER, synthetic=True, name="recoiler", hp=70, energyType=3, minAttackCost=1,
@@ -198,9 +185,6 @@ def test_simultaneous_double_ko_is_a_draw_not_a_locked_win():
 # --------------------------------------------------------------------- in-scope CRITICAL gate (ADR-0030)
 @pytest.mark.req("REQ-LETHAL-0007")
 def test_critical_c1e0_winning_attack_vetoes_the_gust_breaker():
-    """CRITICAL c1e0 ('must never happen again'): the current Active can KO the opponent's Active for
-    the win, but the agent played Boss's Orders — gusting up a body it could no longer KO — and threw
-    the game. The Solver locks the winning attack and vetoes the gust."""
     pilot = _pilot()
     boss = opt(PLAY, area=HAND, index=0)                         # the breaker (gust)
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
@@ -213,9 +197,6 @@ def test_critical_c1e0_winning_attack_vetoes_the_gust_breaker():
 
 @pytest.mark.req("REQ-LETHAL-0008")
 def test_critical_fd5c_retreat_into_the_powered_wincon_is_locked():
-    """CRITICAL fd5c: retreating was right — but into the powered Mega Starmie that KOs for the win, not
-    the unpowered opener. My spent Active can't KO; a benched Mega (1 W = Jetting Blow 120) KOs the
-    opponent's 120-HP Active. The Solver locks the retreat that brings the winning attacker Active."""
     pilot = _pilot()
     retreat = opt(RETREAT)
     won = state(active=poke(PREEVO, energy=1, hp=70),                 # spent opener, can't KO
@@ -229,9 +210,8 @@ def test_critical_fd5c_retreat_into_the_powered_wincon_is_locked():
 
 @pytest.mark.req("REQ-LETHAL-0010")
 def test_strict_execute_only_holds_across_the_turns_two_decisions():
-    """Across the many per-decision calls of ONE turn, the Solver re-derives the same line and takes its
-    next step each time — the enabling attach first (Wally's vetoed), then the finishing KO (Wally's
-    vetoed again) once the engine re-opens the menu. Strict execute-only, no explicit turn state."""
+    """The Solver re-derives the same line on every decision of the turn and takes its next step:
+    strict execute-only, no explicit turn state."""
     pilot = _pilot()
     play_wallys = opt(PLAY, area=HAND, index=0)
     attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
@@ -252,11 +232,8 @@ def test_strict_execute_only_holds_across_the_turns_two_decisions():
 # ------------------------------------------------------------- telemetry: verdict rides in the @T record
 @pytest.mark.req("REQ-LETHAL-0011")
 def test_lethal_verdict_is_emitted_in_decision_telemetry():
-    """The Solver's verdict must ride in the @T Decision Telemetry (ADR-0019) — the SAME `to_record`
-    feeds the live stderr line, the correction's `live_trace`, and the tuner's retest — so a blunder
-    correction on a lethal decision carries the solver's data for the blunder-buster to analyze. A
-    locked line surfaces its step + kind + rationale; a non-lethal decision surfaces `lethal: None`
-    (the key is always present so corrections can filter on it)."""
+    """One `to_record` feeds the stderr line, a correction's `live_trace` and the tuner's retest
+    (ADR-0019); the `lethal` key is always present so corrections can filter on it."""
     pilot = _pilot()
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(OPP, hp=120),
                 prizes=1, opp_prizes=2)
@@ -288,8 +265,6 @@ def _direct_win_obs():
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_is_off_by_default_and_never_calls_the_engine(monkeypatch):
-    """Kill-switch (ADR-0021 pattern): without `lethal_verify=True` the Solver locks on closed-form
-    math alone — byte-identical to the shipped behavior — and NEVER invokes the engine backstop."""
     pilot = _pilot()
 
     def _boom(*a, **kw):
@@ -303,9 +278,6 @@ def test_lethal_verify_is_off_by_default_and_never_calls_the_engine(monkeypatch)
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_confirms_a_direct_lock_and_rides_in_telemetry(monkeypatch):
-    """With the switch ON, a DIRECT lock is confirmed through `_engine_confirms_win` with exactly the
-    lock's one step; the verdict rides on the line (and in the @T record) so the blunder-buster can
-    filter on it (ADR-0019)."""
     pilot = _pilot(lethal_verify=True)
     calls = []
 
@@ -323,9 +295,8 @@ def test_lethal_verify_confirms_a_direct_lock_and_rides_in_telemetry(monkeypatch
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_refutes_a_phantom_direct_lock(monkeypatch):
-    """The backstop's whole point (ADR-0030: false-lock = thrown game): when the ENGINE says the
-    closed-form 'win' does not actually win, the candidate is dropped — no lock, defer to the normal
-    machinery — and the refute is surfaced (Decision + @T) so a live divergence is countable."""
+    """ADR-0030: a false lock is a thrown game, so a refuted candidate is dropped and the refute is
+    surfaced for counting."""
     pilot = _pilot(lethal_verify=True)
     monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: False)
     d = pilot.explain(_direct_win_obs())
@@ -337,9 +308,7 @@ def test_lethal_verify_refutes_a_phantom_direct_lock(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_unavailable_engine_keeps_the_sound_closed_form_lock(monkeypatch):
-    """Fail-safe (never commit-degraded, ADR-0030): a None verdict — no `search_begin_input`, lib-free
-    suite, or any search error — keeps the sound closed-form lock, unverified. The switch being ON must
-    never LOSE wins the closed-form layer already proves."""
+    """The switch being ON must never LOSE a win the closed-form layer already proves."""
     pilot = _pilot(lethal_verify=True)
     monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: None)
     d = pilot.explain(_direct_win_obs())
@@ -349,10 +318,8 @@ def test_lethal_verify_unavailable_engine_keeps_the_sound_closed_form_lock(monke
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_never_touches_multi_step_unlock_locks(monkeypatch):
-    """A 1-step engine sim of a MULTI-step line cannot reach a result (the turn hasn't ended), so
-    `_engine_confirms_win` would report False and wrongly refute a good lock. Until the multi-step
-    drive-to-terminal is built (ADR-0030 remaining follow-up), verify applies to DIRECT locks only —
-    unlock/evolve locks stay closed-form even with the switch ON."""
+    """A 1-step engine sim of a MULTI-step line cannot reach a result — the turn has not ended — so it
+    would report False and wrongly refute a good lock; verify applies to DIRECT locks only."""
     pilot = _pilot(lethal_verify=True)
 
     def _boom(*a, **kw):
@@ -370,9 +337,8 @@ def test_lethal_verify_never_touches_multi_step_unlock_locks(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_refute_count_survives_the_cascades_policy_reentry(monkeypatch):
-    """The verify cascade re-runs decide(), which re-enters plan_turn under ``_planning`` — the
-    re-entry must NOT wipe the outer decision's refute count (the review-caught clobber): a refuted
-    first candidate stays counted when a later candidate's cascade drives the policy."""
+    """The verify cascade re-runs decide(), which re-enters plan_turn under ``_planning``; that
+    re-entry must not wipe the outer decision's refute count."""
     pilot = _pilot(lethal_verify=True)
     won = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
                 prizes=1, opp_prizes=2)
@@ -400,8 +366,7 @@ def test_refute_count_survives_the_cascades_policy_reentry(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0013")
 def test_lethal_verify_refute_falls_through_to_a_second_confirmed_candidate(monkeypatch):
-    """Candidate-level, not turn-level: an engine-refuted direct candidate drops, but a LATER direct
-    candidate the engine confirms still locks (the refute count records the drop)."""
+    """Candidate-level, not turn-level."""
     pilot = _pilot(lethal_verify=True)
     verdicts = iter([False, True])
     monkeypatch.setattr(pilot, "_engine_confirms_win", lambda obs, steps: next(verdicts))
@@ -416,10 +381,8 @@ def test_lethal_verify_refute_falls_through_to_a_second_confirmed_candidate(monk
 # ═══ the one generator family (ADR-0037 stage 2, `lethal_family`) ═══
 @pytest.mark.req("REQ-LETHAL-0015")
 def test_family_locks_the_two_develop_retreat_attach_win():
-    """The motivating gap (ADR-0037): the win needs TWO develops — retreat into a benched Mega at 2
-    Energy, then attach the 3rd so Nebula Beam (210) KOs the 200-HP last-prize Active. No hook scores
-    it (the retreat hook needs a READY body), so the legacy rungs miss it and the heuristic planner
-    commits it only rank-grade. With `lethal_family=True` the win rung generates and LOCKS it."""
+    """The motivating gap (ADR-0037): the win needs TWO develops, and no legacy hook scores it — the
+    retreat hook needs an already-READY body."""
     retreat = opt(RETREAT)
     won = state(active=poke(PREEVO, energy=0, hp=70),
                 bench=[poke(WINCON, energy=2, hp=330)],           # needs the retreat AND the attach
@@ -436,9 +399,8 @@ def test_family_locks_the_two_develop_retreat_attach_win():
 
 @pytest.mark.req("REQ-LETHAL-0016")
 def test_family_locks_the_evolve_plus_attach_win():
-    """Two develops via EVOLVE: Staryu (2 E) evolves to Mega Starmie ex, then the held Energy makes
-    3 for Nebula Beam (210) vs the 200-HP last-prize Active. The legacy evolve rung tests the
-    CURRENT energy only (min-bound), so it misses this; the family's tier-2 evolve candidate locks it."""
+    """The legacy evolve rung tests the CURRENT energy only (min-bound), so it misses a win that
+    needs the held Energy attached after the evolve."""
     evolve = opt(EVOLVE, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     won = state(active=poke(PREEVO, energy=2, hp=70), opp_active=poke(OPP, hp=200),
                 opp_bench=[poke(BENCHIE, hp=100)], hand=[WINCON, WATER], prizes=1, opp_prizes=2)
@@ -450,9 +412,8 @@ def test_family_locks_the_evolve_plus_attach_win():
 
 @pytest.mark.req("REQ-LETHAL-0017")
 def test_family_locks_the_gust_win_and_stands_down_without_a_winning_target():
-    """The gust win shape (ADR-0022, family-generated): Boss's Orders drags the benched 2-prize ex —
-    which my Active KOs (Jetting 120 vs its 120 HP) for my LAST 2 prizes — while the 330-HP Active
-    itself is un-KO-able. Legacy never locks a PLAY (gust was hook-scored only); the family locks it."""
+    """Boss's Orders drags a benched 2-prize ex my Active can KO while their Active itself cannot be
+    KO'd (ADR-0022)."""
     boss = opt(PLAY, area=HAND, index=0)
     won = state(active=poke(WINCON, energy=1, hp=330), opp_active=poke(EXOPP, hp=330),
                 opp_bench=[poke(EXOPP, hp=120)], hand=[BOSS], prizes=2, opp_prizes=2)
@@ -485,11 +446,8 @@ def _tutor_pilot(deck):
 
 @pytest.mark.req("REQ-LETHAL-0018")
 def test_family_tutor_win_is_gated_on_deck_certain_energy():
-    """The 4298 shape, game-winning: no Energy in hand, the attach unspent — Hilda fetches the Energy
-    that makes 3 for Nebula Beam (210) vs the 200-HP last-prize Active. SOUND only with the deck
-    tracker's POSITIVE certainty (`deck_definitely_has`): with the prize multiset anchored
-    (`obs['own_prizes']`) and Water provably still in deck, the family locks the tutor; without the
-    anchor (certainty unavailable) it must NOT — a probable fetch is never a win."""
+    """SOUND only under the deck tracker's POSITIVE certainty (`deck_definitely_has`), which needs
+    the prize multiset anchored in `obs['own_prizes']`: a probable fetch is never a win."""
     deck = [WATER] * 4 + [1] * 56
     won = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=200),
                 opp_bench=[poke(BENCHIE, hp=100)], hand=[HILDA], prizes=1, opp_prizes=2)
@@ -512,10 +470,8 @@ def _two_develop_obs():
 
 @pytest.mark.req("REQ-LETHAL-0019")
 def test_family_verifies_every_lock_refute_drops_and_none_keeps(monkeypatch):
-    """Family mode widens `lethal_verify` to EVERY win lock (the cascade drives multi-step lines to
-    the engine's verdict, cap 40): a False verdict drops the multi-develop candidate (+ the refute
-    count); a None verdict (coin bail / engine absent) keeps the min-bound closed-form lock — a
-    coin-floor win can never verify True by construction, so None must not lose it."""
+    """Family mode widens verify to EVERY win lock. A coin-floor win can never verify True by
+    construction, so a None verdict must keep the min-bound closed-form lock."""
     pilot = _pilot(lethal_family=True, lethal_verify=True)
     calls = []
 
@@ -543,9 +499,8 @@ def test_family_verifies_every_lock_refute_drops_and_none_keeps(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0020")
 def test_family_is_shortest_first_and_never_retries_a_refuted_index(monkeypatch):
-    """Shortest-first: with a direct winning KO AND a develop-unlock both available, the family locks
-    the DIRECT attack ("take exactly those decisions"). And a candidate refuted at one tier is not
-    retried at a longer tier — the verify cascade drives the same policy either way."""
+    """A candidate refuted at one tier is not retried at a longer one — the verify cascade drives the
+    same policy either way, so it is one sim per option index."""
     pilot = _pilot(lethal_family=True)
     # direct win (Jetting 120 vs 120) + a retreat that would also unlock a win via the bench Mega.
     won = state(active=poke(WINCON, energy=1, hp=330), bench=[poke(WINCON, energy=3, hp=330)],
@@ -570,8 +525,7 @@ def test_family_is_shortest_first_and_never_retries_a_refuted_index(monkeypatch)
 
 @pytest.mark.req("REQ-LETHAL-0021")
 def test_family_develop_tiers_stand_down_on_turn_one():
-    """Turn 1 going first cannot attack (rules.md §first-turn), so no develop can cash a win — the
-    family's develop tiers must not lock (the same guard the attach hook carries)."""
+    """Turn 1 going first cannot attack (rules.md §first-turn), so no develop can cash a win."""
     won = state(active=poke(PREEVO, energy=0, hp=70), bench=[poke(WINCON, energy=2, hp=330)],
                 opp_active=poke(OPP, hp=200), opp_bench=[poke(BENCHIE, hp=100)],
                 hand=[WATER], prizes=1, opp_prizes=2, turn=1)
@@ -581,9 +535,7 @@ def test_family_develop_tiers_stand_down_on_turn_one():
 
 @pytest.mark.req("REQ-LETHAL-0022")
 def test_family_covers_the_three_critical_shapes():
-    """Coverage parity: the three in-scope CRITICAL shapes (040c attach-veto, c1e0 direct-veto-gust,
-    fd5c retreat-into-wincon) must still lock — same step — with `lethal_family=True`, so flipping
-    the switch can never reopen a gated CRITICAL."""
+    """Flipping the switch must never reopen a gated CRITICAL."""
     fam = lambda: _pilot(lethal_family=True)                                    # noqa: E731
     # 040c: enabling attach locked, Wally's vetoed.
     attach = state(active=poke(WINCON, energy=2, hp=330), opp_active=poke(OPP, hp=180),
@@ -615,9 +567,8 @@ CARD = 1       # OptionType.CARD
 
 
 def _veto_pilot(monkeypatch, entries, verdict=True):
-    """A family+verify+veto pilot whose engine verify is faked: returns ``verdict`` and materializes
-    ``entries`` into the record ONCE (the first verified lock) — the confirmed-cascade stand-in the
-    replay half consumes; later re-verifies record nothing, like a cascade with no driven selects."""
+    """The fake verify materializes ``entries`` ONCE, on the first verified lock; later re-verifies
+    record nothing, like a cascade with no driven selects."""
     pilot = _pilot(lethal_family=True, lethal_verify=True, lethal_veto=True)
     pending = [list(entries)]
 
@@ -640,10 +591,8 @@ def _after_retreat_menu():
 
 @pytest.mark.req("REQ-LETHAL-0024")
 def test_veto_replays_the_verified_cascade_by_identity(monkeypatch):
-    """A verified lock materializes the confirmed cascade; the NEXT decision replays its head by
-    OPTION IDENTITY (type + attackId + card), not by index — the recorded attack is found wherever
-    it sits on the live menu, and the decision is marked kind="replay" so telemetry shows the lock
-    (not re-derivation) drove it."""
+    """Replay is by OPTION IDENTITY (type + attackId + card), never by index, so the recorded pick is
+    found wherever it sits on the live menu."""
     obs2 = _after_retreat_menu()
     entries = [{"ctx": 0, "max": 1, "drive": False,
                 "chosen": [(13, NEBULA, None, None, None, None)]}]   # (ATTACK, Nebula, ...) identity
@@ -656,9 +605,7 @@ def test_veto_replays_the_verified_cascade_by_identity(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0025")
 def test_veto_mismatch_falls_back_and_surfaces_lethal_lost(monkeypatch):
-    """Any signature mismatch (the recorded pick has no live identity match) clears the lock, falls
-    back to per-decision re-derivation — never a blind index — and surfaces the sparse `lethal_lost`
-    telemetry key so a live divergence is countable."""
+    """A signature mismatch clears the lock and falls back to re-derivation — never a blind index."""
     entries = [{"ctx": 0, "max": 1, "drive": False,
                 "chosen": [(13, 999, None, None, None, None)]}]      # an attack that won't exist live
     pilot = _veto_pilot(monkeypatch, entries)
@@ -690,9 +637,8 @@ def test_veto_lock_expires_with_the_turn(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0027")
 def test_veto_policy_drives_the_hidden_prize_pick_and_keeps_the_lock(monkeypatch):
-    """A recorded pick from a HIDDEN zone (the prize-take TO_HAND select — the sim's ids are
-    predictions) is policy-driven at replay, outcome-invariant: the entry is consumed, the lock
-    survives, and the NEXT recorded select still replays by identity."""
+    """A recorded pick from a HIDDEN zone is policy-driven at replay — the sim's ids there are
+    predictions — so the entry is consumed and the lock survives whatever the policy picks."""
     entries = [{"ctx": TO_HAND, "max": 1, "drive": True, "chosen": [(CARD, None, 42, None, None, None)]},
                {"ctx": 0, "max": 1, "drive": False,
                 "chosen": [(13, NEBULA, None, None, None, None)]}]
@@ -723,12 +669,8 @@ def test_veto_off_never_stores_a_lock(monkeypatch):
 
 @pytest.mark.req("REQ-LETHAL-0012")
 def test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win():
-    """ep83054602 f17: the opponent's Active has a 'prevent all damage from your {ex} Pokémon' Ability
-    (Crustle's Mysterious Rock Inn, Function Tag `prevent_ex_damage`). My cheap Jetting Blow is walled,
-    but Nebula Beam "isn't affected by any effects on your opponent's Active Pokémon" — so it lands its
-    210 THROUGH the Ability and KOs the 150-HP Active. The opponent's Bench is empty, so that KO WINS.
-    The Solver must see it ONLY because Nebula Beam carries `ignores_active_effects`; without the signal
-    both ex attacks read as walled and the win is invisible (the missed-win blunder)."""
+    """An attack that "isn't affected by any effects on your opponent's Active Pokémon" lands THROUGH
+    a `prevent_ex_damage` Ability; without `ignoresEffects` both ex attacks read as walled."""
     EX_ATTACKER, CRUSTLE = 901, 345
     cards = {
         EX_ATTACKER: CardStat(EX_ATTACKER, synthetic=True, name="Mega Starmie ex", hp=330, energyType=3, ex=True,

@@ -37,11 +37,8 @@ def _option_record(pilot, od, sel, opt) -> dict:
 
 
 def probe_follow_ups(pilot, obs, first_step, *, max_selects: int = 24) -> list[dict]:
-    """Drive ``first_step`` through the pilot's seeded engine search and return one record per follow-up
-    select the policy reaches: ``{step, context, type, maxCount, options: [...], chosen}``. ``chosen``
-    is what ``decide()`` picked (used to walk the cascade); ``options`` is the FULL resolved menu (the
-    authoring surface). Stops at a verdict, when control passes to the opponent, or at ``max_selects``.
-    Returns ``[]`` when the engine is unavailable or the obs carries no seed (never raises)."""
+    """One record per follow-up select the policy reaches from ``first_step``. ``chosen`` is what
+    ``decide()`` picked; ``options`` is the FULL resolved menu. ``[]`` on no seed; never raises."""
     if not (obs or {}).get("search_begin_input"):
         return []
     try:

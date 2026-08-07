@@ -37,19 +37,15 @@ class ProposedHypothesis:
     # can fix it; fix lives in planner.py / lethal.py. /blunder-buster routes on these (ADR-0030/0031).
     planner_committed: bool = False   # live_trace.planned non-null (Turn Planner committed a line)
     lethal_locked: bool = False       # live_trace.lethal non-null (Lethal Solver locked a win)
-    plan_candidates: list | None = None  # the develop rung's ranked end-boards (Phase 1) — surfaced so a
-                                      # sequencing correction sits next to the alternatives it out-scored,
-                                      # letting /blunder-buster separate a mis-ranked leaf from a bad pick
-    develop_class: dict | None = None  # Phase-3 develop-rung verdict (`classify_develop_correction`) for a
-                                      # turn_plan correction: rung-right (retire datum) / leaf-misrank /
-                                      # rung-inactive / no-prescription + leans_on_rule + cross_turn. Sparse.
-    # Posture (ADR-0041): a matchup-doctrine miss routes to the archetype's Brief / recognition, not a
-    # generic weight. /blunder-buster surfaces these so a matchup misplay isn't authored as a when().
+    plan_candidates: list | None = None  # the develop rung's ranked end-boards — a sequencing
+                                      # correction sits beside the alternatives it out-scored
+    develop_class: dict | None = None  # `classify_develop_correction`'s verdict. Sparse.
+    # Posture (ADR-0041): a matchup-doctrine miss routes to the archetype's Brief / recognition,
+    # never a generic weight or a `when()`.
     posture_mismatch: bool = False    # human flagged the opponent Read WRONG at this decision
     believed_archetype: str | None = None   # who the agent thought it faced (live_trace.posture top)
-    # Scope (ADR-0049): what the blunder is ABOUT. A strong routing prior for /blunder-buster (a Turn
-    # blunder is prima facie planner-code) but never an auto-route — a Turn whose `planned` is null
-    # throughout means the Planner never committed, and the gap is a general Hypothesis after all.
+    # Scope (ADR-0049): a routing PRIOR, never an auto-route — a Turn whose `planned` is null
+    # throughout means the Planner never committed, and the gap is a Hypothesis after all.
     scope: str = "decision"
     subject: object = None            # the Turn number (turn scope); frame for decision... see `key`
     seat: object = None
@@ -63,10 +59,7 @@ def _slug(text: str) -> str:
 
 
 def believed_archetype(correction) -> str | None:
-    """The archetype the shipped agent believed it faced at this decision — the top posture
-    candidate off the live trace (ADR-0041), or None when no posture was captured (no Scout /
-    pre-posture replay). Shared by ``io.write_proposals`` and ``tune.py``'s worklist tags so a
-    matchup misplay carries its opponent identity."""
+    """The top posture candidate off the live trace (ADR-0041); None when none was captured."""
     cands = (((correction.live_trace or {}).get("posture") or {}).get("cands")) or []
     return cands[0][0] if cands and cands[0] else None
 

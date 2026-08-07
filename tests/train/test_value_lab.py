@@ -1,24 +1,9 @@
-"""`train.value_lab` — the MENU leg, which turns a leaf UNIT cost into a per-decision one (Issue #291).
+"""`train.value_lab` — the MENU leg, which turns a leaf UNIT cost into a per-decision one
+(Issue #291).
 
-`value_lab.py` already times one `state_value` call on one board and reports the corpus P50/P95.
-Issue #263's acceptance is stated **per decision**, not per leaf call, and under its uniform 1-ply
-ordering a decision costs one leaf evaluation per *surviving candidate* — so the missing factor is
-the post-Option-Equivalence menu size, and the tail of that distribution is what sizes a beam.
-
-Two things these tests hold the instrument to, both of which are ways the number could be quietly
-wrong rather than visibly absent:
-
-* **the collapse is ADR-0091's, not a second one.** `option_equivalence.class_representatives` is
-  the shipped definition of "these are one decision"; a menu count that re-derived it would drift
-  from the composer it is sizing, which is the same one-definition rule the fingerprint module's own
-  header states. So the count is asserted to equal that function's, on a menu where the collapse
-  actually bites.
-* **the apply-seam term is ABSENT, and says so.** `apply_option` raises `NotImplementedError` for
-  every MODELLED fate at this commit — it is POC-T0's frozen contract and Issue #263 itself builds
-  the transition. A derived per-decision figure that silently omitted it would read as a total when
-  it is a **lower bound**, so the report carries the omission as a field rather than as prose in a
-  commit message.
-"""
+Two ways the number could be quietly wrong: the collapse must be ADR-0091's own
+(`class_representatives`), not a second derivation, and the apply-seam term is ABSENT and must
+say so — the derived figure is a LOWER BOUND, carried as a field rather than as prose."""
 from __future__ import annotations
 
 import sys
@@ -45,9 +30,7 @@ from train.value_lab import (  # noqa: E402
 
 
 def _energy(index, recipient_index):
-    """An ATTACH — the shape that names TWO zones, and so the one where a body-only fingerprint would
-    have called different Energies onto one Pokémon the same decision (6 false equivalences, measured
-    in `option_equivalence`'s header)."""
+    """An ATTACH — the shape naming TWO zones, where a body-only fingerprint would falsely merge."""
     return {"type": 7, "area": AREA_HAND, "index": index,
             "inPlayArea": AREA_BENCH, "inPlayIndex": recipient_index}
 
@@ -70,10 +53,7 @@ def _correction(options, frame):
 # ── the collapse is ADR-0091's ────────────────────────────────────────────────────────────────────
 
 def test_post_collapse_count_is_option_equivalences_own():
-    """Two identical Energy onto two identical bodies is 4 menu entries and fewer real decisions.
-
-    Asserted against `class_representatives` rather than against a hand-written expected integer, so
-    the day the fingerprint changes this count moves with it instead of pinning a stale answer."""
+    """Asserted against `class_representatives`, not a hand-written integer, so the count moves with it."""
     frame = _frame([60, 60])
     options = [_energy(i, b) for i in (0, 1) for b in (0, 1)]
     prof = menu_profile(_correction(options, frame))
@@ -84,10 +64,7 @@ def test_post_collapse_count_is_option_equivalences_own():
 
 
 def test_a_menu_with_nothing_to_collapse_is_unchanged():
-    """The positive control's negative half: distinguishable bodies must NOT merge.
-
-    A collapse that fired on everything would satisfy the test above just as well and would understate
-    every decision's cost, so the split case is asserted in the same file."""
+    """The positive control's negative half: a collapse that fired on everything would also pass above."""
     frame = _frame([60, 30])                       # different HP -> different class
     options = [_energy(0, 0), _energy(0, 1)]
     prof = menu_profile(_correction(options, frame))
@@ -95,11 +72,7 @@ def test_a_menu_with_nothing_to_collapse_is_unchanged():
 
 
 def test_an_unfingerprintable_option_joins_no_class():
-    """Blind implies conservative: an option the snapshot does not reveal must never merge.
-
-    Two byte-identical deck references collapse to one only if something fingerprinted them; the
-    module's contract is that they do not, and a menu sizer that merged them would under-count the
-    exact family (fetch/search) Issue #263 leans on hardest."""
+    """Blind implies conservative: an option the snapshot does not reveal must never merge."""
     frame = _frame([60])
     options = [{"type": 8, "area": AREA_DECK, "index": 0}, {"type": 8, "area": AREA_DECK, "index": 0}]
     prof = menu_profile(_correction(options, frame))
@@ -120,11 +93,7 @@ def test_the_fate_split_counts_every_option_once():
 
 
 def test_the_fate_split_bins_by_the_seams_own_constants():
-    """The bucket keys are `apply_option`'s exported fates, matched by EQUALITY.
-
-    Asserted against the constants rather than against the literals they happen to hold, so this
-    fails if the seam renames a fate instead of silently mis-binning it — which is exactly what a
-    substring test (`"refus" in resolved`) would do."""
+    """Matched by EQUALITY against the exported fates, so a rename fails instead of mis-binning."""
     from common.apply_option import MODELLED, REFUSED, fate
 
     frame = _frame([60])
@@ -135,11 +104,7 @@ def test_the_fate_split_bins_by_the_seams_own_constants():
 
 
 def test_an_unclassifiable_option_is_its_own_bucket_never_refused():
-    """An instrument failure must not be laundered into a seam verdict.
-
-    `refused` is a fate Issue #263 acts on — it makes a refusal a one-action terminal candidate — so
-    folding "the profiler threw" into it would report seam coverage that never happened. The width
-    still counts the option, because dropping it would understate the per-decision multiplier."""
+    """An instrument failure must not be laundered into a seam verdict; `refused` is a fate acted on."""
     frame = _frame([60])
     prof = menu_profile(_correction([{"type": "not-an-int-kind"}], frame))
     assert prof["menu"] == 1
@@ -158,12 +123,8 @@ def test_the_report_names_the_apply_seam_as_UNMEASURED():
 
 
 def test_the_leaf_report_carries_max_beside_the_tail():
-    """Issue #291 §3a asks for leaf **P50 and P95 and max** by name, and max is not recoverable from
-    a percentile. It earns its place on this corpus: the worst leaf runs ~8x the P95 and ~3.5x the
-    second-worst, so a beam sized on the tail alone gets no warning about the board that costs most.
-
-    Driven through `value_lab_report` with a stub scorer rather than the real Pilot — the field under
-    test is the aggregation, and a DLL-backed corpus walk would be measuring `state_value` instead."""
+    """Issue #291 §3a asks for leaf P50, P95 and max by name, and max is not recoverable from a
+    percentile. Driven through a stub scorer — the field under test is the aggregation."""
     class _Pilot:
         def __init__(self, ms): self.ms = ms
         def _leaf_state_model(self, obs, my_index):

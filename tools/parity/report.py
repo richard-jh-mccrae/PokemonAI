@@ -1,30 +1,18 @@
 """Coverage ledger + parity rollup (ADR-0050 M4 item 3).
 
-Builds the committed ledger ``data/engine/coverage.json``:
+Builds ``data/engine/coverage.json`` — ``{cardId: {name, status, chains, evidence, updated}}`` —
+with per-chain status:
 
-    {cardId: {"name", "status", "chains": {chainId: status}, "evidence": [trace ids],
-              "updated": iso-date}}
-
-with per-chain status ∈ {verified, derived, seeded, unprobed, deferred}:
-
-- **verified** — the chain was EXERCISED by a committed parity trace (all committed traces
-  replay divergence-free by the CI gate, so exercise there is proof).
-- **derived**  — def straight from the structured tables (textless attack, skill-less
-  Pokémon, basic energy): nothing to interpret, correct by construction of the tables.
+- **verified** — EXERCISED by a committed parity trace (every committed trace replays cleanly
+  under the CI gate, so exercise there is proof).
+- **derived**  — def straight from the structured tables; correct by construction.
 - **seeded**   — def from a text rule (``R-…``): runs, but no trace has pinned it yet.
 - **unprobed** — hand-authored (override) chain with no committed-trace evidence.
 - **deferred** — explicitly unmodeled; exercising it raises UnsupportedCard.
 
-A card's own status is its weakest chain (deferred < unprobed < seeded < derived <
-verified) — a Pokémon is only as covered as its least-covered attack.
+A card's status is its WEAKEST chain — a Pokémon is only as covered as its least-covered attack.
 
-    python tools/parity/report.py            # rebuild ledger + print rollup
-    python tools/parity/report.py --print    # rollup only (no write)
-
-Exercise evidence per committed trace: PLAY/ATTACH/EVOLVE logs (cardId), ATTACK logs
-(attackId), and each select's ``effect`` serial (ability/trainer programs mid-effect) —
-serials map to cards via the trace's submitted decks (serial scheme, determinism.md §1).
-"""
+    python tools/parity/report.py [--print]"""
 from __future__ import annotations
 
 import argparse
@@ -101,10 +89,8 @@ def trace_evidence(paths: list[Path]) -> tuple[dict[str, set[str]], dict[str, in
 
 
 def ops_in(entry: dict) -> set[str]:
-    """Every interpreter op a ChainDef entry can execute — programs, spliced asks, and
-    the runtime-synthesized wrappers (turn.py injects xActivateAsk around onEvolve/
-    onBench hooks; a stadium onBench payload runs as xBenchCounterDamage, ordered via
-    xOrderTriggers when simultaneous)."""
+    """Every interpreter op a ChainDef entry can execute — programs, spliced asks, and the
+    runtime-synthesized wrappers (`xActivateAsk` around onEvolve/onBench, `xOrderTriggers`)."""
     out: set[str] = set()
     for key in ("play", "rider", "pre"):
         for op in entry.get(key) or []:

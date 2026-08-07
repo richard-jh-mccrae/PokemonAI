@@ -1,12 +1,7 @@
-"""Randomness sources for cgpy (ADR-0059).
+"""Randomness sources for cgpy (ADR-0059). The native engine is unseedable, so cgpy owns its own.
 
-The native engine is unseedable; cgpy owns its randomness instead:
-
-- `SeededRng`  — reproducible self-play (a property the native engine never had).
-- `ReplayRandomness` — differential replay: shuffles/draw identities/coin outcomes are bound
-  from a recorded native trace (reveal-oracle style); asking it for anything unrecorded raises,
-  so a replay can never silently absorb divergence.
-- manual-coin is an Engine flag, not an Rng: flips surface as COIN_HEAD selects.
+`ReplayRandomness` RAISES when asked for anything the trace does not record, so a replay can never
+silently absorb divergence. Manual-coin is an Engine flag, not an Rng: flips become COIN_HEAD selects.
 """
 from __future__ import annotations
 
@@ -59,13 +54,8 @@ class ReplayError(AssertionError):
 
 
 class ReplayRandomness:
-    """Binds every random outcome from a recorded native game.
-
-    Fed per-frame by the replayer: queues of drawn serials (from the trace's DRAW logs, per
-    seat), coin outcomes (COIN logs), and post-shuffle deck orders (god frames). Draws consume
-    the recorded identity wherever it sits in the deck (multiset-checked); shuffles adopt the
-    recorded order when one is pending, else mark the deck order unknown until the next sync.
-    """
+    """Binds every random outcome from a recorded native game, fed per-frame by the replayer. Draws
+    consume the recorded identity WHEREVER it sits in the deck, multiset-checked."""
 
     def __init__(self):
         self.draw_queues: dict[int, list[int]] = {0: [], 1: []}
@@ -73,19 +63,14 @@ class ReplayRandomness:
         self.shuffle_orders: dict[int, list[list[int]]] = {0: [], 1: []}
         self.prize_feed: dict[int, list[int]] = {0: [], 1: []}
         self.prize_take_queue: dict[int, list[int]] = {0: [], 1: []}   # god-free path
-        # Per-victim FIFO of forced hand exits during the OPPONENT's turn (Psych Out
-        # family). Fed by the replayer from the trace's MOVE_CARD stream; consumed by
-        # hand_pick (random picks) AND hand_pick_expect (known-identity forced exits,
-        # e.g. Judge's opponent half) so the queue never skews (the M4 alignment hazard,
-        # docs/pyeng/determinism.md §9).
+        # Per-victim FIFO of forced hand exits during the OPPONENT's turn. Consumed by BOTH
+        # hand_pick and hand_pick_expect, or the queue skews (the M4 alignment hazard).
         self.hand_pick_queue: dict[int, list[int]] = {0: [], 1: []}
-        # God-free look-reveal binding (Pokégear / Dusk Ball class): the replayer
-        # pre-feeds the NEXT frame's recorded DECK->LOOKING serials; a look consumes
-        # them in recorded order regardless of which end of the deck it reads.
+        # The replayer pre-feeds the NEXT frame's recorded DECK->LOOKING serials; a look consumes
+        # them in RECORDED order regardless of which end of the deck it reads.
         self.look_feed: dict[int, list[int]] = {0: [], 1: []}
-        # God-free mill binding (Hammer-lanche class): the replayer pre-feeds the
-        # NEXT frame's recorded DECK->DISCARD serials in discard order; a top-of-deck
-        # mill consumes them (a provisionally prize-parked one swaps into the deck).
+        # The NEXT frame's recorded DECK->DISCARD serials in discard order; a provisionally
+        # prize-parked one swaps back into the deck.
         self.mill_feed: dict[int, list[int]] = {0: [], 1: []}
 
     def shuffle(self, seq: list, *, seat: int) -> None:
@@ -109,11 +94,8 @@ class ReplayRandomness:
             raise ReplayError(f"seat {seat}: draw requested but no recorded DRAW remains")
         serial = self.draw_queues[seat].pop(0)
         if serial not in deck:
-            # God-free reveal-oracle: the DRAW proves this serial really sits in the
-            # deck — a provisional facedown prize deal may have parked it in the prize
-            # row instead. Exchange it with the would-have-drawn deck top; both zones
-            # stay multiset-exact and prize identities remain provisional until a
-            # take/listing re-binds them (the prize_take rule's draw-side mirror).
+            # The DRAW proves this serial is really in the deck, so a provisional prize deal must
+            # have parked it; exchange with the deck top to keep BOTH zones multiset-exact.
             if prize is not None and serial in prize and deck:
                 prize[prize.index(serial)] = deck[-1]
                 deck[-1] = serial
@@ -130,9 +112,8 @@ class ReplayRandomness:
                 raise ReplayError(
                     f"seat {seat}: recorded prize serials {missing} not in deck")
             return serials
-        # God-free (cabt) path: deal PROVISIONAL identities (deck top, like the live
-        # rule); the true identity binds at take time via `prize_take` (the owner's
-        # PRIZE->HAND move log carries the serial) with a multiset-preserving swap.
+        # God-free path: PROVISIONAL identities; the true one binds at take time via `prize_take`,
+        # with a multiset-preserving swap.
         return [deck[-(i + 1)] for i in range(count)]
 
     def hand_pick(self, seat: int, hand: list[int]) -> int:
@@ -148,10 +129,8 @@ class ReplayRandomness:
         return serial
 
     def hand_pick_expect(self, seat: int, serials: list[int]) -> None:
-        """Drain the FIFO through a known-identity forced exit (whole-hand shuffles,
-        reveal-and-pick discards): pop one entry per moved card and require the popped
-        set to match. An EMPTY queue skips silently (a truncated trace whose feed never
-        saw the tail events); a partial/mismatched pop is a real skew — raise."""
+        """Drain the FIFO through a known-identity forced exit: one pop per moved card, popped set
+        must match. An EMPTY queue skips silently; a partial or mismatched pop is a real skew."""
         q = self.hand_pick_queue[seat]
         if not q:
             return
@@ -189,12 +168,8 @@ class ReplayRandomness:
 
     def mill_bind(self, seat: int, deck: list[int], prize: list[int],
                   n: int) -> list[int]:
-        """Which serials a top-of-deck mill discards, in discard order (reveal-oracle,
-        M4). God-free: consume the pre-fed recorded DECK->DISCARD serials — a serial a
-        provisional facedown prize deal parked in the prize row swaps back into the deck
-        (multiset-exact, like draw_bind), since the recorded discard proves it was in
-        the deck. Positional (deck top) for any unfed remainder / seeded play. Serials
-        are unique, so identity removal by the caller is unambiguous."""
+        """Which serials a top-of-deck mill discards, in DISCARD order: the pre-fed recorded ones
+        (a prize-parked serial swaps back, like draw_bind), then positional for any remainder."""
         feed = self.mill_feed.get(seat) or []
         out: list[int] = []
         for _ in range(min(n, len(deck))):
@@ -216,12 +191,8 @@ class ReplayRandomness:
 
     def prize_take(self, seat: int, serial: int, *, deck: list[int],
                    prize: list[int]) -> int:
-        """Resolve a provisional prize identity at take time (reveal-oracle, M4).
-
-        Returns the RECORDED serial for this take. Already in the row: removal by
-        identity needs no bookkeeping. Provisionally in the deck: exchange it with the
-        `serial` occupant so both zones stay multiset-exact. No queue = god-path replay
-        (identities were exact at deal)."""
+        """The RECORDED serial for this take. One provisionally in the deck exchanges with the
+        `serial` occupant so both zones stay multiset-exact. No queue = god-path replay."""
         q = self.prize_take_queue.get(seat)
         if not q:
             return serial

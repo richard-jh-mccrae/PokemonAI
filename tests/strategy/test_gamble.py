@@ -1,6 +1,6 @@
 """Tier 2 — Gamble Lines (ADR-0039): closed-form expectimax over Outcome Classes.
 
-The canonical decision (docs/architecture/tier-2-chance-ev.md): Mega Starmie ex Active with no
+The canonical decision (docs/architecture/tiers.md): Mega Starmie ex Active with no
 Energy, hand = Lillie's Determination + Ignition Energy, opponent Water-weak. The banked line
 (attach Ignition → Nebula ●●● 210, Weakness ignored) is safe; refreshing FIRST gambles the hand
 for a {W} Basic → Jetting Blow {W} at 240 with Weakness — a KO the held hand cannot reach. The
@@ -28,10 +28,8 @@ def _deck(agent="mega_starmie"):
 
 
 def _gamble_obs(opp_hp=230, with_prizes=True):
-    """The canonical board: my Mega Starmie ex (1031, 0 Energy) vs a Water-weak Cinderace (666) at
-    ``opp_hp``; hand = Lillie's Determination (1227) + Ignition Energy (17); prizes anchored so the
-    tracker's exact deck counts exist (own_prizes = the first five deck cards NOT needed by the
-    test's math)."""
+    """Mega Starmie ex (1031, 0 Energy) vs a Water-weak Cinderace (666) at ``opp_hp``; hand =
+    Lillie's (1227) + Ignition (17); prizes anchored so the tracker's exact deck counts exist."""
     deck = _deck()
     hand_ids = [1227, 17]
     prize_ids = [cid for cid in deck if cid not in (1227, 17)][:5]
@@ -65,18 +63,15 @@ def _gamble_obs(opp_hp=230, with_prizes=True):
 
 @pytest.mark.req("REQ-GAMBLE-0001")
 def test_the_lillies_gamble_commits_when_ev_beats_the_banked_line():
-    """opp at 230: Nebula (210, after banking the Ignition) cannot KO, Jetting (120×2 Weakness =
-    240) can — one {W} Basic short. The deck is full of Water Energy, so the 6-draw's hit odds are
-    high and the gamble EV (P × KO value) dwarfs the 210 chip: the planner commits the refresh
-    FIRST and the trace says why."""
+    """opp at 230: Nebula (210, banking the Ignition) cannot KO; Jetting (120x2 Weakness = 240) can,
+    one {W} Basic short. The {W}-flush deck makes the 6-draw's EV dwarf the 210 chip."""
     pilot = _shipped_pilot()
     obs = _gamble_obs(opp_hp=230)
     decision = pilot.explain(obs)
     assert decision.planned is not None and decision.planned.goal == "gamble"
     assert decision.chosen == [0]                        # Lillie's first — the gamble, not the bank
     assert "gamble:" in decision.planned.rationale and "KO" in decision.planned.rationale
-    # The full working rides the Decision (sparse `gamble` telemetry, ADR-0019): classes with the
-    # SOUGHT out-card ids, per-option p·EV rows, the det baseline, and the committed best.
+    # the full working rides the Decision as sparse `gamble` telemetry (ADR-0019)
     tr = decision.gamble
     assert tr is not None and tr["considered"] is True and tr["best"] is not None
     assert tr["classes"] and all(c["sought"] and c["copies"] > 0 for c in tr["classes"])
@@ -98,10 +93,8 @@ def test_the_gamble_stands_down_when_a_deterministic_ko_exists():
 
 @pytest.mark.req("REQ-GAMBLE-0003")
 def test_the_gamble_prices_pre_anchor_and_stands_down_when_switched_off():
-    """WP2: pre-anchor (no own_prizes → no exact counts) the gamble no longer stands down — the
-    decklist is fully known, only the prize split of the unseen copies is random, so it PRICES with
-    the prize-split-weighted window sum (`anchored: False`, `prizes_hidden` set) instead of the old
-    modeling-gap zero. The {W}-flush deck still clears the bar. Kill-switch off → silent stand-down."""
+    """Pre-anchor the decklist is still fully known — only the prize SPLIT of unseen copies is
+    random — so it prices with the prize-split-weighted window sum rather than standing down."""
     pilot = _shipped_pilot()
     decision = pilot.explain(_gamble_obs(opp_hp=230, with_prizes=False))
     tr = decision.gamble
@@ -120,9 +113,8 @@ def test_the_gamble_prices_pre_anchor_and_stands_down_when_switched_off():
 
 @pytest.mark.req("REQ-GAMBLE-0005")
 def test_coin_attacks_rank_by_their_mean_when_race_pricing_is_on():
-    """A coin/conditional CHIP attack (bounds 0–100) ranks by its mean (50) instead of the exact
-    read — honest EV for ranking only; with the switch off, the legacy exact price stands. The KO
-    branch and every sound path (Lethal floor / Incoming ceiling) are untouched by construction."""
+    """Honest EV for RANKING only: the KO branch and every sound path (Lethal floor / Incoming
+    ceiling) are untouched by construction."""
     from common.pilot import Board
     pilot = _shipped_pilot()
     obs = _gamble_obs(opp_hp=500)                     # a huge wall: nothing KOs, chip branch only
@@ -162,9 +154,8 @@ def test_draw_hit_probability_is_exact_and_fail_closed():
 
 @pytest.mark.req("REQ-GAMBLE-0006")
 def test_recovery_class_counts_the_held_burst_energy_copies():
-    """The recovery class enabler: `_gamble_burst_copies` returns the pool-wide copies (deck +
-    returned hand) of a held `discard_eot` burst Energy — the miss branch that redraws it re-banks
-    the deterministic line. Zero when no such burst is held."""
+    """Pool-wide copies (deck + RETURNED hand) of a held `discard_eot` burst: the miss branch that
+    redraws it re-banks the deterministic line."""
     pilot = _shipped_pilot()
     stat = pilot.stats.get(1031)                          # Mega Starmie ex
     hand = [{"id": 17}]                                   # one Ignition (discard_eot) in hand
@@ -175,25 +166,13 @@ def test_recovery_class_counts_the_held_burst_energy_copies():
 
 @pytest.mark.req("REQ-GAMBLE-0007")
 def test_fetch_predicates_live_in_the_card_representation_not_text():
-    """Round-11 ruling: the tutor/recycle predicate the gamble closure needs must live in the card
-    REPRESENTATION (`card_effects.json` FETCH clauses), so no card text is parsed at runtime or build
-    time. Pin the load-bearing predicates against source: Fighting Gong is {F}-locked (energy_type 6)
-    with an energy AND a Pokémon branch; the recyclers are discard-zone; Poké Pad is no-Rule-Box.
-
-    Energy Retrieval's row carries ``amount: 2`` since Issue #301 — the card recovers UP TO 2 and the
-    clause used to read as one, which is a fix to the DATA, not to the predicate this test pins.
-
-    Fighting Gong and Night Stretcher gained ``choice: true`` on both legs at Issue #394 — also a fix
-    to the DATA. Both print *"a X **or** a Y"* and were declared as conjunctions, i.e. as delivering
-    both. The PREDICATE fields this test exists to pin are unchanged, so the assertions read the
-    fields rather than compare whole dicts; the relation itself is asserted below them, because a
-    test that pinned the wrong reading is what let the defect sit."""
+    """The tutor/recycle predicate lives in `card_effects.json` FETCH clauses, so no card text is
+    parsed. Assertions read FIELDS, not whole dicts, so a new declared field cannot fail them."""
     from common.effects import CardEffects
     eff = CardEffects.load()
 
     def leg(clauses, **fields):
-        """The clause carrying exactly these predicate fields — subset, not dict equality, so a new
-        DECLARED field does not fail a test about PREDICATES."""
+        """The clause carrying these predicate fields — subset, not dict equality."""
         return next((c for c in clauses if all(c.get(k) == v for k, v in fields.items())), None)
 
     gong = eff.clauses(1142)
@@ -204,8 +183,7 @@ def test_fetch_predicates_live_in_the_card_representation_not_text():
     assert ({"kind": "fetch", "target": "basic_energy", "zone": "discard", "amount": 2}
             in eff.clauses(1118))
     assert leg(eff.clauses(1097), kind="fetch", target="basic_energy", zone="discard")
-    # The RELATION, pinned where the predicates are, because the two are read from the same legs and
-    # getting it wrong is what made both cards claim to deliver two cards instead of one.
+    # the RELATION, pinned beside the predicates: both are read off the same legs
     from common.fetch_closure import reveal_legs
     for cid in (1142, 1097):
         assert reveal_legs(eff.clauses(cid)).relation == "union", cid
@@ -216,10 +194,8 @@ def test_fetch_predicates_live_in_the_card_representation_not_text():
 
 @pytest.mark.req("REQ-GAMBLE-0007")
 def test_wp1_fetch_reaches_slot_reads_the_clause_representation():
-    """WP1: `_fetch_reaches_slot(want, card_id, …)` reads the card's `basic_energy` FETCH clauses
-    from `card_effects.json` (ADR-0032) — never card text. Fighting Gong (1142) is the canonical
-    trap: its `energy_type: 6` clause makes it a {F} out only (the generic `tutor_energy` tag can't
-    carry the lock), never a {W} out, and only when a {F} Basic is still reachable in the source zone."""
+    """Fighting Gong (1142) is the trap: its `energy_type: 6` clause makes it a {F} out only, which
+    the generic `tutor_energy` tag cannot carry."""
     ml = _shipped_pilot("mega_lucario")
     F, W = 6, 3
     deck = {F: 2, 1142: 4}                                # Fighting basics + Fighting Gong in the deck
@@ -237,10 +213,8 @@ def test_wp1_fetch_reaches_slot_reads_the_clause_representation():
 
 @pytest.mark.req("REQ-GAMBLE-0007")
 def test_wp1_fetch_items_join_the_gamble_ko_class_outs():
-    """WP1: a drawable fetch Item whose target is reachable is a closure out — its deck copies join
-    the class's `copies`/`sought`. The recycle branch (Night Stretcher, a matching Basic ONLY in the
-    discard) makes a class EXIST that the literal-energy-only reading could not (deck has no matching
-    Basic left) — the deck-closure ∪ discard-closure the spec calls for. A held tutor voids the class."""
+    """A drawable fetch Item whose target is reachable is a closure out (deck-closure ∪
+    discard-closure); a HELD tutor is a deterministic line, so it voids the class."""
     from common.pilot import Board
     # (a) deck-search closure: Fighting Gong copies added to a Fighting slot's outs.
     ml = _shipped_pilot("mega_lucario")
@@ -269,9 +243,8 @@ def test_wp1_fetch_items_join_the_gamble_ko_class_outs():
 
 @pytest.mark.req("REQ-GAMBLE-0008")
 def test_wp2_prize_split_hit_is_the_exact_closed_form():
-    """WP2: `_prize_split_hit(u, deck, prizes, pool, n)` = Σ_j C(deck,j)C(prizes,u−j)/C(deck+prizes,u)
-    × window(j). Degenerates to the plain window draw with no hidden prizes; discounts BELOW it once
-    copies can be prized; fails closed on garbage (an endorser)."""
+    """`_prize_split_hit(u, deck, prizes, pool, n)` = Σ_j C(deck,j)C(prizes,u−j)/C(deck+prizes,u) ×
+    window(j)."""
     from math import comb
     from common.deck_odds import draw_hit_probability
     pilot = _shipped_pilot()
@@ -291,11 +264,8 @@ def test_wp2_prize_split_hit_is_the_exact_closed_form():
 
 @pytest.mark.req("REQ-GAMBLE-0009")
 def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
-    """WP5: the evolution-KO class — a Staryu Active (in play since last turn) that, evolved to Mega
-    Starmie ex, KOs with its carried Energy + one attach. The gamble to DRAW the evolution is priced,
-    its outs = the evolution's copies ∪ the Item Pokémon-tutor closure (Ultra Ball / Mega Signal —
-    Supporter tutors are slot-dead post-refresh). Voided when the evolution is in hand (deterministic
-    evolve-KO), and when the Active was placed THIS turn (rules.md §4: can't evolve a new-in-play body)."""
+    """Outs = the evolution's copies ∪ the ITEM Pokémon-tutor closure (Supporter tutors are slot-dead
+    post-refresh). A body placed THIS turn cannot evolve (rules.md §4), so it voids the class."""
     from common.pilot import Board
     ms = _shipped_pilot("mega_starmie")
     ma = {"id": 1030, "hp": 70, "energies": [3, 3], "appearThisTurn": False}   # Staryu, 2 {W}, eligible
@@ -309,9 +279,8 @@ def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
     placed = {**ma, "appearThisTurn": True}
     assert ms._gamble_evolution_ko_classes({"current": {}}, board, placed, opp, counts, [{"id": 1227}]) == []
     assert ms._gamble_evolution_ko_classes({"current": {}}, board, ma, opp, counts, [{"id": 1031}]) == []
-    # The Pokémon-tutor closure honours the clause representation: Poké Pad's `no_rule_box` clause
-    # EXCLUDES a Rule-Box Mega ex (the parametric fact the `tutor_pokemon` tag can't carry); Ultra
-    # Ball (any Pokémon) and Mega Signal (mega) include it.
+    # Poké Pad's `no_rule_box` clause EXCLUDES a Rule-Box Mega ex — a fact the `tutor_pokemon` tag
+    # cannot carry — while Ultra Ball and Mega Signal include it.
     ml = _shipped_pilot("mega_lucario")
     megalu = next(cid for cid in set(ml.deck) if (s := ml.stats.get(cid)) and getattr(s, "megaEx", False))
     assert ml._fetch_reaches_pokemon(megalu, 1152, {megalu: 1, 1152: 4}) is False   # Poké Pad: no Rule Box
@@ -320,11 +289,8 @@ def test_wp5_evolution_ko_gamble_class_prices_drawing_the_evolution():
 
 @pytest.mark.req("REQ-GAMBLE-0010")
 def test_supporter_tutors_reach_only_what_their_clauses_can_deliver():
-    """The post-Item-refresh Supporter closure (`_supporter_energy_tutor_reaches` /
-    `_supporter_evolution_tutor_reaches`): Hilda's `energy` fetch needs a matching Basic in deck;
-    Crispin's UNconditional accel counts, Rosa's prize-behind-conditioned accel fails closed; Petrel
-    is the 2-hop — live only while an energy-fetch ITEM (with a reachable target) is still in deck,
-    and never for a slot its Items are type-locked out of."""
+    """A conditioned accel (Rosa's prize-behind gate) fails closed; Petrel is the 2-hop, live only
+    while an energy-fetch ITEM with a reachable target is still in deck."""
     ml = _shipped_pilot("mega_lucario")
     F, W = 6, 3
     assert ml._supporter_energy_tutor_reaches(1219, F, {F: 5, 1142: 4, 1219: 1}, set()) is True
@@ -354,10 +320,8 @@ def test_supporter_tutors_reach_only_what_their_clauses_can_deliver():
 
 @pytest.mark.req("REQ-GAMBLE-0010")
 def test_supporter_outs_count_only_when_the_refresh_is_an_item():
-    """The 4-of-5 rule (spec §Missing): a Supporter refresh spends the one-per-turn slot, so a drawn
-    Supporter tutor is dead in ITS window — the class's Supporter supplement (Petrel here) is applied
-    ONLY to the Unfair Stamp (Item) option's pricing, never to Lillie's, and not even to Stamp once a
-    Supporter was already played this turn."""
+    """A Supporter refresh spends the one-per-turn slot, so a drawn Supporter tutor is dead in ITS
+    window: the supplement applies only to the ITEM option, and not even then once the slot is spent."""
     from math import isclose
     from common.pilot import Board
     from common.deck_odds import draw_hit_probability
@@ -400,12 +364,8 @@ def test_supporter_outs_count_only_when_the_refresh_is_an_item():
 
 @pytest.mark.req("REQ-GAMBLE-0011")
 def test_wp4_engine_derivation_is_board_gated():
-    """`_gamble_draw_engines`: a drawn engine copy counts only when its ability is unconditional-once-
-    in-play (`once_per_turn_ability` — Drakloak/Dudunsparce; Fezandipiti's post-KO gate and Lunatone's
-    Solrock+discard gate fail closed) AND an eligible base is already on board (rules.md §4: in play
-    since last turn). Depth = board-supported capacity (Σ min(copies, eligible bases) per line), the
-    stage window = the MINIMUM usable window (conservative); an excluded id (the class's own sought
-    evolution) never double-counts."""
+    """A drawn engine counts only if its ability is unconditional-once-in-play AND an eligible base
+    is on board. Depth = Σ min(copies, eligible bases); the window is the MINIMUM usable one."""
     dx = _shipped_pilot("dragapult_ex")
     counts = {120: 3, 66: 1, 5: 4}
     dreepy = {"id": 119, "hp": 70, "energies": [], "appearThisTurn": False}
@@ -427,11 +387,8 @@ def test_wp4_engine_derivation_is_board_gated():
 
 @pytest.mark.req("REQ-GAMBLE-0011")
 def test_wp4_engine_windows_lift_the_anchored_gamble_price():
-    """Integration: Munkidori one {C} short, 4 Basic Psychic outs, 2 Drakloak + an eligible Dreepy —
-    the anchored eval prices with the two-window form (base + the missed-but-drew-Drakloak branch's
-    Recon window over the thinned pool) and the trace carries the engine block; without the eligible
-    Dreepy the same board prices at the plain window. Pre-anchor stays plain (engines are an
-    anchored-only sharpening; under-count, never a guess)."""
+    """The anchored eval prices with the two-window form (base + the missed-but-drew-engine branch
+    over the thinned pool). Pre-anchor stays plain: engines are an anchored-only sharpening."""
     from math import isclose
     from common.pilot import Board
     from common.deck_odds import draw_hit_probability, draw_hit_with_engines
@@ -467,13 +424,8 @@ def test_wp4_engine_windows_lift_the_anchored_gamble_price():
 
 
 def test_chain_refresh_lifts_the_window_when_a_drawn_refresh_is_live():
-    """The refresh CHAIN (spec failure mode B — hand expansion): the window may miss its outs but
-    draw ANOTHER refresh, whose replay is a fresh full window at the same outs. Two legs, each with
-    its own gate: a drawn Unfair Stamp (Item) chains iff one of MY Pokémon was KO'd during their
-    last turn (`Board.my_pokemon_koed_last_turn` — the card's own condition); a drawn SUPPORTER
-    refresh chains only when the played refresh was an ITEM (the slot is unspent — the 4-of-5
-    rule). The chain branch conditions on missing every out, so it adds disjointly; without its
-    gate the same board prices at the plain window."""
+    """A window may miss its outs but draw ANOTHER refresh, whose replay is a fresh full window. The
+    chain branch conditions on missing every out, so it adds disjointly."""
     from math import isclose
     from common.pilot import Board
     from common.deck_odds import draw_hit_probability as hitp
@@ -530,10 +482,8 @@ def _pump_obs(ma, opp):
 
 @pytest.mark.req("REQ-GAMBLE-0012")
 def test_wp5_damage_pump_ko_class():
-    """WP5: the DAMAGE-PUMP KO class — my Active's affordable attack is short of the KO by ≤ one boost,
-    and drawing a damageBoost Trainer lifts it over. Gates mirror `_boost_lethal_tactical` exactly
-    (attacker-type via `energyType`, defender `{ex}`). Premium Power Pro ({F}+30, Item) is always-live;
-    Black Belt's (+40-vs-ex, Supporter) rides the post-Item supplement and needs an ex defender."""
+    """Short of the KO by <= one boost. The gates mirror `_boost_lethal_tactical` exactly (attacker
+    type via `energyType`, defender `{ex}`)."""
     from common.pilot import Board
     ml = _shipped_pilot("mega_lucario")
     stat = ml.stats.get(678)                              # Mega Lucario ex, {F}=6, Mega Brave 270 at 2 E
@@ -565,10 +515,8 @@ def test_wp5_damage_pump_ko_class():
 
 @pytest.mark.req("REQ-GAMBLE-0013")
 def test_wp5_gust_ko_class():
-    """WP5: the GUST KO class — my Active can't KO the current opp Active but CAN KO a benched target
-    once it's dragged up (per-target weakness via the shared `_can_ko` oracle). Drawing Boss's Orders
-    (1182, a Supporter → post-Item-refresh only) enables it; value = the benched target's prize. No
-    KO-able benched target, or Boss's already in hand, yields no class."""
+    """My Active cannot KO their Active but CAN KO a benched target once dragged up (per-target
+    weakness via the shared `_can_ko` oracle); the value is that target's prize."""
     from common.pilot import Board
     ml = _shipped_pilot("mega_lucario")
     ma = {"id": 678, "hp": 340, "energies": [6, 6]}      # Mega Lucario ex, Aura Jab 130 / Mega Brave 270
@@ -586,10 +534,8 @@ def test_wp5_gust_ko_class():
 
 @pytest.mark.req("REQ-GAMBLE-0014")
 def test_wp5_bench_fill_anti_donk_survival_class():
-    """WP5 (survival): bench EMPTY + Active doomed = a donk game-loss looms — a KO of my only Pokémon
-    ends the game. Drawing ANY benchable Basic (or Poffin, whose bench-fill clause reaches a ≤70-HP
-    Basic still in deck) averts it; value = KO_SCORE-scale (a loss averted). Voided when a Basic is
-    already in hand (bench it — deterministic), when the bench isn't empty, or when not doomed."""
+    """Bench EMPTY + Active doomed = a KO of my only Pokémon ends the game, so the class is valued at
+    KO_SCORE scale (a loss averted)."""
     from common.pilot import Board
     ms = _shipped_pilot("mega_starmie")
     ma = {"id": 1031, "hp": 40, "energies": []}
@@ -609,10 +555,8 @@ def test_wp5_bench_fill_anti_donk_survival_class():
 
 @pytest.mark.req("REQ-GAMBLE-0014")
 def test_wp5_survival_heal_out_lifts_the_doomed_active_above_the_incoming():
-    """WP5 (survival): the same bench-empty predicted-loss class also counts a drawn HEAL that lifts
-    the doomed Active above the incoming — Wally's Compassion heals a damaged Mega ex to full, so it
-    survives when max HP > the incoming (a Supporter → post-Item supplement). Not an out when even a
-    full heal can't survive (incoming ≥ max HP), nor when the Active carries no damage to heal."""
+    """A full heal is an out only when max HP > the incoming, and only on an Active carrying damage
+    to heal."""
     from common.pilot import Board
     ms = _shipped_pilot("mega_starmie")
     ma = {"id": 1031, "hp": 100, "energies": [3]}        # Mega Starmie ex (max 330), 100 HP (damaged)
@@ -633,10 +577,8 @@ def test_wp5_survival_heal_out_lifts_the_doomed_active_above_the_incoming():
 
 @pytest.mark.req("REQ-GAMBLE-0015")
 def test_wp6_ko_gamble_fires_despite_a_held_line_preevo_via_graded_keep_cost():
-    """WP6: the binary protected-hand stand-downs (wincon / line pre-evo / ACE-SPEC in hand) are gone,
-    replaced by the graded keep-cost priced into the det baseline. A KO gamble (≈ KO_SCORE) now fires
-    even holding a Line pre-evolution — its keep-cost (a re-accessible Staryu) is dwarfed by the KO —
-    where the old binary guard stood down. The eval row carries the `keep` floor."""
+    """The protected-hand stand-downs are a graded keep-cost priced into the det baseline, so a
+    KO-scale gamble outweighs holding a re-accessible Line pre-evolution."""
     pilot = _shipped_pilot()
     obs = _gamble_obs(opp_hp=230)
     obs["current"]["players"][0]["hand"].append({"id": 1030})   # Staryu — the line pre-evolution

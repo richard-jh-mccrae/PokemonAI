@@ -1,4 +1,4 @@
-"""The develop-rung correction classifier (Phase 3 consumer, `docs/plans/phase3-tooling.md`).
+"""The develop-rung correction classifier.
 
 A turn-scope Correction carrying a `turn_plan` note is a develop-rung correction. `classify_develop_
 correction` reads its live trace (`plan_candidates`, `planned`, `opts[correct].fired`) and the note,
@@ -20,10 +20,7 @@ def _corr(*, correct, live_trace, turn_plan=None, rationale=""):
 
 @pytest.mark.req("REQ-TUNER-0018")
 def test_leaf_misrank_when_the_rung_overrode_the_human_pick():
-    """The gold case (dragapult ep86090164): the rung fired and committed [2]@65, but the human wants
-    [0]@50 — the greedy pick. The rung mis-ranked the leaf (picked a higher-valued board the human
-    rejects), and it overrode greedy. Verdict = leaf-misrank, diverged, with the committed vs correct
-    values and the rules [0] leans on."""
+    """The gold case: the rung committed [2]@65 but the human wants the greedy [0]@50 — a leaf-misrank."""
     lt = {"chosen": [2],
           "planned": {"step": [2], "goal": "develop", "value": 65.0, "diverged": True},
           "plan_candidates": [
@@ -116,9 +113,8 @@ def test_proposal_carries_the_develop_class_for_a_turn_plan_correction():
 
 @pytest.mark.req("REQ-TUNER-0018")
 def test_batch_report_buckets_retire_corroboration_and_leaf_fodder():
-    """The Phase-3 aggregate: rung-right corrections corroborate a rule's retirement (rung reproduced
-    its pick); leaf-misranks are leaf/gate fodder. A cross-turn leaf-misrank is a capability-gap, not
-    a leaf tune. Prose/inactive are counted but routed elsewhere."""
+    """Rung-right corrections corroborate a rule's retirement; leaf-misranks are leaf/gate fodder. A
+    cross-turn leaf-misrank is a capability-gap, not a leaf tune."""
     from train.tuner.develop import develop_batch_report
     right = _corr(correct=[1], turn_plan={"intended_line": "bench the second basic"}, live_trace={
         "planned": {"step": [1], "goal": "develop", "value": 70.0},

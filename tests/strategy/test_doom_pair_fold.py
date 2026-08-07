@@ -1,29 +1,15 @@
 """POC-T1 (Issue #260) — the legacy doom pair folds onto the Threat-Clock curve, byte-identically.
 
-`CombatMath.active_doomed` used to be ``max(incoming_active_damage, forward_incoming_damage)``: two
-hand-written reads standing beside `incoming`, the curve that answers the same question. Their
-agreement with the curve was a MEASUREMENT (259/274 — `doom-shadow-grill-handoff.md`) rather than a
-property, and the 15 disagreements were ruled frame-by-frame in that grill's RULED appendix.
-
-The fold makes the divergence a **policy** instead of a second code path: `UNCHARGED` is what "worst
-case, affordability not charged on the body as it stands" means, spelled as a parameter of the one
+The fold makes the divergence a POLICY instead of a second code path: `UNCHARGED` is what *"worst
+case, affordability not charged on the body as it stands"* means, spelled as a parameter of the one
 curve. This module is the evidence that the spelling did not change the number.
 
-**The reference oracle below is the DELETED code, verbatim.** That is the point — a pin that
-re-derived the expected values from the new implementation would assert nothing. It is a fixture, not
-a fallback: nothing imports it, and when a future change means to move the doom read, this test is
-what has to be re-ruled rather than quietly re-baselined.
+**The reference oracle below is the DELETED code, verbatim** — a pin that re-derived its expected
+values from the new implementation would assert nothing. Nothing imports it; it is a fixture, and a
+future change to the doom read has to be RE-RULED against it rather than quietly re-baselined.
 
-Two divergences are declared rather than pinned, because both are DEFECTS OF THE OLD PAIR that the
-fold fixes, both in the pessimistic direction:
-
-1. **A self-locked Active still contributes its FORWARD forms.** Evolving clears attack effects
-   (`docs/rules.md` §4), so an ADR-0033 self-lock is a fact about *that* Pokémon. The old pair got
-   this right by accident (`forward_incoming_damage` never consulted the lock at all) while
-   `incoming`'s shared enumeration got it wrong (it skipped the whole line). The curve is fixed;
-   `_legacy_forward` below reproduces the old pair, so on a locked body the two legitimately differ.
-2. **The vestigial ``opp`` parameter is gone.** It was never read — passing None silently disabled
-   the entire forward leg. No caller relied on it (verified: every live call passed a real dict).
+One divergence is declared rather than pinned, in the pessimistic direction: a self-locked Active
+still contributes its FORWARD forms, because evolving clears attack effects (`docs/rules.md` §4).
 """
 import json
 import sys
@@ -35,17 +21,12 @@ from common.strategy.combat import CURRENT_FORMS_ONLY, UNCHARGED
 
 REPO = Path(__file__).resolve().parents[2]
 
-#: The three agents whose correction runs the ruled corpus is drawn from. The fold is checked over
-#: EVERY committed frame of all three, not only the 15 — "the 15" was a property of one sweep, and a
-#: pin scoped to it would narrow silently as the corpus grows (ADR-0089 decision 2: a ruling is
-#: re-derived, not inherited).
+# Checked over EVERY committed frame of all three, not only the ruled 15 — a pin scoped to one
+# sweep's frames narrows silently as the corpus grows (ADR-0089 decision 2).
 AGENTS = ("mega_starmie", "mega_lucario", "dragapult_ex")
 
-#: …and the fifteen frames the grill ruled BY NAME (`doom-shadow-grill-handoff.md`, RULED appendix),
-#: as `episode_id-frame`. Asserted present and byte-identical individually, because "the corpus was
-#: covered" is a weaker claim than "these frames were covered": the whole sweep found agreement on
-#: 259/274 and it is exactly these fifteen where the two reads disagreed, so they are the frames a
-#: fold could plausibly move.
+# The frames the grill ruled BY NAME, as `episode_id-frame`. Asserted individually because *"the
+# corpus was covered"* is weaker than *"these frames were covered"*.
 RULED_15 = (
     "81904451-17", "82749168-21", "82749168-29", "81904064-44", "85163634-17",
     "85058574-69", "85058574-71", "86091435-13", "86091435-20", "86091435-30",
@@ -169,9 +150,8 @@ def test_the_fold_is_byte_identical_to_the_deleted_pair(agent):
 
 
 def test_the_fold_reads_one_curve_at_two_policies():
-    """The structural claim, stated as code: doom IS `incoming` under `UNCHARGED`, and the surviving
-    divergence from `doomed_incoming` is that method's `charged=None` ceiling — one implementation,
-    two policies. If a future edit re-splits them this fails before any corpus does."""
+    """Doom IS `incoming` under `UNCHARGED`; the surviving divergence is `charged=None`'s ceiling. If
+    a future edit re-splits them this fails before any corpus does."""
     pilot = _pilot("mega_lucario")
     frames = [obs for _run, _i, obs, _k in _frames("mega_lucario")]
     if not frames:
@@ -197,10 +177,8 @@ def test_the_fold_reads_one_curve_at_two_policies():
 
 @pytest.mark.parametrize("frame_key", RULED_15)
 def test_each_RULED_frame_is_byte_identical(frame_key):
-    """The fifteen by name. `test_the_fold_is_byte_identical_to_the_deleted_pair` already covers
-    them inside its corpus walk, but only as anonymous members of a few hundred — and a walk that
-    silently stopped finding them would still pass. These are the frames the grill ruled one at a
-    time; they are asserted one at a time."""
+    """The corpus walk covers these as anonymous members of a few hundred, and a walk that silently
+    stopped finding them would still pass. Ruled one at a time, so asserted one at a time."""
     for agent in AGENTS:
         for _run, _i, obs, key in _frames(agent):
             if key != frame_key:
@@ -218,19 +196,8 @@ def test_each_RULED_frame_is_byte_identical(frame_key):
 
 
 def test_the_declared_self_lock_divergence_is_MEASURED_not_assumed():
-    """The one behaviour change the corpus cannot show, shown directly.
-
-    `_attacker_forms` used to skip a self-locked body's WHOLE line; it now skips only the locked
-    form and still yields its FORWARD forms, because evolving clears attack effects
-    (`docs/rulebook.txt` L215: *"When a Pokémon evolves or moves to the Bench, it recovers from all
-    Special Conditions"*; `docs/rules.md` §4 for attack effects). The corpus walk asserts no frame
-    carries a live lock rather than exercising one — the tracker is empty on a replayed frame — so
-    without this the fold's only real divergence would be untested.
-
-    Both halves are asserted: the locked form contributes nothing, and its forward form still does.
-    The direction matters — the old pair got this right by accident (`forward_incoming_damage` never
-    consulted the lock), so had the fold inherited `incoming`'s skip it would have made a survival
-    read LESS pessimistic than the read it replaced."""
+    """The corpus walk cannot exercise a live lock — the tracker is empty on a replayed frame — so
+    without this the fold's only real divergence is untested. BOTH halves, since the direction matters."""
     from common.cards import CardFunctions
     from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
     from common.strategy.combat import CombatMath

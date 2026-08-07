@@ -85,9 +85,7 @@ _CARDS = {
                                        # line's PRIZE load-bearing; the card always was one.
     DEAD_END: CardStat(DEAD_END, synthetic=True, name="Ditto", hp=60),
     # An ALAKAZAM-SHAPED line: the forward form's printed `maxDamage` is a trivial 10 because its
-    # whole output is a Damage Formula scaler (`per_unit x count(variable)`). The printed forward
-    # index therefore reads this line at 10 and the pre-ADR-0119 `_gust_forward_denial` scored
-    # it exactly 0, while the board-priced `forward_threat_ceiling` sees the real number.
+    # whole output is a Damage Formula scaler, so the printed forward index cannot see the threat.
     SCALER_PREEVO: CardStat(SCALER_PREEVO, synthetic=True, name="Abra", hp=60),
     SCALER_FORM: CardStat(SCALER_FORM, synthetic=True, name="Alakazam", evolvesFrom="Abra", hp=140,
                           maxDamage=10, attacks=(A_SCALE,)),
@@ -143,41 +141,8 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-# ── the gust WHETHER-TO-PLAY rungs — DELETED (POC-T4/5, Issue #386) ──────────────────────────────
-#
-# Fifteen tests lived here over the five `doctrine_gust` rungs Issue #386 retires: `gust-for-the-ko`
-# (+50), `gust-for-the-loaded-equal-ko` (+50), `gust-for-the-stall` (+10),
-# `stall-gust-over-dev-when-starved` (+95) and `gust-to-strand-the-key-attacker` (+20). Every one
-# asserted `"<rung-id>" in _fired(...)` on a board built to make that rung fire, so every one pinned
-# WHICH MECHANISM decided rather than WHAT the agent played — the assertion a swap invalidates.
-#
-# **The TARGET side is untouched and its tests all remain below.** Only the whether-to-play half
-# dies; `_gust_target_tactical` and its legs are FIRING-owned and explicitly out of Issue #386's
-# scope. If you are looking for the tests that were here, check first whether you actually want the
-# target-select section — most gust behaviour people care about lives there.
-#
-# WHERE THE FACT WENT — and this is an honest audit, not a redirect:
-#
-#   "drag up a KO-able benched body" is asserted at DECISION level, on real captured boards, by
-#   `test_blunder_20260709_gust_ko.py` (f79, f81 — both fixture-backed) and
-#   `test_blunder_20260710_split_fixes.py`'s Boss's-Orders frame. Under differencing this is not a
-#   rung at all: gusting a body the composer can then Knock Out shows up as a sequence that takes a
-#   prize out-scoring one that does not.
-#
-#   **CORRECTION, measured after this note was first written.** Those successor tests are themselves
-#   failing, and the reason is worse than "a flip to rule": `apply_option` REFUSES Boss's Orders
-#   outright — *"1182 Boss's Orders: its Effect Clauses write ['bodies_in_play',
-#   'special_conditions', ...] — the structural floor is not the whole play"* (Issue #300 `_covers`).
-#   The card is unmodellable at the seam, so the composer can never commit a gust, and **the gust
-#   fact has NO working decision-level assertion on this branch.** That is a coverage LOSS, not a
-#   disagreement, and it is recorded as one in `poc_t4_flips.py` (f79 and f81, diagnosis REFUSAL)
-#   rather than left implied by the sentence above.
-#
-#   It does not change the disposition of the fifteen tests deleted here — a rung-id assertion on a
-#   hand-built menu could not have detected a seam refusal either, and keeping them would have meant
-#   fifteen green tests over a mechanism that no longer exists. But "the fact is carried elsewhere"
-#   was too strong, and the honest version is: the fact is carried elsewhere AS A KNOWN GAP, with a
-#   named cause and a strict xfail that will fire the day the seam learns to write a gust.
+# The five gust WHETHER-TO-PLAY rungs were DELETED (Issue #386); the TARGET side below is untouched.
+# `apply_option` REFUSES Boss's Orders, so the gust fact is a KNOWN GAP — `poc_t4_flips.py` f79/f81.
 @pytest.mark.req("REQ-GUST-0001")
 def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
     """No gustable KO (the only benched mon, 200 HP, survives my 120) → HOLD Boss's: the rule stays
@@ -190,17 +155,13 @@ def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
                       opp_bench=[poke(BENCHIE, hp=200)],
                       hand=[BOSS]))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
 @pytest.mark.req("REQ-GUST-0001")
 def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
-    """Net-of-baseline: I can KO the current Active for 1 prize (120 >= 100) and the gust only reaches
-    another 1-prize KO → don't gust (the direct KO is free and gusting would bench their Active safe).
-    The rule fires only when the gust beats the current-Active KO."""
+    """Net-of-baseline: the direct KO is free and gusting would bench their Active safe, so a gust
+    reaching only an equal prize must not fire."""
     obs = make_select(
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
@@ -209,9 +170,6 @@ def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
                       opp_bench=[poke(BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -220,9 +178,8 @@ def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
 @pytest.mark.req("REQ-GUST-0004")
 @pytest.mark.parametrize("cond", ["poisoned", "burned", "asleep", "paralyzed", "confused"])
 def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
-    """The S1 stall scenario, but the opponent's Active carries a special condition → HOLD Boss's:
-    gusting it off to the bench would CLEAR the condition (a free cure), so the stall stands down for
-    every one of the five conditions (any condition is a gift). Mirror of the firing case below."""
+    """Gusting a conditioned Active off to the bench CLEARS the condition — a free cure — so the
+    stall stands down for all five."""
     obs = make_select(
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
@@ -231,18 +188,13 @@ def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS], opp_conditions=(cond,)))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
 @pytest.mark.req("REQ-GUST-0004")
 def test_gust_for_the_ko_stands_down_when_burn_will_KO_the_active_for_the_same_prize():
-    """Offensive baseline: my weak Active (10) can't KO the opponent's 20-HP Active by attacking, but
-    it is BURNED — burn's 20 KOs it this Checkup for a free 1 prize. A gust reaching another 1-prize KO
-    must NOT fire: gusting the burned Active off to the bench CURES it, trading my Supporter for a prize
-    I'd already get. (The wincon is benched so the SETUP-damping can't confound the result.)"""
+    """Burn's 20 KOs the 20-HP Active at Checkup for a free prize, so gusting it off (which CURES it)
+    trades my Supporter for a prize I already had."""
     obs = make_select(
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
@@ -252,9 +204,6 @@ def test_gust_for_the_ko_stands_down_when_burn_will_KO_the_active_for_the_same_p
                       opp_bench=[poke(BENCHIE, hp=10)],
                       hand=[BOSS], opp_conditions=("burned",)))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -308,9 +257,7 @@ def test_gust_target_denial_outranks_a_bigger_inert_prize():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_gust_target_breaks_ties_toward_an_evolving_threat():
-    """Two equal-prize, inert, KO-able targets → drag up the one whose evolution line becomes an
-    attacker (forward-evolution index), denying the latent threat. A sub-prize tie-break that never
-    overrides a real prize difference."""
+    """A sub-prize tie-break on the forward-evolution index: it never overrides a real prize gap."""
     obs = make_select(
         [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
         context=SWITCH,
@@ -324,12 +271,8 @@ def test_gust_target_breaks_ties_toward_an_evolving_threat():
 
 @pytest.mark.req("REQ-GUST-0013")
 def test_gust_matchup_priority_is_a_subprize_tiebreak_over_the_plan():
-    # ADR-0051: the gust target tie-break reads the unified MatchupPlan — prefer dragging up the
-    # higher-priority body (wincon > its pre-evo), sub-prize (never overrides a real prize gap), and
-    # clamped to POSITIVE so a KO-able draw engine (`avoid`) is still worth its prize (0, not negative).
-    # `general_roles` (Issue #395 D5) replaced the old `draw_engine_ids` id-set: the general tier
-    # now carries a ROLE per body, so it can gate `avoid` on prize value instead of firing on every
-    # `draw` body. DEAD_END is a 1-prize engine, which is the case where `avoid` is still correct.
+    # ADR-0051: sub-prize, and clamped to POSITIVE so a KO-able `avoid` body is still worth its
+    # prize (0, never negative).
     plan = build_matchup_plan(brief_roles={WINCON: "prize_liability", PREEVO_THREAT: "fragile_preevo"},
                               general_roles={DEAD_END: "avoid"}, gamma=1.0)
     board = Board(matchup_plan=plan)
@@ -359,9 +302,8 @@ def test_gust_target_does_not_fire_on_my_own_retreat():
 
 @pytest.mark.req("REQ-GUST-0009")
 def test_gust_oracle_respects_resistance_no_false_ko():
-    """The gust KO oracle (`_can_ko`) subtracts the defender's Resistance (flat -30, simulator-verified):
-    a benched mon that RESISTS my Fighting attacker survives my 120 (120-30=90 < 100) → NOT a KO target,
-    while an equal-HP non-resisting mon IS. Drag up the one I can actually KO, never the resisted body."""
+    """`_can_ko` subtracts the defender's Resistance (flat -30, simulator-verified), so a resisting
+    body at equal HP is NOT a KO target."""
     obs = make_select(
         [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
         context=SWITCH,
@@ -376,9 +318,8 @@ def test_gust_oracle_respects_resistance_no_false_ko():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_gust_target_prefers_the_two_prize_snipe_synergy():
-    """Two equal-prize KO-able targets, but gusting the 70-HP one lets my Active's 50 bench-snipe
-    finish the 20-HP one for a SECOND prize, while gusting the 20-HP one leaves the snipe unable to
-    reach the 70-HP body. Drag up the target that banks 2 prizes (ep82523164 f55)."""
+    """Gusting the 70-HP body lets my 50 bench-snipe finish the 20-HP one for a SECOND prize; gusting
+    the 20-HP one leaves the snipe short of the 70."""
     obs = make_select(
         [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
         context=SWITCH,
@@ -397,10 +338,8 @@ def test_gust_target_prefers_the_two_prize_snipe_synergy():
 
 @pytest.mark.req("REQ-GUST-0003")
 def test_active_doomed_by_forward_hand_size_evolution():
-    """Posture: the opp's Active (Kadabra, 30 dmg) can EVOLVE into a hand_size_attacker (Alakazam,
-    20 dmg/card) whose Powerful Hand KOs my 130-HP Active next turn. `active_doomed` must see the
-    forward threat — handCount 10 → 20 × (10 − 1 played) = 180 ≥ 130 — though Kadabra's own attack
-    can't (ep82754875 f52). We play AS IF the opponent evolves and attaches."""
+    """`active_doomed` reads the FORWARD threat — 20 x (10 - 1 played) = 180 >= 130 — though the
+    pre-evolution's own attack cannot reach it. We play AS IF the opponent evolves and attaches."""
     obs = make_select([opt(END)],
                       current=state(active=poke(MY_FRAGILE, hp=130),
                                     opp_active=poke(KADA, energy=1), opp_hand_count=10))
@@ -409,9 +348,7 @@ def test_active_doomed_by_forward_hand_size_evolution():
 
 @pytest.mark.req("REQ-GUST-0003")
 def test_not_doomed_when_hand_too_small_for_the_forward_attacker():
-    """Control: a 1-card hand (0 after the evolution is played) → 20 × 0 = 0 forward damage, and
-    Kadabra's own 30 < 130, so my Active is NOT doomed. The threat is the hand SIZE, not the bare
-    evolution — the read stays quiet when the hand can't back it up."""
+    """Control: the threat is the hand SIZE, not the bare evolution, so a 1-card hand reads 0."""
     obs = make_select([opt(END)],
                       current=state(active=poke(MY_FRAGILE, hp=130),
                                     opp_active=poke(KADA, energy=1), opp_hand_count=1))
@@ -420,9 +357,8 @@ def test_not_doomed_when_hand_too_small_for_the_forward_attacker():
 
 @pytest.mark.req("REQ-GUST-0013")
 def test_active_doomed_by_general_forward_evolution_attack():
-    """ep83457493 f20: the opp's Active (Riolu-like, tiny printed attack) EVOLVES into a 270-damage
-    attacker next turn — `active_doomed` must see the general printed forward threat (not just the
-    hand_size special case): 270 ≥ my 130. Same affordability gate (their Energy + one attach)."""
+    """The general printed forward threat, not just the hand_size special case. Same affordability
+    gate: their Energy plus one attach."""
     obs = make_select([opt(END)],
                       current=state(active=poke(MY_FRAGILE, hp=130),
                                     opp_active=poke(PREEVO_THREAT, energy=1, hp=60),
@@ -443,9 +379,6 @@ def test_gust_for_the_stall_silent_when_not_under_threat():
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -467,11 +400,8 @@ def test_gust_stall_target_picks_the_energyless_high_retreat_body():
 
 @pytest.mark.req("REQ-GUST-0015")
 def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom():
-    """ep82753102 f109: the opponent's Active both DOOMS my Active (200 incoming ≥ 200 HP) and is
-    KO-able on the menu — the direct KO removes the threat, while a gust benches it SAFELY to come
-    back. A 2-prize gust must then beat the menu by MORE than one prize, so it stands down and the
-    agent kills the threat. The same 2-prize gust over a harmless KO-able Active (no doom) fires —
-    that control is `test_gust_for_the_ko_fires_to_reach_a_higher_prize_than_the_current_active`."""
+    """The Active both DOOMS mine and is KO-able on the menu: the direct KO removes the threat while
+    a gust benches it SAFELY, so the gust must beat the menu by MORE than one prize."""
     obs = make_select(
         [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
         context=MAIN,
@@ -480,17 +410,13 @@ def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom(
                       opp_bench=[poke(EX_BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
-    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
-    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
 @pytest.mark.req("REQ-GUST-0015")
 def test_gust_target_breaks_ties_toward_the_loaded_body():
-    """SWITCH tie-break mirror of the loaded-equal play rule: two equal-prize KO-able bodies, one
-    carrying 3 sunk Energy — drag up the loaded one (the KO destroys everything attached; ADR-0062's
-    marginal strip pointed across the table). Sub-prize: it never overrides a real prize gap."""
+    """The KO destroys everything attached, so among equal prizes drag up the LOADED body.
+    Sub-prize: it never overrides a real prize gap."""
     obs = make_select(
         [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
         context=SWITCH,
@@ -506,13 +432,8 @@ def test_gust_target_breaks_ties_toward_the_loaded_body():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_flat_wincon_denial_constant_is_gone_not_relocated():
-    """ADR-0119 decision 2. `_gust_wincon_denial` added a flat `_WINCON_DENIAL_PRIZES` (1.5)
-    scaled by γ and gated to two curated MatchupPlan roles, so it read 0 on an unrecognised opponent
-    and on any wincon line no Brief had labelled. Its question — *what does this line BECOME* — is
-    now answered from card facts for every board.
-
-    Asserted structurally because the regression this guards is someone re-adding the constant
-    beside the derivation, which no value test would notice."""
+    """ADR-0119 decision 2. Asserted STRUCTURALLY: the regression this guards is someone re-adding
+    the constant beside the derivation, which no value test would notice."""
     from common.strategy.doctrines import doctrine_gust as dg
     assert not hasattr(Pilot, "_gust_wincon_denial")
     assert not hasattr(dg, "_WINCON_DENIAL_PRIZES")
@@ -524,11 +445,8 @@ def test_the_flat_wincon_denial_constant_is_gone_not_relocated():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_gust_target_prices_the_LINES_prize_not_the_bodys_own():
-    """The premium `_gust_wincon_denial` used to add, now derived. Riolu is a 1-prize Basic one hop
-    from a 3-prize Mega ex; Ditto is a 1-prize Basic whose line goes nowhere. Both are KO-able and
-    both yield exactly one prize TODAY, so nothing but the line reading can separate them.
-
-    Hand-derived: `1 + (3 - 1) x halve(1)` = 2.0 against Ditto's flat 1.0."""
+    """Both bodies are KO-able and both yield one prize TODAY, so nothing but the LINE reading can
+    separate them. Hand-derived: `1 + (3 - 1) x halve(1)` = 2.0 against a dead end's flat 1.0."""
     from common.needs import line_prize_advance
     p = _pilot()
     assert p.combat.forward_line_prize(PREEVO_THREAT) == (3, 1), "Riolu -> MegaLucario, one hop"
@@ -548,14 +466,8 @@ def test_the_gust_target_prices_the_LINES_prize_not_the_bodys_own():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_evolving_threat_denial_sees_a_SCALING_forward_form():
-    """ADR-0119 decision 5, made concrete on the shape that broke it.
-
-    `_gust_forward_denial` used to threshold the provider's PRINTED forward index at 100. Alakazam's
-    whole output is a Damage Formula scaler, so that index reads its line at **10** and the term
-    scored a genuinely lethal evolving threat at exactly **0**. The board-priced
-    `CombatMath.forward_threat_ceiling` sees it.
-
-    The printed control is asserted first, so this cannot pass by the fixture simply being big."""
+    """A scaler line's PRINTED forward index reads 10, so a 100 threshold scored a lethal evolving
+    threat at 0. The printed control is asserted first, so this cannot pass by the fixture being big."""
     p = _pilot()
     p.scaled_threat_rank = True          # armed by the runtime profile, not by `Pilot.__init__`
     printed = p.stats.forward_max_damage(SCALER_PREEVO)
@@ -572,9 +484,8 @@ def test_the_evolving_threat_denial_sees_a_SCALING_forward_form():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_evolving_threat_denial_is_a_magnitude_not_a_threshold():
-    """A line at 99 and a line at 400 both scored 0 and 0.5 under the threshold. Now the reading is
-    monotone in the board-priced ceiling, so a scarier line prices higher — asserted by moving ONLY
-    the scaler's variable, which leaves every card fact identical between the two readings."""
+    """Monotone in the board-priced ceiling. Asserted by moving ONLY the scaler's variable, so every
+    card fact is identical between the two readings."""
     p = _pilot()
     p.scaled_threat_rank = True          # armed by the runtime profile, not by `Pilot.__init__`
     p._opp_attack_context = {"atk_hand": 2}
@@ -586,10 +497,8 @@ def test_the_evolving_threat_denial_is_a_magnitude_not_a_threshold():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_printed_read_is_restored_exactly_when_the_lever_is_thrown():
-    """`scaled_threat_rank` OFF must restore the printed threshold byte-for-byte at THIS call site
-    too, which is the whole reason ADR-0119 rides Issue #213's existing lever rather than
-    deleting the two constants. An incident switch that reverted two of three printed reads would be
-    worse than no switch at all."""
+    """OFF must restore the printed threshold byte-for-byte at THIS call site too: an incident switch
+    that reverted two of three printed reads is worse than no switch."""
     from common.strategy.doctrines import doctrine_gust as dg
     p = _pilot()
     p._opp_attack_context = {"atk_hand": 10}
@@ -604,18 +513,8 @@ def test_the_printed_read_is_restored_exactly_when_the_lever_is_thrown():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_evolving_threat_denial_discounts_by_the_hops_to_the_ATTACKER():
-    """The hop count must be the distance to the best-DAMAGE form, not the best-PRIZE one.
-
-    `reach` is `forward_threat_ceiling` — a damage quantity about the line's biggest ATTACKER — so
-    discounting it by `forward_line_prize`'s hop count asks how far away a different form is. The
-    two genuinely diverge, and the direction of the error is what makes this worth a test rather
-    than a comment: a line with NO prize gap reports 0 prize-hops, so a prize-hop discount would
-    vanish entirely on exactly the case ADR-0119 decision 5 is justified by — *"a 1-prize Basic
-    evolving into a 1-prize Stage 1 that hits hard"*.
-
-    `SCALER_PREEVO` is that case: Abra (1 prize) -> Alakazam (1 prize), so `forward_line_prize`
-    returns 0 hops while `forward_payoff_terms` returns 1. `halve(0)` is 1.0 and `halve(1)` is 0.5,
-    so the bug was a clean factor of two, undiscounted."""
+    """The hop count must be the distance to the best-DAMAGE form, not the best-PRIZE one: a line
+    with no prize gap reports 0 prize-hops, so a prize-hop discount would vanish undiscounted."""
     p = _pilot()
     p.scaled_threat_rank = True
     p._opp_attack_context = {"atk_hand": 7}                       # 10 + 20x7 = 150

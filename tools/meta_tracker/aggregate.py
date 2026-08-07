@@ -69,10 +69,8 @@ def rate_table(episodes: list[dict], key: str):
 
 
 def merge_map(eps: list[dict]) -> dict[str, str]:
-    """Subset-merge archetypes that share a primary main line, then label each
-    cluster by its **most common** member (not the fullest — a rare 3-main
-    variant shouldn't rename the dominant 1-main deck). Non-destructive (view only).
-    E.g. the Hop's Trevenant variants collapse to one; plain Alakazam stays 'Alakazam'."""
+    """Subset-merge archetypes sharing a primary main line, then label each cluster by its MOST COMMON
+    member — a rare 3-main variant must not rename the dominant 1-main deck. Non-destructive."""
     mains: dict[str, frozenset] = {}
     primary: defaultdict[str, Counter] = defaultdict(Counter)
     freq: Counter = Counter()

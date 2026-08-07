@@ -62,10 +62,8 @@ def _fixture(name):
 
 
 def _drive_promote(pilot, obs, first_step, *, max_selects=28):
-    """Drive ``first_step`` through the pilot's seeded search, letting ``decide()`` complete the cascade
-    (as the live agent does). Returns ``(promoted_id, opp_active_ko)`` — the card id decide() brought up
-    at the first retreat SWITCH / forced promote, and whether the opponent's Active reached 0 HP during
-    the drive. Mirrors ``_engine_confirms_win``'s cascade drive, incl. its boost-tracker feed."""
+    """``(promoted_id, opp_active_ko)`` — the id decide() brought up at the first SWITCH / forced
+    promote, and whether their Active reached 0 HP. Mirrors `_engine_confirms_win`'s cascade drive."""
     cur = obs["current"]
     yi = cur["yourIndex"]
     me, opp = cur["players"][yi], cur["players"][1 - yi]
@@ -113,9 +111,7 @@ def _drive_promote(pilot, obs, first_step, *, max_selects=28):
     ("ml_lethal_recover_energy_via_gong_f48", [9]),     # grab via Fighting Gong
 ])
 def test_promote_ko_aware_brings_up_the_ko_body(fixture, grab_step):
-    """With ``promote_ko_aware`` ON, after the energy grab the cascade promotes Mega Lucario ex (Aura
-    Jab 130 KOs Tangela 80) and takes the KO — where the energy-ranked baseline brings up Solrock
-    (Cosmic Beam 70, no KO)."""
+    """The energy-ranked baseline brings up the wrong body and forfeits the Knock Out."""
     obs = _fixture(fixture)["obs"]
     assert obs.get("search_begin_input")
     promoted, opp_ko = _drive_promote(_pilot("mega_lucario", promote_ko_aware=True), obs, grab_step)
@@ -125,14 +121,8 @@ def test_promote_ko_aware_brings_up_the_ko_body(fixture, grab_step):
 
 @pytest.mark.req("REQ-PROMOTE-KO-0001")
 def test_the_promote_decider_off_does_not_take_the_ko():
-    """Baseline (the pre-fix defect): f26 promotes the wrong body and forfeits the Knock Out — pins
-    that the fix, not the fixture, is what lands it.
-
-    The LEVER changed with ADR-0100 (#141). `promote_ko_aware` was the kill-switch for
-    `promote-the-ko-attacker`, and that rung is DELETED; the pick site's Knock-Out layer is now
-    `_promote_ko_tactical`, which rides the `promote_retreat_value` switch alongside the residual
-    it sums with. So the degraded mode this test pins is the decider OFF — which reproduces the
-    shipped defect exactly, and is what makes OFF a coherent state rather than half an agent."""
+    """The Knock-Out layer rides `promote_retreat_value` alongside the residual it sums with
+    (ADR-0100), so the degraded mode is the whole DECIDER off rather than half an agent."""
     obs = _fixture("ml_lethal_recover_energy_retreat_ko_f26")["obs"]
     promoted, opp_ko = _drive_promote(
         _pilot("mega_lucario", promote_retreat_value=False), obs, [1])
@@ -141,27 +131,13 @@ def test_the_promote_decider_off_does_not_take_the_ko():
 
 # ─────────────────────────── Proposal B: boost lethal (f24) ───────────────────────────
 
-# ⚠ f24's ``[correct]``-only cascade is a SAMPLE, not a fact (#178, measured 2026-07-27). Driving one
-# step and letting decide() play out the rest makes the sim draw 8-11 cards off the deck `_seed_zones`
-# seeded from a PREDICTED multiset and the engine shuffled — so its verdict is whatever that shuffle
-# allowed. Measured over 30 fresh processes: flags-ON None ×30 (the engine reaches its own win and
-# `_engine_confirms_win` declines to certify a shuffle-dependent True); flags-OFF False ×29, None ×1
-# — the lucky shuffle where closed-form recognition composes the line WITHOUT the tier. That 1-in-30
-# is what failed the full suite here. No assertion below may turn on that verdict.
-#
-# Everything else in this module is draw-free and asserted exactly, f24's own explicit line included.
+# ⚠ f24's ``[correct]``-only cascade is a SAMPLE, not a fact (Issue #178): decide() draws off a deck
+# seeded from a PREDICTED multiset and shuffled, so no assertion below may turn on that verdict.
 
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
 def test_boost_lethal_f24_composes_the_win_line_and_is_never_refuted():
-    """The fix's gate, on the part of it that is a fact: with the boost tier + KO-aware promote ON,
-    f24's ``[correct]``-only form is NEVER refuted — decide() composes attach->boost->boost->retreat->
-    promote->swing far enough that the engine never passes the turn to the opponent unresolved, which
-    is the refute this gate would otherwise show.
-
-    It cannot assert ``is True``. The engine does reach its own win here, but only via a cascade that
-    drew 8-11 cards off the shuffled predicted deck, so that True holds for one shuffle and
-    `_engine_confirms_win` demotes it to None (see the note above). The REPRODUCIBLE proof that the
-    target win is real is the explicit line below — which is measurably draw-free."""
+    """It cannot assert ``is True``: that verdict is shuffle-dependent and gets demoted to None. The
+    reproducible proof that the target win is real is the explicit line below."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     assert engine_confirms(fx, _pilot("mega_lucario", promote_ko_aware=True,
                                       boost_lethal=True)) is not False
@@ -169,15 +145,8 @@ def test_boost_lethal_f24_composes_the_win_line_and_is_never_refuted():
 
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
 def test_boost_lethal_f24_target_is_real():
-    """Proof-of-target: the full explicit win line IS a real engine win, and reproducibly so — driving
-    every step leaves the cascade nothing to draw for (measured: zero DRAW, zero COIN, one prize take,
-    which the verdict is invariant to). This is the multi-step gate `lethal_helpers.engine_confirms`
-    documents for a lethal whose decide() follow-up hooks can't be trusted to compose it.
-
-    The old OFF-side bookend is DELETED, not moved: it asserted that the flag-off cascade "still
-    REFUTES ... closed-form recognition alone never composes it", and that is false as measured — it
-    composes on roughly 1 shuffle in 30. The claim was never about the tier; it was about the deck
-    order the process happened to draw."""
+    """Driving EVERY step leaves the cascade nothing to draw for, so this verdict is reproducible
+    where the `[correct]`-only one is not."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     win_line = [[5], [1], [1], [2], [0], [0], [2]]
     assert engine_confirms(fx, _pilot("mega_lucario"), line=win_line) is True
@@ -185,8 +154,7 @@ def test_boost_lethal_f24_target_is_real():
 
 @pytest.mark.req("REQ-BOOST-LETHAL-0001")
 def test_boost_lethal_inert_on_mega_starmie_f110():
-    """Inert where inapplicable: a shipped mega_starmie recover-energy win still confirms with the new
-    tiers ON — no boosted {F} body there, so the boost tier never mis-generates a win."""
+    """No boosted body on this board, so the boost tier must never mis-generate a win."""
     fx = _fixture("ms_lethal_recover_energy_to_win_f110")
     pilot = _pilot("mega_starmie", promote_ko_aware=True, boost_lethal=True)
     assert pilot._engine_confirms_win(fx["obs"], [fx["correct"]], max_cascade=40) is True
@@ -196,10 +164,8 @@ def test_boost_lethal_inert_on_mega_starmie_f110():
 
 @pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
 def test_retreat_enabler_lethal_f15_locks_and_wins_end_to_end_when_flag_on():
-    """ml f15 (a thrown turn-3 WIN): Team Rocket's Petrel -> tutor Air Balloon -> attach it to the Active
-    Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80,
-    opp bench empty -> WIN. With ``retreat_enabler_lethal`` ON the tier LOCKS the win (planned.goal=='win',
-    next_step==[0]) and the grab/attach steering drives the full cascade to a real engine WIN."""
+    """Petrel -> tutor Air Balloon -> attach to the Active (retreat 2-2=0) -> free retreat -> promote
+    -> Aura Jab into an empty opposing bench; the grab/attach steering drives the whole cascade."""
     fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     pilot = _pilot("mega_lucario", promote_ko_aware=True, retreat_enabler_lethal=True)
     d = pilot.explain(fx["obs"])
@@ -210,9 +176,8 @@ def test_retreat_enabler_lethal_f15_locks_and_wins_end_to_end_when_flag_on():
 
 @pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
 def test_retreat_enabler_lethal_off_does_not_lock_f15():
-    """Soundness bookend: with the flag OFF (default) the tier is inert — no win LOCK, and the
-    ``[correct]``-only cascade REFUTES (closed-form recognition alone never composes the Petrel ->
-    Air Balloon -> retreat -> promote steering)."""
+    """OFF is the DEFAULT and the tier is inert: closed-form recognition alone never composes the
+    tutor -> attach -> retreat -> promote steering."""
     fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     pilot = _pilot("mega_lucario", promote_ko_aware=True)   # retreat_enabler_lethal defaults False
     d = pilot.explain(fx["obs"])
@@ -222,10 +187,8 @@ def test_retreat_enabler_lethal_off_does_not_lock_f15():
 
 @pytest.mark.req("REQ-RETREAT-ENABLER-LETHAL-0001")
 def test_retreat_enabler_lethal_counter_fixtures_do_not_regress():
-    """The three shipped lethal counter-fixtures still behave with the tier ON: f110 confirms a WIN and
-    f24 is never refuted (its `[correct]`-only verdict is a shuffle sample — see the note above the
-    boost-lethal gates), f26/f48 stay KO-not-win (engine_confirms is a WIN gate, so it correctly
-    refutes them by category — they ship via promote_ko_aware, not this gate)."""
+    """`engine_confirms` is a WIN gate, so the two KO-not-win fixtures are correctly refuted BY
+    CATEGORY — they ship via `promote_ko_aware`, not this one."""
     on = dict(promote_ko_aware=True, boost_lethal=True, retreat_enabler_lethal=True)
     assert engine_confirms(_fixture("ml_lethal_retreat_boost_to_ko_f24"),
                            _pilot("mega_lucario", **on)) is not False

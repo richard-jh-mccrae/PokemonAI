@@ -1,19 +1,9 @@
-"""Opponent Model — the umbrella facade over all opponent *knowledge* (ADR-0047).
+"""Opponent Model — the `board.opponent` facade over all opponent *knowledge* (ADR-0047): Identity
+(the injected ``Scout``), Resources (``opponent_resources``) and Dispositions (the matched Brief's
+``opponent_properties``, fed in per turn by the Pilot's γ-gated match).
 
-The single `board.opponent` surface. A pure knowledge layer: it answers *what is true / probable about
-the opponent* and never decides (the Pilot/Planner consume it). It composes three subsystems:
-
-- **Identity** — the injected ``Scout`` (dependency-injected, not rewritten): who they are (the Read).
-- **Resources** — ``opponent_resources`` (the match-scoped ``OpponentResourceModel`` + the stateless
-  ``copies_left_odds``): what they have left.
-- **Dispositions** — the matched Matchup Brief's ``opponent_properties`` (high-bar behavioral booleans),
-  fed in per turn by the Pilot's γ-gated match (``note_brief``) so the facade never duplicates the
-  posture-gating policy.
-
-Lifecycle: constructed once per match, one :meth:`observe` fan-out (one write seam), one read surface.
-Two honest epistemic tiers, never one confidence number — *calibrated* (Resources, Read) and *asserted*
-(Dispositions). **Fails OPEN**: every accessor returns a safe default on a missing read (never suppress a
-real line on a guess), and :meth:`observe` never raises.
+Constructed once per match; one :meth:`observe` fan-out is the only write seam. **Fails OPEN** —
+every accessor returns a safe default on a missing read, and :meth:`observe` never raises.
 """
 from __future__ import annotations
 
@@ -24,7 +14,7 @@ from .scouting.read import Read
 
 
 class OpponentModel:
-    """The opponent-knowledge facade (``board.opponent``). See the module docstring."""
+    """The opponent-knowledge facade (``board.opponent``)."""
 
     def __init__(self, scout=None, artifact=None, resources=None, *,
                  confidence_threshold: float = 0.6) -> None:
@@ -38,9 +28,7 @@ class OpponentModel:
 
     # -- write seam -------------------------------------------------------------------------------
     def observe(self, obs: dict) -> Read:
-        """One fan-out: update Identity (Scout) + Resources from the same observation, stash the
-        opponent's player dict for the probabilistic reads, and return the Read (so the caller keeps
-        its existing local). Never raises — a failed subsystem degrades to its safe default."""
+        """Never raises — a failed subsystem degrades to its safe default."""
         try:
             self._read = self.scout.observe(obs) if self.scout is not None else Read()
         except Exception:
@@ -50,8 +38,7 @@ class OpponentModel:
         return self._read
 
     def note_brief(self, brief) -> None:
-        """Record the Pilot's γ-gated matched Brief for this decision — the Dispositions source. None
-        clears it (posture off / no cover), so ``disposition`` returns the caller default."""
+        """None clears it (posture off / no cover), so ``disposition`` returns the caller default."""
         self._brief = brief
 
     @staticmethod
@@ -67,12 +54,11 @@ class OpponentModel:
     # -- Identity ---------------------------------------------------------------------------------
     @property
     def read(self) -> Read:
-        """The current Scouting Read (Identity). Always a ``Read`` (empty when posture off / unseen)."""
+        """Always a ``Read`` (empty when posture off / unseen)."""
         return self._read
 
     @property
     def archetype(self) -> str | None:
-        """The confidently-recognized opponent archetype (top candidate ≥ threshold), else None."""
         cands = self._read.candidates if self._read else []
         if cands and cands[0][1] >= self.confidence_threshold:
             return cands[0][0]
@@ -104,11 +90,8 @@ class OpponentModel:
         return self.resources.took_ko_this_turn
 
     def copies_left_odds(self, card_id: int | None = None):
-        """P(the opponent's deck still holds ≥1 copy). With ``card_id`` → that card's probability
-        (fail-open **1.0**, "assume present", for an unknown card / no confident Read); without →
-        the whole ``{cardId: p}`` map over the recognized archetype's representative build ({} when
-        no confident archetype or no artifact). γ-gated by recognition: an unrecognized opponent
-        yields no suppressing estimate."""
+        """P(the opponent's deck still holds ≥1 copy); ``None`` → the whole map. Fails OPEN at 1.0
+        ("assume present") for an unknown card, so an unrecognized opponent suppresses nothing."""
         odds = self._copies_odds_map()
         if card_id is None:
             return odds
@@ -125,8 +108,7 @@ class OpponentModel:
 
     # -- Dispositions -----------------------------------------------------------------------------
     def disposition(self, key: str, default=None):
-        """A high-bar behavioral property asserted by the matched Brief (Dispositions), else the
-        caller ``default``. The canonical read behind ``Board.opp_property``."""
+        """The canonical read behind ``Board.opp_property``."""
         if self._brief is None:
             return default
         return (self._brief.opponent_properties or {}).get(key, default)

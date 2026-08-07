@@ -1,24 +1,13 @@
 """Report every comment and docstring in this repo that exceeds the code-as-documentation budget.
 
-The budget (`.claude/skills/code-as-docs/SKILL.md`): a `#` comment block gets 2 lines, a function or
-class docstring gets 2 lines, a module docstring gets 15, and no prose line exceeds 120 characters.
+The budget (`.claude/skills/code-as-docs/SKILL.md`): 2 lines for a `#` block, 2 for a function
+or class docstring, 15 for a module docstring, 120 characters for any prose line.
 
-Prose that must exceed 2 lines is a signal, not an exception to argue for: the reasoning belongs in an
-ADR the code links to, or the code needs a name that makes the comment unnecessary.
+    python -m tools.doc_budget [prefix] [--detail] [--json]
 
-Run it as the reduction pass's progress meter:
-
-    python -m tools.doc_budget                 # summary
-    python -m tools.doc_budget --detail src/   # every offending block, with line numbers
-    python -m tools.doc_budget --json          # machine-readable, for the test
-
-`tests/test_comment_budget.py` asserts against this module, so the tool and the gate cannot disagree.
-The scan set is `git ls-files` rather than a filesystem walk, for the reasons
-`tests/test_import_hygiene.py` documents: a walk pulls in `.venv/` and the live worktrees under
-`.claude/worktrees/`, and then reports another branch's file as this tree's defect.
-
-`src/cg/` is excluded — it is the vendored native-engine wrapper and is off-limits per CLAUDE.md.
-"""
+The scan set is `git ls-files`, never a filesystem walk: a walk pulls in `.venv/` and the live
+worktrees under `.claude/worktrees/` and reports another branch's file as this tree's defect.
+`src/cg/` is excluded — vendored, off-limits per CLAUDE.md."""
 from __future__ import annotations
 
 import argparse

@@ -1,9 +1,6 @@
-"""Supporter sequencing in `_finish_turn_last` — the commitment ladder that makes "play your free
-Item digs, THEN commit your one-per-turn Supporter, THEN spend the blind Energy attach, and only
-nuke your hand last" a STRUCTURAL property, not a fragile score race (the Pokegear-before-Salvatore
-misplay: a Supporter scored as if it were a free dig). Verified through the PUBLIC Pilot interface
-(`decide` picks the sequenced option). Tiers: free dev 0 -> Supporter 1 -> attach / cost_discard 2
--> shuffle_hand Supporter 3 -> turn-enders 4.
+"""`_finish_turn_last`'s commitment ladder, asserted through the public `decide` rather than a score.
+
+Tiers: free dev 0 -> Supporter 1 -> attach / cost_discard 2 -> shuffle_hand Supporter 3 -> turn-enders 4.
 """
 import pytest
 
@@ -15,14 +12,14 @@ from common.strategy import Hypothesis, Line, Strategy
 from pilot_helpers import ACTIVE, HAND, PLAY, make_select, opt, poke, state
 
 ATTACH = 8
-ITEM, SUPPORTER = 1, 3        # CardType (cg/api.py): Pokegear is an Item, Salvatore a Supporter
-POKEGEAR = 1122              # Item — dig/draw: look top 7, may take Supporter to hand (a FREE dig)
-SALVATORE = 1189            # Supporter — search/rush_evolve: the one-per-turn commitment
-DRAWSUP = 1224              # Cheren — plain draw Supporter (draw, NOT shuffle_hand)
-LILLIES = 1227             # Lillie's Determination — shuffle_hand Supporter (nukes the hand)
-WINCON = 900               # Mega-ex win-condition (evolves from the pre-evo)
-PREEVO = 800               # its pre-evolution (Staryu-like) — a rush_evolve target
-WATER = 3                  # a reusable Basic Energy
+ITEM, SUPPORTER = 1, 3        # CardType (cg/api.py)
+POKEGEAR = 1122
+SALVATORE = 1189
+DRAWSUP = 1224
+LILLIES = 1227
+WINCON = 900               # synthetic
+PREEVO = 800               # synthetic
+WATER = 3
 
 
 def _stats():
@@ -54,53 +51,39 @@ def _pilot(strat=None, **kw):
                  functions=_funcs(), **kw)
 
 
-# ---------------------------------------------------------------- (a) free Item dig before Supporter
 @pytest.mark.req("REQ-PILOT-0023")
 def test_a_free_item_dig_is_sequenced_before_the_one_per_turn_supporter():
-    """Pokegear-before-Salvatore. SETUP with a pre-evolution (Staryu) in play: Salvatore's rush_evolve
-    fires, so the Supporter strongly OUTSCORES a Pokegear that gets only the dig bonus. Yet playing
-    your one Supporter is a commitment — the free Item dig (tier 0) is sequenced ahead of the Supporter
-    (tier 1), so Pokegear is played first and may upgrade which Supporter you commit."""
     pilot = _pilot()
     play_salvatore = opt(PLAY, area=HAND, index=0)
     play_pokegear = opt(PLAY, area=HAND, index=1)
     obs = make_select([play_salvatore, play_pokegear],
                       current=state(active=poke(PREEVO, hp=70), hand=[SALVATORE, POKEGEAR]))
     traces = pilot.explain(obs).options
-    assert traces[0].score > traces[1].score        # Salvatore (rush_evolve + search) outscores Pokegear
-    assert pilot.decide(obs) == [1]                 # ... yet free Item dig sequenced first
+    assert traces[0].score > traces[1].score        # Salvatore outscores Pokegear
+    assert pilot.decide(obs) == [1]                 # ... yet the free Item dig goes first
 
 
-# ------------------------------------------------------------ (b) Supporter before a non-KO attach
 @pytest.mark.req("REQ-PILOT-0024")
 def test_a_supporter_is_sequenced_before_a_non_ko_energy_attach():
-    """A Supporter is informative (draws / searches / tutors), so play it before you blind-commit your
-    one Energy attach — it may reveal the better attach target or the Energy you'd rather place. Even
-    when the attach OUTSCORES the Supporter, the Supporter (tier 1) is sequenced ahead of the attach
-    (tier 2). A plain draw Supporter vs a (synthetically endorsed) attach to a Pokemon that needs Energy."""
+    """A Supporter is informative, so it is spent before the blind Energy attach it may re-target."""
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)],
                      hypotheses=[Hypothesis(id="t-endorse-attach", rationale="test", weight=100,
                                             when=lambda c: c.option_type == ATTACH and c.card_id == WATER)])
     pilot = _pilot(strat=strat)
-    play_draw_sup = opt(PLAY, area=HAND, index=0)                                # Cheren (draw Supporter)
-    attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # W -> Staryu (needs energy)
+    play_draw_sup = opt(PLAY, area=HAND, index=0)
+    attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([play_draw_sup, attach],
                       current=state(active=poke(PREEVO, energy=0, hp=70), hand=[DRAWSUP, WATER]))
     traces = pilot.explain(obs).options
     assert traces[1].score > traces[0].score        # attach outscores the Supporter ...
-    assert pilot.decide(obs) == [0]                 # ... yet Supporter sequenced first
+    assert pilot.decide(obs) == [0]                 # ... yet the Supporter goes first
 
 
-# --------------------------------------------------- (c) Energy attach before a hand-shuffle Supporter
 @pytest.mark.req("REQ-PILOT-0025")
 def test_a_hand_shuffle_supporter_is_sequenced_after_the_energy_attach():
-    """Attach the Energy you're holding BEFORE a Supporter that shuffles your hand into the deck
-    (Lillie's / Harlequin) — else you shuffle away the Energy you needed. This is STRUCTURAL (the
-    shuffle is tier 3, the attach tier 2), not merely the -60 `attach-before-hand-shuffle` weight: even
-    a shuffle endorsed POSITIVE (here by a stand-in rule that overpowers the -60, with a reusable
-    Energy still in hand) is held until after the attach. Both plays are synthetically endorsed so only
-    the commitment tiers decide the order."""
+    """Structural (tier 3 vs tier 2), not the -60 `attach-before-hand-shuffle` weight: the endorsement
+    below overpowers that weight and the shuffle is still held until after the attach."""
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)],
                      hypotheses=[Hypothesis(id="t-endorse-shuffle", rationale="test", weight=100,
@@ -108,28 +91,24 @@ def test_a_hand_shuffle_supporter_is_sequenced_after_the_energy_attach():
                                  Hypothesis(id="t-endorse-attach", rationale="test", weight=30,
                                             when=lambda c: c.option_type == ATTACH and c.card_id == WATER)])
     pilot = _pilot(strat=strat)
-    play_shuffle = opt(PLAY, area=HAND, index=0)                                 # Lillie's (shuffle_hand)
-    attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # W -> Staryu (needs energy)
+    play_shuffle = opt(PLAY, area=HAND, index=0)
+    attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([play_shuffle, attach],
                       current=state(active=poke(PREEVO, energy=0, hp=70), hand=[LILLIES, WATER]))
     traces = pilot.explain(obs).options
     assert traces[0].score > 0                       # shuffle endorsed (positive) despite the -60 ...
-    assert pilot.decide(obs) == [1]                  # ... yet Energy attach sequenced first
+    assert pilot.decide(obs) == [1]                  # ... yet the Energy attach goes first
 
 
-# ----------------------------------------------- (d) a gust never sequences ahead of a menu KO
-BOSS = 1182                                          # Boss's Orders — gust Supporter
-OPPFRAIL = 678                                       # opponent's Active: 190 HP (Nebula 210 KOs it)
-OPPBENCHIE = 679                                     # opponent's benched 70-HP body (the gust bait)
+BOSS = 1182
+OPPFRAIL = 678
+OPPBENCHIE = 679
 
 
 @pytest.mark.req("REQ-PILOT-0026")
 def test_a_gust_play_is_never_sequenced_ahead_of_a_menu_ko():
-    """ep83456015 f38: my Mega can Nebula-KO the opponent's 190-HP Active (3 prizes), but the
-    endorsed Boss's Orders — an 'informative Supporter' by the old ladder — sequenced FIRST, and the
-    gust SWAPPED the defender: the KO the menu offered was forfeited for a 1-prize bait. A gust is a
-    defender-changing commitment, so with a KO on the menu it drops to the last tier; its own
-    KO-UNLOCK path (KO_SCORE-class gust tactical) still rides tier 0."""
+    """A gust changes the defender, so with a KO on the menu it drops to the last tier; a gust that
+    UNLOCKS a KO (KO_SCORE-class tactical) still rides tier 0."""
     stats = _stats()
     stats._stats[BOSS] = CardStat(BOSS, synthetic=True, name="Boss's Orders", hp=0, cardType=SUPPORTER)
     stats._stats[OPPFRAIL] = CardStat(OPPFRAIL, synthetic=True, name="opp mega", hp=330, energyType=7)

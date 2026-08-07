@@ -1,27 +1,12 @@
 """The **provision seam** — `CombatMath.provision_codes` (Issue #418, ADR-0125).
 
-*"How many units does this Energy card provide this body, and in what colour?"* is ONE question.
-Before Issue #418 the tree answered it SIX ways: `board_delta._provided_units` and
-`CombatMath._special_energy_groups` composed the declared accessors and were right, while
-`pilot._attach_provision`, `pilot._attach_lethal_tactical`, `planner._attach_provided` and
-`planner._best_hand_attach_units` each hardcoded *three units on an Evolution holding a
-``discard_eot`` card, one otherwise*.
+Ignition Energy (17) is the ONLY shipped card carrying either ``discard_eot`` or ``provides_evo``,
+and it carries both — so a rule keyed on the wrong predicate reads correctly on every card that
+exists today. `test_the_two_cases_the_coincidence_hides` runs the two SYNTHETIC cards that separate
+them, because no shipped card can.
 
-**That hardcode is right only by a coincidence of the shipped pool**, and the coincidence is what
-this file exists to break. Swept over `src/common/card_functions.json`, exactly three cards carry a
-provision tag — Boomerang Energy (9) ``provides:1``, Ignition Energy (17) ``discard_eot`` +
-``provides:1`` + ``provides_evo:3``, Telepath Psychic Energy (19) ``provides:1`` — so **Ignition is
-the only card carrying either ``discard_eot`` or ``provides_evo``, and it carries both**. The two
-predicates coincide on one row, and a rule keyed on the wrong one reads correctly on every card that
-exists today. `test_the_two_cases_the_coincidence_hides` below runs the two SYNTHETIC cards that
-separate them, because no shipped card can.
-
-The second half is the ``energies``-vs-``energyCards`` split (`common/board_cards.py`, Issue #297).
-`MySide.best_reachable_damage`'s hypothetical leg was named ``extra_energy_ids`` and fed CARD ids
-into a list of ``EnergyType`` UNIT codes. For a Basic Energy the two coincide (Basic {W} is card 3
-and ``WATER`` is 3) and nothing shows; card 17 is not an EnergyType at all, so `unit_colours`
-resolved it to the empty set — **WILD, which pays every slot**. See
-`test_an_ignition_cannot_pay_a_water_slot_and_a_card_id_says_otherwise`.
+The second half is the ``energies``-vs-``energyCards`` split (Issue #297): card 17 is not an
+``EnergyType``, so `unit_colours` resolves it to the empty set — WILD, which pays every slot.
 """
 from __future__ import annotations
 
@@ -43,9 +28,8 @@ IGNITION, BOOMERANG, TELEPATH = 17, 9, 19
 WATER_ENERGY = 3                    # Basic {W} Energy — the card whose id EQUALS its EnergyType
 COLORLESS, WATER, PSYCHIC = 0, 3, 5
 
-#: Two cards that do not exist, and that is the point — each splits one of the two predicates the
-#: shipped pool welds together. `EVO_ONLY` provides 3 on an Evolution and never expires; `BURST_2`
-#: expires and provides 2, not 3.
+#: Two cards that do not exist, each splitting one of the predicates the shipped pool welds together:
+#: `EVO_ONLY` provides 3 on an Evolution and never expires; `BURST_2` expires and provides 2, not 3.
 EVO_ONLY, BURST_2 = 9001, 9002
 
 
@@ -72,8 +56,8 @@ def _combat(tags, *, stats=None):
                       functions=CardFunctions(tags), transients=None, effects=CardEffects({}))
 
 
-#: The REAL tags, as committed. Ignition's come from `tests/card_facts.py` — the ONE copy every
-#: fixture in the suite takes — and are asserted against the store below rather than trusted.
+#: The REAL tags, as committed; Ignition's come from `tests/card_facts.py` and are asserted against
+#: the store below rather than trusted.
 _REAL = {IGNITION: ignition_tags(),
          BOOMERANG: ["provides:1"], TELEPATH: ["provides:1", "search"]}
 
@@ -84,12 +68,8 @@ def _stat(c, cid):
 
 # ───────────────────────────────────────────────────────────── the ground truth, re-measured
 def test_the_shipped_pool_welds_discard_eot_to_provides_evo():
-    """The census the four retired hardcodes were accidentally right about, asserted off the
-    committed store so a new card breaks this file instead of the Pilot.
-
-    If this ever fails with a card carrying ``provides_evo`` and NOT ``discard_eot`` (or the
-    reverse), the coincidence is over — which is exactly the day the old rule would have started
-    reading 1 where the card prints N."""
+    """Asserted off the committed store so a new card breaks THIS file instead of the Pilot: a card
+    carrying one predicate without the other ends the coincidence this module's premise rests on."""
     table = json.loads((REPO / "src" / "common" / "card_functions.json").read_text(encoding="utf-8"))
     provides, evo, burst = set(), set(), set()
     for cid, tags in table.items():
@@ -107,13 +87,8 @@ def test_the_shipped_pool_welds_discard_eot_to_provides_evo():
 
 
 def test_the_committed_tags_are_what_the_shared_fixture_claims():
-    """`tests/card_facts.IGNITION_TAGS` is the ONE copy of Ignition's tags the whole suite takes, and
-    it is a LITERAL rather than a read of the store — a constant that loaded the store could only
-    ever agree with it, which would make this assertion vacuous. So the literal is checked here.
-
-    A fixture that trims a card's tags to the one a test happens to read is asserting a card fact
-    that is not true. Fifteen of them did until Issue #418, and the missing ``provides:*`` pair was
-    invisible only because a hardcode was supplying the 3 those tags should have."""
+    """`tests/card_facts.IGNITION_TAGS` is a LITERAL, not a read of the store — a constant that
+    loaded the store could only ever agree with it, so the literal is checked here instead."""
     real = CardFunctions.load()
     for cid, tags in _REAL.items():
         assert sorted(real.tags(cid)) == sorted(tags)
@@ -127,17 +102,16 @@ def test_a_basic_energy_is_one_unit_of_its_own_colour():
 
 
 def test_ignition_is_one_colourless_on_a_basic_and_three_on_an_evolution():
-    """*"…it provides {C} Energy. If this card is attached to an Evolution Pokémon, it provides
-    {C}{C}{C} Energy instead"* — `data/EN_Card_Data.csv` 17, read at source. The HOLDER is the
-    argument, because the provision is a property of the holder as much as of the card."""
+    """Card 17 prints *"provides {C}… if attached to an Evolution Pokémon, {C}{C}{C} instead"*, so
+    the HOLDER is the argument: the provision is a property of the holder as much as of the card."""
     c = _combat(_REAL)
     assert c.provision_codes(IGNITION, _stat(c, STARYU)) == (COLORLESS,)
     assert c.provision_codes(IGNITION, _stat(c, M_STARMIE)) == (COLORLESS,) * 3
 
 
 def test_a_tool_claims_zero_units_rather_than_making_no_claim():
-    """A Pokémon Tool rides ``OptionType.ATTACH`` exactly as an Energy does. ``()`` is a CLAIM — this
-    card provides nothing — and it is different from ``None``, which is *"I cannot read this"*."""
+    """A Pokémon Tool rides ``OptionType.ATTACH`` as an Energy does. ``()`` is a CLAIM (provides
+    nothing); ``None`` is *"I cannot read this"*."""
     tool = {8001: CardStat(8001, synthetic=True, name="Air Balloon", cardType=2, retreatReduction=2)}
     c = _combat(_REAL, stats=tool)
     assert c.provision_codes(8001, _stat(c, M_STARMIE)) == ()
@@ -145,17 +119,15 @@ def test_a_tool_claims_zero_units_rather_than_making_no_claim():
 
 
 def test_an_untagged_special_energy_is_unreadable_not_zero():
-    """Fail-CLOSED (ADR-0067). ``None`` and ``()`` must not be confused: zero units is a real,
-    plausible board that under-reports the attach, so the apply seam has to refuse rather than
-    write it."""
+    """Fail-CLOSED (ADR-0067): ``None`` and ``()`` must not be confused — zero units is a real,
+    plausible board that under-reports the attach, so the apply seam refuses rather than writing it."""
     c = _combat({IGNITION: ["discard_eot"]})
     assert c.provision_codes(IGNITION, _stat(c, M_STARMIE)) is None
 
 
 def test_the_floor_is_one_unit_and_never_the_hardcodes_guess_at_three():
-    """The DECIDER's degradation. An option still has to be priced, so ``None`` becomes ONE unit —
-    of the card's own colour when the stat gives one, WILD when it does not. Never three: an
-    unreadable card must not inherit the ``discard_eot``-shaped guess."""
+    """The DECIDER's degradation: ``None`` becomes ONE unit, of the card's own colour or WILD. Never
+    three — an unreadable card must not inherit the ``discard_eot``-shaped guess."""
     c = _combat({IGNITION: ["discard_eot"]})
     assert c.provision_codes_or_floor(IGNITION, _stat(c, M_STARMIE)) == (COLORLESS,)
     assert c.provision_codes_or_floor(None, _stat(c, M_STARMIE)) == (WILD_CODE,)
@@ -164,15 +136,8 @@ def test_the_floor_is_one_unit_and_never_the_hardcodes_guess_at_three():
 
 # ─────────────────────────────────────── acceptance 5: the two cases the shipped pool cannot show
 def test_the_two_cases_the_coincidence_hides():
-    """Two SYNTHETIC cards, each splitting one half of the weld the shipped pool enforces.
-
-    * ``provides_evo`` WITHOUT ``discard_eot`` — the old rule read **1** where the card prints 3,
-      because it keyed the evolution bonus off the expiry rider.
-    * ``discard_eot`` that is NOT three-on-evolution — the old rule read **3** where the card
-      prints 2, for the same reason.
-
-    Neither card exists, and that is the whole argument for the seam: the hardcode could not be
-    caught by any test over the shipped pool."""
+    """Two SYNTHETIC cards, each splitting one half of the weld the shipped pool enforces. Neither
+    exists, which is the whole argument for the seam: no test over the shipped pool can catch this."""
     c = _combat({**_REAL,
                  EVO_ONLY: ["provides:1", "provides_evo:3"],          # no expiry rider
                  BURST_2: ["discard_eot", "provides:1", "provides_evo:2"]})
@@ -191,14 +156,8 @@ def test_the_two_cases_the_coincidence_hides():
 
 # ─────────────────────────────────── acceptance 3: card ids and unit codes are NOT interchangeable
 def test_an_ignition_cannot_pay_a_water_slot_and_a_card_id_says_otherwise():
-    """**D2, the live over-read.** Jetting Blow costs {W}; Ignition Energy is colourless and cannot
-    fund it — `_attach_lethal_tactical`'s own comment has said so since it was written.
-
-    ``[0]`` is what the engine renders for one Ignition on a Basic. ``[17]`` is what the card id
-    would have put there, and 17 is not an ``EnergyType``: `unit_colours` falls through to the empty
-    set, which this module reads as WILD — Energy that pays every slot. The two lists must therefore
-    NOT be interchangeable, and the assertion is deliberately written as the inequality rather than
-    as two independent numbers, because the defect was precisely that they agreed."""
+    """``[0]`` is what the engine renders for one Ignition on a Basic; ``[17]`` is the card id, which
+    reads WILD. Written as the INEQUALITY, because the defect was precisely that they agreed."""
     c = _combat(_REAL)
     assert unit_colours(COLORLESS) == frozenset({COLORLESS})
     assert unit_colours(IGNITION) == frozenset(), "card 17 is not an EnergyType — it reads WILD"
@@ -218,9 +177,8 @@ def test_an_ignition_cannot_pay_a_water_slot_and_a_card_id_says_otherwise():
 
 
 def test_a_typed_special_energy_is_the_same_trap_one_card_over():
-    """Not an Ignition-only quirk. Telepath Psychic Energy is card **19** with ``energyType`` {P}:
-    the card id resolves to no colour at all, while the code it actually renders pays {P} slots.
-    `_burst_capped_tonight`'s cap read this card by id until Issue #418."""
+    """Not an Ignition-only quirk: Telepath Psychic Energy is card 19 with ``energyType`` {P}, so the
+    id resolves to no colour at all while the code it renders pays {P} slots."""
     c = _combat(_REAL)
     assert c.provision_codes(TELEPATH, _stat(c, M_STARMIE)) == (PSYCHIC,)
     assert unit_colours(PSYCHIC) == frozenset({PSYCHIC})
@@ -229,9 +187,8 @@ def test_a_typed_special_energy_is_the_same_trap_one_card_over():
 
 # ──────────────────────────────────────────────────── acceptance 1: ONE composition, two contracts
 def test_the_apply_seam_refuses_exactly_where_the_seam_cannot_read():
-    """`board_delta.units_for_cards` is the seam's OTHER arity: same composition, and ``None`` turned
-    into the `Unmodellable` a board write must raise rather than guess through. The two contracts
-    differ only in what they do with an unreadable card — never in what they compute."""
+    """`board_delta.units_for_cards` is the seam's OTHER arity: the two contracts differ only in what
+    they do with an unreadable card — never in what they compute."""
     c = _combat({IGNITION: ["discard_eot"]})
     cards = [{"id": IGNITION}]
     try:
@@ -240,8 +197,7 @@ def test_the_apply_seam_refuses_exactly_where_the_seam_cannot_read():
         assert "provides:N" in str(gap)
     else:                                              # pragma: no cover - the failure is the point
         raise AssertionError("an untagged Special Energy must refuse, not attach zero units")
-    # …and with the real tags both arities give the same answer, which is the property that makes
-    # them one reader rather than two.
+    # …and with real tags both arities give the same answer — one reader rather than two.
     real = _combat(_REAL)
     assert units_for_cards(real, cards, holder_stat=_stat(real, M_STARMIE)) == [COLORLESS] * 3
     assert (tuple(units_for_cards(real, cards, holder_stat=_stat(real, M_STARMIE)))
@@ -249,9 +205,8 @@ def test_the_apply_seam_refuses_exactly_where_the_seam_cannot_read():
 
 
 def test_the_hand_leg_and_the_attached_leg_agree_about_one_ignition():
-    """`_special_energy_groups` (hand) and `_attached_units` (board) are the pair whose disagreement
-    Issue #142 opened and Issue #297 half-closed. Both now run through the seam, so the Budget's
-    hypothetical attach and the board it becomes carry identical colours."""
+    """Both legs run through the seam, so the Budget's hypothetical attach and the board it becomes
+    carry identical colours (Issue #142, Issue #297)."""
     c = _combat(_REAL)
     hand_group, = c._special_energy_groups([IGNITION], _stat(c, M_STARMIE))
     attached = c._attached_units({"id": M_STARMIE, "energies": [COLORLESS] * 3})
@@ -260,10 +215,8 @@ def test_the_hand_leg_and_the_attached_leg_agree_about_one_ignition():
 
 
 def test_a_rainbow_special_energy_is_wild_on_both_legs():
-    """The disagreement that was still live before Issue #418, and that no shipped deck reaches:
-    the hand leg spelled its pool ``frozenset({etype})``, so ``RAINBOW`` — the engine's *"Every
-    Types"* code — paid only a non-existent type-10 slot in hand while paying anything once
-    attached. Both legs now read `unit_colours`."""
+    """No shipped deck reaches this: the hand leg spelled its pool ``frozenset({etype})``, so
+    ``RAINBOW`` paid a non-existent slot in hand while paying anything once attached (Issue #418)."""
     rainbow = {9003: CardStat(9003, synthetic=True, name="(synthetic) rainbow Energy",
                               cardType=6, energyType=WILD_CODE)}
     c = _combat({**_REAL, 9003: ["provides:1"]}, stats=rainbow)
@@ -275,10 +228,8 @@ def test_a_rainbow_special_energy_is_wild_on_both_legs():
 
 # ─────────────────────────────────────────────────────────── the evolve hypothetical (D3's seam)
 def test_restage_energy_re_reads_the_cards_against_the_new_stage():
-    """`restage_energy` is `without_expiring_energy`'s sibling: that one asks *what does this body
-    hold once the expiring Energy is gone*, this one asks *what do the same cards provide once this
-    body is an Evolution*. One Ignition on a Staryu renders ``[0]``; the same card on Mega Starmie
-    ex renders ``[0, 0, 0]``."""
+    """`restage_energy` asks *what do the same cards provide once this body is an Evolution* —
+    `without_expiring_energy`'s sibling."""
     c = _combat(_REAL)
     body = {"id": STARYU, "energies": [COLORLESS], "energyCards": [{"id": IGNITION}]}
     after = c.restage_energy(body, _stat(c, M_STARMIE))
@@ -288,12 +239,10 @@ def test_restage_energy_re_reads_the_cards_against_the_new_stage():
 
 
 def test_restage_energy_declines_rather_than_compounding_a_disagreement():
-    """The APPLY seam refuses when the provision model disagrees with the engine about the board as
-    it already stands (`board_delta._evolve`'s self-check). A decider cannot refuse, so the same
-    check lands as a DECLINE — the body comes back by identity, reading exactly as it did before."""
+    """A decider cannot refuse, so `board_delta._evolve`'s self-check lands here as a DECLINE: the
+    body comes back by identity, reading exactly as it did before."""
     c = _combat(_REAL)
-    # The engine says two units; the model says one. Something is wrong, and re-deriving the
-    # post-evolution list from the model would compound an error already visible.
+    # Engine says two units, model says one: re-deriving would compound a visible error.
     lying = {"id": STARYU, "energies": [COLORLESS, COLORLESS], "energyCards": [{"id": IGNITION}]}
     assert c.restage_energy(lying, _stat(c, M_STARMIE)) is lying
 
@@ -307,8 +256,8 @@ def test_restage_energy_declines_rather_than_compounding_a_disagreement():
 
 
 def test_restage_energy_returns_the_body_by_identity_when_nothing_moves():
-    """A Basic Energy provides the same unit on either stage, so the overwhelmingly common board
-    costs one walk and no allocation — the same contract `without_expiring_energy` declares."""
+    """A Basic Energy provides the same unit on either stage, so the common board costs one walk and
+    no allocation — the same contract `without_expiring_energy` declares."""
     c = _combat(_REAL)
     body = {"id": STARYU, "energies": [WATER], "energyCards": [{"id": WATER_ENERGY}]}
     assert c.restage_energy(body, _stat(c, M_STARMIE)) is body

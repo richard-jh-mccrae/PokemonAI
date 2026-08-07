@@ -2,24 +2,15 @@
 with the evidence to rule it, derived rather than transcribed.
 
     python tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json --out gate.json
-    python tools/train/wave_scan.py --diff gate.json --out data/leaf_lab/wave3-scan-sheet.md \
-                                    --ruled data/leaf_lab/wave3-rulings.md
+    python tools/train/wave_scan.py --diff gate.json --out <sheet.md> --ruled <rulings.md>
 
-It exists because of a question asked mid-wave-3 (Issue #262): *"So many of these frames' correction
-answer is right in their rationale. must we really go through all of these?"* The answer was no —
-every `Correction` already carries its `rationale`, `correct_label` and `category`, so the sheet the
-developer needs can be GENERATED from the corpus and the live leaf. Nothing here is retyped, which is
-the point: a hand-maintained sheet drifts from the gate the moment either moves, and a wave that
-takes a week is exactly when that happens.
+Nothing here is retyped: a hand-maintained sheet drifts from the gate the moment either moves.
 
-**Excluded automatically:** frames already ruled (parsed out of the ruling record), frames the
-Held-out Ledger owns, and frames whose ruling is voided. All three are already resolved — putting
-them in front of the developer again is the "broken for three phases becomes scenery" failure the
-gate readout's own doctrine warns about.
+Excluded automatically: frames already ruled, held out, or voided — all three are resolved, and
+re-presenting them is the "becomes scenery" failure the gate readout's doctrine warns about.
 
-The default verdict for everything listed is REVERT — the recorded label stands and the leaf is
-wrong — because that is the verdict that changes nothing on disk. Only a CONFORM re-captures a
-baseline row, so only a CONFORM is worth the developer's time.
+The default verdict is REVERT, because that is the verdict that changes nothing on disk; only a
+CONFORM re-captures a baseline row, so only a CONFORM is worth the developer's time.
 """
 from __future__ import annotations
 
@@ -34,11 +25,8 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def ruled_keys(path: Path) -> set:
-    """Frame keys already carrying a verdict in the ruling record.
-
-    Parsed out of the committed Markdown rather than kept as a second list, so the record stays the
-    ONE place a verdict lives. The record escapes the pipes in a frame key for the Markdown table
-    (``81904451\\|0\\|decision\\|24``), so they are unescaped back here."""
+    """Parsed out of the committed Markdown rather than kept as a second list, so the record stays
+    the ONE place a verdict lives. The table ESCAPES a frame key's pipes; they are unescaped here."""
     if not path or not path.exists():
         return set()
     text = path.read_text(encoding="utf-8")
@@ -46,19 +34,8 @@ def ruled_keys(path: Path) -> set:
 
 
 def intent_of(correction) -> str:
-    """What the developer said they wanted, from WHEREVER this Correction's scope records it.
-
-    A decision-scope record carries it in ``rationale``. A **turn**-scope record carries it in
-    ``turn_plan`` (``intended_line`` + ``expected_end_board``) and its ``rationale`` is empty — so
-    reading only ``rationale`` reports a turn Correction as having no stated intent at all.
-
-    Measured 2026-08-02 (Issue #262): `86090164|1|turn|2` reached the developer's triage list as
-    *"no rationale is recorded"* and got flagged as the one frame that could not be triaged from the
-    corpus. It has a turn plan — *"Attach energy to our active dreepy, retreat to Budew, DO NOT play
-    Lillie's this turn, because we want to evolve our Dunsparce next turn"* — which decides the frame
-    outright. The blank was this generator's, not the corpus's, and a blank that reads as "the human
-    never said" is the worst possible failure for a sheet whose entire job is to relay what they
-    said."""
+    """From WHEREVER the scope records it: a turn-scope record's intent is in ``turn_plan`` and its
+    ``rationale`` is EMPTY, so reading only ``rationale`` reports it as having no stated intent."""
     rationale = " ".join((getattr(correction, "rationale", "") or "").split())
     if rationale:
         return rationale

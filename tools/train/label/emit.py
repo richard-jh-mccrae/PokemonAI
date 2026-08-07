@@ -1,10 +1,8 @@
-"""The machine-store writer + run manifest (S3a design §D4).
+"""The machine-store writer + run manifest (S3a §D4).
 
-Machine Corrections ride the SAME rails as human ones (``build_correction`` → the store glob →
-``tune.py``), distinguished only by ``provenance="machine"`` (C2). They land in the gitignored,
-**wholesale-rewritten** ``data/corrections/machine/`` store — regenerable from the corpus, never
-appended (a re-run replaces it, so re-runs can't duplicate). The θ precision gate (the human review,
-§D3) is the safety net, amortized; per-record approval at machine volume defeats the pipeline.
+Machine Corrections ride the SAME rails as human ones, distinguished only by ``provenance="machine"``.
+They land in the gitignored, **wholesale-rewritten** ``data/corrections/machine/`` store — a re-run
+replaces it, so re-runs cannot duplicate. The θ precision gate is the safety net, amortized.
 """
 from __future__ import annotations
 
@@ -21,8 +19,7 @@ MACHINE_MANIFEST = MACHINE_DIR / "manifest.json"
 
 
 def _rationale(dis: dict) -> str:
-    """Auto-generated rationale carrying ΔV and the per-option V table (§D2). Deliberately free of the
-    uppercase ``CRITICAL`` token so a machine label never trips the human must-fix-first marker."""
+    """The auto rationale. Deliberately free of the uppercase ``CRITICAL`` token — that is the human marker."""
     return (f"value_delta: expert best option {dis['correct']} P(win)={dis['v_best']:.3f} beats "
             f"chosen option {dis['chosen']} P(win)={dis['v_chosen']:.3f} "
             f"(delta={dis['delta']:.3f}). per-option P(win): {dis.get('v_table', {})}. "
@@ -30,9 +27,7 @@ def _rationale(dis: dict) -> str:
 
 
 def to_correction(dis: dict, agent: str):
-    """Build a machine Correction from a disagreement. ``chosen`` reflects the **choice provider's**
-    pick (recorded or replayed), so the record is set on a ``Decision`` whose ``chosen`` is overridden
-    to ``dis['chosen']`` — the rest of the snapshot (options, current, obs) is the real frame's."""
+    """A machine Correction from a disagreement; ``chosen`` is overridden to the choice PROVIDER's pick."""
     decision = dataclasses.replace(dis["decision"], chosen=[dis["chosen"]])
     return build_correction(
         decision,
@@ -49,8 +44,7 @@ def to_correction(dis: dict, agent: str):
 
 
 def cap_by_delta(dis_list, cap: int):
-    """Keep the ``cap`` largest-|ΔV| disagreements (VIPER critical-state concentration). Returns
-    ``(kept, dropped_count)`` so the caller can report the cap instead of silently truncating (§D4)."""
+    """The ``cap`` largest-|ΔV| disagreements plus the dropped count, so the caller reports rather than truncates."""
     ordered = sorted(dis_list, key=lambda d: abs(d["delta"]), reverse=True)
     if cap is None or len(ordered) <= cap:
         return ordered, 0
@@ -58,8 +52,7 @@ def cap_by_delta(dis_list, cap: int):
 
 
 def write_machine_store(corrections, dest: Path | str = MACHINE_STORE) -> Path:
-    """Rewrite the machine store WHOLESALE with ``corrections`` (JSONL). No append — the store is a
-    regenerable artifact, so a re-run replaces it and can never accumulate duplicates."""
+    """Rewrite the store WHOLESALE. No append — it is regenerable, so a re-run can never duplicate."""
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="utf-8") as fh:
@@ -69,8 +62,6 @@ def write_machine_store(corrections, dest: Path | str = MACHINE_STORE) -> Path:
 
 
 def write_manifest(manifest: dict, dest: Path | str = MACHINE_MANIFEST) -> Path:
-    """Write the run manifest sidecar (§D4): run/mode/git-rev/corpus ids, value-model meta+sha, θ,
-    choice provider, budgets, per-agent emitted/dropped counts."""
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

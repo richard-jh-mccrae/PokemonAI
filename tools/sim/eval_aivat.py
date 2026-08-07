@@ -15,12 +15,6 @@ from __future__ import annotations
 
 
 def aivat(films, value_fn):
-    """AIVAT-correct the paired eval over ``films`` using per-decision values from ``value_fn``.
-
-    ``films`` is the run's captured replay films; ``value_fn`` maps a decision obs to a P(win)
-    estimate (WP1's value net). Returns ``{"variance_reduction": float, "corrected_delta": float}``
-    once implemented, or **None** (the v1 null seam) → the report emits ``aivat: null``. The
-    frozen contract: a null return is always valid and never raises, so an eval run is complete
-    with or without the correction.
-    """
+    """The v1 NULL SEAM for AIVAT correction. Contract: a null return is always valid and never
+    raises, so an eval run is complete with or without the correction."""
     return None

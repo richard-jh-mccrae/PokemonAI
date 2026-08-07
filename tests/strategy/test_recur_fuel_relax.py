@@ -2,7 +2,7 @@
 
 `Pilot._doom_recur_fueled` already ships an all-or-nothing guard: whenever an opponent's Active is a
 POSSIBLE discard-recur refueler, the matched-Read relax stands down entirely, regardless of whether
-the fuel would actually change the affordability verdict. `recur_fuel_relax` (OFF by default)
+the fuel would actually change the affordability verdict. `recur_fuel_relax` (ships ON)
 quantifies it instead — the CHARGED relax read is computed against the body's REAL fuel-augmented
 Energy, so a line whose fuel still can't bridge the affordability gap is told apart from one where it
 does, recovering a legitimate relax the coarse guard was blocking. OFF is byte-identical to today
@@ -24,14 +24,8 @@ ATTACK = 9101
 
 
 def _setup(*, recur_fuel_relax: bool, fuel_energy_count: int):
-    """MY 150-HP Active vs a BARE (0 Energy) opponent refueler whose single attack costs 5 —
-    unaffordable under `_DOOM_CHARGED`'s base budget (wild=2, no burst — `evolvesFrom` unset) alone,
-    and by design the synthetic `AttackStat` sets no `energyTypes`, so `attack_type_payable` is a
-    trivial pass-through (`combat.py`: "True whenever the attack record doesn't resolve") — only the
-    plain COUNT check (`attached + wild + burst >= cost`) gates, keeping the scenario about the FUEL
-    AMOUNT, not per-type composition. `fuel_energy_count` populates `opp["discard"]` — the ONE
-    source both `_doom_recur_fueled` (the possibility gate) and `_recur_fueled_oa` (the
-    augmentation amount) read, so the two cannot disagree about how much fuel there is."""
+    """The synthetic `AttackStat` sets no `energyTypes` on purpose, so only the plain COUNT check
+    gates and the scenario stays about the FUEL AMOUNT rather than per-type composition."""
     stats = DictCardStatProvider({
         MY_ID: CardStat(MY_ID, name="My Active", hp=150),
         REFUEL: CardStat(REFUEL, name="Refueler", hp=100, energyType=FIGHTING,
@@ -54,26 +48,21 @@ def _setup(*, recur_fuel_relax: bool, fuel_energy_count: int):
 
 
 def test_off_stands_down_entirely_whenever_fuel_is_merely_possible():
-    """OFF (default): the possible recur-fueled line blocks the relax outright — the worst-case
-    oracle's raw damage (200, unconditional on affordability) exceeds my HP (150), so it stays
-    doomed, even though the CHARGED read — never even reached — could not afford the attack either
-    way. This is today's shipped behavior, unaffected by the kill-switch's existence."""
+    """OFF (default): a merely POSSIBLE recur-fueled line blocks the relax outright, because the
+    worst-case oracle's raw damage is unconditional on affordability."""
     pilot, ma, oa, opp = _setup(recur_fuel_relax=False, fuel_energy_count=1)
     assert pilot._active_doomed(ma, oa, opp) is True
 
 
 def test_on_relaxes_when_the_fuel_still_cant_bridge_the_gap():
-    """ON: the SAME board, but the relax is now quantified — 1 unit of real fuel (0→1 attached)
-    still can't afford the cost-5 attack under the charged budget (1 + wild 2 = 3 < 5), so the
-    relax correctly fires and the AI is freed from an unnecessary worst-case posture the coarse
-    guard was blocking for no reason."""
+    """ON: the SAME board, quantified — 1 unit of fuel still cannot afford the cost-5 attack under
+    the charged budget (1 + wild 2 = 3 < 5), so the relax fires."""
     pilot, ma, oa, opp = _setup(recur_fuel_relax=True, fuel_energy_count=1)
     assert pilot._active_doomed(ma, oa, opp) is False
 
 
 def test_on_still_stays_doomed_when_the_fuel_actually_bridges_the_gap():
-    """ON, but with enough discard fuel (3, the verified reload cap) that the charged budget
-    (3 + wild 2 = 5) now AFFORDS the attack — the quantified read correctly refuses to relax across
-    a REAL threat, exactly the ADR-0064 hidden-burst lesson this whole mechanism exists to protect."""
+    """ON with enough discard fuel (3, the verified reload cap) that the charged budget AFFORDS the
+    attack: the quantified read refuses to relax across a REAL threat (the ADR-0064 hidden burst)."""
     pilot, ma, oa, opp = _setup(recur_fuel_relax=True, fuel_energy_count=3)
     assert pilot._active_doomed(ma, oa, opp) is True

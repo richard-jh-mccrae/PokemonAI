@@ -103,11 +103,8 @@ def test_the_two_seats_are_never_one_decision():
 # ── the rejected body-only design's six false equivalences ───────────────────────────────────────
 
 def test_two_attaches_of_DIFFERENT_hand_cards_to_one_body_are_NOT_one_decision():
-    """The measured failure of the rejected design (ADR-0091 decision 1).
-
-    An ATTACH names TWO cards — `area`/`index` is the Energy in hand, `inPlayArea`/`inPlayIndex` the
-    recipient body. Fingerprinting only the body called *different Energies onto one Pokémon* the
-    same decision, six times over on the committed corpus. This is that negative, pinned."""
+    """An ATTACH names TWO cards: `area`/`index` is the Energy in hand, `inPlayArea`/`inPlayIndex`
+    the recipient body (ADR-0091 decision 1)."""
     frame = _frame(bench=[_body(serial=1)],
                    hand=[{"id": 3, "playerIndex": 0, "serial": 40},      # Water
                          {"id": 6, "playerIndex": 0, "serial": 41}])     # a DIFFERENT type
@@ -119,7 +116,6 @@ def test_two_attaches_of_DIFFERENT_hand_cards_to_one_body_are_NOT_one_decision()
 
 
 def test_the_SAME_hand_card_to_two_identical_bodies_IS_one_decision():
-    """`86091728|0|decision|19`'s shape — the second corpus instance, never ruled by a human."""
     frame = _frame(bench=[_body(serial=1), _body(serial=2)],
                    hand=[{"id": 5, "playerIndex": 0, "serial": 40}])
     opts = [{"area": AREA_HAND, "index": 0, "inPlayArea": AREA_BENCH, "inPlayIndex": 0,
@@ -130,7 +126,6 @@ def test_the_SAME_hand_card_to_two_identical_bodies_IS_one_decision():
 
 
 def test_two_identical_hand_cards_to_one_body_ARE_one_decision():
-    """The other direction: duplicate Energy in hand, one recipient."""
     frame = _frame(bench=[_body(serial=1)],
                    hand=[{"id": 5, "playerIndex": 0, "serial": 40},
                          {"id": 5, "playerIndex": 0, "serial": 41}])
@@ -144,9 +139,8 @@ def test_two_identical_hand_cards_to_one_body_ARE_one_decision():
 # ── blind implies conservative, structurally ─────────────────────────────────────────────────────
 
 def test_a_face_down_DECK_option_joins_no_class():
-    """262 corpus options index the deck, which the snapshot exposes only as a COUNT. Unresolvable
-    means unfingerprintable means no class — the oracle is conservative exactly where it is blind,
-    and by construction rather than by an exclusion list somebody maintains."""
+    """The snapshot exposes the deck only as a COUNT: unresolvable means unfingerprintable means no
+    class, so the oracle is conservative where it is blind by construction, not by an exclusion list."""
     frame = _frame()
     opts = [{"area": AREA_DECK, "index": 0, "playerIndex": 0, "type": OPT_CARD},
             {"area": AREA_DECK, "index": 1, "playerIndex": 0, "type": OPT_CARD}]
@@ -250,10 +244,8 @@ def test_no_options_and_no_frame_are_both_empty_not_an_error():
 # ── the engine vocabulary is SOURCED, not remembered ─────────────────────────────────────────────
 
 def test_area_constants_match_the_engine_enums():
-    """CLAUDE.md: engine vocabulary comes from `src/cg/api.py`, never from memory. But importing
-    `cg.api` MAPS THE NATIVE LIBRARY, and `common.option_equivalence` is imported by `train.gates`,
-    which must stay loadable with no DLL. So the areas are written literally there and PINNED here —
-    the same treatment, and for the same reason, as `gates`' lane constants."""
+    """Importing `cg.api` MAPS THE NATIVE LIBRARY, and `train.gates` imports
+    `common.option_equivalence` with no DLL — so the areas are written literally there and pinned here."""
     from cg.api import AreaType
     import common.option_equivalence as oe
     assert oe.AREA_DECK == int(AreaType.DECK)
@@ -265,9 +257,8 @@ def test_area_constants_match_the_engine_enums():
 
 
 def test_the_unresolvable_zones_are_the_ones_the_snapshot_hides():
-    """`_PLAYER_ZONES` membership IS the reveal test, so its ABSENCES are the load-bearing half:
-    DECK and PRIZE are face-down, and an equivalence over cards nobody can see would be asserted
-    from ignorance rather than from the board."""
+    """`_PLAYER_ZONES` membership IS the reveal test, so its ABSENCES matter: DECK and PRIZE are
+    face-down, and an equivalence over cards nobody can see is asserted from ignorance."""
     from cg.api import AreaType
     import common.option_equivalence as oe
     assert int(AreaType.DECK) not in oe._PLAYER_ZONES

@@ -1,31 +1,16 @@
 """The registries in `tools/rung_registry.py` must describe the repo that exists, not the one that was.
 
-A fold map written as prose is unfalsifiable — the audit found 194 false claims and the largest family was
-prose naming a deleted rung. Written as data it is checkable, but a registry is only worth its checks: an
-entry nothing verifies is a false claim that now looks authoritative, which is strictly worse than prose.
+Every leg is asserted here, because an entry nothing verifies is a false claim that now looks
+authoritative. The unverifiable leg is `note`, which is why it is capped at one line.
 
-So every leg is asserted here. `Fold.into` resolves as a symbol or is a LIVE rung id; `Fold.adr` names a
-real ADR; `Decider.owner` resolves and `Decider.flag` is a real `runtime.PROFILE` key. The unverifiable
-leg is `note`, which is why it is capped at one line and carries no claim the ADR does not.
-
-Four things below are subtle enough to state once, here, rather than in five function docstrings:
-
-* **The resolver needs its own controls.** `getattr` chains fail quietly, and a resolver that always
-  passes verifies nothing. Both reachable shapes get one — a plain method, and a `default_factory`
-  dataclass field, which `getattr` alone cannot see. Losing that branch would silently retire the five
-  ADR-0079 opening entries.
-* **`FOLDED` is permanent, `NOT_A_RUNG` is not.** Pruning `FOLDED` when the last mention goes would make
-  the reduction pass destroy the records it exists to preserve. What shrinks is `MAX_MENTIONS`. The one
-  real error is a LIVE rung claiming to be folded — a reused id inherits a retirement that is now false.
-  `NOT_A_RUNG` exists only to protect a mention, so an entry with no mention left IS dead weight.
-* **The bare scan is exact, not a wider guess.** `_mentions` sees only backticked tokens, and the prose
-  fold maps wrote their ids bare, so the ratchet was blind to the very text it drains. Knowing the
-  retired set makes the wider scan exact; the lookaround stops `discard-the-redundant` matching inside
-  `discard-the-redundant-tutor`.
-* **An id-keyed frozenset is a CONSUMER.** `planner._CLASS_B_SPEND_IDS` held seven names of rungs that
-  no longer exist, so the spend account could never carry them — and two were stems that never matched
-  even while their rung lived. Worse, the stale entries made those ids read as LIVE to `_live_strings`,
-  suppressing the dead-id alarm on the prose naming them: one instrument's rot silencing another's.
+* The resolver needs its own controls: `getattr` chains fail quietly, and a `default_factory`
+  dataclass field is invisible to `getattr` alone — both reachable shapes get one.
+* `FOLDED` is PERMANENT (pruning it would destroy the records it preserves); what shrinks is the
+  `MAX_MENTIONS` ratchet. `NOT_A_RUNG` only protects a mention, so an entry with no mention IS dead.
+* `_mentions` sees only BACKTICKED tokens, so `_bare_mentions` rescans the registered retired ids
+  bare — the prose fold maps wrote their ids bare and were invisible to the ratchet.
+* An id-keyed frozenset is a CONSUMER: a stale id can never match, and it also reads as LIVE to
+  `_live_strings`, suppressing the dead-id alarm on the prose naming it.
 """
 from __future__ import annotations
 
@@ -52,8 +37,7 @@ _KEBAB = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+){2,})`")
 
 _SENTINELS = {EMERGENT, SUBSUMED, REVERTED, UNRECORDED, UNREPLACED}
 #: One live id from each of three DIFFERENT modules, so deleting any one cluster cannot silently
-#: retire the whole control. `dig-before-commit` was here until PR #447 deleted the rung ladder —
-#: which is the control doing its job, and the reason it is spread across modules now.
+#: retire the whole control.
 _CONTROLS_LIVE = ("use-acceleration", "prefer-rush-evolve-tutor", "fetch-the-wincon")
 _CONTROL_DEAD = "this-rung-was-never-real"
 _CONTROL_SYMBOL_ABSENT = "common.pilot:Pilot._this_method_was_never_written"

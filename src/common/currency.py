@@ -1,340 +1,71 @@
-"""Currency — the exchange rates between the value scales, DERIVED and never tuned (ADR-0078).
-
-The codebase speaks **three** value scales, and until ADR-0078 only one pair of them had a bridge:
-
-  * **damage / tactical** — the `score` the doctrines and rungs compete on. `KO_SCORE = 1000` is its
-    dominance band; `_DENIAL_PLAY_W = 1.0` is "points per damage point denied"; `ENERGY_RECOVER = 75`
-    is labelled chip-scale. The attach (ADR-0069) and evolve (ADR-0070) marginals live here.
-  * **prizes / prize-equivalents** — `combat.prize_value` (Mega ex 3, ex 2, else 1; rules.md §6) and
-    the opponent-target marginal `needs.opponent_target_value` (0 – 3.9).
-  * **card-worth points** — what the Needs DP *sums* (`card_worth.ROLE_TIER` ≤ 30, `ENERGY_TIER` 8,
-    `TAG_TIER` 10–30). `needs.py`'s "ONE currency" claim scopes to this scale alone.
-
-This module owns the conversions. A prize-denominated value must never be consumed raw by a
-consumer that counts in another scale (ADR-0078 decision 2) — that is how `_PRIZE_UNIT = 12` came to
-assert roughly an eighth of honest value and made the promote/retreat equation endorse feeding a
-3-prize body to save a 40-point band.
-"""
+"""Exchange rates between the three value scales — damage/tactical, prize-equivalents, card-worth —
+DERIVED and never tuned (ADR-0078). A value in one scale is never consumed raw by another."""
 from __future__ import annotations
 
-# The Worth scale itself, for the deploy yardstick and the gust-target band at the foot of this
-# module. `card_worth` is a leaf (it imports nothing from `common`), so this cannot cycle.
+# `card_worth` is a leaf, so this cannot cycle.
 from common.card_worth import ROLE_TIER as _ROLE_TIER, TAG_TIER as _TAG_TIER
-# The PRIZE-equivalent yardstick, for the gust-target band. `common.needs` imports `card_worth`,
-# `grading` and `strategy.context` — all three leaves, none of which imports anything from `common`
-# — and never this module, so the arrow runs one way and this cannot cycle either. (`grading` joined
-# that list at ADR-0119, which gave `needs` the `halve` hop-discount; the invariant this comment
-# protects is the LIST, so it is restated rather than left reading as though `needs` still had two
-# imports.) IMPORTED rather than restated so the bound and the equation it bounds — the two
-# halves of ONE fact — cannot drift apart; aliased private because `needs` is its home and this
-# module must not become a second place to read it from.
-#
-# The cost, stated rather than left to be discovered: this module was leaf-only until now, so every
-# importer of `currency` (`hold_value`, `state_value`, `deploy_value`, `promote_retreat_value`,
-# `snipe_relevance`, `sound_rules`) now pulls `needs` transitively. Accepted because the alternative
-# is a second spelling of the ceiling, and `needs` itself imports nothing that could close a loop.
+# `needs` imports only leaves and never this module, so this cannot cycle either — but every importer
+# of `currency` now pulls `needs` transitively.
 from common.needs import TARGET_VALUE_CEILING as _TARGET_VALUE_CEILING
 
-#: The **Prize Damage Rate** — damage per prize, bridging prizes ↔ damage.
-#:
-#: DERIVED, not tuned: the MEDIAN HP-per-prize over every body in the set — 1061 bodies in
-#: `data/EN_Card_Data.csv` at the `docs/rules.md` §6 prize values, median **100.0** (mean 101.5; per
-#: band 90 / 130 / 110). Recomputable and falsifiable, which is the whole point —
-#: `tests/strategy/test_currency.py` recomputes it from the CSV rather than pinning the literal, so a
-#: future set re-derives it instead of inheriting it. The superseded `_PRIZE_UNIT = 12` asserted
-#: roughly an eighth of this, which is why the shipped equation endorsed feeding a 3-prize body to
-#: save a 40-point band.
-#:
-#: Ratified by ADR-0100 (promote/retreat, its first consumer) and HOISTED here by ADR-0078 (#187
-#: grill) once three more consumers arrived — the deny / snipe / gust marginals of the
-#: opponent-target family, each of which must convert its prize-denominated slice before it can meet
-#: a damage-scale score. It deliberately does NOT reach `KO_SCORE` (the KO's dominance band is
-#: unbounded by this rate) or Worth (see below).
+#: Damage per prize. DERIVED, not tuned: the MEDIAN HP-per-prize over the whole card set (ADR-0078;
+#: `tests/strategy/test_currency.py` recomputes it from the CSV). Reaches neither `KO_SCORE` nor Worth.
 PRIZE_DAMAGE_RATE = 100.0
 
 
-# ── The Worth Damage Rate — the MISSING third leg (ADR-0078 decision 2/3) ─────────────────────────
-#
-# There is deliberately NO `WORTH_DAMAGE_RATE` constant in this module yet, and adding one without
-# the derivation below is the exact fudge ADR-0065 forbids.
-#
-# ⚠️ **Read that sentence with its qualifier: it is about a GENERAL rate.** Two SEAM-SCOPED
-# worth<->damage rates do live in this module, both honestly labelled at their own definitions —
-# `DEPLOY_BAND / DEPLOY_WORTH_SCALE` (ADR-0086 amendment C) and `ITEM_HOLD_WORTH_RATE` (Issue #261
-# item 2f) — and a THIRD seam-scoped rate sits on a different scale PAIR entirely,
-# `GUST_TARGET_WORTH_RATE` (prize<->worth, ADR-0107). Each carries a recorded reconciliation debt
-# against a general rate if one is ever derived. Stated here, at the guard, rather than only at the
-# definitions: a reader who takes the paragraph above at face value and then meets three such
-# constants further down has been misled by this file, which is the ADR-0078 complaint being repeated
-# rather than paid down.
-#
-# The missing bridge is **damage per card-worth point**, from which prize → worth composes as
-# `PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`. It cannot be read off the shipped constants, because two
-# pairs price the SAME object on both scales and disagree by ~6.7x:
-#
-#     keeping a gust/denial Trainer   TAG_TIER["gust"] 10.0   vs  ITEM_HOLD_WORTH_RATE 1.0 =>  ~1
-#     one Energy                      ENERGY_TIER      8.0    vs  ENERGY_RECOVER   160/3   =>  ~6.7
-#
-# The first row used to read `_DENIAL_ITEM_COST 10`. That constant is DELETED (Issue #261 item 2f):
-# the ~1.0 it implied is no longer buried inside a deny-scoped magic number, it is the explicit,
-# seam-scoped `ITEM_HOLD_WORTH_RATE` at the foot of this module. The catalogue entry is unchanged in
-# value and strictly better evidenced — a rate you can read is a rate a reviewer can dispute.
-#
-# The gap was ~9x until Issue #172 DERIVED `ENERGY_RECOVER` from the card set (75 -> 160/3). That it
-# moved without closing is the point: deriving one leg honestly did not reveal a hidden worth rate,
-# which is evidence the bridge has to come from a corpus ruling rather than from the tiers.
-#
-# So it needs a corpus anchor, and the corpus does not currently hold one: every committed deny
-# fixture is a play/hold frame (`select.context = 0`), none a DISCARD select, and the one keep-side
-# Hammer ruling (`86091435-68`) is REFUTED-AS-LABELED and directional.
-#
-# **That anchor gate has now been RUN, and it FAILED — the constant is absent BY DESIGN, not
-# pending** (ADR-0080, Issue #199). Corpus-wide there are 12 `Discard`-context frames; exactly one
-# holds a Hammer, and on that board the opponent's Archaludon ex carries one {M} against a {M}{M}{M}
-# attack, so both instruments price the strip at 0.000 — with `m = 0` the rate DIVIDES OUT and no
-# value is derivable from it under any policy. ADR-0080 then made the question moot for deny
-# entirely, by reformulating deny as a CATEGORICAL RELEVANCE instrument that never crosses a scale
-# boundary. Deny was the last consumer asking for the rate.
-#
-# ADR-0086 (Issue #197) asked the same question of the DEPLOY seam, which ADR-0078 decision 3 had
-# nominated as more promising because its frames are natively play-side. `deploy_anchor_sweep.py`
-# (deleted by Issue #243 — it declared itself terminal, and a ruling's artifact is the record, not
-# the script) answers no, and for a STRUCTURAL reason rather than a corpus gap: a deploy is never
-# exclusive with
-# a damage-denominated option (benching consumes no attach, no Supporter slot, and does not end the
-# turn), so it cannot TRADE against one, and the only genuine competitor for a Bench slot is another
-# deploy — worth versus worth, carrying no rate information.
-#
-# Consumers that would need this rate stay on their incumbent scale and say so.
+# There is deliberately NO general `WORTH_DAMAGE_RATE` — the corpus anchor gate RAN and FAILED
+# (ADR-0080/0086). The three seam-scoped rates below are the honest exceptions, labelled at each site.
 
 
-# ── The DEPLOY band — a SEAM-SCOPED rate, honestly labelled (ADR-0086 amendment C, Issue #197) ────
-#
-# The Deploy Marginal's two Worth-denominated legs are dimensionless RATIOS — a marginal over the
-# `needs.py` assignment divided by `DEPLOY_WORTH_SCALE` — so the Worth points cancel and the Worth
-# scale never escapes the assignment. That is what lets the equation exist without the constant
-# above.
-#
-# **Stated plainly rather than buried: `DEPLOY_BAND / DEPLOY_WORTH_SCALE` has units of
-# damage-per-worth-point. It IS a worth<->damage rate, scoped to one seam.** Amendment B made the
-# rate local, small and honestly labelled — it did not make it unnecessary. This is a THIRD entry in
-# the catalogue two paragraphs up (trainer ~1.0, energy ~6.7, deploy ~`DEPLOY_BAND / 30`).
-#
-# The one honest mitigation, not oversold: ADR-0078's complaint was that two constants priced the
-# SAME object differently. Nothing else in this codebase prices a bench deployment, so this constant
-# contradicts nothing today.
-#
-# RECONCILIATION DEBT, recorded here so it is tripped over rather than discovered: if a general
-# Worth Damage Rate is ever derived, `DEPLOY_BAND / DEPLOY_WORTH_SCALE` must be checked against it,
-# and a disagreement is evidence about ONE of the two rather than automatically about this one.
-
-#: The yardstick the deploy relevance ratios divide by — the ceiling on what a SINGLE card can
-#: contribute to the Needs assignment, i.e. the top `ROLE_TIER` band. **Derived, not invented**: an
-#: arbitrary divisor would be the ADR-0065 fudge wearing a different hat. Read off `card_worth` at
-#: import so a re-band of the tiers moves the yardstick with it rather than silently re-scaling every
-#: deploy score.
-#:
-#: It is deliberately FIXED and board-independent. Normalising per decision instead (dividing by the
-#: best candidate at THIS decision) was rejected on correctness: the marginal competes against `End`
-#: (0) and against attacks, so the ratio must mean the same thing on every board — a per-decision
-#: normaliser would make the best available deploy read 1.0 whether it is excellent or merely
-#: least-bad, and the agent would deploy every turn.
+#: The deploy ratios' yardstick — the top `ROLE_TIER` band, read at import so a re-band moves it.
+#: Deliberately FIXED and board-independent: a per-decision normaliser would deploy every turn.
 DEPLOY_WORTH_SCALE = max(_ROLE_TIER.values())     # == 30.0 (win_condition / primary_attacker)
 
-#: What a FULL-relevance deploy is worth on the damage scale.
-#:
-#: **A PRESERVATION CHOICE, never a derivation** (ADR-0080 decision 3's discipline for its `K`,
-#: applied verbatim). It is pinned so the equation reproduces the incumbent range of the rungs it
-#: replaces — `develop-a-basic-in-setup` +12, `develop-the-wincon-base-first` +6 riding on it,
-#: `develop-the-accel-recipient` +20, `pre-position-attacker` +25, `bench-the-supporter-tutor` +25 —
-#: so the swap starts behaviour-preserving and the Decision Gate can then rule every flip.
-#:
-#: That gate is the whole difference between this constant and ADR-0100's `_PRIZE_UNIT = 12`, which
-#: was wrong by ~8x and endorsed feeding a 3-prize body to save a 40-point band: same species of
-#: number, but this one is checked against recorded frames rather than asserted.
-#:
-#: One bound the corpus supplies directly (ADR-0086 amendment D, frame `85709280|1|decision|51` —
-#: `85709280|1|match|` until ADR-0113 Amendment A re-scoped it, same record): the human ruled Lillie's
-#: Determination (`dig-before-commit`, +20) OVER a redundant second Solrock into the last Bench slot,
-#: so `DEPLOY_BAND x relevance(that Solrock) < 20`. Weak — the relevance should be ~0 on that board
-#: anyway — but real, and gated.
+#: A FULL-relevance deploy on the damage scale — a PRESERVATION CHOICE, never a derivation (ADR-0086),
+#: pinned to the incumbent +12..+25 rung range. Divided by `DEPLOY_WORTH_SCALE` it is the third rate.
 DEPLOY_BAND = 25.0
 
 
 def deploy_relevance_to_damage(relevance: float) -> float:
-    """Convert a dimensionless deploy relevance in [0, 1] into the damage/tactical scale.
-
-    The ONE place the Deploy Marginal's Worth-derived legs enter a `score` the damage-scale rungs
-    also write to. Callers hand a RATIO (a Needs-assignment marginal already divided by
-    `DEPLOY_WORTH_SCALE`), never a raw worth value — handing this a worth magnitude would be
-    exactly the scale-boundary crossing ADR-0078 decision 2 forbids."""
+    """Callers hand a RATIO (a Needs marginal already divided by `DEPLOY_WORTH_SCALE`), never a raw
+    worth value — that would be the scale-boundary crossing ADR-0078 decision 2 forbids."""
     return float(relevance) * DEPLOY_BAND
 
 
-# ── The ITEM-HOLD band — the second SEAM-SCOPED rate, and the oldest one (Issue #261 item 2f) ─────
-#
-# **Stated plainly rather than buried, exactly as the deploy band is: `ITEM_HOLD_WORTH_RATE` has
-# units of damage-per-worth-point. It IS a worth<->damage rate, scoped to one seam.** It is the
-# FIRST entry in the catalogue two blocks up (trainer ~1.0), which until now existed only as the
-# ratio between two constants that never met in an expression — `TAG_TIER["gust"] 10.0` on the worth
-# side and `_DENIAL_ITEM_COST 10` on the damage side.
-#
-# Deleting that constant in favour of a general hold price (`common/hold_value.py`) forces the
-# crossing into the open, and the honest thing to do with it is name it rather than let a
-# `x 1.0`-shaped nothing hide in the arithmetic. Nothing about the agent's behaviour changes: the
-# rate the incumbent asserted is the rate that ships.
-#
-# RECONCILIATION DEBT, on the same terms as the deploy band's: if a general Worth Damage Rate is
-# ever derived, this must be checked against it, and a disagreement is evidence about ONE of the two
-# rather than automatically about this one. `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the
-# candidate; its authoring note already owes a reconciliation against this catalogue.
-
-#: Damage per card-worth point AT THE ITEM-HOLD SEAM — what one Worth point of a card you are about
-#: to spend is worth against a damage-denominated score.
-#:
-#: **A PRESERVATION CHOICE, never a derivation** (`DEPLOY_BAND`'s discipline, applied verbatim). It
-#: is pinned at the ratio `_DENIAL_ITEM_COST 10 / TAG_TIER["gust"] 10.0` already asserted, so the
-#: generalisation starts behaviour-preserving on the four committed deny anchors and the Decision
-#: Gate can then rule any flip. Issue #212 put re-deriving the deny keep price explicitly out of
-#: scope; this is that scope note honoured in arithmetic.
+#: Damage per card-worth point AT THE ITEM-HOLD SEAM — a worth<->damage rate, scoped to one seam.
+#: A PRESERVATION CHOICE, never a derivation: the ratio the deleted `_DENIAL_ITEM_COST` asserted.
 ITEM_HOLD_WORTH_RATE = 1.0
 
 
 def item_hold_to_damage(keep_worth: float) -> float:
-    """Convert a card-worth HOLD price into the damage/tactical scale at the seam-scoped rate.
-
-    The ONE place `common.hold_value`'s Worth-denominated price enters a `score` the damage-scale
-    rungs also write to. Callers hand a WORTH value (a `needs` assignment marginal floored by
-    `hold_value.ITEM_HOLD_FLOOR`), never a prize-equivalent — that is `prize_to_damage`.
-
-    **This takes a MAGNITUDE where `deploy_relevance_to_damage` refuses one, and the difference is
-    real rather than an oversight.** The deploy legs are ratios because a deploy marginal HAS a
-    natural yardstick — the ceiling on one card's assignment contribution — so the Worth cancels and
-    no rate is needed. A hold price has no such yardstick: *"what does spending this card cost"* is
-    an amount, not a fraction of anything, so the crossing is unavoidable and the honest response is
-    to name the rate rather than to manufacture a denominator that would only hide it. That is why
-    the rate above is stated as a PRESERVATION choice with a reconciliation debt, on exactly the
-    terms `DEPLOY_BAND` is."""
+    """Callers hand a WORTH magnitude (a `needs` marginal floored by `hold_value.ITEM_HOLD_FLOOR`),
+    never a prize-equivalent — that is `prize_to_damage`."""
     return float(keep_worth) * ITEM_HOLD_WORTH_RATE
 
 
-# ── The GUST-TARGET band — prizes → WORTH, the third seam-scoped rate (ADR-0107, item 2g) ───
-#
-# The first crossing on the **prize ↔ worth** pair. The two above are worth ↔ damage; `PRIZE_DAMAGE_
-# RATE` is prize ↔ damage; this is the leg that had no bridge at all, and one consumer was crossing
-# it silently.
-#
-# **The defect.** ADR-0076 decision 1 prices the `gust_target` slot by `needs.opponent_target_value`,
-# which is denominated in PRIZE-EQUIVALENTS (1.0 – 3.9). Every other slot kind in the same *summed*
-# `needs._keep_slot_dp` assignment is denominated in CARD-WORTH points (wincon 30, `discard_eot` 30,
-# `deny` 10, Energy 8) — and `needs.py`'s own module docstring says slots are valued "in the ONE
-# currency". ADR-0076 Amendment E recorded that as a debt and called it *"latent, not firing"*;
-# ADR-0080 decision 4 re-inherited it here with Amendment F reversed. Measured over the corpus
-# (2026-08-02, 80 frames emitting 228 slots) it is worse than latent: the slot's MEDIAN value is
-# 1.000, against a `general` slot the very same card opens at up to `TAG_TIER["gust"] x
-# _GENERAL_WORTH_W` = 4.5 — so the assignment COVERED a `gust_target` slot on **1 frame in 80**. The
-# "0 decision flips" that armed the flag was the instrument being all but INERT, not the instrument
-# agreeing. Denominated, the same measurement reads **25 of 80**.
-#
-# (The 1-in-80 is measured, not inferred. `3.9 < 4.5` does NOT prove it: the general slot is
-# `worth x deploy x _GENERAL_WORTH_W x liq`, so 4.5 is its CEILING and it can fall below the gust
-# slot — which is exactly what happens on the one frame. The reading comes from zeroing the
-# gust_target slots and watching V drop.)
-#
-# **Why this is a RATIO and not a rate lookup.** `opponent_target_value` has a natural, derived
-# ceiling — `needs.TARGET_VALUE_CEILING` = `MAX_PRIZE_VALUE` (3) + `_SURVIVAL_CAP` (0.9) = 3.9 — so
-# the prize scale can be divided out into a dimensionless [0, 1] fraction and never escapes the
-# marginal. That is ADR-0086 amendment B's deploy argument, and it is why no general prize↔worth rate
-# is needed. It is also what makes the two members of the opponent-target slot FAMILY finally
-# identical in shape: `deny` is already `TAG_TIER["gust"] x relevance∈[0,1]` (ADR-0080 decision 3),
-# and `gust_target` now is too.
-#
-# **Stated plainly rather than buried, exactly as the two bands above are: `GUST_TARGET_WORTH_RATE`
-# has units of worth-per-prize-equivalent. It IS a prize<->worth rate, scoped to one seam.** It is a
-# FOURTH catalogue entry — on a different scale PAIR from the three above, so it does not join their
-# ~6.7x spread; it opens its own row.
-#
-# ⚠️ **The composed cross-check DISAGREES by ~39x, and that is recorded rather than reconciled.**
-# Composing the two shipped legs — `PRIZE_DAMAGE_RATE` 100 damage/prize ÷ `ITEM_HOLD_WORTH_RATE` 1.0
-# damage/worth — says one prize-equivalent is ~100 WORTH points. This rate says 2.56. Both cannot be
-# right, and the disagreement is evidence about the WORTH scale rather than about this seam: that
-# scale's whole range is 0–30 by construction (`ROLE_TIER`), so a 100-point slot would not price a
-# held card, it would delete every other card's contribution from the assignment — the `_PRIZE_UNIT
-# = 12` failure mode with the sign reversed. Pricing the hand ON ITS OWN SCALE is what the DP is for.
-# `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the constant that settles this; it now ships
-# `1.0 / 120.0`, so this is the same RECONCILIATION DEBT `DEPLOY_BAND` and
-# `ITEM_HOLD_WORTH_RATE` carry — with the disagreement quantified here so it is tripped over rather
-# than discovered.
-
-#: What a FULL-ceiling gust target is worth on the WORTH scale — the disruption-Trainer band.
-#:
-#: **A PRESERVATION CHOICE, never a derivation** (`DEPLOY_BAND`'s discipline, applied verbatim), and
-#: it introduces NO new number: it is `card_worth.TAG_TIER["gust"]`, read at import so a re-band of
-#: the tiers moves it rather than silently re-scaling the slot. The incumbent it preserves is the
-#: routing ADR-0076 replaced — before the `gust_target` kind existed, a held Boss's Orders opened a
-#: `deny` slot worth exactly `TAG_TIER["gust"] / 2**t`.
-#:
-#: Measured against that incumbent over the same 228 corpus slots (2026-08-02): the old routing
-#: priced them median **2.500** / mean **2.695** / max **10.0**; at this band the new denomination
-#: prices them median **2.564** / mean **3.082** / max **8.184**. So the band is not merely asserted
-#: to be behaviour-preserving — the distribution it reproduces is the recorded one, which is the check
-#: ADR-0100's `_PRIZE_UNIT = 12` (wrong by ~8x) never had.
+#: A FULL-ceiling gust target on the WORTH scale — a PRESERVATION CHOICE, not a derivation: it IS
+#: `TAG_TIER["gust"]`, read at import so a re-band of the tiers moves it with it (ADR-0107).
 GUST_TARGET_BAND = _TAG_TIER["gust"]                  # == 10.0
 
-#: Worth points per prize-equivalent AT THE GUST-TARGET SEAM. Not authored — the quotient of the band
-#: above and the derived ceiling, named so a reviewer can dispute a rate instead of an arithmetic.
+#: Worth per prize-equivalent AT THE GUST-TARGET SEAM — a prize<->worth rate, scoped to one seam. It
+#: DISAGREES ~39x with the composed `PRIZE_DAMAGE_RATE / ITEM_HOLD_WORTH_RATE`; recorded, unreconciled.
 GUST_TARGET_WORTH_RATE = GUST_TARGET_BAND / _TARGET_VALUE_CEILING     # ~= 2.564
 
 
 def target_value_to_worth(prize_equivalents: float) -> float:
-    """Convert an opponent-target marginal into the card-WORTH scale at the seam-scoped rate.
-
-    The ONE place a prize-denominated `needs.opponent_target_value` may enter the Worth-summing Needs
-    assignment. Callers hand a PRIZE-EQUIVALENT (a row's ``value`` off `_opponent_target_rows`), never
-    a worth magnitude — that would be a double conversion.
-
-    Clamped at the ceiling rather than trusted to it. The bound holds for every shipped caller
-    (`_opponent_target_rows` passes `prize_advance = CardStat.prize_value <= MAX_PRIZE_VALUE`, and
-    `survival_value` is capped), so the clamp is never reached — it is there because the two bounds
-    live in `needs` and a future set with a 4-prize body would otherwise push a slot silently above
-    the band it is defined to top out at.
-
-    Written through `GUST_TARGET_WORTH_RATE` rather than re-deriving `ratio x band`, so the constant
-    a reviewer disputes is the constant the arithmetic uses — the `_DENIAL_ITEM_COST` lesson
-    (ADR-0105 decision 3: a rate that never meets an expression is a rate nothing stops drifting)."""
+    """Callers hand a PRIZE-EQUIVALENT (an `_opponent_target_rows` ``value``), never a worth magnitude.
+    The clamp is unreachable for every shipped caller; it bounds a future 4-prize body."""
     return max(0.0, min(float(prize_equivalents), _TARGET_VALUE_CEILING)) * GUST_TARGET_WORTH_RATE
 
 
 def prize_to_damage(prize_equivalents: float) -> float:
-    """Convert a prize-denominated value into the damage/tactical scale at the derived rate.
-
-    The one legitimate way for a prize-equivalent marginal (`needs.opponent_target_value`) to enter a
-    `score` the damage-scale rungs also write to. Callers that hold a *card-worth* value want the
-    Worth Damage Rate instead — which does not exist yet, on purpose (see above)."""
+    """Callers holding a *card-worth* value want the Worth Damage Rate, which does not exist."""
     return float(prize_equivalents) * PRIZE_DAMAGE_RATE
 
 
 def tiebreak_bonus(relevances, k: float) -> float:
-    """Half the finest distinction a menu of ``[0,1]`` relevance values actually draws, in SCORE units.
-
-    The shared arithmetic behind BOTH relevance instruments' lexicographic tiebreaks — deny's
-    (ADR-0084, Issue #217 decision 2) and snipe's (ADR-0085 Amendment H, Issue #188). The two keep
-    their OWN guards, which differ on purpose: deny declines to order a zero because its ordering
-    signal is derived from the same board, snipe orders one because the Brief is independent authored
-    scouting. Only this quantum is common, and it lives here because it is the piece most likely to
-    drift apart unnoticed — the two copies had already grown a stale cross-reference between them by
-    the time it was extracted.
-
-    ``k`` is the instrument's normalizer, so ``k x relevance`` is its score and two distinct relevance
-    values differ by at least ``1 / k``. Half the smallest REAL gap on the menu therefore can never
-    overtake a difference relevance itself settled; ``1 / k`` — one damage unit — is the fallback when
-    the menu draws no distinction at all, which is exactly the all-zero case snipe must still order.
-
-    Deriving it beats fixing it: a hardcoded epsilon is sized against the arithmetic in front of it
-    and rots silently the first time a term changes that arithmetic — the ADR-0063 failure mode, where
-    a new positive term voided every guard calibrated against the previous scale with nothing failing
-    loudly.
-    """
+    """Half the finest distinction a ``[0,1]`` relevance menu draws, in SCORE units — so a tiebreak
+    cannot overtake a difference relevance settled. ``1 / k`` (one damage unit) when the menu is flat."""
     distinct = sorted(set(relevances))
     gaps = [b - a for a, b in zip(distinct, distinct[1:]) if b > a]
     return 0.5 * float(k) * (min(gaps) if gaps else (1.0 / float(k)))

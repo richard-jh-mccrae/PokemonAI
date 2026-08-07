@@ -18,12 +18,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 
-# NATIVE-ONLY by definition: every pin here is an empirical fact about the DLL that cgpy is
-# built to match, so running them ON cgpy measures the twin against itself. Worse than useless
-# under `CG_ENGINE=py` (tests/conftest.py): the module reaches past the alias with its own
-# `from cg import api` while driving an aliased `battle_start`, so the native lib receives a
-# cgpy-produced observation and **aborts the interpreter** — taking the whole run down at ~24%,
-# not just this module. Skip cleanly instead so the twin arm is usable at all.
+# NATIVE-ONLY: these pin empirical facts about the DLL. Under `CG_ENGINE=py` the module reaches
+# past the alias with its own `from cg import api` and ABORTS THE INTERPRETER, so it skips instead.
 try:
     from cgpy.alias import installed as _alias_installed
 except Exception:                                            # cgpy absent: nothing to guard
@@ -153,13 +149,8 @@ def test_validation_error_codes():
 
 
 def test_fork_reshuffles_but_is_deterministic():
-    """search_begin ignores the provided deck order yet is reproducible call-to-call.
-
-    Reproducibility is pinned for forks from a plain MAIN select only — a fork begun
-    mid-effect (a pending trainer/attack select) reshuffles differently call-to-call
-    (probed 2026-07-12: 0/186 MAIN forks divergent vs 44/62 mid-effect; determinism.md
-    §4), so chaos games retry until one lands on MAIN.
-    """
+    """search_begin ignores the provided deck order yet is reproducible call-to-call — for forks
+    from a plain MAIN select ONLY (determinism.md §4), so chaos games retry until one lands."""
     from cg import api
 
     deck = _agent_deck()
@@ -211,25 +202,8 @@ def test_fork_reshuffles_but_is_deterministic():
 
 
 def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
-    """The boundary the pin above does NOT cover (#178, determinism.md §4).
-
-    `test_fork_reshuffles_but_is_deterministic` drives its forks straight to END, so nothing
-    ever shuffles inside the line — and the reproducibility it pins is real but narrow. Let the
-    line play a shuffle-your-hand-in-and-draw card and every draw AFTER that shuffle varies
-    call-to-call, from a plain MAIN fork, in one process. That is what made ml f24 flap through
-    three suite tests, and `planner._rng_probe` exists because of it.
-
-    Asserted as an inequality, so it stays honest if a future engine build makes the in-line
-    shuffle reproducible: this test then fails and the planner's rule can be revisited on the
-    epistemic argument alone (a predicted deck ORDER is still a guess).
-
-    **Driven through `_simulate_line` since POC-T4/5 (Issue #386).** It used to drive
-    `_engine_leaf_value`, which is deleted with the develop rollout — but only the SCORER went. The
-    forward-sim primitive underneath survives by name and is preserved for exactly this class of
-    caller: the offline instruments that measure the ENGINE rather than a retired rung. Swapping the
-    driver keeps the pin measuring what it was minted to measure, and `_rng_probe` — which exists
-    because of this fact and still gates the win rung's verdict — keeps its explanation.
-    """
+    """The boundary the pin above does NOT cover (determinism.md §4): once the line plays a
+    shuffle-and-draw, every later draw varies call-to-call. Asserted as an INEQUALITY."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" /
                      "ml_lethal_retreat_boost_to_ko_f24.json").read_text(encoding="utf-8"))
     obs = fx["obs"]

@@ -17,17 +17,8 @@ class WinLineMixin:
     """Lines that win this turn, each verified before it locks."""
 
     def _win_line(self, obs, select, board, options, traces) -> TurnLine | None:
-        """The shortest guaranteed win on the current turn as a ``goal="win"`` Turn Line, or None.
-
-        Two generation modes (ADR-0037): ``lethal_family`` ON = the ONE generator family
-        (`_family_win_candidates` — single+multi-develop, gust, tutor; all min-bound sound), every
-        lock engine-verified (`lethal_verify`, cascade-driven to the engine's verdict). OFF = the
-        legacy stage-1 rungs (`_legacy_win_candidates` — direct + hook-trace unlock + evolve), with
-        verify on DIRECT locks only (a 1-step sim of a multi-step line ends mid-turn and would
-        false-refute without the cascade drive the family mode uses). Either way: a refute drops the
-        candidate (never lock a phantom, counted in `_lethal_refutes`); a None verdict keeps the
-        sound closed-form lock (a coin-floor win can never verify True by construction — the
-        min-bound floor is the authority there)."""
+        """The shortest guaranteed win on this turn as a ``goal="win"`` Turn Line, or None. A refute
+        DROPS the candidate (never lock a phantom); a None verdict keeps the closed-form lock."""
         if board.my_prizes_remaining <= 0:
             return None
         opp = self._opp_active(obs)
@@ -51,13 +42,8 @@ class WinLineMixin:
         return None
 
     def _legacy_win_candidates(self, obs, select, board, options, traces, opp):
-        """Yield the pre-family (stage-1) closed-form candidates in their exact order — the
-        ``lethal_family=False`` path, ADR-0030's shipped rungs (shared-valuation upgrades — e.g.
-        the typed-affordability guard — flow through): (1) a KO already
-        on the menu that WINS now, judged by the attack's OWN prize yield (`_attack_wins`); (2) an
-        Energy attach or a retreat into a READY benched attacker that unlocks the winning KO (the
-        KO_SCORE-class closed-form hook traces); (3) an EVOLVE of the Active bringing a bigger
-        attacker online (no hook scores it, so its own min-bound lookup)."""
+        """The pre-family (stage-1) closed-form candidates in their exact order — the
+        ``lethal_family=False`` path (ADR-0030): direct KO, then hook-trace unlock, then evolve."""
         # 1) direct: a KO on the menu that wins now.
         for i, o in enumerate(options):
             if o.get("type") == _ATTACK and self._attack_wins(obs, board, o, opp):
@@ -69,16 +55,14 @@ class WinLineMixin:
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return
 
-        # 2) Energy attach (`_attach_lethal_tactical`) or retreat into ready bench attacker
-        # (`_retreat_to_lethal_tactical`) unlocking that KO — both KO_SCORE-class; finishing attack
-        # follows next menu.
+        # 2) attach or retreat into a ready bench attacker, unlocking that KO — both KO_SCORE-class;
+        # the finishing attack follows on the next menu.
         for i, o in enumerate(options):
             if o.get("type") in (_ATTACH, _RETREAT) and traces[i].tactical >= KO_SCORE:
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                rationale="lethal (unlock): a develop enables the winning KO")
-        # 3) EVOLVE of Active bringing bigger attacker online — no closed-form hook scores it, so
-        # look up: evolved form inherits Active's Energy, best affordable attack must KO (same-turn
-        # legal, rules.md §evolution). Typed-affordability guarded like every shared KO valuation.
+        # 3) EVOLVE the Active into a bigger attacker — no closed-form hook scores it, so look up
+        # whether the evolved form's best affordable attack KOs (same-turn legal, rules.md §evolution).
         ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
         for i, o in enumerate(options):
             if o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
@@ -89,16 +73,8 @@ class WinLineMixin:
                                    rationale="lethal (evolve): evolving enables the winning KO")
 
     def _family_win_candidates(self, obs, select, board, options, opp):
-        """Yield ``goal="win"`` candidates from the ONE generator family (ADR-0037), SHORTEST-first:
-        tier 0 = a direct KO already on the menu; tier 1 = one develop (attach the Active / retreat
-        into a ready body / evolve the Active / gust up a KO-able last-prize body); tier 2 = the same
-        develop PLUS this turn's one attach; tier 3 = the energy-tutor Supporter line (fetch the
-        attach the line lacks). Every candidate is min-bound SOUND (worst-coin damage floors, exact
-        prize math, engine-vetted step legality — an option on the menu IS legal); the develop tiers'
-        win test is the conservative legacy precondition (opp-Active prize reaches my remaining count
-        or their bench is empty — rider snipes under-counted, never over). An option index is yielded
-        once, at its shortest tier (a refuted candidate is not retried at a longer tier: the verify
-        cascade drives the same policy either way)."""
+        """``goal="win"`` candidates from the ONE generator family (ADR-0037), SHORTEST-first. Every
+        candidate is min-bound SOUND; an option index is yielded once, at its shortest tier."""
         # tier 0: direct — a KO on the menu that wins now.
         seen = set()
         for i, o in enumerate(options):
@@ -143,9 +119,8 @@ class WinLineMixin:
                 if win:
                     seen.add(i)
                     yield TurnLine(next_step=[i], goal="win", kind=kind, rationale=why)
-        # tier 3: the energy-tutor Supporter supplies the attach the line lacks (the 4298 shape,
-        # game-winning). SOUND only when the deck DEFINITELY still holds a reusable Energy (the
-        # match-scoped tracker's positive certainty) — a probable fetch is never a win.
+        # tier 3: the energy-tutor Supporter supplies the attach the line lacks. SOUND only when the
+        # deck DEFINITELY still holds a reusable Energy — a probable fetch is never a win.
         retreat_on_menu = any(o.get("type") == _RETREAT for o in options)
         if (not (board.energy_attached or board.reusable_energy_in_hand)
                 and self._tutor_energy_certain(board)):
@@ -162,13 +137,8 @@ class WinLineMixin:
                     seen.add(i)
                     yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                    rationale="lethal (unlock): the energy tutor fetches the winning attach")
-        # tier 4: the evolution-tutor Supporter line (Salvatore, `rush_evolve` — the a212 shape):
-        # evolve a deck-certain, no-Ability DIRECT evolution onto an in-play body straight from the
-        # deck, then (for a benched body) retreat into it and attach — e.g. Salvatore -> Mega Starmie
-        # onto a Staryu, free-retreat the opener, attach, Jetting Blow the last body: bench-empty win.
-        # Salvatore's own allowance covers every in-play target (setup-placed / played this turn;
-        # anything older is normal-legal), so no timing gate. SOUND on the tracker's positive deck
-        # certainty + min-bound KO math; the engine verify cascade backstops the rest.
+        # tier 4: the evolution-tutor Supporter (`rush_evolve`) evolves a deck-certain, no-Ability
+        # DIRECT evolution onto an in-play body. Its own allowance covers every target, so no timing gate.
         targets = [(p, False) for p in (me.get("active") or []) if p]
         if retreat_on_menu:
             targets += [(p, True) for p in (me.get("bench") or []) if p]
@@ -178,14 +148,8 @@ class WinLineMixin:
             if any(self._tutor_evolution_wins(obs, board, opp, p) for p, _ in targets):
                 yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                rationale="lethal (unlock): the evolution tutor evolves the winning attacker")
-        # tier 5 (`boost_lethal`): retreat into a benched attacker whose DAMAGE-BOOSTED KO wins — the
-        # promote-a-benched-{F}-attacker → play N damage-boost Items → swing-lethal shape (ml f24:
-        # Solrock's Cosmic Beam 70 + 2x Premium Power Pro = 130 exact OHKOs Duraludon; opp bench empty
-        # -> a bench-empty win). The retreat is the driven step; the SWITCH then promotes the boosted
-        # body (`promote_ko_aware`'s `is_ko_promote_target`), the Items price at KO_SCORE via
-        # `_boost_lethal_tactical` once it is Active, and the final swing is the direct tier-0 KO. The
-        # boost total is this-turn plays + playable hand copies (`_typed_boost_total`); the retreated
-        # Active benches as the `requiresBench` partner. Min-bound sound; engine-verified on lock.
+        # tier 5 (`boost_lethal`): retreat into a benched attacker whose DAMAGE-BOOSTED KO wins. The
+        # retreat is the driven step; the boost total is this-turn plays plus playable hand copies.
         if self.boost_lethal and ma is not None:
             for i, o in enumerate(options):
                 if i in seen or o.get("type") != _RETREAT:
@@ -208,13 +172,8 @@ class WinLineMixin:
                         yield TurnLine(next_step=[i], goal="win", kind="unlock",
                                        rationale="lethal (boost): retreat into the boosted KO attacker wins")
                         break
-        # tier 6 (`retreat_enabler_lethal`): a benched attacker ALREADY wins if promoted, but the Active
-        # can't retreat now — a retreat-reduction Tool (Air Balloon: {C}{C} less) frees the retreat. Drive
-        # the Tool play (already in hand), else a Trainer-tutor Supporter (Petrel: "search a Trainer") whose
-        # deck DEFINITELY still holds a covering Tool (ml f15: Petrel -> Air Balloon -> onto Makuhita -> free
-        # retreat -> promote Mega Lucario ex -> Aura Jab 130 >= Riolu 80, opp bench empty). The tutor pick ->
-        # Tool -> Active attach -> retreat -> promote cascade rides re-planning + the steering hooks; SOUND on
-        # the tracker's positive deck certainty, and engine-verified on lock (a phantom is dropped).
+        # tier 6 (`retreat_enabler_lethal`): a benched attacker ALREADY wins if promoted but the Active
+        # cannot retreat — drive the retreat-reduction Tool, or a Trainer-tutor that certainly reaches one.
         if (self.retreat_enabler_lethal and ma is not None and not self._can_retreat(ma)
                 and self._bench_body_wins_if_promoted(obs, board, opp, me, ma)):
             need = self._retreat_shortfall(ma)
@@ -232,26 +191,15 @@ class WinLineMixin:
                                    rationale="lethal (unlock): the retreat Tool frees the retreat into the winning KO body")
 
     def _bench_body_wins_if_promoted(self, obs, board, opp, me, ma) -> bool:
-        """SOUND: some benched body, promoted with its CURRENT Energy (a freed retreat brings it Active),
-        takes a min-bound winning KO of the opponent's Active. The retreat-enabler tier's win test — the
-        retreat itself is supplied by a Tool, not modeled here (``_develop_wins`` values the body as if
-        already Active, the retreated Active provably benched via ``_promote_bench_names``)."""
+        """SOUND: some benched body, promoted with its CURRENT Energy, takes a min-bound winning KO.
+        The retreat itself is supplied by a Tool and is not modeled here."""
         return any(self._develop_wins(obs, board, opp, p.get("id"), len(p.get("energies") or []),
                                       body=p, promote_bench_names=self._promote_bench_names(me, j, ma))
                    for j, p in enumerate(me.get("bench") or []) if p)
 
     def _retreat_shortfall(self, ma) -> int:
-        """Energy the Active is SHORT of paying its EFFECTIVE Retreat Cost this turn (>0 iff it can't
-        retreat now). A retreat-reduction Tool whose reduction covers this frees the retreat (Air Balloon
-        −2 on a retreat-2 Makuhita with 0 attached -> shortfall 2 -> free).
-
-        "Effective", not printed, since Issue #306. This used to read the printed cost and ignore the
-        Tools ALREADY attached, which merely over-stated the need while every Tool was a discount —
-        fail-closed, so it survived. Gravity Gemstone makes a retreat cost {C} MORE
-        (`retreatReduction` −1), and an ignored surcharge UNDER-states the need, which would let
-        `_grab_retreat_tool_lethal_tactical` / `_attach_retreat_tool_lethal_tactical` accept a Tool
-        that does not in fact free the retreat and score the phantom at KO_SCORE. Shared with
-        `_can_retreat` through `_attached_retreat_delta`, so the two cannot disagree about a body."""
+        """Energy the Active is SHORT of paying its EFFECTIVE Retreat Cost (>0 iff it can't retreat
+        now). EFFECTIVE, not printed: an ignored Tool SURCHARGE would under-state it (Issue #306)."""
         if not (ma and self.stats):
             return 0
         st = self.stats.get(ma.get("id"))
@@ -261,14 +209,14 @@ class WinLineMixin:
         return max(0, eff - len(ma.get("energies") or []))
 
     def _is_trainer_tutor(self, obs, select, option) -> bool:
-        """This PLAY option is a `tutor_trainer` Supporter (Petrel class) — it searches ANY Trainer card
-        into hand, so it can certainly fetch a specific retreat Tool the deck definitely still holds."""
+        """This PLAY option is a `tutor_trainer` Supporter — it searches ANY Trainer into hand, so it
+        can certainly fetch a specific retreat Tool the deck definitely still holds."""
         cid = self._option_card_id(obs, select, option)
         return bool(cid is not None and self.functions and "tutor_trainer" in self.functions.tags(cid))
 
     def _deck_has_retreat_tool(self, board, need: int) -> bool:
-        """SOUND: a retreat-reduction Tool whose reduction covers ``need`` is PROVABLY still in my deck
-        (the match tracker's positive certainty, `Board.deck_definitely_has`) — never a probable fetch."""
+        """SOUND: a retreat-reduction Tool covering ``need`` is PROVABLY still in my deck
+        (`Board.deck_definitely_has`) — never a probable fetch."""
         if not self.stats:
             return False
         return any(st is not None and getattr(st, "retreatReduction", 0) >= need
@@ -278,15 +226,8 @@ class WinLineMixin:
     def _develop_wins(self, obs, board, opp, attacker_id, energy, body=None,
                       extra_type=None, extra_units: int = 0,
                       boost_amount: int = 0, boost_type=None, promote_bench_names=None) -> bool:
-        """SOUND: this attacker, carrying ``energy``, takes a min-bound affordable KO of the
-        opponent's Active AND that KO wins — it reaches my remaining prize count or their bench is
-        empty (no Pokémon to promote). The family's shared develop-tier win test: worst-coin damage
-        floors via ``bound="min"``, rider snipes deliberately under-counted (conservative).
-        ``body``/``extra_type``/``extra_units`` forward to the typed-affordability guard (an Energy
-        the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
-        {W}); budget beyond attached+extra stays wild (fail-open). ``boost_amount``/``boost_type``/
-        ``promote_bench_names`` forward the damage-boost rider (the `boost_lethal` tier: a typed
-        this-turn boost + a provably-benched `requiresBench` partner)."""
+        """SOUND: this attacker carrying ``energy`` takes a min-bound affordable KO that WINS — it
+        reaches my remaining prize count, or their bench is empty. Rider snipes are under-counted."""
         if not (self._prize_value(opp) >= board.my_prizes_remaining or not board.opp_bench):
             return False
         return self._best_affordable_ko_value(obs, board, opp, attacker_id, energy, bound="min",
@@ -296,15 +237,8 @@ class WinLineMixin:
                                               promote_bench_names=promote_bench_names) > 0
 
     def _attach_provision_codes(self, obs, select, board, option) -> tuple:
-        """The ``EnergyType`` UNIT codes this ATTACH provides the Active — one of its own colour for
-        a Basic Energy, CCC for a discard-burst (`discard_eot`, Ignition) onto an Evolution.
-        ``()`` when the card can't be resolved or provides no Energy.
-
-        CODES rather than a bare count since Issue #418, off the single seam
-        `CombatMath.provision_codes`: the develop-tier win test needs the COLOUR as well (an Energy
-        the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
-        {W}), and reading the count here and the colour at the call site is two readings of one
-        fact."""
+        """The ``EnergyType`` UNIT codes this ATTACH provides the Active; ``()`` when unresolvable.
+        CODES not a count, because the win test needs the COLOUR too (Issue #418)."""
         eid = self._option_card_id(obs, select, option)
         if eid is None:
             return ()
@@ -318,11 +252,8 @@ class WinLineMixin:
         return bool(cid is not None and self.functions and "gust" in self.functions.tags(cid))
 
     def _gust_win_target(self, obs, board, energy) -> bool:
-        """SOUND: some benched opponent body the gust drags Active is worth my remaining prize count
-        AND my Active (at ``energy``) takes a min-bound affordable KO of it — the ADR-0022 gust
-        lethal, generated (and locked) by the family rather than hook-scored. Dragging never empties
-        their board (the old Active benches), so only the prize-out shape wins here; Tera bench
-        immunity is irrelevant (the target is Active when hit)."""
+        """SOUND: some benched body the gust drags Active is worth my remaining prize count AND my
+        Active KOs it (ADR-0022). Dragging never empties their board, so only the prize-out wins."""
         ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
         for b in (self._opp_player(obs).get("bench") or []):
             if not b or self._prize_value(b) < board.my_prizes_remaining:
@@ -333,10 +264,8 @@ class WinLineMixin:
         return False
 
     def _tutor_energy_certain(self, board) -> bool:
-        """SOUND: my deck DEFINITELY still holds a reusable typed Energy a `tutor_energy` Supporter
-        can fetch — the deck tracker's positive certainty (`Board.deck_definitely_has`), never the
-        probabilistic estimate. Reusable mirrors `_has_reusable_energy`: an Energy card (hp 0, real
-        `energyType`) not tagged `discard_eot`."""
+        """SOUND: my deck DEFINITELY still holds a reusable typed Energy a `tutor_energy` Supporter can
+        fetch — positive certainty, never the probabilistic estimate. Reusable = not `discard_eot`."""
         if not self.stats:
             return False
         for cid in set(self.deck):
@@ -350,14 +279,12 @@ class WinLineMixin:
         return False
 
     def _attack_wins(self, obs, board, option, opp) -> bool:
-        """True iff taking this ATTACK wins the match THIS turn — its own KO(s) take my last prize, or
-        it empties the opponent's board. Per-attack and CONSERVATIVE (under-counts riders rather than
-        over): a false Lethal is the one catastrophic error, so soundness beats completeness. A
-        simultaneous double-KO is a draw, not a win (ADR-0022 #2), so it never wins here."""
+        """True iff taking this ATTACK wins THIS turn — its own KO(s) take my last prize, or it empties
+        their board. A simultaneous double-KO is a DRAW, not a win (ADR-0022), so it never wins here."""
         aid = option.get("attackId")
         hp = (opp or {}).get("hp", 0)
-        # Damage oracle (ADR-0032): ignore-flag attack (Nebula Beam) KOs through prevent_ex_damage wall old
-        # path zeroed. bound="min" = sound FLOOR: coin/conditional contributes worst case, never locks phantom Lethal.
+        # bound="min" is the sound FLOOR: a coin/conditional contributes its worst case, so a phantom
+        # Lethal can never lock.
         dmg = self.predicted_damage(self._my_active_id(obs), aid, opp, bound="min",
                                     context=self._damage_context(obs))
         active_ko = bool(hp and dmg >= hp)
@@ -370,31 +297,21 @@ class WinLineMixin:
         return active_ko and not board.opp_bench       # KO leaves them no Pokémon to promote
 
     def _win_lock_store(self, obs, recorded) -> None:
-        """Materialize a VERIFIED win line's confirmed cascade as the turn-scoped locked line
-        (ADR-0037 stage 3, `lethal_veto`): the engine-driven selects, each an entry
-        ``{ctx, max, drive, chosen}`` where ``chosen`` is the picked options' identity tuples and
-        ``drive`` marks a hidden-zone pick (prize) the replay must policy-drive. Only a verified
-        lock ever stores one — a None-verdict lock has no confirmed cascade to replay."""
+        """Materialize a VERIFIED win line's confirmed cascade as the turn-scoped locked line: entries
+        ``{ctx, max, drive, chosen}``. Only a verified lock ever stores one (ADR-0037 stage 3)."""
         self._locked_line = {"turn": (obs.get("current") or {}).get("turn"),
                              "queue": list(recorded)}
 
     def _option_identity(self, obs, select, option) -> tuple:
-        """The live-matchable identity of one select option — type + attack + resolved card +
-        in-play target + owner. Deliberately EXCLUDES the option's menu index (the replay's whole
-        point is index-independence); a visible-zone card resolves by id, so a sim pick maps onto
-        the live menu wherever it sits."""
+        """The live-matchable identity of one select option. Deliberately EXCLUDES the menu index —
+        the replay's whole point is index-independence."""
         return (option.get("type"), option.get("attackId"),
                 self._option_card_id(obs, select, option),
                 option.get("inPlayArea"), option.get("inPlayIndex"), option.get("playerIndex"))
 
     def replay_locked_line(self, obs, select):
-        """The locked line's next step, replayed against the live select (ADR-0037 stage 3), as
-        ``(chosen, TurnLine)`` — or None when there is nothing to replay: veto off, no lock, the
-        lock expired (a new turn — natural, silent), the entry is a hidden-zone pick (policy-drives
-        it, entry consumed, lock kept), the queue ran dry, or ANY identity failed to match — the
-        mismatch path also clears the lock and raises the sparse ``lethal_lost`` flag
-        (`_lethal_lost`, telemetry) so a live sim-vs-reality divergence is countable. Never a blind
-        index: every replayed pick is identity-resolved on the LIVE menu."""
+        """The locked line's next step replayed against the live select, as ``(chosen, TurnLine)``, or
+        None. Never a blind index: every replayed pick is identity-resolved on the LIVE menu."""
         if not self._planning:                         # mirror the refute counter's reentry guard:
             self._lethal_lost = False                  # an in-sim decide must never clobber the
         lock = self._locked_line                       # outer decision's loss flag
@@ -429,15 +346,8 @@ class WinLineMixin:
                                  rationale="lethal (replay): executing the verified line"))
 
     def _exact_own_zones(self, obs, me):
-        """(ADR-0050) The EXACT ``(your_deck, your_prize)`` predictions for ``search_begin`` — flat
-        card-id lists — from the deck tracker's anchored split: ``your_deck`` = decklist − visible −
-        prizes (``_deck_known_counts``), ``your_prize`` = ``obs['own_prizes']``. ``(None, None)`` when
-        the prizes are not yet anchored (no ``own_prizes``, or the tracker can't resolve them), so the
-        caller keeps the sound decklist-prefix fallback.
-
-        NEVER seeds the deck+prize POOL into the deck half: over-counting a prized copy into the deck
-        is exactly what could let the engine fetch a card that is really all prized and false-confirm
-        a phantom win (the one catastrophic Solver error). The split is the soundness."""
+        """The EXACT ``(your_deck, your_prize)`` for ``search_begin`` (ADR-0050), else ``(None, None)``.
+        NEVER seed the deck+prize POOL into the deck half: the engine would fetch a fully-prized copy."""
         own = (obs or {}).get("own_prizes")
         if not own:
             return None, None
@@ -450,18 +360,8 @@ class WinLineMixin:
         return your_deck, your_prize
 
     def _seed_zones(self, obs, me, opp):
-        """(ADR-0050) The hidden-zone predictions for ``search_begin``:
-        ``(your_deck, your_prize, opp_deck, opp_prize, opp_hand)``.
-
-        MY deck/prize use the EXACT anchored split (``_exact_own_zones``) when ``lethal_seed_exact`` is
-        on and the tracker has anchored; else a decklist prefix — the sound fallback, because only
-        non-fetch lines (whose verdict is deck-independent) reach the search unanchored (the fetch
-        tiers gate on ``deck_definitely_has``, which needs the anchor). The prefix is what
-        false-refuted the high-id enabler band before this fix (`deck.csv` is id-sorted).
-
-        Opponent zones stay a my-deck prefix: a this-turn lethal ends before the opponent acts
-        (`_engine_confirms_win` refutes the moment control passes to them), so their hidden content
-        cannot change the verdict — only the count must satisfy ``search_begin``."""
+        """The hidden-zone predictions for ``search_begin`` (ADR-0050): ``(your_deck, your_prize,
+        opp_deck, opp_prize, opp_hand)``. Opponent zones are a my-deck prefix — only the count matters."""
         deck = list(self.deck)
 
         def take(n):
@@ -476,49 +376,8 @@ class WinLineMixin:
                 take(len(opp.get("prize") or [])), take(opp.get("handCount", 0)))
 
     def _engine_confirms_win(self, obs, line_steps, max_cascade: int = 12, record=None):
-        """Tier-1 (ADR-0030): forward-simulate ``line_steps`` — a list of per-select index lists, the
-        exact moves of a candidate win line — through the engine's OWN search and report whether IT
-        declares me the winner. The grading engine, not my closed-form math, is the authority, so it
-        also resolves what closed-form is blind to (abilities, status, Tera, evolution/turn-1 timing).
-
-        Distinct from `_simulate_line` by design: THIS is the sound regime (``manual_coin=True``,
-        drives to the engine's VERDICT); that is the heuristic ranker (coins auto-resolve, reads the
-        end-of-turn BOARD). A winning attack does not flip ``result`` at the attack step: the engine
-        first opens MY cascade selects (take the prize(s), pick a snipe/Damage target, pay a cost),
-        so after the line's own steps the search keeps driving MY selects through the policy
-        (``decide``, under the ``_planning`` guard so nothing nests or pollutes) until the engine
-        reaches a verdict — measured live: the prize-take TO_HAND select is what every real win
-        parks on.
-
-        Sound and fail-safe:
-          * ``manual_coin=True`` so a coin the line doesn't account for surfaces as a COIN_HEAD
-            select → **None** rather than trust a chosen flip (never let the policy pick heads).
-          * a cascade that DREW off the shuffled deck can only be confirmed as far as that draw:
-            a ``True`` there is demoted to **None** (#178). Same rule as the coin, through the door
-            the coin rule left open — `_seed_zones` seeds the hidden zones with a predicted MULTISET
-            whose ORDER is our guess, so a win that needed a specific card off it is not a guaranteed
-            win in the real game, whatever the sim did. Asymmetric on purpose:
-            **False is left alone.** A refute is the conservative direction (it drops a candidate and
-            costs at most a turn), while demoting refutes to None would let phantom locks through —
-            the one catastrophic error. Measured on ml f24 (2026-07-27): its `[correct]`-only
-            cascade shuffles its hand back in mid-line and then draws ELEVEN cards off the reshuffled
-            deck — every one of them AFTER that shuffle, which is the part the engine does not
-            reproduce — and its verdict came back False on most runs and True on some, which is what
-            made two suite tests flake through the same frame.
-          * the select passing to the OPPONENT with no verdict = the win did not materialize before
-            they act → False (a real refute: our win-shapes need no opponent action).
-          * an exhausted cascade cap is **None** (undetermined never refutes); so is an unavailable
-            search (lib-free suite), a missing ``search_begin_input``, or any error — the caller
-            then keeps its sound closed-form verdict.
-        The hidden-zone predictions are filled from my own deck list; the cascade's prize picks
-        reveal predicted cards but the ``result`` verdict is invariant to WHICH prize is taken (so a
-        prize take alone never demotes — `_rng_probe(prize=False)`).
-        Lazy DLL import keeps the fast unit suite from ever loading the native engine.
-
-        ``record`` (a list, ADR-0037 stage 3): materialize each cascade select this drive answers as
-        ``{ctx, max, drive, chosen}`` — the picked options' identity tuples, ``drive``=True for an
-        all-hidden-zone pick (prize area: the sim's ids are predictions, replay must policy-drive) —
-        the confirmed-cascade record a verified lock replays (`lethal_veto`)."""
+        """Forward-simulate ``line_steps`` through the engine's OWN search and report ITS verdict
+        (ADR-0030). Asymmetric: a True that rode RANDOMNESS demotes to None, a False is left alone."""
         if not (obs or {}).get("search_begin_input") or not line_steps:
             return None
         try:
@@ -534,12 +393,9 @@ class WinLineMixin:
         yd, yp, od, op_, oh = self._seed_zones(obs, me, opp)   # ADR-0050: exact own split when anchored
 
         was_planning = self._planning
-        self._planning = True                          # the cascade re-runs decide(): never nest a
-        # This-turn boosts PLAYED inside the cascade (the sim's own Premium Power Pro plays) must be
-        # priced by the boost tracker so a later step's decide() sees the running total (a multi-copy
-        # boost line, ml f24). observe() is skipped under `_planning` for the REAL stream, so drive the
-        # tracker explicitly from the sim's obs here — snapshot + restore so the match state a real
-        # decision resumes on is untouched (the sim's future never leaks into the live tracker).
+        self._planning = True                          # the cascade re-runs decide(): never nest
+        # `observe()` is skipped under `_planning`, so drive the boost tracker from the sim's obs here
+        # — snapshot + restore, so the sim's own boost plays never leak into the live match state.
         boost_snap = {k: list(v) for k, v in self._turn_boosts._by_side.items()}
         boost_turn_snap = self._turn_boosts._last_turn
         try:                                           # search, never verify inside a verify

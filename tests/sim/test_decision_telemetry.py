@@ -1,8 +1,7 @@
 """Decision Telemetry: the agent emits its per-decision trace to stderr (ADR-0019).
 
-System test — runs the fixture agent in a real `cabt` match and reads the telemetry back off
-the episode's agent log (the same `{duration, stdout, stderr}` structure you download from
-Kaggle), so we verify the *collected* data end-to-end, not an imagined shape.
+System test — a real `cabt` match, read back off the episode agent log, so the shape verified is
+the one Kaggle actually collects.
 """
 from pathlib import Path
 
@@ -15,17 +14,8 @@ FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 
 
 def _stderr_telemetry(env) -> list[dict]:
-    """Every `@T` telemetry record our agent wrote to stderr across the match.
-
-    Delegates to the same `parse_records` the real collection tooling (`/blunder-buster`,
-    `tools/submit/collect.py`) uses on downloaded Kaggle logs, rather than re-parsing `@T` lines
-    by hand: `kaggle_environments` hard-truncates each decision's captured stderr at
-    `maxLogLength` (default 10,000 chars — `Agent.act`), so a rare, unusually large decision
-    (many legal options) can truncate an `@T` line mid-JSON. `parse_records` already treats that
-    as an expected artifact of the `{duration, stdout, stderr}` capture path and skips the bad
-    line rather than raising — a hand-rolled parser here that doesn't do the same went flaky on
-    exactly that (issue #180).
-    """
+    """`parse_records`, not a hand-rolled `@T` parser: `kaggle_environments` truncates stderr at
+    `maxLogLength`, so a big decision can cut an `@T` line mid-JSON (Issue #180)."""
     from train.blunder.telemetry_log import parse_records
 
     return parse_records(env.logs or [])
@@ -42,13 +32,11 @@ def test_agent_emits_decision_telemetry_to_stderr_in_a_real_match():
     recs = _stderr_telemetry(env)
     assert recs, "agent must emit @T decision telemetry to stderr"
     rec = recs[0]
-    assert "chosen" in rec and "opts" in rec                 # choice + every legal option
-    assert all("score" in o for o in rec["opts"])            # each option carries its score
-    assert any(o.get("fired") for o in recs[-1]["opts"]) or any(  # hypotheses fired somewhere
+    assert "chosen" in rec and "opts" in rec
+    assert all("score" in o for o in rec["opts"])
+    assert any(o.get("fired") for o in recs[-1]["opts"]) or any(
         o.get("fired") for r in recs for o in r["opts"])
 
-    # ADR-0041: the shipped agent wires a Scout, so each decision's @T record carries its opponent
-    # POSTURE (who it thinks it faces) -> every Correction's live_trace records the matchup.
     postures = [r["posture"] for r in recs if "posture" in r]
     assert postures, "agent must emit its opponent posture to stderr (ADR-0041)"
     assert all({"cands", "gamma", "brief"} <= set(p) for p in postures)

@@ -1,61 +1,16 @@
-"""**POC-A2 (Issue #269)** — the apply-seam coverage census, as a re-runnable measurement.
+"""POC-A2 (Issue #269) — the apply-seam coverage census, as a re-runnable measurement.
 
-Answers *what fraction of the real card pool does `common/apply_option.py` actually reach?* by
-resolving every **effect site** in the pool to one of Issue #259 §3b's three fates — MODELLED /
-ENGINE-RESOLVED / REFUSED — and weighting the answer by exposure rather than by card count alone.
+Resolves every effect SITE in the card pool — one (card, option kind, effect) triple — to one of
+MODELLED / ENGINE-RESOLVED / REFUSED and weights the answer by exposure. Writes the data
+sections of `docs/plans/apply-seam-coverage.md`; the verdict prose is authored there.
 
-Writes `docs/plans/apply-seam-coverage.md`'s data sections. The prose verdict is authored in that
-report; this module owns every number in it, so a re-run after a compendium build regenerates the
-tables rather than leaving the report to rot.
-
-## What an "effect site" is, and why the unit is not the card
-
-A card is not one decision. *Buddy-Buddy Poffin* is one `_PLAY`; *Drakloak* is a `_EVOLVE` **and** an
-`_ABILITY`, and its attack is a turn-ender the seam never transitions at all. So the unit here is the
-**site**: one (card, option kind, effect) triple that the apply-seam will be asked to price. Sites,
-not cards, are what the composer's 1-ply ordering actually visits.
-
-Sites are derived structurally, never from a card's name:
-
-* Basic Energy / Pokémon Tool → one `_ATTACH`. Special Energy → `_ATTACH` **with** an effect.
-* Item / Supporter / Stadium → one `_PLAY` with an effect.
-* Basic Pokémon → one `_PLAY` (deploy); Stage 1/2 → one `_EVOLVE`. Structural unless the card carries
-  an on-play / on-evolve triggered Ability, which rides that same option.
-* Each **activated** Ability ("Once during your turn…", "As often as you like…") → one `_ABILITY`.
-  Passive and checkup-triggered Abilities pose no option and are counted separately.
-* Attacks are TERMINAL (`docs/rules.md` §3): no successor state, so no fate. Counted, never scored.
-
-## Sources — all at-source, none from memory (CLAUDE.md)
-
-* Card facts and **effect text**: `tools/meta_tracker/cards.json`, the portable dump of the engine's
-  own `all_card_data()` (`tools/meta_tracker/dump_cards.py`). The engine is the authority; the CSV
-  `data/EN_Card_Data.csv` is NOT usable here because it carries one attack per card and **no Ability
-  text at all**, and Abilities are exactly what the ENGINE-RESOLVED fate is about.
-* Effect Clauses: `src/common/card_effects.json` (ADR-0032), through `common.effects.CardEffects`.
-* Fates, kind table and clause write-sets: `common.apply_option` / `common.snapshot_coverage`
-  themselves — imported, never re-spelled, so the census cannot drift from the seam it measures.
-* Our decks: `src/agents/*/deck.csv`. The opponent pool: the scouting artifact's per-archetype
-  `representative_build`, weighted by the artifact's own meta `priors`.
-
-## The one judgement call in this report, and why it does not live here
-
-Whether a card's Effect Clauses cover its **whole** printed effect is not mechanically decidable —
-`Surfer` carries a `draw` clause and the printed card also switches the Active, and no parser reads
-that. It is a hand ruling, one per clause-bearing card, each quoting the leg the clauses miss, and it
-is the report's highest-value column. A PARTIAL clause set used to be **worse than none**, because
-§3b resolved it to MODELLED and the omitted leg then priced at exactly 0 — the §3c failure, silently.
-Issue #299 wired the verdict into `fate` as `clauses_cover`, so a partial set now refuses; the column
-survives because it still names the WORK, and because the seam reads the same store to decide it.
-
-The ruling was a table in THIS file until Issue #300 moved it into the compendium
-(`card_effects.json`'s `_covers` block, authored in `effect_overrides.json`), where the apply seam
-itself reads it. This module now reads the same store: **the census is a report, the compendium is
-the truth**, and a report carrying its own private copy of the fact it reports on is the second
-loader ADR-0087 charges for — it would drift, and both sides of the diff would share the drift.
+Sources are read at-source: `tools/meta_tracker/cards.json` (the engine's own `all_card_data()`;
+the CSV carries no Ability text), `src/common/card_effects.json`, and `common.apply_option` /
+`common.snapshot_coverage` themselves. The clause-completeness ruling lives in the compendium's
+`_covers` block, which the seam reads too — the census is a report, the compendium is the truth.
 
 Usage:
-    python tools/apply_seam_coverage.py [--out PATH] [--json PATH]
-"""
+    python tools/apply_seam_coverage.py [--out PATH] [--json PATH]"""
 from __future__ import annotations
 
 import argparse
@@ -83,33 +38,18 @@ ARTIFACT_JSON = _ROOT / "src" / "common" / "scouting" / "artifact.json"
 AGENTS_DIR = _ROOT / "src" / "agents"
 DEFAULT_OUT = _ROOT / "docs" / "plans" / "apply-seam-coverage.md"
 
-#: The generated block is spliced BETWEEN these markers, so the report's authored verdict prose and
-#: its measured numbers live in one committed file and a re-run refreshes the numbers without
-#: touching a word of the prose. A report whose data sat in a second file would drift from it.
+#: The generated block is spliced BETWEEN these markers, so a re-run refreshes the numbers
+#: without touching a word of the report's authored prose.
 BEGIN = "<!-- BEGIN GENERATED: tools/apply_seam_coverage.py -->"
 END = "<!-- END GENERATED -->"
 
 # ── report classes ────────────────────────────────────────────────────────────────────────────────
-# The three FATES are `seam.FATES`, imported rather than re-spelled. These four classes are the
-# report's own taxonomy on top of them: they partition the sites, and they split MODELLED by whether
-# the clause set is COMPLETE, because that split is what the fate alone cannot show.
+# The FATES are `seam.FATES`, imported. These classes split MODELLED by clause completeness.
 
 #: MODELLED, and the Effect Clauses cover the whole printed effect.
 FULL = "modelled-full"
-#: The clauses cover only PART of the printed effect.
-#:
-#: This used to mean *"MODELLED as far as §3b is concerned"* — the seam had no `clauses_cover` gate,
-#: so a partial set priced as a complete one and the uncovered leg differenced to exactly 0. Issue
-#: #300 declared the verdict and **Issue #299 wired it**: a partial set now reaches `fate` as
-#: `clauses_cover=False`, which fails closed, so these sites are REFUSED (or engine-route candidates)
-#: rather than MODELLED. The class survives the ruling because it names WORK — complete the clause
-#: set — that is distinct from "no compendium entry at all". The WIRE VALUE survives unrenamed for
-#: the same reason `apply_option.ENGINE_ROUTE_KINDS` does: it is the report's stable row identity,
-#: printed in four committed tables, in the `### MODELLED-PARTIAL` heading `_partial_rows` splits on,
-#: and quoted by three queued sibling issues (Issue #302 / #303 / #304). Renaming it silently would
-#: move all of those; the honest alternative taken here is to say plainly, at the definition and
-#: directly under the heading, that these no longer resolve to MODELLED — and to print each row's
-#: actual `fate` beside it so no reader has to infer it from the label.
+#: The clauses cover only PART of the printed effect. Since Issue #299 such a set reaches `fate`
+#: as `clauses_cover=False` and fails closed, so it is REFUSED; the class survives to name WORK.
 PARTIAL = "modelled-partial"
 
 #: REFUSED causes, per the issue's grouping. Each has a different fix, which is the whole point of
@@ -120,11 +60,7 @@ OPP_HIDDEN = "opponent hidden zone"    # (b') their hand / deck / prizes — sam
 NONDET = "not provably deterministic"  # (c) the engine route's fail-closed gate
 
 # ── text markers ──────────────────────────────────────────────────────────────────────────────────
-# Fail-CLOSED by construction (ADR-0067's yield convention): these decide only that an effect
-# CANNOT be proved deterministic. Absence of a marker is never itself a proof — it makes a site an
-# ENGINE-RESOLVED *candidate*, and the report says so rather than claiming the proof.
-#
-# Apostrophes in the engine's text are U+2019, so every pattern that would span one uses `.`.
+# Fail-CLOSED. Apostrophes in the engine's text are U+2019, so a pattern spanning one uses `.`.
 
 _RNG_OR_HIDDEN = tuple(re.compile(p, re.I) for p in (
     r"\bshuffle",                       # deck ORDER — `snapshot_coverage`'s one HIDDEN zone
@@ -148,19 +84,8 @@ _OPPONENT_HIDDEN = tuple(re.compile(p, re.I) for p in (
     r"opponent.s deck", r"opponent.s Prize",
 ))
 
-#: **Effect families**, in resolution order, and whether the *existing* Effect-Clause vocabulary
-#: (`snapshot_coverage.CLAUSE_WRITES`, 33 keys today — accel / coin / draw / energy_provide /
-#: energy_recur / fetch / heal among them) can already express the family.
-#:
-#: This is what turns "91 sites are a clause-vocabulary gap" into a schedulable number: a gap in an
-#: EXPRESSIBLE family is a compendium ENTRY — the builder already knows the shape — while a gap in a
-#: NEW-VOCABULARY family needs a clause kind, a write-set in `CLAUSE_WRITES`, and a transition in
-#: T4. The two cost wildly different amounts, so the report must not report them as one pile.
-#:
-#: Ordered because cards compose: *Surfer* switches AND draws, and the switch is why it is played, so
-#: the switch family must match first. Order therefore runs new-vocabulary families ahead of the
-#: expressible ones — the honest direction, since a card is only fully expressible if NO leg of it
-#: needs new vocabulary.
+#: Effect families, in resolution order, and whether the EXISTING clause vocabulary can express
+#: each. Ordered because cards compose: new-vocabulary families run ahead of expressible ones.
 _FAMILIES: tuple[tuple[str, bool, object], ...] = (
     ("gust — pull a benched opponent body Active", False,
      re.compile(r"switch in 1 of your opponent.s benched", re.I)),
@@ -193,26 +118,21 @@ _FAMILIES: tuple[tuple[str, bool, object], ...] = (
     ("draw", True, re.compile(r"\bdraw\b", re.I)),
 )
 
-#: An Ability the player ACTIVATES — it appears on the MAIN menu as an `_ABILITY` option. Both
-#: Abilities ever observed in the 372-frame corpus (Drakloak's Recon Directive, Lunatone's Lunar
-#: Cycle) match the first pattern.
+#: An Ability the player ACTIVATES — it appears on the MAIN menu as an `_ABILITY` option.
 _ACTIVATED = tuple(re.compile(p, re.I) for p in (
     r"once during your turn", r"as often as you like during your turn",
     r"during your turn, you may", r"once during your first turn",
 ))
 
-#: An Ability that rides the `_PLAY` / `_EVOLVE` option instead of posing its own — its effect is
-#: part of that option's transition, so it is what makes an otherwise-structural deploy or evolve
-#: carry a card effect.
+#: An Ability that RIDES the `_PLAY` / `_EVOLVE` option instead of posing its own.
 _ON_PLAY = re.compile(r"when you play this Pok.mon from your hand", re.I)
 _ON_EVOLVE = re.compile(r"from your hand to evolve", re.I)
 
 
 # ── the clause-coverage ruling, read from the compendium ──────────────────────────────────────────
 
-#: The compendium's verdict vocabulary -> this report's MODELLED split. One map rather than a
-#: cascade, keyed off `snapshot_coverage`'s own constants so a third verdict cannot be silently
-#: dropped on the floor here — it simply has no report class, and :func:`validate` says so.
+#: The compendium's verdict vocabulary -> this report's MODELLED split, keyed off
+#: `snapshot_coverage`'s constants so a third verdict has no class rather than being dropped.
 _VERDICT_CLASS: dict[str, str] = {
     snapshot_coverage.COVERS_FULL: FULL,
     snapshot_coverage.COVERS_PARTIAL: PARTIAL,
@@ -220,12 +140,8 @@ _VERDICT_CLASS: dict[str, str] = {
 
 
 def _covers_class(entry) -> tuple[str, str] | None:
-    """One card's compendium verdict as ``(report class, what the clauses carry or miss)``.
-
-    `None` when the card carries no verdict at all — which :func:`validate` refuses to run on rather
-    than defaulting either way, because defaulting would fabricate the report's most important
-    column. The verdict itself lives in `card_effects.json`; see this module's header for why it is
-    not duplicated here."""
+    """One card's compendium verdict as ``(report class, what the clauses carry or miss)``. `None` when
+    the card carries no verdict at all, which :func:`validate` refuses to run on."""
     report_class = _VERDICT_CLASS.get((entry or {}).get("covers"))
     if report_class is None:
         return None
@@ -259,11 +175,8 @@ def load_our_decks(agents_dir: Path = AGENTS_DIR) -> dict[str, collections.Count
 
 def load_opponent_builds(path: Path = ARTIFACT_JSON) -> tuple[dict[str, collections.Counter],
                                                               dict[str, float]]:
-    """``({archetype: Counter}, {archetype: meta prior})`` from the scouting artifact.
-
-    The prior is the artifact's own recency-weighted meta share, so opponent exposure can be
-    expressed as *copies in the average deck we will actually face* rather than as an unweighted sum
-    over 122 archetypes most of which are noise."""
+    """``({archetype: Counter}, {archetype: meta prior})`` from the scouting artifact. The prior is the
+    artifact's own recency-weighted meta share, so mostly-noise archetypes cannot outvote the field."""
     art = json.loads(path.read_text(encoding="utf-8"))
     builds, priors = {}, {}
     for name, dossier in art["dossiers"].items():
@@ -303,21 +216,7 @@ class Site:
 
 def _ability_mode(text: str) -> str:
     """``activated`` (poses an `_ABILITY` option) / ``on_play`` / ``on_evolve`` (rides that option) /
-    ``passive`` (poses no option at all).
-
-    Order matters: Noctowl's Jewel Seeker opens *"Once during your turn, when you play this Pokemon
-    from your hand to evolve…"*, and it is the on-evolve trigger that decides where the effect lands,
-    not the once-per-turn cap.
-
-    That a rider RIDES is measured, not assumed (**Issue #305**, the report's AMBIGUOUS #3). The
-    engine resolves a triggered Ability inside the `_PLAY` / `_EVOLVE` that played the card — a
-    `SelectType.YES_NO` / `SelectContext.ACTIVATE` gate naming the card in `contextCard`, then the
-    effect's own selects, then MAIN — and poses **no** `OptionType.ABILITY` at any point, including
-    on later menus after the gate was DECLINED. Evidence:
-    `tests/fixtures/triggered_ability_selects.json` (captured by
-    `tools/meta_tracker/probe_triggered_ability.py`), re-driven against the live engine every run by
-    `tests/strategy/test_triggered_ability_shape.py`. So these sites stay `_PLAY` / `_EVOLVE` and are
-    NOT engine-route eligible under the current kind table."""
+    ``passive``. Order matters, and that a rider RIDES is measured, not assumed (Issue #305)."""
     if _ON_EVOLVE.search(text):
         return "on_evolve"
     if _ON_PLAY.search(text):
@@ -328,16 +227,8 @@ def _ability_mode(text: str) -> str:
 
 
 def _clauses_for(clauses: list[dict], where: str) -> list[dict]:
-    """The subset of a card's clauses belonging to one site.
-
-    Routed by the clause's own ``trigger``: `on_evolve` / `on_bench_play` ride the evolve and deploy
-    options, `on_attack` belongs to a TERMINAL attack and is no site's, and an untriggered clause on
-    a Pokemon is its activated Ability's.
-
-    `on_attach` (Issue #301, Telepath Psychic Energy) needs no branch and deliberately has none: the
-    only cards that can carry it are Special Energy, whose sole site IS the `_ATTACH` this function
-    is asked for under ``where="activated"``. Giving it a branch would mean inventing a fourth home
-    for a trigger that already lands on the one option it can ride."""
+    """The subset of a card's clauses belonging to one site, routed by the clause's own ``trigger``.
+    `on_attach` needs no branch: only Special Energy carries it, and its sole site IS the `_ATTACH`."""
     def home(c: dict) -> str:
         trigger = c.get("trigger")
         if trigger == "on_evolve":
@@ -367,9 +258,8 @@ def sites_for(card_id: int, card: dict, clauses: list[dict]) -> tuple[list[Site]
         mk(_ATTACH, "attach", _text(card), _clauses_for(clauses, "activated"))
         return out, aside
     if cat == "tool":
-        # Attaching a Tool writes `attached_tools` (homed) and nothing else; the Tool's ongoing
-        # effect is a STATIC modifier the stat provider parses (hpBonus / retreatReduction /
-        # damageBoost) and `state_value` reads off the body, never a transition this seam applies.
+        # A Tool's ongoing effect is a STATIC modifier the stat provider parses (hpBonus /
+        # retreatReduction / damageBoost), never a transition this seam applies.
         mk(_ATTACH, "attach", "", [])
         return out, aside
     if cat in ("item", "supporter", "stadium"):
@@ -409,11 +299,8 @@ def _hits(text: str, patterns) -> bool:
 
 
 def family(site: "Site") -> tuple[str, bool]:
-    """``(effect family, is it expressible in the EXISTING clause vocabulary?)``.
-
-    Falls back on the card's own category rather than on a catch-all, so a Stadium whose text matches
-    no family reads as *Stadium static board modifier* — which is the truthful answer, and a
-    new-vocabulary one — instead of vanishing into "other"."""
+    """``(effect family, is it expressible in the EXISTING clause vocabulary?)``. Falls back on the
+    card's category rather than a catch-all, so an unmatched Stadium reads truthfully."""
     for name, expressible, pattern in _FAMILIES:
         if pattern.search(site.text or ""):
             return name, expressible
@@ -425,17 +312,8 @@ def family(site: "Site") -> tuple[str, bool]:
 
 
 def refusal_cause(text: str, *, rng_refuses: bool) -> str:
-    """The cause a refusal on ``text`` should carry, or ``""`` when nothing in it refuses.
-
-    One cascade, called from both refusal branches of :func:`resolve`, so the two can never drift on
-    what counts as opponent choice. ``rng_refuses`` is the one real difference between them: the
-    ENGINE-RESOLVED gate is a determinism PROOF and any RNG marker defeats it, while a closed-form
-    transition on a MODELLED kind prices the shuffle as a `deck_odds` distribution and is untroubled
-    by it.
-
-    Order is a precedence: opponent JUDGEMENT outranks opponent HIDDEN state (a card that reads
-    their hand *and* lets them choose is refused for the choice, the harder unknown), and both
-    outrank mere RNG."""
+    """The cause a refusal on ``text`` should carry, or empty when nothing in it refuses. Order is a
+    precedence: opponent JUDGEMENT outranks opponent HIDDEN state, and both outrank mere RNG."""
     if _hits(text, _OPPONENT_CHOICE):
         return OPP_CHOICE
     if _hits(text, _OPPONENT_HIDDEN):
@@ -445,26 +323,14 @@ def refusal_cause(text: str, *, rng_refuses: bool) -> str:
     return ""
 
 
-#: Stands in for a live `_search_api` when this census asks the seam for a fate. The census measures
-#: *"which fate would this option reach if the caller wired an engine and could prove determinism?"*,
-#: which is why ENGINE-RESOLVED here is an upper bound — see the report's Method section.
+#: Stands in for a live `_search_api`. ENGINE-RESOLVED here is an UPPER BOUND: the census asks
+#: which fate an option would reach if the caller wired an engine and could prove determinism.
 _ENGINE_SEAM = object()
 
 
 def clauses_cover(site: Site, covers: dict[int, dict]) -> bool | None:
-    """The tri-state `apply_option.fate` takes for ``clauses_cover``, for one site.
-
-    This is the one place the census **extends** the seam rather than mirroring it, and the extension
-    is the per-OPTION judgement `fate` explicitly leaves to its caller: `None` from
-    `CardEffects.clauses_cover` means *absence of a compendium entry*, which covers both **"this
-    option has no printed effect at all"** (structural — a vanilla Basic's deploy, a Basic Energy
-    attach) and **"this card HAS an effect and nothing models it"**. Those two must not resolve alike:
-    the first is MODELLED by construction, the second is precisely the coverage gap this report
-    exists to count. The census can tell them apart because it holds the card's effect text, so it
-    answers `None` only for the structural case and `False` for the uncovered one.
-
-    `True` / `False` for a card that IS ruled come straight from the compendium's `_covers` verdict —
-    one store (see this module's header), never a second copy of the ruling."""
+    """The tri-state `apply_option.fate` takes for ``clauses_cover``, for one site — the one place the
+    census EXTENDS the seam: `None` for a structural site, `False` for an effect nothing models."""
     if not site.has_effect:
         return None
     judged = _covers_class(covers.get(site.card_id)) if site.clauses else None
@@ -474,26 +340,8 @@ def clauses_cover(site: Site, covers: dict[int, dict]) -> bool | None:
 
 
 def resolve(site: Site, covers: dict[int, dict]) -> Site:
-    """Resolve one site to a §3b fate plus a reported class and, when refused, a cause.
-
-    **Calls `apply_option.fate` rather than re-deriving it** (Issue #299). It could not before: the
-    fate was a kind-table lookup plus an engine gate on two inputs nothing produces today, so a
-    literal call answered REFUSED for every engine-route option and the census had to mirror the
-    logic by hand. Now that `fate` takes the per-option `clauses_cover`, the census supplies the two
-    judgements it is entitled to make and asks the seam for the answer — so the two cannot drift, and
-    the report cannot claim a fate the seam would not return.
-
-    The two supplied judgements, both fail-CLOSED (ADR-0067's yield convention):
-
-    * ``clauses_cover`` — :func:`clauses_cover` above.
-    * ``deterministic`` — judged from the printed text: any shuffle, deck read, coin, reveal, prize
-      or opponent-judgement marker means *not proved*. **Absence of a marker is not a proof**, which
-      is why ENGINE-RESOLVED in this report means *eligible and candidate-deterministic* — an upper
-      bound, and every table that carries it says so.
-
-    ``covers`` is the compendium's own verdict block (:func:`load_covers`) — passed in rather than
-    read here, so this stays pure and the report cannot consult a different store than the seam.
-    """
+    """Resolve one site to a §3b fate plus a reported class and, when refused, a cause. Calls
+    `apply_option.fate` rather than re-deriving it (Issue #299); both judgements fail CLOSED."""
     how = seam.coverage(site.kind)
     judged = _covers_class(covers.get(site.card_id)) if site.clauses else None
     blocked = refusal_cause(site.text, rng_refuses=True)
@@ -507,21 +355,16 @@ def resolve(site: Site, covers: dict[int, dict]) -> Site:
             "structural: the transition is the same shape for every card of the kind")
         return site
 
-    # A PARTIAL clause set keeps its own report row whatever fate it now reaches. The fate moved in
-    # Issue #299 — a partial set is `clauses_cover=False`, so it no longer prices as a complete one —
-    # but the WORK it names did not: complete the clauses. Reporting it as an undifferentiated
-    # refusal would merge it with cards that have no compendium entry at all, and those are a
-    # different backlog. The `fate` column beside it carries where it actually landed.
+    # A PARTIAL clause set keeps its own report row whatever fate it reaches: the WORK it names —
+    # complete the clauses — is a different backlog from a card with no compendium entry at all.
     partial = bool(judged) and judged[0] == PARTIAL
     site.report_class = PARTIAL if partial else site.fate
     if partial:
         site.note = judged[1]
 
     if site.fate == seam.REFUSED:
-        # RNG counts against the ENGINE route (a determinism PROOF) but NOT against a closed-form
-        # transition on a MODELLED kind, where a shuffle prices as a `deck_odds` distribution and §3
-        # already says a search-reveal returns an `Expectation`. So the same text is a vocabulary gap
-        # on `_PLAY` and a structural nondeterminism refusal on `_ABILITY`.
+        # RNG counts against the ENGINE route (a determinism PROOF) but not against a closed-form
+        # transition on a MODELLED kind, where a shuffle prices as a `deck_odds` distribution.
         site.cause = refusal_cause(site.text, rng_refuses=how != seam.MODELLED) or GAP
     return site
 
@@ -529,16 +372,12 @@ def resolve(site: Site, covers: dict[int, dict]) -> Site:
 # ── Tool static-effect readback ──────────────────────────────────────────────────────────────────
 
 class _SkillShim:
-    """The `.skills` duck-type the stat-provider parsers read, over a `cards.json` record.
-
-    The parsers take the engine's `CardData`; `cards.json` IS that data, dumped. Shimming it keeps
-    the Tool measurement on the SAME parsers the Pilot ships, so this report cannot claim a Tool is
-    readable that the agent then cannot read."""
+    """The `.skills` duck-type the stat-provider parsers read, over a `cards.json` record, so the Tool
+    measurement runs on the SAME parsers the Pilot ships."""
 
     class _Skill:
-        # An OBJECT with `.text`, not a dict: `parse_card_damage_boost` reads the attribute
-        # directly while the Tool parsers accept either, and a dict would silently score every
-        # Tool's damage boost as 0.
+        # An OBJECT with `.text`, not a dict: `parse_card_damage_boost` reads the attribute directly,
+        # and a dict would silently score every Tool's damage boost as 0.
         def __init__(self, text: str):
             self.text = text
 
@@ -546,18 +385,8 @@ class _SkillShim:
         self.skills = [self._Skill(a.get("text") or "") for a in (card.get("abilities") or [])]
 
 
-#: Tools whose printed effect is DELIBERATELY not modelled, with the reason. Per "no silent caps",
-#: a group that reads as covered when it is not is worse than one that reads as missing — so these
-#: are named in the report rather than left to sit in the same "**none**" bucket as an oversight.
-#: Ruled at Issue #306; each needs a `state_value` shape that does not exist, not a parser fix.
-#:
-#: **Brave Bangle (1175) was here and is not any more** (Issue #345). Its entry read *"GATED on a
-#: holder predicate we cannot decide — … `CardStat` models `ex`/`megaEx` but not Radiant, so a
-#: no-Rule-Box test would fail OPEN and over-credit."* That is a claim about the POOL, and it was
-#: never measured against it: a sweep of all 1061 Pokémon bodies finds no Radiant, V, VMAX, VSTAR or
-#: V-UNION card, so *"has a Rule Box"* and `CardStat.is_ex_body` are the same 151 bodies — exact,
-#: not fail-open. The gate now lives in `CardStat.holderNoRuleBox` and the sweep is a test
-#: (`tests/scouting/test_tool_holder_facts.py`) that fails the day the pool gains one.
+#: Tools whose printed effect is DELIBERATELY not modelled, with the reason (Issue #306). Each
+#: needs a `state_value` shape that does not exist, not a parser fix.
 DELIBERATELY_UNMODELLED_TOOLS = {
     1156: "REACTIVE — draws 2 when the holder is damaged in the Active Spot",
     1161: "REACTIVE — moves an Energy off the attacker when the holder is damaged",
@@ -567,24 +396,16 @@ DELIBERATELY_UNMODELLED_TOOLS = {
     1180: "EXOTIC — grants an attack printed on the Tool itself, to one named body",
 }
 
-#: Why the whole group stays out. Pricing *"when this body is attacked, X happens"* needs a term
-#: that values a CONDITIONAL FUTURE event on a body — a `state_value` design question adjacent to
-#: Issue #278's survival work, not a `card_text` gap. Inventing a `CardStat` shape for it here would
-#: be guessing at the term that has to consume it.
+#: Why the whole group stays out: pricing a conditional FUTURE event on a body is a
+#: `state_value` design question, not a `card_text` gap.
 UNMODELLED_TOOLS_REASON = (
     "a term that prices a conditional FUTURE event on a body, which `state_value` has no shape for "
     "(adjacent to Issue #278's survival work) — a design question, not a parser gap")
 
 
 def tool_static_reads(card: dict) -> list[str]:
-    """Which CardStat fields the shipped parsers actually recover from a Tool's printed text.
-
-    Empty means the Tool attaches, writes `attached_tools`, and moves NO term of `state_value` — so
-    under 1-ply differencing it prices at ~0 and sorts to the bottom of the menu.
-
-    A field is listed when it is RECOVERED, which is not the same as PRICED: `attackCostReduction`
-    (Issue #306) is parsed and has no live consumer yet — see the report's tool verdict, which says
-    so rather than letting the row read as covered."""
+    """Which CardStat fields the shipped parsers recover from a Tool's printed text; empty means the
+    Tool moves NO term of `state_value`. RECOVERED is not PRICED — `attackCostReduction` has no reader."""
     c = _SkillShim(card)
     got = []
     if _parse_tool_hp_bonus(c):
@@ -622,9 +443,7 @@ def our_copies(decks: dict[str, collections.Counter]) -> collections.Counter:
 
 def meta_copies(builds: dict[str, collections.Counter], priors: dict[str, float]) -> dict[int, float]:
     """``{card id: expected copies in the deck across the table}`` — each archetype's representative
-    build weighted by its meta prior, renormalised over the archetypes that have a build.
-
-    Unweighted copy counts over 122 archetypes would let 100 one-off brews outvote the field."""
+    build weighted by its meta prior, renormalised over the archetypes that have a build."""
     mass = sum(priors.get(a, 0.0) for a in builds) or 1.0
     out: dict[int, float] = collections.defaultdict(float)
     for arch, counter in builds.items():
@@ -670,10 +489,8 @@ def census(pool: set[int], cards, effects, covers) -> tuple[list[Site], dict]:
 
 
 def load_strategy_names(agents_dir: Path = AGENTS_DIR) -> dict[str, str]:
-    """``{agent: STRATEGY.md text}`` for the decks that have an authored doctrine.
-
-    Used only to flag *win-plan critical path* exposure: a card the deck's own doctrine names is a
-    card the agent is supposed to be building around, so a refusal on it is not a tail risk."""
+    """``{agent: STRATEGY.md text}``. Used only to flag win-plan critical-path exposure: a refusal on a
+    card the deck's own doctrine names is not a tail risk."""
     out = {}
     for p in sorted(agents_dir.glob("*/STRATEGY.md")):
         out[p.parent.name] = p.read_text(encoding="utf-8")
@@ -711,9 +528,8 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     # reading "our 5 decks" became a lie the moment it did.
     n_decks = len(decks)
 
-    # Name and predicate agree, and the invariant that used to be an `or` clause is asserted
-    # instead: a site with no card effect is structural, and structural is MODELLED-FULL by
-    # construction. If that ever stops holding, the headline must be re-derived, not quietly widened.
+    # Name and predicate agree, and the invariant is asserted rather than carried as an `or` clause:
+    # a site with no card effect is structural, and structural is MODELLED-FULL by construction.
     effect_bearing = [s for s in sites if s.has_effect]
     stray = [s for s in sites if not s.has_effect and s.report_class != FULL]
     if stray:
@@ -1023,18 +839,8 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add(f"- `unhomed()`: `{snapshot_coverage.unhomed()}`")
     add(f"- `footprints_writing_unhomed()`: `{seam.footprints_writing_unhomed()}`")
     add("")
-    # Through `snapshot_coverage.clause_values`, NOT a hand-rolled `kind`-plus-`rider` walk. This
-    # table used to keep its own, so a section titled "Clause write-set health" reported on two of
-    # the audit's axes: `effect` had been outside it since Issue #300 minted it, and `cost` would
-    # have been outside it from Issue #350. One extractor, so the report cannot claim health over
-    # ground the audit walks and it does not (Issue #350).
-    #
-    # Two deliberate consequences, both measured against the committed compendium. The old
-    # `used[c.get("kind")] += 1` counted a literal `None` for a clause with no `kind` and rendered it
-    # as an UNDECLARED row; the extractor skips it, so that signal moves to the audit test, which is
-    # the real gate — 0 of the 116 committed clauses lack a `kind`, so no row changed. And a value
-    # carried on two keys of one clause now counts twice (only `gust` is multi-key today), which is
-    # what "sites using it" already meant for a `kind`-plus-`rider` clause.
+    # Through `snapshot_coverage.clause_values`, NOT a hand-rolled `kind`-plus-`rider` walk, so the
+    # report cannot claim health over ground the audit walks and it does not (Issue #350).
     used = collections.Counter()
     for s in sites:
         for c in s.clauses:
@@ -1045,21 +851,12 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
                ["/".join(snapshot_coverage.VOCABULARY_KEYS) + " in pool", "sites using it",
                 "has a write-set"]))
     add("")
-    # ── the THIRD axis (Issue #374) ───────────────────────────────────────────────────────────────
-    # The table above reports the health of the VOCABULARY axis. It reported nothing at all about the
-    # SELECTOR axis, which is the wider one — and that is the same defect one level up that Issue
-    # #350 fixed inside the table itself: a report titled "Clause write-set health" cannot claim
-    # health over ground the audit walks and it does not. Read through the same
-    # `snapshot_coverage.clause_selectors` extractor the audit uses, for the same reason.
-    #
-    # `UNCONSUMED` is the honest column: a value can be perfectly well DECLARED and still have no
-    # reader, which is the state 33 of the 74 are in. Declared-and-unread is a scheduled gap with a
-    # written reason; declared-and-silent would be the vacuous registry this axis was built to avoid.
+    # The THIRD axis (Issue #374). `UNCONSUMED` is the honest column: a value can be DECLARED and
+    # still have no reader, and declared-and-silent would be the vacuous registry this avoids.
     add("### Clause selector-value health (`snapshot_coverage`, Issue #374)")
     add("")
-    # WHOLE-COMPENDIUM, unlike the pool-scoped table above — deliberately, and said out loud because
-    # the two sit next to each other. The audit this mirrors walks every committed clause, so a
-    # pool-scoped count here would report health over a strictly smaller set than the check enforces.
+    # WHOLE-COMPENDIUM, unlike the pool-scoped table above: the audit this mirrors walks every
+    # committed clause, so a pool-scoped count would report health over a strictly smaller set.
     pairs = snapshot_coverage.clause_selectors(load_effects())
     undeclared = snapshot_coverage.undeclared_selector_values(pairs)
     add(f"- `undeclared_selector_values()`: `{undeclared}`")

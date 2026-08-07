@@ -1,35 +1,11 @@
 """Leaf lab — measure the SHIPPED end-of-turn LEAF against tagged corrections, and gate on it.
 
-**The scoring source moved at POC-T4/5 (Issue #386): this lab now scores through the sequence
-composer's 1-ply differencing, not through the retired engine rollout.** It used to call
-`planner._engine_leaf_value`, which simmed a candidate first action to its end-of-turn board through
-the native engine and scored THAT. That function is deleted with the develop rollout rung, so the
-gate's own question — *does the scorer rank the human's `correct` option highest?* — had to be
-re-pointed at the scorer that now decides: `composer.compose`'s depth-0 ordering, which applies each
-option through `apply_option` and differences `state_value` against the pre-move board. Same
-question, same corpus, same frame keys, same verdicts; a different (and now SHIPPED) scorer.
+The scorer is `composer.compose`'s depth-0 1-ply differencing (Issue #386), not the retired engine
+rollout: values are small `state_value` deltas, and only the RANKING is graded, so the scale change
+moves no verdict. `data/leaf_lab/baseline.json` is a RULING RECORD and was NOT re-captured to match
+the new scorer — that is how the old Decision Gate died. Every `OK -> MISS` is a flip to be ruled.
 
-**The baseline is a RULING RECORD and is NOT re-captured by this change.** `data/leaf_lab/baseline.json`
-records human verdicts per frame; re-capturing it to match a new scorer would make the gate vacuous,
-which is exactly how the old Decision Gate died. Every `OK -> MISS` the re-point produces is a flip
-for the developer to rule (`diff`'s own report), not a number to conform.
-
-Two consequences of the swap, stated because a reader will otherwise wonder:
-
-* **Values are no longer prize-denominated `KO_SCORE`-scale numbers.** A composer delta is a
-  `state_value` difference in prize units, typically small. Only the RANKING is graded, and every
-  verdict here (`correct_is_top`, `correct_rank`, `top_tie`, `class_asymmetry`) is rank- or
-  equality-based, so the scale change moves no verdict by itself.
-* **A frame no longer needs a reseedable engine search.** The composer is closed-form, so the
-  `search_begin_input` placeholder this module used to inject is gone and boards cgpy could not
-  reseed are no longer skipped. `is_leaf_frame`'s population is unchanged.
-
-A *leaf frame* (`is_leaf_frame`) is any MAIN-select correction with a target to rank: a turn-planner
-correction (`turn_plan` payload) OR any MAIN-select pick correction that names a `correct` option, so
-the whole tagged corpus of setup-turn pick corrections drives leaf enrichment.
-
-    python tools/train/leaf_lab.py                 # score every leaf frame, print the report
-    python tools/train/leaf_lab.py --agent dragapult_ex
+    python tools/train/leaf_lab.py [--agent dragapult_ex] [capture|restamp|diff ...]
 """
 from __future__ import annotations
 
@@ -45,11 +21,8 @@ from common import composer as cp                            # noqa: E402
 from train.gates import CAPTURE_POINT, print_gate_report      # noqa: E402
 
 _PLACEHOLDER_SBI = "leaf-lab-cgpy-reseed"   # any non-empty token passes `_simulate_line`'s gate; cgpy
-                                            # then reconstructs the search state from the structured obs.
-                                            # No longer used HERE (the composer is closed-form and needs
-                                            # no search token) — kept because `tools/train/family_diag.py`
-                                            # imports it for its own engine-sim attribution, which still
-                                            # drives `_simulate_line`. One spelling, per ADR-0087.
+                                            # then reconstructs the search state from the obs. Unused
+                                            # here now; kept because `family_diag.py` imports it.
 
 _EPS = 1e-9                                 # `class_asymmetry`'s "the leaf priced this ONE way" bar —
                                             # measured float non-associativity is 2.8e-14, the leaf's
@@ -57,20 +30,8 @@ _EPS = 1e-9                                 # `class_asymmetry`'s "the leaf pric
 
 
 def board_leaf_values(pilot, obs) -> list:
-    """The SHIPPED leaf's value for taking EACH menu option first (index-aligned; None where the seam
-    cannot price it) — **the composer's depth-0 1-ply differencing** (POC-T4/5, Issue #386).
-
-    `composer.compose` already computes exactly this on its way to a decision and hands it back as
-    `ComposerResult.fanned`: one delta per OPTION, with each Option-Equivalence class's value spread
-    across its members. Read off the shipped call rather than re-derived here, for the reason this
-    module's `class_asymmetry` finding is about — an instrument that scores its own reconstruction
-    measures a board the agent never sees, and rung/instrument drift is how the decider sweeps
-    rotted. `fanned` is also the same fan-out the retired rung applied, so the class-canonicalised
-    reading below is unchanged.
-
-    A `None` here means *the seam refused this option* (a `_CARD`/`_YES`/`_NUMBER` whose whole content
-    is a card effect, or a card the clause set does not cover) — an unknown, not a zero, and the
-    downstream verdicts already treat `None` as unscored."""
+    """The SHIPPED leaf's value for taking EACH menu option first (index-aligned) — `composer.compose`'s
+    own `fanned`, read off the shipped call. `None` = the seam REFUSED the option: unknown, not zero."""
     options = (obs.get("select") or {}).get("option") or []
     if not options:
         return []
@@ -84,54 +45,21 @@ def board_leaf_values(pilot, obs) -> list:
 
 
 def frame_key(correction) -> str:
-    """The **stable identity** of a leaf frame, as a flat string a JSON capture can key on.
-
-    This is the Correction's own ``identity_key`` — ``(episode, seat, scope, subject)``, already the
-    repo's answer to "are these two records the same blunder" (ADR-0049). It matters because the
-    Discrimination Gate diffs captures per frame, and ``episode_id`` alone is NOT unique: keying on
-    it merged frames from one episode and collapsed a real 276-row diff to 221. A gate that
-    under-reports is the exact failure it exists to prevent.
-
-    Delegates to `gates.correction_frame_key`, the single derivation the **Corpus Reader** uses
-    (ADR-0087 decision 2) — so a frame carries ONE name across both gates and a ruling held out
-    of one is held out of the other. The Decision Gate hand-built its own and read ``seat`` off the
-    ``decision`` snapshot, which has no such field: 163 of its 332 keys were wrong, and four standing
-    Held-out Ledger rulings could not reach it."""
+    """The Correction's ``identity_key`` flattened via `gates.correction_frame_key` — ONE name across both gates."""
     from train.gates import correction_frame_key
     return correction_frame_key(correction)
 
 
 def evaluate_leaf_on_correction(pilot, correction) -> dict:
-    """Score one `turn_plan` correction's board and rank the human's `correct` pick under the leaf.
-
-    Returns per-option `values`, and the verdict: `correct_is_top` (a correct option holds the strict
-    or shared maximum — LENIENT, a shared max counts), `correct_is_unique_top` (a correct option is the
-    SOLE maximum — the honest "the argmax rung would actually pick your option", since ties break by
-    option order, not by you), `correct_rank` (1 = best; ties don't demote), `outscored_by` (options
-    strictly above the best correct), and `top_tie` (how many share the top value — a large tie is a leaf
-    that can't discriminate). `scored` is None-free option count; `unscorable` when no correct option scored.
-
-    Every verdict is computed on the **canonicalised** values — options a board cannot tell apart are
-    one decision, so each carries its class maximum, exactly as the develop rung ranks them
-    (ADR-0091). `top_tie` therefore counts CLASSES: two identical Riolu tying is correct
-    behaviour, not a leaf that cannot discriminate. The recorded `values` column stays RAW, and
-    `class_asymmetry` reports any class the leaf priced two ways — see that function for why the two
-    readings must not be collapsed.
-    """
+    """Score one correction's board and rank the human's `correct` pick under the leaf. Every verdict is
+    computed on the CANONICALISED values (ADR-0091); the recorded `values` column stays RAW."""
     from common.option_equivalence import class_of, fan_out, option_equivalence
 
     obs = correction.obs or {}
     raw = board_leaf_values(pilot, obs)
     equiv = option_equivalence((obs.get("select") or {}).get("option") or [], obs)
-    # TWO readings of one sim, deliberately (ADR-0091 decisions 4 + 6), because collapsing them
-    # breaks one of the lab's two jobs:
-    #   * RAW is the evidence — canonicalising first would make `class_asymmetry` empty BY
-    #     CONSTRUCTION, an instrument that can only ever report "nothing", which is the vacuous-gate
-    #     failure `decider_lab_diff`'s docstring exists about;
-    #   * CANONICAL is what the agent sees — the develop rung fans the class maximum out before it
-    #     ranks, so grading the raw values would measure something the agent does not do, and the
-    #     rung/instrument drift is how the decider sweeps rotted.
-    # So: the finding is read off `raw`, every verdict off `values`.
+    # TWO readings of one sim (ADR-0091): the finding is read off RAW — canonicalising first would
+    # make `class_asymmetry` empty BY CONSTRUCTION — and every verdict off the fanned `values`.
     values = fan_out(raw, equiv)
     correct = list(correction.correct or [])
     scored = [v for v in values if v is not None]
@@ -151,9 +79,8 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     top = max(scored)
     best_correct = max(correct_vals)
     outscored = sum(1 for v in scored if v > best_correct)
-    # Ties are counted over CLASSES, not raw options (ADR-0091 decision 4): two options that are
-    # the same decision tying is correct behaviour, not a leaf that cannot discriminate, and counting
-    # them separately aimed leaf-enrichment work at a phantom.
+    # Ties are counted over CLASSES, not raw options (ADR-0091): two options that are the same
+    # decision tying is correct behaviour, and counting them apart aimed leaf work at a phantom.
     at_top = {i for i, v in enumerate(values) if v is not None and v == top}
     top_tie = len({min(class_of(equiv, i)) for i in at_top})
     is_top = best_correct >= top
@@ -163,35 +90,8 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
 
 
 def class_asymmetry(values, equiv) -> list:
-    """Every **Option Equivalence Class** whose members do NOT all score the same — the leaf pricing
-    one decision two ways (ADR-0091 decision 4).
-
-    ``[{"options": [i, ...], "spread": high - low}, ...]``, worst spread first.
-
-    This is a genuine defect and the Discrimination Gate is structurally blind to it: `correct_is_top`
-    is tie-LENIENT, so a frame where the leaf ranks one of two identical options 12x above the other
-    still reads ``OK``. Measured 2026-07-31: five classes, worst `81903490|0|decision|49` at
-    ``1167.0 / 95.4 / 95.4`` on three byte-identical Riolu, reproducible across fresh Pilots. The
-    cause was the retired `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO
-    from one bench slot and missing the isomorphic line from another — search incompleteness presenting
-    as a value difference (**Issue #254**), fixed at its source by ADR-0103's canonical ordering.
-    Re-measured 2026-08-02: **zero real classes**, and the finding is what proved it. Since the
-    POC-T4/5 re-point it is a claim about the COMPOSER's fan-out, where a non-empty finding would mean
-    `fan_out` and the class map disagree — a stronger property than the rollout could offer, since the
-    composer scores one representative per class by construction.
-
-    ``_EPS`` is why "zero" is expressible at all. The one class that survives the fix reports
-    ``124.83000000000001 / 124.82999999999998`` — a spread of ``2.8e-14``, which is float
-    non-associativity in a sum whose terms arrive in a different order per option, not the leaf pricing
-    one decision two ways. Without the tolerance this instrument would report a finding it can never
-    stop reporting, and a permanent finding is one readers learn to skip. ``1e-9`` sits eleven orders
-    above that noise and six below the ``0.001`` the leaf's own values are rounded to elsewhere, so no
-    difference the leaf can express is swallowed.
-
-    **Reported, never gating** — the doctrine the tie metrics already carry (`gates.py` module
-    docstring): a metric nobody has ruled on must not start failing `main`. A non-empty finding now
-    means either the ordering is not canonical on that path or a class is being scored somewhere that
-    does not canonicalise."""
+    """Every **Option Equivalence Class** whose members do NOT all score the same (ADR-0091), worst
+    spread first. Reported, never gating. ``_EPS`` is why "zero classes" is expressible at all."""
     from common.option_equivalence import classes
 
     out = []
@@ -204,17 +104,8 @@ def class_asymmetry(values, equiv) -> list:
 
 
 def is_leaf_frame(c) -> bool:
-    """Does this correction exercise the shipped leaf — a MAIN-select (context 0) board with a target
-    the leaf can be asked to rank? Two shapes qualify: a turn-planner correction (carries a
-    ``turn_plan`` payload, kept even when ``correct`` is empty so an unscored setup turn is still
-    *counted* as a leaf frame), and any MAIN-select pick correction that names a ``correct`` option —
-    the human's intended first action, whatever the correction's scope.
-
-    **The MAIN restriction is now a SCOPE statement, not a substrate limit.** It used to be forced:
-    the offline engine sim could reseed only from a MAIN-select board. The composer prices any menu it
-    can model, but MAIN single-pick is the context it DECIDES (`planner.plan_turn`), so grading it
-    elsewhere would grade a scorer that is not in charge there. POC-T4/6 (Issue #387) is what widens
-    the decision contexts, and widening this population belongs with it."""
+    """A MAIN-select (context 0) board with a target the leaf can rank: a ``turn_plan`` correction, or
+    any MAIN-select correction naming a ``correct``. MAIN is a SCOPE statement, not a substrate limit."""
     if getattr(c, "scope", None) == "match":
         return False
     obs = getattr(c, "obs", None)
@@ -226,14 +117,8 @@ def is_leaf_frame(c) -> bool:
 
 
 def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
-    """Aggregate the leaf verdict across a batch. `pilot_for(agent)` builds/returns the cgpy-wired Pilot
-    for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered.
-
-    A **Voided Ruling** frame is still scored and still carried in ``rows`` — it is marked ``voided``
-    and left out of the RATES only (ADR-0088 decision 4). It deliberately stays *scorable*, so the
-    diff still compares it and `ruling_moves` still sees it: a voided ruling stops grading, it does not
-    stop existing, and a frame vanishing from ``compared`` would be the shrinking-gated-set failure
-    ``added``/``removed`` exist to prevent."""
+    """Aggregate the leaf verdict across a batch. A **Voided Ruling** frame is still scored and still
+    carried in ``rows`` — marked ``voided`` and left out of the RATES only (ADR-0088 decision 4)."""
     voided = set(voided or ())
     rows, skipped = [], 0
     for c in corrections:
@@ -265,8 +150,7 @@ def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
 
 
 def _cgpy_pilot_builder():
-    """A memoised `pilot_for(agent)` that builds each agent's real Pilot and wires cgpy as its offline
-    search backend. Returns None for an agent whose Pilot can't be built."""
+    """A memoised `pilot_for(agent)` wiring cgpy as the offline search backend; None if unbuildable."""
     import importlib
     from cgpy.compat import api as cgpy_api
     tune = importlib.import_module("train.tune")
@@ -305,9 +189,8 @@ def _build_report(store, agent, *, voided=()):
 
 
 def _print_report(rpt) -> None:
-    # `gradeable` is absent from a capture taken before ADR-0088; fall back rather than crash,
-    # so a diff against an older committed baseline still reads. Same field name the Decision Gate
-    # uses — one concept, one word.
+    # `gradeable` is absent from a capture taken before ADR-0088; fall back rather than crash, so a
+    # diff against an older committed baseline still reads.
     gradeable = rpt.get("gradeable", rpt["scorable"])
     voided = rpt.get("voided", 0)
     print(f"\n=== leaf lab: {rpt['n']} leaf frames "
@@ -341,9 +224,8 @@ def _print_report(rpt) -> None:
 
 
 def _print_diff(diff, held_out, before_meta, voided=None) -> None:
-    """The Discrimination Gate's report. The aggregate metrics are printed by `_print_report` for
-    context and are deliberately absent from the verdict — over 1b they moved the GOOD way while six
-    frames broke, so a gate keyed on them would have passed the swap that motivated this gate."""
+    """The Discrimination Gate's report. The aggregate metrics are printed for context and are
+    deliberately absent from the verdict — over 1b they moved the GOOD way while six frames broke."""
     if diff["added"] or diff["removed"]:
         # Never silently tolerated: a shifted corpus means the two captures are not comparable, and a
         # diff that quietly skips frames reads green for the wrong reason.
@@ -352,10 +234,8 @@ def _print_diff(diff, held_out, before_meta, voided=None) -> None:
     for f in diff["miss_to_ok"]:
         print(f"  IMPROVED  {f['key']}  MISS -> OK")
     from train.gates import print_stale_baseline, split_excused
-    # BEFORE the gate block, matching `print_ruling_moves` above and the `CORPUS SHIFTED` line: the
-    # verdict is the last thing printed, and everything that changes what it MEANS comes ahead of it.
-    # These frames are still listed as `REGRESSED` inside that block — the label explains the line,
-    # it does not replace or excuse it (ADR-0110 decision 1).
+    # BEFORE the gate block: the verdict is the last thing printed, and everything that changes what
+    # it MEANS comes ahead of it. These frames still print as `REGRESSED` — the label excuses nothing.
     print_stale_baseline(diff.get("stale_baseline") or [])
     voided = voided or {}
     gating, ruled, void_hits = split_excused(diff["ok_to_miss"], held_out, voided)
@@ -380,10 +260,8 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd")
     cap = sub.add_parser(
         "capture", help="write a baseline report artifact (the gate's reference)",
-        # WHERE you capture from is not checked by anything — `guarded_capture` asks whether every
-        # fail-direction frame carries a ruling, never whether the tree carries the change under
-        # test. So the one rule that cannot be enforced is the one `--help` has to state
-        # (ADR-0110 decision 4).
+        # WHERE you capture from is checked by nothing, so the one unenforceable rule is the one
+        # `--help` has to state (ADR-0110 decision 4).
         epilog=f"Capture point: {CAPTURE_POINT}. Capturing at HEAD bakes the change under test into "
                f"its own reference, and the gate can then never speak about that change again.")
     cap.add_argument("--out", type=Path, required=True)
@@ -411,10 +289,8 @@ def main(argv=None) -> int:
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
-    # The **off-policy** exposure (Issue #412), resolved here for the reason the Ruling Index is: it
-    # is a property of the CORPUS, not of a capture or a diff, so a capture and the diff reading it
-    # must not resolve two different sets. Reported only — it reaches no verdict, and Issue #412
-    # ruled that it should not (`gates.off_policy_frames`).
+    # The off-policy exposure (Issue #412), resolved here for the Ruling Index's reason: it is a
+    # property of the CORPUS, not of a capture. Reported only — it reaches no verdict.
     from train.gates import off_policy_frames, print_off_policy_readout
     off_policy = off_policy_frames(args.store)
     rpt = _build_report(args.store, args.agent, voided=set(voided))
@@ -423,11 +299,8 @@ def main(argv=None) -> int:
         from train.gates import (_scorable, discrimination_fail_keys, guarded_capture,
                                  leaf_lab_diff, print_ruling_readout, rows_by_key,
                                  write_json_artifact)
-        # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
-        # this build degrades OK -> MISS may only become the new reference once a human has ruled it.
-        # The convention has HELD historically (every absorbed flip carried a ruling, measured over
-        # the whole baseline history) — this removes the reliance on discipline, it does not repair a
-        # breach (ADR-0094 decision 1).
+        # A baseline is a RULING RECORD, so overwriting one is guarded, not free: a frame this build
+        # degrades OK -> MISS may only become the new reference once a human has ruled it (ADR-0094).
         def _write():
             write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
             _print_report(rpt)
@@ -450,14 +323,12 @@ def main(argv=None) -> int:
         held_out = held_out_frames()
         passed = discrimination_gate_verdict(diff, held_out=held_out, voided=set(voided))
         _print_report(rpt)
-        # Context BEFORE the verdict, matching the Decision Gate: `_print_diff` ends with the
-        # PASS/FAIL line, and a reader who stops there must not have skipped the delta that explains
-        # the numbers above it.
+        # Context BEFORE the verdict: `_print_diff` ends with the PASS/FAIL line, and a reader who
+        # stops there must not have skipped the delta that explains the numbers above it.
         print_ruling_moves(diff["ruling_moves"])
         print_ruling_readout(index, voided, orphans=orphans)
-        # `moved` is the fail direction only — the flips this gate would go red on. An off-policy
-        # frame that improved needs no operator action, so naming it here would dilute the one list
-        # that must not become scenery.
+        # `moved` is the fail direction only. An off-policy frame that improved needs no operator
+        # action, so naming it here would dilute the one list that must not become scenery.
         print_off_policy_readout(off_policy, present=rows_by_key(rpt, keep=_scorable),
                                  moved=discrimination_fail_keys(diff))
         print_agree_delta(diff["agree_delta"])
@@ -467,9 +338,8 @@ def main(argv=None) -> int:
                 "gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
                 "baseline_git_rev": before.get("git_rev"), "compared": diff["compared"],
                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
-                # A SUBSET of `ok_to_miss` above, never a subtraction from it: these flips still
-                # gate, and a machine consumer must be able to tell a reference that has gone stale
-                # from a build that regressed without re-deriving it (ADR-0110 decision 2).
+                # A SUBSET of `ok_to_miss` above, never a subtraction: these flips still gate, and a
+                # consumer must tell a stale reference from a regressed build (ADR-0110 decision 2).
                 "stale_baseline": [f["key"] for f in diff["stale_baseline"]],
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],

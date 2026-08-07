@@ -1,20 +1,12 @@
 """Typed affordability for the shared KO valuation (`_best_affordable_ko_value` / `_develop_wins`).
 
-The count-only check (`attack_costs[aid] <= energy`) credits a colorless-only provider (Ignition
-Energy {C}{C}{C}) with funding SPECIFIC-type cost slots it can never pay (Jetting Blow's {W}) — a
-phantom KO/lethal in closed form. `Pilot._attack_type_payable` (AttackStat.energyTypes) closes it
-SOUND-OR-SILENT: suppress only on a PROVABLY unmet specific slot; an unresolvable attack record, a
-unit code this build's enum does not know, and unknown-type budget (a planned attach) all stay
-fail-open. Lib-free synthetic obs via pilot_helpers.
+The count-only check credits a colorless-only provider with funding SPECIFIC-type cost slots it can
+never pay. `Pilot._attack_type_payable` closes it SOUND-OR-SILENT: suppress only on a PROVABLY unmet
+slot; an unresolvable record, an unknown unit code and unknown-type budget all stay fail-open.
 
-**The bodies here are written in ENERGY UNITS** (`cg/api.py` `Pokemon.energies` is
-`list[EnergyType]`), which is what the engine actually hands the agent — so an attached Ignition
-Energy is `[COLORLESS, COLORLESS, COLORLESS]`, not `[17, 17, 17]`. They used to be written as card
-ids, and that read as *"three units of type 17"*: outside the enum, therefore WILD, therefore
-covering the very {W} slot this file exists to prove is unpayable. It passed only because the
-production code made the same mistake in the same direction (Issue #297). The old
-`energies=[0]*n` "unresolvable placeholder" is gone with it — 0 is COLORLESS, a specific and
-perfectly payable answer for a colourless slot, and the fail-open case is now an unknown CODE.
+Bodies here are ENERGY UNITS (`cg/api.py` `Pokemon.energies` is `list[EnergyType]`), never card ids:
+an attached Ignition Energy is `[COLORLESS] * 3`, not `[17] * 3` (Issue #297). 0 is COLORLESS — a
+specific, payable answer — so the fail-open case is an unknown CODE.
 """
 import pytest
 
@@ -68,11 +60,8 @@ _TYPED = {JETTING: AttackStat(JETTING, damage=120, cost=3, energyTypes=(3, 0, 0)
 
 
 def _ranked(pilot, obs):
-    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
-    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this file's rung and started
-    testing the composer on a board no human ever ruled."""
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]`` — the
+    composer decides the single-pick MAIN menu, so `decide(obs) == [n]` would not test this file."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
 
 def _pilot(attack_stats=None, **kw):
@@ -84,11 +73,8 @@ def _pilot(attack_stats=None, **kw):
 
 
 def _body(*units):
-    """A body carrying these Energy UNITS — the engine's ``Pokemon.energies``, EnergyType codes.
-
-    Stated as units rather than cards because that is what the affordability family reads, and
-    because the card→unit expansion is not 1:1: ONE Ignition Energy is the whole of
-    ``_IGNITION_UNITS``, three colourless."""
+    """A body carrying these Energy UNITS (the engine's ``Pokemon.energies``). The card→unit expansion
+    is not 1:1: ONE Ignition Energy is three colourless."""
     return {"id": WINCON, "energies": list(units)}
 
 
@@ -121,10 +107,8 @@ def test_no_body_keeps_the_legacy_count_only_check():
 
 @pytest.mark.req("REQ-GEN-0068")
 def test_an_unknown_unit_code_is_wild():
-    """A unit code outside this build's `EnergyType` — a later set's enum member — MIGHT be the {W},
-    so it stays fail-open. This is the whole of the wild case now: `energies=[0]*3` used to be read
-    as "unresolvable, therefore wild" and is really three COLORLESS units, which are resolvable and
-    provably cannot pay a {W} (Issue #297) — that board is the test above."""
+    """A unit code outside this build's `EnergyType` MIGHT be the {W}, so it stays fail-open. This is
+    the whole wild case: three COLORLESS units are resolvable and provably cannot pay (Issue #297)."""
     assert _ko(_pilot(), body=_body(UNKNOWN_UNIT, UNKNOWN_UNIT, UNKNOWN_UNIT)) >= KO_SCORE
 
 
@@ -168,9 +152,8 @@ def test_unknown_type_extra_stays_wild():
 # ------------------------------------------------- behavioral: the retreat lookahead
 @pytest.mark.req("REQ-GEN-0068")
 def test_retreat_lethal_stands_down_on_a_colorless_funded_wincon():
-    """A benched wincon 'ready' by COUNT (one Ignition, {C}{C}{C}) cannot actually pay Jetting
-    Blow's {W}: the retreat carries no KO-class value. The spent Active (Turbo 50 vs 100 HP) can't
-    KO either, so only a GENUINELY payable wincon justifies the retreat-lethal."""
+    """A benched wincon 'ready' by COUNT (one Ignition) cannot actually pay Jetting Blow's {W}, so the
+    retreat carries no KO-class value — only a GENUINELY payable wincon justifies a retreat-lethal."""
     pilot = _pilot()
     bench_wincon = poke(WINCON, hp=330, attached_energy=[(IGNITION, _IGNITION_UNITS)])
     cur = state(active=poke(CINDER, energy=1, hp=160), bench=[bench_wincon],

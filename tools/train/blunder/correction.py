@@ -1,25 +1,14 @@
-"""The Correction record -- the curated unit of learning (ADR-0009).
+"""The Correction record -- the curated unit of learning (ADR-0009). See `tools/train/CONTEXT.md`.
 
-A Correction is ``(state, chosen, correct, attribution, rationale)`` plus identity.
-``state`` is embedded as a self-contained snapshot of the Decision so the record
-survives replay deletion (ADR-0002 amendment). ``correct`` is the better legal
-option at the *first divergent* Decision (Tier-1; the rest of the line goes in
-``rationale``). See ``tools/train/CONTEXT.md``.
+``state`` is embedded as a self-contained snapshot so the record survives replay deletion
+(ADR-0002 amendment); ``correct`` names the better option at the FIRST divergent Decision.
 
-**Scope** (ADR-0049) says how many Decisions the record is *about* -- one (``decision``, the
-default and the shape ADR-0015 fixed), or a whole ply (``turn``). Off ``decision`` scope the record
-is keyed by its Scope's ``subject`` rather than the Anchor frame, ``correct`` is optional (and,
-when given, indexes the **Anchor** -- asserting it is the first divergent Decision), and the
-``span`` of covered Decisions rides along so the record stays self-contained.
+**Scope** (ADR-0049) says how many Decisions the record is about — one (``decision``) or a ply
+(``turn``). Off ``decision`` scope the record is keyed by its Scope's ``subject``, ``correct`` is
+optional, and the ``span`` of covered Decisions rides along.
 
-At ``decision`` scope ``correct`` is mandatory with ONE exception (Issue #229): an empty ``correct``
-on a **provably optional** select (``minCount == 0``) is a recorded **DECLINE** -- the ruling *"take
-none of these"*, which is the answer an optional select exists to allow. This is not a new encoding:
-``gates.satisfies_human`` has always read an empty ``correct`` as a decline, matched EXACTLY and
-never by subset, at every scope. The reader already spoke the language; only the writer refused it,
-so the corpus could not hold the shape its own grader grades. Where ``minCount`` cannot be read the
-old refusal stands (``select_min_count``) -- an unverifiable decline is the degenerate record this
-narrowness exists to stop.
+At ``decision`` scope ``correct`` is mandatory with ONE exception (Issue #229): empty on a PROVABLY
+optional select (``minCount == 0``) is a recorded DECLINE. Unprovable means refused.
 """
 from __future__ import annotations
 
@@ -40,17 +29,14 @@ _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
 
 
 def is_critical(rationale: str | None) -> bool:
-    """True when ``rationale`` carries the uppercase ``CRITICAL`` token (word-boundary, case-
-    sensitive — so lowercase prose like 'a critical attack' is NOT a marker). The human writes it
-    at tag time to flag a blunder that ``/blunder-buster`` must resolve before any other work."""
+    """True when ``rationale`` carries the uppercase ``CRITICAL`` token — case-SENSITIVE, so
+    lowercase prose like 'a critical attack' is not a marker."""
     return bool(rationale) and _CRITICAL_RE.search(rationale) is not None
 
 
 def subject_of(scope: str, decision: dict) -> int | None:
-    """What a Correction of ``scope`` is *about* — the identity the record is keyed by (ADR-0049).
-
-    ``decision`` (the Anchor snapshot) → its ``frame``; ``turn`` → the Anchor's ``turn`` number.
-    """
+    """What a Correction of ``scope`` is about — the identity it is keyed by (ADR-0049).
+    ``decision`` → the Anchor's ``frame``; ``turn`` → its ``turn`` number."""
     if scope == "decision":
         return decision.get("frame")
     if scope == "turn":
@@ -59,30 +45,14 @@ def subject_of(scope: str, decision: dict) -> int | None:
 
 
 def select_min_count(obs: dict | None) -> int | None:
-    """The Anchor select's ``minCount``, or ``None`` when the record cannot establish it.
-
-    ``Decision`` carries no ``minCount`` field and ``snapshot()`` omits it, so the ONE route to it is
-    the agent observation -- and ``obs`` is ``None``-able (an unreplayable record has none). ``None``
-    therefore means *unknown*, and is deliberately NOT collapsed to 0: a caller that read a missing
-    field as "optional" would admit exactly the unverifiable decline this is here to refuse.
-
-    ``bool`` is excluded because ``True`` is an ``int`` in Python, and a ``minCount`` of ``True``
-    would read as the mandatory 1 by accident rather than as the malformed value it is.
-
-    Not shared with ``gates.records_a_decline_it_cannot_state``, which reads the same field for the
-    opposite job and so needs the opposite fail direction: that predicate only ever REMOVES a frame
-    from grading, so unknown-means-optional is its safe read, while admitting a record is a write and
-    must fail CLOSED. One extraction, two deliberate policies -- collapsing them would silently give
-    the writer the reader's leniency.
-    """
+    """The Anchor select's ``minCount``, else ``None`` = UNKNOWN, never collapsed to 0 — this is a
+    write, so it fails CLOSED (unlike `gates.records_a_decline_it_cannot_state`, which fails open)."""
     value = ((obs or {}).get("select") or {}).get("minCount")
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def identity_key(correction) -> tuple:
-    """The tuple that makes two Corrections *the same blunder*: the Scope's subject, never the
-    Anchor frame. So one Turn tagged from two different frames is one Correction, and a Turn
-    Correction happily coexists with the Decision Corrections inside that Turn."""
+    """What makes two Corrections the SAME blunder: the Scope's subject, never the Anchor frame."""
     return (correction.episode_id, correction.seat, correction.scope, correction.subject)
 
 
@@ -115,43 +85,28 @@ class Correction:
     category: str               # closed human vocab (mandatory)
     attribution: str | None     # learning-surface link (derived by Tuner; ADR-0017)
     rationale: str              # free prose
-    #: OPTIONAL alternative correct picks — a SET of option-index lists the human ruled EQUALLY
-    #: correct, where the single `correct` list over-specifies (ADR-0086, Issue #197). First case:
-    #: `83661652` f29, ruled "bench Riolu, Makuhita, and Solrock, ordering doesn't matter, just
-    #: don't play ultra ball" — the rationale distinguishes a basic from the Ultra Ball, not one
-    #: basic from another, so scoring only `correct` marks a REGRESSION for a pick the human
-    #: explicitly called right. `correct` is left untouched, so every existing consumer is unchanged
-    #: and only a reader that knows about alternatives widens its verdict.
+    #: OPTIONAL option-index lists the human ruled EQUALLY correct where `correct` over-specifies
+    #: (ADR-0086). `correct` is untouched, so only a reader that knows about these widens its verdict.
     correct_alternatives: list | None = None
     alternatives_ruled: str = ""     # ISO date the alternatives were ruled
     alternatives_why: str = ""       # the ruling, verbatim
-    provenance: str = "human"   # who TAGGED this: "human" (blunder-inspector) | "machine" (the ML
-                                # labeler, ADR-0053 WP3). Orthogonal to `source` (whose GAME it was —
-                                # still "own"/"peer"): a machine label of our own game is
-                                # source="own", provenance="machine". Old records lack the key ->
-                                # default "human", so every existing filter/consumer is unchanged.
-                                # Fit rule (S3b): a machine record whose identity_key collides with a
-                                # human record is dropped from the fit — human wins. See
-                                # docs/plans/ml-training-contracts.md (C2).
+    provenance: str = "human"   # who TAGGED this: "human" | "machine" (ADR-0053 WP3). Orthogonal to
+                                # `source` (whose GAME). On an identity_key collision, human wins.
     obs: dict | None = None     # agent observation (int-enum) so Tuner can replay Pilot
     agent_build: str | None = None  # submission-folder stem of build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
-    live_trace: dict | None = None  # live @T Decision Telemetry record this game emitted (ADR-0019),
-                                    # incl. `posture` — who the agent thought it faced (ADR-0041)
-    posture_mismatch: bool = False  # human judged the agent's opponent Read/Posture WRONG here
-                                    # (ADR-0041): a matchup-doctrine miss to tie to that archetype's
-                                    # Brief / recognition, not a generic weight. The believed archetype
-                                    # lives in `live_trace["posture"]`; the intended line in `rationale`.
+    live_trace: dict | None = None  # live Decision Telemetry this game emitted (ADR-0019), incl.
+                                    # `posture` — who the agent thought it faced (ADR-0041)
+    posture_mismatch: bool = False  # human judged the Read/Posture WRONG here (ADR-0041): tie it to
+                                    # that archetype's Brief, not to a generic weight.
     # --- Scope (ADR-0049) ---
     scope: str = "decision"         # decision (one Decision) | turn (one ply)
-    subject: int | None = None      # what the Scope is about: the Anchor frame (decision), the turn
-                                    # number (turn). THE identity, not `frame`.
-    span: list[dict] | None = None  # the Decisions the Scope covers. turn: per-Decision obs +
-                                    # live_trace (re-drivable).
-    turn_plan: dict | None = None   # develop-rung Phase 3 (turn scope): the human's ideal-line note —
-                                    # {intended_line, expected_end_board}. Sparse (None off turn-plan
-                                    # tags), so legacy records are unchanged. `leans_on_rule` is NOT
-                                    # stored — blunder-buster derives it from live_trace `opts[correct].fired`
+    subject: int | None = None      # THE identity, not `frame`: the Anchor frame (decision scope) or
+                                    # the turn number (turn scope).
+    span: list[dict] | None = None  # the Decisions the Scope covers; turn scope carries per-Decision
+                                    # obs + live_trace so it is re-drivable.
+    turn_plan: dict | None = None   # turn scope: the human's ideal-line note, {intended_line,
+                                    # expected_end_board}. Sparse — None off turn-plan tags.
 
     @property
     def is_critical(self) -> bool:
@@ -204,19 +159,8 @@ def build_correction(
     span: list[dict] | None = None,
     turn_plan: dict | None = None,
 ) -> Correction:
-    """Validate and assemble a Correction from a tagged Decision (the **Anchor**).
-
-    Raises ValueError if ``source``/``scope`` is unknown, ``category`` is not in the closed
-    vocabulary, or ``correct`` violates the Scope's contract (ADR-0049):
-
-    - ``decision`` — ``correct`` indexes the Anchor's options (ADR-0015), and is mandatory EXCEPT as
-      a **DECLINE**: empty is admitted when the Anchor's select is provably optional
-      (``minCount == 0``), recording the ruling *"take none of these"* (Issue #229). Where
-      ``minCount`` cannot be read the record is refused, so this is a strict relaxation — a decline
-      is admitted only where the optional select is proved, never where it is merely assumed.
-    - ``turn`` — ``correct`` is optional; when given it indexes the Anchor's options and must
-      differ from ``chosen``, since giving it asserts the Anchor is the first divergent Decision.
-    """
+    """Validate and assemble a Correction from a tagged Decision (the **Anchor**). Raises ValueError
+    on an unknown source/scope/category, or a ``correct`` violating the Scope's contract (ADR-0049)."""
     if source not in SOURCES:
         raise ValueError(f"source must be one of {SOURCES}, got {source!r}")
     if scope not in SCOPES:

@@ -27,10 +27,8 @@ def _cell_n(cell: dict, arm: str) -> int:
 
 
 def checkpoint_regressions(checkpoints: list, *, z: float = _Z95) -> list[dict]:
-    """Which frozen checkpoints the candidate REGRESSES against vs the baseline. Per checkpoint
-    cell (``build_id``, candidate wins/n, baseline wins/n) compute the on−off delta and its
-    variance; flag it when the candidate is worse by MORE than the cell's own CI margin
-    (``delta < −z·√var``) — a real drop, not noise. Ordered worst-first."""
+    """Which frozen checkpoints the candidate REGRESSES against, worst-first: flagged when the
+    candidate is worse by MORE than the cell's own CI margin (``delta < −z·√var``), i.e. not noise."""
     flags = []
     for c in checkpoints:
         if c["candidate_n"] <= 0 or c["baseline_n"] <= 0:
@@ -44,16 +42,8 @@ def checkpoint_regressions(checkpoints: list, *, z: float = _Z95) -> list[dict]:
 
 
 def verdict(paired: dict, *, candidate_crashes: int, regressions: list, complete: bool = True) -> str:
-    """Map the paired win-delta CI to G2's read. ``paired`` is the raw ``paired_ab.paired_delta``
-    dict (keys ``delta``/``ci_lo``/``ci_hi``/``n_matchups``), which is also what ``flips_on`` reads:
-
-    - ``inconclusive`` — the run measured nothing (no paired cells) OR the matrix was cut short
-      (``complete`` is False, e.g. a capped run): a partial/empty run can never PASS, whatever the
-      surviving cells say, and only reads ``fail`` on an unambiguous loss.
-    - ``fail``  — the CI upper bound is below 0 (the candidate is provably worse overall).
-    - ``pass``  — the ``flips_on`` rule holds (delta ≥ 0, CI lower bound ≥ −1%, zero candidate
-      crashes) AND no checkpoint regression tripped AND the run is complete.
-    """
+    """Map a raw ``paired_ab.paired_delta`` to G2's read. An empty or INCOMPLETE matrix can never
+    PASS whatever its surviving cells say — it is ``inconclusive`` unless the loss is unambiguous."""
     if paired.get("n_matchups", 0) == 0:
         return "inconclusive"                                 # measured nothing -> never a pass
     if paired["ci_hi"] < 0:
@@ -64,12 +54,8 @@ def verdict(paired: dict, *, candidate_crashes: int, regressions: list, complete
 
 
 def checkpoint_pool(history_rows: list, available_artifacts, *, extra_ids=()) -> tuple[list, list]:
-    """Resolve the frozen-checkpoint opponent pool (pure). Pool = the SUBMITTED builds recorded in
-    ``agent_history.jsonl`` (``history_rows``) whose artifact zip is on disk (``available_artifacts``
-    = the set of present artifact stems), PLUS any ``extra_ids`` pinned by ``--checkpoints`` (they
-    ADD to the pool, they never restrict it). A submitted build with no local zip, or a pinned id
-    absent from history, is skipped with a named warning. Returns ``(pool, warnings)`` where each
-    pool entry is ``{"submission_id", "agent", "artifact"}``."""
+    """The frozen-checkpoint pool -> ``(pool, warnings)``: submitted builds whose artifact zip is on
+    disk, plus ``extra_ids``, which ADD to the pool and never restrict it. Misses warn, not raise."""
     available = set(available_artifacts)
     extra = {int(i) for i in extra_ids}
     by_id = {row.get("submission_id"): row for row in history_rows}
@@ -96,9 +82,8 @@ def checkpoint_pool(history_rows: list, available_artifacts, *, extra_ids=()) ->
 
 
 def _raw_paired(pairs: list) -> dict:
-    """The raw ``paired_ab.paired_delta`` aggregate (keys ``delta``/``ci_lo``/``ci_hi``/
-    ``n_matchups``) — what the verdict and ``flips_on`` read. Empty input -> a zero-width interval
-    with ``n_matchups`` 0, which the verdict reads as inconclusive (never a pass)."""
+    """The raw ``paired_ab.paired_delta`` aggregate. Empty input -> a zero-width interval with
+    ``n_matchups`` 0, which the verdict reads as inconclusive, never a pass."""
     if not pairs:
         return {"delta": 0.0, "ci_lo": 0.0, "ci_hi": 0.0, "n_matchups": 0}
     return paired_delta(pairs)
@@ -115,17 +100,8 @@ def build_report(*, baseline: dict, candidate: dict, matchups: list, h2h: list =
                  candidate_crashes: int = 0, git_rev: str = "", generated_at: str = "",
                  preset: str = "", per_cell_n: int = 0, status: str = "complete",
                  coverage: dict | None = None) -> dict:
-    """Assemble the frozen C3 report (``report_version`` 1).
-
-    ``matchups`` are the paired cells (C3 shape ``{opponent, seat, n, candidate_wins,
-    baseline_wins, draws}``, optionally per-arm ``candidate_n``/``baseline_n``) — the ONLY input to
-    the paired win-delta, computed per-arm so a resume that left the arms different sizes can't
-    produce a >1 win-rate. ``h2h`` cells (the informational candidate-vs-baseline block) are
-    emitted in ``matchups`` tagged ``informational`` but excluded from the delta and the verdict.
-    ``checkpoints`` (raw cells with both arms' wins) drive the regression tripwire and the C3
-    ``checkpoints`` block; they never enter the delta. ``status``/``coverage`` mark a capped/partial
-    run so the verdict can't PASS on a fraction of the powered matrix. ``aivat`` is
-    ``eval_aivat.aivat(...)``'s return (None in v1)."""
+    """Assemble the frozen C3 report (``report_version`` 1). ONLY ``matchups`` feeds the paired
+    win-delta — ``h2h`` is emitted tagged ``informational`` and ``checkpoints`` never enters it."""
     pairs = [(c["candidate_wins"], _cell_n(c, "candidate"), c["baseline_wins"], _cell_n(c, "baseline"))
              for c in matchups if _cell_n(c, "candidate") > 0 and _cell_n(c, "baseline") > 0]
     raw = _raw_paired(pairs)

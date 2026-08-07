@@ -1,27 +1,9 @@
-"""The correction-seeded acceptance corpus for the hypergeometric-fetch-closure subsystem
-(spec §Round 10 §1). The ~35 recorded shuffle / fetch / discard blunders that ARE the acceptance
-suite: each replays the REAL recorded state through the real `Pilot.explain()` and asserts the
-human's `correct` option is the one chosen (the `tests/strategy/test_blunder_*` harness).
+"""The correction-seeded acceptance corpus for the hypergeometric-fetch-closure subsystem.
 
-Two roles, one corpus (the TDD ratchet):
-  * **PINS** — corrections the shipped agent ALREADY gets right. Plain assertions: they lock the
-    behaviour the staged WP7 value convergences (refresh-SHED → keep-cost, fetch grab/pitch → the
-    oracle) must NOT regress — the net that makes each flip provable instead of reckless (ADR-0065).
-  * **TARGETS** — open blunders the convergence is meant to FIX, marked `xfail(strict=True)`. They
-    are green while unfixed; when a flip makes one pass, the strict-xfail turns it into a red XPASS —
-    the signal to PROMOTE it from a target to a pin. Delete the `xfail` mark, keep the id.
-
-Provenance & filtering (spec): ids are `<episode_id>-f<frame>`, drawn verbatim from the spec's family
-lists; every record is read from the committed `data/corrections/`; `reviewed.json` is joined first —
-`refuted` and `covered` corrections do NOT become fixtures (`test_excluded_ids_are_provably_out` proves
-each exclusion), and `refuted`/`covered` are now the ONLY grounds.
-
-`82228640-9` used to be excluded as "carries no `agent`/obs — unreplayable". That was false on both
-counts, and only a raw-JSONL walk could believe it: the record backfills to `mega_starmie` from its
-`agent_build` and carries an `obs` (ADR-0087, Issue #241 — the 40 dropped records). Replayed through
-the shipped Pilot it picks `[1]`, which IS the human's `correct`, so Issue #243 moved it into PINS
-rather than inventing a new ground to keep it out. An exclusion whose stated reason is untrue is the
-failure this file's own `test_excluded_ids_are_provably_out` exists to prevent.
+Each case replays the REAL recorded state through the real `Pilot.explain()` and asserts the human's
+`correct` option is chosen. PINS assert it outright; TARGETS are open blunders under
+`xfail(strict=True)`, so a flip turns red and forces the promotion. `refuted`/`covered` in
+reviewed.json are the ONLY grounds for exclusion.
 """
 from __future__ import annotations
 
@@ -34,14 +16,8 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 CORR = REPO / "data" / "corrections"
 
-# ── The families (spec §Round 10 §1). "<ep>-<frame>": each entry is a real recorded correction. ──
-#    PIN  = the shipped agent already ranks `correct` top today (a regression guard).
-#    TGT  = an open blunder; the staged convergence must flip it (xfail-strict target).
+# "<ep>-<frame>" -> what the human ruled. PIN = the shipped agent already ranks `correct` top.
 PINS = {
-    # PROMOTED BACK from `POC_T4_FLIPS` on 2026-08-07 by the composer tie-defer
-    # (`planner._tied_first_steps`): on each of these four the composer's own scores TIED, so it
-    # abstained, the structural sequencer took the turn, and the human's ruling was played. Their
-    # strict xfails XPASSed, which is what forced the move.
     "86091728-19": "attach: the {P} goes to the benched 2nd-line Dreepy, not the role-less off-Line "
                    "Active Munkidori — `prefer-active-attach-in-setup` stands down when a benched "
                    "Line member sits un-powered and the Active isn't a deck attacker; the "
@@ -51,17 +27,11 @@ PINS = {
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
-    # Recovered by ADR-0087's backfill (Issue #243): EXCLUDED here as "no-agent / unreplayable" until
-    # the raw walk was retired. The record is replayable and the shipped Pilot already makes the
-    # human's pick, so it belongs in PINS rather than TARGETS — a free regression guard the corpus
-    # was hiding.
     "82228640-9": "recovered from the 40 dropped records — the agent already makes the human pick",
     # discard-pair valuation (sets, not sums; role floors)
     "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
-    # These five record a SINGLE flagged discard for a 2-card forced pitch (correct ⊆ chosen, the
-    # partial-discard semantics above). The shipped keep-value ladder ALREADY discards the flagged
-    # card in each — role-floor + duplicate-first work; they pin that (they were misfiled as targets
-    # because a 1-index `correct` can never equal a 2-index pick).
+    # These five record a SINGLE flagged discard for a 2-card forced pitch, so they are `correct ⊆
+    # chosen` cases — a 1-index `correct` can never equal a 2-index pick.
     "82525101-14": "dp: never Ultra-Ball away the Ignition burst — pitch the duplicate Wally's (⊆)",
     "82749656-20": "dp: keep the ACE SPEC Hero's Cape — give back the redundant Salvatore (⊆)",
     "83686860-18": "dp: don't pitch BOTH Dreepy — one line survives; Judge goes instead (⊆)",
@@ -84,57 +54,24 @@ PINS = {
     "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
                    "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
     # shuffle timing & keep-value (the refresh side)
-    # Flipped by the TAG_TIER worth-coverage build (ADR-0065 §Build status): the discard ladder's
-    # keep-value tags (`discard_eot`, `clutch_heal`) now carry worth, so the graded shed charges for
-    # shuffling them and the refresh stands down — the agent attacks instead.
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
     "83686860-13": "keep: don't refresh a live hand — end the turn",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
-    # discard-as-resource (zone-signed worth)
-    # PROMOTED from TARGETS by POC-T4/5 (Issue #386): both were OPEN blunders awaiting a
-    # convergence, and the sequence composer gets them right. `82525741-78`'s own note said
-    # *"no evolve valuation can rank the human pick top here"* — and none does; what ranks it
-    # is scoring the whole TURN instead of the option. Both were XPASS(strict) before promotion.
+    # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
+    # scoring the whole TURN.
     "82525741-78": "poffin: don't play a fetch whose target class is exhausted",
     "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
                     "Ultra Ball fodder",
 }
 TARGETS = {
-    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
-    # evolve, but the blunder is the DEAD Buddy-Buddy Poffin: it fetches Basics of 70 HP or less,
-    # Staryu is the only such card in the deck, and all 3 copies were on the board. Evolving either
-    # Staryu is merely FINE — the evolve decider scores both exactly 0.0, i.e. correctly indifferent —
-    # so no evolve valuation can rank the human pick top here. The fix belongs to the fetch family's
-    # exhausted-target gate (#164), which is the convergence this target now awaits.
-    # discard-pair valuation
-    # `86091435-68` (don't pitch the Drakloak that can EVOLVE the active Dreepy) was the last strict
-    # target here — REFUTED-AS-LABELED 2026-07-19 (reviewed.json: the recorded 2nd slot was wrong,
-    # the Hammer should be KEPT for the opponent's Active; the keep-value equation's pick endorsed).
-    # Its SURVIVING substance rides as the relaxed deploy-now target below
-    # (`test_deploy_now_drakloak_is_not_pitched`) — the card must not be pitched, whatever fills the
-    # other slot. (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
-    #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
+    # `86091435-68` was REFUTED-AS-LABELED (reviewed.json); its surviving substance rides as
+    # `test_deploy_now_drakloak_is_not_pitched` below.
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
 }
-# ── POC-T4/5 FLIPS (Issue #386) — a THIRD category, deliberately not folded into TARGETS ─────
-#
-# These ten were PINS: the rung ladder ranked the human's pick top on each. The sequence composer
-# does not, so they are recorded here rather than deleted, rewritten, or quietly moved in with the
-# open blunders. The distinction is the whole point of a separate name:
-#
-#   TARGETS      = a blunder nobody has fixed yet; the convergence is MEANT to flip it.
-#   POC_T4_FLIPS = behaviour that CHANGED under the swap. Nobody has ruled on it. It may be a
-#                  regression, or the composer being right where the rung was lucky — and that
-#                  judgement belongs to a human reading the wave-3 packet, not to whoever is
-#                  making the suite green.
-#
-# Folding them into TARGETS would assert the first reading. Deleting them would assert neither and
-# lose the frame. `strict=True` is what makes this safe to leave: the day a flip is ruled and the
-# behaviour returns, the XPASS turns red and someone has to come back and promote it.
-#
-# Every id keeps its ORIGINAL pin text verbatim — what the human wanted is not re-narrated here.
+# A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
+# that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
 POC_T4_FLIPS = {
     "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
@@ -145,19 +82,15 @@ POC_T4_FLIPS = {
     "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle",
     "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
     "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
-    # Filed 2026-08-07 by the `shed` WIRING, not by the swap itself: `_composer_line` was not
-    # passing `Pilot.cost_shed_indices`, so every costed search REFUSED unpriced and the composer
-    # had no opinion about an Ultra Ball. Wiring it (`test_composer_seams_are_wired.py`) gave it
-    # one, and on these two frames the opinion disagrees with the human. That is a seam being
-    # COMPLETED turning an invisible abstention into a visible ruling question, which is the point.
+    # Filed by the `shed` WIRING, not the swap: before it, every costed search REFUSED unpriced and
+    # the composer had no opinion about an Ultra Ball.
     "83967841-17": "the composer plays Ultra Ball where the human ruled End turn; the costed "
                    "search is priced for the first time",
     "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
                    "same cause as 83967841-17",
 }
-# The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
-# the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
-# recorded blunder pick is not made and its option prices ≤ 0.
+# The tagged blunder is DEAD but strict `correct`-equality cannot hold: the residue is a DIFFERENT,
+# separately adjudicated line. Assert only the substance.
 SUBSTANCE_PINS = {
     "83038055-51": "Lillie's dead (−34); agent attacks. Residue: Jetting-vs-Nebula, ALREADY "
                    "adjudicated in the agent's favour (reviewed.json ep83661649 f30 / ep83116501 "
@@ -187,19 +120,15 @@ _REVIEWED = json.loads((CORR / "reviewed.json").read_text(encoding="utf-8"))
 
 
 def _record(cid: str):
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The private
-    module-level raw index this replaced dropped 40 records on a falsy `agent` — one of which,
-    `82228640-9`, this file EXCLUDED as "unreplayable" on exactly that evidence."""
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089)."""
     from corpus_helpers import corpus_record
     ep, fr = cid.split("-")
     return corpus_record(ep, int(fr))
 
 
 def _pilot(agent: str):
-    """A FRESH pilot per replay — the Pilot is stateful across `explain()` calls (the deck tracker
-    accumulates observations of ONE game), so sharing a pilot across corrections from different
-    games makes each verdict depend on which replays ran before it (measured: the same option scored
-    +8.1 polluted vs −6.9 clean). Slower, sound."""
+    """A FRESH pilot per replay: the Pilot is stateful across `explain()` calls (its deck tracker
+    accumulates ONE game), so sharing one FLIPS verdicts — an option scored +8.1 polluted, −6.9 clean."""
     spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -211,12 +140,8 @@ _AREA_ZONE = {4: "active", 5: "bench"}      # engine area code → the obs playe
 
 
 def _attach_fingerprint(obs: dict, opt: dict):
-    """The interchangeability key of an ATTACH option: (hand card, byte-identical target body). Two
-    attach options with the same fingerprint put the same Energy onto indistinguishable bodies (same
-    card id, hp, energies, tools — everything but the engine `serial`), so a human `correct` naming
-    one of them is satisfied by the other (the 074df7c lethal-recover precedent, stricter: identical
-    body state, not just card id). None for a non-attach option or an unresolvable target — those
-    keep exact-index matching."""
+    """(hand card, byte-identical target body) — everything but the engine `serial`. None for a
+    non-attach option or an unresolvable target; those keep exact-index matching."""
     if opt.get("type") not in _ATTACH_TYPES:
         return None
     cur = obs.get("current") or {}
@@ -232,9 +157,7 @@ def _attach_fingerprint(obs: dict, opt: dict):
 
 
 def _matches_up_to_interchangeability(obs: dict, chosen: set, correct: set) -> bool:
-    """Set equality where an attach index also matches a DIFFERENT attach index with the same
-    `_attach_fingerprint` — the multiset of picks is compared by fingerprint, with exact-index
-    identity for every non-attach (or unresolvable) pick."""
+    """Set equality, except that attach picks are compared by `_attach_fingerprint`."""
     if chosen == correct:
         return True
     if len(chosen) != len(correct):
@@ -248,16 +171,8 @@ def _matches_up_to_interchangeability(obs: dict, chosen: set, correct: set) -> b
 
 
 def _replay_picks_correct(cid: str) -> bool:
-    """Did the shipped Pilot make the human's pick? Set-valued (order-independent).
-
-    A forced DISCARD select takes ``minCount`` cards, but a human often records only the ONE
-    load-bearing card their correction is about ("pitch the duplicate Wally's, not the Ignition") —
-    a `correct` shorter than the pick count. Such a partial correction is satisfied iff every card it
-    names IS discarded (`correct ⊆ chosen`): the flagged mistake is not made, whatever fills the
-    remaining forced slot. A fully-specified correction (as many picks as the select forces) still
-    demands set equality — up to attach-target INTERCHANGEABILITY: a `correct` that names one of two
-    byte-identical bodies is satisfied by the other (86091728 f19 pins the SECOND of two bare benched
-    Dreepy; either receives the {P} identically — `_matches_up_to_interchangeability`)."""
+    """Did the shipped Pilot make the human's pick? A `correct` SHORTER than the forced pick count is
+    a partial correction, satisfied by `correct ⊆ chosen`; a full one demands set equality."""
     rec = _record(cid)
     d = _pilot(rec.agent).explain(rec.obs)
     chosen, correct = set(d.chosen), set(rec.correct)
@@ -281,9 +196,7 @@ _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.parametrize("cid", _CASES)
 def test_correction_ranks_the_human_pick_top(cid):
-    """Replay the recorded decision through the real Pilot: the human's `correct` option is chosen.
-    PINS assert it (regression net for the staged convergences); TARGETS xfail-strict until a flip
-    lands (then the XPASS says: promote this id from a target to a pin)."""
+    """TARGETS are xfail-strict, so a flip becomes an XPASS that says: promote this id to a pin."""
     assert _replay_picks_correct(cid), (
         f"{cid}: expected {_record(cid).correct_label!r}, "
         f"got {_record(cid).chosen_label!r}")
@@ -292,9 +205,7 @@ def test_correction_ranks_the_human_pick_top(cid):
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in SUBSTANCE_PINS])
 def test_substance_pin_the_tagged_blunder_is_dead(cid):
-    """The recorded blunder pick is not made AND its option prices ≤ 0 — the correction's substance,
-    without pinning the alternative line (which is separately adjudicated / designed; see
-    SUBSTANCE_PINS notes)."""
+    """The blunder is not made AND prices <= 0, without pinning the alternative line."""
     rec = _record(cid)
     d = _pilot(rec.agent).explain(rec.obs)
     blunder = set(rec.chosen)
@@ -307,13 +218,8 @@ def test_substance_pin_the_tagged_blunder_is_dead(cid):
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_deploy_now_drakloak_is_not_pitched():
-    """The SURVIVING substance of the refuted `86091435-68` (user re-review 2026-07-19): whatever
-    fills the other Ultra-Ball slot, the hand Drakloak — the ONLY card that can evolve the active
-    Dreepy this turn (the benched Drakloak is a different Line instance and covers nothing) — must
-    not be pitched. Relaxed from the refuted strict label, whose 2nd slot wrongly pitched the
-    Crushing Hammer the user now rules should hit the opponent's Active (Archaludon ex). PROMOTED to
-    a plain pin 2026-07-19: the deploy-now spike + the seam-D swap (`discard_keep_value`) landed, so
-    the equation now keeps the Drakloak."""
+    """The surviving substance of the refuted `86091435-68`: whatever fills the other Ultra-Ball
+    slot, the hand Drakloak — the only card that can evolve the active Dreepy — must not be pitched."""
     rec = _record("86091435-68")
     p = _pilot(rec.agent)
     d = p.explain(rec.obs)

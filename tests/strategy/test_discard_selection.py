@@ -89,9 +89,8 @@ def _powered_setup(hand_ids, *, active_energy):
 
 @pytest.mark.req("REQ-GEN-0067")
 def test_burst_energy_keep_decays_once_the_active_is_fully_powered():
-    """ep83454549 f36: the Active Mega already carries Nebula Beam's cost — Ignition's burst has no
-    urgent job, so the keep-key premise is void and the hand-refresh engine Supporter (Lillie's)
-    outkeeps it: pitch [dead opener, Ignition], keep Lillie's."""
+    """The Active already carries its attack cost, so Ignition's burst has no urgent job and the
+    keep-key premise is void — the hand-refresh engine Supporter outkeeps it."""
     pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=3)
     dec = pilot.explain(obs)      # premise void: no keep
     assert set(pilot.decide(obs)) == {0, 2}                               # pitch opener + Ignition

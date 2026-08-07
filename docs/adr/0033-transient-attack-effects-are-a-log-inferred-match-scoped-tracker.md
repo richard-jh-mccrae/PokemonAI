@@ -63,3 +63,8 @@ cost-raisers stay on the ledger (tracked fields exist for none of them; retreat-
 engine-enforced at the menu and deliberately untracked — the 2026-07-02 amendment). The
 tracker is the first match-scoped state INSIDE the Pilot; the `_planning` guard is the invariant
 that keeps engine-sim futures from polluting it.
+
+**Measured engine fact (composition order).** The engine applies **resistance before** a defender
+takes-less transient: an Okidogi draft measured resistance −30 and then Reflect −40 against the base
+70. `tests/sim/test_transients_engine.py` therefore picks a Shaymin/Sigilyph pair that is neither
+weak nor resisted, so the transient is the only modifier on the hit and the reading is clean.

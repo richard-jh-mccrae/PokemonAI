@@ -1,20 +1,11 @@
-"""Per-build JSONL store for Corrections -- the "correction log" (ADR-0009, ADR-0015).
+"""Per-build JSONL store for Corrections — the "correction log" (ADR-0009, ADR-0015).
 
-Corrections are filed by the **build that played the game**, mirroring ``data/replays/<stem>/``:
-``data/corrections/<agent_build>/corrections.jsonl`` (e.g. ``mega_starmie_20260625_bde590c/``),
-so at competition end you can track which agent/build had which corrections over time. Routing is
-automatic -- a Correction carries its ``agent_build`` (ADR-0015), so ``append_correction`` files it
-in the right subdir; corrections with no parseable build identity go to ``_unfiled/``. Each file is
-append-only JSONL (gold, committed). A ``.jsonl`` path addresses one file; a directory addresses the
-whole tree (``load_corrections`` unions + dedups every ``<build>/corrections.jsonl`` under it).
+Filed by the build that played the game; unparseable build identity goes to ``_unfiled/``. A
+``.jsonl`` path addresses one file, a directory the whole tree.
 
-Reads are **deduplicated** by default (``load_corrections``): the same *subject* tagged twice
-(same episode/seat/scope/subject/chosen/correct/category) is one blunder, so consumers (Tuner, report,
-``/blunder-buster``, the inspector list) see it once -- duplicates otherwise amplify the weight
-fit and inflate counts. A different category/correct on the same subject is a *conflict*, kept.
-The subject is the Anchor frame for a decision Correction and the Turn / seat for a scoped one
-(ADR-0049), so a Turn Correction never collides with the Decision Corrections inside that Turn.
-The on-disk file stays append-only; ``tools/train/dedup_corrections.py`` physically compacts it.
+Reads are deduplicated by Scope subject (ADR-0049), because a duplicate otherwise amplifies the
+weight fit; a differing category/correct on the same subject is a *conflict* and is kept. The
+on-disk file stays append-only — ``tools/train/dedup_corrections.py`` physically compacts it.
 """
 from __future__ import annotations
 
@@ -25,19 +16,14 @@ from .correction import Correction, identity_key
 
 
 def _dedup_key(c: Correction):
-    """What makes two Corrections 'identical in nature' (one blunder, not two).
-
-    Keyed by the Scope's subject (ADR-0049), never the Anchor frame — so the same Turn tagged
-    from two frames is one blunder. For a decision-scope record the subject *is* the frame, so
-    this is byte-identical to the pre-Scope key.
-    """
+    """Keyed by the Scope subject (ADR-0049), never the Anchor frame, so the same Turn tagged from
+    two frames is one blunder."""
     return (*identity_key(c), tuple(c.chosen), tuple(c.correct), c.category)
 
 
 def dedup_corrections(corrections) -> list[Correction]:
-    """Collapse exact-duplicate Corrections, keeping the LATEST per key (its refined rationale /
-    identity). Corrections that differ in category or correct on the same decision are conflicts,
-    not duplicates -- all are kept. The same frame in a different episode is a distinct blunder."""
+    """Keeps the LATEST per key. Differing category/correct on one decision is a conflict, not a
+    duplicate, and all of those are kept."""
     seen: dict = {}
     for c in corrections:
         seen[_dedup_key(c)] = c          # last occurrence wins; dict keeps first-seen order
@@ -45,9 +31,8 @@ def dedup_corrections(corrections) -> list[Correction]:
 
 
 def find_conflicts(corrections) -> list:
-    """Subjects (episode, seat, scope, subject) tagged with >1 distinct judgment (category/correct)
-    after dedup -- genuine disagreements for a human to resolve, not duplicates. Returns
-    [(key, [corr])]."""
+    """``[(key, [corrections])]`` for subjects carrying >1 distinct judgment after dedup — genuine
+    disagreements for a human to resolve."""
     from collections import defaultdict
     groups: dict = defaultdict(list)
     for c in dedup_corrections(corrections):
@@ -70,13 +55,8 @@ def _is_file(source: Path | str) -> bool:
 
 
 def jsonl_files(source: Path | str) -> list[Path]:
-    """Log file(s) a source denotes: a ``.jsonl`` path -> itself; a directory -> every
-    ``<build>/corrections.jsonl`` under it (plus a legacy root-level ``corrections.jsonl``).
-
-    **Public because the store owns where the logs LIVE** (ADR-0087 decision 1). A caller that
-    needs per-file provenance — the frame viewer prints the source path — must not re-derive the
-    layout with its own glob: that is a second idea of what the corpus IS, one level below the second
-    idea of what a *record* is that cost the Decision Gate 40 records. Ask here instead."""
+    """Public because the store owns where the logs LIVE (ADR-0087 decision 1): a caller needing
+    per-file provenance asks here rather than re-deriving the layout with its own glob."""
     source = Path(source)
     if _is_file(source):
         return [source] if source.exists() else []

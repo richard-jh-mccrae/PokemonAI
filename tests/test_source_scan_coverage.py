@@ -1,24 +1,13 @@
 """A test that scans source BY PATH must keep scanning all of it when the code moves.
 
-Several tests read `src/**.py` as text or AST and assert over what they find. Each already carries a
-positive control, so a scan that finds *nothing* fails loudly — that is not the gap. The gap is
-narrower and opens only during a refactor: every one names a **hard-coded module list** (`MODULES`,
-`CONSUMERS`, `PILOT_SRC`), while `Pilot` is a mixin composition whose methods live across seven files
-today and are planned to spread further. Move a method out of `pilot.py` and the list still names a
-real file, the control still finds real content, and the scan quietly stops covering the surface it
-was written to police — a gate does not become sound by getting quieter.
+Each registered scan names a hard-coded module list while `Pilot` is a mixin composition spread
+across several files, so moving a method leaves the list naming a real file while the scan quietly
+stops covering the surface it was written to police.
 
-Two ideas are kept apart deliberately, because conflating them produced a false failure while this
-file was being written:
-
-* **The decider surface** — `src/common/*.py` modules contributing `Pilot` methods (today: `pilot.py`
-  alone; after the split: the `decide_*.py` siblings). These hold the closed-form deciders.
-* **The planner surface** — `src/common/strategy/**`, i.e. `PlannerMixin`, `ObjectivesMixin` and the
-  four doctrine mixins. These legitimately compose the leaf, and `planner.py` imports `state_value`
-  by design (ADR-0092: the engine leaf IS ``KO_SCORE x state_value(...)``).
-
-The insulation guard below therefore follows the DECIDER surface only. Asserting it over the whole
-MRO reports `planner.py` as an offender, which is the instrument being wrong rather than the code.
+Two surfaces are kept apart deliberately: the DECIDER surface (`src/common/*.py` modules
+contributing `Pilot` methods) and the PLANNER surface (`src/common/strategy/**`, which composes the
+leaf and imports `state_value` by design, ADR-0092). The insulation guard follows the DECIDER
+surface only — asserting it over the whole MRO reports `planner.py` as a false offender.
 """
 from __future__ import annotations
 
@@ -96,8 +85,7 @@ def _decider_surface() -> set[str]:
 
 def _literals(rel: str, names: tuple[str, ...]) -> set[str]:
     """What a registered scan ACTUALLY reads: the binding's RUNTIME value, resolved by importing the
-    module. Reading the source literal instead would credit a hand-kept tuple and score a
-    self-maintaining glob as covering nothing — the opposite of what this gate is for."""
+    module. Reading the source literal would score a self-maintaining glob as covering nothing."""
     spec = importlib.util.spec_from_file_location(f"_scancov_{Path(rel).stem}", REPO / rel)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
