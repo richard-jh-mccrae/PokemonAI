@@ -80,11 +80,29 @@ def stadium_hp_delta(gs: GameState, p) -> int:
     Mountain: Stage 2s −30 both sides, pinned ml_dx_2001 f112: 320-HP Dragapult ex
     renders 290) PLUS matching attached-energy bonuses (Grow Grass: +20 on a {G}
     holder — computed live so it floats with the holder's type across evolution,
-    unlike the mutate-model tools). Damage counters live on stored hp/max_hp."""
+    unlike the mutate-model tools). Damage counters live on stored hp/max_hp.
+
+    ``stadium.hpDelta`` is ``{"amount": n, "filter": {…}}`` over the ordinary
+    :func:`_card_matches` vocabulary, which already carried ``basic`` and ``stage2``.
+    It replaced a bespoke ``stage2HpDelta`` key at Issue #435, when **Lively Stadium
+    (1251)** — *"Each Basic Pokémon in play (both yours and your opponent's) gets +30
+    HP"* — needed the same arithmetic against a different body class: two one-off keys
+    for one effect is the shape a filter already expresses, and the general form now
+    matches `card_effects.json`'s own ``{"effect": "hp_delta", "amount", "applies_to"}``
+    clause 1:1, which is what makes the cross-engine agreement checkable rather than
+    coincidental (`tests/parity/test_stadium_static_cross_engine.py`).
+
+    **Both sides, structurally.** Every `stadium_static` in the pool is ``symmetric:
+    true``, and this function takes a BODY rather than a seat, so a modifier reaches
+    the opponent's board by the same call that reaches ours. A ``symmetric: false``
+    static would need a seat dimension that neither engine has — see
+    `common/board_delta.py:stadium_hp_delta`, which mirrors this quantity and mirrors
+    the limitation."""
     delta = 0
     sdef = stadium_def(gs)
-    if "stage2HpDelta" in sdef and gs.stat(p.top).stage2:
-        delta += sdef["stage2HpDelta"]
+    hp_delta = sdef.get("hpDelta")
+    if hp_delta and _card_matches(gs, p.top, hp_delta.get("filter", {})):
+        delta += hp_delta["amount"]
     for s in p.energy:
         edef = def_for(gs.card_id(s)) or {}
         hb = edef.get("hpBonus", 0)

@@ -9,25 +9,24 @@ exercises yet — they land with the pool-wide fan-out (M4). REQ-CGPY-0002.
 
 Not every assertion here is trace-pinned: `test_resistance_reduces_30` sweeps the pool
 for a matching pair, and Issue #346's Tool block below is derived from printed card
-text. This module is the one home for hand-built `attack_damage` assertions — it owns
-`make_state`, the suite's only hand-built cgpy `GameState` — so text-derived damage
-gates live here rather than in a second builder somewhere else.
+text. This module is the one home for hand-built `attack_damage` assertions, and the
+builder it uses — `make_state`, still the suite's ONLY hand-built cgpy `GameState` — now
+lives in `tests/cgpy_state_helpers.py` so the one other claim that needs a board with no
+trace behind it (`test_stadium_static_cross_engine.py`, Issue #435) can reach it without
+a second copy existing. Text-derived damage gates still live here.
 """
 from __future__ import annotations
 
 import csv
-from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from cgpy.cards import CardDB
 from cgpy.chain import def_for, load_chain_defs, start_program
 from cgpy.damage import attack_damage
-from cgpy.state import CardInstance, GameState, PokemonInPlay
 from cgpy.turn import apply_answer
 
-DB = CardDB.load()
+from cgpy_state_helpers import DB, make_state
 
 CINDERACE = 666        # fire, weak to water
 MEGA_STARMIE = 1031    # water attacker (Jetting Blow 1487 / Nebula Beam 1488)
@@ -35,36 +34,6 @@ DRAGAPULT = 121        # Tera: benched attack damage is prevented
 STARYU = 1030
 JETTING_BLOW = 1487
 NEBULA_BEAM = 1488
-
-
-def make_state(attacker_cid: int, defender_cid: int,
-               defender_bench: Sequence[int] = (),
-               attacker_tools: Sequence[int] = (),
-               attacker_bench: Sequence[int] = ()) -> GameState:
-    cards: dict[int, CardInstance] = {}
-    serial = iter(range(3, 200))
-
-    def mon(cid: int, owner: int) -> PokemonInPlay:
-        s = next(serial)
-        cards[s] = CardInstance(serial=s, card_id=cid, owner=owner)
-        hp = DB.card(cid).hp
-        return PokemonInPlay(stack=[s], hp=hp, max_hp=hp)
-
-    gs = GameState(db=DB, cards=cards, players=[], rng=None)
-    from cgpy.state import PlayerBoard
-    b0, b1 = PlayerBoard(), PlayerBoard()
-    b0.active = mon(attacker_cid, 0)
-    b1.active = mon(defender_cid, 1)
-    b0.bench = [mon(c, 0) for c in attacker_bench]
-    b1.bench = [mon(c, 1) for c in defender_bench]
-    for cid in attacker_tools:                 # attached Pokémon Tool (owner = attacker)
-        s = next(serial)
-        cards[s] = CardInstance(serial=s, card_id=cid, owner=0)
-        b0.active.tools.append(s)
-    gs.players = [b0, b1]
-    gs.turn = 3
-    gs.phase = "TURN"
-    return gs
 
 
 def test_weakness_doubles():
