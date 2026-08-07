@@ -300,20 +300,11 @@ _CLASS_B_SPEND_IDS = frozenset({   # the "spend account" rules (t0-planner-dispo
     # Their referent — spending a one-shot Energy that buys nothing — is now the decider's
     # EVAPORATION LOSS, carried on `OptionTrace.attach_spend` and added below, so the account keeps
     # the signal without keeping the weight coincidences.
-    #
-    # ⚠️ **THIRTEEN more left at POC-T4/5 (Issue #386), and they left SILENTLY** — the HEAL, RETREAT,
-    # SEQUENCING and DISRUPTION clusters plus the Tool doctrine's MAIN-phase half were deleted into
-    # the sequence composer, and this set went on naming their rungs: `dont-waste-clutch-heal`,
-    # `dont-rush-evolve-without-target`, `dont-play-switch-for-no-gain`,
-    # `dont-play-damage-boost-when-cant-attack`, `dont-spend-unneeded-supporter`,
-    # `hold-wincon-dont-shuffle`, `hold-line-piece`, `hold-wincon-with-base`,
-    # `hold-successor-when-doomed`, `hold-the-retreat-tool-with-no-retreat`,
-    # `save-tool-for-the-attacker`, `hold-irreplaceable-tool`, `protect-ace-spec-tool`,
-    # `keep-key-cards`.
-    # A member no Strategy ships can never appear in `OptionTrace.fired`, so removing it is a
-    # provable no-op on `_line_account` — the account was already only its five live members. That is
-    # exactly why it went unnoticed: nothing broke, and the set read as three times its true size.
-    # `tests/strategy/test_rung_id_literals_are_live.py` now holds both halves to the live roster.
+    # ⚠️ Thirteen dead members were dropped by PR #448, and they did NOT leave together: six went at
+    # POC-T4/5, three in merges from 2026-07-18/19/27, and four were never ids at all (stems whose real
+    # rungs carried `-dont-shuffle` / `-at-discard`). A member no Strategy ships can never reach
+    # `OptionTrace.fired`, so the set read at three times its true size for weeks, costing nothing and
+    # showing nothing. `tests/strategy/test_rung_id_literals_are_live.py` is the interlock.
     "dont-rush-evolve-without-target", "dont-refresh-into-a-probable-miss",
     "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck",
     "dont-search-a-probable-whiff",

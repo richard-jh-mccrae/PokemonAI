@@ -72,6 +72,15 @@ FOLDED: dict[str, Fold] = {
     "attach-energy-last": Fold(
         "0069", "common.pilot:Pilot._finish_turn_last",
         "the -5 rung became a structural tier: free development, then Supporter, then ATTACH"),
+    # Both RETIRED by PR #432, reverted by PR #447, restored by PR #448 — the rungs stay retired, so the
+    # records stand. They were dropped here for exactly one commit while the revert was live: a fold
+    # record tracking a MERGE rather than a measurement is a record that can be un-made by one.
+    "aurajab-skip-partnerless-solrock": Fold(
+        "", "common.pilot:Pilot._attach_value",
+        "Issue #425: Strategy.partners alone decided ml f87, so the deck rung was measured redundant"),
+    "gravity-mountain-vs-stage2": Fold(
+        "", "common.pilot:Pilot._boost_lethal_tactical",
+        "Issue #424: the boost reaches the card through its card_effects.json clause, not a deck-side id"),
     # --- PR #447 (POC-T4/5, Issue #386) deleted the rung LADDER. Destinations are main's own notes,
     #     transcribed rather than inferred: `strategy/baseline/__init__.py`, `doctrine_gust.py`'s
     #     "WHETHER-TO-PLAY band is DELETED" block, and the tombstone in `dragapult_ex/strategy.py`.
@@ -91,12 +100,16 @@ FOLDED: dict[str, Fold] = {
         "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
     "hold-the-retreat-tool-with-no-retreat": Fold(
         "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
-    # NOT registered, deliberately: `gust-for-the-ko`, `gust-for-the-loaded-equal-ko` and
-    # `retreat-to-wall-the-line` are retired Hypotheses that `pilot._finish_turn_last`'s tier
-    # predicates still name in INLINE string literals, so the harvest reads them as live and a fold
-    # record would trip the reused-id gate. Those two tiers are therefore unreachable on `main`,
-    # which is a scoring ruling to make (restore the tier, or delete the branch) rather than a
-    # registry entry to write. Same masking shape as the `_CLASS_B_SPEND_IDS` interlock, one layer down.
+    # The three ids `_finish_turn_last`'s two tiers matched as INLINE string literals. Registrable only
+    # since PR #448 deleted those tiers: while a tier still named an id, the harvest read it as LIVE.
+    "gust-for-the-ko": Fold(
+        "0132", UNREPLACED,
+        "hole is TOTAL: CLAUSE_WRITES['gust'] blocks _covers, so rung, tier and leaf are all silent"),
+    "gust-for-the-loaded-equal-ko": Fold(
+        "0132", UNREPLACED, "sibling gate for the loaded-attacker EQUAL-prize case; same total hole"),
+    "retreat-to-wall-the-line": Fold(
+        "0132", "common.composer:compose",
+        "a narrowing, not a break: the composer scores the retreat in-sequence on 63.4% of MAIN frames"),
     "gust-for-the-stall": Fold(
         "0092", "common.composer:compose", "gust-then-attack is a SEQUENCE; the composer compares it as one"),
     "stall-gust-over-dev-when-starved": Fold(
@@ -279,9 +292,10 @@ NOT_A_RUNG: dict[str, str] = {
 #: Ratchet on how many `src/` SITES still name a retired rung, backticked or not. Lower it as the reduction
 #: pass deletes stale mentions. A tombstone is legitimate; this many is prose nobody re-read.
 #:
-#: RAISED ONCE, 181 -> 204, when PR #447 deleted the rung ladder: `_bare_mentions` scans the REGISTERED
-#: set, so registering 14 newly-retired rungs makes their existing prose visible to a scan that was
-#: previously blind to it. The prose did not grow — the instrument's reach did. That is the ONLY
-#: legitimate reason to raise this number, and it must be stated, because "the ceiling went up" and
-#: "the rot got worse" are indistinguishable from the number alone.
-MAX_MENTIONS = 204
+#: RAISED, 181 -> 228, across the PR #447/#448 pair: `_bare_mentions` scans the REGISTERED set, so
+#: registering 19 newly-retired rungs makes their EXISTING prose visible to a scan that was blind to it.
+#: The prose did not grow — the instrument's reach did. That is the ONLY legitimate reason to raise this
+#: number, and it must be stated, because "the ceiling went up" and "the rot got worse" are
+#: indistinguishable from the number alone. Five of the 19 could not be registered at all until PR #448
+#: deleted the tiers naming them, which is why this took two raises rather than one.
+MAX_MENTIONS = 228
