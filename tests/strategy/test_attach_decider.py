@@ -710,12 +710,16 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
 #
 # **Both are RETIRED**, measured 2026-08-06 against `origin/main` @ `e8141b8` before any edit.
 #
-# The validation base is **2/2 gradeable, 3 raw**. ADR-0121 Decision 0 binds here — *a follow-up
-# select is only gradeable if the MAIN decision that opened it was correct* — so the base was run
-# through `train.grab_sweep._off_policy` FIRST: of the three ruled 678 ctx-21 frames, `85058574-121`
-# is off-policy (two earlier ruled blunders on the same turn) and is excluded, while `84889539-87`
-# and `86088989-63` are clean. Excluding it costs the argument nothing: it is also the one frame
-# where neither rung ever fired.
+# The validation base is **3/3 gradeable**, on which the decider agrees at **2** (Issue #442,
+# amending Issue #425's original *2/2 gradeable, 3 raw*). ADR-0121 Decision 0 binds here — *a
+# follow-up select is only gradeable if the MAIN decision that opened it was correct* — so the base
+# is run through `train.grab_sweep._off_policy` FIRST. Under the detector Issue #412 rebuilt on
+# `main` (`1e4e5243`), all three ruled 678 ctx-21 frames come back gradeable: `84889539-87` and
+# `86088989-63` have no candidate at all, and `85058574-121` has one (`f114`) that a developer ruled
+# GRADEABLE. Including it costs the retirement nothing — it is still the one frame where neither
+# rung ever fired, measured in both arms — but the decider MISSES it, and that miss is filed
+# separately as Issue #443 (it is pre-existing: the Decision Gate has graded it as a non-voided
+# disagreement all along). See `test_the_678_validation_base_is_three_of_three_...` below.
 #
 # On that base, all 70 committed mega_lucario Corrections replayed through the shipped Pilot and
 # through the same Pilot with the two ids filtered out of `strategy.hypotheses` moved **zero**
@@ -732,6 +736,7 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
 # Card facts VERIFIED at source (data/EN_Card_Data.csv, 2026-08-06).
 RIOLU = 677                         # Basic; Mega Lucario ex's ONLY previous stage. Retreat 2
 MEGA_LUCARIO_EX = 678               # Stage 1 from Riolu; Aura Jab {F} 130 / Mega Brave {F}{F} 270
+HARIYAMA = 674                      # Stage 1 from Makuhita, HP 150; Wild Press {F}{F}{F} 210 (70 self)
 _AURAJAB_RUNGS = {"aurajab-skip-partnerless-solrock", "aurajab-load-the-wincon-line"}
 
 
@@ -821,27 +826,68 @@ def test_aura_jab_does_not_hand_a_third_energy_to_a_two_cost_riolu():
     assert riolu["build"] == 0.0 and riolu["retreat_equity"] == 0.0 and riolu["tactical"] == 0.0
 
 
-def test_the_678_validation_base_is_two_of_three_and_names_which_one_is_off_policy():
-    """The base this retirement rests on, measured rather than assumed — **2/2 gradeable, 3 raw**.
+def test_the_678_validation_base_is_three_of_three_and_the_decider_misses_one():
+    """The base this retirement rests on, RE-MEASURED after `main` moved — **3/3 gradeable**, on
+    which the decider agrees with the human at **2**.
 
-    ADR-0121 Decision 0: *a follow-up select is only gradeable if the MAIN decision that opened it
-    was correct*. An `ATTACH_FROM` menu exists only because the agent attacked with Aura Jab, so if
-    that turn's earlier play was itself ruled a blunder, the board is one the agent should never have
-    reached and a Correction filed on it is not evidence about the recipient pick.
+    ## What changed, and why it is not drift
 
-    `85058574-121` is exactly that: two earlier ruled Corrections on the SAME turn 10 (`f114`
-    wrong_attack, `f109` other, both MAIN). Its own rationale says the same thing from the other
-    direction — *"TURN-PLANNER scope, NOT the single-turn energy oracle"* — and the record is
-    `scope="turn"`. It is EXCLUDED, not failed, and excluding it costs the retirement nothing: it is
-    also the one frame of the three where neither retired rung ever fired.
+    Issue #425 measured this base as *2/2 gradeable, 3 raw*: the old same-turn off-policy detector
+    flagged `85058574-121`, so it was excluded. `main`'s Issue #412 (`1e4e5243`) then rebuilt that
+    detector — `candidates()` became a purely mechanical scan and `RULINGS` became the developer's
+    verdict, with *"`classify()` never reaches OFF_POLICY on its own reasoning"* — and ruled this
+    exact frame **GRADEABLE**: its one surviving candidate `f114` is a Poké Pad vs attach swap, which
+    moves none of the bodies or HP the frame's own multi-turn rationale reasons from. The frame did
+    not drift out of the flagged set; a human ruled it back in. Two textually-clean branches
+    therefore collided semantically, which is Issue #442.
 
-    POSITIVE CONTROL, required because this test's headline is an absence: the same detector is
-    pointed at the ctx-7 base, where ADR-0121 measured 15 of 31 off-policy. A detector that has gone
-    quiet would otherwise certify every frame as clean.
+    ## The licence to re-author rather than delete or relax
 
-    A test asserting the two survivors' DECISIONS is above; this one asserts only who is in the base
-    and who is not. Delete it the day the Turn Planner reaches `85058574-121` and the record stops
-    being off-policy — do NOT relax it into grading that frame."""
+    This test's previous version forbade both cheap fixes — *"Delete it the day the Turn Planner
+    reaches `85058574-121` … do NOT relax it into grading that frame."* Neither path was licensed
+    **without a verdict**; Issue #442 obtained one (2026-08-07): **the retirement STANDS.** Deleting
+    a rung that provably never fires on a frame cannot make that frame's inclusion unsafe, and
+    neither retired rung fires here — measured in both arms (shipped, and with both Hypotheses
+    restored in memory from `5eacac3a^`), scores identical to the digit. Mechanically they cannot:
+    `skip-partnerless-solrock` needs Lunatone ABSENT and Lunatone is in play (it is option 0's own
+    recipient), and `load-the-wincon-line` needs `card_is_line_preevo` with no Riolu among the
+    recipients. So the base is re-authored honestly instead of silenced.
+
+    ## What it now encodes
+
+    All three frames gradeable; the decider agrees at `84889539-87` and `86088989-63` and MISSES
+    `85058574-121`, where the equation ranks the Solrock (676) recipient above the ruled Hariyama
+    (674) with **no rung firing on any option** — the ranking is pure `_attach_value`. That miss is
+    PRE-EXISTING, not this branch's: `data/decider_lab/baseline.json` has always carried
+    `85058574|1|turn|10` as `context 21, correct [3], chosen [1]`, unvoided and graded, and the
+    Decision Gate has always been green over it. It is filed as **Issue #443**, which also carries
+    the OPEN question of whether the frame belongs to the attach decider at all or to the Turn
+    Planner — its record is `scope="turn"` and its rationale closes *"TURN-PLANNER scope, NOT the
+    single-turn energy oracle."* `off_policy`'s GRADEABLE answers a DEPENDENCY question, not a scope
+    one, and nobody has ruled the second.
+
+    Also corrected: the old docstring named TWO predecessors flagging this frame (`f114` + `f109`).
+    Only `f114` is a candidate now — `f109` is an ENDORSEMENT (`chosen == correct == [9]`, an
+    explicit *"match planer note"*), and Issue #412's `endorses_the_play` narrowing stopped it
+    scanning.
+
+    POSITIVE CONTROLS — one per absence, because *"found nothing"* and *"my instrument is broken"*
+    return the same empty output (CLAUDE.md). There are THREE absences here, so there are three:
+
+    1. **`_off_policy` returning `[]`** → the disputed frame must still HAVE a candidate (`f114`), so
+       its GRADEABLE is demonstrably a developer RULING and not an empty scan standing in for one.
+    2. **the detector as a whole** → `off_policy.control` re-points the same scan at the ctx-7
+       population ADR-0121 ruled it on. It counts CANDIDATES, not verdicts, precisely so it does not
+       fade to zero as the review succeeds.
+    3. **no rung firing at `85058574-121`** → `85058574-114`, the SAME episode through the SAME
+       `mega_lucario` Pilot and the same `explain()` path, fires rungs loudly. Without this the
+       `not any(t.fired ...)` leg would pass green if `fired` were renamed, if the channel stopped
+       being populated, or if `dec.options` came back empty — three ways to certify silence that have
+       nothing to do with the decider. The option arity is asserted alongside for the same reason.
+
+    Goes RED if the base gains or loses a member, if any of the three changes off-policy verdict, or
+    if the decider's pick moves at any of the three."""
+    from train.blunder import off_policy as op
     from train.blunder.store import load_corrections
     from train.grab_sweep import _off_policy
 
@@ -856,11 +902,43 @@ def test_the_678_validation_base_is_two_of_three_and_names_which_one_is_off_poli
     def _effect(c):
         return (((c.obs or {}).get("select") or {}).get("effect") or {}).get("id")
 
-    base = {f"{c.episode_id}-{(c.decision or {}).get('frame')}": _off_policy(c, by_ep)
+    base = {f"{c.episode_id}-{(c.decision or {}).get('frame')}": c
             for c in corrs if c.obs and _ctx(c) == 21 and _effect(c) == MEGA_LUCARIO_EX}
     assert set(base) == {"84889539-87", "85058574-121", "86088989-63"}, f"base moved: {sorted(base)}"
-    assert not base["84889539-87"] and not base["86088989-63"]        # the two the equation is graded on
-    assert base["85058574-121"], "the off-policy frame stopped being flagged — re-rule the base"
+    for key, c in sorted(base.items()):
+        assert _off_policy(c, by_ep) == [], f"{key} left the gradeable base — re-rule it"
 
-    flagged7 = [c for c in corrs if c.obs and _ctx(c) == 7 and _off_policy(c, by_ep)]
-    assert flagged7, "CONTROL FAILED: the detector flags nothing at ctx 7 either — it is broken"
+    # CONTROL 1: the disputed frame's GRADEABLE is a developer RULING over a live candidate, not the
+    # empty scan an unruled-and-unflagged frame would also produce.
+    disputed = base["85058574-121"]
+    assert [x.frame for x in op.candidates(disputed, by_ep)] == [114], "f114 stopped scanning"
+    assert op.RULINGS[op.ruling_key(disputed)].verdict == op.GRADEABLE
+
+    # 3 of 3 gradeable, 2 of 3 agreeing — each decision replayed through the shipped Pilot.
+    replays = {f"{ep}-{fr}": _replay_rows(ep, fr)
+               for ep, fr in (("84889539", 87), ("86088989", 63), ("85058574", 121))}
+    agree = {k: sorted(d.chosen or []) == sorted(r.correct or [])
+             for k, (r, d, _rows) in replays.items()}
+    assert agree == {"84889539-87": True, "86088989-63": True, "85058574-121": False}, agree
+
+    # CONTROL 2: the detector still fires on the ctx-7 population ADR-0121 ruled it on.
+    control = op.control(corrs)
+    assert control["healthy"], f"CONTROL FAILED: the detector is silent at ctx 7 — {control}"
+
+    # The one miss, NAMED — Solrock over the ruled Hariyama, with no rung in the sum (Issue #443).
+    rec, dec, rows = replays["85058574-121"]
+    assert dec.chosen == [1] and rec.correct == [3]
+    assert rows[1]["target"] == SOLROCK and rows[3]["target"] == HARIYAMA
+    assert rows[1]["tactical"] > rows[3]["tactical"]
+    # Lunatone IS in play — it is option 0's own recipient — which is why the retired
+    # `skip-partnerless-solrock` (Lunatone ABSENT) could never have fired here.
+    assert rows[0]["target"] == LUNATONE
+    assert RIOLU not in {r["target"] for r in rows.values()}   # ... nor `load-the-wincon-line`
+    assert len(dec.options) == 5, "option arity moved — 'no rung fired' would be vacuous"
+    assert not any(t.fired for t in dec.options), "a rung fired — the miss is not the equation's"
+
+    # CONTROL 3: the `fired` channel is LIVE on this Pilot. `85058574-114` is this frame's own
+    # candidate predecessor — same episode, same agent, same `explain()` — and it fires rungs.
+    _rec114, dec114, _rows114 = _replay_rows("85058574", 114)
+    assert any(t.fired for t in dec114.options), \
+        "CONTROL FAILED: no rung fires at 85058574-114 either — `fired` is not being populated"

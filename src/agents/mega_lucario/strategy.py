@@ -147,9 +147,18 @@ HYPOTHESES = [
     #  Mega Brave's 270, not Accelerating Stab's 30.
     #  MEASURED before deletion. Base first, per ADR-0121 Decision 0 (a follow-up select is gradeable
     #  only if the MAIN decision that opened it was correct): of the three ruled 678 ctx-21 frames,
-    #  `train.grab_sweep._off_policy` flags 85058574-121 (two earlier ruled blunders on the same turn)
-    #  and clears ml f87 and 86088989-63 — **2/2 gradeable, 3 raw**. Excluding the third costs nothing:
-    #  it is also the one frame where neither rung ever fired. Then all 70 committed mega_lucario
+    #  `train.grab_sweep._off_policy` cleared ml f87 and 86088989-63 and flagged 85058574-121 —
+    #  **2/2 gradeable, 3 raw**.
+    #  CORRECTED 2026-08-07, Issue #442 — the base is **3/3 gradeable**, and this note used to state
+    #  the pre-correction reading as fact. `main`'s Issue #412 (`1e4e5243`) rebuilt the detector and a
+    #  developer ruled 85058574-121 GRADEABLE, so it is IN the base, not excluded; and it has ONE
+    #  candidate predecessor (`f114`), never the "two earlier ruled blunders" this note claimed —
+    #  `f109` is an ENDORSEMENT (`chosen == correct == [9]`) and no longer scans. The retirement
+    #  nonetheless STANDS on the enlarged base: 85058574-121 is still the one frame where neither rung
+    #  fires, re-measured in both arms with the other two as the positive control that the restored
+    #  rungs are otherwise loud. The decider MISSES that frame, which is pre-existing (the Decision
+    #  Gate has graded it as a non-voided disagreement all along) and is filed as Issue #443.
+    #  Then all 70 committed mega_lucario
     #  Corrections replayed through the shipped Pilot and through the same Pilot with both ids removed:
     #  ZERO decisions moved, agreement identical on both arms at 50/64 by `satisfies_human` (49/64
     #  strict — 64, not 70, because six records are prose-only and carry no `correct`), and the two
