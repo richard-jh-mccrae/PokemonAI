@@ -24,8 +24,21 @@ closures in `data/corrections/reviewed_audit_allowlist.json` that name one:
 * `dig-before-commit` (+20) and `use-the-draw-engine-ability` -> DELETED into the composer's
   sequence search. Both said *"take the informative, reversible action before the committing one"*,
   which is what a beam over within-turn sequences does by construction — the dig's successor states
-  are the ones it scores. `_finish_turn_last`'s tiers SURVIVE and are still where the ordering claim
-  lives; only the flat endorsements are gone.
+  are the ones it scores. `_finish_turn_last`'s tiers survive **for these two**; only the flat
+  endorsements are gone.
+
+  ⚠️ **That sentence used to read "the tiers SURVIVE" without qualification, and for two of them it
+  was FALSE ON THE DAY IT WAS WRITTEN.** A tier that triggers off a rung ID dies with the rung, and
+  two did: the KO-enabling-gust tier and the wall-retreat tier matched
+  `gust-for-the-ko` / `gust-for-the-loaded-equal-ko` / `retreat-to-wall-the-line` as inline string
+  literals in `pilot._finish_turn_last`, so from this fold onward both branches were unreachable.
+  Nothing went red — a retired id in a live string literal reads as live to every instrument, which
+  is why the false claim survived a full CI run and a review. Both branches are now deleted with the
+  loss recorded at the site, and `tests/strategy/test_rung_id_literals_are_live.py` is the interlock
+  that fails the next one.
+* `gust-for-the-loaded-equal-ko` -> DELETED with `gust-for-the-ko` below, and named here because it
+  was omitted from this map entirely: it is the sibling gate for the loaded-attacker EQUAL-prize
+  case, and a rung absent from the map is a rung `reviewed_audit.py` cannot answer for.
 * `dont-waste-clutch-heal` -> DELETED; a heal is priced by the survival delta it buys.
 * `deploy-hp-tool` and `hold-the-retreat-tool-with-no-retreat` -> DELETED with the Tool doctrine's
   MAIN-phase half.

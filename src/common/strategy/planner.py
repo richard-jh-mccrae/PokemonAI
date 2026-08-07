@@ -292,18 +292,31 @@ _CLASS_B_SPEND_IDS = frozenset({   # the "spend account" rules (t0-planner-dispo
     # board (spent cards don't show; hand hidden) and legitimately additive along the line (pure spends
     # don't double-count state). REUSED from the live tuned weight set (`OptionTrace.fired`), never
     # re-derived. `turn_value = readiness(end) − Σ spend_costs(line)`.
+    # SCOPE, since the stale-membership audit below had to establish it anyway: `_line_account`'s only
+    # callers are inside `_simulate_line`, which POC-T4/5 retired as a RUNTIME rollout and kept as the
+    # OFFLINE engine primitive the instruments drive. So this account prices no shipped decision today
+    # — which is a reason to keep it honest, not a licence to let it rot.
     # NB the five `discard_eot` burst rungs that used to lead this list are DELETED (ADR-0069 §7).
     # Their referent — spending a one-shot Energy that buys nothing — is now the decider's
     # EVAPORATION LOSS, carried on `OptionTrace.attach_spend` and added below, so the account keeps
     # the signal without keeping the weight coincidences.
-    "dont-waste-clutch-heal",
-    "dont-rush-evolve-without-target", "dont-play-switch-for-no-gain",
-    "dont-play-damage-boost-when-cant-attack", "dont-spend-unneeded-supporter",
-    "hold-wincon-dont-shuffle", "hold-line-piece", "hold-wincon-with-base", "hold-successor-when-doomed",
-    "dont-refresh-into-a-probable-miss", "hold-the-retreat-tool-with-no-retreat",
-    "save-tool-for-the-attacker", "hold-irreplaceable-tool", "protect-ace-spec-tool",
+    #
+    # ⚠️ **THIRTEEN more left at POC-T4/5 (Issue #386), and they left SILENTLY** — the HEAL, RETREAT,
+    # SEQUENCING and DISRUPTION clusters plus the Tool doctrine's MAIN-phase half were deleted into
+    # the sequence composer, and this set went on naming their rungs: `dont-waste-clutch-heal`,
+    # `dont-rush-evolve-without-target`, `dont-play-switch-for-no-gain`,
+    # `dont-play-damage-boost-when-cant-attack`, `dont-spend-unneeded-supporter`,
+    # `hold-wincon-dont-shuffle`, `hold-line-piece`, `hold-wincon-with-base`,
+    # `hold-successor-when-doomed`, `hold-the-retreat-tool-with-no-retreat`,
+    # `save-tool-for-the-attacker`, `hold-irreplaceable-tool`, `protect-ace-spec-tool`,
+    # `keep-key-cards`.
+    # A member no Strategy ships can never appear in `OptionTrace.fired`, so removing it is a
+    # provable no-op on `_line_account` — the account was already only its five live members. That is
+    # exactly why it went unnoticed: nothing broke, and the set read as three times its true size.
+    # `tests/strategy/test_rung_id_literals_are_live.py` now holds both halves to the live roster.
+    "dont-rush-evolve-without-target", "dont-refresh-into-a-probable-miss",
     "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck",
-    "dont-search-a-probable-whiff", "keep-key-cards",
+    "dont-search-a-probable-whiff",
 })
 _ABILITY_FIRE_IDS = frozenset({    # the "ability-readiness co-equal — fire it = value" rules
     # (t0-planner-disposition.md class A): a POSITIVE tuned weight whose referent is the ACTION of USING a
@@ -316,7 +329,11 @@ _ABILITY_FIRE_IDS = frozenset({    # the "ability-readiness co-equal — fire it
     # now the decider's `accel_value` — forward build the end board DOES show (Energy landing on
     # bench bodies), so crediting it here as well would double-count. `use-acceleration` survives and
     # keeps the PLAY-side credit, which the end board genuinely cannot show.
-    "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "use-the-draw-engine-ability",
+    # `use-the-draw-engine-ability` left with the SEQUENCING cluster at POC-T4/5 (Issue #386) — see
+    # the ⚠️ on `_CLASS_B_SPEND_IDS` above for why an unshipped member is inert rather than wrong,
+    # and `baseline/__init__.py` for where its claim went (the composer scores the dig's successor
+    # states, so the draw is priced by the board it reaches rather than credited flat here).
+    "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f",
     "use-acceleration", "bench-the-comeback-drawer",
 })
 

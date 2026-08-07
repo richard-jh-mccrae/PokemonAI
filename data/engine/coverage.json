@@ -11,8 +11,8 @@
   },
   "chains": {
    "verified": 447,
-   "unprobed": 19,
-   "deferred": 605,
+   "unprobed": 20,
+   "deferred": 604,
    "derived": 1169,
    "seeded": 583
   },
@@ -16675,12 +16675,12 @@
   "1251": {
    "name": "Lively Stadium",
    "cardType": "stadium",
-   "status": "deferred",
+   "status": "unprobed",
    "chains": {
-    "1251": "deferred"
+    "1251": "unprobed"
    },
    "evidence": [],
-   "updated": "2026-07-13"
+   "updated": "2026-08-06"
   },
   "1252": {
    "name": "Gravity Mountain",
