@@ -121,10 +121,10 @@ confidence, threats, targets). **Posture** consumes it through the seams above, 
    (**calibrate aggression to favourability**) is live BOTH ways — the unfavored half as a
    MULTIPLIER inside the instrument it scales rather than a flat rung (`_DENIAL_UNFAVORED` in
    `_denial_play_tactical`; `needs.phase_scale` where the term is survival-denominated, ADR-0102 —
-   the flat `disrupt-when-unfavored` is deleted), and `dont-gift-a-refresh-when-favored` (≥ 0.55,
-   the variance-denial favored half, ADR-0026 amendment 2026-07-03)
-   ([baseline_disruption.py](../src/common/strategy/baseline/baseline_disruption.py)), fed by the
-   deck's own `my_archetype` declaration (M2.1b / PR#8). Kill-switch: `main.py` `posture=` param.
+   the flat `disrupt-when-unfavored` is deleted). The favored half's RUNG went with
+   `baseline_disruption.py` (PR #447); its sign gate survives as
+   [`refresh.refills_opponent`](../src/common/strategy/refresh.py), fed by the deck's own
+   `my_archetype` declaration (M2.1b / PR#8). Kill-switch: `main.py` `posture=` param.
 2. **pending** — deck-specific Read-conditioned Hypotheses;
 3. **pending** — feeding the Read's predicted opponent deck into `search_begin` (Tier-1).
 

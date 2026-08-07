@@ -41,7 +41,7 @@ from pathlib import Path
 import pytest
 
 from tools.rung_registry import (DECIDERS, EMERGENT, FOLDED, MAX_MENTIONS, NOT_A_RUNG, REVERTED, SUBSUMED,
-                                 UNRECORDED)
+                                 UNRECORDED, UNREPLACED)
 
 REPO = Path(__file__).resolve().parents[1]
 GIT = shutil.which("git")
@@ -50,8 +50,11 @@ GIT = shutil.which("git")
 #: cannot trip the scan. Two-segment ids do not exist in the shipped set.
 _KEBAB = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+){2,})`")
 
-_SENTINELS = {EMERGENT, SUBSUMED, REVERTED, UNRECORDED}
-_CONTROLS_LIVE = ("use-acceleration", "dig-before-commit", "prefer-rush-evolve-tutor")
+_SENTINELS = {EMERGENT, SUBSUMED, REVERTED, UNRECORDED, UNREPLACED}
+#: One live id from each of three DIFFERENT modules, so deleting any one cluster cannot silently
+#: retire the whole control. `dig-before-commit` was here until PR #447 deleted the rung ladder —
+#: which is the control doing its job, and the reason it is spread across modules now.
+_CONTROLS_LIVE = ("use-acceleration", "prefer-rush-evolve-tutor", "fetch-the-wincon")
 _CONTROL_DEAD = "this-rung-was-never-real"
 _CONTROL_SYMBOL_ABSENT = "common.pilot:Pilot._this_method_was_never_written"
 _MAX_NOTE = 120

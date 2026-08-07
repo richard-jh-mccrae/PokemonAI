@@ -21,6 +21,9 @@ EMERGENT = "EMERGENT"        # no code asserts it; the replacing equation produc
 SUBSUMED = "SUBSUMED"        # deleted because another mechanism already covered the fact; nothing was added
 REVERTED = "REVERTED"        # built, then deleted because it MEASURED worse; nothing replaced it
 UNRECORDED = "UNRECORDED"    # genuinely retired, but no ADR or fold note in the repo says where it went
+UNREPLACED = "UNREPLACED"    # deleted, and the note says OUTRIGHT that nothing has taken the family over
+                             # yet. Distinct from UNRECORDED (nobody wrote it down) and from SUBSUMED
+                             # (something already covered it): here the gap is the recorded finding.
 
 
 class Fold(NamedTuple):
@@ -40,7 +43,8 @@ class Decider(NamedTuple):
 
 
 #: Decision seam -> its owner. The first thing to read when wiring into an existing decision: six equation
-#: deciders (each with its own kill-switch), four archetype doctrines (Mixins, ADR-0008), one turn planner.
+#: deciders (each with its own kill-switch), three archetype doctrines (Mixins, ADR-0008), one turn planner.
+#: The TOOL doctrine was a fourth until PR #447 deleted `doctrine_tool.py`; ADR-0028 is its record.
 DECIDERS: dict[str, Decider] = {
     "attach": Decider("common.pilot:Pilot._attach_value", "attach_value", "0069"),
     "evolve": Decider("common.evolve_value:evolve_value", "evolve_value", "0070"),
@@ -51,7 +55,6 @@ DECIDERS: dict[str, Decider] = {
     "gust": Decider("common.strategy.doctrines.doctrine_gust:GustMixin", "", "0022"),
     "fetch": Decider("common.strategy.doctrines.doctrine_fetch:FetchMixin", "", "0023"),
     "shuffle_refresh": Decider("common.strategy.doctrines.doctrine_shuffle_refresh:ShuffleRefreshMixin", "", "0024"),
-    "tool": Decider("common.strategy.doctrines.doctrine_tool:ToolMixin", "", "0028"),
     # The Planner runs unconditionally; `lethal_family` switches its TOP (win) rung, not the whole ladder.
     "turn_plan": Decider("common.strategy.planner:PlannerMixin.plan_turn", "lethal_family", "0037"),
 }
@@ -69,9 +72,45 @@ FOLDED: dict[str, Fold] = {
     "attach-energy-last": Fold(
         "0069", "common.pilot:Pilot._finish_turn_last",
         "the -5 rung became a structural tier: free development, then Supporter, then ATTACH"),
-    "aurajab-skip-partnerless-solrock": Fold(
-        "", "common.pilot:Pilot._attach_value",
-        "Issue #425: Strategy.partners alone decided ml f87, so the deck rung was measured redundant"),
+    # --- PR #447 (POC-T4/5, Issue #386) deleted the rung LADDER. Destinations are main's own notes,
+    #     transcribed rather than inferred: `strategy/baseline/__init__.py`, `doctrine_gust.py`'s
+    #     "WHETHER-TO-PLAY band is DELETED" block, and the tombstone in `dragapult_ex/strategy.py`.
+    "dig-before-commit": Fold(
+        "0092", "common.composer:compose",
+        "a beam over within-turn sequences scores the dig's successor states by construction"),
+    "use-the-draw-engine-ability": Fold(
+        "0092", "common.composer:compose", "same claim as dig-before-commit: act informatively, then commit"),
+    "dont-spend-unneeded-supporter": Fold(
+        "0092", UNREPLACED,
+        "BUILD 4's two Board signals still name it; nothing scores off them since the ladder went"),
+    "dont-waste-clutch-heal": Fold(
+        "0092", "common.composer:compose", "a heal is priced by the survival delta it buys"),
+    "hold-clutch-heal": Fold(
+        "0092", "common.composer:compose", "the whole HEAL cluster went; the survival delta is the price"),
+    "deploy-hp-tool": Fold(
+        "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
+    "hold-the-retreat-tool-with-no-retreat": Fold(
+        "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
+    # NOT registered, deliberately: `gust-for-the-ko`, `gust-for-the-loaded-equal-ko` and
+    # `retreat-to-wall-the-line` are retired Hypotheses that `pilot._finish_turn_last`'s tier
+    # predicates still name in INLINE string literals, so the harvest reads them as live and a fold
+    # record would trip the reused-id gate. Those two tiers are therefore unreachable on `main`,
+    # which is a scoring ruling to make (restore the tier, or delete the branch) rather than a
+    # registry entry to write. Same masking shape as the `_CLASS_B_SPEND_IDS` interlock, one layer down.
+    "gust-for-the-stall": Fold(
+        "0092", "common.composer:compose", "gust-then-attack is a SEQUENCE; the composer compares it as one"),
+    "stall-gust-over-dev-when-starved": Fold(
+        "0092", "common.composer:compose", "gust-then-attack is a SEQUENCE; the composer compares it as one"),
+    "gust-to-strand-the-key-attacker": Fold(
+        "0092", "common.composer:compose", "gust-then-attack is a SEQUENCE; the composer compares it as one"),
+    "dont-gift-a-refresh-when-favored": Fold(
+        "", "common.strategy.refresh:refills_opponent",
+        "the rung went with baseline_disruption; its SIGN GATE is the surviving half"),
+    "play-risky-ruins-when-net-positive": Fold(
+        "0092", UNREPLACED, "dragapult's own note: the Stadium family it priced is NOT yet taken over"),
+    "unfair-stamp-comeback-posture": Fold("", UNRECORDED, "went with the ladder; no note names a successor"),
+    "concentrate-accel-on-one-line-body": Fold(
+        "", UNRECORDED, "named by a live rationale in mega_lucario; no note names a successor"),
     "build-active-wincon": Fold(
         "0069", "common.pilot:Pilot._attach_value", "the attack axis' typed convex build toward the line payoff"),
     "concentrate-energy-on-wincon": Fold(
@@ -218,9 +257,6 @@ FOLDED: dict[str, Fold] = {
     "grab-a-draw-supporter-in-setup": Fold(
         "0122", "common.pilot:Pilot._grab_refresh_value",
         "amendment: a refresh is priced by its real pull, so the flat +10 floor and its tie-break both went"),
-    "gravity-mountain-vs-stage2": Fold(
-        "", "common.pilot:Pilot._boost_lethal_tactical",
-        "Issue #424: the boost reaches the card through its card_effects.json clause, not a deck-side id"),
     "play-energy-denial": Fold(
         "0062", "common.pilot:_DENIAL_PLAY_W", "price the quantity denied; the flat +20 paid the same for 270 as for 70"),
     "refresh-when-hand-is-dead": Fold(
@@ -237,11 +273,15 @@ FOLDED: dict[str, Fold] = {
 #: Id-SHAPED tokens in `src/` prose that were never scoring rungs. Recorded so a reduction pass does not
 #: "fix" correct prose by deleting them, and so `FOLDED` is not asked to explain a retirement that never happened.
 NOT_A_RUNG: dict[str, str] = {
-    "deck-personality-reactivity": "a learnthetcg digest proposal id (data/strategy/proposals/applied/)",
     "risk-scales-with-prize-position": "a learnthetcg digest proposal id; baseline_posture is its authored half",
-    "heal-and-stall": "a Turn Goal name in planner narrative, paired with heal-and-KO; never an `id=`",
 }
 
 #: Ratchet on how many `src/` SITES still name a retired rung, backticked or not. Lower it as the reduction
-#: pass deletes stale mentions; never raise it. A tombstone is legitimate; this many is prose nobody re-read.
-MAX_MENTIONS = 181
+#: pass deletes stale mentions. A tombstone is legitimate; this many is prose nobody re-read.
+#:
+#: RAISED ONCE, 181 -> 204, when PR #447 deleted the rung ladder: `_bare_mentions` scans the REGISTERED
+#: set, so registering 14 newly-retired rungs makes their existing prose visible to a scan that was
+#: previously blind to it. The prose did not grow — the instrument's reach did. That is the ONLY
+#: legitimate reason to raise this number, and it must be stated, because "the ceiling went up" and
+#: "the rot got worse" are indistinguishable from the number alone.
+MAX_MENTIONS = 204
