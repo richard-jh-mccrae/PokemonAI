@@ -72,7 +72,7 @@ _COMPOSER_GAP_K = 8           # composer rung: how many coverage-gap reasons rid
 
 def _tied_first_steps(result, chosen) -> list:
     """Menu indices whose best sequence ties ``chosen``'s score — the composer having NO OPINION
-    about which action to take first.
+    about which action to take first. **ADR-0131 decision 2.**
 
     Compared at `composer._SCORE_PLACES`, the same float-noise floor `selection_key` uses, so this
     reads "tied" exactly where that key does and the two cannot drift apart into a decision that is

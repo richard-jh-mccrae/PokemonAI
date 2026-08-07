@@ -1,4 +1,4 @@
-"""The composer must not decide what its own numbers say it has no view on (POC-T4/5, Issue #386).
+"""The composer must not decide what its own numbers say it has no view on — ADR-0131 (Issue #386).
 
 `selection_key` always returns something. That is correct as a tie-break *within* an Option
 Equivalence Class — indistinguishable options are one decision (ADR-0091), so which member wins is a

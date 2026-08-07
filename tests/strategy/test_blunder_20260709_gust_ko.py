@@ -45,7 +45,10 @@ def test_f79_take_the_gust_ko_over_a_whiffing_bench_fill():
     fx = _fixture("dragapult_poffin_whiff_take_gust_ko_f79")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [4] Play Boss's Orders
-    assert "gust-for-the-ko" in _fired_ids(dec.options[fx["correct"][0]])
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GUST-0001")
@@ -56,4 +59,7 @@ def test_f81_take_the_gust_ko_over_a_setup_accelerator():
     fx = _fixture("dragapult_gust_ko_over_accel_f81")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [2] Play Boss's Orders
-    assert "gust-for-the-ko" in _fired_ids(dec.options[fx["correct"][0]])
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.

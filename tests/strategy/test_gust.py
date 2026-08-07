@@ -190,7 +190,9 @@ def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
                       opp_bench=[poke(BENCHIE, hp=200)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -207,7 +209,9 @@ def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
                       opp_bench=[poke(BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -227,7 +231,9 @@ def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS], opp_conditions=(cond,)))
     p = _pilot()
-    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -246,7 +252,9 @@ def test_gust_for_the_ko_stands_down_when_burn_will_KO_the_active_for_the_same_p
                       opp_bench=[poke(BENCHIE, hp=10)],
                       hand=[BOSS], opp_conditions=("burned",)))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -435,7 +443,9 @@ def test_gust_for_the_stall_silent_when_not_under_threat():
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -470,7 +480,9 @@ def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom(
                       opp_bench=[poke(EX_BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 

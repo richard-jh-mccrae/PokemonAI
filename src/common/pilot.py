@@ -2121,7 +2121,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # drops to the LAST tier below (the
                                                                      # attach-anyway blunder class,
                                                                      # 82749168-21/82867148-34).
-            # A FREE INFORMATIVE PLAY reaches the boundary's band at score ZERO (POC-T4/5, #386).
+            # A FREE INFORMATIVE PLAY reaches the boundary's band at score ZERO — ADR-0131
+            # decision 1 (POC-T4/5, Issue #386).
             #
             # `sound_rules.information-before-commitment` is a STANDING ruling that this ordering is
             # *"NOT derivable by the planner — both orders reach the same end state, so no function

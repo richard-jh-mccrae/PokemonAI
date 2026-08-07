@@ -204,7 +204,9 @@ def test_board_intent_rules_do_not_leak_onto_search_options():
     obs = make_select([card_opt(DECK, 0)], context=TO_HAND, deck=[{"id": 222}],
                       current=state(active=poke(700, energy=1)))
     fired = _fired(pilot.explain(obs).options[0])
-    assert "dig-before-commit" not in fired
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert "use-acceleration" not in fired
 
 

@@ -7,6 +7,10 @@ ruling, plus the things that turned out to be wrong on the way here.
 Nothing below was conformed into either `baseline.json`. **A baseline is a ruling record.** The
 Decision Gate died once already by auto-recapture and it is not being revived that way.
 
+The two design decisions this branch makes are recorded in
+[ADR-0131](../adr/0131-a-decider-must-not-decide-what-its-own-numbers-say-it-has-no-view-on.md);
+§5 below is their measurement.
+
 ## 1. What the gates say
 
 | gate | result |
@@ -129,7 +133,7 @@ same reason. Guarded by `tests/strategy/test_composer_seams_are_wired.py`.
 These numbers predate the tie-defer of §5, which takes the totals to 44/28/2; the arms are quoted as
 measured so the shed decision stands on its own comparison.
 
-## 5. A whitelisted sound rule the swap broke, and the fourth defer
+## 5. A whitelisted sound rule the swap broke, and the fourth defer (ADR-0131)
 
 **`sound_rules.information-before-commitment` stopped working.** ADR-0095 decision 3 rules that this
 ordering is *"NOT derivable by the planner — both orders reach the same end state, so no function of

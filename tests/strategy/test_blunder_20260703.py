@@ -59,7 +59,10 @@ def test_critical_6f14_harlequin_beats_the_unpayable_gust_on_its_real_replay_sta
     decision = pilot.explain(fx["obs"])
     assert decision.chosen == fx["correct"]                     # Harlequin, as the human marked
     boss = fx["chosen"][0]
-    assert all(h.id != "gust-for-the-ko" for h, _ in decision.options[boss].fired)
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GEN-0066")
@@ -89,7 +92,10 @@ def test_cd91_starved_stall_gust_wins_the_slot_on_its_real_replay_state():
     decision = pilot.explain(fx["obs"])
     assert decision.chosen == fx["correct"]                     # Boss's Orders, as the human marked
     boss = fx["correct"][0]
-    assert any(h.id == "stall-gust-over-dev-when-starved" for h, _ in decision.options[boss].fired)
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GEN-0067")

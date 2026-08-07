@@ -305,18 +305,16 @@ def _attach_hp_tool():
                                      hand=[_HP_TOOL]))
 
 
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_when_the_boost_would_not_save():
-    """Incoming 500 still KOs even at 430 → the Tool is wasted, so don't deploy it."""
-    pilot = _hp_tool_pilot(opp_dmg=500)
-    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_for_a_tool_with_no_hp_bonus():
-    """A Tool whose text grants no flat HP (hpBonus 0) never triggers the breakpoint rule, even on a
-    doomed Active — the rule is specifically about crossing a survival HP line."""
-    pilot = _hp_tool_pilot(hp_bonus=0, opp_dmg=400)
-    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
+# REQ-GEN-0024's two `deploy-hp-tool` silence tests are DELETED here (POC-T4/5, Issue #386). The
+# rung went with the Tool doctrine's MAIN half, and each test's ONLY assertion was
+# `"deploy-hp-tool" not in _fired(...)` — true of every board in the game once the rung is gone. They
+# would have gone on passing while checking nothing, which no failure count can surface.
+#
+# Named successors, and the second is the honest half:
+#   * The Tool's HP grant landing on the attach is `board_delta._attach`, asserted by
+#     `tests/strategy/test_apply_option.py` — the +HP fact itself is better covered than it was.
+#   * The DECISION the rung made — "this Tool would not save the body, so don't spend it" — has NO
+#     successor. It is a survival-breakpoint read, and no term computes it today. Recorded here
+#     rather than implied, the same way `test_dragapult_ex_triggers.py` records the unpriced Stadium.
 
 
