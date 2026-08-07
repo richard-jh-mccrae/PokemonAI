@@ -6,7 +6,7 @@
 decision 6** (which handled the `transposition` *instance* and named the *class* as this issue), and
 **amends [ADR-0085](0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)
 Amendment J** (`satisfies_human`, until now the untouched predicate both `main` gates key on).
-Extends **[ADR-0031](0031-the-turn-planner.md)**'s develop rollout with a soundness correction. Does
+Extends **[ADR-0031](0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)**'s develop rollout with a soundness correction. Does
 **not** supersede anything.
 
 **Context issues:** Issue #247 (this grill), Issue #239 / ADR-0088 (the Voided Ruling and the

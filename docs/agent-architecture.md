@@ -86,7 +86,7 @@ can carry the trigger (then consider folding IT once its vocabulary proves gener
 
 Worked example: [agents/mega_starmie/strategy.py](../src/agents/mega_starmie/strategy.py).
 This replaces the per-deck imperative style of
-[demos/rules-based-lucario.py](../demos/rules-based-lucario.py) (hard-coded card ids + magic
+the removed `demos/rules-based-lucario.py` (hard-coded card ids + magic
 numbers, no reuse or tunability).
 
 ## Scoring — hypotheses + the Tactical Evaluator

@@ -1,7 +1,7 @@
 # ML Training Pipeline — Build Plan (living playbook)
 
-**Governing docs:** [ADR-0053](../adr/0053-ml-training-pipeline-build-plan.md) (decisions —
-read first) · [research report](../research/ml-training-system.md) (evidence base).
+**Governing docs:** [ADR-0053](../../adr/0053-ml-training-pipeline-build-plan.md) (decisions —
+read first) · [research report](../../research/ml-training-system.md) (evidence base).
 This doc is the operational plan: per-session scopes, gate checklists, and the status ledger.
 
 **How a fresh session uses this doc:** read ADR-0053 + this file; check the status ledger;

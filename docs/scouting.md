@@ -11,7 +11,7 @@ Glossary: [common/CONTEXT.md](../src/common/CONTEXT.md). Decisions:
 engine stats), [ADR-0004](adr/0004-shared-common-packaged-per-submission.md) (shared
 `common/`, package step). Grader constraints (≤~10 min/match, tight per-move budget,
 no internet, fresh process per match) are summarized under *Runtime* below.
-Reference consumer: [demos/rules-based-lucario.py](../demos/rules-based-lucario.py).
+Reference consumer: the removed `demos/rules-based-lucario.py`.
 
 ## Architecture
 

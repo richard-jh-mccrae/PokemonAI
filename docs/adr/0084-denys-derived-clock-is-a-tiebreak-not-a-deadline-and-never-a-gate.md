@@ -3,7 +3,7 @@
 **Status:** Accepted (grilled 2026-07-30, `/grill-with-docs` on Issue #217 — eight locked decisions,
 one of them a mid-grill **reversal of a decision already accepted**). **Build = Issue #217.**
 Retires `_DENIAL_BENCH` from the armed fire rung in favour of
-[ADR-0071](0071-bench-survival-is-a-shared-budget-harvest.md) decision 6's promotion gate.
+[ADR-0071](0071-bench-survival-is-a-shared-budget-harvest-and-the-clock-accumulates.md) decision 6's promotion gate.
 **Does NOT supersede [ADR-0062](0062-energy-denial-is-what-the-strip-actually-takes-away.md)** — its
 `/2**t` grade and its `_DENIAL_BENCH` derivation both survive, the latter on the OFF path only.
 Does not reopen [ADR-0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md)

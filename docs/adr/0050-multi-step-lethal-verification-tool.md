@@ -17,7 +17,7 @@ lethals, `f110` confirms end-to-end; `f26`/`f48`/`f24` (mega_lucario) do **not**
 policy cascade — a **pre-existing** condition (identical under prefix and exact seeding, so not caused
 by this fix), filed for Phase-3/blunder-buster analysis rather than blocking (per the audit policy).
 
-**Context.** The Lethal Solver ([ADR-0030](0030-lethal-solver-is-a-sound-min-bound-generator-plus-engine-verify.md) /
+**Context.** The Lethal Solver ([ADR-0030](0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md) /
 [ADR-0037](0037-lethal-solver-is-the-turn-planners-top-rung.md)) proves a win real with
 `_engine_confirms_win` (`planner.py:529`): it forks the native engine from `obs["search_begin_input"]`,
 steps a candidate line, then drives *my* follow-up selects through `decide()` to the engine's own

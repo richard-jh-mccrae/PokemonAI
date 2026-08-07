@@ -9,7 +9,7 @@ with Amendment F reversed.
 decision 1 priced the `gust_target` slot in the wrong currency, and whose Amendment E recorded that
 as a debt) and **[ADR-0078](0078-the-value-currencies-are-three-scales-bridged-by-derived-rates.md)**
 (whose scale catalogue gains its first prize↔worth row). Follows
-**[ADR-0086](0086-the-deploy-marginal-is-one-equation-over-the-needs-assignment.md) amendment C** and
+**[ADR-0086](0086-the-deploy-marginal-prices-a-bench-slot-and-what-fills-it.md) amendment C** and
 **[ADR-0105](0105-the-free-item-hold-price-is-the-keep-machinery-floored.md) decision 3** in form: a
 seam-scoped rate, stated plainly, carrying a reconciliation debt. Does **not** supersede anything.
 
