@@ -1,7 +1,7 @@
 """Report every comment and docstring in this repo that exceeds the code-as-documentation budget.
 
 The budget (`.claude/skills/code-as-docs/SKILL.md`): a `#` comment block gets 2 lines, a function or
-class docstring gets 2 lines, a module docstring gets 50, and no prose line exceeds 120 characters.
+class docstring gets 2 lines, a module docstring gets 15, and no prose line exceeds 120 characters.
 
 Prose that must exceed 2 lines is a signal, not an exception to argue for: the reasoning belongs in an
 ADR the code links to, or the code needs a name that makes the comment unnecessary.
@@ -36,7 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 MAX_LINE = 120
 MAX_COMMENT_LINES = 2
 MAX_DOCSTRING_LINES = 2
-MAX_MODULE_DOC_LINES = 50
+MAX_MODULE_DOC_LINES = 15
 
 EXCLUDED = ("src/cg/",)
 

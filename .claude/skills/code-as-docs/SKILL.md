@@ -64,7 +64,7 @@ Report the outcome in one line before building. *Already exists* → stop and sa
 |---|---|
 | `#` comment block | **2 lines** |
 | Function / class docstring | **2 lines** |
-| Module docstring | **50 lines** |
+| Module docstring | **15 lines** |
 | Any prose line | **120 characters** |
 
 `tools/doc_budget.py` computes this; `tests/test_comment_budget.py` is the gate. Run
@@ -75,6 +75,18 @@ Report the outcome in one line before building. *Already exists* → stop and sa
 - the reasoning belongs in an ADR, and the code should carry a one-line pointer to it;
 - the code needs a better name, and then the comment is unnecessary;
 - the invariant belongs in a test, where it will fail when it stops being true.
+
+**Over-budget prose is TRIAGED, never truncated.** Sort each block before cutting it, because two
+different things are in there and only one is disposable:
+
+| Kind | Recognise it by | Action |
+|---|---|---|
+| Restatement / enumeration | it repeats the next line, or lists ids, weights, flags, statuses, %-complete | **delete** — the code is the copy that stays true |
+| Measured evidence | it reports something someone RAN: a corpus count, an A/B delta, a CI, "zero decisions moved" | **relocate** to the owning ADR, leave a one-line pointer |
+
+Deleting measured evidence is the one irreversible move in a reduction pass: it is not recoverable
+from the code, because it is not a fact about the code. It is a fact about an experiment, and losing
+it means the next person re-runs it — or worse, re-litigates a decision it already settled.
 
 ## 4. What earns prose
 
@@ -98,8 +110,15 @@ So, in the **same commit** as the deletion:
 2. Record where the logic went in the **owning module's fold map** — the docstring at the top of the
    `baseline_*` / `doctrine_*` module. `baseline_energy.py` is the worked example: it names all
    nineteen deleted attach rungs and what each became. That is the one place a reader should land.
-3. If a deliberate tombstone must stay in `src/` prose, add it to `tests/retired_rung_ids.py` with
-   the module that explains it. Prefer deleting the prose — the ledger has a shrink-only ceiling.
+3. If a deliberate tombstone must stay in `src/` prose, add a `Fold(adr, symbol, note)` to
+   `tools/rung_registry.py` naming where the claim went. Prefer deleting the prose — the registry
+   carries a shrink-only ceiling, and every raise must be argued at the constant.
+
+A retired id sitting in a **live string literal** — a frozenset member, an inline tuple a `_tier`
+predicate matches — reads as LIVE to any prose scan, which silences the alarm on the prose naming it.
+That masking has now hidden the same class of defect at two layers (`planner._CLASS_B_SPEND_IDS`, then
+`pilot._finish_turn_last`). `tests/strategy/test_rung_id_literals_are_live.py` is the interlock: it
+AST-walks for literals compared against a Hypothesis id and holds them to the shipped roster.
 
 ## 6. The gates that enforce this
 
@@ -108,7 +127,8 @@ in the suite:
 
 | Gate | Enforces |
 |---|---|
-| `tests/test_retired_rung_ids.py` | `src/` prose may not name a Hypothesis id that does not exist |
+| `tests/test_rung_registry.py` | `src/` prose may not name a Hypothesis id that does not exist |
+| `tests/strategy/test_rung_id_literals_are_live.py` | a literal a module MATCHES on must be a shipped id |
 | `tests/test_doc_links_resolve.py` | every Markdown link points at a file that exists |
 | `tests/test_comment_budget.py` | the size budget (arms itself when the reduction pass reaches zero) |
 | `tests/test_adr_index.py` | the ADR index matches `docs/adr/` on disk |

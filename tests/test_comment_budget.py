@@ -1,6 +1,6 @@
 """The comment and docstring size budget — the gate that keeps prose from re-accumulating.
 
-The budget is 2 lines for a `#` block, 2 for a function or class docstring, 50 for a module docstring,
+The budget is 2 lines for a `#` block, 2 for a function or class docstring, 15 for a module docstring,
 120 characters for any prose line. `.claude/skills/code-as-docs/SKILL.md` argues for those numbers;
 `tools/doc_budget.py` computes them, and this file is the gate over that tool so the two cannot drift.
 
@@ -32,7 +32,7 @@ from tools.doc_budget import (  # noqa: E402
 )
 
 _OVER_BUDGET = '''"""A module docstring of three lines.
-This is well inside the 50-line module budget,
+This is well inside the 15-line module budget,
 so it must NOT be reported."""
 
 
@@ -76,7 +76,7 @@ def test_the_budget_scanner_actually_measures(tmp_path: Path, monkeypatch: pytes
 
 
 def test_the_budget_constants_match_the_documented_policy() -> None:
-    assert (MAX_COMMENT_LINES, MAX_MODULE_DOC_LINES, MAX_LINE) == (2, 50, 120)
+    assert (MAX_COMMENT_LINES, MAX_MODULE_DOC_LINES, MAX_LINE) == (2, 15, 120)
 
 
 def test_the_protected_literal_extractor_still_finds_its_anchors() -> None:
