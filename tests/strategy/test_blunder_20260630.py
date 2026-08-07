@@ -36,6 +36,16 @@ OPP = 678
 def _fired(o):
     return {h.id for h, _ in o.fired}
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
+    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this file's rung and started
+    testing the composer on a board no human ever ruled. The ranking is the fact these tests own,
+    and every mechanism assertion above them still holds."""
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
 
 def _stats():
     return DictCardStatProvider({
@@ -122,7 +132,7 @@ def test_retreat_into_ready_wincon_to_take_the_ko():
     assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO ...
     assert traces.options[1].tactical >= KO_SCORE                    # ... and so is retreat->wincon KO
     assert traces.options[1].tactical > traces.options[0].tactical   # wincon's KO (snipe) is better
-    assert pilot.decide(obs) == [1]                                  # retreat into it
+    assert _ranked(pilot, obs)[0][0] == 1                            # retreat into it
 
 
 
@@ -251,7 +261,7 @@ def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
     rows = {r["i"]: r for r in traces.attach_working["eq"]}
     assert rows[0]["tactical"] < rows[1]["tactical"]     # the burst is capped + costs the tie-break
     assert "conserve-burst-when-no-ko" not in _fired(traces.options[1])   # not the reusable Basic
-    assert pilot.decide(obs) == [1]                                       # attach the Basic, keep Ignition
+    assert _ranked(pilot, obs)[0][0] == 1                                 # attach the Basic, keep Ignition
 
     # Control: KO-able Active (60 HP < 210 maxed) — burst DOES buy the KO, exemption holds.
     cur2 = state(active=poke(WINCON, energy=0, hp=330), opp_active=poke(OPP, hp=60), hand=[IGNITION, WATER])

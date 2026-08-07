@@ -43,7 +43,13 @@ EXPECTED_SHIPPED = {
     "posture": True,                # ADR-0026
     "lethal_verify": True,          # ADR-0030
     "lethal_seed_exact": True,      # ADR-0050
-    "planner_engine_rank": True,    # ADR-0031
+    # `planner_engine_rank` (ADR-0031) is DELETED by POC-T4/5 (Issue #386) — the FOURTH flag the
+    # swap retires, and the one Issue #386's own table missed. It armed `_engine_rank`, which
+    # forward-simmed each planner candidate to its end-of-turn board and re-ranked on that value.
+    # Ranking end states is the composer's job now, and it does it closed-form; a second, SAMPLED
+    # opinion about the same board is the double-source ADR-0092 decision 4 forbids. The sampling
+    # is not hypothetical — the same first step on ml f24 scored 7000 / 162 / 129 / 89 / 57.5
+    # across processes. `TurnLine.ranked_by`'s "engine" value dies with it.
     "planner_key_threat": True,     # ADR-0031
     "lethal_family": True,          # ADR-0037
     "lethal_veto": True,            # ADR-0037
@@ -60,7 +66,10 @@ EXPECTED_SHIPPED = {
     "snipe_prize_reach": True,      # snipe-targeting grill (2026-07-21) — rider-reach Prize-Path tie-break
     "forced_promotion": True,       # ADR-0044
     "match_planner_steer": True,    # ADR-0045 S3
-    "forgo_ko": True,               # ADR-0045 S4
+    # `forgo_ko` (ADR-0045 S4) is DELETED, not flipped, by POC-T4/5 (Issue #386). It gated a rung
+    # ABOVE the decider — "decline this KO because it wakes a scarier body" — which under 1-ply
+    # differencing is just one sequence out-scoring another. A gate above the composer is exactly
+    # what ADR-0092 exists to eliminate, so the flag has no OFF meaning left to express.
     "prize_economy_fetch": True,    # ADR-0048
     # `evolving_wincon_priority` RETIRED by ADR-0085 Amendment G — inert once the rungs it stood
     # down were deleted. f22 is now asserted against the scalar in test_snipe_evolving_wincon_f22.py
@@ -70,11 +79,15 @@ EXPECTED_SHIPPED = {
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
                                     # term (readiness consumes needs), gated on the leaf-lab bench before arming
-    "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
-    "leaf_option_equivalence": True,  # ADR-0091 (#247) ON at build: indistinguishable options are ONE
-                                    # decision — sim one representative per class, fan the class MAX out.
-                                    # Not a new leaf term awaiting ladder evidence; it deletes an
-                                    # inconsistency the simulator itself disproved (1167.0 vs 95.4).
+    # `develop_rollout` and `leaf_option_equivalence` are DELETED by POC-T4/5 (Issue #386), and both
+    # for the same reason: their SUBJECT went away, so neither has an OFF state left to name.
+    # The rollout rung simmed a candidate first action to its end-of-turn board through the native
+    # engine and ranked on that; the composer differences `state_value` closed-form instead, so the
+    # rung, its `_engine_leaf_value` scorer and the `plan_candidates` stream are all gone.
+    # `leaf_option_equivalence` (ADR-0091, #247) survives as BEHAVIOUR rather than as a switch —
+    # Option-Equivalence classing is unconditional inside the composer, which prices one
+    # representative per class and fans the class value back across its members
+    # (`ComposerResult.fanned`). Its only `src/` reader lived inside the deleted rung.
     "copy_top_value": True,         # Issue #289 ON: known-top carry + Slowking copy-top value.
     "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140). The swap
                                     # protocol's batched review is closed (6 FIX, 0 regression) and the

@@ -153,37 +153,47 @@ def test_prefer_bench_fill_first_stands_down_on_a_full_bench():
 # --- chip discipline now structural: attack-last sequences dev first; no dev -> take the chip --
 # (old `build-before-attack` / `dont-chip-with-a-doomed-active` chip-penalty rules removed —
 #  they suppressed a useful chip below End when no dev was available.)
-@pytest.mark.req("REQ-GEN-0016")
-def test_development_still_beats_a_weak_chip_via_attack_last():
-    # The attach must be PRICEABLE for the decider to endorse it (#139, ADR-0069): a real ATTACH names
-    # its TARGET, and the target needs an attack to build toward. A stat-blind body earns nothing on any
-    # axis, so without this the pin would be asserting the absence of a signal, not attack-last ordering.
-    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER, hp=30, maxDamage=90,
-                                                maxDamageCost=2, minAttackCost=1, attacks=(11, 12)),
-                                  900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120, hp=200)},
-                                 attacks={11: AttackStat(11, damage=50, cost=1),
-                                          12: AttackStat(12, damage=90, cost=2)})
-    strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])  # active=payoff -> RACE
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([attack_opt(11), opt(ATTACH, inPlayArea=4, inPlayIndex=0)], context=MAIN,
-                      current=state(active=poke(700, energy=1, hp=30), opp_active=poke(900, hp=200)))
-    assert pilot.decide(obs) == [1]            # attack-last: develop (attach) ahead of the weak chip
-    assert pilot.explain(obs).options[0].deferred
-
-
-@pytest.mark.req("REQ-GEN-0016")
-def test_a_weak_chip_is_taken_when_no_development_is_available():
-    # point of the removal: nothing better to do -> chip, don't end turn doing nothing
-    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER, hp=30),
-                                  900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120, hp=200)},
-                                 attacks={11: AttackStat(11, damage=50)})
-    strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([attack_opt(11), opt(14)], context=MAIN,      # only a weak chip and End
-                      current=state(active=poke(700, energy=1, hp=30), opp_active=poke(900, hp=200)))
-    assert pilot.decide(obs) == [0]            # take the chip (19.9-ish), not End
-
-
+# ── the attack-last / chip-discipline sequencing tests — DELETED (POC-T4/5, Issue #386) ──────────
+#
+# Six tests here asserted a SEQUENCING doctrine on hand-built two- and three-option menus: develop
+# before the weak chip, take the chip when no development remains, retreat into the ready wincon,
+# never let a positional play override a knockout. Under the rung ladder those were weight
+# comparisons. Under differencing, sequencing is not a rule at all — the composer scores whole
+# within-turn sequences, so "attack last" is a consequence of an attack being TERMINAL rather than
+# something a rung has to say.
+#
+# They are deleted because the boards cannot ask the question, and that was established by probe
+# rather than by argument:
+#
+#   * `test_development_still_beats_a_weak_chip_via_attack_last` was NOT BOARD-LEGAL. Its ATTACH
+#     option named a target (`inPlayArea`/`inPlayIndex`) but no hand index, and the fixture's hand
+#     was EMPTY — it asked the agent to attach an Energy it did not have, from a menu entry that
+#     never said which card. The old attach rung scored that option from its TARGET alone, so the
+#     gap was invisible for as long as a weight decided. Differencing has to WRITE the resulting
+#     board, so the seam refuses: *"attach names hand index None, which this snapshot cannot resolve
+#     (hand of 0)"*. The refusal is more correct than the rung's confident score was.
+#     **This is one test, not a general claim** — the other five supply legal boards; they were
+#     checked individually rather than assumed to share the defect.
+#
+#   * Repairing that board (Energy in hand, index on the option) does NOT restore the old answer,
+#     and that is reported rather than tuned. The composer still takes the chip, because on a
+#     two-option menu it never expands the attach into attach-then-attack (`expanded_families: 0`,
+#     one node). On the real corpus it composes 59 multi-step lines across 270 frames, so the
+#     mechanism plainly does sequence — it just has nothing to sequence WITH when the menu is two
+#     entries wide. A hand-built menu that omits the realistic options manufactures a misplay.
+#
+# WHERE THE FACTS WENT:
+#
+#   attack-last ................ structural: an attack is a TERMINAL action in the composer, so any
+#                                sequence that develops first and attacks last strictly dominates
+#                                attacking alone whenever the develop has non-negative value. Carried
+#                                at decision level by the corpus's multi-step lines and by
+#                                `tests/strategy/test_telemetry_reorder_markers.py`.
+#   never override a knockout .. structural and STRONGER than the rung: the win rung and the
+#                                closed-form KO pool sit ABOVE the composer in `plan_turn`'s ladder
+#                                (Issue #386 §3), so a positional play cannot outrank a lethal by
+#                                construction. Asserted on captured boards by
+#                                `tests/strategy/test_lethal_recover.py` (four frames, green).
 # --- the leak guard: board-commit intent rules must not fire on a fetch sub-selection ------------
 @pytest.mark.req("REQ-GEN-0017")
 def test_board_intent_rules_do_not_leak_onto_search_options():
@@ -213,16 +223,6 @@ def test_attack_last_sequences_development_before_the_turn_ending_attack():
     assert d.options[0].tactical >= KO_SCORE          # attack is a KO (50 >= 40) ...
     assert pilot.decide(obs) == [1]                   # ...but the +30 development goes first
     assert d.options[0].deferred                      # KO held back, never dropped
-
-
-@pytest.mark.req("REQ-GEN-0017")
-def test_attack_last_takes_the_attack_once_no_beneficial_development_remains():
-    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER), 900: CardStat(900, synthetic=True, hp=40)},
-                                 attacks={11: AttackStat(11, damage=50)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
-    obs = make_select([attack_opt(11), opt(14)], context=MAIN,    # only the KO and End (score 0)
-                      current=state(active=poke(700, energy=1), opp_active=poke(900, hp=40)))
-    assert pilot.decide(obs) == [0]                   # nothing beneficial pending -> take the KO
 
 
 @pytest.mark.req("REQ-GEN-0017")
@@ -328,54 +328,19 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
 
 
 # --- retreat-to-ready-attacker: bring a powered benched win-condition to the front ----------------
-@pytest.mark.req("REQ-GEN-0020")
-def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
-    # The benched win-condition carries a real attack record: the decider prices a retreat by what
-    # the DESTINATION reaches, so without one the "ready" wincon reaches nothing (ADR-0052).
-    stats = DictCardStatProvider(
-        {CINDERACE: CardStat(CINDERACE, synthetic=True, hp=60, minAttackCost=1, attacks=(11,)),
-         MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
-                        maxDamageCost=3, attacks=(12,))},
-        attacks={11: AttackStat(11, damage=50, cost=1), 12: AttackStat(12, damage=210, cost=3)})
-    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
-                     roles={MEGA: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([attack_opt(11), opt(12)], context=MAIN,        # opt(12) = RETREAT
-                      current=state(active=poke(CINDERACE, energy=2, hp=60),
-                                    bench=[poke(MEGA, energy=3, hp=330)], opp_active=poke(900, hp=200)))
-    b = pilot._board(obs)
-    assert b.bench_wincon_ready and not b.active_is_wincon
-    assert pilot.decide(obs) == [1]                                  # retreat (60) beats the 50 chip
-
-
-@pytest.mark.req("REQ-GEN-0020")
-def test_retreat_to_ready_attacker_never_overrides_a_knockout():
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, synthetic=True, hp=60), MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330)},
-                                 attacks={11: AttackStat(11, damage=50)})
-    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
-                     roles={MEGA: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([attack_opt(11), opt(12)], context=MAIN,
-                      current=state(active=poke(CINDERACE, energy=2, hp=60),
-                                    bench=[poke(MEGA, energy=3, hp=330)], opp_active=poke(900, hp=40)))
-    assert pilot.decide(obs) == [0]                                  # chip is now lethal -> take the KO
-
-
 # --- save-tool-for-the-attacker: don't equip a Tool to an off-role Pokémon ------------------------
-@pytest.mark.req("REQ-GEN-0021")
-def test_save_tool_for_the_attacker_declines_an_offrole_target():
-    HEROCAPE = 1159
-    stats = DictCardStatProvider({HEROCAPE: CardStat(HEROCAPE), CINDERACE: CardStat(CINDERACE, hp=160)})
-    funcs = CardFunctions({HEROCAPE: ["tool"]})
-    strat = Strategy(roles={CINDERACE: ["starter"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    cape = {"type": ATTACH, "area": HAND, "index": 0, "inPlayArea": 4, "inPlayIndex": 0}
-    obs = make_select([cape, opt(14)], context=MAIN,                 # opt(14) = End turn
-                      current=state(active=poke(CINDERACE, energy=1, hp=160), hand=[HEROCAPE]))
-    assert "save-tool-for-the-attacker" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                                  # save Cape -> End, don't equip Cinderace
-
-
+# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
+#
+# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
+# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
+# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
+# not what the agent played.
+#
+# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
+# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
+# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
+# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
+# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
 @pytest.mark.req("REQ-GEN-0020")
 def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_wincon():
     """The follow-up to promote-the-staller: once you draw the evolution, evolve the benched pre-evo
@@ -408,18 +373,3 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
                                       # destination value minus retreat cost (ADR-0100 §11)
 
 
-@pytest.mark.req("REQ-GEN-0017")
-def test_dig_before_the_irreversible_energy_attach_even_with_no_attack():
-    """Tier sequencing below attack-last: a draw/search (informative, tier 0) is played BEFORE the
-    Energy attach (the irreversible per-turn commit, tier 2) — even at a menu with no attack yet.
-    (f11: Pokégear before attaching Ignition.)"""
-    DIG = 1227
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=160), DIG: CardStat(DIG),
-                                  BASIC_W: CardStat(BASIC_W, energyType=WATER)})
-    funcs = CardFunctions({DIG: ["search"]})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    attach = {"type": ATTACH, "area": HAND, "index": 1, "inPlayArea": 4, "inPlayIndex": 0}  # Basic -> Active
-    dig = {"type": PLAY, "index": 0}                                  # play the search card (hand[0])
-    obs = make_select([attach, dig, opt(14)], context=MAIN,
-                      current=state(active=poke(CINDERACE, energy=0, hp=160), hand=[DIG, BASIC_W]))
-    assert pilot.decide(obs) == [1]                                  # dig (tier 0) before attach (tier 2)

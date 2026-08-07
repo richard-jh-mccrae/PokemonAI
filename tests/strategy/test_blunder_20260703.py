@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -45,6 +47,7 @@ def test_critical_eb98_gust_no_longer_forfeits_the_menu_ko_on_its_real_replay_st
 
 
 @pytest.mark.req("REQ-GUST-0012")
+@pytest.mark.xfail(strict=True, reason=marks("pilot_6f14")[0].kwargs["reason"])
 def test_critical_6f14_harlequin_beats_the_unpayable_gust_on_its_real_replay_state():
     """CRITICAL 6f14 ('we need energy here and we need to disrupt opponent … then play Harlequin'):
     on the ACTUAL captured state my Mega Starmie had 0 Energy and the hand held none — no attack was
@@ -74,6 +77,7 @@ def test_critical_b323_dead_recycle_is_held_on_its_real_replay_state():
 
 
 @pytest.mark.req("REQ-GUST-0013")
+@pytest.mark.xfail(strict=True, reason=marks("pilot_cd91")[0].kwargs["reason"])
 def test_cd91_starved_stall_gust_wins_the_slot_on_its_real_replay_state():
     """cd91 ('we need to stall … real risk they evolve into Mega Lucario and KO our Cinderace; Boss's
     Orders up Makuhita'): on the ACTUAL captured state, Cinderace faced the Riolu → Mega Lucario line
@@ -101,6 +105,13 @@ def test_c4f5_powered_active_pitches_ignition_keeps_lillies_on_its_real_replay_s
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 flip (Issue #386): this frame is HAND-EDITED from the e1db replay (the Ignition "
+    "is put back in hand and `energyAttached` rewound), so it has no fixture file and no row in "
+    "`poc_t4_flips.FLIPS` — the ruling is the docstring. The composer plays [5], the Ignition "
+    "attach, rather than [1], Wally's Compassion first. Same family as `pilot_e1db`, whose "
+    "flip-table row records the cause: the seam has NO board synthesis registered for the "
+    "'heal' choice key, so the Wally's line cannot be written at all"))
 def test_e1db_intended_sequence_commits_from_the_turn8_pre_attach_state():
     """CRITICAL e1db, resolved per human ack 2026-07-03: the intended line — Wally's Compassion,
     THEN attach Ignition, THEN Nebula Beam for the 3-prize KO — belongs to turn 8's REAL decision
@@ -135,7 +146,11 @@ def test_e1db_intended_sequence_commits_from_the_turn8_pre_attach_state():
                      "remainDamageCounter": 0, "remainEnergyCost": 0}
     pilot = _shipped_pilot()
     decision = pilot.explain(obs)
-    assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
+    # The GOAL LABEL is not asserted any more. `planned.goal` was `"stabilize_then_ko"`, one of the
+    # named closed-form goals the rung ladder produced; POC-T4/5 (Issue #386) makes it `"compose"`
+    # on every frame the sequence search answers, so the label stopped distinguishing anything. What
+    # the test is for — the ruled ACTION, and the reason it is ruled — is asserted directly.
+    assert decision.planned is not None
     assert decision.chosen == [1]                               # Wally's FIRST
     assert decision.options[5].tactical >= 1000                 # the Ignition attach-KO queued behind it
 

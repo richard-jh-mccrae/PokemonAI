@@ -322,7 +322,8 @@ _BENCH_SLOT_PRICE = _DEPLOY_PRIZE_BAND
 #: flatten exactly the boards the develop rung has to tell apart.
 _DEVELOPMENT_CAP = (_BENCH_MAX + 1) * _DEPLOY_PRIZE_BAND
 
-#: `hand`'s runaway guard, and the incumbent `pilot._HAND_READINESS_CAP` (40 / `KO_SCORE` = 0.04) is
+#: `hand`'s runaway guard, and the incumbent `pilot._HAND_READINESS_CAP` (40 / `KO_SCORE` = 0.04 —
+#: deleted with its term at POC-T4/5, quoted here as the historical number) is
 #: deliberately NOT carried over. That cap belonged to `leaf_hand_value`, an armed-OFF experimental
 #: term measured as "a wash", at an implicit rate ~16x smaller than the wave-1-ratified
 #: :data:`POC_WORTH_PRIZE_RATE`; against this rate it would bite at a Worth of 4.8 — below a single
@@ -1942,8 +1943,9 @@ def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
     the DP that produced the first two is `set_keep_v2`'s, unchanged.
 
     **Bounded by a runaway guard, not by the incumbent's cap** — see :data:`_HAND_CAP` for why
-    `pilot._HAND_READINESS_CAP` is deliberately not carried over: against the ratified rate it would
-    bite below the Worth of one Basic Energy and price every card play at 0 delta.
+    `pilot._HAND_READINESS_CAP` (40, deleted with its term at POC-T4/5) is deliberately not carried
+    over: against the ratified rate it would bite below the Worth of one Basic Energy and price
+    every card play at 0 delta.
 
     ``worth_prize_rate`` defaults to :data:`POC_WORTH_PRIZE_RATE` and is a PARAMETER rather than a
     module read so the scale-invariance test can re-point the yardstick and assert what does and does

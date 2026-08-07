@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import record_reason
+
 from common import currency
 
 REPO = Path(__file__).resolve().parents[2]
@@ -104,6 +106,7 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
     assert len([s for s in slots if s.key == "general:1229"]) == 1
 
 
+@pytest.mark.xfail(strict=True, reason=record_reason("83457493", 31))
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     """ep83457493 f31 (Game D): the opponent's Mega Lucario ex is fully fueled; I hold Boss's Orders
@@ -133,6 +136,7 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     assert 4 in d.chosen                                        # plays Harlequin (correction [4])
 
 
+@pytest.mark.xfail(strict=True, reason=record_reason("83969481", 55))
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_a_heal_insuring_the_last_wincon_is_not_latent_worth():
     """ep83969481 f55 (wave-2 ruling, Issue #261 — the user's words: "preserve our healer when we

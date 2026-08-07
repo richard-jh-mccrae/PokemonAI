@@ -38,6 +38,19 @@ CORR = REPO / "data" / "corrections"
 #    PIN  = the shipped agent already ranks `correct` top today (a regression guard).
 #    TGT  = an open blunder; the staged convergence must flip it (xfail-strict target).
 PINS = {
+    # PROMOTED BACK from `POC_T4_FLIPS` on 2026-08-07 by the composer tie-defer
+    # (`planner._tied_first_steps`): on each of these four the composer's own scores TIED, so it
+    # abstained, the structural sequencer took the turn, and the human's ruling was played. Their
+    # strict xfails XPASSed, which is what forced the move.
+    "86091728-19": "attach: the {P} goes to the benched 2nd-line Dreepy, not the role-less off-Line "
+                   "Active Munkidori — `prefer-active-attach-in-setup` stands down when a benched "
+                   "Line member sits un-powered and the Active isn't a deck attacker; the "
+                   "`attach_to_needy_line` tie-break develops the line (promoted from a TARGET by "
+                   "the attach-target-priority seam build; either identical Dreepy satisfies it — "
+                   "`_matches_up_to_interchangeability`)",
+    "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
+    "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
+    "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
     # Recovered by ADR-0087's backfill (Issue #243): EXCLUDED here as "no-agent / unreplayable" until
     # the raw walk was retired. The record is replayable and the shipped Pilot already makes the
     # human's pick, so it belongs in PINS rather than TARGETS — a free regression guard the corpus
@@ -65,42 +78,27 @@ PINS = {
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
     "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
-    "86091728-19": "attach: the {P} goes to the benched 2nd-line Dreepy, not the role-less off-Line "
-                   "Active Munkidori — `prefer-active-attach-in-setup` stands down when a benched "
-                   "Line member sits un-powered and the Active isn't a deck attacker; the "
-                   "`attach_to_needy_line` tie-break develops the line (promoted from a TARGET by "
-                   "the attach-target-priority seam build; either identical Dreepy satisfies it — "
-                   "`_matches_up_to_interchangeability`)",
-    "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
-    "83967841-17": "hold: hold the Ultra Ball, end the turn",
-    "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
-    "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
+    # 83967841-17 and 85163634-17 MOVED to `POC_T4_FLIPS` on 2026-08-07 (the `shed` wiring gave the
+    # composer its first opinion about a costed search, and it plays the Ultra Ball on both).
     "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
                    "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
-    "85163634-17": "hold: attack (Turbo Flare) — fetch one turn early = disruption exposure; the "
-                   "held-card-risk build (spec §Round 8 §5): `dont-fetch-before-the-deadline` stands "
-                   "the Ultra Ball down (the Mega lands only next turn) and "
-                   "`dont-shuffle-away-the-deferred-fetch` holds the Lillie's that would nuke the "
-                   "deferred plan's vehicle. Promoted from a TARGET (tests/strategy/test_held_card_risk.py)",
     # shuffle timing & keep-value (the refresh side)
     # Flipped by the TAG_TIER worth-coverage build (ADR-0065 §Build status): the discard ladder's
     # keep-value tags (`discard_eot`, `clutch_heal`) now carry worth, so the graded shed charges for
     # shuffling them and the refresh stands down — the agent attacks instead.
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
-    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
-                   "covering an irreplaceable Active takes an insurance slot at its full tier "
-                   "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
-                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
     "83686860-13": "keep: don't refresh a live hand — end the turn",
-    "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
-    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle",
     # discard-as-resource (zone-signed worth)
-    "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
-    "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
-    "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
+    # PROMOTED from TARGETS by POC-T4/5 (Issue #386): both were OPEN blunders awaiting a
+    # convergence, and the sequence composer gets them right. `82525741-78`'s own note said
+    # *"no evolve valuation can rank the human pick top here"* — and none does; what ranks it
+    # is scoring the whole TURN instead of the option. Both were XPASS(strict) before promotion.
+    "82525741-78": "poffin: don't play a fetch whose target class is exhausted",
+    "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
+                    "Ultra Ball fodder",
 }
 TARGETS = {
     # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
@@ -109,7 +107,6 @@ TARGETS = {
     # Staryu is merely FINE — the evolve decider scores both exactly 0.0, i.e. correctly indifferent —
     # so no evolve valuation can rank the human pick top here. The fix belongs to the fetch family's
     # exhausted-target gate (#164), which is the convergence this target now awaits.
-    "82525741-78": "poffin: don't play a fetch whose target class is exhausted (awaits #164)",
     # discard-pair valuation
     # `86091435-68` (don't pitch the Drakloak that can EVOLVE the active Dreepy) was the last strict
     # target here — REFUTED-AS-LABELED 2026-07-19 (reviewed.json: the recorded 2nd slot was wrong,
@@ -120,8 +117,43 @@ TARGETS = {
     #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
-    "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as Ultra Ball "
-                    "fodder, reopened by Issue #347 ruling",
+}
+# ── POC-T4/5 FLIPS (Issue #386) — a THIRD category, deliberately not folded into TARGETS ─────
+#
+# These ten were PINS: the rung ladder ranked the human's pick top on each. The sequence composer
+# does not, so they are recorded here rather than deleted, rewritten, or quietly moved in with the
+# open blunders. The distinction is the whole point of a separate name:
+#
+#   TARGETS      = a blunder nobody has fixed yet; the convergence is MEANT to flip it.
+#   POC_T4_FLIPS = behaviour that CHANGED under the swap. Nobody has ruled on it. It may be a
+#                  regression, or the composer being right where the rung was lucky — and that
+#                  judgement belongs to a human reading the wave-3 packet, not to whoever is
+#                  making the suite green.
+#
+# Folding them into TARGETS would assert the first reading. Deleting them would assert neither and
+# lose the frame. `strict=True` is what makes this safe to leave: the day a flip is ruled and the
+# behaviour returns, the XPASS turns red and someone has to come back and promote it.
+#
+# Every id keeps its ORIGINAL pin text verbatim — what the human wanted is not re-narrated here.
+POC_T4_FLIPS = {
+    "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
+    "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
+    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
+                   "covering an irreplaceable Active takes an insurance slot at its full tier "
+                   "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
+                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
+    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle",
+    "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
+    "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
+    # Filed 2026-08-07 by the `shed` WIRING, not by the swap itself: `_composer_line` was not
+    # passing `Pilot.cost_shed_indices`, so every costed search REFUSED unpriced and the composer
+    # had no opinion about an Ultra Ball. Wiring it (`test_composer_seams_are_wired.py`) gave it
+    # one, and on these two frames the opinion disagrees with the human. That is a seam being
+    # COMPLETED turning an invisible abstention into a visible ruling question, which is the point.
+    "83967841-17": "the composer plays Ultra Ball where the human ruled End turn; the costed "
+                   "search is priced for the first time",
+    "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
+                   "same cause as 83967841-17",
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
 # the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
@@ -242,7 +274,8 @@ def _param(cid, reason, *, xfail):
 
 
 _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
-          + [_param(c, r, xfail=True) for c, r in TARGETS.items()])
+          + [_param(c, r, xfail=True) for c, r in TARGETS.items()]
+          + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()])
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
@@ -307,7 +340,7 @@ def test_excluded_ids_are_provably_out(cid, why):
 
 def test_corpus_families_are_disjoint_and_ided():
     """No id is double-listed across categories — the audit surface stays clean."""
-    cats = [set(PINS), set(TARGETS), set(SUBSTANCE_PINS), set(EXCLUDED)]
+    cats = [set(PINS), set(TARGETS), set(POC_T4_FLIPS), set(SUBSTANCE_PINS), set(EXCLUDED)]
     for i, a in enumerate(cats):
         for b in cats[i + 1:]:
             assert not (a & b), f"an id is listed in two categories: {sorted(a & b)}"

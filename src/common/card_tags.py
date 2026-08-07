@@ -103,8 +103,12 @@ TAG_REGISTRY: dict[str, Tag] = {
     "dig": Tag(DERIVED,
                "Looks at / reorders the top or bottom of the deck — selection and information. A "
                "`MOVE_CARD` touching the `LOOKING` area.",
-               ("common.pilot", "common.strategy.context",
-                "common.strategy.baseline.baseline_sequencing")),
+               # `baseline_sequencing` was deleted by POC-T4/5 (Issue #386) along with the whole
+               # SEQUENCING cluster. The tag did not lose its consumer with it: `pilot`'s
+               # `_finish_turn_last` is what reads `dig` now, through `_informative_card`, and that
+               # is the ADR-0095 boundary rather than a rung. Named as `common.pilot`, already
+               # listed first.
+               ("common.pilot", "common.strategy.context")),
     "energy_accel": Tag(DERIVED,
                         "Attaches Energy beyond the manual once-per-turn drop — ramp / tempo. An "
                         "`ATTACH` log by the actor from a non-Tool card.",
@@ -152,8 +156,9 @@ TAG_REGISTRY: dict[str, Tag] = {
                         "A fetch that COSTS a discard from hand (Ultra Ball class) — a blind, "
                         "costly commitment the sequencer defers behind free development, and whose "
                         "shed side `doctrine_fetch` prices.",
-                        ("common.pilot", "common.strategy.doctrines.doctrine_fetch",
-                         "common.strategy.baseline.baseline_sequencing")),
+                        # Same deletion as `dig` above: the deferral is `_finish_turn_last`'s
+                        # `_TIER_COMMITMENT`, in `common.pilot`.
+                        ("common.pilot", "common.strategy.doctrines.doctrine_fetch")),
     "rare_candy": Tag(CURATED,
                       "Puts a Stage 2 from hand straight onto its root Basic, SKIPPING the Stage 1 "
                       "— so a missing Stage 1 does not prove a Stage 2 dead. Distinct from "
@@ -175,7 +180,10 @@ TAG_REGISTRY: dict[str, Tag] = {
     "hand_disruption": Tag(DERIVED,
                            "Shuffles or discards the opponent's hand — resource denial. Their "
                            "cards move `HAND→DECK`/`DISCARD` during this card's resolution.",
-                           ("common.pilot", "common.strategy.baseline.baseline_disruption")),
+                           # `baseline_disruption` was deleted by POC-T4/5 (Issue #386). The tag
+                           # keeps its live consumer: `pilot` reads it at the shuffle-refresh
+                           # tier and through the Opponent Model.
+                           ("common.pilot",)),
     "energy_denial": Tag(DERIVED,
                          "Removes the opponent's ATTACHED Energy — tempo denial (their "
                          "`ENERGY→DISCARD`).",
@@ -184,9 +192,10 @@ TAG_REGISTRY: dict[str, Tag] = {
                         "A refresh that shuffles BOTH hands away and redraws (Iono, Unfair Stamp) "
                         "— a Gamble Line: it can refill a small opponent hand, so ADR-0060 forbids "
                         "reading it as a strip.",
+                        # minus `baseline_disruption`, deleted by POC-T4/5 (Issue #386); the
+                        # shuffle DOCTRINE is where the Gamble-Line reading actually lives.
                         ("common.pilot", "common.strategy.planner",
-                         "common.strategy.doctrines.doctrine_shuffle_refresh",
-                         "common.strategy.baseline.baseline_disruption")),
+                         "common.strategy.doctrines.doctrine_shuffle_refresh")),
     "item_lock": Tag(CURATED,
                      "A body whose Ability locks Item play (the benched-disruptor maneuver) — read "
                      "on BOTH sides: it gates our own Item lines and prices their disruptor.",
@@ -204,8 +213,11 @@ TAG_REGISTRY: dict[str, Tag] = {
                        "A heal that also BOUNCES the healed Pokémon's Energy to hand (Wally's "
                        "Compassion) — a defensive save, not a value heal: held until the Active is "
                        "doomed, then played and re-powered the same turn.",
+                       # minus `baseline_heal`, deleted by POC-T4/5 (Issue #386): a clutch heal is
+                       # now priced by the survival delta it buys, which `needs` and the planner
+                       # already read.
                        ("common.pilot", "common.card_worth", "common.needs",
-                        "common.strategy.planner", "common.strategy.baseline.baseline_heal")),
+                        "common.strategy.planner")),
     "spread": Tag(DERIVED,
                   "Places damage counters across the opponent's board 'in any way' (a "
                   "`DAMAGE_COUNTER_ANY` select context) — snipe / multi-KO setup. **Inert as a "
@@ -233,9 +245,17 @@ TAG_REGISTRY: dict[str, Tag] = {
                        ("common.pilot", "common.card_worth", "common.needs",
                         "common.strategy.combat", "common.strategy.planner")),
     "tool": Tag(CURATED,
-                "A Pokémon Tool — an attachment whose static modifiers ride the holder. The Tool "
-                "doctrine asks whether one is in hand at all before pricing an attach.",
-                ("common.pilot", "common.strategy.doctrines.doctrine_tool")),
+                "A Pokémon Tool — an attachment whose static modifiers ride the holder. What "
+                "reads it is the ATTACH transition: `board_delta` routes a Tool attach on "
+                "`stat.is_tool` and lands the holder's flat HP grant on the same step.",
+                # `doctrine_tool` was deleted by POC-T4/5 (Issue #386) with its MAIN-phase
+                # rungs, and `common.pilot` stopped naming the tag with it. The tag outlived
+                # the doctrine because three seams still ask "is this a Tool?" as a
+                # STRUCTURAL question rather than a positional one — which is why it is not
+                # INERT. (`board_delta` asks the same question through `CardStat.is_tool`,
+                # a cardType test, so it is not a reader OF THIS TAG and is not listed.)
+                ("common.board_choice", "common.fetch_closure",
+                 "common.snapshot_coverage")),
     # --- special conditions -------------------------------------------------------------------
     # All five are probe-derived and all five are INERT as card-level tags, for one shared reason:
     # a condition decides a turn through the ATTACK that inflicts it (`AttackStat`, the Damage

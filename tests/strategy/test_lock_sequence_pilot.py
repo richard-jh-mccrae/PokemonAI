@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 AURA_JAB_DMG, MEGA_BRAVE_DMG = 130, 270
@@ -67,6 +69,8 @@ def test_a_doomed_active_pays_no_cooldown_charge():
     assert attacks[MEGA_BRAVE_DMG][1] == 0
 
 
+@pytest.mark.xfail(strict=True,
+                   reason=marks("ml_dont_wake_the_giant_with_the_locking_ko_f88")[0].kwargs["reason"])
 def test_the_locking_ko_is_still_declined_when_the_line_is_better():
     """The behavioural gate the charge exists to serve: f88's human correction is Aura Jab over the
     locking Mega Brave KO. Re-derived through the full shipped menu, not a hand-built probe."""

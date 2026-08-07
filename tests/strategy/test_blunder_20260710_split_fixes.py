@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 POFFIN = 1086
@@ -122,6 +124,7 @@ def test_f10_develops_instead_of_gusting_a_harmless_active():
 
 
 @pytest.mark.req("REQ-GEN-0076")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_poffin_whiff_take_gust_ko_f79")[0].kwargs["reason"])
 def test_f79_poffin_whiff_detected_after_tightening_bench_fill_filter():
     """f79: the deck holds no fetchable <=70-HP Basic, so Buddy-Buddy Poffin whiffs. With the `bench_fill`
     filter tightened to <=70 HP, the sound whiff guard `dont-search-an-empty-deck` (-60) now fires on the

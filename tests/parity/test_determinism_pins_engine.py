@@ -222,6 +222,13 @@ def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
     Asserted as an inequality, so it stays honest if a future engine build makes the in-line
     shuffle reproducible: this test then fails and the planner's rule can be revisited on the
     epistemic argument alone (a predicted deck ORDER is still a guess).
+
+    **Driven through `_simulate_line` since POC-T4/5 (Issue #386).** It used to drive
+    `_engine_leaf_value`, which is deleted with the develop rollout — but only the SCORER went. The
+    forward-sim primitive underneath survives by name and is preserved for exactly this class of
+    caller: the offline instruments that measure the ENGINE rather than a retired rung. Swapping the
+    driver keeps the pin measuring what it was minted to measure, and `_rng_probe` — which exists
+    because of this fact and still gates the win rung's verdict — keeps its explanation.
     """
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" /
                      "ml_lethal_retreat_boost_to_ko_f24.json").read_text(encoding="utf-8"))
@@ -254,7 +261,7 @@ def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
         api.search_step = spy
         pilot._planning = True
         try:
-            pilot._engine_leaf_value(obs, [3])
+            pilot._simulate_line(obs, [3])
         finally:
             pilot._planning = False
             api.search_step = step

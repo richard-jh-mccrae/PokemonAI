@@ -416,14 +416,8 @@ once when a body is benched, and nothing re-evaluates them), while a *static* is
 recomputed per body on every render (`cgpy/chain.py:stadium_hp_delta`, called from
 `render.pokemon_dict`) — which is why a Gravity Mountain body renders back at full HP the moment the
 Stadium leaves. So a trigger is applied at the event and a static wherever the apply seam mints or
-re-classes a body; `board_delta.stadium_clauses_of` is the one predicate that answers *which* of a
-Stadium's clauses reaches a given event and body, and the ONE reader of `applies_to` anywhere
-(`stadium_clauses_for` is that predicate keyed by the Stadium **in play** — it reads
-`current["stadium"]` and delegates; `stadium_clauses_of` is keyed by the CARD, which is what a
-counterfactual asks about, Issue #424). Its `event` vocabulary is `STADIUM_EVENTS`: the three
-transitions `bench_play` / `stage_change` / `displace`, plus `static` — *no* transition, just the
-floating modifier on a body of this class, which is the only thing a KO-breakpoint counterfactual
-needs. The audit walks all four of `kind`, `rider`,
+re-classes a body; `board_delta.stadium_clauses_for` is the one predicate that answers *which* of a
+Stadium's clauses reaches a given event and body, and the ONE reader of `applies_to` anywhere. The audit walks all four of `kind`, `rider`,
 `effect` and `cost` for exactly that reason — a kind whose write-set reads empty is not a kind that
 writes nothing.
 `cost` is the fourth (Issue #350) and it is VOCABULARY, not a parameter: its values are a closed set

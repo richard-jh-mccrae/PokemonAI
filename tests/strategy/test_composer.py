@@ -1209,22 +1209,29 @@ def test_depth_truncation_is_REPORTED_never_silent():
     assert result.stats["depth_truncated"] > 0
 
 
-# ── the darkness ─────────────────────────────────────────────────────────────────────────────────
+# ── the arming (was: the darkness) ─────────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.req("REQ-COMPOSER-0010")
-def test_the_composer_has_ZERO_production_callers():
-    """Issue #385 lands DARK — arming it at MAIN is Issue #386's, and both ADR-0072 gates must
-    therefore see byte-identical output at this commit. ASSERTED, not assumed: an accidental import
-    from `pilot`/`planner` is exactly what would make the gate diff meaningful and nobody notice.
+def test_the_composer_has_EXACTLY_ONE_production_caller():
+    """**Was `test_the_composer_has_ZERO_production_callers` until POC-T4/5 (Issue #386) armed it.**
 
-    Matched on an IMPORT STATEMENT, never on the substring: `apply_option`'s docstrings name
-    `common.composer.resolve_against` as the consumer that made `option_serials` public, and a
-    substring sweep reports that as a caller. A prose mention is not a call.
+    The old test asserted the darkness Issue #385 shipped under: nothing in production imported this
+    module, so both ADR-0072 gates had to see byte-identical output, and an accidental import was
+    exactly what would make a gate diff meaningful with nobody noticing. That premise expired the
+    moment `planner._composer_line` began calling `compose`. The test is REWRITTEN rather than
+    deleted because the property it protects did not expire with it — it inverted. What mattered was
+    never the number zero; it was that the caller set is DECLARED, so a second entry point cannot
+    appear without someone saying so.
 
-    *Positive control, both ways:* the same pattern finds `state_value`'s real production importers,
-    so a silent zero would be the instrument failing rather than the codebase being clean — and it is
-    re-run against `composer` itself to prove the pattern can match this module's own name."""
+    A second caller would mean the composer is reached by two routes with two sets of seams passed
+    in — which is precisely how `shed` came to be wired in `tools/train/composer_lab.py` and not in
+    production, a divergence that made every corpus measurement describe an agent that did not ship
+    (see `tests/strategy/test_composer_seams_are_wired.py`).
+
+    *Positive control, both ways:* the same pattern finds `state_value`'s and `apply_option`'s real
+    production importers, so a silent empty result would be the instrument failing rather than the
+    codebase being clean."""
     import re
     from pathlib import Path
 
@@ -1240,8 +1247,11 @@ def test_the_composer_has_ZERO_production_callers():
 
     assert importers("state_value"), "the sweep found no `state_value` importer — instrument broken"
     assert importers("apply_option"), "the sweep found no `apply_option` importer — instrument broken"
-    assert importers("composer") == [], \
-        f"composer is imported in production by {importers('composer')}"
+    assert importers("composer") == ["planner.py"], (
+        f"the composer's production caller set has changed: {importers('composer')}. It is armed at "
+        "ONE seam — `planner._composer_line`, which is also the only place the per-option seams "
+        "(`shed`, `search_api`, the determinism proof) are supplied. A second caller reaching it "
+        "without them prices a different composer under the same name")
 
 
 @pytest.mark.req("REQ-COMPOSER-0010")

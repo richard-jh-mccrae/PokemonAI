@@ -1,6 +1,6 @@
 """Deferred-planner cluster — four opponent-model-driven / new-planner consumers wired DEFAULT-OFF so
 they change NO live behavior until the ladder validates them (cf. tests/agents/test_runtime.py for the
-PROFILE contract and tests/strategy/test_deferred_disruption_cluster.py for the weight-0 trigger idiom):
+PROFILE contract):
 
   * BUILD 1 `ko_target_whiff`       — KO/snipe-target TIEBREAK toward the body the opponent is least able
                                       to replace (lowest `copies_left_odds`); pure tiebreak, fails OPEN.
@@ -8,8 +8,9 @@ PROFILE contract and tests/strategy/test_deferred_disruption_cluster.py for the 
                                       is near deck-out (`opp_deckout_in_turns`, SOUND).
   * BUILD 3 `enabler_item_composer` — the ko_for_prizes Item-tutor→evolve→KO composer (prefer a cheaper
                                       Item enabler over the scarce Supporter tutor).
-  * BUILD 4 `dont-spend-unneeded-supporter` — a weight-0 Hypothesis gated on the new `Board.turn_goal_satisfied`
-                                      predicate (fails SAFE to False).
+  * BUILD 4 `Board.turn_goal_satisfied` — the fail-SAFE-to-False predicate. Its weight-0 Hypothesis
+                                      consumer (`dont-spend-unneeded-supporter`) was deleted by
+                                      POC-T4/5 with the whole SEQUENCING cluster.
 
 These tests exercise the FLAG DEFAULTS (all off), the inert code paths, and the trigger — never a live
 score delta (every seam is off / weight 0).
@@ -23,7 +24,6 @@ from common.playability import RARE_CANDY_TAG
 from common.runtime import PROFILE
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy
-from common.strategy.baseline import SEQUENCING_HYPOTHESES
 from common.strategy.context import KO_SCORE, _ATTACH, _PLAY
 from common.strategy.planner import (_PLANNER_DECKOUT_TURNS, _PLANNER_DECKOUT_W,
                                      _PLANNER_ENABLER_FREE, _PLANNER_ENABLER_ITEM_BASE,
@@ -31,7 +31,6 @@ from common.strategy.planner import (_PLANNER_DECKOUT_TURNS, _PLANNER_DECKOUT_W,
 from pilot_helpers import PLAY, make_select, opt, poke, state
 
 _NEW_FLAGS = ("ko_target_whiff", "opp_resource_reads", "enabler_item_composer")
-_SUPPORTER = next(h for h in SEQUENCING_HYPOTHESES if h.id == "dont-spend-unneeded-supporter")
 
 
 def _pilot(**kw) -> Pilot:
@@ -395,7 +394,7 @@ def test_rare_candy_line_appears_only_with_the_flag_on():
     assert off._ko_for_prizes_lines(obs, obs["select"], board, obs["select"]["option"], None) == []
 
 
-# ══════════════════════════════ BUILD 4 — turn_goal_satisfied + the Hypothesis ══════════════════════════════
+# ══════════════════════════════ BUILD 4 — turn_goal_satisfied ══════════════════════════════
 
 def test_turn_goal_satisfied_field_exists_and_defaults_false():
     assert Board().turn_goal_satisfied is False
@@ -408,31 +407,9 @@ def test_turn_goal_satisfied_derivation_fails_safe_to_false():
     board = Board(game_plan=GamePlan(directed_goal="ko_on_path", confidence=0.9), line_ready=True)
     assert pilot._turn_goal_satisfied(board, None) is False          # even a confident plan → False (sound)
 
-
-def test_supporter_hypothesis_ships_weight_zero_and_assumed():
-    assert _SUPPORTER.weight == 0
-    assert _SUPPORTER.status == "assumed"
-
-
-def _ctx(*, option_type=_PLAY, tags=("draw",), card_type=3, board=None):
-    stat = CardStat(synthetic=True, cardId=1, cardType=card_type)
-    return Context(plan=Plan.RACE, select_context=0, option_type=option_type, card_id=1,
-                   tags=list(tags), stat=stat, board=board or Board())
-
-
-def test_supporter_when_fires_on_a_satisfied_goal():
-    board = Board(turn_goal_satisfied=True)
-    assert bool(_SUPPORTER.when(_ctx(board=board)))                          # draw supporter
-    assert bool(_SUPPORTER.when(_ctx(tags=["gust"], board=board)))          # Boss's Orders
-    assert bool(_SUPPORTER.when(_ctx(tags=["rush_evolve"], board=board)))   # evolution tutor
-
-
-def test_supporter_when_silent_when_goal_not_satisfied():
-    assert not _SUPPORTER.when(_ctx(board=Board(turn_goal_satisfied=False)))
-
-
-def test_supporter_when_silent_off_target():
-    board = Board(turn_goal_satisfied=True)
-    assert not _SUPPORTER.when(_ctx(card_type=1, board=board))              # an Item, not a Supporter
-    assert not _SUPPORTER.when(_ctx(tags=["dig"], board=board))             # a genuine dig keeps value
-    assert not _SUPPORTER.when(_ctx(option_type=_ATTACH, board=board))      # not a PLAY
+# BUILD 4's `dont-spend-unneeded-supporter` Hypothesis and its trigger tests are DELETED with the
+# whole SEQUENCING cluster (POC-T4/5, Issue #386). It shipped at weight 0 — WIRED and INERT — and
+# what it was waiting for is precisely what landed: the composer prices holding a scarce Supporter as
+# the `hand` term of the end board it declines to spend it from. `Board.turn_goal_satisfied` above
+# survives and is still asserted here: it is a board FACT with other readers, and its fail-safe-False
+# derivation is the property worth guarding.

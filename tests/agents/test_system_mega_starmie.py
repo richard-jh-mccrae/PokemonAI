@@ -39,7 +39,15 @@ _STATS = DictCardStatProvider({
     BUDDY_POFFIN: CardStat(BUDDY_POFFIN, hp=0),
     MEGA_SIGNAL: CardStat(MEGA_SIGNAL, hp=0),
 }, attacks={JETTING: AttackStat(JETTING, damage=120)})
-_TAGS = CardFunctions({BUDDY_POFFIN: ["search"], MEGA_SIGNAL: ["search"], CINDERACE: ["opener"]})
+# The tags are the COMMITTED ones for these card ids (`src/common/card_functions.json`), not a
+# convenient subset. They were trimmed to `["search"]` / `["opener"]` here until POC-T4/5, which was
+# harmless only while `dig-before-commit` (+20) fired off the bare `search` tag and carried the
+# tag-keyed half of this system test on its own. That rung is deleted by Issue #386, and with the
+# real tags the same boards still exercise both layers — via `bench_fill` and `energy_accel`, which
+# are facts about these cards rather than about a rung.
+_TAGS = CardFunctions({BUDDY_POFFIN: ["search", "bench_fill"],
+                       MEGA_SIGNAL: ["search", "tutor_mega"],
+                       CINDERACE: ["opener", "energy_accel"]})
 
 
 def _pilot(functions=_TAGS, stats=_STATS):
@@ -54,8 +62,11 @@ def _open_active():   # SETUP: choose opening Active (Staryu vs Cinderace)
 
 
 def _play_search():   # SETUP: PLAY a tutor/search card (Buddy Poffin) vs basic (Staryu)
+    # The Bench is stated EMPTY rather than left to default, because that is the board condition the
+    # tag-keyed rule reads: Buddy Poffin's `bench_fill` only earns its bump while there is a Bench to
+    # fill. Leaving it implicit made the test depend on a default rather than on the fact.
     return make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                       current=state(hand=[BUDDY_POFFIN, STARYU]))
+                       current=state(active=poke(STARYU), bench=[], hand=[BUDDY_POFFIN, STARYU]))
 
 
 def _attack():        # RACE: Mega Starmie ex (Water) attacks Cinderace (Fire, Weak to Water)
@@ -85,10 +96,15 @@ def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
 
 @pytest.mark.req("REQ-SYS-0002")
 def test_a_role_keyed_and_a_tag_keyed_general_rule_fire_on_the_same_card():
-    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'search' -> both signals fire on one option.
+    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'bench_fill' -> both signals fire on
+    # one option. The tag-keyed exemplar was `dig-before-commit` off the `search` tag until POC-T4/5
+    # deleted that rung (Issue #386); `prefer-bench-fill-first` reads a different tag on the SAME
+    # card, so the thing under test — two independently-keyed layers meeting on one option — is
+    # unchanged. Worth stating because the tag-keyed layer got materially quieter in that deletion:
+    # `dig-before-commit` was the universal one, firing on any `search` card anywhere.
     fired0 = {h.id for h, _ in _pilot().explain(_play_search()).options[0].fired}
     assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (deck's declaration)
-    assert "dig-before-commit" in fired0                     # tag-keyed (universal Function Tag)
+    assert "prefer-bench-fill-first" in fired0               # tag-keyed (Function Tag on the card)
 
 
 @pytest.mark.req("REQ-SYS-0003")
@@ -96,8 +112,8 @@ def test_function_tags_have_an_effect():
     obs = _play_search()
     with_tags = {h.id for h, _ in _pilot().explain(obs).options[0].fired}
     without = {h.id for h, _ in _pilot(functions=None).explain(obs).options[0].fired}
-    assert "dig-before-commit" in with_tags     # tag drives the tag-keyed rule
-    assert "dig-before-commit" not in without   # remove card_functions -> rule can't fire
+    assert "prefer-bench-fill-first" in with_tags     # tag drives the tag-keyed rule
+    assert "prefer-bench-fill-first" not in without   # remove card_functions -> rule can't fire
     assert "play-a-tutor-for-the-unfound-wincon" in without  # role-keyed rule unaffected
 
 

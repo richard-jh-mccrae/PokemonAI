@@ -9,7 +9,7 @@ ADR-0092 §6 drafted the whitelist as a flat prose list, and the flat shape fail
 test. ONE board fact — an empty Bench under a knock-outable Active — reached that list through
 **three** mechanisms simultaneously:
 
-    _predicted_loss         -KO_SCORE terminal rung, CombatMath-gated   (planner.py)
+    _predicted_loss         -KO_SCORE terminal rung, CombatMath-gated   (planner.py, now state_value.py)
     _empty_bench_forced     order filter, unconditional                 (pilot.py)
     keep-a-bench            +60 tuned weight, unscoped when()           (baseline_bench.py)
 
@@ -180,14 +180,21 @@ WHITELIST: tuple[SoundRule, ...] = (
     ),
     SoundRule(
         id="predicted-loss",
-        entry="`_predicted_loss` (−KO_SCORE bench-empty doom, ADR-0064)",
+        entry="`state_value._predicted_loss` case 2 (−KO_SCORE bench-empty doom, ADR-0064)",
         type=STRUCTURAL,
         fact="empty Bench under a knock-outable Active",
         reason="The SAME fact as `empty-bench-filter`, and deliberately so: this is the doom-gated "
                "form (bench empty AND `combat.reachable_incoming >= my_hp`) that becomes the SOLE "
                "guard once the filter retires. Two entries on one fact is the double-counting rule "
                "being paid down on a schedule, not an exception to it — which is why the filter is "
-               "typed provisional and this one is not.",
+               "typed provisional and this one is not. "
+               "**RE-HOMED, not retired, at POC-T4/5 (Issue #386):** the entry used to name "
+               "`planner._predicted_loss`, the terminal rung, which was deleted with the rung ladder "
+               "the composer replaces. The fact did not move — `state_value._predicted_loss` is the "
+               "port of that exact rung and reads the same CombatMath gate, so this is one entry "
+               "changing address rather than a guard going away. Note the whitelist named a deleted "
+               "function while staying green: `test_sound_rules` keys on `id` and `fact`, so nothing "
+               "checks that an `entry` still resolves.",
     ),
     SoundRule(
         id="prize-lethality",

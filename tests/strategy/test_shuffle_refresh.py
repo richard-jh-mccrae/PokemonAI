@@ -27,6 +27,33 @@ PLAINDRAW = 950       # plain draw Supporter (draw, NOT shuffle_hand) - the cont
 def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
+    sequence composer: the rungs in this file still SCORE every option, but they no longer pick. A
+    `decide(obs) == [n]` line here therefore stopped testing this file's subject and started testing
+    the composer, on a hand-built board no human ever ruled. The ranking is the fact this file owns.
+    """
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
+def _sequenced(pilot, obs):
+    """The ladder's own final ORDER — `_finish_turn_last` applied to its score order.
+
+    A ranking cannot express a SEQUENCING claim: the whole point of "the costly search is tiered
+    ahead of the hand-nuking shuffle" is that it holds *regardless of raw scores*. The tiers survived
+    POC-T4/5 intact, so this is where that claim still lives."""
+    select = obs["select"]
+    dec = pilot.explain(obs)
+    board = pilot._board(obs, select)
+    options = select["option"]
+    traces = list(dec.options)
+    by_score = pilot._score_order(obs, options, traces)
+    return pilot._finish_turn_last(obs, board, options, traces, by_score,
+                                   select.get("maxCount", 0), select.get("context"))
+
+
 
 # --- a dead-hand refresh still plays over End (the +20 endorsement, no dead-hand rung needed) ------
 @pytest.mark.req("REQ-GEN-0042")
@@ -47,7 +74,7 @@ def test_a_dead_hand_refresh_is_still_played_over_end():
     obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)], hand=[LILLIES]))
     assert pilot.explain(obs).options[0].score > 0
-    assert pilot.decide(obs) == [0]                                   # refresh, not End
+    assert _ranked(pilot, obs)[0][0] == 0                                   # refresh, not End
 
 
 # --- a live tutor is sequenced before the refresh (tier 2 vs tier 3) --------------------------------
@@ -68,7 +95,10 @@ def test_a_playable_tutor_is_played_before_the_refresh():
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, ULTRA]))
     assert "fetch-when-it-fills-a-need" in _fired(pilot.explain(obs).options[1])
-    assert pilot.decide(obs) == [1]                                  # play the tutor, not the refresh
+    # A SEQUENCING claim, so it is asserted at the sequencer. The ladder's RANKING no longer
+    # puts the tutor top — `dig-before-commit`'s +20 is deleted — but the tiering that the
+    # docstring actually describes ("regardless of raw scores") is intact and is the claim.
+    assert _sequenced(pilot, obs)[0] == 1                                  # play the tutor, not the refresh
 
 
 # --- dont-refresh-into-a-probable-miss also owns K=0: a provably-spent deck, post-anchor -----------
@@ -136,7 +166,7 @@ def test_disruption_value_survives_the_probable_miss_veto():
     assert "play-harlequin-vs-hand-size" not in _fired(trace)         # RETIRED (ADR-0102) — the
     assert trace.score > 0                                            # disruption value is now the
     #                                                                   priced survival, in `tactical`
-    assert pilot.decide(obs) == [0]                                   # played as disruption
+    assert _ranked(pilot, obs)[0][0] == 0                                   # played as disruption
 
 
 # --- dont-refresh-into-a-probable-miss (Layer B, post-anchor): the N-card draw likely whiffs -------
@@ -184,36 +214,42 @@ def test_laceys_8_draw_window_lifts_the_probable_miss():
     pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=3)
     trace = pilot.explain(obs).options[0]
     assert "dont-refresh-into-a-probable-miss" not in _fired(trace)   # the 8-draw window opens
-    assert pilot.decide(obs) == [0]                                   # refresh plays again
+    assert _ranked(pilot, obs)[0][0] == 0                                   # refresh plays again
 
 
 # --- Shuffle-Refresh IS still a hand-cycling draw -- but the SWING ORACLE owns it (ADR-0060) --------
 @pytest.mark.req("REQ-GEN-0046")
-def test_the_swing_oracle_owns_the_shuffle_refresh_and_dig_owns_the_plain_draw():
+def test_the_swing_oracle_owns_the_shuffle_refresh_and_a_plain_draw_gets_nothing():
     """A Shuffle-Refresh is still endorsed as a hand-cycle — ADR-0024's 'only when the hand is dead'
     premise stays REFUTED (hoarding cost ~3:1 in the mega_starmie mirror). But ADR-0060 moves that
     endorsement OUT of `dig-before-commit`, which is hand-size-BLIND and so endorsed Judge just as
     warmly when we held 8 cards and the opponent held 1 (ml f111, CRITICAL).
 
     The cycling credit is preserved EXACTLY (`_REFRESH_CYCLE` = 20, the same +20 dig used to give)
-    and now arrives as a tactical term that also prices what the shuffle actually moves. A plain
-    draw card is untouched: `dig-before-commit` still owns it."""
+    and now arrives as a tactical term that also prices what the shuffle actually moves.
+
+    **`dig-before-commit` is itself deleted by POC-T4/5 (Issue #386), which changes what the second
+    half of this test can say.** It used to be *"a plain draw card is untouched — dig still owns
+    it"*, asserted by naming the rung. There is no rung to name, and the mirror-image
+    `"dig-before-commit" not in _fired(refresh)` assertion is now true of every board and every
+    option, so keeping it would have left the test one assertion greener than it is. What survives is
+    the CONTRAST the ADR is actually about, and it needs no rung id: the swing oracle prices the
+    refresh at exactly 20.0 tactical and stays SILENT on a plain draw."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINDRAW: CardStat(PLAINDRAW, synthetic=True, hp=0),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # SETUP (no win-condition Line) - dig-before-commit is eligible to fire on a draw card here.
+    # SETUP (no win-condition Line).
     obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, PLAINDRAW]))
     refresh, plain = pilot.explain(obs).options[0], pilot.explain(obs).options[1]
 
-    assert "dig-before-commit" not in _fired(refresh)   # the hand-BLIND rung no longer reaches it
-    assert refresh.tactical == 20.0                     # ... the cycling credit is preserved, exactly
+    assert refresh.tactical == 20.0                     # the cycling credit is preserved, exactly
     assert refresh.score > 0                            # ... so the refresh is still the strong line
-
-    assert "dig-before-commit" in _fired(plain)         # a plain draw card is unaffected
-    assert plain.tactical == 0.0                        # ... and the oracle stays silent on it
+    assert plain.tactical == 0.0                        # ... and the oracle stays SILENT on a plain draw
+    assert refresh.tactical > plain.tactical, (         # the contrast, stated as one comparison so a
+        "the swing oracle no longer separates a hand-nuking refresh from a plain draw")
 
 
 # --- regression fix: Shuffle-Refresh played BEFORE the turn-ending attack (cycle, then KO) ----------

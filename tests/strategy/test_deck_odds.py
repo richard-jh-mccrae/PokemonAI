@@ -23,6 +23,17 @@ END = 14  # OptionType.END
 def _fired(o):
     return {h.id for h, _ in o.fired}
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
+    sequence composer: the rungs in this file still SCORE every option, but they no longer pick. A
+    `decide(obs) == [n]` line here therefore stopped testing this file's subject and started testing
+    the composer, on a hand-built board no human ever ruled. The ranking is the fact this file owns.
+    """
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
 
 # ============================================================ the pure hypergeometric estimator
 @pytest.mark.req("REQ-GEN-0053")
@@ -257,13 +268,13 @@ def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prize
     fired = _fired(pilot.explain(obs).options[0])
     assert "dont-search-a-probable-whiff" in fired
     assert "dont-search-an-empty-deck" not in fired         # NOT sound guard — still reachable
-    assert pilot.decide(obs) == [1]                          # End beats probable-whiff dig
+    assert _ranked(pilot, obs)[0][0] == 1                          # End beats probable-whiff dig
 
     # Control: same board, no deckCount -> estimate silent -> dig is played.
     obs2 = make_select([play_signal, opt(END)],
                        current=state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5))
     assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs2).options[0])
-    assert pilot.decide(obs2) == [0]
+    assert _ranked(pilot, obs2)[0][0] == 0
 
 
 @pytest.mark.req("REQ-GEN-0055")
@@ -283,7 +294,7 @@ def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
                          obs["select"]["option"][0])
     assert not ctx.search_targets_unlikely
     assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [0]                          # play bench-filler — probably hits
+    assert _ranked(pilot, obs)[0][0] == 0                          # play bench-filler — probably hits
 
 
 @pytest.mark.req("REQ-GEN-0055")

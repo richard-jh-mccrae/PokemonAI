@@ -1,10 +1,5 @@
 {
   "demote-needless-search-supporter-in-setup": -17.0,
-  "dig-before-commit": 23.0,
   "fetch-the-attack-color": 1.33,
-  "gust-for-the-ko": 51.0,
-  "gust-for-the-stall": 7.0,
-  "play-risky-ruins-when-net-positive": 12.0,
-  "stall-gust-over-dev-when-starved": 92.0,
   "use-acceleration": 27.0
 }

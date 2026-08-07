@@ -228,3 +228,59 @@ def test_the_doc_table_and_the_data_carry_the_same_entries_in_the_same_order():
     reads and what the wave packets cite; `sound_rules.py` is what the tracks import. A rule deleted
     from one and left in the other would give two answers to "may I delete this rung?"."""
     assert _doc_ids() == [r.id for r in sr.WHITELIST]
+
+
+# ── an entry must name a symbol that still EXISTS ─────────────────────────────────────────────────
+
+
+_ENTRY_SYMBOL = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
+
+
+def _entry_symbols():
+    """Every dotted `module.symbol` an entry names, as (rule id, dotted path) pairs."""
+    return [(r.id, s) for r in sr.WHITELIST for s in _ENTRY_SYMBOL.findall(r.entry)]
+
+
+def _resolves(dotted: str) -> bool:
+    """Does `a.b.c` name something importable under `common`? Walk attributes from the deepest
+    importable module prefix, so both `composer.BEAM_WIDTH` and `scouting.matchup_plan._ROLE_PRIORITY`
+    resolve without the test needing to know which parts are modules."""
+    import importlib
+    parts = dotted.split(".")
+    for split in range(len(parts) - 1, 0, -1):
+        try:
+            obj = importlib.import_module("common." + ".".join(parts[:split]))
+        except ImportError:
+            continue
+        for attr in parts[split:]:
+            obj = getattr(obj, attr, None)
+            if obj is None:
+                return False
+        return True
+    return False
+
+
+@pytest.mark.req("REQ-WHITELIST-0002")
+def test_every_symbol_an_entry_names_still_resolves():
+    """An entry that names a DELETED function is a guard the codebase no longer has, recorded as one
+    it does — and until this test existed nothing could see it. `predicted-loss` carried
+    ``_predicted_loss ... (planner.py)`` for the whole of POC-T4/5, which deleted that rung with the
+    ladder; the suite stayed green because every other check here keys on `id` and `fact`. The fact
+    itself never moved (`state_value._predicted_loss` is the port of that exact rung), so the repair
+    was to change the entry's ADDRESS — which is only a repair anyone makes if something asks.
+
+    Deliberately narrow: only dotted paths are checked. A bare `` `KO_SCORE` `` is prose about a band,
+    not an address, and demanding it resolve would push entries toward jargon nobody can read."""
+    unresolved = [(rid, s) for rid, s in _entry_symbols() if not _resolves(s)]
+    assert unresolved == [], f"whitelist entries name symbols that no longer exist: {unresolved}"
+
+
+@pytest.mark.req("REQ-WHITELIST-0002")
+def test_the_symbol_check_actually_looks_at_something():
+    """The positive control. `test_every_symbol_an_entry_names_still_resolves` passes just as
+    happily when the regex matches nothing at all, so assert that it matched — and that a name known
+    to be gone is genuinely rejected rather than skipped."""
+    assert len(_entry_symbols()) >= 5                       # the sweep is not looking at an empty set
+    assert _resolves("state_value._predicted_loss") is True  # a live symbol resolves
+    assert _resolves("strategy.planner._predicted_loss") is False   # the one POC-T4/5 deleted
+    assert _resolves("state_value._no_such_symbol") is False

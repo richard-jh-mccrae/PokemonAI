@@ -15,10 +15,6 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import NamedTuple
 
-from common import board_delta                # the Stadium clause home (Issue #410): its
-                                              # `stadium_hp_delta` + `applies_to` predicate are what
-                                              # `_stadium_hp_shift` reads, never re-derived
-                                              # (Issue #424)
 from common import deck_odds
 from common import retreat_cost                # ADR-0100 §8's grant-aware cost, shared with
                                               # `board_choice`'s Energy-discard target space
@@ -42,7 +38,7 @@ from common.option_equivalence import canonical_keys   # ADR-0103: the ordering 
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.grading import HORIZON as _HORIZON, halve as _halve
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
-from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
+from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin
 from common.strategy.objectives import ObjectivesMixin
 from common.strategy.planner import PlannerMixin, TurnLine
 
@@ -147,20 +143,13 @@ _GENERAL_ILLIQUID_FLOOR = 0.15  # piece 2b (the shed's Hole-2 fix): a general-wo
                            # a body lands keeps it above outright-dead cards in pitch order. Derived from
                            # the board, never a card list; a live recipient restores full worth (f65: an
                            # Ignition kept for the BENCHED Mega Starmie stays fully priced).
-# WP-N5b/N5d (armed OFF): the develop-rung LEAF's actionable-resource term — the value of my HELD
-# hand at end-of-turn = the needs-assignment slot coverage (`needs.set_keep_v2`) of the held cards
-# that COULD NOT have been deployed this turn (`_held_undeployable` — the N5d complement: a card I
-# chose not to play is a fumble, not future value; crediting it rewarded HOARDING, the N5b/N5c
-# regression). The SAME valuation the keep-value sites use (readiness CONSUMES needs — one
-# vocabulary, not a rival). Sized/capped by the leaf-lab bench.
-_HAND_READINESS_W = 0.5
-_HAND_READINESS_CAP = 40.0
-# The ε TIE-BREAK scale (the alternative sizing): shrink the whole term below the smallest genuine
-# leaf gap (~0.025, the line account's smallest spend increment), so it can ONLY split exact-value
-# ties (the 36→5 collapse) and can never overturn a real ranking gap. N5b's W-insensitivity proved
-# the damage was tie-splits, not magnitude — so the ε only helps once the VALUATION is right (N5d).
-_HAND_TIEBREAK_W = 0.0001
-_HAND_TIEBREAK_CAP = 0.02
+# WP-N5b/N5d's hand-value term (`_hand_readiness`, `_held_undeployable`, `_HAND_READINESS_W/_CAP`
+# and the `_HAND_TIEBREAK_*` ε alternative) is DELETED by POC-T4/5 (Issue #386) along with the
+# develop rung whose LEAF it was a term of. The question it answered — what are the cards still in
+# my hand at end-of-turn worth? — is now `state_value`'s `hand` family, which prices the hand as a
+# LEDGER (supply against DEMAND, ADR-0127) rather than as a one-sided credit; that is why the cap
+# is not carried over (`state_value` §`hand`). `leaf_hand_value` survives as the flag gating the
+# held-context CAPTURE the state model needs (`planner._leaf_state_model`), not this term.
 _DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLACES `play-energy-denial`'s
                            # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
                            # off a benched body. Same lesson as ADR-0060: price the quantity, don't
@@ -573,11 +562,6 @@ class Board:
                                        # line-preevo Active with nothing better to do + a benched
                                        # `item_lock` opener + a cheap reachable retreat — retreat into
                                        # Budew to DENY the opp's Item turn (no incoming-damage premise)
-    tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of body to equip my held +HP
-                                       # Tool this turn — survival-turns target picker (ADR-0028);
-                                       # None when no +HP Tool in hand / no body worth equipping
-    irreplaceable_tool_in_hand: bool = False  # an ACE SPEC (one-per-deck, unrecoverable) Tool is in
-                                       # my hand — anti-shuffle belt (never shuffle it away)
     priority_wincon_slot: tuple | None = None  # (AreaType, index) of the ONE win-condition Pokémon to
                                        # concentrate Energy on — most-Energy wincon still short of biggest
                                        # attack. Active skipped if it can already KO. None when no buildable wincon
@@ -923,9 +907,6 @@ class Context:
                                            # ABILITY needs as fuel (CardStat.abilityEnergyTypes) and none is
                                            # attached — the attach switches a dormant Ability on (Adrena-Brain's
                                            # {D}). Attach-side sibling of `fetch-the-ability-fuel-color`
-    attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
-                                           # survival-turns picker chose (== board.tool_deploy_slot) —
-                                           # proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
     attach_feeds_firing_accel: bool = False  # this ATTACH puts Energy on an ACTIVE accelerator
                                            # (`accel_source` Role, e.g. Cinderace) that still NEEDS it to fire
                                            # its accel attack, w/ a bench recipient and no ready wincon to retreat into. Multiplies Energy even if doomed (ep83037962 f70); off if a ready attacker exists (ep83007714 f65).
@@ -1251,11 +1232,15 @@ class Decision:
     game_plan: dict | None = None    # the Match Planner's Game Plan (ADR-0045), compact for telemetry:
                                      # mode + confidence + route + directed goal. Sparse; `/blunder-buster`
                                      # ties a ladder misplay to this match-scale read
-    plan_candidates: list | None = None  # the develop-rollout rung's ranked end-boards (Phase 1): top-K
-                                     # {step, value, why, committed?, greedy?} sorted by value desc, so a
-                                     # correction reader sees WHAT the rung out-scored, not just its pick.
-                                     # Sparse: None unless the develop rung fired — keeps a non-develop
-                                     # record byte-identical to the pre-rung wire format
+    composer: dict | None = None     # the SEQUENCE COMPOSER's per-decision telemetry (POC-T4/5): the
+                                     # margin block Issue #263 § *Beam-quality package* item 3 REQUIRES
+                                     # (the chosen first step's 1-ply rank relative to k and its margin to
+                                     # the k-th candidate), the run stats, the winning candidate's
+                                     # `working()` legs and its step indices, plus any coverage-gap
+                                     # reasons. Sparse: None unless the composer ran. It REPLACES
+                                     # `plan_candidates`, the develop rollout's top-K ranked end-boards,
+                                     # which died with that rung — a near-miss at the beam cutoff is the
+                                     # early warning the ranked list used to stand in for
     attach_working: dict | None = None  # the ENERGY-ATTACH DECIDER's legible working (ADR-0069 §9):
                                      # the per-option AXES rows — attack_axis (this_turn / build /
                                      # accel_value), retreat_equity, ability_fuel, evaporation_loss,
@@ -1275,7 +1260,7 @@ def _slot_cid(slot):
     return int(head) if head.isdigit() else None
 
 
-class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin):
     """Composed from the Turn Planner — whose sound top rung IS the Lethal Solver (ADR-0030/0031/0037,
     one entry point) — the Tier-3 Match Objectives (ADR-0040: the KO Race), and four doctrine mixins
     (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form Pilot-side methods;
@@ -1284,23 +1269,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
-                 planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
+                 planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, snipe_prize_reach=False, forced_promotion=False,
                  value_model=None,
-                 match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
+                 match_planner_steer=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
-                 develop_rollout=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False,
+                 snipe_relevance=False, copy_top_value=False,
                  deferred_target_expansion=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
@@ -1325,9 +1309,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # hidden zones from the EXACT own deck/prize split
                                                         # (own_prizes) vs the old id-sorted decklist prefix
                                                         # that hid the high-id enabler band. OFF = prefix.
-        self.planner_engine_rank = planner_engine_rank  # ADR-0031 kill-switch: engine-sim RANKS the
-                                                        # Planner's candidate lines (off = closed-form pick,
-                                                        # engine only sharpens the committed line's value)
         self.planner_key_threat = planner_key_threat    # ADR-0031 kill-switch: the KO-the-key-threat
                                                         # Goal-Ladder rung (snipe-KO the benched top threat)
         self.lethal_family = lethal_family              # ADR-0037 kill-switch: the ONE win-generator
@@ -1367,9 +1348,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Game Plan directed goal biases the Turn Planner's
                                                         # candidate ranking (sub-prize, confidence-scaled).
                                                         # Default OFF — byte-identical; matured via ladder
-        self.forgo_ko = forgo_ko                        # ADR-0045 kill-switch (S4): forgo a NON-winning KO
-                                                        # under the tight sound gate ("don't wake the giant").
-                                                        # Default OFF — the riskiest lever, ladder-gated
         self.promote_ko_aware = promote_ko_aware        # kill-switch: KO-aware, boost-inclusive promote
                                                         # pick — prefer promoting the benched wincon whose
                                                         # affordable attack (given the attachable Energy +
@@ -1447,14 +1425,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # so OFF means attach endorsements go silent and only
                                                         # the surviving structure rungs speak. An incident
                                                         # lever, never a comparison baseline.
-        self.leaf_option_equivalence = leaf_option_equivalence   # ADR-0091 (Issue #247) kill-switch:
-                                                        # options a board cannot tell apart are ONE
-                                                        # decision, so the develop rung sims one
-                                                        # representative per class and gives every member
-                                                        # the class MAXIMUM. Fixes a measured 1167.0-vs-95.4
-                                                        # split on three byte-identical Riolu, caused by an
-                                                        # index-order-dependent greedy rollout (Issue #254).
-                                                        # OFF = byte-identical to the pre-#247 rung.
         self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
                                                         # only from a self-verified known top card.
         self.deferred_target_expansion = deferred_target_expansion   # ADR-0121 (Issue #392),
@@ -1468,11 +1438,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # this Pilot consumes it yet, so OFF is
                                                         # byte-identical and ON changes no decision
                                                         # until that consumer exists.
-        self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
-                                                        # the within-turn rollout rung — on a develop turn
-                                                        # (plan_turn else None) where greedy is weak/indifferent,
-                                                        # sim each candidate first action to end-of-turn and
-                                                        # commit the best leaf. OFF = byte-identical
         self.doom_matched_relax = doom_matched_relax    # doom-shadow grill kill-switch (2026-07-23): behind a
                                                         # γ-matched Brief (`_incoming_budget` set) AND no
                                                         # discard-recur fuel, a worst-case `active_doomed` cry
@@ -1605,8 +1570,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # wants IN the discard (deck-fixed; Aura Jab class)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
-        self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
-                                                        # end-boards, lifted onto the Decision's plan_candidates
+        self._composer_trace = None                     # POC-T4/5: the last composer run's margin +
+                                                        # stats, lifted onto the Decision's `composer` key
         self._planning = False                          # reentrancy guard: True while an engine sim re-runs
                                                         # policy, so plan_turn stays closed-form (no nested search)
 
@@ -1677,8 +1642,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
-                            plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
-                                             if planned.goal == "develop" else None),  # rung's ranking (sparse)
+                            composer=(self._composer_trace                     # POC-T4/5: the margin
+                                      if planned.goal == "compose" else None),   # telemetry (sparse)
                             gamble=getattr(self, "_gamble_trace", None),
                             attach_working=self._attach_working(obs, select, board, options),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
@@ -1726,6 +1691,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
+                        # Emitted on the DEFER path too, and that is the point: the composer ran and
+                        # declined (no scorable option, or a coverage-gap winner it refused to commit
+                        # on an unknown), so this record is the only place the reason survives. A
+                        # telemetry key that appeared only when the composer WON would answer
+                        # "did it fire" with "did it agree", which is the column-misreading the lab's
+                        # own caveat exists against.
+                        composer=getattr(self, "_composer_trace", None),
                         attach_working=self._attach_working(obs, select, board, options),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
@@ -1805,12 +1777,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         answer). One consequence stated rather than hidden: this changes which of several EXACTLY
         tied options is picked in live play too, and deliberately — a policy that is invariant only
         inside the sim would be simulating something other than itself, which is the drift the
-        develop rung's whole override authority rests on not having.
+        composer's whole authority to decide the MAIN menu rests on not having.
 
         Unconditional, like `_prefer_soonest_arming_evolve` below (the same defect one layer up, the
         same fix): it deletes an inconsistency rather than adding a value term, so there is no OFF
-        branch worth carrying. `leaf_option_equivalence` keeps its own narrower contract — the develop
-        rung's class collapse — untouched.
+        branch worth carrying. The `leaf_option_equivalence` kill-switch that used to carry the
+        develop rung's narrower class-collapse contract is DELETED with that rung (POC-T4/5): the
+        composer applies ADR-0091 unconditionally, which is the same reading this key already took.
 
         Measured 2026-08-02 over 300 corpus frames (2193 options, mean 7.3/frame): the fingerprinting
         costs **0.031 ms per decision**, ~3% of the ~0.95 ms whole-Board build
@@ -2148,6 +2121,45 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # drops to the LAST tier below (the
                                                                      # attach-anyway blunder class,
                                                                      # 82749168-21/82867148-34).
+            # A FREE INFORMATIVE PLAY reaches the boundary's band at score ZERO (POC-T4/5, #386).
+            #
+            # `sound_rules.information-before-commitment` is a STANDING ruling that this ordering is
+            # *"NOT derivable by the planner — both orders reach the same end state, so no function
+            # of that state separates them (ADR-0095 decision 3)"*. The swap deleted
+            # `dig-before-commit` (+20) on the premise that a rung asserting a leaf-computable
+            # preference is a second opinion — but that premise does not hold for THIS rung, and the
+            # whitelist says so in as many words.
+            #
+            # What broke, measured on ADR-0095's own anchor frame `ms_information_before_commitment
+            # _f11`: with the +20 gone the Pokégear 3.0 prices at exactly 0.00, the gate below drops
+            # it to `_TIER_ENDER`, and the boundary underneath never runs on it. Crushing Hammer
+            # (22.50, COMMITTING) sequences first and the human's ruled dig is not played at all.
+            # The boundary was intact the whole time; its input had been removed.
+            #
+            # This is NOT the `>= 0` loosening ADR-0069 measured and rejected, and FOUR fences keep
+            # it from becoming one:
+            #
+            #   `_PLAY` only        a zero-priced ATTACH still falls to the last tier, which is the
+            #                       attach-anyway blunder class (82749168-21, 82867148-34).
+            #   `== 0` not `>= 0`   a NEGATIVE score is a decider saying the play is bad.
+            #   not `cost_discard`  a costed dig is not free, so weak dominance does not hold.
+            #   NOTHING FIRED       the fence that was missing, and the one that matters most. A
+            #                       score of 0 has two very different causes: *nothing prices this
+            #                       option* (the Pokégear, once `dig-before-commit` was deleted —
+            #                       `fired` is empty) and *a rung deliberately NEUTRALISED it* (Mega
+            #                       Signal under `dont-tutor-the-held-wincon`, which nets a redundant
+            #                       tutor to exactly zero — `fired` names it). The old `score <= 0`
+            #                       gate treated both as "not endorsed", and it was right about the
+            #                       second. Without this fence the carve-out sequenced a search the
+            #                       ladder had just refused FIRST — caught by
+            #                       `test_benchless_agent_refreshes_over_a_redundant_wincon_tutor`,
+            #                       whose whole subject is a neutralised tutor.
+            #
+            # What survives all four is exactly the ADR's own case: free, informative, unopposed, and
+            # priced at nothing — where taking it cannot cost anything and can improve what follows.
+            if (t == _PLAY and traces[i].score == 0 and not traces[i].fired
+                    and not _cost_discard(i) and self._informative_card(traces[i].card_id)):
+                return _TIER_INFORMATIVE
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
                 return _TIER_ENDER                                   # — incl. an attach the decider prices at
                                                                      # ZERO: sequencing that ahead of End is
@@ -3949,70 +3961,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the crossing is exact oracle arithmetic (context-priced, so boosts ALREADY played this turn
         are in the base; each further copy's play re-passes this check on the updated context).
         `_finish_turn_last` then sequences the lethal play tier-0, ahead of the attack it enables.
-        Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise.
-
-        ## Two cards, one question (Issue #424)
-
-        *"Does this play turn a knockout that was not there before?"* is asked by a damage-boost card
-        and by an HP-REDUCING Stadium alike, and only the crossing's SIDE differs::
-
-            boost:     dmg + damageBoost * copies  >=  opp_hp
-            hp_delta:  dmg                         >=  opp_hp + hp_shift
-
-        so this is ONE term with two legs rather than two terms — the band, the necessity guard, the
-        `_is_simultaneous_draw` refusal and the `_EFFICIENCY` discount are identical, and two
-        spellings of one decision is the drift `_order_key`'s docstring exists to warn about.
-        Gravity Mountain (1252) carries no ``damageBoost`` at all — its whole effect is the clause
-        ``{"kind": "stadium_static", "effect": "hp_delta", "amount": -30, "applies_to": "stage2"}``
-        (`card_effects.json`) — so it used to exit at the boost guard and fall to a flat rung that,
-        by its own rationale, could not tell a board where the −30 crosses a breakpoint from one
-        where it does not.
-
-        ``hp_shift`` is SIGNED and nothing branches on its sign, which is what makes an
-        HP-*increasing* Stadium priced as making a KO harder for free: it raises the bar the attack
-        has to clear, so the crossing simply does not fire."""
+        Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise."""
         t = option.get("type")
         if board.turn <= 1:            # turn 1 going first: can't attack, no boost is lethal
             return 0
         cid = self._option_card_id(obs, select, option)
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None:
+        if st is None or not getattr(st, "damageBoost", 0):
+            return 0
+        if t == _PLAY and (st.is_item or st.is_supporter):  # Item stacks; a Supporter is one/turn
+            copies = 1 if st.is_supporter else self._hand_count_of(obs, cid)
+        elif (t == _ATTACH and st.is_tool
+              and option.get("inPlayArea") == _ACTIVE):     # a boost Tool onto my attacker
+            copies = 1
+        else:
             return 0
         opp = self._opp_active(obs)
         opp_hp = (opp or {}).get("hp", 0)
         active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
         if not (active and opp and opp_hp):
             return 0
+        if st.damageBoostType is not None and active.energyType != st.damageBoostType:
+            return 0                                        # "your {F} Pokémon" — attacker-type gate
+        if not st.applies_to_holder(active):
+            return 0                                        # "the Hop's Pokémon this card is attached
+                                                            # to" — the owner-family HOLDER gate
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
-        boost, hp_shift = 0, 0
-        if getattr(st, "damageBoost", 0):
-            # ── the DAMAGE side: lift my attack over their HP ────────────────────────────────────
-            if t == _PLAY and (st.is_item or st.is_supporter):  # Item stacks; a Supporter is one/turn
-                copies = 1 if st.is_supporter else self._hand_count_of(obs, cid)
-            elif (t == _ATTACH and st.is_tool
-                  and option.get("inPlayArea") == _ACTIVE):     # a boost Tool onto my attacker
-                copies = 1
-            else:
-                return 0
-            if st.damageBoostType is not None and active.energyType != st.damageBoostType:
-                return 0                                        # "your {F} Pokémon" — attacker-type gate
-            if not st.applies_to_holder(active):
-                return 0                                        # "the Hop's Pokémon this card is attached
-                                                                # to" — the owner-family HOLDER gate
-            if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
-                return 0                                        # "{ex}" defender gate (incl. Mega ex)
-            boost = st.damageBoost * copies
-        elif t == _PLAY and st.is_stadium:
-            # ── the HP side: lower their HP under my attack (Issue #424) ─────────────────────────
-            shift = self._stadium_hp_shift(obs, cid, opp_stat)
-            if shift is None:
-                return 0                                        # a clause the seam cannot price
-            hp_shift = shift
-        else:
-            return 0
-        need = opp_hp + hp_shift                                # the defender's HP AFTER this play
-        if need <= 0:                                           # a body the play alone would floor:
-            return 0                                            # not a crossing this term can state
+        if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
+            return 0                                        # "{ex}" defender gate (incl. Mega ex)
         ctx = self._my_damage_context(obs)
         for aid in (active.attacks or ()):
             cost = self._attack_cost(aid)
@@ -4029,62 +4005,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
             if dmg <= 0:                                    # a boost never lifts a does-nothing attack
                 continue
-            if (dmg + boost >= need
+            if (dmg + st.damageBoost * copies >= opp_hp
                     and not self._is_simultaneous_draw(board, aid, self._prize_value(opp))):
                 best = max(best, KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost)
         return best
-
-    def _stadium_hp_shift(self, obs: dict, card_id, defender_stat) -> int | None:
-        """How playing this Stadium MOVES the defender's rendered HP — ``delta_after − delta_now``.
-
-        The COUNTERFACTUAL half of `board_delta.stadium_hp_delta`, which prices the Stadium already
-        in play. Both readings come from that one shipped function, so the `applies_to` class test
-        (`board_delta._admits`; ``stage2`` for Gravity Mountain) decides which bodies a Stadium
-        reaches by the shipped predicate rather than by a second branch here. A Stadium that does not
-        reach this defender therefore contributes 0 structurally.
-
-        **A DIFFERENCE of two readings, because playing a Stadium DISPLACES the one in play** —
-        *"Only one Stadium can be in play at a time—if a new one comes into play, discard the old one
-        and end its effects"* (`docs/rulebook.txt` L136), which `board_delta._play`'s Stadium branch
-        models. Without the subtraction, replacing an opponent's Gravity Mountain with our own would
-        read as a fresh −30 when the −30 was already on the board and the true gain is 0.
-
-        ``delta_now`` is SUBTRACTED rather than added because the engine's observation already
-        renders the in-play Stadium into the body it reports: `cgpy/render.py:pokemon_dict` returns
-        ``hp = p.hp + delta`` and ``maxHp = p.max_hp + delta``, never storing either (`ml_dx_2001`:
-        Dragapult ex 290/290 at f172 with Gravity Mountain out, 320/320 at f181 without it). So
-        ``opp_hp`` arrives with the current delta baked in and the shift is what CHANGES.
-
-        None — *unknown, refuse* — when either reading names a clause the seam cannot price, which
-        includes a defender with no `CardStat` (the `applies_to` test cannot be evaluated).
-
-        ⚠️ **The subtraction stopped being a forward contract at Issue #433, and the change of state
-        is the point.** It shipped INERT: only two cards in the pool carry an `hp_delta` clause at
-        all — 1252 and 1251 — and neither could put a non-zero ``delta_now`` under a legal play.
-        1252 over 1252 is not one (*"You can't play a Stadium card if a Stadium with the same name is
-        already in play"*, `docs/rulebook.txt` L137, enforced at `cgpy/options.py`), and **1251
-        refused**, for want of a ``basic`` resolver in `board_delta._APPLIES_TO`.
-
-        That resolver now exists, so ``delta_now`` is LIVE: with Lively Stadium out, a Basic defender
-        is rendered 30 HP above its printed maximum, and playing **any** other Stadium ends that lift.
-        Measured on the shipped term — a Basic rendered at 300 with Mega Brave's 270 on the board is
-        out of reach until Risky Ruins displaces the Lively, at which point the shift is −30, the bar
-        falls to 270 and the play is priced KO_SCORE-class. A one-sided add would have read that
-        board as 0 and missed the knockout, which is exactly the case the subtraction was written
-        for before one existed."""
-        current = obs.get("current") or {}
-        try:
-            now = board_delta.stadium_hp_delta(
-                board_delta.stadium_clauses_for(current, self.combat,
-                                                event=board_delta.STADIUM_STATIC,
-                                                stat=defender_stat), defender_stat)
-            after = board_delta.stadium_hp_delta(
-                board_delta.stadium_clauses_of(self.combat, card_id,
-                                               event=board_delta.STADIUM_STATIC,
-                                               stat=defender_stat), defender_stat)
-        except board_delta.Unmodellable:
-            return None
-        return after - now
 
     def _hand_count_of(self, obs: dict, card_id) -> int:
         """Copies of `card_id` in MY hand (the stacking read for a Power-Pro-class crossing)."""
@@ -5311,74 +5235,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 spent_burst="discard_eot" in tags and getattr(board, "active_fully_powered", False))
             out.append(row)
         return out
-
-    def _held_undeployable(self, cid, ctx: dict) -> bool:
-        """WP-N5d — the deployability COUNTERFACTUAL: could this held card NOT have been deployed
-        during the turn that just ended? Only such cards are FUTURE VALUE the leaf may credit; a
-        deployable card still in hand is a card I CHOSE not to play — a fumble or a deliberate hold,
-        both already priced elsewhere (the spend account / the keep sites) — and crediting it
-        rewards hoarding (the N5b/N5c regression: two held deployables at +23 beat the line that
-        played them). ``ctx`` = the sim's `heldCtx` snapshot (the last my-perspective turn facts;
-        `_simulate_line`). Per class, rules.md quotas at source: an Energy is undeployable iff the
-        one manual attach was already spent (§3); a Supporter iff the Supporter slot was spent (§3);
-        an evolution iff NO eligible base was in play (matching ``evolvesFrom`` name, in play since
-        last turn — no evolving a just-arrived body, §4); a Basic iff the bench was full. Items /
-        Tools / Stadiums are always deployable → never credited (a deliberate hold — e.g. a switch
-        banked under doom — is the survival/keep sites' jurisdiction, not board readiness). Unknown
-        stats → False (err toward NOT rewarding a hold)."""
-        st = self.stats.get(cid) if self.stats else None
-        if st is None:
-            return False
-        if getattr(st, "is_energy", False):
-            return bool(ctx.get("energyAttached"))
-        if getattr(st, "is_supporter", False):
-            return bool(ctx.get("supporterPlayed"))
-        base = getattr(st, "evolvesFrom", None)
-        if base:
-            eligible = any(b and not b.get("appearThisTurn")
-                           and getattr(self.stats.get(b.get("id")), "name", None) == base
-                           for b in (ctx.get("bodies") or ()))
-            return not eligible
-        if getattr(st, "is_pokemon", False):
-            return bool(ctx.get("benchFull"))
-        return False
-
-    def _hand_readiness(self, end_obs: dict, my_index: int) -> float:
-        """WP-N5b/N5d (armed OFF, `leaf_hand_value`): the develop-rung LEAF's actionable-resource
-        term — readiness CONSUMES the needs module. The value of the held cards that COULD NOT have
-        been deployed this turn (`_held_undeployable` — the N5d complement) = their JOINT slot
-        coverage under the exact assignment (`needs.set_keep_v2` over the resolved hand, specific
-        needs only — `include_general=False`, N5c), the SAME valuation the keep-value sites use —
-        one vocabulary, not a rival (the grill's "do NOT build a rival" ruling). Deployable held
-        cards still PARTICIPATE in the assignment (a deployable copy covering a slot correctly
-        shrinks an undeployable sibling's marginal) — they just earn no credit themselves. Requires
-        the sim's injected hand + `heldCtx` (fail-safe 0 without either — no plumbing → no term).
-        Capped under the sub-prize budget; `_HAND_TIEBREAK_W/_CAP` is the ε sizing alternative
-        (split only exact ties). Never raises."""
-        cur = (end_obs or {}).get("current") or {}
-        players = cur.get("players") or []
-        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
-        ctx = me.get("heldCtx")
-        if not me.get("hand") or not ctx:
-            return 0.0
-        # a MY-perspective view of the (opponent-perspective) end obs — the resolver reads
-        # `_my_player`/board facts off `yourIndex`; the injected hand is already on players[my_index].
-        mobs = {**end_obs, "current": {**cur, "yourIndex": my_index}}
-        try:
-            board = self._board_hypothetical(mobs)
-            rows = self._needs_hand_rows(mobs, board)
-            if not rows:
-                return 0.0
-            held = [k for k, r in enumerate(rows) if self._held_undeployable(r["cid"], ctx)]
-            if not held:
-                return 0.0
-            slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
-            resupply = [0.0] * len(slots)
-            from common import needs
-            val = needs.set_keep_v2(slots, elig, resupply, held)
-        except Exception:
-            return 0.0                                   # a featurize/resolve slip never crashes ranking
-        return min(_HAND_READINESS_CAP, val * _HAND_READINESS_W)
 
     def _refresh_slot_resupply(self, slots, elig, rows, obs: dict, board: Board,
                                draws: int) -> list:
@@ -7165,10 +7021,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_target_is_priority_wincon = (
             option.get("type") == _ATTACH and board.priority_wincon_slot is not None
             and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.priority_wincon_slot)
-        attach_is_tool_deploy_target = (
-            option.get("type") == _ATTACH and board.tool_deploy_slot is not None
-            and "tool" in tags and getattr(stat, "hpBonus", 0) > 0
-            and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.tool_deploy_slot)
         attach_feeds_firing_accel = (
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and "accel_source" in at_roles and self._attach_target_needs(at_target)
@@ -7222,8 +7074,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
-                       attach_is_tool_deploy_target=attach_is_tool_deploy_target,
-                       attach_feeds_firing_accel=attach_feeds_firing_accel,
+                                  attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
                        attach_target_is_draw_engine=self._is_draw_engine_body((at_target or {}).get("id")),
                        attach_from_target_needs=attach_from_needs,
@@ -8089,10 +7940,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             board.ko_promote_slot = self._ko_aware_promote_slot(obs, board, me, oa)   # KO-aware,
             #                                             boost-inclusive promote target (KO-gated; None
             #                                             when no benched body reaches a KO -> inert)
-        if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
-            board = replace(board,                      # Tool is in hand (common case pays nothing)
-                            tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
-                            irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
         # ADR-0076: the shared per-body opponent-target value, resolved ONCE per `_board()` call and

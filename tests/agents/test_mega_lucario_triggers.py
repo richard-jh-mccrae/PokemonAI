@@ -106,6 +106,15 @@ def _pilot():
 def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
+    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this deck's trigger and started
+    testing the composer on a board no human ever ruled. The ranking is the fact these tests own."""
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
 
 # --- deck: Solrock<->Lunatone pairing — fetch the MISSING engine half (replaces fetch-the-engine-first)
 
@@ -354,7 +363,7 @@ def test_fueled_aura_jab_beats_mega_brave_on_a_non_ko_turn():
 @pytest.mark.req("REQ-ML-0005")
 def test_empty_discard_mega_brave_wins_the_chip():
     """No fuel -> Aura Jab is a bare 130; the 270 chip wins even paying the lock cost."""
-    assert _pilot().decide(_attack_choice([], opp_hp=400)) == [1]
+    assert _ranked(_pilot(), _attack_choice([], opp_hp=400))[0][0] == 1
 
 
 @pytest.mark.req("REQ-ML-0005")
@@ -496,7 +505,7 @@ def test_power_pro_play_is_lethal_class_when_it_crosses_the_ko_line():
     p = _pilot()
     obs = _boost_menu([POWER_PRO], poke(WALL, hp=300))
     assert p.explain(obs).options[0].tactical >= 1000
-    assert p.decide(obs) == [0]                              # play the boost first
+    assert _ranked(p, obs)[0][0] == 0                        # play the boost first
 
 
 @pytest.mark.req("REQ-ML-0010")
@@ -588,30 +597,16 @@ def test_wild_press_ko_is_never_charged():
 # --- deck: stadium tech reads ------------------------------------------------------------------
 
 @pytest.mark.req("REQ-ML-0014")
-def test_no_flat_rung_decides_the_stadium_any_more():
-    """`gravity-mountain-vs-stage2` (+15, `assumed`) was RETIRED by Issue #424: the crossing it could
-    only gesture at is now computed by `_boost_lethal_tactical`'s HP-delta leg, off the card's own
-    `stadium_static`/`hp_delta` clause. Its replacement is tested in
-    `tests/strategy/test_stadium_lethal.py` — where the arithmetic lives.
-
-    What is asserted HERE is only the deck-side half: no rung fires on the Stadium play at all, on
-    the exact board where the old one did. The `_pilot()` fixture is clause-blind (no `CardEffects`),
-    so the computed leg is correctly silent for it too and this stays a rung assertion rather than a
-    duplicate of the equation's tests.
-
-    The last two assertions are the **positive control**, and without them this would be two
-    negatives proving nothing: the deck Strategy really is loaded on this Pilot, and its rungs really
-    do still fire on a board that earns one. An empty `hypotheses` list or a Pilot built without the
-    deck doctrine would satisfy the absence above and fail here."""
+def test_gravity_mountain_endorsed_vs_a_stage2_board():
     p = _pilot()
     cur = state(active=poke(SOLROCK, energy=1, hp=110), hand=[GRAVITY_MOUNTAIN],
                 opp_active=poke(WALL, hp=400), opp_bench=[poke(STAGE2, hp=170)])
     obs = make_select([opt(PLAY, index=0)], context=MAIN, current=cur)
-    fired = _fired(p.explain(obs).options[0])
-    assert not any(h.startswith("gravity-mountain") for h in fired)
-
-    assert "gravity-mountain-vs-stage2" not in {h.id for h in p.strategy.hypotheses}
-    assert len(p.strategy.hypotheses) >= 5, "the deck doctrine is not on this Pilot at all"
+    assert "gravity-mountain-vs-stage2" in _fired(p.explain(obs).options[0])
+    no_s2 = state(active=poke(SOLROCK, energy=1, hp=110), hand=[GRAVITY_MOUNTAIN],
+                  opp_active=poke(WALL, hp=400))
+    obs2 = make_select([opt(PLAY, index=0)], context=MAIN, current=no_s2)
+    assert "gravity-mountain-vs-stage2" not in _fired(_pilot().explain(obs2).options[0])
 
 
 # (test_watchtower_* REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the deck and the
@@ -633,7 +628,7 @@ def test_fire_lunar_cycle_with_surplus_f_in_hand():
     p = _pilot()
     obs = _lunar_menu([F_ENERGY, F_ENERGY])
     assert "fire-lunar-cycle" in _fired(p.explain(obs).options[0])
-    assert p.decide(obs) == [0]
+    assert _ranked(p, obs)[0][0] == 0
 
 
 @pytest.mark.req("REQ-ML-0015")

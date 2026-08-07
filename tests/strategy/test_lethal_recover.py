@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import param_for
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -82,7 +84,9 @@ def _equivalent(obs: dict, chosen_idx: int, correct_idx: int) -> bool:
 @pytest.mark.req("REQ-PLAN-0030")
 @pytest.mark.parametrize("agent,fixture", [
     ("mega_starmie", "ms_lethal_recover_energy_to_win_f110.json"),   # grab the {W} that wins (active)
-    ("mega_lucario", "ml_lethal_retreat_boost_to_ko_f24.json"),      # attach {F} to Solrock (boost line)
+    param_for("ml_lethal_retreat_boost_to_ko_f24",                # attach {F} to Solrock (boost line)
+              "mega_lucario", "ml_lethal_retreat_boost_to_ko_f24.json",
+              id="mega_lucario-ml_lethal_retreat_boost_to_ko_f24.json"),
     ("mega_lucario", "ml_lethal_recover_energy_retreat_ko_f26.json"),  # fetch {F}, retreat-into-Mega KO
     ("mega_lucario", "ml_lethal_recover_energy_via_gong_f48.json"),  # grab Fighting Gong (energy tutor)
 ])

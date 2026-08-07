@@ -1,9 +1,19 @@
-"""Turn Planner — the Tier-1 Engine-Search rank (ADR-0031 phase 3), on the committed native engine.
+"""Turn Planner on the committed native engine — the LIVE-OBSERVATION half of the planner's tests.
 
-Engine-backed (imports ``cg``), offline on Windows + Linux like ``test_lethal_engine.py``. Proves the
-``_simulate_line`` / ``_engine_leaf_value`` primitives drive the simulator's own forward search from a
-REAL observation to the end of my turn — stepping a candidate first move, then re-running the Pilot's
-policy on each intermediate SearchState — and read a leaf value off the resulting board.
+Engine-backed (imports ``cg``), offline on Windows + Linux like ``test_lethal_engine.py``.
+
+**What is proved here changed at POC-T4/5 (Issue #386).** This module used to prove that the
+``_simulate_line`` / ``_engine_leaf_value`` pair drove the simulator's own forward search from a REAL
+observation to the end of my turn — stepping a candidate first move, then re-running the Pilot's
+policy on each intermediate SearchState — and read a leaf value off the resulting board. That
+rollout is deleted: nothing in a live decision sims a line any more, and ranking end states is the
+sequence composer's job, done closed-form off ``apply_option``.
+
+So the live-observation question is re-pointed rather than dropped, and it is the same question:
+does the scorer that DECIDES round-trip from a real engine observation? It is now asked of
+``_leaf_state_model`` → ``composer.compose``. ``_simulate_line`` keeps its own test because the
+OFFLINE primitive survives for the instruments that measure the engine (``family_diag``, the
+cgpy↔native agreement lane, the determinism backstop).
 """
 import json
 from pathlib import Path
@@ -64,15 +74,22 @@ def _first_open_menu(pilot, obs, limit=80):
 
 @pytest.mark.req("REQ-PLANNER-0011")
 @needs_live_board_search
-def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
-    """Drive a real mirror game to its first open turn menu, then evaluate the live first move through
-    the engine sim: the primitive must return a concrete FINITE leaf value (not None), proving
-    ``search_begin`` → step the move → re-run the policy to end-of-turn round-trips from a live
-    observation and the resulting board is read (prizes taken + survival). The engine, not our
-    closed-form math, produced the board it scored. NB the value may be NEGATIVE: the ADR-0064 loss
-    rung prices a bench-empty-doomed end board at ``-KO_SCORE`` (a predicted game loss is a legitimate
-    leaf outcome), so this asserts finiteness, not sign."""
+def test_the_shipped_leaf_round_trips_from_a_real_observation():
+    """Drive a real mirror game to its first open turn menu, then score it with the leaf that DECIDES:
+    build the StateModel off the live observation and run the composer over the live menu. It must
+    return a concrete FINITE score for a real menu option, proving the whole path — engine
+    observation → ``_leaf_state_model`` → ``apply_option`` → ``state_value`` — round-trips on a board
+    the engine produced rather than one a fixture wrote.
+
+    This replaces the ``_engine_leaf_value`` round-trip (POC-T4/5): that primitive answered the same
+    question about a scorer that no longer decides anything. NB the score may be NEGATIVE — the
+    ADR-0064 loss term prices a bench-empty-doomed end board at ``-KO_SCORE``, a legitimate leaf
+    outcome — so this asserts finiteness, not sign. A ``chosen is None`` is likewise legitimate (the
+    seam refusing to price a menu is an honest answer, not a failure), so the finiteness bar is put
+    on whatever the composer DID price."""
     import math
+
+    from common import composer as cp
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -80,8 +97,13 @@ def test_engine_leaf_value_round_trips_the_search_on_a_real_observation():
     try:
         menu = _first_open_menu(pilot, obs)
         assert menu is not None                            # reached an open turn menu with a search input
-        value = pilot._engine_leaf_value(menu, pilot.decide(menu))
-        assert value is not None and math.isfinite(value)  # search round-tripped to an end-of-turn board
+        options = (menu.get("select") or {}).get("option") or []
+        my_index = int((menu.get("current") or {}).get("yourIndex") or 0)
+        result = cp.compose(pilot._leaf_state_model(menu, my_index), options,
+                            search_api=getattr(pilot, "_search_api", None))
+        scored = [v for v in result.fanned if v is not None]
+        assert scored, "the composer priced no option at all on a live opening menu"
+        assert all(math.isfinite(v) for v in scored)       # every priced option is a real number
     finally:
         battle_finish()
 
@@ -92,7 +114,13 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
     """``_simulate_line`` returns a real end-of-turn board (not None) and stops on MY side: the returned
     tuple carries my player index and the prize count I started the turn with, and the resulting State
     is either the opponent's turn, a later board, or a finished game — never left mid-decision on my
-    turn. Proves the policy-driven stepping terminates cleanly."""
+    turn. Proves the policy-driven stepping terminates cleanly.
+
+    The tuple is SIX-wide since POC-T4/5, not seven. Issue #178's ``stream`` bit ("this line also
+    rode the shuffle") was read by exactly one caller — the develop rollout, which refused an
+    unreproducible ranking outright — and died with it; a bit that exists to demote a ranking has
+    nothing to demote once no rung ranks a simmed board. ``coins`` stays, because the win rung's own
+    verdict driver still speaks in it (``_rng_probe(prize=False)``)."""
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -102,10 +130,8 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
         assert menu is not None
         sim = pilot._simulate_line(menu, pilot.decide(menu))
         assert sim is not None
-        end, my_index, start_prizes, result, line_val, coins, stream = sim  # 5th = signed line account
+        end, my_index, start_prizes, result, line_val, coins = sim    # 5th = signed line account
         assert isinstance(coins, bool)                               # 6th = the line flipped a coin
-        assert isinstance(stream, bool)                              # 7th = it also rode the shuffle
-        assert not coins or stream                                   # stream is the wider of the two
         assert my_index in (0, 1) and start_prizes >= 1
         cur = end.get("current") or {}
         # my turn's over: game finished, or menu is no longer mine to act on
@@ -116,14 +142,23 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
 
 
 @pytest.mark.req("REQ-PLANNER-0034")
-def test_engine_ranking_survives_a_live_drive():
-    """Live smoke for multi-candidate ranking (`planner_engine_rank=True`): a real mirror drive with
-    the switch ON must never crash, and any line it commits carries the ranking provenance
-    (``ranked_by`` set — the engine valued it, or the closed form did when a sim fork failed). The
-    ranking-vs-closed pick equivalences are unit-gated; this proves the seam holds on live engine
-    observations end to end."""
+def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
+    """Live smoke for the DECIDER (POC-T4/5). A real mirror drive must never crash, the composer must
+    actually reach the wheel on ordinary turns, and every sequence line it commits must be
+    well-formed: its ``next_step`` IS the option the agent played, so the first action of the scored
+    sequence and the pick can never drift apart.
+
+    This replaces two tests at once, and for one reason — their subjects merged. The engine-ranking
+    drive (`planner_engine_rank=True`) and the develop-rung drive (`develop_rollout=True`) each drove
+    a live mirror to prove a rung's seam held; both rungs are deleted, and the composer is the single
+    mechanism that now answers for the boards they covered. Asserting the STEP IS THE PICK is the
+    part worth keeping — it is a decision-level property that survives the next swap, where
+    ``ranked_by in ("engine", "closed")`` pinned which rung did the valuing.
+
+    ``committed`` deliberately excludes win lines: the Lethal Solver's engine-verified lock preempts
+    the composer (ADR-0037), so it carries no composer provenance and never should."""
     deck = _deck()
-    pilot = _engine_pilot(deck, planner_engine_rank=True)
+    pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
     assert start.errorPlayer < 0
     committed = []
@@ -133,10 +168,16 @@ def test_engine_ranking_survives_a_live_drive():
             if cur.get("result", -1) != -1:
                 break
             d = pilot.explain(obs)
-            if d.planned is not None and d.planned.goal != "win":   # win locks preempt ranking
+            if d.planned is not None and d.planned.goal != "win":   # win locks preempt the composer
                 committed.append(d.planned)                         # (ADR-0037), no provenance to carry
+                if d.planned.kind == "sequence":
+                    assert d.planned.next_step == list(d.chosen)    # the scored line's first action IS the pick
             obs = battle_select(d.chosen)
-        assert all(ln.ranked_by in ("engine", "closed") for ln in committed)
+        assert any(ln.kind == "sequence" for ln in committed), (
+            "the composer never committed a line across a whole mirror drive — it is the DEFAULT "
+            "decider, so a drive where it never fires means the ladder above it is swallowing "
+            "every board")
+        assert all(ln.ranked_by in ("composer", None) for ln in committed)
     finally:
         battle_finish()
 
@@ -168,19 +209,18 @@ def test_critical_7f48_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now takes human's correct move (the retreat)
 
 
-@pytest.mark.req("REQ-PLANNER-0020")
-def test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state():
-    """CRITICAL 0cbc: on the ACTUAL captured state, the agent's Mega ex was at 160/330 and could KO the
-    opponent's Active (Jetting Blow), but the `active_can_ko` suppressor dropped the heal — so it played
-    a filler card ([3]) instead of Wally's Compassion ([5]). Wally heals to full and bounces the Energy;
-    one re-attach still affords the KO, so the agent both survives and takes the prize. Replayed through
-    the shipped Pilot, the stabilize-then-KO goal commits Wally's — the human's ``correct`` move."""
-    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_0cbc.json").read_text(encoding="utf-8"))
-    pilot = _shipped_pilot()
-    decision = pilot.explain(fx["obs"])
-    assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
-    assert decision.chosen == fx["correct"]        # agent now heals-and-KOs (plays Wally's) as human marked
-
+# ── CRITICAL 0cbc — MOVED (POC-T4/5, Issue #386) ─────────────────────
+#
+# `test_critical_0cbc_stabilize_then_ko_is_fixed_on_its_real_replay_state`
+# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
+# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
+#
+# It moved rather than being rewritten in place because it turned out not to be its own
+# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
+# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
+# beam can commit — and three scattered xfails would have hidden that they are one finding.
+# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
+# deleted, and it pinned which mechanism fired rather than what the agent played.
 
 @pytest.mark.req("REQ-PLANNER-0035")
 def test_critical_a212_evolution_tutor_line_is_fixed_on_its_real_replay_state():
@@ -216,21 +256,18 @@ def test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler():
     assert decision.chosen == fx["correct"]        # agent now direct-evolves ([4]), not the tutor
 
 
-@pytest.mark.req("REQ-PLANNER-0036")
-def test_critical_6858_heal_before_attach_is_fixed_on_its_real_replay_state():
-    """CRITICAL 6858 ('heal first, then attach Ignition, then attack for KO'): on the ACTUAL captured
-    state my Mega Starmie (210/330, one {W}) faced the mirror's 190-HP Active. The agent attached
-    Ignition FIRST ([1]) — Nebula KOs, but the Mega stays at 210 and eats the mirror's own 210 next
-    turn. Wally's Compassion FIRST ([3]) heals to 330 and bounces the {W}; the Ignition attach still
-    lands after ({C}{C}{C} on the Evolution -> Nebula 210 ≥ 190), so the agent heals AND takes the
-    3-prize KO. The stabilize-then-KO rung now sees the attach-CARRIED KO (no ATTACK on the menu
-    reaches one) and commits the heal ahead of the attach."""
-    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_6858.json").read_text(encoding="utf-8"))
-    pilot = _shipped_pilot()
-    decision = pilot.explain(fx["obs"])
-    assert decision.planned is not None and decision.planned.goal == "stabilize_then_ko"
-    assert decision.chosen == fx["correct"]        # agent now plays Wally's first, as human marked
-
+# ── CRITICAL 6858 — MOVED (POC-T4/5, Issue #386) ─────────────────────
+#
+# `test_critical_6858_heal_before_attach_is_fixed_on_its_real_replay_state`
+# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
+# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
+#
+# It moved rather than being rewritten in place because it turned out not to be its own
+# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
+# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
+# beam can commit — and three scattered xfails would have hidden that they are one finding.
+# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
+# deleted, and it pinned which mechanism fired rather than what the agent played.
 
 @pytest.mark.req("REQ-PLANNER-0023")
 def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
@@ -250,85 +287,32 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
     assert decision.chosen == fx["correct"]        # agent now plays Hilda (energy grab) as human marked
 
 
-@pytest.mark.req("REQ-PLANNER-0012")
-@needs_live_board_search
-def test_develop_rung_commits_a_well_formed_line_on_a_live_drive():
-    """End-to-end on the committed engine: with `develop_rollout=True`, a real mirror drive engages the
-    develop rung on its setup turns (no KO to aim at, greedy weak/indifferent). Every develop line it
-    commits is well-formed — `goal="develop"`, engine-ranked, its step IS the chosen pick — and its
-    telemetry carries the leaf value plus the non-empty ranked `plan_candidates` with the committed pick
-    flagged. Proves the rung fires the real sim from live observations and emits the ranking."""
-    deck = _deck()
-    pilot = _engine_pilot(deck, develop_rollout=True)
-    obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0
-    develop_seen = 0
-    try:
-        for _ in range(120):
-            cur = obs.get("current") or {}
-            if cur.get("result", -1) != -1:
-                break
-            d = pilot.explain(obs)
-            if d.planned is not None and d.planned.goal == "develop":
-                develop_seen += 1
-                assert d.planned.ranked_by == "engine"
-                assert d.planned.next_step == list(d.chosen)
-                rec = to_record(d)
-                assert rec["planned"]["goal"] == "develop" and "value" in rec["planned"]
-                assert rec["plan_candidates"]                        # non-empty ranking emitted
-                assert any(c.get("committed") for c in rec["plan_candidates"])
-            obs = battle_select(d.chosen)
-        assert develop_seen > 0                                      # the rung engaged on the setup turns
-    finally:
-        battle_finish()
+# ── the develop-rung live drives — DELETED (POC-T4/5, Issue #386) ────────────────────────────────
+#
+# `test_develop_rung_commits_a_well_formed_line_on_a_live_drive` and
+# `test_flag_off_never_commits_develop_and_emits_no_candidates` (both REQ-PLANNER-0012) drove a real
+# mirror to prove the rung fired the sim from live observations and emitted `plan_candidates`, and
+# that OFF was byte-identical. The rung, its `_engine_leaf_value` scorer, the `plan_candidates`
+# stream and the `develop_rollout` switch are all gone, so neither has a subject left: there is no
+# OFF state to be byte-identical to when the mechanism is deleted rather than disarmed.
+#
+# What they were REALLY guarding — a committed line is well-formed and its step IS the pick, proved
+# against live engine observations rather than fixtures — is asserted for the composer by
+# `test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick` above, which also
+# fails if the composer never reaches the wheel at all.
 
-
-@pytest.mark.req("REQ-PLANNER-0012")
-def test_flag_off_never_commits_develop_and_emits_no_candidates():
-    """The default-OFF invariant on a live drive: with the rung off, no committed line is a develop
-    line and no record carries `plan_candidates` — byte-identical to the pre-rung agent."""
-    deck = _deck()
-    pilot = _engine_pilot(deck)                                      # develop_rollout defaults False
-    obs, start = battle_start(deck, list(deck))
-    assert start.errorPlayer < 0
-    try:
-        for _ in range(120):
-            cur = obs.get("current") or {}
-            if cur.get("result", -1) != -1:
-                break
-            d = pilot.explain(obs)
-            assert d.planned is None or d.planned.goal != "develop"
-            rec = to_record(d)
-            if rec is not None:
-                assert "plan_candidates" not in rec
-            obs = battle_select(d.chosen)
-    finally:
-        battle_finish()
-
-
-@pytest.mark.req("REQ-PLANNER-0036")
-def test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder():
-    """ep82227388 f43 ('play Wally's to fully heal, then Ignition, then Nebula again'): my Mega Starmie
-    (210/330, fully powered) faces the mirror's 280-HP Active. Their Nebula Beam (210) == my HP, so I
-    die next turn; my Nebula (210) does NOT KO their 280, so this is the NO-KO variant of the heal-line
-    — heal to survive + chip, not stabilize-then-KO. The human's whole-turn sequence OPENS with
-    Pokégear 3.0 (dig), then Wally's, then the Ignition re-attach, then Nebula. The old agent instead
-    committed the turn-ending Attack ([12]) and skipped the heal entirely.
-
-    This is a SINGLE-FRAME guard, not a full-turn playout: no committed correction carries
-    ``search_begin_input`` (0/372), so the engine cannot fork this captured mid-turn state and the
-    downstream heal→re-power→attack cannot be simulated here. We assert only what is verifiable — the
-    shipped Pilot opens with the Pokégear dig (step 1 of the human's line) and never regresses to the
-    Attack blunder. The no-KO 'survive-and-chip' planner rung that would PROVE the heal follows does
-    not exist yet (contrast 6858, the KO variant, which ``stabilize_then_ko`` owns)."""
-    fx = json.loads((REPO / "tests" / "fixtures" / "corrections" / "planner_82227388_43.json")
-                    .read_text(encoding="utf-8"))
-    pilot = _shipped_pilot()
-    decision = pilot.explain(fx["obs"])
-    chosen = decision.options[decision.chosen[0]]
-    assert getattr(chosen, "card_id", None) == 1122          # opens with Pokégear 3.0 (the human's step 1)
-    assert decision.chosen != fx["chosen"]                   # NOT the old turn-ending Attack blunder ([12])
-
+# ── ep82227388 f43 — MOVED (POC-T4/5, Issue #386) ─────────────────────
+#
+# `test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder`
+# now lives in `tests/strategy/test_heal_refusal_ceiling.py`, as a pair: the seam refusal
+# asserted positively, and the human's ruled ACTION kept verbatim under `xfail(strict=True)`.
+#
+# It moved rather than being rewritten in place because it turned out not to be its own
+# problem. All three clutch-heal CRITICALs fail for ONE reason — `apply_option` refuses to
+# model Wally's Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the
+# beam can commit — and three scattered xfails would have hidden that they are one finding.
+# The `planned.goal == "stabilize_then_ko"` assertion is not carried over at all: that rung is
+# deleted, and it pinned which mechanism fired rather than what the agent played.
 
 # ── #138 Leaf Profile — the ENGINE-DRIVEN halves (ADR-0068 decision 1) ─────────────────────────
 #
@@ -345,13 +329,19 @@ def test_82227388_43_opens_the_clutch_heal_turn_without_the_attack_blunder():
 def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
     """A real engine drive to a live turn menu, then a leaf evaluation, probed.
 
-    The leaf's StateModel field set must stay WITHIN the ordinary per-decision profile: a leaf reads
-    the model only through the policy re-run inside `_simulate_line`, so reading anything the ordinary
-    decision path does not is the signal that a new consumer (#145) has arrived with its per-leaf cost
-    unmeasured. The probe must also see at least one build, so a green result can't mean "measured
-    nothing"."""
+    The leaf's StateModel field set must stay WITHIN the ordinary per-decision profile: reading
+    anything the ordinary decision path does not is the signal that a new consumer (#145) has arrived
+    with its per-leaf cost unmeasured. The probe must also see at least one build, so a green result
+    can't mean "measured nothing".
+
+    Probed through the composer since POC-T4/5. The reasoning is UNCHANGED in kind but not in detail:
+    the leaf used to read the model only through the policy re-run inside `_simulate_line`, so the
+    profile was the ordinary decision path's by construction. The composer reads it directly, off
+    `_leaf_state_model` and the `apply_option` transitions — which is exactly why the bound now has
+    teeth it did not have before, and why it is worth keeping."""
     import math
 
+    from common import composer as cp
     from test_leaf_profile import LEAF_PROFILE, _Probe   # sibling module, not a `tests.` package
     deck = _deck()
     pilot = _engine_pilot(deck)
@@ -360,9 +350,12 @@ def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
     try:
         menu = _first_open_menu(pilot, obs)
         assert menu is not None
-        chosen = pilot.decide(menu)
+        options = (menu.get("select") or {}).get("option") or []
+        my_index = int((menu.get("current") or {}).get("yourIndex") or 0)
         with _Probe() as probe:
-            value = pilot._engine_leaf_value(menu, chosen)
+            result = cp.compose(pilot._leaf_state_model(menu, my_index), options,
+                                search_api=getattr(pilot, "_search_api", None))
+        value = None if result.chosen is None else result.chosen.score
         assert value is None or math.isfinite(value)          # the leaf still evaluates
         assert probe.fields, "the probe measured nothing — a leaf builds at least one model"
         assert probe.fields <= LEAF_PROFILE, (
@@ -374,12 +367,21 @@ def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
 
 
 @pytest.mark.req("REQ-PLANNER-0011")
-def test_a_leaf_costs_one_model_build_per_simulated_decision():
-    """The sizing fact #145 and #150 need: a leaf's model cost is NOT one build. The simulated line
-    re-runs my policy to end-of-turn, so it pays one per-decision build per decision it makes
-    (measured N = 4 on a real turn-1 drive; the engine sim dominates the leaf's ~12.7 ms, and the
-    model's share is under 1%). If N ever collapses to 1 the sim stopped re-running the policy, and
-    much more than this test is wrong."""
+def test_a_whole_turns_composition_costs_a_bounded_number_of_model_builds():
+    """The sizing fact #145 and #150 need, re-measured for the mechanism that now decides.
+
+    It used to read: a leaf's model cost is NOT one build, because the simulated line re-ran my
+    policy to end-of-turn and paid one per-decision build per decision it made (N = 4 on a real
+    turn-1 drive; the engine sim dominated the leaf's ~12.7 ms and the model's share was under 1%).
+
+    That sizing is GONE with the rollout, and the replacement has the opposite shape: the composer
+    never re-runs the policy, so the whole beam over a whole turn is priced from ONE root model plus
+    whatever `apply_option` derives per transition. The cost driver moved from *how many decisions
+    does the sim make* to *how many transitions does the beam expand*, and the engine sim no longer
+    dominates — the composer IS the wall-clock now (median ~31 ms/decision, max 1448 ms; Issue #273).
+    So the bound is asserted as a BOUND rather than as an exact N: pinning the number would make this
+    a beam-width tripwire wearing a cost test's name."""
+    from common import composer as cp
     from common.state_model import StateModel
     deck = _deck()
     pilot = _engine_pilot(deck)
@@ -387,7 +389,9 @@ def test_a_leaf_costs_one_model_build_per_simulated_decision():
     try:
         menu = _first_open_menu(pilot, obs)
         assert menu is not None
-        chosen = pilot.decide(menu)
+        options = (menu.get("select") or {}).get("option") or []
+        my_index = int((menu.get("current") or {}).get("yourIndex") or 0)
+        model = pilot._leaf_state_model(menu, my_index)
         descriptor, orig, builds = StateModel.__dict__["build"], StateModel.build, []
 
         def counting(o, **kw):
@@ -395,9 +399,14 @@ def test_a_leaf_costs_one_model_build_per_simulated_decision():
             return orig(o, **kw)
         StateModel.build = staticmethod(counting)
         try:
-            pilot._engine_leaf_value(menu, chosen)
+            cp.compose(model, options, search_api=getattr(pilot, "_search_api", None))
         finally:
             StateModel.build = descriptor          # the descriptor, not the bound method
-        assert len(builds) >= 1
+        # The root build happens OUTSIDE the probe (above), so a count of 0 here is the honest
+        # reading of "the beam derived its states rather than rebuilding them", not a broken probe —
+        # which is why the upper bound carries the assertion and the lower one is >= 0.
+        assert len(builds) <= cp.BEAM_WIDTH * cp.SEQUENCE_DEPTH * max(1, len(options)), (
+            f"the beam built {len(builds)} StateModels over one turn's composition — more than one "
+            f"per expanded transition, so something is rebuilding instead of deriving")
     finally:
         battle_finish()

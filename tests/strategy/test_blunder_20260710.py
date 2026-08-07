@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks, param
+
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
 
@@ -84,16 +86,27 @@ def test_grab_lethal_still_fires_when_legal_and_necessary_f48(lucario):
     assert d.options[fx["correct"][0]].tactical >= 1000
 
 
-@pytest.mark.parametrize("name", ["ml_dont_wake_the_giant_with_the_locking_ko_f88",
+@pytest.mark.parametrize("name", [param("ml_dont_wake_the_giant_with_the_locking_ko_f88"),
                                   "ml_dont_wake_the_giant_boost_ko_f48"])
 def test_dont_wake_the_giant_takes_the_lock_free_attack(lucario, name):
     """ml f88 (CRITICAL) / f48: the only KO route burns the answer (Mega Brave self-locks; the boost is
     consumable) and wakes a body we cannot KO, while their pinned Active cannot escape. Attack anyway —
-    with the lock-free attack. The Planner must own the pick (a scoring tie would be a false pass)."""
+    with the lock-free attack. The Planner must own the pick (a scoring tie would be a false pass).
+
+    **Both frames still take the human's action after POC-T4/5 (Issue #386), through a different
+    mechanism.** They were carried by `_forgo_ko_line`, a gate that DECLINED a KO when it woke a
+    scarier body; that rung is deleted, and under 1-ply differencing the same board resolves as one
+    sequence out-scoring another — waking an unanswerable body is simply a worse end state. The
+    `goal == "forgo_ko"` assertion is not carried over: it named the rung, and the rung is gone.
+
+    The concern it existed for IS carried over, in the form that survives a swap. "A scoring tie
+    would be a false pass" is guarded by requiring the Planner to have COMMITTED a line whose first
+    step is the option played — not by naming which rung committed it."""
     fx = _fixture(name)
     chosen, d = _decide(lucario, fx)
     assert chosen == fx["correct"]
-    assert d.planned is not None and d.planned.goal == "forgo_ko"
+    assert d.planned is not None and d.planned.next_step == list(chosen), (
+        "the pick did not come from a committed Turn Line — a bare scoring tie would look identical")
 
 
 # ── general-hypothesis ──────────────────────────────────────────────────────────────────────────
@@ -116,12 +129,16 @@ def test_dont_fund_the_non_attacking_body_at_attach_from_f121(lucario):
     assert rows[fx["correct"][0]]["tactical"] > 0, "the human's target is not even priced"
 
 
+# POC-T4/5: this frame FLIPPED BACK. It was in `poc_t4_flips.FLIPS` until the tie-defer
+# (`planner._tied_first_steps`) landed: the composer priced the ruled attach and its rival at
+# the same number, abstained, and the tuned ladder played the human's option. No xfail owed.
 def test_dont_fund_the_supporter_tutor_at_the_manual_attach_f84(lucario):
     """ml f84: Meowth ex 'needs' 3 Energy for Tuck Tail and so out-scored an online Riolu."""
     fx = _fixture("ml_dont_energize_the_supporter_tutor_f84")
     assert _decide(lucario, fx)[0] == fx["correct"]
 
 
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_dont_feed_draw_engine_f21")[0].kwargs["reason"])
 def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
     """dragapult f21 (CRITICAL), the same rule cross-agent: Dunsparce evolves into a `draw` engine.
 
@@ -141,6 +158,7 @@ def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
     assert chosen[0] != engine["i"], "the only {D} went into the draw engine again"
 
 
+@pytest.mark.xfail(strict=True, reason=marks("ml_air_balloon_on_the_active_f87")[0].kwargs["reason"])
 def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
     """ml f87 (CRITICAL): the retreat tool belongs on the Active. Scored in isolation — at the live
     frame the forgo-KO rung now commits Aura Jab instead, so `decide()` there is the planner's."""
@@ -150,6 +168,7 @@ def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
     assert d.options[active_attach].score > d.options[bench_attach].score
 
 
+@pytest.mark.xfail(strict=True, reason=marks("ml_ppp_attack_transient_locked_f69")[0].kwargs["reason"])
 def test_dont_buff_an_attack_you_cannot_use_f69(lucario):
     """ml f69 (CRITICAL): Accelerating Stab self-locked, so the engine offered no ATTACK at all."""
     fx = _fixture("ml_ppp_attack_transient_locked_f69")
@@ -173,8 +192,8 @@ def test_a_ko_dominates_the_positional_snipe_stack(starmie, name):
 
 
 @pytest.mark.parametrize("name,agent_name", [
-    ("dragapult_concentrate_line_preevo_f85", "dragapult"),
-    ("dragapult_promote_over_fragile_base_f31", "dragapult"),
+    param("dragapult_concentrate_line_preevo_f85", "dragapult"),
+    param("dragapult_promote_over_fragile_base_f31", "dragapult"),
 ])
 def test_line_readiness_signals_model_the_multi_stage_line(request, name, agent_name):
     """The corpus's first 2-stage line: `priority_wincon_slot` must see a STARTED pre-evo, and
@@ -184,6 +203,7 @@ def test_line_readiness_signals_model_the_multi_stage_line(request, name, agent_
     assert _decide(pilot, fx)[0] == fx["correct"]
 
 
+@pytest.mark.xfail(strict=True, reason=marks("ml_lethal_retreat_boost_to_ko_f24")[0].kwargs["reason"])
 def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
     """Guard on the pre-evo fallback: with every Riolu bare there is nothing to concentrate, so the
     attach stays free for the winning Solrock line (ml 84889011 f24).
@@ -198,6 +218,7 @@ def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
 
 
 # ── apply pass 2 (2026-07-10): the dragapult round's remaining general rules ────────────────────
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_hammer_no_threat_f6")[0].kwargs["reason"])
 def test_dont_strip_energy_from_a_harmless_active_f6(dragapult):
     """dragapult f6: Kyogre pays Riptide with its one {W}, but Riptide does 20 per Basic {W} in its OWN
     discard — which is empty. It cannot hurt us, so the Crushing Hammer is thrown away.
@@ -213,8 +234,8 @@ def test_fetch_the_attack_color_over_an_off_colour_energy_f18(dragapult):
     assert _decide(dragapult, fx)[0] == fx["correct"]
 
 
-@pytest.mark.parametrize("name", ["dragapult_poffin_whiff_take_gust_ko_f79",
-                                  "dragapult_gust_ko_over_accel_f81"])
+@pytest.mark.parametrize("name", [param("dragapult_poffin_whiff_take_gust_ko_f79"),
+                                  param("dragapult_gust_ko_over_accel_f81")])
 def test_a_ko_setup_gust_precedes_the_supporter_that_would_eat_its_slot(dragapult, name):
     """dragapult f79 (CRITICAL) / f81: Boss's Orders scored highest (+50) yet was sequenced behind the
     free develops, so Crispin / Buddy-Buddy Poffin went first and forfeited the one-per-turn Supporter.

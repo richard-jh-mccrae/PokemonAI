@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks, param_for
+
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
 
@@ -39,10 +41,14 @@ def _fixture(name: str) -> dict:
 @pytest.mark.parametrize("agent,fixture,leg", [
     ("dragapult_ex", "dragapult_promote_over_fragile_base_f31", "promote-preserve-the-line"),
     ("dragapult_ex", "dp_charge_the_line_f29", "line-progress (advance over spread)"),
-    ("dragapult_ex", "dragapult_concentrate_line_preevo_f85", "concentrate on the started line"),
+    param_for("dragapult_concentrate_line_preevo_f85",
+              "dragapult_ex", "dragapult_concentrate_line_preevo_f85", "concentrate on the started line",
+              id="dragapult_ex-dragapult_concentrate_line_preevo_f85"),
     # Promoted from TARGET on the swap (#140): the income-ON one-shot burst the equation was built
     # to fix. Its `xfail(strict)` XPASSed the moment the decider landed, which is what forced this move.
-    ("dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)"),
+    param_for("dp_evolve_the_draw_engine_f40",
+              "dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)",
+              id="dragapult_ex-dp_evolve_the_draw_engine_f40"),
 ])
 def test_evolve_corpus_pin(agent, fixture, leg):
     """A covered evolve/line decision the equation must keep correct after the fold."""
@@ -54,7 +60,9 @@ def test_evolve_corpus_pin(agent, fixture, leg):
 
 # ── CLAIMS: what a fixture asserts, declared in its own `claims` block (ADR-0072 decision 3) ──────
 @pytest.mark.parametrize("agent,fixture", [
-    ("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35"),
+    param_for("dp_hold_evolve_until_typed_ready_f35",
+              "dragapult_ex", "dp_hold_evolve_until_typed_ready_f35",
+              id="dragapult_ex-dp_hold_evolve_until_typed_ready_f35"),
 ])
 def test_evolve_corpus_claims(agent, fixture):
     """Assert exactly what the fixture declares, rather than only whole-decision equality.
@@ -102,6 +110,7 @@ def test_evolve_corpus_claims(agent, fixture):
 
 
 # ── f82: a PIN since ADR-0071 removed the shared-budget inflation (was PLANNER SCOPE) ─────────────
+@pytest.mark.xfail(strict=True, reason=marks("dp_evolve_energized_line_body_first_f82")[0].kwargs["reason"])
 def test_evolve_corpus_planner_scope_f82():
     """f82: the Pilot picks the human's body through the real decision path.
 

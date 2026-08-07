@@ -66,6 +66,15 @@ _TYPED = {JETTING: AttackStat(JETTING, damage=120, cost=3, energyTypes=(3, 0, 0)
           TURBO: AttackStat(TURBO, damage=50, cost=1, energyTypes=(0,))}
 
 
+
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
+    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this file's rung and started
+    testing the composer on a board no human ever ruled."""
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
 def _pilot(attack_stats=None, **kw):
     explicit = _TYPED if attack_stats is None else attack_stats
     merged = {**_SYNTHS, **explicit}       # explicit records win; synths fill the remaining ids
@@ -173,7 +182,7 @@ def test_retreat_lethal_stands_down_on_a_colorless_funded_wincon():
     bench_wincon["energies"] = [WATER, COLORLESS, COLORLESS]
     obs = make_select([attack_opt(TURBO), opt(RETREAT), opt(END)], context=0, current=cur)
     assert pilot.explain(obs).options[1].tactical >= KO_SCORE
-    assert pilot.decide(obs) == [1]                               # retreat into the payable wincon
+    assert _ranked(pilot, obs)[0][0] == 1                         # retreat into the payable wincon
 
 
 # ------------------------------------------------- behavioral: the win rung's develop tier

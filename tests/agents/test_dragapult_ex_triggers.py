@@ -86,9 +86,35 @@ def test_hold_evolution_silent_when_body_has_fp():
     assert "hold-evolution-until-attacker-ready" not in _fired(p.explain(obs).options[0])
 
 
+def _stadium_delta(pilot, obs):
+    """The composer's own 1-ply delta for the Stadium play — the number the deleted rung stood in for.
+
+    Asserted instead of a rung id because the rung is gone and the QUESTION is not: is playing this
+    Stadium worth anything to the board? Today the answer is a hard 0.0, and the two tests below say
+    so as strict xfails rather than pretending the fact moved somewhere."""
+    from common import composer as cp
+    sel = obs["select"]
+    pilot._board(obs, sel)
+    model = pilot._leaf_state_model(obs, int((obs.get("current") or {}).get("yourIndex") or 0))
+    res = cp.compose(model, sel["option"], shed=pilot.cost_shed_indices)
+    assert not list(res.gaps), (
+        "the Stadium play is REFUSED, not priced-at-zero — that is a different (and more visible) "
+        f"gap than the one this test pins: {list(res.gaps)[:1]}")
+    return dict(res.order).get(0)
+
+
 # --- play-risky-ruins-when-net-positive: net-value gated (wincon in play) / opp-stadium denial ------
 
 @pytest.mark.req("REQ-DP-0003")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 UNPRICED FAMILY (Issue #386): `play-risky-ruins-when-net-positive` (+15) is "
+    "deleted and NOTHING took the family over. `state_value.development` names the gap in its "
+    "own `blind_to`: *\"the STADIUM — `model.stadium` has a supplier and no reader, so playing "
+    "or replacing one prices exactly 0.\"* Measured here: the composer MODELS the Stadium play "
+    "(no coverage gap) and prices it at exactly 0.0, which is worse than a refusal because it "
+    "reads as a considered valuation. Strict, so this goes RED the day `development` grows the "
+    "read — which is when the deck note in `src/agents/dragapult_ex/strategy.py` needs "
+    "revisiting too"))
 def test_play_risky_ruins_fires_with_no_stadium_once_wincon_online():
     """No Stadium up AND our win-condition is in play -> place Risky Ruins (past our fragile-basic
     development, the 320-HP body shrugs the symmetric chip while it bleeds the opponent)."""
@@ -96,21 +122,28 @@ def test_play_risky_ruins_fires_with_no_stadium_once_wincon_online():
     obs = make_select([opt(PLAY, index=0)],
                       current=state(active=poke(DRAGAPULT, energy=2, hp=320, max_hp=320),  # wincon in play
                                     hand=[RISKY_RUINS]))
-    assert "play-risky-ruins-when-net-positive" in _fired(p.explain(obs).options[0])
+    assert _stadium_delta(p, obs) > 0.0, (
+        "the Stadium play still prices at nothing; `state_value` has no reader for `model.stadium`")
 
 
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
+# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
+# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
+# passing, because dead text that looks like a guard is worse than no guard.
+#
+# The positive half survives directly above: `play-risky-ruins-when-net-positive` is deleted with
+# the deck rung it named, and the Ruins decision is now the composer scoring a board with the Stadium
+# in play against one without. `src/agents/dragapult_ex/STRATEGY.md` is updated in the same change.
 @pytest.mark.req("REQ-DP-0003")
-def test_play_risky_ruins_silent_pre_wincon():
-    """No Stadium up but our win-condition NOT in play -> silent: we're the bench-heavier developing
-    side, so the SYMMETRIC chip damages our own fragile Dreepy line more (f24, CRITICAL)."""
-    p = _pilot()
-    obs = make_select([opt(PLAY, index=0)],
-                      current=state(active=poke(CINDERACE, hp=160),
-                                    bench=[poke(DREEPY, hp=70)], hand=[RISKY_RUINS]))   # no Dragapult in play
-    assert "play-risky-ruins-when-net-positive" not in _fired(p.explain(obs).options[0])
-
-
-@pytest.mark.req("REQ-DP-0003")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 UNPRICED FAMILY (Issue #386): `play-risky-ruins-when-net-positive` (+15) is "
+    "deleted and NOTHING took the family over. `state_value.development` names the gap in its "
+    "own `blind_to`: *\"the STADIUM — `model.stadium` has a supplier and no reader, so playing "
+    "or replacing one prices exactly 0.\"* Measured here: the composer MODELS the Stadium play "
+    "(no coverage gap) and prices it at exactly 0.0, which is worse than a refusal because it "
+    "reads as a considered valuation. Strict, so this goes RED the day `development` grows the "
+    "read — which is when the deck note in `src/agents/dragapult_ex/strategy.py` needs "
+    "revisiting too"))
 def test_play_risky_ruins_replaces_opponent_stadium_even_pre_wincon():
     """An OPPONENT Stadium is up -> fire regardless of our wincon: replacing it denies them, an
     independent reason from the self-chip net-value."""
@@ -118,16 +151,8 @@ def test_play_risky_ruins_replaces_opponent_stadium_even_pre_wincon():
     obs = make_select([opt(PLAY, index=0)],
                       current=state(active=poke(CINDERACE, hp=160), hand=[RISKY_RUINS]))
     obs["current"]["stadium"] = [{"id": 999, "serial": 1, "playerIndex": 1}]   # opponent's Stadium
-    assert "play-risky-ruins-when-net-positive" in _fired(p.explain(obs).options[0])
+    assert _stadium_delta(p, obs) > 0.0, (
+        "replacing THEIR Stadium prices at nothing; the transition applies the replacement but no "
+        "term reads what it changed")
 
 
-@pytest.mark.req("REQ-DP-0003")
-def test_play_risky_ruins_silent_when_ours_is_up():
-    """Our own Risky Ruins is already in play -> silent (nothing to gain; engine blocks a re-play
-    anyway). Wincon in play here, so the ONLY reason for silence is our Stadium already being up."""
-    p = _pilot()
-    obs = make_select([opt(PLAY, index=0)],
-                      current=state(active=poke(DRAGAPULT, energy=2, hp=320, max_hp=320),
-                                    hand=[RISKY_RUINS]))
-    obs["current"]["stadium"] = [{"id": RISKY_RUINS, "serial": 1, "playerIndex": 0}]   # ours (yourIndex 0)
-    assert "play-risky-ruins-when-net-positive" not in _fired(p.explain(obs).options[0])

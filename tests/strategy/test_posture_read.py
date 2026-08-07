@@ -324,14 +324,42 @@ def test_favored_half_taxes_the_gift_but_never_the_strip():
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
     gift = _obs_judge_vs_mega_lucario(opp_hand=2)    # Judge redraws them 2 → 4: a GIFT (opp_net +2)
     strip = _obs_judge_vs_mega_lucario(opp_hand=8)   # Judge redraws them 8 → 4: a STRIP (opp_net −4)
-    favored_gift = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(gift).options[0].fired}
-    favored_strip = {h.id for h, _ in _favored_pilot(0.7, funcs).explain(strip).options[0].fired}
-    even = {h.id for h, _ in _favored_pilot(0.5, funcs).explain(gift).options[0].fired}
-    unfavored = {h.id for h, _ in _favored_pilot(0.3, funcs).explain(gift).options[0].fired}
-    assert "dont-gift-a-refresh-when-favored" in favored_gift
-    assert "dont-gift-a-refresh-when-favored" not in favored_strip   # ruling 3: never tax a strip
-    assert "dont-gift-a-refresh-when-favored" not in even
-    assert "dont-gift-a-refresh-when-favored" not in unfavored
+    def _score(fav, obs):
+        return _favored_pilot(fav, funcs).explain(obs).options[0].score
+
+    # The GIFT/STRIP half survives the rung, and survives it by a wide margin: the swing oracle
+    # prices the same Judge at 4.0 when it refills a 2-card hand and 36.0 when it strips an 8-card
+    # one. That is the substantive claim, and it is now a board reading rather than a rung.
+    assert _score(0.7, strip) > _score(0.7, gift) * 2, (
+        f"the swing oracle no longer separates a gift from a strip: "
+        f"gift={_score(0.7, gift)} strip={_score(0.7, strip)}")
+    # Structural exclusions, restated at the score: a strip is never taxed, at any favorability.
+    assert _score(0.5, strip) > _score(0.5, gift)
+    assert _score(0.3, strip) > _score(0.3, gift)
+
+
+@pytest.mark.req("REQ-POSTURE-0006")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 CAPABILITY LOSS (Issue #386): `dont-gift-a-refresh-when-favored` was deleted with "
+    "`baseline_disruption.py`, and it was the ONLY consumer of the Read's favorability lever in the "
+    "refresh decision. Measured: the same gift board prices 4.0 at favorability 0.7, 0.5 AND 0.3 — "
+    "the number no longer moves at all. An unconsumed Board signal is an unbuilt feature, so this is "
+    "recorded as a strict xfail rather than deleted: it turns RED the day something re-wires "
+    "favorability into this decision, which is exactly when someone should look at it"))
+def test_matchup_favorability_still_reaches_the_refresh_decision():
+    """The half of the old test that did NOT survive, kept as a live tripwire.
+
+    ADR-0041 built the Posture Read so a matchup fact could steer a decision. On this board it no
+    longer can: refilling a losing opponent's hand costs the same whether we are winning the matchup
+    or losing it. That may well be the right call under differencing — the end-of-turn board is the
+    same either way — but it is a RULING nobody has made, and deleting the test would have made the
+    loss invisible."""
+    funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
+    gift = _obs_judge_vs_mega_lucario(opp_hand=2)
+    favored = _favored_pilot(0.7, funcs).explain(gift).options[0].score
+    unfavored = _favored_pilot(0.3, funcs).explain(gift).options[0].score
+    assert favored < unfavored, (
+        f"favorability does not move the gift's price: favored={favored} unfavored={unfavored}")
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
@@ -352,9 +380,17 @@ def test_a_hand_size_attacker_tag_no_longer_buys_the_refresh_a_flat_endorsement(
     obs["current"]["players"][1]["bench"].append({"id": HSATK})   # benched; ML stays recognized
     trace = _favored_pilot(0.7, funcs).explain(obs).options[0]
     fired = {h.id for h, _ in trace.fired}
-    assert "dont-gift-a-refresh-when-favored" in fired
     assert "play-harlequin-vs-hand-size" not in fired      # RETIRED (ADR-0102)
-    assert trace.score < 0                                 # the refill is declined, not endorsed
+    # `dont-gift-a-refresh-when-favored` is itself deleted (POC-T4/5), so asserting it fired is no
+    # longer possible and asserting it did NOT is true of every board. What the test is about — a
+    # `hand_size_attacker` TAG buys the refresh nothing — is unchanged and is asserted directly:
+    # the same board WITHOUT the tag must price identically.
+    without = _favored_pilot(0.7, CardFunctions(
+        {JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})).explain(
+            _obs_judge_vs_mega_lucario(opp_hand=2)).options[0]
+    assert trace.score == without.score, (
+        f"the `hand_size_attacker` tag moved the price {without.score} -> {trace.score}; a TAG must "
+        "buy nothing, the survival term reads the clock")
 
 
 # ---- Brief-consumer wiring: the matched Matchup Brief on the Board (ADR-0027), behavior-neutral ----

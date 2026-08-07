@@ -94,24 +94,41 @@ def test_greedy_grab_decision_carries_a_top_level_flag():
 
 
 @pytest.mark.req("REQ-SUB-0006")
-def test_real_attack_last_decision_emits_deferred_and_reordered():
-    """End-to-end plumbing: a real ``Pilot.explain`` on an attack-last board (chip attack + a free
-    Item) resequences the menu, so the emitted record chooses the Item, flags the held attack
-    ``deferred``, AND carries the top-level ``reordered`` — the full 'why' a trace reader needs.
+def test_a_composer_decided_record_carries_the_composer_block_as_its_why():
+    """**Was `test_real_attack_last_decision_emits_deferred_and_reordered` until POC-T4/5 (#386).**
 
-    The free action is a `search` Item (`dig-before-commit` +20), not a bare Basic develop. Since
-    ADR-0086 a develop carries no flat endorsement — it is priced by the Deploy Marginal — and on this
-    board a roleless second body genuinely fills no need, so it scores 0 and nothing resequences. That
-    is the equation answering correctly; it just leaves nothing for a TELEMETRY test to observe."""
+    ADR-0019's claim is legibility: a reader must never have to misread "top-score not chosen" as a
+    scoring bug, so the record carries the 'why'. `deferred`/`reordered` were that 'why' because
+    `_finish_turn_last` was what produced `chosen`. On a composer-decided frame it is not —
+    `_composer_line` returns its own `Decision` before the sequencer runs, so neither marker is even
+    computed, and asserting them here would be asserting a mechanism that did not decide.
+
+    The 'why' on this path is the sparse `composer` block: the chosen line's first step, its margin
+    to the k-th candidate, and the coverage gaps. That is what is asserted, and the claim is the same
+    claim — the record explains its own pick.
+
+    The markers are NOT unpinned: the unit-level tests above still pin their shape, and the
+    sequencer's behaviour is pinned where it still decides (`test_blunder_20260629.py`,
+    `test_supporter_sequencing.py`, `test_information_before_commitment.py`)."""
     board = state(active=poke(ATTACKER, energy=1, hp=200, max_hp=200),
-                  bench=[poke(BASIC, hp=60, max_hp=60)],   # non-empty bench: the chip attack out-scores
-                  hand=[BALL],                             # one free tier-0 action, so the resequence flips
+                  bench=[poke(BASIC, hp=60, max_hp=60)],
+                  hand=[BALL],
                   opp_active=poke(OPPA, hp=200, max_hp=200), prizes=2, opp_prizes=2)
     obs = make_select([attack_opt(ATK), {"type": PLAY, "index": 0}], current=board)
-    rec = to_record(_pilot(deploy_value=True).explain(obs))
-    assert rec["chosen"] == [1]                               # the free develop goes first (attack-last)
-    assert rec["opts"][0].get("deferred") is True             # the held chip attack is flagged
-    assert rec.get("reordered") is True                       # top-level: chosen != argmax(score)
+    dec = _pilot(deploy_value=True).explain(obs)
+    rec = to_record(dec)
+    assert dec.planned is not None and dec.planned.ranked_by == "composer", (
+        "this board is no longer composer-decided, so it cannot pin the composer's telemetry — "
+        "re-point it, or restore the `deferred`/`reordered` assertions if the sequencer took it back")
+    comp = rec.get("composer")
+    assert comp, "a composer-decided record carries no `composer` block — the pick has no 'why'"
+    # `first_index`, not `steps`: a TERMINAL line (an attack, an End) has no steps, so `steps` is
+    # `[]` and the block would explain a pick it could not identify. That gap was found by this test
+    # and closed in `_composer_line`.
+    assert comp.get("first_index") == rec["chosen"][0], (
+        f"the composer block names a different committed option than the record chose: "
+        f"{comp.get('first_index')} vs {rec['chosen']}")
+    assert "margin" in comp, "no margin — a first step that barely survived the beam is invisible"
 
 
 @pytest.mark.req("REQ-SUB-0006")
