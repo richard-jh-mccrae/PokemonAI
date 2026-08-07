@@ -222,35 +222,60 @@ agreement forecast: of Issue #400's 76 seam refusals on human-ruled `_PLAY` fram
 **13** — Hilda 6, Night Stretcher 4, Ultra Ball 3. Poffin's 8 are the Bench half; 30 are RNG; 12 were
 gust/heal/accel; Salvatore's 5 are `dest: in_play`; Pokégear's 8 are the `dig` decline.
 
-### `composer_lab`, before and after — and agreement did NOT move
+### `composer_lab`, before and after — measured against the rebased base, and a wave-packet ruling
 
-`python tools/train/composer_lab.py`, this branch against `origin/main` @ `643c4155`:
+`python tools/train/composer_lab.py`, this branch against `origin/main` @ `8196e75d` (the base this
+issue actually merges onto — `main` gained Issue #400 Phase 1, ADR-0129, between this issue's build
+and its rebase, which is why the comparison below supersedes an earlier, staler one taken against
+`643c4155`):
 
 | | main | this | |
 |---|---:|---:|---|
 | frames with a coverage gap | 255 | **241** | −14 |
-| expectation nodes | 879 | **1322** | +443 |
-| composer == chosen | 50 | **53** | +3 |
-| **composer == ruled** | **82 / 270** | **82 / 270** | **0** |
+| expectation nodes | 758 | **1107** | +349 |
+| composer == chosen | 58 | **60** | +2 |
+| **composer == ruled** | **92 / 270** | **88 / 270** | **−4** |
 | truncated by the branch cap | 4 | 4 | 0 |
 
-The coverage claim is validated and the agreement number is **flat**, which is the expected result
-rather than a disappointing one — and recording it is the point. Issue #400 Phase 1 measures why: a
-reveal-terminated line scores `EV(terminal) = 0` against attack lines carrying a prize, so *"a
-reveal's leaf delta is exactly 0.0, and it can only ever TIE"*. Enumerating more reveals gives the
-composer boards to difference; it does not give a reveal line a terminal value to compete on. **That
-summand is Phase 1's, and it is still unbuilt.**
+**Agreement moves, and it moves down.** Phase 1 gives a reveal line a real terminal EV to compete on
+— the summand this ADR's earlier draft named as missing — and once it exists, the extra coverage
+this issue supplies lets a reveal line **win** decisions it used to lose by construction
+(`coverage_gap` sorting it last, whatever its score). Reported as measured rather than smoothed into
+the flat result an earlier draft of this ADR recorded against the pre-Phase-1 base.
 
-So this issue delivers exactly what it claimed — supply — and nothing it did not. A reader looking
-for the agreement move should look at Issue #400 Phase 1, not here. Had the ADR reported only the
-+443 and the −14, it would have implied a result this change cannot produce alone.
+**Per ADR-0092: a flip off a human ruling is never auto-conformed. Every one of the 9 was taken to
+the developer, individually, before this issue shipped.** The raw −4 undersells what the ruling
+found — the mechanical `composer == ruled` string match cannot distinguish "wrong" from "a
+DIFFERENT correct answer than the one recorded," and four of the nine turned out to be the latter:
+
+| frame | ruled pick | composer's new pick | ruling |
+|---|---|---|---|
+| `82228640-7` | Attach Energy → Staryu | Play Ultra Ball | **composer wrong** — Ultra Ball is saved to find Mega Starmie ex, already in hand; discarding Hilda for it forfeits an energy AND a Pokémon for a coin-flip Pokémon alone |
+| `82752045-18` | Attack with Turbo Flare | Play Hilda | **composer wrong** — "playing Hilda here did not help us at all" |
+| `83967841-17` | End turn | Play Ultra Ball | **composer wrong** — still setting up, nothing needs evolving; save Ultra Ball for next turn |
+| `85163634-17` | Attack with Turbo Flare | Play Ultra Ball | **composer wrong** — fetching a turn early risks a Judge/Harlequin disruption for no gain; no cost to waiting |
+| `82756021-101` | Attack with Jetting Blow | Play Hilda | **architectural, out of scope** — the ruled line is a lethal read (*"just attack for the win"*); a 1-ply composer with no threat-planner access cannot see it, this issue or any other reveal-vocabulary issue included |
+| `82228640-48` | Attach Energy → Mega Starmie ex | Play Hilda | **NOT wrong** — the final Staryu copy is prized, so Hilda's value shifts to the energy fetch plus deck-thin for next turn; both lines are fine |
+| `82228640-53` | Attach Energy → Mega Starmie ex | Play Hilda | **NOT wrong** — no other Supporter that turn, so Hilda is "just" deck-thinning; a weak premise, but not a wrong one |
+| `82748422-26` | Attach Energy → Mega Starmie ex | Play Hilda | **NOT wrong** — fetching energy here is fine |
+| `85058574-88` | Attack with Aura Jab | Play Ultra Ball | **NOT wrong** — discard an Energy + Solrock, fetch Mega Lucario ex is a good move |
+
+**4 genuine misses, 1 out-of-scope architectural gap, 4 that were never really regressions** — the
+binary metric just has no way to record "also correct." None of the 4 genuine misses trace to a
+defect in THIS issue's code: each is the composer's 1-ply valuation making a call this issue's
+widening merely gave it the OPPORTUNITY to make, on a question (multi-turn resource timing, whether
+a fetch helps *this* board) that Issue #386/#387's ranking work owns, not this one's coverage work.
+Recorded as an owed ruling rather than silently absorbed — the four are real, named, and left for the
+ranking issues to close, exactly as ADR-0122 is precedent for taking a measured miss seriously rather
+than waving it into a footnote.
 
 **Evidence, and what could not be evidence.** Every module touched except one is dark, so
 `score_diff` and both ADR-0072 gates are NULL CONTROLS here and are reported as such rather than
 quietly satisfied (PR #411's lesson). What did bite: the apply-seam parity lane (1361 tests green),
-the census re-run at every step, and — for the single live commit, the `_shed_signals` refactor —
-`score_diff` **0 divergent over 375 frames**, a MEANINGFUL null because its only mover (`cost_discard`
-is carried by exactly one card, Ultra Ball) is present in all five shipped decks.
+the census re-run at every step, the composer_lab wave-packet ruling above, and — for the single live
+commit, the `_shed_signals` refactor — `score_diff` **0 divergent over 375 frames**, a MEANINGFUL
+null because its only mover (`cost_discard` is carried by exactly one card, Ultra Ball) is present in
+all five shipped decks.
 
 **Three fixture defects surfaced, each caught by an existing guard rather than by the author**, and
 they are recorded because each is the same failure mode: `pilot_helpers.fetch_effects` never mirrored
