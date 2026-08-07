@@ -319,7 +319,7 @@ class DenyMixin:
         clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler,
                      context=self._opp_attack_context)
         # THE FRACTIONAL READING, opted into here and nowhere else (ADR-0117); other clock families
-        # keep the integer. ⚠️ A body that never leads is a Structural Zero at any resolution (#398).
+        # keep the integer. ⚠️ A body that never leads is a Structural Zero at any resolution (Issue #398).
         base_exact = model.theirs.survival_clock(ma, **clock).exact
         # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once per decision: which of
         # their bodies die to our Knock Out this turn, and so deny nothing.

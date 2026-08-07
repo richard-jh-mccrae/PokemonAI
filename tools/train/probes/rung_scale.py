@@ -1,4 +1,4 @@
-"""Commensurability probe (#175, ADR-0074 decision 5) — is the TUNED score on the same scale as the
+"""Commensurability probe (Issue #175, ADR-0074 decision 5) — is the TUNED score on the same scale as the
 planner's `_leaf_value`, in the POSITIONAL band below one prize?
 
 The dominance floor decision 5 rules replaces `_commit_best`'s constant `best_val < KO_SCORE` with a

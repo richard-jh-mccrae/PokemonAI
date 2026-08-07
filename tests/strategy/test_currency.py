@@ -77,7 +77,7 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     from common.card_worth import ENERGY_TIER, TAG_TIER
     from common.hold_value import ITEM_HOLD_FLOOR
     from common.strategy.context import ENERGY_RECOVER
-    # The ~9x disagreement, asserted so it cannot drift silently before #199 rules it.
+    # The ~9x disagreement, asserted so it cannot drift silently before Issue #199 rules it.
     trainer_rate = currency.ITEM_HOLD_WORTH_RATE
     energy_rate = ENERGY_RECOVER / ENERGY_TIER
     assert trainer_rate == pytest.approx(1.0)

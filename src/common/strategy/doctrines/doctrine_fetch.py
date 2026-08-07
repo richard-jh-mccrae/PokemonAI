@@ -248,7 +248,8 @@ class FetchMixin:
     def _grab_value_of(self, board, cid: int, plan) -> float:
         """The grab comparator's value for fetching card `cid` into hand right now — the sum of the positive
         TO_HAND grab Hypotheses that fire, on the SAME rungs as the real grab (ADR-0023)."""
-        from common.pilot import Context, _fires   # lazy: Context/Board live in pilot (cycle-free import)
+        from common.pilot import Context, _fires   # lazy re-export; Context/Board own module is
+                                                   # `deciders.facts` (cycle-free import)
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         roles = self.strategy.roles.get(cid, [])

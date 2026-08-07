@@ -233,7 +233,7 @@ NONDETERMINISTIC_CLAUSES: frozenset[str] = frozenset({
 })
 
 #: Clauses that REVEAL information — they change the option set itself, not only the board. Issue
-#: #263 must never fold one into a commutative block: reordering changes what the later choices are.
+#: Issue #263 must never fold one into a commutative block: reordering changes what the later choices are.
 REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
 
 #: The clause keys whose VALUES must have a declared write-set. ONE list, so "which keys does the
@@ -311,7 +311,7 @@ CLAUSE_PARAMETERS: dict[str, str] = {
 }
 
 #: Every SELECTOR value the compendium may use, keyed by the clause key that carries it (Issue
-#: #374). Keyed, because a FLAT namespace would be wrong: `"basic"` means three things across keys.
+#: Issue #374). Keyed, because a FLAT namespace would be wrong: `"basic"` means three things across keys.
 CLAUSE_SELECTORS: dict[str, frozenset[str]] = {
     # `_accel_target_ok` fails CLOSED, so a mistyped `target` means the accel funds NO body at all.
     "target": frozenset({
@@ -362,7 +362,7 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
     "amount_per=their_bench": "1187 Morty's Conviction. The set IS decidable (theirs.bench is homed) "
                               "but no consumer multiplies by it yet; both heal readers decline it in "
                               "the under-counting direction",
-    # ⚠️ `applies_to=basic_non_dark` / `stage2` / `basic` LEFT this ledger (Issues #410, #433):
+    # ⚠️ `applies_to=basic_non_dark` / `stage2` / `basic` LEFT this ledger (Issues #410, Issue #433):
     # `board_delta._APPLIES_TO` resolves all three. `metal` stays — its write-set is EMPTY.
     "applies_to=metal": "1244 Full Metal Lab. A {M}-body scope on a damage modifier read off the "
                         "stadium zone, which branches on the effect rather than this narrowing",

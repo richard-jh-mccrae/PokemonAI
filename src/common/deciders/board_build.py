@@ -475,7 +475,7 @@ class BoardMixin:
         if any((p.get("energies") or []) for p in in_play if p.get("id") in line_ids):
             return False                                  # a wincon Line body is already being energized
         # ^ RETAINED DELIBERATELY though doctrinally too strict (user rulings 2026-07-28/29): deleting
-        # it measured −4.75% over 2400 games (ADR-0072 A/B). The real fix is the value question, #165.
+        # it measured −4.75% over 2400 games (ADR-0072 A/B). The real fix is the value question, Issue #165.
         if ma_stat is None or getattr(ma_stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
             return False                                  # the retreat must be reachable this turn
         return not self._active_maxed_kos(ma, oa)         # don't waste a body that could KO instead

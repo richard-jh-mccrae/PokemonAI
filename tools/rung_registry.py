@@ -54,7 +54,7 @@ DECIDERS: dict[str, Decider] = {
 #: Retired rung id -> where it went, grouped by the swap that killed it. PERMANENT: entries are NOT pruned
 #: when the last `src/` mention goes, because an ADR naming a retired rung still needs this lookup.
 FOLDED: dict[str, Fold] = {
-    # --- ADR-0069, the attach decider (#139). Nineteen rungs -> one axes-sum marginal.
+    # --- ADR-0069, the attach decider (Issue #139). Nineteen rungs -> one axes-sum marginal.
     "advance-the-accel-pieces": Fold(
         "0069", "common.pilot:Pilot._attach_value",
         "the attach side of acceleration is the decider's accel_value; NOT re-routed into the planner"),
@@ -138,7 +138,7 @@ FOLDED: dict[str, Fold] = {
     "spread-attach-to-the-needy": Fold(
         "0069", "common.pilot:Pilot._attach_value", "spreading is what convexity declines; it was never the goal"),
 
-    # --- ADR-0070, the evolve decider (#140).
+    # --- ADR-0070, the evolve decider (Issue #140).
     "advance-the-evolution-line": Fold("0070", "common.evolve_value:evolve_value", "the decider's deploy term"),
     "evolve-into-wincon": Fold("0070", "common.evolve_value:evolve_value", "the decider's deploy term"),
     "evolve-the-energized-body-first": Fold(
@@ -147,7 +147,7 @@ FOLDED: dict[str, Fold] = {
     "hold-evolution-until-attacker-ready": Fold(
         "0070", "common.evolve_value:evolve_value", "the dragapult deck rung is income_loss (folded via ADR-0034)"),
 
-    # --- ADR-0086 / ADR-0096, the deploy marginal (#197, Issue #261 item 2d).
+    # --- ADR-0086 / ADR-0096, the deploy marginal (Issue #197, Issue #261 item 2d).
     "bench-fill-a-basic": Fold("0086", "common.deploy_value:deploy_value", "decision 6: a CARD-target bench candidate"),
     "bench-the-supporter-tutor": Fold(
         "0086", "common.deploy_value:deploy_value", "the ability leg's need-matched yield"),
@@ -171,7 +171,7 @@ FOLDED: dict[str, Fold] = {
     "pre-position-attacker": Fold(
         "0086", "common.deploy_value:deploy_value", "DEPLOY_WORTH_SCALE is pinned to reproduce its +25 band"),
 
-    # --- ADR-0100, the promote/retreat equation (#141). Eleven of twelve rungs.
+    # --- ADR-0100, the promote/retreat equation (Issue #141). Eleven of twelve rungs.
     "dont-promote-into-their-prize-reach": Fold("0100", EMERGENT, "prize Exposure plus the fatal step"),
     "dont-promote-onto-their-path": Fold(
         "0100", SUBSUMED, "S7c: they attack the Active BECAUSE it is the Active; path membership changes nothing"),

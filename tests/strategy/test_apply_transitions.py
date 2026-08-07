@@ -346,7 +346,7 @@ def test_a_deploy_onto_a_FULL_bench_refuses_rather_than_inventing_a_sixth_slot()
 @pytest.mark.req("REQ-APPLY-0005")
 def test_playing_a_SUPPORTER_refuses_because_the_effect_IS_the_play():
     """Pricing the structural floor alone would difference the gust to ~0 — the silent zero Issue
-    #300's `_covers` verdict exists to refuse. The refusal NAMES the card, so the backlog is work."""
+    Issue #300's `_covers` verdict exists to refuse. The refusal NAMES the card, so the backlog is work."""
     obs = _obs(_player(active=_body(RIOLU), hand=[BOSS]))
     r = _apply(obs, {"type": _PLAY, "index": 0})
     assert isinstance(r, ao.Refusal) and r.scope == ao.OPTION_SCOPE

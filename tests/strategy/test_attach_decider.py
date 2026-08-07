@@ -575,7 +575,7 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
 @pytest.mark.req("REQ-ATTACH-DECIDER-0001")
 def test_the_decider_still_RANKS_but_no_longer_DECIDES():
     """At a single-pick MAIN menu the sequence composer decides and `attach_value` only prices (Issue
-    #386 §9 item 11). Asserted so a change putting the decider back in charge cannot pass silently."""
+    Issue #386 §9 item 11). Asserted so a change putting the decider back in charge cannot pass silently."""
     p = _pilot()
     active = {"id": MEGA, "energies": [W_ENERGY], "hp": 330}
     obs = _obs([], [{"id": IGNITION}, {"id": W_ENERGY}],

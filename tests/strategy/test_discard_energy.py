@@ -1,7 +1,7 @@
 """The Pilot's ENERGY-CARD signals — the reads the attach decider's burst discipline stands on.
 
 The five `discard_eot` rungs this file used to pin (`dont-waste-discard-energy` and its family) are
-DELETED (#139, ADR-0069 §7). Their behaviour now lives in the decider's equation — honest printed
+DELETED (Issue #139, ADR-0069 §7). Their behaviour now lives in the decider's equation — honest printed
 provision, the evaporation loss, the no-KO cap, the resource tie-break — and is pinned as BEHAVIOUR
 in `test_attach_decider.py`, at the decision seam rather than on a rung's `when()`.
 

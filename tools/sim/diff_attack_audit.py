@@ -7,6 +7,8 @@ A gap's class is coarse: ``scaler`` (printed 0, dealt >0), ``over_prediction`` (
 
     python tools/sim/diff_attack_audit.py                    # diff the accumulated measurements
     python tools/sim/diff_attack_audit.py --json out.json    # machine-readable gap list
+
+REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
 """
 from __future__ import annotations
 

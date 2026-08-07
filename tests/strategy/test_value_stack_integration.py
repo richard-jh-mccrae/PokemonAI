@@ -1,13 +1,13 @@
 """**The value stack, across the T1/T3 seam** — Issue #270's cross-track integration acceptance.
 
-Issues #260 (the StateModel API) and #262 (`state_value`) were built in parallel against one seam,
+Issues #260 (the StateModel API) and Issue #262 (`state_value`) were built in parallel against one seam,
 and a signature freeze promises shapes, not semantics. Four groups, one per surviving scope item:
 
 * **A — the ENUMERATION.** An AST census of what `state_value` asks the model, against a reviewed
   list, so a new query goes red until somebody has answered what it returns when the fact is ABSENT.
   Three known collapses (ABSENT and ZERO arrive as one integer) are RULED and pinned, not fixed.
-* **B — threading equivalence** on real corpus frames, for the two reads #260's own tests miss.
-* **C — end to end** through `tools/train/value_lab.py`, #262's named acceptance instrument.
+* **B — threading equivalence** on real corpus frames, for the two reads Issue #260's own tests miss.
+* **C — end to end** through `tools/train/value_lab.py`, Issue #262's named acceptance instrument.
 * **D — the ADR-0093 defect class**, structurally. Item 5 as worded is an empty intersection, so it
   is re-pointed at `Board`'s 23 numeric non-Optional defaults plus the small StateModel surface.
 
@@ -582,7 +582,7 @@ def test_the_StateModel_numeric_defaults_are_the_two_RULED_collapses():
 
 @pytest.mark.req("REQ-VALUESTACK-0007")
 def test_the_bypass_census_this_issue_asked_for_was_ALREADY_BUILT_by_issue_260():
-    """Scope item 4 was ALREADY BUILT by #260, in `test_combat_bypass_census.py`. Its CONTENT is
+    """Scope item 4 was ALREADY BUILT by Issue #260, in `test_combat_bypass_census.py`. Its CONTENT is
     asserted, never its existence; the census VERDICT is deliberately not re-asserted here."""
     import test_combat_bypass_census as census
 

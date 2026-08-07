@@ -683,7 +683,7 @@ def test_my_armed_clock_is_none_for_an_unknown_body():
     assert m.mine.turns_to_afford(None) is None
 
 
-# ── the Provable Budget and the famine read (#142, ADR-0067 amendment) ─────────────────────────
+# ── the Provable Budget and the famine read (Issue #142, ADR-0067 amendment) ─────────────────────────
 
 def _f70_shape(**kw):
     """Active Dragapult ex at ZERO Energy, Crispin the only hand card, the Energy suite in deck."""

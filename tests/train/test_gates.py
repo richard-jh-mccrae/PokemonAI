@@ -1,6 +1,6 @@
 """The two deterministic merge gates for a mid-build decider swap (ADR-0072, #167).
 
-#136 directive 6 used to gate a swap on a paired A/B win-rate test. Phase 1b measured what that
+Issue #136 directive 6 used to gate a swap on a paired A/B win-rate test. Phase 1b measured what that
 costs: −1.17 pp, 95% CI [−4.59, +2.25] over 2400 games — a run that demonstrated neither a
 regression nor a non-regression, and which no affordable n could settle. Merit therefore moved to two
 instruments that answer EXACTLY rather than statistically, both per-frame, both pure:
@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 # The corpus's on-disk shape lives in ONE place, because a second test file needed a `tmp_path`
-# corpus (#250) and would otherwise re-encode it. Aliased so the 18 call sites below read unchanged.
+# corpus (Issue #250) and would otherwise re-encode it. Aliased so the 18 call sites below read unchanged.
 from corrections_helpers import correction_record as _rec
 from corrections_helpers import corrections_store as _store
 
@@ -242,7 +242,7 @@ def test_an_endorsement_claim_for_an_absent_slot_is_unprovable_not_vacuously_tru
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_held_out_status_is_per_claim_not_per_fixture():
-    """f35's shape: its Decision Claim is owned by #165 while its Axis Claim still GATES. A per-fixture
+    """f35's shape: its Decision Claim is owned by Issue #165 while its Axis Claim still GATES. A per-fixture
     flag could not express that, and would either hide a live claim or gate a deferred one."""
     claims = parse_claims({
         "correct": [2],

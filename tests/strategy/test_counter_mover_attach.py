@@ -4,7 +4,7 @@ Munkidori is declared `counter_mover` — no attacker Role — so the board-eval
 §4) zeroes its attack axis while an attacker alternative is IN PLAY, while the additive Ability Fuel
 channel survives. Two of the three behaviours below are EMERGENT from that, with no rung and no
 needs-conditioned gate; the third (the stuck-Active {P} arm-up) is an owed ruling carried as a STRICT
-xfail and written up in `ADR-0069` §Ruling 3.
+xfail. The doctrine is the user ruling of 2026-07-19, stated in full at that test.
 """
 from __future__ import annotations
 
@@ -106,8 +106,8 @@ def test_the_line_still_eats_first_in_setup():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.xfail(strict=True, reason="RULING OWED — the role gate discards the very "
-                   "discrimination the doctrine turns on; see the docstring and "
-                   "ADR-0069 §Ruling 3.")
+                   "discrimination the doctrine turns on; see this test's docstring "
+                   "and ADR-0069.")
 def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     """The doctrine says the {P} goes to Munkidori so Mind Bend is live. It asserts the SUBSTANCE —
     whether the ranking distinguishes at all — because an OUTCOME assertion here went silently XPASS."""

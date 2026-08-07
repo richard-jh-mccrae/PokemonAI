@@ -128,7 +128,7 @@ class PromoteRetreatMixin:
             if base >= 1.0:
                 continue                              # already ready — no double credit
             for etype, count in (mine.deck_energy_counts or {}).items():
-                # `expected`, not the raw CountTriple — that raises into a "bad input -> 0.0" guard (#167).
+                # `expected`, not the raw CountTriple — that raises into a "bad input -> 0.0" guard (Issue #167).
                 copies = int(getattr(count, "expected", count) or 0)
                 # DELIBERATE CombatMath bypass (POC-T1's list; `test_combat_bypass_census`): the target
                 # is a HYPOTHETICAL body the board does not carry, so no `MySide` route can build it.

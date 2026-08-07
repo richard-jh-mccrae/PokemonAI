@@ -7,7 +7,7 @@ state, and once it is known ``deck = decklist - prizes - visible`` holds exactly
 ANCHORING: a search that reveals the WHOLE deck (``len(select.deck) == deckCount``) makes
 ``prizes = decklist - select.deck - visible`` exact. A partial reveal is rejected.
 
-Prize takes come from the LOG, never a guess (#175). ``logs`` is a DELTA, so takes accumulate across
+Prize takes come from the LOG, never a guess (Issue #175). ``logs`` is a DELTA, so takes accumulate across
 observations, keyed by the engine's per-card ``serial`` so a replayed frame cannot count one twice.
 
 Before the first reveal, and on ANY inconsistency, the anchor is dropped and None reported — the

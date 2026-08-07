@@ -30,7 +30,7 @@ def normalize(setback_damage: float) -> float:
 def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types=(),
                     total_attached: int = 0, attached_counts=None, forward_discount: float) -> dict:
     """Relevance of removing ONE Energy of ``energy_type`` from a body, with its legs. ``energy_type``
-    is an EnergyType code, NEVER a card id. ``forward_discount`` has no default, deliberately (#217)."""
+    is an EnergyType code, NEVER a card id. ``forward_discount`` has no default, deliberately (Issue #217)."""
     blank = {"relevance": 0.0, "attack_leg": 0.0, "ability_leg": 0.0,
              "setback_damage": 0, "forward_setback": 0, "affordable_setback": 0,
              "affordable_relevance": 0.0}

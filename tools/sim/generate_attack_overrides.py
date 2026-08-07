@@ -8,6 +8,8 @@ REQ-PROV-0001..0008 are tabled in `docs/attack-effects.md`; the REQ-AUDIT ids ar
     python tools/sim/generate_attack_overrides.py             # writes the table + the sidecar
     python tools/sim/generate_attack_overrides.py --dry-run   # print, don't write
     python tools/sim/generate_attack_overrides.py --rule      # accept a fit OVER a human ruling
+
+REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
 """
 from __future__ import annotations
 

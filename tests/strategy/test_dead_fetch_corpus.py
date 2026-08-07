@@ -1,4 +1,4 @@
-"""Dead-fetch corpus — the behavioural pin for **Fetch Deadness** (issue #164, ADR-0073).
+"""Dead-fetch corpus — the behavioural pin for **Fetch Deadness** (issue Issue #164, ADR-0073).
 
 A search whose entire target class is provably gone realises no role. `dont-search-an-empty-deck` is
 the play-side veto, and this file replays the anchor Correction through the REAL shipped Pilot.

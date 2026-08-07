@@ -45,7 +45,7 @@ class OrderMixin:
 
     def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
         """Break an EXACT tie between EVOLVE options toward the body that arms soonest (ADR-0070
-        amendment M, #167). Tied evolves need NOT be adjacent, so permute them within their own slots."""
+        amendment M, Issue #167). Tied evolves need NOT be adjacent, so permute them within their own slots."""
         def arm(i):
             w = getattr(traces[i], "evolve_working", None)
             return (w or {}).get("result", {}).get("arm") if w else None

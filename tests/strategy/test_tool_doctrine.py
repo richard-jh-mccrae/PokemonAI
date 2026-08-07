@@ -3,7 +3,7 @@
 ADR-0028's doctrine had two halves. The DEPLOY half — a +HP Tool (Hero's Cape, +100 HP, ACE SPEC)
 placed proactively onto the body that carries the game, its target chosen by survival-turns
 board-math (`ceil(hp / incoming)`) — was five tuned rungs in `doctrines/doctrine_tool.py`, and Issue
-#386 deletes all five. The rungs were the whole module, so the module is gone; the audit note below
+Issue #386 deletes all five. The rungs were the whole module, so the module is gone; the audit note below
 records where each fact went.
 
 The HOLD half survives, and it is the reason this file does. `hold-irreplaceable-tool-dont-shuffle`

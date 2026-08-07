@@ -91,7 +91,7 @@ EXPECTED_SHIPPED = {
     "deny_relevance": True,         # ADR-0080 / ADR-0093. Arm TOGETHER with `deny_strip_delta`
     "deferred_target_expansion": False,  # ADR-0121 armed-OFF: the CHOICE node's consumer — the
                                     # composer taking the `max` over the target classes — is Issue
-                                    # #385 and does not exist yet
+                                    # Issue #385 and does not exist yet
 }
 
 

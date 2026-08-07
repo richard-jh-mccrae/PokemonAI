@@ -83,7 +83,7 @@ class EnergyMixin:
         options = set()
         for playset in playsets:
             # The manual attach plays exactly ONE source, but a source is a GROUP: a Basic Energy is
-            # one unit, a Special Energy is however many its provision prints (#142).
+            # one unit, a Special Energy is however many its provision prints (Issue #142).
             groups = [(AttachUnit(frozenset(hand_energy_types)),)] if hand_energy_types else []
             groups += [(u,) for c in playset for u in c.hand_yields]
             groups += list(special)

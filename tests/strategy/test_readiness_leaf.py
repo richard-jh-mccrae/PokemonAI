@@ -3,7 +3,7 @@
 The account credits USING a beneficial setup ability and subtracts a wasteful spend, reusing the live
 tuned weights (`OptionTrace.fired`); the sign filter drops a positive spend-id or a negative
 ability-id. The readiness LEAF this module also carried was deleted with the develop rung (Issue
-#386); `state_value`'s `readiness` family is the successor.
+Issue #386); `state_value`'s `readiness` family is the successor.
 """
 import pytest
 
@@ -82,7 +82,7 @@ class _Trace:
 
 
 # The readiness LEAF's sixteen tests are DELETED with `planner._readiness` and its helpers (Issue
-# #386); every fact they carried is re-homed in test_state_value.py, except the one guarded below.
+# Issue #386); every fact they carried is re-homed in test_state_value.py, except the one guarded below.
 
 
 @pytest.mark.req("REQ-PLANNER-0011")

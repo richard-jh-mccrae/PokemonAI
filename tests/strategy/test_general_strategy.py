@@ -75,7 +75,7 @@ def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     obs = make_select([card_opt(ACTIVE, 0), card_opt(BENCH, 0)], context=ATTACH_FROM,
                       current=state(active=poke(700, hp=30), bench=[poke(800, hp=110)],
                                     opp_active=poke(900, hp=160)))
-    # `dont-feed-the-doomed` is DELETED (#139, ADR-0069 §7): the SURVIVAL gate zeroes a doomed body's
+    # `dont-feed-the-doomed` is DELETED (Issue #139, ADR-0069 §7): the SURVIVAL gate zeroes a doomed body's
     # forward build outright, so a dying Active simply earns nothing to bank.
     rows = {r["i"]: r for r in pilot.explain(obs).attach_working["eq"]}
     assert rows[0]["doomed"] is True and rows[0]["build"] == 0.0

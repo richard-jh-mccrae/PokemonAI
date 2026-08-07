@@ -34,7 +34,8 @@ _REFRESH_OPPONENT_HAND_FRESH = 2   # per stripped card THEY DREW LAST TURN — l
 # Supporter is RECOVERY, not card advantage, and takes general worth instead of this shared engine slot.
 _ENGINE_KEEP_TAGS = frozenset({"draw", "search", "dig"})
 
-_ENGINE_SUPPORTER_KEEP = 8.0
+_ENGINE_SUPPORTER_KEEP = 8.0     # discard-CONTEXT worth, not general worth: sized to the −8 band of
+                                 # the discard-keep rung it replaced (ADR-0065 seam-D)
 
 
 class HandMixin:

@@ -1,8 +1,8 @@
-"""Measure the deck-tracker ANCHOR rate across real self-play matches (#175 follow-up).
+"""Measure the deck-tracker ANCHOR rate across real self-play matches (Issue #175 follow-up).
 
 Drives the native engine directly (`cg.game`) with the real agent policy in BOTH seats, and records
 whether the prizes were anchored at each own-seat decision frame. Reports the UN-anchored share by
-turn — the only frames #175's probability weighting can change anything on — plus DE-ANCHOR events.
+turn — the only frames Issue #175's probability weighting can change anything on — plus DE-ANCHOR events.
 
 Usage: python anchor_rate.py <agent> [-n GAMES]
 """

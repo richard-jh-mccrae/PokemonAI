@@ -2,7 +2,7 @@
 the win-condition development rule it unblocked (`prefer-rush-evolve-tutor`).
 
 `evolve-into-wincon` was the module's other subject and is DELETED with the evolve-decider swap
-(#140, ADR-0070 §10) — its referent is the decider's deploy term, pinned at
+(Issue #140, ADR-0070 §10) — its referent is the decider's deploy term, pinned at
 `test_evolve_decider.py` (the algebra) and `test_evolve_value.py` (real frames)."""
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot

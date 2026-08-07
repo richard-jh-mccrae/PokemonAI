@@ -399,7 +399,7 @@ def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
 
 def test_a_delivery_to_the_BENCH_still_refuses_and_now_says_so_for_the_right_reason():
     """A Bench delivery is the deploy transition, with its Bench cap and Stadium-trigger gate — Issue
-    #410's work. The refusal must land on `dest`, the reason that describes it, not on `amount`."""
+    Issue #410's work. The refusal must land on `dest`, the reason that describes it, not on `amount`."""
     with pytest.raises(bd.Unmodellable, match="`dest`"):
         be.expectation(_search_board(hand=(POFFIN,)), _play_option())
 

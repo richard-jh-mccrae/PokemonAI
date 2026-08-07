@@ -86,7 +86,7 @@ def test_the_shipped_leaf_round_trips_from_a_real_observation():
 @needs_live_board_search
 def test_simulate_line_reaches_a_board_and_ends_my_turn():
     """The policy-driven stepping terminates cleanly on MY side. The tuple is SIX-wide since Issue
-    #386: ``stream`` died with the develop rollout; ``coins`` stays for the win rung's verdict driver."""
+    Issue #386: ``stream`` died with the develop rollout; ``coins`` stays for the win rung's verdict driver."""
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
@@ -206,7 +206,7 @@ def test_critical_4298_supporter_enabled_ko_is_fixed_on_its_real_replay_state():
 
 # ep82227388 f43 MOVED to `tests/strategy/test_heal_refusal_ceiling.py` (Issue #386), same reason.
 
-# The #138 Leaf Profile engine halves live here rather than in `test_leaf_profile.py` only because
+# The Issue #138 Leaf Profile engine halves live here rather than in `test_leaf_profile.py` only because
 # moving them back buys nothing. Do NOT re-introduce an ordering workaround if a frame goes unstable.
 
 @pytest.mark.req("REQ-PLANNER-0011")
@@ -242,7 +242,7 @@ def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
 
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_a_whole_turns_composition_costs_a_bounded_number_of_model_builds():
-    """The sizing fact Issue #145 / #150 need: the composer never re-runs the policy, so a whole turn
+    """The sizing fact Issue #145 / Issue #150 need: the composer never re-runs the policy, so a whole turn
     is priced from ONE root model plus per-transition derivation. A BOUND, not an exact N."""
     from common import composer as cp
     from common.state_model import StateModel

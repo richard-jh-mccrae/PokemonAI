@@ -1,6 +1,6 @@
 """S3c — the deny instrument's STRIP delta (`Pilot._strip_delta_terms`, ADR-0078 / #199).
 
-#186 built the opponent-target marginal's **removal** Δ: the turns of survival bought by a body
+Issue #186 built the opponent-target marginal's **removal** Δ: the turns of survival bought by a body
 leaving the board. That is the gust / snipe question. A Crushing Hammer never asks it — it discards
 ONE Energy and the body stays — so deny had no slice to read.
 

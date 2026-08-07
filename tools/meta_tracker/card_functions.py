@@ -34,7 +34,7 @@ _INTO_PLAY = frozenset((2, 4, 5))   # HAND / ACTIVE / BENCH — fetch destinatio
 _CTX_DAMAGE_COUNTER_ANY = 14   # SelectContext.DAMAGE_COUNTER_ANY
 
 #: Every tag :func:`classify_functions` can emit from a probe record. Exported because
-#: `common.card_tags.unsourced_tag_instances` needs it and must NOT re-transcribe it (#395).
+#: `common.card_tags.unsourced_tag_instances` needs it and must NOT re-transcribe it (Issue #395).
 DERIVED_TAGS = frozenset({
     "switch", "gust",                       # SWITCH log, by side
     "hand_disruption", "energy_denial",     # opponent-side forced moves during resolution

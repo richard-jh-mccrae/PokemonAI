@@ -107,9 +107,9 @@ it does not follow it out. That single failure produced the largest family of de
 So, in the **same commit** as the deletion:
 
 1. `grep -rn '<the-name>' src/ tools/ tests/ docs/` and delete every mention that asserts it is live.
-2. Record where the logic went in the **owning module's fold map** — the docstring at the top of the
-   `baseline_*` / `doctrine_*` module. `baseline_energy.py` is the worked example: it names all
-   nineteen deleted attach rungs and what each became. That is the one place a reader should land.
+2. Record where the logic went in `tools/rung_registry.py`'s `FOLDED` map — checked data, not prose,
+   so `tests/test_rung_registry.py` can verify every leg. The nineteen deleted attach rungs are the
+   worked example: each carries the ADR, the symbol that replaced it, and a one-line note.
 3. If a deliberate tombstone must stay in `src/` prose, add a `Fold(adr, symbol, note)` to
    `tools/rung_registry.py` naming where the claim went. Prefer deleting the prose — the registry
    carries a shrink-only ceiling, and every raise must be argued at the constant.

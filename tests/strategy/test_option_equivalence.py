@@ -269,7 +269,7 @@ def test_the_unresolvable_zones_are_the_ones_the_snapshot_hides():
 
 def test_the_representative_is_the_LOWEST_index_in_its_class():
     """Deterministic by construction — two processes handed one menu must rank identically, or the
-    develop rung's all-or-nothing reproducibility guarantee (#178) is worthless."""
+    develop rung's all-or-nothing reproducibility guarantee (Issue #178) is worthless."""
     from common.option_equivalence import class_representatives
     equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
     assert class_representatives(equiv, 5) == [0, 1, 2, 4]

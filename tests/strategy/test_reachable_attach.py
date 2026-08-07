@@ -724,7 +724,7 @@ def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_lin
     assert _composed_rank((2.0, False, 0.87)) > _composed_rank(certain_one)
 
 
-# ── #175 decision-6 extension: the POKEMON-presence leg is weighted too ───────────────────────
+# ── Issue #175 decision-6 extension: the POKEMON-presence leg is weighted too ───────────────────────
 
 def test_pokemon_presence_weight_composes_with_the_energy_weight():
     """A composed line whiffs two independent ways, and `_composed_rank` sees ONE probability — so
