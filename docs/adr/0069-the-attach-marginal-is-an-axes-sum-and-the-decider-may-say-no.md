@@ -6,7 +6,7 @@ swap, so its shape (fold → delete → retune → corpus re-rule → paired A/B
 follow. Companion vocabulary: **Retreat Equity · Ability Fuel** in the Agent Runtime
 [`CONTEXT.md`](../../src/common/CONTEXT.md); the Budget/reachability family is ADR-0067 (#137);
 the snapshot it reads is ADR-0068 (#138); the shadow-era rulings it amends are the 2026-07-21
-attach grill (`docs/plans/attach-valuation-grill-spec.md`).
+attach grill (`docs/archive/plans/attach-valuation-grill-spec.md`).
 
 ## Context
 

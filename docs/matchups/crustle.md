@@ -14,7 +14,7 @@
 - [x] Phase 2 counterplay research synthesised (89-agent sweep, 55/66 claims verified, confidence high) + variant engine facts pulled
 - [x] Phase 3 weakness grill: 7/7 seams locked
 - [x] Phase 4 Brief-field reconciliation complete — 2 new keys minted (`opp_ex_damage_immune`, `opp_caps_big_hits`), pierce-override verified at source
-- [x] Phase 5 ship-it (user "continue") → Phase B proposal emitted: `data/strategy/proposals/matchup-20260709-crustle.md`
+- [x] Phase 5 ship-it (user "continue") → Phase B proposal emitted: `data/strategy/proposals/applied/matchup-20260709-crustle.md`
 
 Decisions resolved (user ✓): mint BOTH keys; each encodes the **pierce override** (an effect-ignoring attack negates the immunity/cap). Next: `/update-strategy` authors `briefs/crustle.json` + runs `validate_brief.py`; human commits (`matchup: …`).
 

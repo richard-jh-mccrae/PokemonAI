@@ -228,13 +228,14 @@ def test_the_report_separates_refuted_from_the_blockers(vocab, reviewed):
 
 
 @pytest.mark.req("REQ-LEDGER-0007")
-def test_the_fold_map_target_comes_from_the_codes_own_fold_map():
-    """The column that makes a ruling cheap. Paired with a rung the fold maps do NOT name, so the
-    test distinguishes "read the fold map" from "returned something for everything"."""
+def test_the_fold_map_target_comes_from_the_retirement_registry():
+    """The column that makes a ruling cheap, now read from `tools.rung_registry.FOLDED` rather than
+    parsed out of prose. Paired with a rung the registry does NOT carry, so an implementation that
+    returned something for everything still fails."""
     targets = fold_map_targets({"dont-waste-discard-energy", "play-energy-denial",
                                 "keep-line-base-at-discard"}, DEFAULT_SRC)
-    assert "BURST discipline" in targets["dont-waste-discard-energy"]
-    assert "RETIRED" in targets["play-energy-denial"]
+    assert "_attach_value" in targets["dont-waste-discard-energy"]
+    assert "_DENIAL_PLAY_W" in targets["play-energy-denial"]
     assert targets["keep-line-base-at-discard"] == ""
 
 

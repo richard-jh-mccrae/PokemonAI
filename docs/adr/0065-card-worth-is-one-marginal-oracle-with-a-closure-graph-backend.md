@@ -5,7 +5,7 @@
 (`fetch_closure.py`). Every equation below is `value = Worth × Odds`.
 
 **Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
-[`docs/plans/hypergeometric-fetch-closure.md`](../archive/plans/hypergeometric-fetch-closure.md)) and
+[`docs/archive/plans/hypergeometric-fetch-closure.md`](../archive/plans/hypergeometric-fetch-closure.md)) and
 **BUILT 2026-07-18 — the module seam + two consumers converged, suite-green.** The gamble keep-floor
 (WP6) and the **refresh SHED** consume the oracle; the **fetch grab/pitch** shadow was investigated
 and found ALREADY subsumed (its tuned discard ladder prices roles + redundancy; its residual gaps are

@@ -15,20 +15,16 @@ from common.strategy.context import (_DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY,
 from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
-    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0085, Issue #188).
-    # `snipe-for-the-ko` (60), `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40),
-    # `snipe-the-top-threat` (30), `snipe-the-threat` (20) and `snipe-on-the-path` (12) were an
-    # ADDITIVE stack, and the stack itself was the defect: bonuses firing on DIFFERENT bodies summed
-    # and out-voted a free prize (30 + 40 + 45 = 115 on an un-KO-able Grookey vs 60 on the KO-able
-    # Applin, ms 82754241 f45), which is why five of the six carried a hand-written stand-down clause
-    # against `snipe_ko_available` and two more against `evolving_wincon_on_bench`. Every such clause
+    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0085, Issue #188);
+    # per-rung fold map in `tools/rung_registry.py` (`FOLDED`, ADR-0085 group). They were an ADDITIVE
+    # stack, and the stack itself was the defect: bonuses firing on DIFFERENT bodies summed and
+    # out-voted a free prize (115 on an un-KO-able Grookey vs 60 on the KO-able Applin, ms 82754241
+    # f45), which is why five of the six carried a hand-written stand-down clause. Every such clause
     # is a guard bolted on to stop the sum, not a statement about the board.
     #
     # `common/snipe_relevance.py` replaces all six with ONE `[0,1]` scalar under hard gates —
     # `relevance = tera_veto (x) (their_plan * my_route)` — where the ordering is a PRODUCT of two
-    # conjunctive sides, so nothing sums and no stand-down clause is needed. `snipe-for-the-ko` lives
-    # on as the structural `Pilot._snipe_ko_dominator` (KO_SCORE-class), OUTSIDE the scalar, because a
-    # free prize is not a graded preference.
+    # conjunctive sides, so nothing sums and no stand-down clause is needed.
     #
     # Deleted, not suppressed (#136 standing directive 1). `snipe_relevance` therefore ships ON and
     # OFF is documented DEGRADED MODE, never a rollback — the `attach_value` / `evolve_value` /

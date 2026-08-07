@@ -396,154 +396,26 @@ def unresolved_tally(reviewed: dict, vocab: Vocabulary) -> Counter:
 # "what the rule became" — the column that lets a developer rule quickly
 # ---------------------------------------------------------------------------
 
-_ARROW = re.compile(r"\s(?:->|\u2192)\s")
-_BULLET = re.compile(r"^\s*[*\u2022]\s")
-#: A block that says a rung is GONE outranks one that merely mentions it. Without this, `pilot.py`'s
-#: live signal docstrings win the race for a rung whose fold map lives one directory away.
-_RETIREMENT = re.compile(r"\b(RETIRED|retired|DELETED|deleted|EMERGENT|FOLDED|folded|SUPERSEDED|"
-                         r"subsumed|removed with)\b")
-_SENTENCE = re.compile(r"(?<=[.!?])\s")
-
-
-def _prose_blocks(src_root: Path = DEFAULT_SRC) -> list:
-    """``[(path, block text)]`` over every docstring and comment run under `src/`.
-
-    Docstrings come from the AST (so a string that is merely assigned is not mistaken for prose) and
-    are split into fold-map bullets; comment runs are joined so a wrapped `# RETIRED …` note reads as
-    one block."""
-    blocks = []
-    for path in _python_files(src_root):
-        try:
-            text = path.read_text(encoding="utf-8")
-            tree = ast.parse(text)
-        except (SyntaxError, UnicodeDecodeError):
-            continue
-        rel = _rel(path)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                doc = ast.get_docstring(node)
-                if doc:
-                    blocks.extend((rel, chunk) for chunk in _split_blocks(doc))
-        run = []
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                run.append(stripped.lstrip("#").lstrip(":").strip())   # `#:` is this repo's attr-doc marker
-            elif run:
-                blocks.append((rel, " ".join(run)))
-                run = []
-        if run:
-            blocks.append((rel, " ".join(run)))
-    return blocks
-
-
-def _split_blocks(doc: str) -> list:
-    """A docstring -> bullets and paragraphs, each collapsed to one line."""
-    out, current = [], []
-    for line in doc.splitlines():
-        if _BULLET.match(line) or not line.strip():
-            if current:
-                out.append(" ".join(current))
-            current = [line.strip()] if line.strip() else []
-        else:
-            current.append(line.strip())
-    if current:
-        out.append(" ".join(current))
-    return [b for b in out if b]
-
-
-def _rank(rel: str) -> int:
-    """Prefer the file a reader would look in for a rung that is gone — the fold maps first."""
-    if "/baseline/baseline_" in rel:
-        return 0
-    if "/doctrines/doctrine_" in rel:
-        return 1
-    if "/strategy/" in rel:
-        return 2
-    return 3
-
-
 def fold_map_targets(rungs, src_root: Path = DEFAULT_SRC) -> dict:
-    """``{rung: "what it became"}`` for the rungs given, read out of `src/`'s own fold maps.
+    """``{rung: "what it became"}`` for the rungs given, straight out of `tools.rung_registry.FOLDED`.
 
-    Two match shapes, because the fold maps use both. `baseline_promote` / `baseline_retreat` /
-    `baseline_evolution` name a rung in full; `baseline_energy`'s bullets ABBREVIATE — ``concentrate
-    / build-active / power-up / spread … -> the ATTACK AXIS`` — so `concentrate-energy-on-wincon`,
-    `build-active-wincon` and `power-up-attacker` appear there only as a hyphen-prefix.
+    Empty string when the registry does not carry the rung. That is a real answer — a rung deleted with
+    no record kept — and it is better than inventing a target.
 
-    **Ranked by where the answer lives, not by how the name matched.** Preferring an exact hit first
-    handed `concentrate-energy-on-wincon` to a *live* signal docstring in `context.py` while its own
-    fold map — which spells it `concentrate` — sat one directory away, and handed
-    `retreat-to-ready-attacker` to the promote cluster's phrase *"the retreat comparison uses"*. So
-    the order is: the fold-map file, then a block that says the rung is GONE, then an exact name,
-    then the shorter block. The abbreviation leg is fenced three ways on top of that — only on an
-    arrow bullet, only BEFORE the arrow (the left-hand side is the name list, the right-hand side is
-    prose), and only against a ``/`` separator (see `_abbreviated_hit`).
+    **This used to parse the prose fold maps** (a ~130-line heuristic: docstring-bullet splitting, an
+    abbreviation leg for `baseline_energy`'s ``concentrate / build-active / power-up …`` shorthand, a
+    four-key ranking to stop a live signal docstring out-bidding the real fold map, and a documented
+    limitation where 2 of 25 cells ran on into the next table row). `FOLDED` is that same information as
+    DATA, checked by `tests/test_rung_registry.py`, so the parser and every one of its edge cases are
+    gone. `src_root` is kept in the signature because callers pass it; the answer no longer depends on it.
+    """
+    from tools.rung_registry import FOLDED
 
-    Empty string when nothing in `src/` names the rung. That is a real answer — some rungs were
-    deleted with no fold map written — and it is better than inventing a target.
-
-    **Known limitation, cosmetic:** a fold map written as an unpunctuated TABLE rather than as prose
-    (`src/agents/mega_starmie/strategy.py`'s rename table) has no sentence boundary to stop at, so
-    2 of the 25 cells the current corpus produces run on into the following row. The head of every
-    cell is the right answer; only the tail is noise. Truncating at the next arrow would fix those
-    two and break every target that legitimately contains one — `attach-energy-last`'s does."""
-    wanted = set(rungs)
-    best = {}
-    for rel, block in _prose_blocks(src_root):
-        lowered = block.lower()
-        arrow = _ARROW.search(block)
-        retirement = 0 if _RETIREMENT.search(block) else 1
-        for rung in wanted:
-            hit, exact = lowered.find(rung), 0
-            if hit < 0 and arrow:
-                hit, exact = _abbreviated_hit(lowered, rung, arrow.start()), 1
-            if hit < 0:
-                continue
-            score = (_rank(rel), retirement, exact, len(block))
-            if rung not in best or score < best[rung][0]:
-                best[rung] = (score, _target_phrase(block, hit))
-    return {rung: best.get(rung, ((), ""))[1] for rung in wanted}
-
-
-def _abbreviated_hit(lowered: str, rung: str, limit: int) -> int:
-    """Position of the longest usable hyphen-prefix of `rung` inside the bullet's NAME LIST, or -1.
-
-    "Inside the name list" is what makes this safe, and it was got wrong first: a bare length fence
-    let `develop` (7 chars, a perfectly ordinary English word) claim both
-    `develop-the-wincon-base-first` and `develop-turbo-flare-recipient` off a sentence about the
-    forgo-KO directive. A fold map writes its names slash-separated — ``concentrate / build-active /
-    power-up / spread / … -> the ATTACK AXIS`` — so the prefix must be FOLLOWED by ``/`` and either
-    preceded by one or sitting at the head of the bullet. Prose cannot satisfy that; a name list
-    always does. (A weaker version accepting a backtick on either side let the bare word ``keep``
-    claim `keep-line-base-at-discard` off an unrelated keep-cost docstring.)"""
-    parts = rung.split("-")
-    for cut in range(len(parts) - 1, 0, -1):
-        prefix = "-".join(parts[:cut])
-        for match in re.finditer(rf"(?<![a-z0-9-]){re.escape(prefix)}(?![a-z0-9-])", lowered):
-            if match.start() >= limit:
-                continue
-            before = lowered[:match.start()].rstrip().rstrip("*").rstrip()
-            after = lowered[match.end():].lstrip()
-            if after.startswith("/") and (not before or before.endswith("/")):
-                return match.start()
-    return -1
-
-
-def _target_phrase(block: str, hit: int, limit: int = 170) -> str:
-    """The fold-map target for the name at `hit` — the SENTENCE it sits in, minus everything up to
-    the arrow inside that sentence.
-
-    Sentence-bounded on purpose. Comment runs are joined into one block, so *"the first arrow after
-    the hit"* reached across four unrelated notes and answered `play-energy-denial` with a sentence
-    about an unrelated 80-damage blunder."""
-    starts = [m.end() for m in _SENTENCE.finditer(block, 0, hit)]
-    start = starts[-1] if starts else 0
-    end = next((m.start() for m in _SENTENCE.finditer(block, hit)), len(block))
-    sentence = block[start:end]
-    arrow = _ARROW.search(sentence, hit - start)
-    tail = " ".join((sentence[arrow.end():] if arrow else sentence).split())
-    return tail if len(tail) <= limit else tail[:limit].rsplit(" ", 1)[0] + "…"
+    out = {}
+    for rung in set(rungs):
+        fold = FOLDED.get(rung)
+        out[rung] = "" if fold is None else f"{fold.into} — {fold.note}"
+    return out
 
 
 # ---------------------------------------------------------------------------

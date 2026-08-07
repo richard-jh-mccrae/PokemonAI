@@ -256,6 +256,6 @@ plan it rejected and the alternatives it out-scored.
 - `match_planner_steer` and `forgo_ko` are `True` in `runtime.py` while their ADRs (0045) still say
   "default OFF" — a doc/code drift to reconcile.
 - The multi-turn CRITICALs (`a21472`, `b4649`, and e.g. `85058574-109`'s full multi-turn KO plan) are a
-  separate, harder problem (`docs/todo/deferred-multi-turn-criticals.md`).
+  separate, harder problem (`docs/archive/todo/deferred-multi-turn-criticals.md`).
 
 Related: [[wroute-satisfied-not-fixed]] · [[tier-planner-t5-t6-fate]] · [[value-model-needs-nonmirror-gauntlet]] · [[match-planner-built]]

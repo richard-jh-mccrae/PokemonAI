@@ -1,7 +1,7 @@
 # ADR-0066: The gust baseline is rider-aware, and gust denial is marginal
 
 **Status.** Accepted and **BUILT 2026-07-19**, default ON — the gusting Round-0 build
-(`docs/plans/gusting-round0-measurement.md`; grill rulings recorded in
+(`docs/archive/plans/gusting-round0-measurement.md`; grill rulings recorded in
 `docs/plans/gusting-grill-spec.md`). Amends ADR-0022 (the gust doctrine); applies ADR-0062/0063's
 marginality rulings and finishes ADR-0052's expensive-attack patch on the bench side. Suite green
 (3051), the 29-correction gust sweep re-run end-to-end.

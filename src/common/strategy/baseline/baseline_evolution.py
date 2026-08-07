@@ -1,10 +1,7 @@
 """BASELINE cluster: EVOLUTION — what survives the evolve-decider swap (ADR-0070 §10, #140).
 
-The four rungs that PRICED an evolve are DELETED, not suppressed: `evolve-into-wincon` (+40) and
-`advance-the-evolution-line` (+15) are the decider's deploy term, and both `+5` energized tie-breaks
-are EMERGENT — an energized body's clocks are nearer, so its evolve delta is naturally larger, which
-is the whole thing they were compensating for. The dragapult `hold-evolution-until-attacker-ready`
-(-46) deck rung goes with them: it is `income_loss` (via /deck-align, ADR-0034).
+The four rungs that PRICED an evolve are DELETED, not suppressed, and the dragapult deck rung goes
+with them. Per-rung fold map: `tools/rung_registry.py` (`FOLDED`, ADR-0070 group).
 
 What remains is the `_PLAY` side, which prices a TUTOR rather than an evolve — structure, not value.
 `dont-rush-evolve-without-target` is a Gate: structural ABSENCE (no pre-evolution in play means

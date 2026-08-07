@@ -76,7 +76,7 @@ the blocker for the LETHAL `lethal-retreat-enabler` f15 ONLY). Authored as `retr
 (planner-code): Board signal `can_wall_line_with_disruptor` + `_can_wall_line_with_disruptor`, a **tier-0
 branch in `_finish_turn_last`** (so RETREAT sequences as step 1 instead of its default tier 4), and a
 `hold-position-in-setup` stand-down. Full authored change + verification in the f32 record
-`data/strategy/proposals/advance-line-over-marginal-energy-strip.md`; pinned by
+the applied `advance-line-over-marginal-energy-strip` proposal (file removed after application); pinned by
 `tests/strategy/test_blunder_20260710_split_fixes.py::test_f32_...`. **CORRECTION (2026-07-10): f20 is NOT
 closed — only f32's retreat frame is.** The shared `retreat-to-wall-the-line` rung fires on the RETREAT
 option (f32: Dreepy already energized). THIS fixture is the earlier ATTACH-enablement frame (Dreepy @0

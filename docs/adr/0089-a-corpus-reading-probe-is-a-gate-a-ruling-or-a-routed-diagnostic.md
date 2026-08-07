@@ -231,7 +231,7 @@ with no directory of its own, and dropping the fallback would have crashed a rep
 | `attach_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic + the ADR-0069 retune grid |
 | `evolve_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
 | `promote_retreat_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
-| `needs_sweep.py` | **ROUTE** | `docs/writeup-from-corrections-to-needs.md` promises its numbers reproduce |
+| `needs_sweep.py` | **ROUTE** | `docs/archive/writeup-from-corrections-to-needs.md` promises its numbers reproduce |
 | `threat_sweep.py` | **ROUTE, −2 modes** | `--doom`/`--recur`/`--target` live; **delete `--slots`** (same-vs-same, 0 flips by construction) and **`--rank`** (answered ADR-0083, covered by `test_scaled_rank_corpus.py`); fix the stale line-17 docstring |
 | 11 files under `tests/strategy/` | **ROUTE** | 9 globbing + 2 fixed-path; one carried the identical 40-record filter |
 

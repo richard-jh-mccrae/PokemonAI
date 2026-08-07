@@ -260,7 +260,7 @@ the red gate is never silently passed.** Directive 6's A/B (`gauntlet_swap_ab.py
 0 crashes / 2400 games**. The verdict rested on one cell (−9.5 pp); re-measured at n=600 **both**
 dragapult/lucario cells changed sign (−9.5 → +2.2; +7.5 → −3.3). Pooled over 4800 games the best
 estimate is **−1.06 pp, 95% CI [−3.90, +1.78], 0 crashes**. The run demonstrated neither a regression
-nor a non-regression. Full working: `docs/plans/evolve-decider-swap-review.md`.
+nor a non-regression. Full working: `docs/archive/plans/evolve-decider-swap-review.md`.
 
 Ruled (user, 2026-07-26): **merge.** The reasoning is that the instrument, not the build, is what
 failed. Clearing `CI-lo >= −1%` near a zero delta needs n ≈ 2270/arm/matchup (~27,000 games), and

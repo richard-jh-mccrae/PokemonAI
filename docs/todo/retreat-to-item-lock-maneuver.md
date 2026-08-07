@@ -53,7 +53,7 @@ beats developing normally. Verify:
   turn) exceeds the forgone development.
 
 Related: [[m2-posture-plan]] (opponent-filtered disruption), `open-the-item-lock-starter`, the ADR-0031
-single-turn planner boundary (`docs/todo/deferred-multi-turn-criticals.md`).
+single-turn planner boundary (`docs/archive/todo/deferred-multi-turn-criticals.md`).
 
 ## 2026-07-13/14 — 2nd instance (SUPPORT-EX-PIVOT variant): now an OPEN planner-code proposal (blunder-buster, build 2d2a113)
 

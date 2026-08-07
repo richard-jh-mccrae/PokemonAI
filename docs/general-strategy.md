@@ -3,8 +3,10 @@
 > **This document does not enumerate the rungs.** It used to, and 14 of its 23 rung sections came to describe
 > code that no longer exists — the ADR-0069/0070/0080/0085/0086/0100 decider swaps replaced whole families
 > of weighted Hypotheses with closed-form marginals. The live registry is the `Hypothesis(...)` definitions
-> in `src/common/strategy/baseline/` and `doctrines/`, each carrying its own `rationale=`; what was retired,
-> and what replaced it, is in those modules' fold maps. Read them, not a second copy.
+> in `src/common/strategy/baseline/` and `doctrines/`, each carrying its own `rationale=`. What was retired,
+> and what replaced it, is `FOLDED` in [tools/rung_registry.py](../tools/rung_registry.py) — data, so every
+> destination is resolved by a test rather than believed. `DECIDERS` in the same file maps each decision
+> seam to the module that owns it. Read those, not a second copy.
 
 > **Game rules** (turn structure, weakness ×2, prizes, per-turn limits, special conditions) are
 > canonical in **[rules.md](rules.md)** — read it before reasoning about any rule. This doc covers

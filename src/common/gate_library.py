@@ -1,5 +1,5 @@
 """Gate library — the DEADLINE leg of the card-worth oracle (ADR-0065; grill Rounds 8-9 of
-``docs/plans/hypergeometric-fetch-closure.md``; the scope/staging plan doc is retired — all four
+``docs/archive/plans/hypergeometric-fetch-closure.md``; the scope/staging plan doc is retired — all four
 gate legs are built, see ADR-0065 §Build status).
 
 `keep_cost = role_value × [P(need met by deadline | keep) − P(met | shuffle)]`. The keep-value sites

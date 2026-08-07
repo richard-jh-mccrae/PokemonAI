@@ -757,7 +757,7 @@ to check the whole set.
 ## Batch 8 (2026-08-03) — the T3.5 remediation track's one flip
 
 The wave above closed on 2026-08-02. This batch is a **new** flip, from a different packet:
-`docs/plans/issue-sequence-281-wave3-packet.md`, produced by the Issue #278 (POC-T3.5) run that
+`docs/archive/plans/issue-sequence-281-wave3-packet.md`, produced by the Issue #278 (POC-T3.5) run that
 landed Issues #281, #280, #343, #282, #345, #346, #284, #285 and #286 on PR #340. It is recorded
 here because this file — not the run-scoped packet — is where the Discrimination Gate's red frames
 get a name attached to them.

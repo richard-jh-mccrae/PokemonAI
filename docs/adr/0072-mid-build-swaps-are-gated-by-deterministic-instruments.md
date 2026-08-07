@@ -16,7 +16,7 @@ Phase 1b returned **FLIP: False**: −1.17 pp, 95% CI [−4.59, +2.25], 0 crashe
 verdict rested on one cell at −9.5 pp; re-measured at n=600 **both** dragapult/lucario cells changed
 sign. Pooled over 4800 games the best estimate is −1.06 pp, 95% CI [−3.90, +1.78], 0 crashes. The
 run demonstrated neither a regression nor a non-regression — the instrument's resolution and the
-effect's size are simply mismatched. Full working: `docs/plans/evolve-decider-swap-review.md`.
+effect's size are simply mismatched. Full working: `docs/archive/plans/evolve-decider-swap-review.md`.
 
 Two structural facts, not defects of that run:
 
@@ -455,7 +455,7 @@ simmed win as shuffle-riding and demotes all of them regardless of merit. Under 
 flavour `_engine_confirms_win` already uses, per ADR-0050's own rule that a win's verdict is invariant
 to which prize is taken — all 7 are unchanged from the shipped leaf. Widening the short-circuit is
 therefore free of that cost; the two REAL frames below are unrelated to it (both are #141 promote/
-retreat continuation-collateral, ruled in `docs/plans/promote-retreat-decider-swap-review.md`). The
+retreat continuation-collateral, ruled in `docs/archive/plans/promote-retreat-decider-swap-review.md`). The
 unwidened case is exactly the `_commit_best` KO-ranker treating a shuffle-blessed win as dominant;
 whether to widen it is still unruled, but no longer for the reason stated here.
 

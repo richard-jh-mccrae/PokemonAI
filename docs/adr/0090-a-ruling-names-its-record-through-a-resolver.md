@@ -111,7 +111,7 @@ The rulings are sound; only their addresses are wrong. `85046350-10` → **`8504
 `86091435-119` → **`86091435-t14s0`**. Neither target is occupied.
 
 Deleting them was rejected: the refutation is cited by name in ADR-0066 and
-`docs/plans/gusting-round0-measurement.md`, and destroying a correct human ruling because a key was
+`docs/archive/plans/gusting-round0-measurement.md`, and destroying a correct human ruling because a key was
 typo'd repairs nothing. Re-keying the data *alone* was also rejected — `orphan_rulings` is a
 **detector**, and a detector plus a free-text writer means this repo's answer to "don't hand-build
 keys" is "we will notice afterwards."

@@ -523,7 +523,8 @@ class Board:
                                        # enough Energy to attack — a finisher to retreat into
     best_promote_slot: tuple | None = None  # (AreaType, index) of MY benched win-condition best to bring
                                        # to Active at a promote/switch — READY (Energy >= cheapest attack)
-                                       # AND most-Energy. Backs `promote-the-powered-attacker`, not a bare copy/slot-0 (ep83007714 f92/f104)
+                                       # AND most-Energy, not a bare copy/slot-0 (ep83007714 f92/f104). Backed
+                                       # `promote-the-powered-attacker` (RETIRED); still read by the promote equation.
     ko_promote_slot: tuple | None = None  # (AreaType, index) of the benched body whose affordable attack —
                                        # given this turn's attachable Energy + a playable {F} damage-boost —
                                        # KOs the opp Active (`promote_ko_aware`; None when off / no KO-body).
@@ -4191,7 +4192,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The card's own printed draw count is the break-even. **The SHED side is graded** (WP7): it was
         a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards (`hold-wincon` /
-        `hold-line-piece` / `hold-irreplaceable-tool`) — a wincon and a dreg cost the same to shuffle.
+        `hold-line-piece-dont-shuffle` / `hold-irreplaceable-tool-dont-shuffle`) — a wincon and a dreg
+        cost the same to shuffle.
         It became ``Σ keep_cost`` over the actual hand, and is now (ADR-0101) the **v2 assignment set
         marginal** `_refresh_shed_keepcost` — one price for the JOINT shed, so duplicate plan pieces
         cost what the pair is worth rather than twice what one is. A live hand of wincons/engines is
@@ -8559,8 +8561,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """(_BENCH, index) of the benched win-condition best to bring to the Active Spot — the READY
         one (Energy >= its cheapest attack cost) carrying the MOST Energy (closest to its payoff hit),
         so a promote/switch picks the built attacker over a bare same-name copy. None when no benched
-        win-condition is ready. The per-option picker behind `promote-the-powered-attacker`; a bench-
-        index tiebreak keeps it deterministic. Distinct from `_priority_wincon_slot` (which targets the
+        win-condition is ready. Was the per-option picker behind `promote-the-powered-attacker`, which is
+        RETIRED with no ADR recording it (tools/rung_registry.py); a bench-index tiebreak keeps it deterministic. Distinct from `_priority_wincon_slot` (which targets the
         one still UNDER its max attack for Energy concentration — the opposite end of the build)."""
         wincon = self._wincon_set()
         if not wincon:

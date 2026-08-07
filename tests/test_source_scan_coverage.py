@@ -47,8 +47,8 @@ NARROW_BY_DESIGN: dict[str, str] = {
         "polices tools/, not src/; its own sweep is a glob over tools/**/*.py, so a move cannot narrow it",
     "tests/test_line_endings_policy.py":
         "names a probe path that never exists on disk — it queries git attributes, not file content",
-    "tests/test_retired_rung_ids.py":
-        "globs every src/**/*.py from git ls-files; names no fixed module",
+    "tests/test_rung_registry.py":
+        "globs every src/**/*.py from git ls-files; the fixed paths are resolver controls, not scan targets",
     "tests/test_doc_links_resolve.py":
         "the src path is a positive-control fixture for the resolver, not a scan target",
     "tests/strategy/test_state_value.py":
@@ -109,8 +109,9 @@ def _tracked_tests() -> list[str]:
         cwd=REPO, check=True, encoding="utf-8", text=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     ).stdout
+    # `--cached` still lists a file deleted from disk but not yet committed, so `is_file` is load-bearing.
     return [p.replace("\\", "/") for p in out.splitlines()
-            if p.startswith("tests/") and p.endswith(".py")]
+            if p.startswith("tests/") and p.endswith(".py") and (REPO / p).is_file()]
 
 
 def test_the_probes_actually_find_something() -> None:

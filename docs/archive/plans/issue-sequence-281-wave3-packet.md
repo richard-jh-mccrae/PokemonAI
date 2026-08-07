@@ -42,7 +42,7 @@ separate ones, and no work in this run touched it.
 > throughout — 3.9 is the true ceiling of `opponent_target_value` as a function and ADR-0107's own
 > choice, and it was measured to discriminate better. The flips it produced, including the three
 > frames this packet's own reverted attempt predicted, are tabled for ruling in
-> `docs/plans/issue-sequence-329-wave3-packet.md`. Nothing above was conformed and no baseline was
+> `docs/archive/plans/issue-sequence-329-wave3-packet.md`. Nothing above was conformed and no baseline was
 > recaptured, then or now.
 
 ## The flip as originally filed

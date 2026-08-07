@@ -2980,7 +2980,7 @@ def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
 
     This is the in-tree half of the claim; the cross-COMMIT half — that Issue #281's shipped numbers
     did not move — is the byte-identical gate A/B recorded in
-    `docs/plans/issue-sequence-281-wave3-packet.md`, because no assertion inside one commit can
+    `docs/archive/plans/issue-sequence-281-wave3-packet.md`, because no assertion inside one commit can
     reach a value from another.
 
     Bit-identical rather than approximate, and over the whole per-family breakdown rather than the

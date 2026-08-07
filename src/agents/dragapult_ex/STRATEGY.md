@@ -7,7 +7,7 @@
 **Status:** `aligned 2026-07-15` (all 2026-07-09 proposals shipped into common — see §6 banner) · was `locked — proposals queued` (deck swapped to the standard meta list — Cinderace OUT; Budew +
 Dunsparce/Dudunsparce + Rosa's Encouragement IN) · **Signed off:** 2026-07-09 (start SECOND) · **Author:** deck-genie
 + Richard · **Supersedes** the 2026-07-03 Cinderace build (full re-author). Phase 6 done: 4 general proposals in
-`data/strategy/proposals/deck-genie-20260709-dragapult_ex.md` for `/update-strategy`; `preferred_start="second"` +
+`data/strategy/proposals/applied/deck-genie-20260709-dragapult_ex.md` for `/update-strategy`; `preferred_start="second"` +
 Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 25 agent tests + check_agent 4/4).
 
 > **Update 2026-07-15 (deck-align):** **1× Judge re-added** (SVI 176, `shuffle_hand` Supporter — "each player
@@ -26,7 +26,7 @@ Cinderace/Judge dead-ref cleanup applied to `strategy.py` (all gates green — 2
 - [x] Phase 4 General-Strategy disposition complete
 - [x] Dispositions adversarially verified vs real code + engine-free probes (workflow `wjzvrtwbk` + `probe_ability.py`): 5 gaps CONFIRMED, rest covered-as-is
 - [x] Phase 5 sign-off (2026-07-09 — **start SECOND**, guru-unanimous vs the "setup-heavy → first" steelman, workflow `wh8ls1w6m`)
-- [x] Phase 6 done: **4 general proposals emitted** → `data/strategy/proposals/deck-genie-20260709-dragapult_ex.md`: (1) `use-the-draw-engine-ability`, (2) `open-the-item-lock-starter` + `item_lock` tag on Budew, (3) `energy_accel` tag on Rosa's, (4) `dont-strand-the-evolving-engine`. **Applied directly** (user-requested hygiene): `preferred_start="second"` + Cinderace/Judge dead-ref cleanup in `strategy.py` — 25 agent tests + check_agent 4/4 green.
+- [x] Phase 6 done: **4 general proposals emitted** → `data/strategy/proposals/applied/deck-genie-20260709-dragapult_ex.md`: (1) `use-the-draw-engine-ability`, (2) `open-the-item-lock-starter` + `item_lock` tag on Budew, (3) `energy_accel` tag on Rosa's, (4) `dont-strand-the-evolving-engine`. **Applied directly** (user-requested hygiene): `preferred_start="second"` + Cinderace/Judge dead-ref cleanup in `strategy.py` — 25 agent tests + check_agent 4/4 green.
 - [x] **All 4 proposals SHIPPED into common** (deck-align 2026-07-15): verified live in `baseline_opening.py` / `baseline_sequencing.py` / `doctrine_fetch.py` + tags in `card_functions.json`. Deck covers-as-is; tuned.json 14/14 keys live; no folds available (3 deck hypotheses stay deck-bound).
 
 **What changed vs the 2026-07-03 build (the delta this re-author covers):**

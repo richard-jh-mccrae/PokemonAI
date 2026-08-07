@@ -53,7 +53,7 @@ isolated ranking, which Issue #263 (T4) is what makes live.
 | Decision Gate | PASS, 0 picks moved | **PASS, 0 picks moved, byte-identical** |
 
 The `1` in the before column is Issue #280's `81906755|1|decision|9`, already ruled **REVERT** in the
-closed packet (`docs/plans/issue-sequence-281-wave3-packet.md`, and Batch 8 of
+closed packet (`docs/archive/plans/issue-sequence-281-wave3-packet.md`, and Batch 8 of
 `data/leaf_lab/wave3-rulings.md`). It is not this issue's and is not re-tabled above. So this issue's
 own contribution is **+3 unruled and −3 improvements**.
 
@@ -533,7 +533,7 @@ it changes no scoring code at all.
 The 7 unruled leaf flips are the batch's standing set and not one of them is this issue's: three are
 Issue #332's (`81904451|0|decision|9`, `83457493|1|decision|20`, `83661649|0|decision|54`), two are
 Issue #329's (`85785606|0|decision|19`, `|21`), one is Issue #351's (`85046350|0|decision|85`), and
-`81906755|1|decision|9` predates the batch entirely — `docs/plans/issue-sequence-339-wave3-packet.md`
+`81906755|1|decision|9` predates the batch entirely — `docs/archive/plans/issue-sequence-339-wave3-packet.md`
 records it at that batch's base, and Issue #280 already ruled it REVERT.
 
 ### How the BEFORE control was taken

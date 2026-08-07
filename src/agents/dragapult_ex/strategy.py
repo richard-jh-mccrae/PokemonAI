@@ -87,8 +87,8 @@ HYPOTHESES = [
         id="bench-the-comeback-drawer",
         rationale="Bench Fezandipiti ex once we're entering the grind (RACE/STABILIZE) so Flip the Script "
                   "(draw 3 after our Pokémon is KO'd) is online when the trades start — the positive driver "
-                  "missing beside `dont-bench-multiprize`, which correctly keeps a 2-prize ex off the early "
-                  "SETUP bench. Not turn 1; a bench slot must be free.",
+                  "the Deploy Marginal's prize-exposure term does not supply (it prices the 2-prize body's "
+                  "cost, never its Ability payoff). Not turn 1; a bench slot must be free.",
         when=lambda c: c.option_type == _PLAY and c.card_id == FEZANDIPITI_EX
         and c.board.line_ready and c.board.my_bench < 5,   # "entering the grind" (ADR-0040 migration:
         weight=18, status="assumed"),                      # was plan in (RACE, STABILIZE) — ≡ today

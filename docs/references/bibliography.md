@@ -5,7 +5,7 @@ with the prior art and its measured success. This document is that ledger: every
 choice in the Value System (tracker issue #136), the precedent it rests on, the measured result
 that justified it, and the source. Compiled from the 2026-07-23 deep-research pass (five parallel
 research angles over 2020–2026 primary sources) plus the earlier ML deep-research report
-(`docs/plans/ml/ml-training-system.md`, 2026-07-11, whose own source list this complements).
+(`docs/archive/research/ml-training-system.md`, 2026-07-11, whose own source list this complements).
 
 **Verification honesty (state this in the writeup too).** Sources marked **[P]** were fetched and
 read at the primary location (author-maintained repos/docs). Sources marked **[S]** were verified
@@ -34,7 +34,7 @@ search — instead of an end-to-end neural policy.
   work. https://github.com/sbl1996/ygo-agent [P]
 - **Compute reality** (prior report): master-level end-to-end Hearthstone took 24 V100s + 5,856
   CPU cores × 23 days (arXiv 2303.05197); a single-desktop PPO pipeline plateaued ~50–59%
-  (Entertainment Computing 2023). See `docs/plans/ml/ml-training-system.md` §5. [S]
+  (Entertainment Computing 2023). See `docs/archive/research/ml-training-system.md` §5. [S]
 - **Our constraint:** Kaggle grader = 2 vCPUs, ~10 min/match, pure-Python-stdlib runtime
   (`docs/agent-checks.md`). [I]
 
@@ -129,7 +129,7 @@ reply; mean aggregation with a single lethal-boundary safety veto. Gated on the 
   https://arxiv.org/pdf/2501.10464 [S]
 - **Our own negative result** — the parked Tier-6 depth-2 (single determinization +
   self-policy-reply + weak heuristic leaf) regressed ~12 points in a 1,000-game mirror A/B
-  (`docs/architecture/tier-6-escalation-search.md`, ADR-0043/0064) — the exact pathological
+  (ADR-0043/0064; the `tier-6-escalation-search.md` design note was removed with the tier) — the exact pathological
   configuration the literature names. The design sequence (evaluation first, search after) follows
   from this measurement. [I]
 - **Determinization counts** (Powley/Whitehouse/Cowling, Dou Di Zhu, AISB/CIG 2011) — playing
@@ -191,7 +191,7 @@ frozen-checkpoint opponent pool now, league/exploiter deferred.
   scale → league deferred, checkpoints kept. [S]
 - **Suphx** (MSR 2020, arXiv 2003.13590) — value-delta credit assignment under luck (the
   global-reward-predictor Φ-delta recipe) — the template for the automatic blunder labeler.
-  See also `docs/plans/ml/ml-training-system.md` §2. [S]
+  See also `docs/archive/research/ml-training-system.md` §2. [S]
 - **Our own instruments** — the merged eval harness (PR #112: ~9k games detects a 3% win-delta;
   duplicate-position auxiliary mode) and blunder labeler (PR #115) with measured internal A/Bs
   (e.g., doom-relax: 4,800-game gauntlet, verdict ON). [I]
@@ -222,13 +222,13 @@ to turn new-set onboarding into review-and-correct.
 - **Zero-score index-tie CRITICAL bugs** (ADR-0062; mega_starmie ep82867148 f48/f87; mega_lucario
   ep83661652 f33/f40/f44) → the deterministic tie-break policy and the continuous scalar. [I]
 - **Dense hand-crafted reward shaping worse than sparse win/loss** (LOCM, Entertainment
-  Computing 2023; see `docs/plans/ml/ml-training-system.md` §8) → learned value deltas, never
+  Computing 2023; see `docs/archive/research/ml-training-system.md` §8) → learned value deltas, never
   heuristic potentials, for credit assignment. [S]
 - **Naive self-play non-convergence in imperfect-info games** (Schmid thesis, arXiv 2111.05884;
   see prior report) → checkpoint pools, eventual league. [S]
 
 ---
 
-*Related internal documents: `docs/plans/ml/ml-training-system.md` (2026-07-11 deep-research
+*Related internal documents: `docs/archive/research/ml-training-system.md` (2026-07-11 deep-research
 report with its own 21-source list), `docs/adr/` (decision records), the Value System tracker
 (GitHub issue #136) and its phase issues (#137–#150), each carrying the per-phase evidence.*

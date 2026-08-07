@@ -120,7 +120,8 @@ def collect() -> dict[str, list[dict[str, str]]]:
     ).stdout
     found: dict[str, list[dict[str, str]]] = defaultdict(list)
     for rel in (p.replace("\\", "/") for p in out.splitlines()):
-        if not (rel.startswith("tests/") and rel.endswith(".py")):
+        # `--cached` still lists a file deleted from disk but not yet committed, so `is_file` is load-bearing.
+        if not (rel.startswith("tests/") and rel.endswith(".py") and (REPO / rel).is_file()):
             continue
         try:
             tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
