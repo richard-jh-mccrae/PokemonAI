@@ -62,7 +62,7 @@ re-derived every turn, never a lock:
    floor only → structurally no regression.
 6. **Scope boundary**: exact arithmetic under the standing-board assumption. Boards where opponent
    choice dominates (retreat/heal/gust webs) belong to the narrowly-triggered engine-tree
-   escalation ([tier-6](../architecture/tier-6-escalation-search.md)); the objectives themselves
+   escalation (Tier 6, deleted from the codebase 2026-07-17 (ADR-0064 decision 6)); the objectives themselves
    never lock a multi-turn claim.
 
 **Rejected.**

@@ -53,7 +53,7 @@ T6 Escalation Search — trigger: KO-Race tie / opponent-choice boards; hard bud
 | 3 | [Match Objectives](tier-3-match-objectives.md) | **75%** | BUILT 2026-07-05: KO Race (a21472 green), two-sided Prize Path + denial, derived phases, gate-ban migration |
 | 4 | [Opponent Model](tier-4-opponent-model.md) | **70%** | Levers + Briefs shipped (main); the γ-continuous predicted-attacker overlay into T3 BUILT 2026-07-05 |
 | 5 | [Automatic Value Model](tier-5-value-model.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0042); cross-deck gauntlet A/B **regressed −0.55%** (CI [−1.27,+0.16], 6 matchups, 0 crashes) → **parked OFF** (features redundant with the closed-form leaf; matchup-conditioned model is the real unlock) |
-| 6 | [Escalation Search](tier-6-escalation-search.md) | **built, PARKED OFF** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger fires but A/B **regressed to 44%** (PR #39) → **parked OFF** (two-ply proxy loses to the tuned scorer) |
+| 6 | Escalation Search | **DELETED** | BUILT 2026-07-05 (ADR-0043); attack-tie trigger inert (0/646) + density trigger A/B **regressed to 44%** (PR #39) → parked OFF, then **DELETED from the codebase 2026-07-17** (ADR-0064 decision 6, `planner.py`). `search_budget` survives as a telemetry label only — there is no switch to flip |
 
 ## Build order (recommended)
 

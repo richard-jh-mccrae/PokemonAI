@@ -127,7 +127,7 @@ valid gain signal — the **Kaggle ladder** — was never run for T5. **So T5 wa
 **The unlock is not "a better gauntlet."** A better gauntlet fixes neither the redundancy (structural) nor the
 measurement (only the ladder measures gain). The real unlock is the **matchup-conditioned model** below,
 validated on the **ladder** — tracked in
-[parked-learned-search-tiers.md](../todo/parked-learned-search-tiers.md).
+`docs/todo/parked-learned-search-tiers.md` (since removed).
 
 ## Deferred refinements (data-justified, not blockers)
 

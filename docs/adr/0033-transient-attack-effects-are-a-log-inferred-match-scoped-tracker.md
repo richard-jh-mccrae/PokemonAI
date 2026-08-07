@@ -1,7 +1,7 @@
 # ADR-0033: Transient attack effects are a log-inferred, match-scoped tracker
 
 **Status.** Accepted & built 2026-07-02 (TDD; the completion plan's P2 —
-[docs/todo/effect-compendium-completion.md](../todo/effect-compendium-completion.md)). Extends
+`docs/todo/effect-compendium-completion.md` (since removed)). Extends
 [ADR-0032](0032-card-knowledge-is-an-engine-audited-effect-compendium.md).
 **Amended 2026-07-02 (wiring pass): the `retreat_lock` field is DELETED, not wired.** An engine
 probe settled its fate: the engine **enforces** the 22 "Defending Pokémon can't retreat" effects

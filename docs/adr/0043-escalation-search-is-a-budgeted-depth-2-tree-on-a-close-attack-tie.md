@@ -28,7 +28,7 @@
 
 **Status.** Accepted + **Built 2026-07-05** (`/tdd`, Tier 6). The narrowly-triggered engine tree for
 the one thing closed-form provably cannot see — **opponent choice**. Build record:
-[docs/architecture/tier-6-escalation-search.md](../architecture/tier-6-escalation-search.md).
+`docs/architecture/tier-6-escalation-search.md`, removed — the tier was deleted from the codebase 2026-07-17 (ADR-0064 decision 6).
 
 **Context.** Tiers 0-3 are opponent-*static*: the KO Race, Incoming, and the Prize Path all assume
 the opponent's board answers as it stands. But two attacks can price identically this turn and leave

@@ -56,7 +56,7 @@ the value-model leaf-eval, exactly where the roadmap puts it.
 > targets) — is closed-form at the same epistemic tier as Incoming/Survival Window and is the
 > designed home for `a21472` ([Tier 3](../architecture/tier-3-match-objectives.md)), NOT the engine
 > tree. The engine-search escalation keeps only the opponent-*choice*-dominated residue
-> ([Tier 6](../architecture/tier-6-escalation-search.md)). `b4649`'s "Prize-Race Planner" is
+> (Tier 6, deleted from the codebase 2026-07-17 (ADR-0064 decision 6)). `b4649`'s "Prize-Race Planner" is
 > realized as the two-sided **Prize Path** objective (Tier 3): fuzzy, γ-gated, non-committal — as
 > ADR-0030 required.
 
