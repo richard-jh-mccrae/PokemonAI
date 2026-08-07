@@ -777,7 +777,7 @@ rather than scarcity standing in for it. Riolu 2.19 → 15.05, and f40 — the f
 this — now picks it.
 
 Full narrative, rulings and triage:
-**[`docs/plans/deploy-decider-swap-review.md`](../plans/deploy-decider-swap-review.md)**.
+**this ADR's Amendments and §Merge evidence** (the separate swap-review doc is deleted).
 
 ## Amendment F — PROPOSED and WITHDRAWN the same day (2026-07-30)
 

@@ -27,7 +27,7 @@ in-scope CRITICALs are FIXED and gated as real-state regressions** — `7f48` (r
 prizes), `0cbc` (heal-then-KO), and `4298` (play Hilda for the energy grab → retreat → Jetting-Blow KO)
 ([tests/fixtures/corrections/](../../tests/fixtures/corrections)); the two multi-turn corrections
 (`a21472`, `b4649`) remain out of scope — captured, re-measured, and fixtured for a future session in
-[docs/todo/deferred-multi-turn-criticals.md](../archive/todo/deferred-multi-turn-criticals.md) (`a21472` is still a
+a since-deleted deferred-criticals note (`a21472` is still a
 live gap; `b4649` re-measured as already covered by tuned scoring).
 
 **Amended 2026-07-02 (wiring pass) — three deferred pieces built, each kill-switched
@@ -77,7 +77,7 @@ Cinderace into Mega Starmie, attach 3rd energy, KO Fezandipiti for 2 prizes"* (`
 to start planning its turn ahead of time, mapping out potential outcomes, and then picking best path…
 KO via Hilda for energy grab, attach, retreat, jetting blow"* (`4298b98d39e8`); *"Should have healed
 with Wally, attached single energy, KO opponent"* (`0cbc478f2d86`). This is **exactly M3's documented
-entry trigger** — the roadmap ([docs/todo/roadmap-search-posture-learning.md](../archive/todo/roadmap-search-posture-learning.md))
+entry trigger** — the M0-M4 roadmap (since deleted)
 says Tier-1 activates when "corrections become 'an extra ply would have caught it' (multi-step tactical)
 rather than 'a rule was missing.'" The agent decides greedily per-option; nothing plans a whole turn.
 

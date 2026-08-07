@@ -108,4 +108,4 @@ Blast radius is tight: `lethal.py` imports live only in pilot.py, planner.py, an
 files; test_lethal.py / test_lethal_engine.py survive re-pointed at planner (REQ-LETHAL-#### ids
 preserved), and the six CRITICAL regressions (`040c`/`c1e0`/`fd5c`, `7f48`/`0cbc`/`4298`) are the
 blocking gate for every stage. Multi-turn planning stays out (`a21472`, `b4649` —
-[docs/todo/deferred-multi-turn-criticals.md](../archive/todo/deferred-multi-turn-criticals.md)).
+a since-deleted deferred-criticals note).

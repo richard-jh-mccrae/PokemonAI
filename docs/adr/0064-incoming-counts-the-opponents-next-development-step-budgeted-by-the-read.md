@@ -1,8 +1,6 @@
 # ADR-0064: Incoming counts the opponent's next development step, budgeted by the Read
 
-**Status.** Accepted (grilled 2026-07-16, session grill on
-[`docs/plans/2ply-opponent-survival-grill-spec.md`](../plans/2ply-opponent-survival-grill-spec.md) —
-six locked decisions). **BUILT 2026-07-16/17** — the threat read, the refactor, the loss rung,
+**Status.** Accepted (grilled 2026-07-16, six locked decisions). **BUILT 2026-07-16/17** — the threat read, the refactor, the loss rung,
 grant-awareness AND the charged matched-Read relaxation landed and suite-green; only the promote
 stand-down (Decision 4 consumer) remains (see §Build status). Deprecates ADR-0043; amends the
 `incoming-affordability.md` WON'T-FIX.
@@ -173,7 +171,7 @@ Consumers: the reachability read vs the wincon's HP becomes the **stand-down con
 `interpose-the-cheap-attacker-to-preserve-the-wincon` (all three drivers) and
 `dont-promote-into-their-prize-reach`, letting `promote-the-ready-wincon` (+40) win when the
 opponent's board literally cannot punish it. Hypergeometric draw-odds stay deferred
-([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md)).
+([ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)).
 
 ### 5. Transient locks: narrower than drafted
 
@@ -214,7 +212,7 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
   Lucario Read (γ over threshold); with no match the agent correctly stays defensive — specified
   behavior, not a failure. Variant 1 is unconditional.
 - **No-regression gates:** the class-D correction set in
-  [`t0-planner-disposition.md`](../plans/t0-planner-disposition.md); `interpose`/
+  the T0 planner disposition (since deleted); `interpose`/
   `dont-promote-into-their-prize-reach`'s existing passing cases (reviewed correction corpus + the
   tuner's score-diff gate); the escalation corpus re-check before its removal task lands.
 - Retest through the real `decide()`, never an isolated probe; `tune.py` clobbers `tuned.json`;
@@ -224,7 +222,7 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
 
 - **`active_doomed` unification** onto the budget model — behind its own fixture re-baseline
   (Decision 2). **DONE 2026-07-23** (the doom-shadow grill,
-  [`doom-shadow-grill-handoff.md`](../plans/doom-shadow-grill-handoff.md) RULED appendix): a
+  the doom-shadow grill handoff (since deleted) RULED appendix): a
   RELAX-ONLY matched-Read gate (`Pilot.doom_matched_relax`, PROFILE ON) — behind a γ-matched Brief
   with no discard-recur fuel, a worst-case doom cry stands only if the charged curve confirms it
   under `Pilot._DOOM_CHARGED` (`base_attach: 2` — the doom consumer budgets the manual attach PLUS
@@ -236,7 +234,7 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
   Ultra-Ball-discard pin). Pinned by `tests/strategy/test_doom_matched_relax.py`.
 - **Escalation code removal** — behind the corpus re-check (Decision 6).
 - **Hypergeometric draw-odds** for the availability gate — its own note
-  ([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md)).
+  ([ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)).
 - **Loss-rung v2:** a bench of guaranteed-dead bodies (all KO-able next turn) as a doom equivalent of
   bench-empty — v1 gates on the literal visible fact only.
 

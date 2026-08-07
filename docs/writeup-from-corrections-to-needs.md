@@ -1,12 +1,12 @@
 # From Hand Corrections to a General Theory of Card Value
 
-**Competition-writeup source material** (feeds [writeup-guidelines](../writeup-guidelines.md) §A4
+**Competition-writeup source material** (feeds [writeup-guidelines](writeup-guidelines.md) §A4
 Features and §A6 Interesting Findings). This documents one working arc — the keep-value line,
 reviewed and rebuilt 2026-07-19/20, merged as PR #121 — because it is the clearest single example
 of the project's method: *human corrections are the teacher, hand-built features are the
 curriculum, and the destination is a general mechanism that derives what the features asserted.*
-Full chronological detail: [ADR-0065 §Build status](../adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)
-and [the grill spec](../plans/keep-value-needs-assignment-grill-spec.md).
+Full chronological detail: [ADR-0065 §Build status](adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)
+and its §Grill run.
 
 ---
 
@@ -48,7 +48,7 @@ pick correct.
 
 ### Stage 0 — corrections compile to features
 
-The base architecture ([ADR-0017](../adr/0017-corrections-compile-to-hypotheses.md)): every recorded
+The base architecture ([ADR-0017](adr/0017-corrections-compile-to-hypotheses.md)): every recorded
 correction becomes a weighted Hypothesis (a rule with a `when=` condition and a tuned score), fit
 offline against the correction corpus. The discard decision alone accumulated a 12-rung tuned
 ladder (`keep-key-cards −30`, `keep-line-base −15`, `discard-the-dead-opener`, …). This works —
@@ -57,7 +57,7 @@ hand-engineered feature with a learned weight.
 
 ### Stage 1 — features consolidate into an equation (v1)
 
-The card-worth oracle ([ADR-0065](../adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md))
+The card-worth oracle ([ADR-0065](adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md))
 replaced per-rule scores with one equation in one currency:
 
 ```

@@ -6,8 +6,8 @@ book is grounded in. Ordered roughly by accessibility for a strong engineer new 
 ## Primary sources inside this repo (ground truth — read these first)
 - `docs/tuning/methodology.md` — the linear model, corrections-as-ranking-labels, hinge loss, L2,
   the structured perceptron, the pocket, the adoption gate. The single best in-repo doc.
-- `docs/architecture/tiers.md` + `tier-0..tier-6-*.md` — the whole decision stack.
-- `docs/architecture/tier-5-value-model.md` + `docs/adr/0042-*.md` — the logistic value model.
+- `docs/architecture/tiers.md` — the whole decision stack, each tier pointing at its owning ADR.
+- `docs/adr/0042-*.md` — the logistic value model (T5).
 - `docs/adr/0009-training-methodology.md`, `docs/adr/0007-*` — why one offline model, why not RL.
 - `src/common/deck_odds.py` — the hypergeometric own-deck estimate (well-commented).
 - `docs/adr/0039-*` (gamble lines / expectimax), `docs/adr/0043-*` (escalation search).

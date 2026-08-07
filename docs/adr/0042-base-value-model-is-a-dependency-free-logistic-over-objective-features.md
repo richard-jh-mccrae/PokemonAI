@@ -3,7 +3,7 @@
 **Status.** Accepted + **Built 2026-07-05** (`/tdd`, Tier 5). The single learned seam (ADR-0007),
 scoped by the 2026-07-05 architecture grilling: its FEATURES are the Tier-3/Tier-4 objective
 primitives, and it refines judgment only. Build record:
-[docs/architecture/tier-5-value-model.md](../architecture/tier-5-value-model.md). Terms:
+[docs/architecture/tiers.md](../architecture/tiers.md) (T5). Terms:
 *Automatic Value Model* in [src/common/CONTEXT.md](../../src/common/CONTEXT.md) (already defined ADR-0007).
 
 **Context.** ADR-0007 committed to ONE learned component — a replay-trained `state → P(win)` — and
