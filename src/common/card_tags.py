@@ -112,7 +112,7 @@ TAG_REGISTRY: dict[str, Tag] = {
     "energy_accel": Tag(DERIVED,
                         "Attaches Energy beyond the manual once-per-turn drop — ramp / tempo. An "
                         "`ATTACH` log by the actor from a non-Tool card.",
-                        ("common.strategy.combat", "common.strategy.context",
+                        ("common.strategy.combat_math.energy", "common.strategy.context",
                          "common.strategy.baseline.baseline_energy")),
     "recycle": Tag(DERIVED,
                    "Returns cards from the discard pile to hand/deck/play — resource recursion.",
@@ -124,7 +124,7 @@ TAG_REGISTRY: dict[str, Tag] = {
                         "Refines the probe's plain `search`, which sees only the generic "
                         "`DECK→HAND` move. Discard-pile retrieval stays `recycle`, a top-N look "
                         "stays `dig`.",
-                        ("common.strategy.planning.gamble", "common.strategy.planning.readiness", "common.strategy.combat")),
+                        ("common.strategy.planning.gamble", "common.strategy.planning.readiness", "common.strategy.combat_math.energy")),
     "tutor_pokemon": Tag(CURATED,
                          "A fetch whose reachable class is Pokémon — the Planner's fetch-class read "
                          "and the fetch doctrine's cost/benefit split on an Ultra Ball-shaped play. "
@@ -238,12 +238,12 @@ TAG_REGISTRY: dict[str, Tag] = {
     "discard_energy_recur": Tag(CURATED,
                                 "A line that reloads Basic Energy from a DISCARD pile — the "
                                 "attrition read that stops a spent board being priced as spent.",
-                                ("common.deciders.doom", "common.strategy.combat")),
+                                ("common.deciders.doom", "common.strategy.combat_math.energy")),
     "discard_eot": Tag(CURATED,
                        "An Energy DISCARDED at end of turn (Ignition Energy) — worth attaching "
                        "only if the holder attacks that same turn.",
                        ("common.deciders.attach", "common.deciders.board_build", "common.deciders.hand", "common.deciders.lethal", "common.deciders.needs", "common.card_worth", "common.needs",
-                        "common.strategy.combat", "common.strategy.planning.gamble", "common.strategy.planning.ladder", "common.strategy.planning.wins")),
+                        "common.strategy.combat_math.energy", "common.strategy.planning.gamble", "common.strategy.planning.ladder", "common.strategy.planning.wins")),
     "tool": Tag(CURATED,
                 "A Pokémon Tool — an attachment whose static modifiers ride the holder. What "
                 "reads it is the ATTACH transition: `board_delta` routes a Tool attach on "

@@ -1,0 +1,242 @@
+"""Bench spread and the HARVEST: which benched bodies a spread attack can knock out, and which of them fall under EVERY
+optimal allocation rather than merely some.
+
+The two readings pull opposite ways — per-body worst case over-counts a THREAT and over-credits a RESCUE — so the
+caller names which question it is asking (`combat_math.policy`)."""
+from __future__ import annotations
+
+
+from common.strategy.combat_math.policy import HARVEST_POSSIBLE, HARVEST_UNAVOIDABLE
+
+
+_BENCH_SNIPE = 0.005       # per-point value of an attack's bench-snipe/spread rider, capped below —
+
+_BENCH_SNIPE_CAP = 0.9     # a sub-prize tiebreak: the equal-outcome KO that ALSO snipes wins,
+                           # without ever overriding a prize (ADR-0022 #14)
+
+
+class HarvestMixin:
+    """Bench spread, and which knock-outs are unavoidable."""
+
+    # --- bench-rider prize math (opp_bench = ((cardId, hp), …), the Board snapshot) -------
+    def bench_ko_indices(self, opp_bench, reach: int) -> frozenset:
+        """WHICH benched Pokémon ``reach`` damage Knocks Out — indices into ``opp_bench``.
+
+        The bench Knock Out rule itself, stated ONCE: bench HP within the damage, bench damage
+        ignores Weakness/Resistance (ADR-0022), Tera bodies take none while benched.
+        `snipe_ko_prizes` is derived from this rather than restating it, so the two can never drift
+        (the `_build_standing` / `_affords` one-function-owns-the-fact lesson).
+
+        ``reach`` is any bench-reaching damage a single body could take — a single-target snipe
+        rider, or a distributable spread total pointed entirely at one body ("in any way you like",
+        so all of it may land on one). The rule does not care which produced it, and naming it
+        ``reach`` rather than ``rider`` keeps that honest.
+
+        Added by #199 (ADR-0080) for the Deny Relevance redundancy gate, which needs the IDENTITY of
+        the bodies that die — the doctrine's *"or maybe its a benched pokemon that we can snipe and
+        KO, same thing, no hammer on that specific pokemon"* — where the aggregate prize read alone
+        cannot say which body it meant."""
+        if reach <= 0:
+            return frozenset()
+        return frozenset(i for i, (cid, hp) in enumerate(opp_bench)
+                         if hp and hp <= reach and not self.is_tera(cid))
+
+    def snipe_ko_prizes(self, opp_bench, rider: int) -> int:
+        """Max prize among the opponent's benched Pokémon a bench-snipe ``rider`` KNOCKS OUT —
+        bench HP <= rider (bench snipes ignore Weakness/Resistance, ADR-0022); Tera bodies take
+        none. 0 when the rider finishes nothing. DERIVED from `bench_ko_indices` (#199)."""
+        bench = list(opp_bench)
+        return max((self.prize_value({"id": bench[i][0]})
+                    for i in self.bench_ko_indices(bench, rider)), default=0)
+
+    @staticmethod
+    def best_ko_subset(items, budget: int) -> frozenset:
+        """Indices of the max-total-prize subset of ``items`` (``[(hp, prize), …]``) whose total
+        HP fits in ``budget`` — a small knapsack (bench <= 5, so <= 32 subsets). Ties break to the
+        cheaper set (fewest counters). Empty frozenset when nothing is affordable."""
+        best_prize, best_cost, best_mask = 0, 0, 0
+        for mask in range(1 << len(items)):          # bench <= 5 -> <= 32 subsets
+            cost = prize = 0
+            for i, (hp, pv) in enumerate(items):
+                if mask & (1 << i):
+                    cost, prize = cost + hp, prize + pv
+            if cost <= budget and (prize > best_prize
+                                   or (prize == best_prize and prize and cost < best_cost)):
+                best_prize, best_cost, best_mask = prize, cost, mask
+        return frozenset(i for i in range(len(items)) if best_mask & (1 << i))
+
+    @staticmethod
+    def _harvest_residual(needs: list, snipes: list) -> int:
+        """Spread still owed to fell every body in ``needs`` after spending the INDIVISIBLE
+        ``snipes`` optimally — the allocation core of :meth:`best_harvest` (ADR-0071 decision 2).
+
+        Each snipe unit lands entirely on ONE body (single-target text), so a unit applied to a body
+        saves ``min(unit, that body's remaining need)``. Maximising the total saved is a separable
+        concave problem under a unit budget, so assigning the LARGEST unit to the LARGEST remaining
+        need is exact for equal-size units — the shipped case, since a turn's payload is re-read off
+        the same attacker pool each turn. Unequal sizes fall back to the same greedy, which is a
+        bound rather than a proof; it can only OVER-state the residual, i.e. under-state their reach
+        on the rescue reading and never manufacture a phantom knockout."""
+        rest = list(needs)
+        for unit in sorted(snipes, reverse=True):
+            if unit <= 0 or not rest:
+                continue
+            i = max(range(len(rest)), key=lambda j: rest[j])
+            rest[i] = max(0, rest[i] - unit)
+        return sum(rest)
+
+    @staticmethod
+    def _harvest_optima(items, snipes, spread: int):
+        """``(objective key, [optimal subsets])`` for ONE payload — the solver core.
+
+        Returns EVERY subset tying at the best objective, because the two Harvest Readings are the
+        union and the intersection of exactly that set."""
+        best_key, optimal = None, []
+        for mask in range(1 << len(items)):          # bench <= 5 -> <= 32 subsets
+            chosen = [i for i in range(len(items)) if mask & (1 << i)]
+            residual = HarvestMixin._harvest_residual([items[i][0] for i in chosen], snipes)
+            if residual > spread:
+                continue                             # the shared budget does not stretch this far
+            key = (sum(items[i][1] for i in chosen),         # prize — their win condition
+                   sum(1 for i in chosen if items[i][2]),    # ...then my role-carrying bodies
+                   -residual)                                # ...then the cheapest allocation
+            if best_key is None or key > best_key:
+                best_key, optimal = key, [frozenset(chosen)]
+            elif key == best_key:
+                optimal.append(frozenset(chosen))
+        return best_key, optimal
+
+    @staticmethod
+    def _read_optima(optimal, reading: str) -> frozenset:
+        """Collapse the tied-optimal subsets to one answer under ``reading``."""
+        if not optimal:
+            return frozenset()
+        if reading == HARVEST_UNAVOIDABLE:
+            return frozenset.intersection(*optimal)
+        return frozenset().union(*optimal)
+
+    @staticmethod
+    def best_harvest(items, snipes, spread: int, *, reading: str = HARVEST_POSSIBLE) -> frozenset:
+        """Indices of MY benched bodies the opponent takes with a SHARED rider budget — the **Bench
+        Harvest** (ADR-0071). ``items`` = ``((hp, prize, is_key), …)`` of the bodies riders can
+        reach; ``snipes`` = the indivisible single-target units (one per turn read); ``spread`` =
+        the total divisible counter budget ("in any way you like").
+
+        Their objective is max total PRIZE, then — strictly SUB-prize, never overriding a real prize
+        difference — the count of my role-carrying bodies, then the cheapest allocation (decision 8:
+        the `opponent_target_value` discipline applied to their model of us).
+
+        ``reading`` selects WHICH question is being asked (decision 3), because one answer cannot
+        serve both consumers:
+        - ``HARVEST_POSSIBLE`` — in the harvest under SOME optimal allocation. The conservative
+          default: a threat/doom read must not call a body safe just because they could kill a
+          different one.
+        - ``HARVEST_UNAVOIDABLE`` — in the harvest under EVERY optimal allocation. The rescue/value
+          read: a knockout they can simply redirect is worth nothing to deny, so rescuing that body
+          credits zero.
+
+        Generalises :meth:`best_ko_subset` rather than calling it: once the budget accumulates over
+        turns each candidate subset has its own post-snipe residual, so the knapsack's fixed-HP
+        items no longer compose (ADR-0071 amendment A)."""
+        return HarvestMixin._read_optima(HarvestMixin._harvest_optima(items, snipes, spread)[1], reading)
+
+    def _harvest_items(self, bench, key_ids):
+        """``(items, index map)`` for :meth:`best_harvest` — my benched bodies riders can reach.
+
+        Tera bodies take NO attack damage while Benched (rules.md §11), so they are dropped rather
+        than scored, and drop out of the index map with them."""
+        items, idx = [], []
+        for i, b in enumerate(bench or ()):
+            hp = (b or {}).get("hp", 0)
+            if not hp or self.is_tera((b or {}).get("id")):
+                continue
+            items.append((int(hp), self.prize_value(b), (b or {}).get("id") in key_ids))
+            idx.append(i)
+        return items, idx
+
+    def bench_harvest(self, my_bench, payloads, *, reading: str = HARVEST_POSSIBLE,
+                      key_ids=frozenset()) -> frozenset:
+        """The Bench Harvest over MY benched body dicts — indices into ``my_bench``.
+
+        ``payloads`` are the CANDIDATE attacks, each ``(snipes, spread)``: attacking ends their turn,
+        so they commit to one attack, and WHICH one is part of the choice being solved — not a
+        pre-filter. Selecting a payload by a proxy metric (largest total rider) is unsound: a 70
+        single-target snipe beats a 60 spread on that sum, yet the spread takes three 20 HP bodies
+        where the snipe takes one. Under-reading their reach that way is the phantom-safety fail
+        direction ADR-0070 §9 refused, so every candidate is scored and the opponent's own objective
+        picks (ADR-0071 amendment F).
+
+        ``key_ids`` is the deck-DECLARED role-carrying set, passed in because `CombatMath` is
+        deck-agnostic."""
+        items, idx = self._harvest_items(my_bench, key_ids)
+        best_key, optimal = None, []
+        for snipes, spread in payloads:
+            key, opts = self._harvest_optima(items, snipes, spread)
+            if key is None:
+                continue
+            if best_key is None or key > best_key:
+                best_key, optimal = key, list(opts)
+            elif key == best_key:
+                optimal.extend(opts)                 # tied attacks widen the allocation choice
+        return frozenset(idx[i] for i in self._read_optima(optimal, reading))
+
+    def bench_harvest_clock(self, my_bench, opp_bodies, *, charged: dict | None = None,
+                            max_t: int = 8, key_ids=frozenset(),
+                            reading: str = HARVEST_POSSIBLE,
+                            opp_active: dict | None = None) -> dict:
+        """``{bench index: first turn it falls in the harvest}`` for the WHOLE Bench in one solve —
+        absent means it survives ``max_t``.
+
+        The shared rider budget is a property of the BENCH, not of one body, so asking per body
+        re-derives the same payload table and re-runs the same subset search once per member.
+        :meth:`turns_to_ko_me`'s bench leg used to do exactly that, and it cost +36% on every Board
+        build once the Prize Path started asking for every benched body (Issue #261 item 2d, measured
+        on the Leaf-Profile pin). That leg now reads this, so there is still ONE derivation.
+
+        Counting, per candidate attack, how many of turns 1..t it is affordable for: they commit to a
+        bench line and use it whenever they can, and counters PERSIST, so ``k`` turns of one attack is
+        ``k`` indivisible snipes plus ``k`` spreads of divisible budget."""
+        bench = list(my_bench)
+        if not bench:
+            return {}
+        horizon = max(1, int(max_t))
+        first: dict = {}
+        seen: dict = {}
+        for t in range(1, horizon + 1):
+            for pair in self._bench_payload_pairs(opp_bodies, t, charged=charged,
+                                                  opp_active=opp_active):
+                seen[pair] = seen.get(pair, 0) + 1
+            payloads = [([s] * k if s else [], p * k) for (s, p), k in seen.items()]
+            for i in self.bench_harvest(bench, payloads, reading=reading, key_ids=key_ids):
+                first.setdefault(i, t)
+            if len(first) == len(bench):
+                break                                 # every body accounted for — no later turn adds
+        return first
+
+    def spread_ko_prizes(self, opp_bench, spread: int) -> int:
+        """Max total prizes from distributing a ``spread`` (Phantom Dive's ``benchSpread``) across
+        the opponent's Bench to KNOCK OUT benched Pokémon — the ``best_ko_subset`` knapsack
+        (spread counters ignore W/R; Tera bodies take none). 0 when nothing is finishable."""
+        if spread <= 0:
+            return 0
+        items = [(hp, self.prize_value({"id": cid})) for cid, hp in opp_bench
+                 if hp and hp <= spread and not self.is_tera(cid)]
+        return sum(items[i][1] for i in self.best_ko_subset(items, spread))
+
+    # --- KO valuation (the shared band every hypothetical attacker is priced on) ------------
+    def bench_snipe_bonus(self, opp_bench, attack_id) -> float:
+        """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes a benched Pokémon is
+        worth a little extra board value — scaled by the rider, capped below a prize; 0 with no
+        clean rider or no benched target."""
+        rider = self.rider_snipe(attack_id)
+        if rider <= 0 or not opp_bench:
+            return 0
+        return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * rider)
+
+    def bench_spread_bonus(self, opp_bench, attack_id) -> float:
+        """Sub-prize tiebreak for a distributable bench SPREAD that doesn't finish a bench mon —
+        it still pre-loads the Bench. Mirrors ``bench_snipe_bonus``; nonzero only for spreads."""
+        spread = self.rider_spread(attack_id)
+        if spread <= 0 or not opp_bench:
+            return 0
+        return min(_BENCH_SNIPE_CAP, _BENCH_SNIPE * spread)
