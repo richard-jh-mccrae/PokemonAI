@@ -93,12 +93,12 @@ TAG_REGISTRY: dict[str, Tag] = {
     "draw": Tag(DERIVED,
                 "Draws cards into hand — raw card advantage / engine fuel. A `DRAW` log by the "
                 "actor, or a look-at-top-then-take (`LOOKING→HAND`).",
-                ("common.pilot", "common.strategy.context",
+                ("common.deciders.context_build", "common.deciders.hand", "common.deciders.order", "common.strategy.context",
                  "common.strategy.doctrines.doctrine_fetch")),
     "search": Tag(DERIVED,
                   "Tutors a SPECIFIC card straight out of the deck (`DECK→HAND`/`BENCH`/`ACTIVE`) — "
                   "consistency. A top-N look is `dig`+`draw`, not this.",
-                  ("common.pilot", "common.strategy.context",
+                  ("common.deciders.hand", "common.deciders.order", "common.strategy.context",
                    "common.strategy.doctrines.doctrine_fetch")),
     "dig": Tag(DERIVED,
                "Looks at / reorders the top or bottom of the deck — selection and information. A "
@@ -108,7 +108,7 @@ TAG_REGISTRY: dict[str, Tag] = {
                # `_finish_turn_last` is what reads `dig` now, through `_informative_card`, and that
                # is the ADR-0095 boundary rather than a rung. Named as `common.pilot`, already
                # listed first.
-               ("common.pilot", "common.strategy.context")),
+               ("common.deciders.hand", "common.deciders.order", "common.strategy.context")),
     "energy_accel": Tag(DERIVED,
                         "Attaches Energy beyond the manual once-per-turn drop — ramp / tempo. An "
                         "`ATTACH` log by the actor from a non-Tool card.",
@@ -130,14 +130,14 @@ TAG_REGISTRY: dict[str, Tag] = {
                          "and the fetch doctrine's cost/benefit split on an Ultra Ball-shaped play. "
                          "NOT read by `fetch_closure`, whose ADR-0032 clause predicate REPLACED the "
                          "tag-keyed `_FETCH_FILTERS` (it names the tag only in prose).",
-                         ("common.pilot", "common.strategy.planner",
+                         ("common.deciders.deploy", "common.strategy.planner",
                           "common.strategy.doctrines.doctrine_fetch")),
     "tutor_mega": Tag(CURATED,
                       "A fetch restricted to a Rule-Box Mega ex — the fact the generic "
                       "`tutor_pokemon` cannot carry, so a wincon-in-hand read would over-claim. "
                       "Same non-consumer note as `tutor_pokemon`: `fetch_closure` mentions it, and "
                       "reads the clause instead.",
-                      ("common.pilot", "common.strategy.planner")),
+                      ("common.deciders.deploy", "common.deciders.hand", "common.deciders.needs", "common.strategy.planner")),
     "tutor_trainer": Tag(CURATED,
                          "A Supporter that searches ANY Trainer card out of the deck (Team "
                          "Rocket's Petrel class) — the Planner's route to a wincon-line Trainer.",
@@ -146,19 +146,19 @@ TAG_REGISTRY: dict[str, Tag] = {
                            "A body whose ON-PLAY Ability fetches a SUPPORTER (Meowth ex's "
                            "Last-Ditch Catch) — a bench-drop that buys a Supporter, which is a "
                            "utility body rather than a wall. Replaced `stall` on 1071 in 2026-07.",
-                           ("common.pilot", "common.needs", "common.strategy.context")),
+                           ("common.deciders.attach", "common.deciders.deploy", "common.needs", "common.strategy.context")),
     "bench_fill": Tag(CURATED,
                       "Fetches Basics straight onto the Bench (Buddy-Buddy Poffin) — bench "
                       "development and deck-thinning in one play; sequenced ahead of hand-refill "
                       "tutors in a thin deck.",
-                      ("common.pilot", "common.strategy.doctrines.doctrine_fetch")),
+                      ("common.deciders.deploy", "common.strategy.doctrines.doctrine_fetch")),
     "cost_discard": Tag(CURATED,
                         "A fetch that COSTS a discard from hand (Ultra Ball class) — a blind, "
                         "costly commitment the sequencer defers behind free development, and whose "
                         "shed side `doctrine_fetch` prices.",
                         # Same deletion as `dig` above: the deferral is `_finish_turn_last`'s
                         # `_TIER_COMMITMENT`, in `common.pilot`.
-                        ("common.pilot", "common.strategy.doctrines.doctrine_fetch")),
+                        ("common.deciders.order", "common.strategy.doctrines.doctrine_fetch")),
     "rare_candy": Tag(CURATED,
                       "Puts a Stage 2 from hand straight onto its root Basic, SKIPPING the Stage 1 "
                       "— so a missing Stage 1 does not prove a Stage 2 dead. Distinct from "
@@ -169,13 +169,13 @@ TAG_REGISTRY: dict[str, Tag] = {
     "rush_evolve": Tag(CURATED,
                        "Evolves a Pokémon ahead of the normal schedule — even the turn its "
                        "pre-evolution was played. Brings the win condition online a turn early.",
-                       ("common.pilot", "common.strategy.planner",
+                       ("common.deciders.deploy", "common.deciders.hand", "common.deciders.needs", "common.strategy.planner",
                         "common.strategy.baseline.baseline_evolution")),
     # --- disruption -------------------------------------------------------------------------
     "gust": Tag(DERIVED,
                 "Drags the opponent's Active out to pull a target up (Boss's Orders) — a `SWITCH` "
                 "log on the OPPONENT's side.",
-                ("common.pilot", "common.strategy.planner",
+                ("common.deciders.board_build", "common.deciders.needs", "common.deciders.order", "common.strategy.planner",
                  "common.strategy.doctrines.doctrine_gust")),
     "hand_disruption": Tag(DERIVED,
                            "Shuffles or discards the opponent's hand — resource denial. Their "
@@ -183,28 +183,28 @@ TAG_REGISTRY: dict[str, Tag] = {
                            # `baseline_disruption` was deleted by POC-T4/5 (Issue #386). The tag
                            # keeps its live consumer: `pilot` reads it at the shuffle-refresh
                            # tier and through the Opponent Model.
-                           ("common.pilot",)),
+                           ("common.deciders.board_build", "common.deciders.deploy", "common.deciders.hand", "common.deciders.needs",)),
     "energy_denial": Tag(DERIVED,
                          "Removes the opponent's ATTACHED Energy — tempo denial (their "
                          "`ENERGY→DISCARD`).",
-                         ("common.pilot", "common.needs")),
+                         ("common.deciders.deny", "common.needs")),
     "shuffle_hand": Tag(CURATED,
                         "A refresh that shuffles BOTH hands away and redraws (Iono, Unfair Stamp) "
                         "— a Gamble Line: it can refill a small opponent hand, so ADR-0060 forbids "
                         "reading it as a strip.",
                         # minus `baseline_disruption`, deleted by POC-T4/5 (Issue #386); the
                         # shuffle DOCTRINE is where the Gamble-Line reading actually lives.
-                        ("common.pilot", "common.strategy.planner",
+                        ("common.deciders.context_build", "common.deciders.order", "common.strategy.planner",
                          "common.strategy.doctrines.doctrine_shuffle_refresh")),
     "item_lock": Tag(CURATED,
                      "A body whose Ability locks Item play (the benched-disruptor maneuver) — read "
                      "on BOTH sides: it gates our own Item lines and prices their disruptor.",
-                     ("common.pilot", "common.strategy.doctrines.doctrine_fetch")),
+                     ("common.deciders.board_build", "common.deciders.promote", "common.strategy.doctrines.doctrine_fetch")),
     # --- board ------------------------------------------------------------------------------
     "switch": Tag(DERIVED,
                   "Moves my OWN Active out — reposition / escape. Also read on THEIR side, where a "
                   "switch card anywhere waives the Threat-Clock bench-promotion surcharge.",
-                  ("common.pilot", "common.strategy.objectives", "common.strategy.planner")),
+                  ("common.deciders.evolve", "common.deciders.needs", "common.deciders.promote", "common.strategy.objectives", "common.strategy.planner")),
     "heal": Tag(DERIVED,
                 "Removes damage from my Pokémon — longevity. An `HP_CHANGE` (value > 0, not a "
                 "damage counter) on my side.",
@@ -216,7 +216,7 @@ TAG_REGISTRY: dict[str, Tag] = {
                        # minus `baseline_heal`, deleted by POC-T4/5 (Issue #386): a clutch heal is
                        # now priced by the survival delta it buys, which `needs` and the planner
                        # already read.
-                       ("common.pilot", "common.card_worth", "common.needs",
+                       ("common.deciders.heal", "common.deciders.needs", "common.card_worth", "common.needs",
                         "common.strategy.planner")),
     "spread": Tag(DERIVED,
                   "Places damage counters across the opponent's board 'in any way' (a "
@@ -230,7 +230,7 @@ TAG_REGISTRY: dict[str, Tag] = {
                              "main attacker in an ex-dominated format. Read three ways: the damage "
                              "oracle zeroes my ex's damage into it, `_body_threat_rank` boosts a "
                              "line carrying it, and snipe relevance's `prevents_my_ex` leg.",
-                             ("common.pilot", "common.strategy.damage")),
+                             ("common.deciders.snipe", "common.strategy.damage")),
     "bench_guard": Tag(CURATED,
                        "Protects benched Pokémon from the EFFECTS of attacks/Abilities (Battle "
                        "Cage). **Inert**: passive and text-derivable, authored ahead of the "
@@ -238,11 +238,11 @@ TAG_REGISTRY: dict[str, Tag] = {
     "discard_energy_recur": Tag(CURATED,
                                 "A line that reloads Basic Energy from a DISCARD pile — the "
                                 "attrition read that stops a spent board being priced as spent.",
-                                ("common.pilot", "common.strategy.combat")),
+                                ("common.deciders.doom", "common.strategy.combat")),
     "discard_eot": Tag(CURATED,
                        "An Energy DISCARDED at end of turn (Ignition Energy) — worth attaching "
                        "only if the holder attacks that same turn.",
-                       ("common.pilot", "common.card_worth", "common.needs",
+                       ("common.deciders.attach", "common.deciders.board_build", "common.deciders.hand", "common.deciders.lethal", "common.deciders.needs", "common.card_worth", "common.needs",
                         "common.strategy.combat", "common.strategy.planner")),
     "tool": Tag(CURATED,
                 "A Pokémon Tool — an attachment whose static modifiers ride the holder. What "
@@ -275,14 +275,14 @@ TAG_REGISTRY: dict[str, Tag] = {
     "opener": Tag(CURATED,
                   "A NON-Basic that may take the Active Spot from hand during setup "
                   "(Explosiveness — Cinderace), so a hand with no Basic is still keepable.",
-                  ("common.pilot", "common.strategy.context")),
+                  ("common.deciders.hand", "common.strategy.context")),
     "stall": Tag(CURATED,
                  "A PLAY-ROLE, not a card function: a big-HP wall piloted NOT to attack, buying "
                  "tempo to set up. A curated seed of the obvious meta walls — real coverage needs "
                  "replay-usage data the pipeline does not capture. **Not** a "
                  "'does not attack much' catch-all: 1071 Meowth ex was re-modeled OFF it "
                  "(`_note_1071_stall_retired`).",
-                 ("common.pilot", "common.strategy.context", "common.strategy.planner")),
+                 ("common.deciders.context_build", "common.strategy.context", "common.strategy.planner")),
     "team_rocket": Tag(CURATED,
                        "The one owner-NAME-family tag and the one ruled exception to REQ-FUNC-0001 "
                        "(Issue #374): the 52 Pokémon whose PRINTED NAME carries the \"Team "

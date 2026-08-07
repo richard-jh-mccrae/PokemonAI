@@ -36,7 +36,13 @@ MODEL_COVERED = frozenset({
     "attached_type_counts", "prize_value",
 })
 
-MODULES = ("src/common/pilot.py", "src/common/strategy/planner.py")
+#: A GLOB, not a list: the Pilot is a mixin composition spread over `common/deciders/`, so a hand-kept
+#: tuple silently narrows the moment a family moves. `tests/test_source_scan_coverage.py` grades this
+#: by what it RESOLVES to, which is what lets a self-maintaining scan be credited for its real reach.
+MODULES = ("src/common/pilot.py", "src/common/strategy/planner.py",
+           *sorted(p.relative_to(REPO).as_posix()
+                   for p in (REPO / "src" / "common" / "deciders").glob("*.py")
+                   if p.name != "__init__.py"))
 
 #: ``(enclosing function, CombatMath method) -> why this bypass is deliberate.``
 #: Three families, each named by the issue or derived from a doctrine already in the tree.

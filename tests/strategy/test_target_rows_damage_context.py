@@ -218,12 +218,16 @@ def test_both_legs_of_each_delta_are_threaded_together():
     the invariant this test protects is that every clock leg of a Δ carries `context`, never which
     of the two readings a call site took. The instrument guard below is what caught the rename when
     the fractional reading landed, and it is kept for the next one."""
-    src = (REPO / "src" / "common" / "pilot.py").read_text(encoding="utf-8")
-    tree = ast.parse(src)
+    # Located BY NAME across the whole Pilot surface, not read out of one hard-coded module: the
+    # split moved both of these into a family, and a `next()` over the wrong file raises
+    # StopIteration — which pytest reports as a plugin error, not as "the instrument is broken".
+    trees = {rel: ast.parse((REPO / rel).read_text(encoding="utf-8")) for rel in PILOT_SURFACE}
     clocks = {"turns_to_ko_me", "survival_clock"}
     for fname in ("_opponent_target_rows", "_strip_delta_terms"):
-        fn = next(n for n in ast.walk(tree)
-                  if isinstance(n, ast.FunctionDef) and n.name == fname)
+        found = [n for tree in trees.values() for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == fname]
+        assert len(found) == 1, f"{fname}: found in {len(found)} modules, expected exactly 1"
+        fn = found[0]
         calls = [c for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
                  and c.func.attr in clocks]
@@ -269,7 +273,16 @@ def _threads_context(call: ast.Call, fn: ast.FunctionDef) -> bool:
 #: Modules that CONSUME the Incoming family. `state_model.py` and `combat.py` are excluded on
 #: purpose: they are the delegation layers, and they forward whatever their caller supplies
 #: (`incoming(my_body, 1, **kwargs)`), so they neither thread nor drop anything themselves.
-CONSUMERS = ("src/common/pilot.py", "src/common/state_value.py", "src/common/strategy/planner.py")
+#: Named ONE BY ONE and not globbed, because `test_the_census_instrument_is_not_silently_empty`
+#: asserts this set EQUALS the modules the sweep finds sites in. Deriving it from the sweep would
+#: make that assertion true by construction; a module listed here with no site is a real failure.
+#: `pilot.py` is absent deliberately — the split moved every one of its sites into a family.
+CONSUMERS = ("src/common/state_value.py", "src/common/strategy/planner.py",
+             "src/common/deciders/board_build.py", "src/common/deciders/deny.py",
+             "src/common/deciders/doom.py", "src/common/deciders/evolve.py",
+             "src/common/deciders/hand.py", "src/common/deciders/heal.py",
+             "src/common/deciders/lines.py", "src/common/deciders/promote.py",
+             "src/common/deciders/snipe.py")
 
 #: Reads that funnel into `CombatMath.incoming` and accept a `context`.
 INCOMING_FAMILY = frozenset({"incoming", "reachable_incoming", "doomed", "doomed_incoming",
@@ -279,6 +292,14 @@ INCOMING_FAMILY = frozenset({"incoming", "reachable_incoming", "doomed", "doomed
 #: that is the property: every live consumer threads it. An entry here is a decision, and adding one
 #: without a reason is what this allowlist exists to make impossible.
 CONTEXT_FREE: dict[tuple[str, str], str] = {}
+
+
+#: Every module a `Pilot` method can live in: the spine plus its families. Used by the scans that
+#: look a method UP rather than grade a fixed module list.
+PILOT_SURFACE = ("src/common/pilot.py",
+                 *sorted(q.relative_to(REPO).as_posix()
+                         for q in (REPO / "src" / "common" / "deciders").glob("*.py")
+                         if q.name != "__init__.py"))
 
 
 def _incoming_sites():

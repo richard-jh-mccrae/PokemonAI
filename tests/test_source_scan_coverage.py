@@ -23,6 +23,7 @@ MRO reports `planner.py` as an offender, which is the instrument being wrong rat
 from __future__ import annotations
 
 import ast
+import importlib.util
 import inspect
 import re
 import shutil
@@ -38,7 +39,6 @@ GIT = shutil.which("git")
 REGISTERED: dict[str, tuple[str, ...]] = {
     "tests/strategy/test_combat_bypass_census.py": ("MODULES",),
     "tests/strategy/test_target_rows_damage_context.py": ("CONSUMERS",),
-    "tests/strategy/test_value_stack_integration.py": ("PILOT_SRC", "STATE_VALUE_SRC", "STATE_MODEL_SRC"),
 }
 
 #: Path-scoped scans that target ONE module on purpose and must not widen, each with the reason.
@@ -51,6 +51,11 @@ NARROW_BY_DESIGN: dict[str, str] = {
         "globs every src/**/*.py from git ls-files; the fixed paths are resolver controls, not scan targets",
     "tests/test_doc_links_resolve.py":
         "the src path is a positive-control fixture for the resolver, not a scan target",
+    "tests/strategy/test_value_stack_integration.py":
+        "its question is the `Board` DATACLASS, which lives in exactly one module: it names the "
+        "declaration (deciders/facts.py) and the construction site (deciders/board_build.py), and "
+        "widening it to the other 17 families would scan for a class that cannot be there. It fails "
+        "CLOSED if Board moves again — `_annotated_numeric` raises on a missing ClassDef",
     "tests/strategy/test_state_value.py":
         "reads pilot.py inline (no binding to extend); its insulation claim is re-asserted over the "
         "live decider surface by test_the_pilot_insulation_guard_follows_the_deciders below",
@@ -90,14 +95,17 @@ def _decider_surface() -> set[str]:
 
 
 def _literals(rel: str, names: tuple[str, ...]) -> set[str]:
-    tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+    """What a registered scan ACTUALLY reads: the binding's RUNTIME value, resolved by importing the
+    module. Reading the source literal instead would credit a hand-kept tuple and score a
+    self-maintaining glob as covering nothing — the opposite of what this gate is for."""
+    spec = importlib.util.spec_from_file_location(f"_scancov_{Path(rel).stem}", REPO / rel)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     found: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
-        if targets & set(names):
-            found |= _src_paths(ast.unparse(node.value))
+    for name in names:
+        value = getattr(module, name)
+        for item in ([value] if isinstance(value, (str, Path)) else list(value)):
+            found |= _src_paths(Path(item).as_posix())
     return found
 
 

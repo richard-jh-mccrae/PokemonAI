@@ -58,7 +58,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 STATE_VALUE_SRC = REPO / "src" / "common" / "state_value.py"
-PILOT_SRC = REPO / "src" / "common" / "pilot.py"
+PILOT_SRC = REPO / "src" / "common" / "pilot.py"          # the spine: where `StateModel.build` runs
+BOARD_SRC = REPO / "src" / "common" / "deciders" / "facts.py"        # where the `Board` dataclass is DECLARED
+BOARD_BUILD_SRC = REPO / "src" / "common" / "deciders" / "board_build.py"   # …and where it is CONSTRUCTED
 STATE_MODEL_SRC = REPO / "src" / "common" / "state_model.py"
 
 #: How many committed corpus frames the corpus-backed groups run over. Matches
@@ -692,8 +694,8 @@ def test_state_value_reads_NO_board_field_which_is_why_item_5_is_RE_POINTED():
         "ruling forbids — and item 5's literal scope has stopped being empty, so re-point it back.")
 
     # The control: the instrument DOES find the dataclass where it really lives.
-    pilot_tree = ast.parse(PILOT_SRC.read_text(encoding="utf-8"))
-    assert any(isinstance(n, ast.Name) and n.id == "Board" for n in ast.walk(pilot_tree))
+    facts_tree = ast.parse(BOARD_SRC.read_text(encoding="utf-8"))
+    assert any(isinstance(n, ast.ClassDef) and n.name == "Board" for n in ast.walk(facts_tree))
 
 
 #: ``(enclosing function, field) -> why ABSENT is unreachable`` for a `Board(...)` construction site
@@ -701,7 +703,7 @@ def test_state_value_reads_NO_board_field_which_is_why_item_5_is_RE_POINTED():
 #: an unrelated edit above cannot silently retire an entry — the same key
 #: `test_combat_bypass_census.DELIBERATE` uses, for the same reason.
 #:
-#: **Empty, and that is the finding**: measured 2026-08-03, `pilot.py` builds a `Board` in exactly
+#: **Empty, and that is the finding**: measured 2026-08-03, the builder builds a `Board` in exactly
 #: ONE place and passes all 23 numeric non-Optional fields explicitly, so no default is ever read as
 #: a measurement. An entry here is a decision.
 DELIBERATE_BOARD_DEFAULTS: dict[tuple[str, str], str] = {}
@@ -744,11 +746,10 @@ def test_every_numeric_board_field_is_SET_at_every_construction_site():
     A new numeric field wired into the dataclass but not into `_board()` fails here, at the moment it
     is added, rather than as a silently wrong decision several tracks later.
     """
-    source = PILOT_SRC.read_text(encoding="utf-8")
-    numeric, _optional = _annotated_numeric(source, "Board")
+    numeric, _optional = _annotated_numeric(BOARD_SRC.read_text(encoding="utf-8"), "Board")
     assert len(numeric) >= 20, f"the Board census found only {len(numeric)} numeric fields"
 
-    sites = _construction_sites(source, "Board")
+    sites = _construction_sites(BOARD_BUILD_SRC.read_text(encoding="utf-8"), "Board")
     assert sites, "no `Board(...)` construction found — the census instrument is broken"
 
     unset = [(where, field) for where, passed in sites for field, _default in numeric
@@ -768,7 +769,7 @@ def test_the_optional_numeric_board_fields_still_default_to_None():
     means ABSENT, not zero"* — Issue #228 measured that a `0.0` there was indistinguishable from a
     measured whiff. A field that gains an `| None` annotation and keeps a numeric default has the
     worst of both: the type says absence is expressible, the default guarantees it never is."""
-    _numeric, optional = _annotated_numeric(PILOT_SRC.read_text(encoding="utf-8"), "Board")
+    _numeric, optional = _annotated_numeric(BOARD_SRC.read_text(encoding="utf-8"), "Board")
     assert ("deny_relevance_best", "None") in optional, \
         "ADR-0093's own field is no longer Optional-with-a-None-default"
 
