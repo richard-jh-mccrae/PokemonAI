@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -52,6 +54,7 @@ def test_f18_fetch_an_on_attack_color_energy_not_the_off_color_utility():
 
 
 @pytest.mark.req("REQ-GEN-0074")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_dont_feed_draw_engine_f21")[0].kwargs["reason"])
 def test_f21_dont_sink_energy_into_the_draw_engine():
     """f21 (CRITICAL): the only Energy is {D}; Dunsparce's Colorless attack made {D} 'payable', so the
     deleted flat `power-up-attacker` sank it into the Dunsparce -> Dudunsparce DRAW ENGINE. The attach

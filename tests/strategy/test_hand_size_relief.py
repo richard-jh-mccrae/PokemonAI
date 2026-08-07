@@ -180,8 +180,18 @@ def test_the_relief_now_DRIVES_and_arrives_inside_the_tactical_sum(pilot):
 @pytest.mark.req("REQ-DISRUPT-0002")
 def test_the_three_flat_disruption_rungs_are_deleted(pilot):
     """The swap IS the deletion (ADR-0092 directive 1): the promoted term must not ship beside the
-    proxies it replaces, or one board would pay twice for one quantity."""
-    from common.strategy.baseline import baseline_disruption
-    ids = {h.id for h in baseline_disruption.HYPOTHESES}
-    assert ids.isdisjoint({"play-harlequin-vs-hand-size", "disrupt-when-unfavored",
-                           "strip-the-stacked-engine-hand"})
+    proxies it replaces, or one board would pay twice for one quantity.
+
+    Asserted against the WHOLE General Strategy since POC-T4/5 (Issue #386), which deleted
+    `baseline_disruption` outright — the three rungs Issue #386 lists were the rest of that module,
+    so importing it to prove they are gone now raises ImportError instead of asserting anything.
+    Widening to the shipped rule set is also the stronger claim: it catches the id reappearing
+    ANYWHERE, not just in the module that used to own it."""
+    from common.strategy.general_strategy import GENERAL_STRATEGY
+    live = {h.id for h in GENERAL_STRATEGY.hypotheses}
+    assert live.isdisjoint({"play-harlequin-vs-hand-size", "disrupt-when-unfavored",
+                            "strip-the-stacked-engine-hand",
+                            "dont-gift-a-refresh-when-favored", "disrupt-the-tailored-hand",
+                            "unfair-stamp-comeback-posture"})
+    with pytest.raises(ImportError):            # the module itself is gone, not merely emptied
+        from common.strategy.baseline import baseline_disruption   # noqa: F401

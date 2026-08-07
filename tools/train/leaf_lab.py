@@ -1,23 +1,35 @@
-"""Leaf lab — measure the develop rung's end-of-turn LEAF against tagged turn_plan corrections.
+"""Leaf lab — measure the SHIPPED end-of-turn LEAF against tagged corrections, and gate on it.
 
-The develop rollout rung commits the option whose simmed end-of-turn board scores highest under
-`_engine_leaf_value`. When it plays badly, the leaf is the suspect (`docs/plans/turn-planner-develop-rung.md`
-Phase 0: "leaf value first — the bottleneck"). This lab re-scores a tagged correction's MAIN-select
-board OFFLINE — cgpy-backed, so any leaf version is measurable without a Kaggle-ladder round-trip — and
-reports the one thing that matters: **does the leaf rank the human's `correct` option highest, or bury
-it under a degenerate tie?**
+**The scoring source moved at POC-T4/5 (Issue #386): this lab now scores through the sequence
+composer's 1-ply differencing, not through the retired engine rollout.** It used to call
+`planner._engine_leaf_value`, which simmed a candidate first action to its end-of-turn board through
+the native engine and scored THAT. That function is deleted with the develop rollout rung, so the
+gate's own question — *does the scorer rank the human's `correct` option highest?* — had to be
+re-pointed at the scorer that now decides: `composer.compose`'s depth-0 ordering, which applies each
+option through `apply_option` and differences `state_value` against the pre-move board. Same
+question, same corpus, same frame keys, same verdicts; a different (and now SHIPPED) scorer.
 
-A *leaf frame* (`is_leaf_frame`) is any reseedable MAIN-select correction with a target to rank: a
-turn-planner correction (`turn_plan` payload — the rung's own domain) OR any MAIN-select pick correction
-that names a `correct` option. The second shape lets the whole tagged corpus of setup-turn pick
-corrections drive leaf enrichment, not only the handful that carry the prose `turn_plan` payload.
+**The baseline is a RULING RECORD and is NOT re-captured by this change.** `data/leaf_lab/baseline.json`
+records human verdicts per frame; re-capturing it to match a new scorer would make the gate vacuous,
+which is exactly how the old Decision Gate died. Every `OK -> MISS` the re-point produces is a flip
+for the developer to rule (`diff`'s own report), not a number to conform.
 
-    python tools/train/leaf_lab.py                 # score every turn_plan correction, print the report
+Two consequences of the swap, stated because a reader will otherwise wonder:
+
+* **Values are no longer prize-denominated `KO_SCORE`-scale numbers.** A composer delta is a
+  `state_value` difference in prize units, typically small. Only the RANKING is graded, and every
+  verdict here (`correct_is_top`, `correct_rank`, `top_tie`, `class_asymmetry`) is rank- or
+  equality-based, so the scale change moves no verdict by itself.
+* **A frame no longer needs a reseedable engine search.** The composer is closed-form, so the
+  `search_begin_input` placeholder this module used to inject is gone and boards cgpy could not
+  reseed are no longer skipped. `is_leaf_frame`'s population is unchanged.
+
+A *leaf frame* (`is_leaf_frame`) is any MAIN-select correction with a target to rank: a turn-planner
+correction (`turn_plan` payload) OR any MAIN-select pick correction that names a `correct` option, so
+the whole tagged corpus of setup-turn pick corrections drives leaf enrichment.
+
+    python tools/train/leaf_lab.py                 # score every leaf frame, print the report
     python tools/train/leaf_lab.py --agent dragapult_ex
-
-cgpy is a PARITY-LIMITED twin of the native engine (~298/434 ladder): its leaf VALUES differ slightly
-from native, but the RANKING it reveals is the signal we act on. Boards cgpy can't reseed are skipped
-and counted (never silently dropped).
 """
 from __future__ import annotations
 
@@ -29,10 +41,15 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from common import composer as cp                            # noqa: E402
 from train.gates import CAPTURE_POINT, print_gate_report      # noqa: E402
 
 _PLACEHOLDER_SBI = "leaf-lab-cgpy-reseed"   # any non-empty token passes `_simulate_line`'s gate; cgpy
-                                            # then reconstructs the search state from the structured obs
+                                            # then reconstructs the search state from the structured obs.
+                                            # No longer used HERE (the composer is closed-form and needs
+                                            # no search token) — kept because `tools/train/family_diag.py`
+                                            # imports it for its own engine-sim attribution, which still
+                                            # drives `_simulate_line`. One spelling, per ADR-0087.
 
 _EPS = 1e-9                                 # `class_asymmetry`'s "the leaf priced this ONE way" bar —
                                             # measured float non-associativity is 2.8e-14, the leaf's
@@ -40,21 +57,30 @@ _EPS = 1e-9                                 # `class_asymmetry`'s "the leaf pric
 
 
 def board_leaf_values(pilot, obs) -> list:
-    """The leaf value `_engine_leaf_value` assigns to taking EACH menu option first (index-aligned;
-    None where the sim is unavailable). Injects a placeholder `search_begin_input` so the offline obs
-    passes the sim gate — cgpy rebuilds the state from the board when no real token is present."""
-    obs = {**obs, "search_begin_input": obs.get("search_begin_input") or _PLACEHOLDER_SBI}
+    """The SHIPPED leaf's value for taking EACH menu option first (index-aligned; None where the seam
+    cannot price it) — **the composer's depth-0 1-ply differencing** (POC-T4/5, Issue #386).
+
+    `composer.compose` already computes exactly this on its way to a decision and hands it back as
+    `ComposerResult.fanned`: one delta per OPTION, with each Option-Equivalence class's value spread
+    across its members. Read off the shipped call rather than re-derived here, for the reason this
+    module's `class_asymmetry` finding is about — an instrument that scores its own reconstruction
+    measures a board the agent never sees, and rung/instrument drift is how the decider sweeps
+    rotted. `fanned` is also the same fan-out the retired rung applied, so the class-canonicalised
+    reading below is unchanged.
+
+    A `None` here means *the seam refused this option* (a `_CARD`/`_YES`/`_NUMBER` whose whole content
+    is a card effect, or a card the clause set does not cover) — an unknown, not a zero, and the
+    downstream verdicts already treat `None` as unscored."""
     options = (obs.get("select") or {}).get("option") or []
-    values = []
-    for i in range(len(options)):
-        pilot._planning = True                  # the rung's reentrancy guard (never nest a search)
-        try:
-            values.append(pilot._engine_leaf_value(obs, [i]))
-        except Exception:
-            values.append(None)
-        finally:
-            pilot._planning = False
-    return values
+    if not options:
+        return []
+    my_index = int((obs.get("current") or {}).get("yourIndex") or 0)
+    try:
+        model = pilot._leaf_state_model(obs, my_index)
+        result = cp.compose(model, options, search_api=getattr(pilot, "_search_api", None))
+    except Exception:
+        return [None] * len(options)
+    return list(result.fanned)
 
 
 def frame_key(correction) -> str:
@@ -146,10 +172,13 @@ def class_asymmetry(values, equiv) -> list:
     is tie-LENIENT, so a frame where the leaf ranks one of two identical options 12x above the other
     still reads ``OK``. Measured 2026-07-31: five classes, worst `81903490|0|decision|49` at
     ``1167.0 / 95.4 / 95.4`` on three byte-identical Riolu, reproducible across fresh Pilots. The
-    cause was `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO from one
-    bench slot and missing the isomorphic line from another — search incompleteness presenting as a
-    value difference (**Issue #254**), fixed at its source by ADR-0103's canonical ordering. Re-measured
-    2026-08-02: **zero real classes**, and the finding is what proved it.
+    cause was the retired `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO
+    from one bench slot and missing the isomorphic line from another — search incompleteness presenting
+    as a value difference (**Issue #254**), fixed at its source by ADR-0103's canonical ordering.
+    Re-measured 2026-08-02: **zero real classes**, and the finding is what proved it. Since the
+    POC-T4/5 re-point it is a claim about the COMPOSER's fan-out, where a non-empty finding would mean
+    `fan_out` and the class map disagree — a stronger property than the rollout could offer, since the
+    composer scores one representative per class by construction.
 
     ``_EPS`` is why "zero" is expressible at all. The one class that survives the fix reports
     ``124.83000000000001 / 124.82999999999998`` — a spread of ``2.8e-14``, which is float
@@ -175,13 +204,17 @@ def class_asymmetry(values, equiv) -> list:
 
 
 def is_leaf_frame(c) -> bool:
-    """Does this correction exercise the develop-rung leaf — a reseedable MAIN-select (context 0) board
-    with a target the leaf can be asked to rank? Two shapes qualify (ADR-0031 develop rung): a
-    turn-planner correction (carries a ``turn_plan`` payload — the rung's own domain, kept even when
-    ``correct`` is empty so an unscored setup turn is still *counted* as a leaf frame), and any
-    MAIN-select pick correction that names a ``correct`` option — the human's intended first action,
-    whatever the correction's scope. Non-MAIN / obs-less records are excluded: the offline sim reseeds
-    ONLY from a MAIN-select board (the leaf-lab gotcha), so they could never be scored regardless."""
+    """Does this correction exercise the shipped leaf — a MAIN-select (context 0) board with a target
+    the leaf can be asked to rank? Two shapes qualify: a turn-planner correction (carries a
+    ``turn_plan`` payload, kept even when ``correct`` is empty so an unscored setup turn is still
+    *counted* as a leaf frame), and any MAIN-select pick correction that names a ``correct`` option —
+    the human's intended first action, whatever the correction's scope.
+
+    **The MAIN restriction is now a SCOPE statement, not a substrate limit.** It used to be forced:
+    the offline engine sim could reseed only from a MAIN-select board. The composer prices any menu it
+    can model, but MAIN single-pick is the context it DECIDES (`planner.plan_turn`), so grading it
+    elsewhere would grade a scorer that is not in charge there. POC-T4/6 (Issue #387) is what widens
+    the decision contexts, and widening this population belongs with it."""
     if getattr(c, "scope", None) == "match":
         return False
     obs = getattr(c, "obs", None)

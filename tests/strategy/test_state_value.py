@@ -2175,6 +2175,33 @@ def test_a_heal_above_the_incoming_raises_survival():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
+def test_an_ON_LINE_body_outdevelops_an_off_line_one_by_TOPOLOGY_not_by_role():
+    """Re-homed at POC-T4/5 (Issue #386) from `tests/strategy/test_leaf_development.py`, which tested
+    `planner._board_development` — deleted with the rung ladder. Its headline fact was that at equal
+    material the board advancing the WIN-CONDITION line must outrank one that builds junk, because
+    the original term was body-count + attached-Energy only and scored the two identically.
+
+    **The fact survives; the MECHANISM does not, and that is the finding.** This family declares
+    ``does_not_read=("role_relevance", ...)`` — it is role-BLIND by design, roles being `readiness`'s
+    jurisdiction. The ordering holds anyway, through `line_topology` and the evolve marginal: Riolu
+    is my Active's pre-evolution, so benching it advances a line the model can see structurally,
+    while Crustle is simply a body. Six tests keyed on DECLARED Roles could not have detected that
+    the mechanism had changed underneath them, which is why they are not carried over verbatim.
+
+    **Reported, not asserted: the ordering does NOT survive into the total on this fixture** — the
+    off-line Crustle's 140 HP buys more from `survival` than the line piece buys from `development`,
+    so the composed scalar prefers it by ~0.006. That is a composed-scalar trade the old unit test
+    was structurally unable to see, and it is a legitimate reading (a beefier body does soak better),
+    not a defect to tune out. Left as a measurement in Issue #386's report."""
+    line_piece, off_line = {}, {}
+    sv.state_value(_lucario_board(bench=[_poke(RIOLU, hp=80, serial=2)]), working=line_piece)
+    sv.state_value(_lucario_board(bench=[_poke(CRUSTLE, hp=140, serial=2)]), working=off_line)
+    assert line_piece["development"] > off_line["development"], (
+        "the pre-evolution of my own Active no longer outdevelops an unrelated body — `line_topology` "
+        "was the successor to the role-keyed term and it has stopped carrying it")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
 def test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom():
     """A deploy is priced by two facts at once and both must move: the body itself is development,
     and a Bench that is no longer empty removes the `_predicted_loss` terminal term (ADR-0064,
@@ -2460,6 +2487,9 @@ def test_the_survival_clock_reads_THEIR_hand_and_never_MINE():
     assert _survival_of_model(theirs_big) < _survival_of_model(mine_big)
 
 
+# `tests/strategy/test_predicted_loss_rung.py` is DELETED (POC-T4/5, Issue #386): it tested
+# `planner._predicted_loss`, and this term is the port of that rung. All five of its cases live
+# in the pair below plus `test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom`.
 @pytest.mark.req("REQ-STATEVALUE-0010")
 def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
     """`_predicted_loss` is the second call site and the more consequential one: it is a TERMINAL
@@ -2479,6 +2509,35 @@ def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
 
     assert _survival_of_model(doomed) <= -sv.LOSS_PRIZES
     assert _survival_of_model(safe) > -sv.LOSS_PRIZES
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_the_bench_empty_doom_stands_down_on_a_phantom_and_on_an_empty_board():
+    """The two FAIL-DIRECTION cases, re-homed here at POC-T4/5 (Issue #386) from
+    `tests/strategy/test_predicted_loss_rung.py`, which tested `planner._predicted_loss` — the rung
+    this term is a port of, deleted with the ladder. The other three cases that file carried (fires
+    when doomed, stands down when a bench body can soak, stands down when the Active survives) were
+    already asserted above and in `test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom`;
+    these two were not, and a terminal `-LOSS_PRIZES` term firing where it should not is the worst
+    error this scalar can make, so they come across rather than being dropped as duplicates.
+
+    * **No Active at all.** A board with nothing in the Active slot is a board mid-promotion, not a
+      predicted loss — the rung makes no claim and the whole scalar is a clean zero.
+    * **A PHANTOM evolution is not doom.** Their Active is a bare pre-evolution carrying no Energy.
+      It could become a next-turn game-ender, but only via an evolution in their hand PLUS a
+      from-scratch attach. The ordinary survival term may still read pessimistically; the terminal
+      catastrophe term must NOT, or a lone Active reads as a turn-2 game loss off a card nobody has
+      seen."""
+    empty = _model(_player(active=None, bench=[], prize=4),
+                   _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4))
+    assert sv._predicted_loss(empty) is False
+    assert sv.state_value(empty) == 0.0                  # no board, no claim — in either direction
+
+    phantom = _lucario_board(my_hp=270, their_active=_poke(RIOLU, hp=110, energies=[], serial=9))
+    assert sv._predicted_loss(phantom) is False
+    assert sv.state_value(phantom) > -sv.LOSS_PRIZES, (
+        "a bare zero-Energy pre-evolution triggered the terminal loss term — the rung is pricing an "
+        "evolution and an attach nobody has seen")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")

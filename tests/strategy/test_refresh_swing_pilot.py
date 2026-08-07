@@ -131,15 +131,14 @@ def test_harlequin_outranks_lillies_when_the_opponent_is_the_one_holding_cards()
     assert harlequin > lillies, f"Harlequin {harlequin:+.1f} must beat Lillie's {lillies:+.1f}"
 
 
-def test_the_refresh_oracle_owns_the_shuffle_refresh_value():
-    """`dig-before-commit` is hand-size-blind and must no longer endorse a shuffle-refresh -- the
-    swing oracle is the single owner. It keeps endorsing genuine digs (tutors, Ball search)."""
-    fx = _fx("ms_dont_harlequin_away_the_bigger_hand_f60.json")
-    _, traces = _refresh_traces(_shipped_pilot("mega_starmie"), fx, HARLEQUIN)
-    fired = {h.id for t in traces for h, _ in t.fired}
-    assert "dig-before-commit" not in fired, "dig-before-commit still endorses a shuffle-refresh"
-
-
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
+# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
+# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
+# passing, because dead text that looks like a guard is worse than no guard.
+#
+# The FACT -- the swing oracle is the single owner of shuffle-refresh value -- is asserted positively
+# one test above (`harlequin > lillies` on the f60 board). That is the differencing result worth
+# keeping; this was its hand-blind negative restatement, keyed on the rung that got retired for it.
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
     """ADR-0101: the SHED leg of the live swing IS `needs.set_keep_v2` over the whole shuffled hand —

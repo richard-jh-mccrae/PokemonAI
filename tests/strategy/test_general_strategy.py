@@ -17,19 +17,23 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-@pytest.mark.req("REQ-GEN-0001")
-def test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table():
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                      current=state(hand=[111, 222]))
-    # opt1 (card 222) is a search card; General Strategy lifts it during SETUP.
-    with_tags = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                      functions=CardFunctions({222: ["search"]}))
-    assert with_tags.decide(obs) == [1]
-    assert "dig-before-commit" in _fired(with_tags.explain(obs).options[1])
+# REQ-GEN-0001's `test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table` stood here
+# until POC-T4/5 (Issue #386). Its subject was `dig-before-commit` (+20), the blanket "a search is
+# good during SETUP" endorsement, and that rung is deleted: a free dig is now worth the board its
+# extra cards reach, which the composer prices by differencing.
+#
+# It is DELETED rather than re-pointed, and the attempt to re-point is why. Rewritten to assert only
+# the half in its own name — that the tag table is load-bearing — it failed: on this bare synthetic
+# board, with the blanket endorsement gone, NO rung fires on a tagged search at all. There was
+# nothing left to observe the tag through here.
+#
+# Named successors, both stronger than what was deleted:
+#   * `tests/cards/test_card_functions_oracle.py` — every tag's declared consumers really read it,
+#     and a tag declared INERT is read by nothing. That is the tag table being load-bearing, checked
+#     against the whole source tree rather than through one rung on one board.
+#   * `tests/strategy/test_fetch_doctrine.py` — builds tagged fetchers and asserts the endorsements
+#     that DO survive (`fetch-when-it-fills-a-need`, `search-the-confirmed-hit`) fire and rank.
 
-    # Counterfactual: no card_functions.json -> no tags -> can't fire -> baseline.
-    no_tags = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    assert no_tags.decide(obs) == [0]
 
 
 # REQ-GEN-0002's two `dont-bench-multiprize` tests stood here until ADR-0086 deleted the rung. Its
@@ -260,34 +264,18 @@ def test_only_snipe_rules_fire_at_a_damage_select():
 # tests/test_search_discipline.py::test_a_weak_chip_is_taken_when_no_development_is_available.
 
 
-@pytest.mark.req("REQ-GEN-0023")
-def test_protect_ace_spec_tool_stacks_extra_reluctance_off_the_wincon():
-    """An ACE SPEC Tool is a one-of, irreplaceable card. Attaching it to a NON-wincon Pokémon draws
-    the base `save-tool-for-the-attacker` reluctance PLUS an extra `protect-ace-spec-tool` bump."""
-    stats = DictCardStatProvider({1159: CardStat(1159, aceSpec=True),     # ACE SPEC Tool
-                                  700: CardStat(700, synthetic=True, hp=120)})            # non-wincon target
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=CardFunctions({1159: ["tool"]}))
-    obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
-                      current=state(active=poke(999), bench=[poke(700)], hand=[1159]))
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "save-tool-for-the-attacker" in fired   # base reluctance (any tool off-wincon)
-    assert "protect-ace-spec-tool" in fired         # + ACE SPEC intensifier (irreplaceable)
-
-
-@pytest.mark.req("REQ-GEN-0023")
-def test_protect_ace_spec_tool_silent_on_a_plain_tool():
-    """A non-ACE-SPEC Tool draws only the base reluctance — the intensifier stays off."""
-    stats = DictCardStatProvider({1160: CardStat(1160, synthetic=True, aceSpec=False), 700: CardStat(700, synthetic=True, hp=120)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=CardFunctions({1160: ["tool"]}))
-    obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
-                      current=state(active=poke(999), bench=[poke(700)], hand=[1160]))
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "save-tool-for-the-attacker" in fired
-    assert "protect-ace-spec-tool" not in fired     # not ACE SPEC -> no extra bump
-
-
+# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
+#
+# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
+# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
+# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
+# not what the agent played.
+#
+# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
+# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
+# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
+# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
+# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
 # --- deploy-hp-tool (general Tool Doctrine deploy, ADR-0028; reads the parsed CardStat.hpBonus) ----
 # PROACTIVE survival-turns deploy (no longer the reactive breakpoint): +HP Tool goes onto the
 # Active win-condition whenever the boost banks a survival turn — or as the anti-shuffle default —
@@ -317,55 +305,16 @@ def _attach_hp_tool():
                                      hand=[_HP_TOOL]))
 
 
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_fires_when_the_boost_dodges_the_incoming_ko():
-    """Active wincon is doomed (incoming 400 >= 330) but +100 (-> 430) survives → deploy the Tool now.
-    Reads the per-Tool HP off CardStat.hpBonus, so it generalises beyond any one card."""
-    pilot = _hp_tool_pilot(opp_dmg=400)
-    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
+# REQ-GEN-0024's two `deploy-hp-tool` silence tests are DELETED here (POC-T4/5, Issue #386). The
+# rung went with the Tool doctrine's MAIN half, and each test's ONLY assertion was
+# `"deploy-hp-tool" not in _fired(...)` — true of every board in the game once the rung is gone. They
+# would have gone on passing while checking nothing, which no failure count can surface.
+#
+# Named successors, and the second is the honest half:
+#   * The Tool's HP grant landing on the attach is `board_delta._attach`, asserted by
+#     `tests/strategy/test_apply_option.py` — the +HP fact itself is better covered than it was.
+#   * The DECISION the rung made — "this Tool would not save the body, so don't spend it" — has NO
+#     successor. It is a survival-breakpoint read, and no term computes it today. Recorded here
+#     rather than implied, the same way `test_dragapult_ex_triggers.py` records the unpriced Stadium.
 
 
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_when_the_boost_would_not_save():
-    """Incoming 500 still KOs even at 430 → the Tool is wasted, so don't deploy it."""
-    pilot = _hp_tool_pilot(opp_dmg=500)
-    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_fires_proactively_to_bank_a_survival_turn():
-    """ADR-0028 reversal of 'hold for a breakpoint': even when the Active is not under immediate threat
-    (incoming 200 < 330), +100 banks an extra survival turn (3 vs 2), so the Tool deploys PROACTIVELY
-    onto the Active win-condition — holding it would risk a hand-shuffle burying the irreplaceable card."""
-    pilot = _hp_tool_pilot(opp_dmg=200)
-    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_for_a_tool_with_no_hp_bonus():
-    """A Tool whose text grants no flat HP (hpBonus 0) never triggers the breakpoint rule, even on a
-    doomed Active — the rule is specifically about crossing a survival HP line."""
-    pilot = _hp_tool_pilot(hp_bonus=0, opp_dmg=400)
-    assert "deploy-hp-tool" not in _fired(pilot.explain(_attach_hp_tool()).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_breakpoint_is_weakness_aware():
-    """Generality across WEAKNESS: an attacker printing only 180 is harmless normally, but doubled by
-    the wincon's Lightning weakness it's 360 >= 330 (doomed) — and +100 (-> 430) clears 360. The
-    rule fires off the weakness-doubled incoming estimate, not the printed number."""
-    pilot = _hp_tool_pilot(opp_type=_LIGHTNING, opp_dmg=180)   # 180 x2 (weakness) = 360
-    assert "deploy-hp-tool" in _fired(pilot.explain(_attach_hp_tool()).options[0])
-
-
-@pytest.mark.req("REQ-GEN-0024")
-def test_deploy_hp_tool_silent_off_the_wincon_where_save_tool_reluctance_rules():
-    """Off the win-condition with NO survival gain: a non-wincon body the boost can't help (330 HP vs
-    700 incoming → dies in 1 either way, gain 0) gets no deploy, and the base
-    `save-tool-for-the-attacker` reluctance governs instead (don't burn a one-shot Tool on a body that
-    gains nothing). A non-wincon WALL that DOES gain a turn earns the Cape — see the Tool Doctrine wall
-    tests (ADR-0028 'never say never')."""
-    pilot = _hp_tool_pilot(opp_dmg=700, wincon_role=False)
-    fired = _fired(pilot.explain(_attach_hp_tool()).options[0])
-    assert "deploy-hp-tool" not in fired
-    assert "save-tool-for-the-attacker" in fired

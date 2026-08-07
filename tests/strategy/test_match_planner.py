@@ -139,105 +139,37 @@ def test_game_plan_rides_the_decision_and_telemetry_blunder_buster_parseable():
 def test_gameplan_goal_bonus_is_confidence_scaled_and_switch_gated():
     """The seam (ADR-0045): a Turn-Planner candidate line SERVING the Game Plan's directed goal gets a
     confidence-scaled sub-prize bump, so the Game Plan steers the ranking; an unrelated line gets none,
-    and the `match_planner_steer` kill-switch silences it (default OFF → byte-identical)."""
+    and the `match_planner_steer` kill-switch silences it (default OFF → byte-identical).
+
+    Exercised on `ko_on_path`/`ko_for_prizes` since POC-T4/5. The pairing this used to use —
+    `survive` → `stabilize_then_ko` — is gone: the composer scores heal-then-attack sequences by
+    construction, so that line no longer exists and `survive` was DROPPED from `_GOAL_LINE` rather
+    than left mapping to the empty set. Left mapping to nothing, this test would still have passed
+    while asserting a bump that could never be paid."""
     from common.pilot import Board
     from common.strategy.strategy import GamePlan, Plan
     pilot = _shipped_pilot()
-    board = Board(game_plan=GamePlan(mode=Plan.STABILIZE, confidence=0.8, directed_goal="survive"))
+    board = Board(game_plan=GamePlan(mode=Plan.RACE, confidence=0.8, directed_goal="ko_on_path"))
     pilot.match_planner_steer = True
-    hi = pilot._gameplan_goal_bonus("stabilize_then_ko", board)
+    hi = pilot._gameplan_goal_bonus("ko_for_prizes", board)
     assert hi > 0                                                    # this line serves the directed goal
-    assert pilot._gameplan_goal_bonus("ko_for_prizes", board) == 0   # unrelated line → no bump
-    lo = Board(game_plan=GamePlan(mode=Plan.STABILIZE, confidence=0.4, directed_goal="survive"))
-    assert pilot._gameplan_goal_bonus("stabilize_then_ko", lo) < hi   # confidence-scaled
+    assert pilot._gameplan_goal_bonus("compose", board) == 0         # unrelated line → no bump
+    lo = Board(game_plan=GamePlan(mode=Plan.RACE, confidence=0.4, directed_goal="ko_on_path"))
+    assert pilot._gameplan_goal_bonus("ko_for_prizes", lo) < hi       # confidence-scaled
     pilot.match_planner_steer = False
-    assert pilot._gameplan_goal_bonus("stabilize_then_ko", board) == 0  # kill-switch → silent
+    assert pilot._gameplan_goal_bonus("ko_for_prizes", board) == 0    # kill-switch → silent
 
 
-# ------------------------------------------------------------------- S4: the forgo-KO gate (planner)
-
-def _giant_waking_scenario(pilot):
-    """A build-mode board where KOing the opp's weak Active (Solrock, off my path) would promote a
-    scarier Mega Lucario ex from their bench — the 'don't wake the giant' shape."""
-    pilot.forgo_ko = True
-    cind = {"id": 666, "hp": 160, "energies": []}
-    opp = {"active": [{"id": 676, "hp": 110, "energies": []}],
-           "bench": [{"id": 678, "hp": 340, "energies": _E(2)}], "discard": [], "handCount": 3}
-    obs = _obs({"active": [cind], "bench": [], "hand": [], "prize": [None] * 6}, opp)
-    return obs, opp
-
-
-@pytest.mark.req("REQ-MATCH-0009")
-def test_forgo_ko_gate_holds_only_off_path_in_build_mode_when_the_ko_wakes_a_scarier_threat():
-    """The tight sound gate (ADR-0045 S4): forgo a non-winning KO ONLY when a build-mode Game Plan is
-    directed (high confidence), the opp Active is OFF my Prize Path, AND KOing it promotes a body that
-    threatens my Active sooner (the Threat Clock). Any condition failing → take the KO (a prize is a prize)."""
-    from common.pilot import Board
-    from common.strategy.strategy import GamePlan, Plan
-    pilot = _shipped_pilot()
-    obs, opp = _giant_waking_scenario(pilot)
-    build = GamePlan(mode=Plan.STALL, confidence=0.8, directed_goal="develop")
-    assert pilot._forgo_ko_gate(obs, Board(game_plan=build, path_target_ids=frozenset()), opp) is True
-    assert pilot._forgo_ko_gate(obs, Board(game_plan=build, path_target_ids=frozenset({676})), opp) is False
-    race = GamePlan(mode=Plan.RACE, confidence=0.8, directed_goal="ko_on_path")
-    assert pilot._forgo_ko_gate(obs, Board(game_plan=race, path_target_ids=frozenset()), opp) is False
-    low = GamePlan(mode=Plan.STALL, confidence=0.3, directed_goal=None)   # low confidence → goal withheld
-    assert pilot._forgo_ko_gate(obs, Board(game_plan=low, path_target_ids=frozenset()), opp) is False
-    obs2, opp_nb = _obs({"active": [{"id": 666, "hp": 160, "energies": []}], "bench": [], "hand": [],
-                         "prize": [None] * 6}, dict(opp, bench=[])), dict(opp, bench=[])
-    assert pilot._forgo_ko_gate(obs2, Board(game_plan=build, path_target_ids=frozenset()), opp_nb) is False
-
-
-@pytest.mark.req("REQ-MATCH-0010")
-def test_forgo_ko_line_declines_the_ko_developing_or_ending():
-    """The forgo-KO line commits a DEVELOP over the giant-waking KO (or END when no develop remains);
-    the `forgo_ko` kill-switch (default OFF) defers → the tuned scoring takes the KO."""
-    from common.pilot import Board
-    from common.strategy.context import _ATTACH, _ATTACK, _END, KO_SCORE
-    from common.strategy.strategy import GamePlan, Plan
-    pilot = _shipped_pilot()
-    pilot.strategy.params["reactivity"] = "opponent-filtered"   # test the LINE logic, not the deck-
-                                                                # personality gate (own test below)
-    obs, _opp = _giant_waking_scenario(pilot)
-    board = Board(game_plan=GamePlan(mode=Plan.STALL, confidence=0.8, directed_goal="develop"),
-                  path_target_ids=frozenset())
-
-    class _Tr:
-        def __init__(self, tac):
-            self.tactical = tac
-
-    opts = [{"type": _ATTACK, "attackId": 1}, {"type": _ATTACH, "index": 0}, {"type": _END}]
-    traces = [_Tr(KO_SCORE), _Tr(30.0), _Tr(0.0)]
-    line = pilot._forgo_ko_line(obs, {}, board, opts, traces)
-    assert line is not None and line.goal == "forgo_ko" and line.next_step == [1]   # the develop, not the KO
-    pilot.forgo_ko = False
-    assert pilot._forgo_ko_line(obs, {}, board, opts, traces) is None               # kill-switch → defer
-    pilot.forgo_ko = True
-    end_only = pilot._forgo_ko_line(obs, {}, board, [{"type": _ATTACK, "attackId": 1}, {"type": _END}],
-                                    [_Tr(KO_SCORE), _Tr(0.0)])
-    assert end_only is not None and end_only.next_step == [1]                       # END, still decline the KO
-
-
-@pytest.mark.req("REQ-MATCH-0011")
-def test_deck_personality_reactivity_gates_the_forgo_ko_seam():
-    """deck-personality (learnthetcg): a `reactivity=="solitaire"` deck TAKES the KO (skips forgo — it
-    races its own plan); an opponent-filtered deck forgoes the giant-waking KO. Same board, same gate;
-    only the deck personality differs."""
-    from common.pilot import Board
-    from common.strategy.context import _ATTACH, _ATTACK, _END, KO_SCORE
-    from common.strategy.strategy import GamePlan, Plan
-    pilot = _shipped_pilot()
-    obs, _opp = _giant_waking_scenario(pilot)                    # forgo_ko forced True inside
-    board = Board(game_plan=GamePlan(mode=Plan.STALL, confidence=0.8, directed_goal="develop"),
-                  path_target_ids=frozenset())
-
-    class _Tr:
-        def __init__(self, tac):
-            self.tactical = tac
-
-    opts = [{"type": _ATTACK, "attackId": 1}, {"type": _ATTACH, "index": 0}, {"type": _END}]
-    traces = [_Tr(KO_SCORE), _Tr(30.0), _Tr(0.0)]
-    pilot.strategy.params["reactivity"] = "solitaire"
-    assert pilot._forgo_ko_line(obs, {}, board, opts, traces) is None            # solitaire → take the KO
-    pilot.strategy.params["reactivity"] = "opponent-filtered"
-    assert pilot._forgo_ko_line(obs, {}, board, opts, traces) is not None        # opponent-filtered → forgo
+# ── S4: the forgo-KO gate — DELETED (POC-T4/5, Issue #386) ───────────────────────────────────────
+#
+# `_forgo_ko_gate`, `_forgo_ko_line` and the `reactivity == "solitaire"` opt-out are gone, and with
+# them the three tests that lived here (`REQ-MATCH-0009/0010/0011`). Under 1-ply differencing,
+# "decline this KO because it wakes a scarier body" is not a gate above the decider — it is one
+# sequence out-scoring another, and a gate above the composer is what ADR-0092 exists to eliminate.
+#
+# The FACT is not deleted with the mechanism. "Don't wake the giant" is asserted at DECISION level,
+# on real captured boards rather than the synthetic `_giant_waking_scenario` these tests built, by
+# `tests/strategy/test_blunder_20260710.py::test_dont_wake_the_giant_takes_the_lock_free_attack`
+# over `ml_dont_wake_the_giant_with_the_locking_ko_f88` (a CRITICAL) and
+# `ml_dont_wake_the_giant_boost_ko_f48`. That is the test that survives a swap; these three pinned
+# which rung fired, so they could not.

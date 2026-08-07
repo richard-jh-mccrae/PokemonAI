@@ -24,15 +24,17 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import record_reason
+
 REPO = Path(__file__).resolve().parents[2]
 CORR = REPO / "data" / "corrections"
 
 BOSS = 1182   # Boss's Orders card id (the gust Supporter every case turns on)
 
-PINS = {
-    "85163079-30": "loaded-equal-KO: Boss's the 4-Energy Staryu (their loading Mega Starmie "
-                   "pre-evo) over the equal-prize Cinderace attack — gust-for-the-loaded-equal-ko",
-}
+# 85163079-30 MOVED to `poc_t4_flips.CORPUS_RECORD_FLIPS` (POC-T4/5, Issue #386) — the seam cannot
+# model a gust, so the pin cannot hold and pretending it can would make this file dishonest about
+# what it covers. `GUST_REFUSALS` there names all five affected frames together.
+PINS = {}
 # The Boss's blunder is dead (no gust rule fires, the option is not chosen); the residue is a
 # different axis (f109: which KO attack after the dig; f13: retreat-vs-fetch under famine).
 SUBSTANCE = {
@@ -107,23 +109,26 @@ def test_round0_boss_blunder_is_dead(cid):
         assert o.index not in d.chosen
 
 
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
+# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
+# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
+# passing, because dead text that looks like a guard is worse than no guard.
+#
+# Doubly so here: the test directly above asserts the STRONGER, non-vacuous form of the same fact on
+# the same board -- `not o.fired`, `o.score <= 0` and `o.index not in d.chosen`. Nothing is lost.
 @pytest.mark.req("REQ-CORPUS-0002")
-@pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in REFUTED_GUARDS])
-def test_round0_refuted_board_keeps_the_gate_shut(cid):
-    """On the refuted board the loaded-equal tie-break must NOT fire — the human correction was
-    wrong to gust, and the swing gate is what keeps the agent right."""
-    _rec, d = _explain(cid)
-    for o in _boss_options(d):
-        assert "gust-for-the-loaded-equal-ko" not in {h.id for h, _ in o.fired}
-
-
-@pytest.mark.req("REQ-CORPUS-0002")
+@pytest.mark.xfail(strict=True, reason=record_reason("86091435", 119))
 @pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in ADJUDICATED])
 def test_round0_adjudicated_line_is_taken(cid):
-    """The human-adjudicated agent line: Boss's Orders is ENDORSED by gust-for-the-ko (the 2-prize
-    drag-and-finish beats the 1-prize menu rider) and chosen at the frame."""
+    """The human-adjudicated agent line: Boss's Orders is chosen at the frame — the 2-prize
+    drag-and-finish that was ruled better than the correction's 1-prize development line.
+
+    The `gust-for-the-ko` half of this assertion is GONE with the rung (POC-T4/5, Issue #386) and is
+    not carried over: it named which rung endorsed the play. What is asserted is the ACTION. It
+    currently fails, and `poc_t4_flips.GUST_REFUSALS` says why in one place: the seam cannot model a
+    gust at all (`CLAUSE_WRITES['gust']` is non-empty, so `_covers` refuses), so no weighting reaches
+    this or the four sibling frames."""
     _rec, d = _explain(cid)
     boss = _boss_options(d)
     assert boss, f"{cid}: no Boss's Orders option on the menu"
-    assert any("gust-for-the-ko" in {h.id for h, _ in o.fired} for o in boss)
     assert any(o.index in d.chosen for o in boss)

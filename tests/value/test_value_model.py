@@ -63,23 +63,39 @@ def test_logistic_learns_a_separable_signal_and_round_trips():
     assert model.predict(win) > 0.9 > 0.1 > model.predict(lose)
 
 
-@pytest.mark.req("REQ-VALUE-0004")
-def test_leaf_blend_is_capped_below_a_prize_and_off_by_default():
-    """The learned leaf term REFINES: at its extreme (P=1 → value 0.5) it adds
-    `_PLANNER_VALUE_W * 0.5` which — with every other capped positional term maxed — still sums below
-    one KO_SCORE, so a real prize always outranks it (the hard-rung invariant). Off/absent → 0."""
-    from common.strategy.context import KO_SCORE
-    from common.strategy.planner import (_PLANNER_VALUE_W, _PLANNER_THREAT_CAP,
-                                          _PLANNER_SURVIVAL_W, _PLANNER_DEV_CAP)
-    max_positional = (_PLANNER_VALUE_W * 0.5 + _PLANNER_THREAT_CAP
-                      + _PLANNER_SURVIVAL_W + _PLANNER_DEV_CAP)
-    assert max_positional < KO_SCORE                        # a positional leaf never outranks a prize
+def _neutral_board(pilot):
+    """A minimal real Board, so `_win_prob`'s None is the MODEL being absent rather than a raise."""
+    obs = {"current": {"yourIndex": 0,
+                       "players": [{"active": None, "bench": [], "hand": [], "prizes": 6},
+                                   {"active": None, "bench": [], "hand": [], "prizes": 6}]},
+           "select": {"context": 0, "type": 0, "minCount": 1, "maxCount": 1, "option": [{"type": 14}]}}
+    return pilot._board(obs, obs["select"])
 
+
+@pytest.mark.req("REQ-VALUE-0004")
+def test_the_value_model_is_off_and_now_reaches_no_decision_at_all():
+    """**Was `test_leaf_blend_is_capped_below_a_prize_and_off_by_default` until POC-T4/5 (#386).**
+
+    The old test asserted the learned leaf term's CAP: at its extreme (P=1 → value 0.5) it added
+    `_PLANNER_VALUE_W * 0.5`, which with every other capped positional term maxed still summed below
+    one KO_SCORE, so a real prize always outranked it. That invariant has no subject any more —
+    `_value_term` is deleted with the develop rollout it blended into, so there is no leaf blend to
+    cap. Asserting the cap would have been arithmetic about a term nothing computes.
+
+    What survives is the stronger statement, and it is the one worth having: the model was ALREADY
+    default-off (it ships 92k rows dark, A/B −0.55%, CI [−1.27, +0.16]), and it is now structurally
+    unable to move a decision even if switched on. `_win_prob` is its only remaining reader and that
+    is telemetry — legibility and calibration, never a score. If a leaf blend is ever rebuilt, this
+    test is where the cap invariant should come back."""
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     pilot, _ = _build_pilot("mega_starmie")
     assert pilot.value_model is None                        # DEFAULT OFF (learned seam gates on its A/B)
-    assert pilot._value_term({}) == 0.0                     # off → no contribution
+    assert not hasattr(pilot, "_value_term"), (
+        "`_value_term` is back — a learned term is reaching the leaf again, so the cap invariant "
+        "this test used to assert is owed again and must be restored here rather than assumed")
+    # `_win_prob` is the surviving reader and it is telemetry-only: no model, no claim.
+    assert pilot._win_prob(_neutral_board(pilot)) is None
 
 
 @pytest.mark.req("REQ-VALUE-0007")

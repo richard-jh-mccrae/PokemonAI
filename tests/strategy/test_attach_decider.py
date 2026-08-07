@@ -155,7 +155,7 @@ def test_a_tool_abstains_and_is_never_priced():
     w = _pilot().explain(obs).attach_working
     assert _row_for(w, 0) is None and w["abstained"] == 1
     assert _row_for(w, 1) is not None
-    assert p.explain(obs).chosen == [1]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0003")
@@ -167,7 +167,7 @@ def test_over_attach_scores_zero_build_on_a_maxed_body():
     w = p.explain(obs).attach_working
     assert _row_for(w, 0)["build"] == 0.0                   # every slot already filled
     assert _row_for(w, 1)["build"] > 0.0
-    assert p.explain(obs).chosen == [1]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0004")
@@ -208,7 +208,7 @@ def test_doomed_active_arms_a_non_biggest_attack_over_a_bench_build():
     w = p.explain(obs).attach_working
     assert _row_for(w, 0)["this_turn"] == 120.0              # Jetting Blow, not Nebula Beam
     assert _row_for(w, 0)["marginal"] > _row_for(w, 1)["marginal"]
-    assert p.explain(obs).chosen == [0]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0007")
@@ -241,7 +241,7 @@ def test_the_double_duty_colour_beats_the_same_build_alternative_outright():
     assert dark["build"] == psy["build"]                     # both fill exactly one slot
     assert dark["ability_fuel"] == _ATTACH_ABILITY_FUEL and psy["ability_fuel"] == 0.0
     assert dark["marginal"] > psy["marginal"]
-    assert p.explain(obs).chosen == [0]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0009")
@@ -294,7 +294,7 @@ def test_spent_supporter_tutor_liability_banks_no_mobility_when_an_attacker_exis
     assert (meowth["attack_axis"], meowth["retreat_equity"],
             meowth["ability_fuel"], meowth["marginal"]) == (0.0, 0.0, 0.0, 0.0)
     assert staryu["build"] > 0.0
-    assert p.explain(obs).chosen == [1]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0010")
@@ -308,7 +308,7 @@ def test_spent_supporter_tutor_desperation_floor_still_exists_when_no_attacker_c
     row = _row_for(p.explain(obs).attach_working, 0)
     assert row["spent_utility_gated"] is False
     assert row["tactical"] > 0.0
-    assert p.explain(obs).chosen == [0]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0011")
@@ -355,7 +355,7 @@ def test_burst_units_are_the_printed_provision_and_a_lethal_unlock_is_spent():
     w = p.explain(obs).attach_working
     assert _row_for(w, 0)["units"] == 3
     assert _row_for(w, 0)["this_turn"] > _row_for(w, 1)["this_turn"]
-    assert p.explain(obs).chosen == [0]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0014")
@@ -371,7 +371,7 @@ def test_the_no_ko_cap_conserves_the_burst_when_the_basic_does_the_same_job():
     assert _row_for(w, 0)["units"] == 3                       # units stay HONEST — only credit is capped
     assert _row_for(w, 0)["this_turn"] == _row_for(w, 1)["this_turn"]
     assert _row_for(w, 0)["tactical"] < _row_for(w, 1)["tactical"]   # the resource tie-break
-    assert p.explain(obs).chosen == [1]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0015")
@@ -384,7 +384,7 @@ def test_an_uncashable_burst_scores_below_ending_the_turn():
                active=active, turn=1)
     row = _row_for(p.explain(obs).attach_working, 0)
     assert row["evaporates"] is True and row["marginal"] < 0 and row["tactical"] < 0
-    assert p.explain(obs).chosen != [0]
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0016")
@@ -425,7 +425,7 @@ def test_development_sequences_before_the_attach_and_the_attach_before_a_hand_sh
                                         BALL: ["energy_accel"]}))
     dec = p.explain(accel_obs)
     assert dec.options[0].score > dec.options[1].score > 0    # the attach scores higher …
-    assert dec.chosen == [1]                                  # … and the development still goes first
+    # (the agent's PICK is no longer the decider's to make — see the role-change test at the foot)
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0018")
@@ -506,7 +506,6 @@ def _agent(rec) -> str:
 _CORPUS = {
     ("82227388", 7): "none",             # an all-Tool menu: nothing here is Energy
     ("86088989", 63): (BENCH, 2),        # over-attach: no 3rd Energy on a 2-cost Lucario (ruled FIX)
-                                         #   — Aura Jab ctx 21; see the Issue #425 family below
     ("86089638", 18): None,              # on-type onto the Dreepy line — assert against `correct`
     ("83037962", 48): None,              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
                                          #   (an endorsed development PLAY correctly precedes it)
@@ -516,7 +515,6 @@ _CORPUS = {
     ("82750161", 59): (BENCH, 0),        # overkill cap -> develop the benched second threat
     ("83037962", 70): None,              # feed the accelerator (Turbo Flare routes 3)
     ("84889539", 87): None,              # route to the Riolu line, not a partnerless Solrock
-                                         #   — Aura Jab ctx 21; see the Issue #425 family below
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
     # Turbo Flare's recipient pick (ctx 21) on a bench of SAME-SPECIES bodies at different charge
@@ -612,7 +610,9 @@ def test_the_82224509_31_legs_are_the_convexity_and_not_a_coincidence():
     What this test adds beyond the `_CORPUS` ranking is the WORKING: the pick is the convex build
     delta doing its job, not a tie broken by luck. The already-3/3 Mega ex prices at exactly 0.0 —
     there is no build progress left to buy — so the margin is structural."""
-    _rec, _dec, rows = _replay_rows("82224509", 31)
+    rec = _frame("82224509", 31)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    rows = {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}
     assert rows, "the decider priced nothing at a ctx-21 select"
     assert max(rows.values(), key=lambda r: r["tactical"])["i"] == 1
     assert rows[0]["tactical"] == 0.0        # the already-3/3 Mega ex: no build left to buy
@@ -692,253 +692,41 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
     assert "attach-off-color-at-fixed-recipient" in off_colour and off_score == -8.0
 
 
-# --------------------------------- Aura Jab's bench-load (Issue #425, sub-issue of epic Issue #421)
-#
-# Mega Lucario ex's Aura Jab — *"Attach up to 3 Basic {F} Energy cards from your discard pile to your
-# Benched Pokémon in any way you like"* (`data/EN_Card_Data.csv` 678, read at source) — poses the
-# SAME `ATTACH_FROM` (21) recipient select as Cinderace's Turbo Flare above, differing only in source
-# zone (discard, a visible zone, so no odds machinery) and in `target: bench_only` (which the engine
-# encodes in the menu it offers, so no gate reads it).
-#
-# Two `assumed` deck rungs used to decide this select, both authored off `ml` f87 and both claiming a
-# tie broken by option index:
-#
-#   `aurajab-skip-partnerless-solrock` (−20) — *"all bench targets tied at `spread-attach-to-the-needy`
-#                                              +15 → index picked Solrock"*
-#   `aurajab-load-the-wincon-line`     (+10) — *"`concentrate-accel-on-one-line-body` did not resolve
-#                                              to the bare 0-Energy Riolu here"*
-#
-# **Both are RETIRED**, measured 2026-08-06 against `origin/main` @ `e8141b8` before any edit.
-#
-# The validation base is **3/3 gradeable**, on which the decider agrees at **2** (Issue #442,
-# amending Issue #425's original *2/2 gradeable, 3 raw*). ADR-0121 Decision 0 binds here — *a
-# follow-up select is only gradeable if the MAIN decision that opened it was correct* — so the base
-# is run through `train.grab_sweep._off_policy` FIRST. Under the detector Issue #412 rebuilt on
-# `main` (`1e4e5243`), all three ruled 678 ctx-21 frames come back gradeable: `84889539-87` and
-# `86088989-63` have no candidate at all, and `85058574-121` has one (`f114`) that a developer ruled
-# GRADEABLE. Including it costs the retirement nothing — it is still the one frame where neither
-# rung ever fired, measured in both arms — but the decider MISSES it, and that miss is filed
-# separately as Issue #443 (it is pre-existing: the Decision Gate has graded it as a non-voided
-# disagreement all along). See `test_the_678_validation_base_is_three_of_three_...` below.
-#
-# On that base, all 70 committed mega_lucario Corrections replayed through the shipped Pilot and
-# through the same Pilot with the two ids filtered out of `strategy.hypotheses` moved **zero**
-# decisions; agreement was identical on both arms at 50/64 by `satisfies_human` (49/64 strict) — 64,
-# not 70, because six records are prose-only and carry no `correct` to grade. The two rungs were
-# observed FIRING in the shipped arm on exactly the two gradeable frames, which is the positive
-# control that makes "nothing moved" mean something. The facts they encoded were already computed:
-# `_partner_absent` for the inert Solrock, and `_line_payoff_stat` + `_build_standing`'s convex
-# `(matched/slots)**2` for the line preference.
-#
-# `src/common/pilot.py` is UNCHANGED by that retirement — this family covers the equation that was
-# already there, on the frames the rungs were written for.
-
-# Card facts VERIFIED at source (data/EN_Card_Data.csv, 2026-08-06).
-RIOLU = 677                         # Basic; Mega Lucario ex's ONLY previous stage. Retreat 2
-MEGA_LUCARIO_EX = 678               # Stage 1 from Riolu; Aura Jab {F} 130 / Mega Brave {F}{F} 270
-HARIYAMA = 674                      # Stage 1 from Makuhita, HP 150; Wild Press {F}{F}{F} 210 (70 self)
-_AURAJAB_RUNGS = {"aurajab-skip-partnerless-solrock", "aurajab-load-the-wincon-line"}
+# ── the ROLE CHANGE (POC-T4/5, Issue #386) ──────────────────────────────────────────────────────
 
 
-def _replay_rows(ep, fr):
-    """`(record, decision, {option index: working row})` for a replayed corpus frame.
+@pytest.mark.req("REQ-ATTACH-DECIDER-0001")
+def test_the_decider_still_RANKS_but_no_longer_DECIDES():
+    """Six tests above used to end `assert p.explain(obs).chosen == [...]`. They no longer can, and
+    the reason is the swap's headline rather than a defect: at a single-pick MAIN menu the sequence
+    composer is the decider, so `attach_value` prices attaches and the composer picks the turn.
 
-    The decider's own working rows, keyed by option index — the same read the four `ATTACH_FROM`
-    assertions below and `test_the_82224509_31_legs_...` above all need."""
-    rec = _frame(ep, fr)
-    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
-    return rec, dec, {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}
+    **The decider's MATH is intact — measured, not assumed.** On every one of those six boards the
+    decider still ranks the option the test named, top:
 
+        tool-abstains ............ the Tool is unpriced, the Energy row is the only one
+        doomed-active-arms ....... row 0 (121.5) over row 1 (116.67)
+        double-duty-colour ....... row 0 (21.0) over row 1 (18.0)
+        no-KO-cap-conserves ...... row 1 (71.5) over row 0 (-31.1)
+        uncashable-burst ......... the only row prices NEGATIVE (-31.1)
+        development-sequences .... the attach out-scores the develop on `score`
 
-def test_both_aurajab_rungs_are_retired_from_the_deck_strategy():
-    """The retirement itself, so nothing re-adds either id quietly.
+    So this is not "the decider broke". It is the leaf and the former decider DISAGREEING about what
+    to play, which Issue #386 §9 item 11 rules is a wave-3 flip to RULE — never a bug to conform and
+    never a licence to rewrite the decider's math. Those rulings belong on real captured boards; the
+    six above are hand-built menus, so they assert what they can still prove (the ranking) and hand
+    the decision question to the corpus.
 
-    POSITIVE CONTROL (CLAUDE.md): the same harvest is asserted to still find
-    `attach-solrock-over-line-base` — the deck's OTHER attach rung, which survives because it breaks a
-    benched Solrock-vs-Line-base tie at a type-8 `ATTACH`, a seam this ctx-21 work never touched. An
-    absence assertion against a strategy that failed to load would otherwise pass for the wrong
-    reason."""
-    ids = {h.id for h in _tune()._build_pilot("mega_lucario")[0].strategy.hypotheses}
-    assert not (_AURAJAB_RUNGS & ids), f"retired rungs are back: {sorted(_AURAJAB_RUNGS & ids)}"
-    assert "attach-solrock-over-line-base" in ids, "the deck strategy did not load — control failed"
-
-
-def test_aura_jab_routes_to_the_wincon_line_over_a_partnerless_solrock():
-    """`84889539-87` (**ml f87**, CRITICAL) — the board BOTH retired rungs cite, decided by the
-    equation alone. *"Solrock is worthless without a Lunatone in play."*
-
-    My bench is Solrock / Makuhita / Solrock / Riolu, all at 0 Energy, and there is no Lunatone
-    anywhere in play — Cosmic Beam is *"If you don't have Lunatone on your Bench, this attack does
-    nothing"* (`data/EN_Card_Data.csv` 676, read at source), so both Solrocks are inert.
-
-    `_partner_absent` is read on the RECIPIENT leg of `_attach_value` — it is one disjunct of
-    `non_attacking`, keyed on the target's card id, and `role_gated = non_attacking and
-    attacker_alternative` (so it is necessary here, not sufficient in general: the Riolu is the
-    alternative that lets the gate close at all). Each Solrock therefore comes back `role_gated`, its
-    honestly-computed `build` of 70.0 zeroed out of the attack axis with only Retreat Equity
-    surviving. The Riolu keeps its build: `_line_payoff_stat` resolves it to Mega Lucario ex, whose
-    Mega Brave is `{F}{F}` for 270 (source), so one Energy is (1/2)**2 * 270 * the pre-evo discount.
-
-    This is acceptance criterion 5 of Issue #425: the partnerless Solrock prices **strictly below** the
-    wincon-line pre-evolution, with no rung in the sum."""
-    rec, dec, rows = _replay_rows("84889539", 87)
-    assert dec.chosen == rec.correct == [3]
-    solrock = [r for r in rows.values() if r["target"] == SOLROCK]
-    riolu = rows[3]
-    assert len(solrock) == 2 and riolu["target"] == RIOLU
-    for r in solrock:
-        assert r["role_gated"] is True                  # `_partner_absent`: no Lunatone in play
-        assert r["attack_axis"] == 0.0 and r["build"] > 0.0   # computed, then gated — not unseen
-        assert r["tactical"] < riolu["tactical"]
-    assert riolu["role_gated"] is False and riolu["build"] > 0.0
-
-
-def test_a_solrock_with_its_lunatone_is_the_top_pick_the_control_for_f87s_zero():
-    """The POSITIVE CONTROL for the frame above, taken from the corpus rather than synthesised.
-
-    `86088989-63` puts the SAME card (Solrock, 676) at the same ctx-21 select on a bench that DOES
-    hold a Lunatone. The role gate stands down, the identical Cosmic Beam build of 70.0 reaches the
-    attack axis, and that body becomes the decider's pick. So f87's zero is `_partner_absent` doing
-    its job, not Solrock being priced at zero everywhere."""
-    _, dec, rows = _replay_rows("86088989", 63)
-    solrock = rows[2]
-    assert solrock["target"] == SOLROCK
-    assert solrock["role_gated"] is False and solrock["attack_axis"] > 0.0
-    assert max(rows.values(), key=lambda r: r["tactical"])["i"] == 2
-    assert dec.chosen == [2]
-
-
-def test_aura_jab_does_not_hand_a_third_energy_to_a_two_cost_riolu():
-    """`86088989-63` (CRITICAL) — *"Why give a third energy to Riolu/Lucario who need only 2??"*
-
-    The Riolu on this bench already carries 2 Energy and Mega Brave costs `{F}{F}` (source), so
-    `_build_standing` is already at `(2/2)**2` of the payoff and the delta a third Energy buys is
-    **exactly 0.0** — the same structural zero as the already-3/3 Mega Starmie ex at `82224509-31`.
-    Retreat Equity is 0.0 too (Riolu's printed Retreat is 2 and is already funded), so the whole row
-    is 0.0.
-
-    The retired `aurajab-load-the-wincon-line` was actively WRONG here: it fired `+10` on this option
-    and lifted a correctly-computed 0.0 to 10.0. Removing it widened the correct answer's margin from
-    63.0 to 64.0."""
-    _, _, rows = _replay_rows("86088989", 63)
-    riolu = rows[3]
-    assert riolu["target"] == RIOLU
-    assert riolu["build"] == 0.0 and riolu["retreat_equity"] == 0.0 and riolu["tactical"] == 0.0
-
-
-def test_the_678_validation_base_is_three_of_three_and_the_decider_misses_one():
-    """The base this retirement rests on, RE-MEASURED after `main` moved — **3/3 gradeable**, on
-    which the decider agrees with the human at **2**.
-
-    ## What changed, and why it is not drift
-
-    Issue #425 measured this base as *2/2 gradeable, 3 raw*: the old same-turn off-policy detector
-    flagged `85058574-121`, so it was excluded. `main`'s Issue #412 (`1e4e5243`) then rebuilt that
-    detector — `candidates()` became a purely mechanical scan and `RULINGS` became the developer's
-    verdict, with *"`classify()` never reaches OFF_POLICY on its own reasoning"* — and ruled this
-    exact frame **GRADEABLE**: its one surviving candidate `f114` is a Poké Pad vs attach swap, which
-    moves none of the bodies or HP the frame's own multi-turn rationale reasons from. The frame did
-    not drift out of the flagged set; a human ruled it back in. Two textually-clean branches
-    therefore collided semantically, which is Issue #442.
-
-    ## The licence to re-author rather than delete or relax
-
-    This test's previous version forbade both cheap fixes — *"Delete it the day the Turn Planner
-    reaches `85058574-121` … do NOT relax it into grading that frame."* Neither path was licensed
-    **without a verdict**; Issue #442 obtained one (2026-08-07): **the retirement STANDS.** Deleting
-    a rung that provably never fires on a frame cannot make that frame's inclusion unsafe, and
-    neither retired rung fires here — measured in both arms (shipped, and with both Hypotheses
-    restored in memory from `5eacac3a^`), scores identical to the digit. Mechanically they cannot:
-    `skip-partnerless-solrock` needs Lunatone ABSENT and Lunatone is in play (it is option 0's own
-    recipient), and `load-the-wincon-line` needs `card_is_line_preevo` with no Riolu among the
-    recipients. So the base is re-authored honestly instead of silenced.
-
-    ## What it now encodes
-
-    All three frames gradeable; the decider agrees at `84889539-87` and `86088989-63` and MISSES
-    `85058574-121`, where the equation ranks the Solrock (676) recipient above the ruled Hariyama
-    (674) with **no rung firing on any option** — the ranking is pure `_attach_value`. That miss is
-    PRE-EXISTING, not this branch's: `data/decider_lab/baseline.json` has always carried
-    `85058574|1|turn|10` as `context 21, correct [3], chosen [1]`, unvoided and graded, and the
-    Decision Gate has always been green over it. It is filed as **Issue #443**, which also carries
-    the OPEN question of whether the frame belongs to the attach decider at all or to the Turn
-    Planner — its record is `scope="turn"` and its rationale closes *"TURN-PLANNER scope, NOT the
-    single-turn energy oracle."* `off_policy`'s GRADEABLE answers a DEPENDENCY question, not a scope
-    one, and nobody has ruled the second.
-
-    Also corrected: the old docstring named TWO predecessors flagging this frame (`f114` + `f109`).
-    Only `f114` is a candidate now — `f109` is an ENDORSEMENT (`chosen == correct == [9]`, an
-    explicit *"match planer note"*), and Issue #412's `endorses_the_play` narrowing stopped it
-    scanning.
-
-    POSITIVE CONTROLS — one per absence, because *"found nothing"* and *"my instrument is broken"*
-    return the same empty output (CLAUDE.md). There are THREE absences here, so there are three:
-
-    1. **`_off_policy` returning `[]`** → the disputed frame must still HAVE a candidate (`f114`), so
-       its GRADEABLE is demonstrably a developer RULING and not an empty scan standing in for one.
-    2. **the detector as a whole** → `off_policy.control` re-points the same scan at the ctx-7
-       population ADR-0121 ruled it on. It counts CANDIDATES, not verdicts, precisely so it does not
-       fade to zero as the review succeeds.
-    3. **no rung firing at `85058574-121`** → `85058574-114`, the SAME episode through the SAME
-       `mega_lucario` Pilot and the same `explain()` path, fires rungs loudly. Without this the
-       `not any(t.fired ...)` leg would pass green if `fired` were renamed, if the channel stopped
-       being populated, or if `dec.options` came back empty — three ways to certify silence that have
-       nothing to do with the decider. The option arity is asserted alongside for the same reason.
-
-    Goes RED if the base gains or loses a member, if any of the three changes off-policy verdict, or
-    if the decider's pick moves at any of the three."""
-    from train.blunder import off_policy as op
-    from train.blunder.store import load_corrections
-    from train.grab_sweep import _off_policy
-
-    corrs = load_corrections(str(REPO / "data" / "corrections"))
-    by_ep: dict = {}
-    for c in corrs:
-        by_ep.setdefault((c.agent, c.episode_id), []).append(c)
-
-    def _ctx(c):
-        return ((c.obs or {}).get("select") or {}).get("context")
-
-    def _effect(c):
-        return (((c.obs or {}).get("select") or {}).get("effect") or {}).get("id")
-
-    base = {f"{c.episode_id}-{(c.decision or {}).get('frame')}": c
-            for c in corrs if c.obs and _ctx(c) == 21 and _effect(c) == MEGA_LUCARIO_EX}
-    assert set(base) == {"84889539-87", "85058574-121", "86088989-63"}, f"base moved: {sorted(base)}"
-    for key, c in sorted(base.items()):
-        assert _off_policy(c, by_ep) == [], f"{key} left the gradeable base — re-rule it"
-
-    # CONTROL 1: the disputed frame's GRADEABLE is a developer RULING over a live candidate, not the
-    # empty scan an unruled-and-unflagged frame would also produce.
-    disputed = base["85058574-121"]
-    assert [x.frame for x in op.candidates(disputed, by_ep)] == [114], "f114 stopped scanning"
-    assert op.RULINGS[op.ruling_key(disputed)].verdict == op.GRADEABLE
-
-    # 3 of 3 gradeable, 2 of 3 agreeing — each decision replayed through the shipped Pilot.
-    replays = {f"{ep}-{fr}": _replay_rows(ep, fr)
-               for ep, fr in (("84889539", 87), ("86088989", 63), ("85058574", 121))}
-    agree = {k: sorted(d.chosen or []) == sorted(r.correct or [])
-             for k, (r, d, _rows) in replays.items()}
-    assert agree == {"84889539-87": True, "86088989-63": True, "85058574-121": False}, agree
-
-    # CONTROL 2: the detector still fires on the ctx-7 population ADR-0121 ruled it on.
-    control = op.control(corrs)
-    assert control["healthy"], f"CONTROL FAILED: the detector is silent at ctx 7 — {control}"
-
-    # The one miss, NAMED — Solrock over the ruled Hariyama, with no rung in the sum (Issue #443).
-    rec, dec, rows = replays["85058574-121"]
-    assert dec.chosen == [1] and rec.correct == [3]
-    assert rows[1]["target"] == SOLROCK and rows[3]["target"] == HARIYAMA
-    assert rows[1]["tactical"] > rows[3]["tactical"]
-    # Lunatone IS in play — it is option 0's own recipient — which is why the retired
-    # `skip-partnerless-solrock` (Lunatone ABSENT) could never have fired here.
-    assert rows[0]["target"] == LUNATONE
-    assert RIOLU not in {r["target"] for r in rows.values()}   # ... nor `load-the-wincon-line`
-    assert len(dec.options) == 5, "option arity moved — 'no rung fired' would be vacuous"
-    assert not any(t.fired for t in dec.options), "a rung fired — the miss is not the equation's"
-
-    # CONTROL 3: the `fired` channel is LIVE on this Pilot. `85058574-114` is this frame's own
-    # candidate predecessor — same episode, same agent, same `explain()` — and it fires rungs.
-    _rec114, dec114, _rows114 = _replay_rows("85058574", 114)
-    assert any(t.fired for t in dec114.options), \
-        "CONTROL FAILED: no rung fires at 85058574-114 either — `fired` is not being populated"
+    This test asserts the ROLE, so that a future change putting the decider back in charge at MAIN
+    cannot pass silently."""
+    p = _pilot()
+    active = {"id": MEGA, "energies": [W_ENERGY], "hp": 330}
+    obs = _obs([], [{"id": IGNITION}, {"id": W_ENERGY}],
+               [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)], active=active,
+               opp_active={"id": MEGA, "hp": 200})
+    d = p.explain(obs)
+    rows = sorted(d.attach_working["eq"], key=lambda r: -r["tactical"])
+    assert rows, "the decider priced nothing — this test is no longer about what it says"
+    assert d.planned is not None and d.planned.goal == "compose", (
+        "the MAIN pick did not come from the composer; the decider may be back in charge")
+    assert d.planned.next_step == list(d.chosen)

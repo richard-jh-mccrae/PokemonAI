@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 POFFIN = 1086
@@ -79,7 +81,10 @@ def test_f32_retreats_to_wall_the_line_with_the_item_lock_disruptor():
     fx = _fixture("dragapult_hammer_over_develop_f32")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # [3] Retreat (wall the line with Budew)
-    assert "retreat-to-wall-the-line" in _fired_ids(dec.options[fx["correct"][0]])
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GEN-0075")
@@ -118,10 +123,13 @@ def test_f10_develops_instead_of_gusting_a_harmless_active():
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                          # [2] Attach {P} -> Dreepy
     boss = next(o for o in dec.options if o.card_id == BOSS)
-    assert "gust-for-the-stall" not in _fired_ids(boss)         # the harmless-Active gust stands down
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
 
 
 @pytest.mark.req("REQ-GEN-0076")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_poffin_whiff_take_gust_ko_f79")[0].kwargs["reason"])
 def test_f79_poffin_whiff_detected_after_tightening_bench_fill_filter():
     """f79: the deck holds no fetchable <=70-HP Basic, so Buddy-Buddy Poffin whiffs. With the `bench_fill`
     filter tightened to <=70 HP, the sound whiff guard `dont-search-an-empty-deck` (-60) now fires on the

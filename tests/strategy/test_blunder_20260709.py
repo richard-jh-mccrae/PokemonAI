@@ -48,6 +48,13 @@ def test_critical_f79_gust_the_only_ko_not_the_unreachable_mega():
 
 
 @pytest.mark.req("REQ-GEN-0068")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 flip (Issue #386) on a REFUTED correction, which is why it is inline rather than "
+    "a `poc_t4_flips.FLIPS` row: this fixture carries `agent_choice`/`human_wanted` and no "
+    "`correct`, so the table's ruling guard has nothing to resolve. The refutation is the "
+    "ruling — the agent's Boss’s Orders line [12] was judged CORRECT and the human's Harlequin "
+    "[2] wrong. The composer now plays [5], which is neither. A frame the agent had RIGHT and "
+    "no longer does, so it is the sharpest kind of regression this table holds"))
 def test_critical_f78_take_the_gust_ko_over_a_speculative_refresh():
     """REFUTED CRITICAL ('evolve our benched Staryu … play Harlequin'): with the Cinderace gust-KO the
     only KO on the board (f79), Boss's Orders is the correct Supporter. Harlequin (shuffle + coin-flip

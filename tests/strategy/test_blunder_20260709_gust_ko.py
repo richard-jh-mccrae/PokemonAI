@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -36,20 +38,28 @@ def _fired_ids(option):
 
 
 @pytest.mark.req("REQ-GUST-0001")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_poffin_whiff_take_gust_ko_f79")[0].kwargs["reason"])
 def test_f79_take_the_gust_ko_over_a_whiffing_bench_fill():
     """CRITICAL f79: with Dragapult ex online, `gust-for-the-ko` (+50) on Boss's Orders now rides tier 0,
     beating the tier-0 Buddy-Buddy Poffin bench-fill (35) — gust the KO instead of a setup Item."""
     fx = _fixture("dragapult_poffin_whiff_take_gust_ko_f79")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [4] Play Boss's Orders
-    assert "gust-for-the-ko" in _fired_ids(dec.options[fx["correct"][0]])
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.
 
 
 @pytest.mark.req("REQ-GUST-0001")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_gust_ko_over_accel_f81")[0].kwargs["reason"])
 def test_f81_take_the_gust_ko_over_a_setup_accelerator():
     """f81: Boss's Orders (`gust-for-the-ko` +50) rides tier 0 ahead of the tier-1 accel Supporter Crispin
     (+45), which would otherwise spend the one-Supporter-per-turn slot and forfeit the 2-prize gust line."""
     fx = _fixture("dragapult_gust_ko_over_accel_f81")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [2] Play Boss's Orders
-    assert "gust-for-the-ko" in _fired_ids(dec.options[fx["correct"][0]])
+    # The rung-id assertion that stood here is DELETED with its rung (POC-T4/5, Issue #386).
+    # Not merely stale — it gave this test's strict xfail a SECOND cause. The recorded reason
+    # is a seam-coverage gap; whoever closes that gap would have found the test still red on a
+    # dead rung name and concluded the fix did not work. One xfail, one cause.

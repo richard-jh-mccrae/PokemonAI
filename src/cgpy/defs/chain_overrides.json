@@ -892,26 +892,10 @@
       }
     }
   },
-  "1251": {
-    "name": "Lively Stadium",
-    "stadium": {
-      "hpDelta": {
-        "amount": 30,
-        "filter": {
-          "basic": true
-        }
-      }
-    }
-  },
   "1252": {
     "name": "Gravity Mountain",
     "stadium": {
-      "hpDelta": {
-        "amount": -30,
-        "filter": {
-          "stage2": true
-        }
-      }
+      "stage2HpDelta": -30
     }
   },
   "120": {

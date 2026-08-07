@@ -1,10 +1,18 @@
-"""The leaf lab — offline leaf-quality measurement (develop rung, `docs/plans/turn-planner-develop-rung.md`).
+"""The leaf lab — offline leaf-quality measurement, and the Discrimination Gate's instrument.
 
-The develop rung is only as good as its end-of-turn LEAF. The lab re-scores a tagged `turn_plan`
-correction's board through `_engine_leaf_value` (cgpy-backed offline, so ANY leaf version is measurable
-without a ladder run) and asks the one question that matters: **does the leaf rank the human's `correct`
-option highest?** These tracers pin the per-correction metrics with the leaf stubbed (the cgpy wiring is
-a CLI concern); the stub mirrors the real ep86090164 board (correct=[0] buried under a 4-way tie at 65).
+The agent is only as good as its end-of-turn LEAF. The lab re-scores a tagged correction's board
+offline — so ANY leaf version is measurable without a ladder run — and asks the one question that
+matters: **does the leaf rank the human's `correct` option highest?** These tracers pin the
+per-correction metrics with the scorer stubbed; the stub mirrors the real ep86090164 board
+(correct=[0] buried under a 4-way tie at 65).
+
+**The scorer moved at POC-T4/5 (Issue #386), the question did not.** The lab used to score through
+`planner._engine_leaf_value`, which simmed a candidate first action to its end-of-turn board through
+the native engine. That function is deleted with the develop rollout, so the lab now reads
+`ComposerResult.fanned` — the composer's own depth-0 1-ply differencing, taken off the shipped call
+rather than re-derived, because an instrument that scores its own reconstruction measures a board
+the agent never sees. Only `_stub_the_scoring_source` below changed; every verdict assertion in this
+module is byte-identical, which is the point.
 """
 from types import SimpleNamespace
 
@@ -55,10 +63,36 @@ def test_is_leaf_frame_rejects_retired_match_scope_even_with_a_turn_plan():
     assert is_leaf_frame(_frame(scope="match", obs=_obs(4), turn_plan={"intended_line": "x"})) is False
 
 
+@pytest.fixture(autouse=True)
+def _stub_the_scoring_source(monkeypatch):
+    """Feed `evaluate_leaf_on_correction` per-option values without running the real scorer.
+
+    The SEAM moved at POC-T4/5 (Issue #386) and this is the whole of the change to this module.
+    `board_leaf_values` used to call `pilot._engine_leaf_value(obs, step)` — one engine sim per
+    candidate first step — so a fake pilot carrying that one method was enough to stub it. It now
+    builds a StateModel and runs `composer.compose`, so the stub has to sit at the module boundary
+    instead of on the pilot.
+
+    Every verdict assertion below is UNCHANGED, and deliberately so: these tests are about
+    `evaluate_leaf_on_correction`'s reporting — rank, top-tie, Option-Equivalence classing,
+    class asymmetry — not about what produced the numbers. A leaf lab whose verdict logic had to be
+    rewritten because its scorer changed would be a lab measuring itself."""
+    from train import leaf_lab
+    real = leaf_lab.board_leaf_values
+
+    def shim(pilot, obs):
+        values = getattr(pilot, "_test_values", None)
+        if values is None:                       # a real pilot → the real (composer-backed) scorer
+            return real(pilot, obs)
+        n = len((obs.get("select") or {}).get("option") or [])
+        return [values.get(i) for i in range(n)]
+
+    monkeypatch.setattr(leaf_lab, "board_leaf_values", shim)
+
+
 def _pilot(values):
-    p = SimpleNamespace(_planning=False)
-    p._engine_leaf_value = lambda obs, step: values.get(step[0])
-    return p
+    """A stand-in pilot carrying the per-option values `_stub_the_scoring_source` hands back."""
+    return SimpleNamespace(_planning=False, _test_values=dict(values))
 
 
 @pytest.mark.req("REQ-TUNER-0019")

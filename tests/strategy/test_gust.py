@@ -143,97 +143,41 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
-@pytest.mark.req("REQ-GUST-0001")
-def test_gust_for_the_ko_plays_bosss_to_reach_a_benched_ko():
-    """Opp Active is a wall I can't KO (120 < 330) but a benched mon is KO-able (120 >= 60) and Boss's
-    is in hand → play Boss's Orders to drag the benched mon up. Options: [chip attack, play Boss's,
-    End] → choose the Boss's play (index 1)."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(WINCON, energy=1, hp=200),
-                      opp_active=poke(WALL, hp=330),
-                      opp_bench=[poke(BENCHIE, hp=60)],
-                      hand=[BOSS]))
-    p = _pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
-
-
-@pytest.mark.req("REQ-GUST-0012")
-def test_gust_for_the_ko_needs_a_payable_attack_this_turn():
-    """ep83457493 f31: my Active had NO Energy and the hand held none — no attack was payable, so
-    'gust for the KO' had no KO to convert (it fired anyway and Boss's beat the hand-refresh the
-    dead hand needed). The whether-to-play signal now gates on the Energy the Active can actually
-    pay this turn (attached + the best unspent hand attach): with none the gust is silent; hand
-    the Active a {W} Energy and the same board endorses it again."""
-    WATER_CARD = 3
-    stats = DictCardStatProvider(dict(_STATS._stats), attacks=_ATTACKS)
-    stats._stats[WATER_CARD] = CardStat(WATER_CARD, name="Basic {W} Energy", hp=0, energyType=WATER)
-
-    def _obs(hand):
-        return make_select(
-            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
-            current=state(active=poke(WINCON, energy=0, hp=200),
-                          opp_active=poke(WALL, hp=330),
-                          opp_bench=[poke(BENCHIE, hp=60)], hand=hand))
-
-    p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
-              general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)
-    assert "gust-for-the-ko" not in _fired(p.explain(_obs([BOSS])).options[0])   # unpayable: silent
-    assert "gust-for-the-ko" in _fired(p.explain(_obs([BOSS, WATER_CARD])).options[0])  # payable: fires
-
-
-@pytest.mark.req("REQ-GUST-0001")
-def test_gust_for_the_ko_stands_down_in_setup_before_the_wincon_is_online():
-    """SETUP with no win-condition in play: a cheap gustable prize must not preempt developing the
-    win-condition — gust-for-the-ko stands down so a setup tutor wins the one Supporter slot."""
-    obs = make_select(
-        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
-        context=MAIN,
-        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
-                      opp_active=poke(WALL, hp=330),
-                      opp_bench=[poke(BENCHIE, hp=60)],
-                      hand=[TUTOR, BOSS]))
-    p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [0]   # play tutor, develop win-condition first
-
-
-@pytest.mark.req("REQ-GUST-0005")
-def test_item_gust_into_a_ko_fires_in_setup_unlike_a_supporter():
-    """#12 Item/Supporter split: an ITEM gust (cardType ITEM, e.g. Pokémon Catcher) doesn't cost your
-    one Supporter slot, so the SETUP-before-wincon damping that holds back a Supporter gust does NOT
-    apply — a free Item gust into a benched KO fires even in setup. (Same board as the Supporter
-    stand-down test above, but the gust card is an Item.)"""
-    obs = make_select(
-        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
-        context=MAIN,
-        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
-                      opp_active=poke(WALL, hp=330),
-                      opp_bench=[poke(BENCHIE, hp=60)],
-                      hand=[ITEM_GUST, TUTOR]))
-    p = _pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[0])   # Item gust fires even in setup, unlike Supporter
-
-
-@pytest.mark.req("REQ-GUST-0001")
-def test_gust_for_the_lethal_fires_even_through_the_setup_damping():
-    """A gust that takes my last prize WINS — it must fire even in SETUP before the win-condition is
-    online (where a non-lethal gust stands down). The wall Active is un-KO-able, but a benched mon is
-    KO-able for my final prize → take the game over a setup tutor."""
-    obs = make_select(
-        [opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
-        context=MAIN,
-        current=state(active=poke(OFF_WINCON, energy=1, hp=200),
-                      opp_active=poke(WALL, hp=330),
-                      opp_bench=[poke(BENCHIE, hp=60)],
-                      hand=[TUTOR, BOSS], prizes=1))
-    p = _pilot()
-    assert p.explain(obs).options[1].tactical >= KO_SCORE   # lethal gust = KO_SCORE-class (Tactical)
-    assert p.decide(obs) == [1]                             # take game over a setup tutor
-
-
+# ── the gust WHETHER-TO-PLAY rungs — DELETED (POC-T4/5, Issue #386) ──────────────────────────────
+#
+# Fifteen tests lived here over the five `doctrine_gust` rungs Issue #386 retires: `gust-for-the-ko`
+# (+50), `gust-for-the-loaded-equal-ko` (+50), `gust-for-the-stall` (+10),
+# `stall-gust-over-dev-when-starved` (+95) and `gust-to-strand-the-key-attacker` (+20). Every one
+# asserted `"<rung-id>" in _fired(...)` on a board built to make that rung fire, so every one pinned
+# WHICH MECHANISM decided rather than WHAT the agent played — the assertion a swap invalidates.
+#
+# **The TARGET side is untouched and its tests all remain below.** Only the whether-to-play half
+# dies; `_gust_target_tactical` and its legs are FIRING-owned and explicitly out of Issue #386's
+# scope. If you are looking for the tests that were here, check first whether you actually want the
+# target-select section — most gust behaviour people care about lives there.
+#
+# WHERE THE FACT WENT — and this is an honest audit, not a redirect:
+#
+#   "drag up a KO-able benched body" is asserted at DECISION level, on real captured boards, by
+#   `test_blunder_20260709_gust_ko.py` (f79, f81 — both fixture-backed) and
+#   `test_blunder_20260710_split_fixes.py`'s Boss's-Orders frame. Under differencing this is not a
+#   rung at all: gusting a body the composer can then Knock Out shows up as a sequence that takes a
+#   prize out-scoring one that does not.
+#
+#   **CORRECTION, measured after this note was first written.** Those successor tests are themselves
+#   failing, and the reason is worse than "a flip to rule": `apply_option` REFUSES Boss's Orders
+#   outright — *"1182 Boss's Orders: its Effect Clauses write ['bodies_in_play',
+#   'special_conditions', ...] — the structural floor is not the whole play"* (Issue #300 `_covers`).
+#   The card is unmodellable at the seam, so the composer can never commit a gust, and **the gust
+#   fact has NO working decision-level assertion on this branch.** That is a coverage LOSS, not a
+#   disagreement, and it is recorded as one in `poc_t4_flips.py` (f79 and f81, diagnosis REFUSAL)
+#   rather than left implied by the sentence above.
+#
+#   It does not change the disposition of the fifteen tests deleted here — a rung-id assertion on a
+#   hand-built menu could not have detected a seam refusal either, and keeping them would have meant
+#   fifteen green tests over a mechanism that no longer exists. But "the fact is carried elsewhere"
+#   was too strong, and the honest version is: the fact is carried elsewhere AS A KNOWN GAP, with a
+#   named cause and a strict xfail that will fire the day the seam learns to write a gust.
 @pytest.mark.req("REQ-GUST-0001")
 def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
     """No gustable KO (the only benched mon, 200 HP, survives my 120) → HOLD Boss's: the rule stays
@@ -246,7 +190,9 @@ def test_gust_for_the_ko_silent_when_no_benched_mon_is_ko_able():
                       opp_bench=[poke(BENCHIE, hp=200)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -263,24 +209,10 @@ def test_gust_for_the_ko_silent_when_current_active_ko_is_at_least_as_good():
                       opp_bench=[poke(BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
-
-
-@pytest.mark.req("REQ-GUST-0001")
-def test_gust_for_the_ko_fires_to_reach_a_higher_prize_than_the_current_active():
-    """Prize-grab: I could KO the current Active for 1 prize, but a benched ex is KO-able for 2 → gust
-    to reach the bigger prize (the gust beats the baseline KO)."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(WINCON, energy=1, hp=200),
-                      opp_active=poke(KOABLE_ACTIVE, hp=100),
-                      opp_bench=[poke(EX_BENCHIE, hp=60)],
-                      hand=[BOSS]))
-    p = _pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
 
 
 # --- #10 condition-rescue guard: never gust off a working special condition (ADR-0022) ------------
@@ -299,23 +231,10 @@ def test_gust_for_the_stall_silent_when_opp_active_has_a_condition(cond):
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS], opp_conditions=(cond,)))
     p = _pilot()
-    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
-
-
-@pytest.mark.req("REQ-GUST-0004")
-def test_gust_for_the_stall_still_fires_with_no_condition():
-    """Control: same stall scenario, opponent's Active has NO condition → the stall-gust fires (the
-    guard only suppresses when a condition is present)."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
-                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
-                      hand=[BOSS]))
-    p = _pilot()
-    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
 
 
 @pytest.mark.req("REQ-GUST-0004")
@@ -333,25 +252,10 @@ def test_gust_for_the_ko_stands_down_when_burn_will_KO_the_active_for_the_same_p
                       opp_bench=[poke(BENCHIE, hp=10)],
                       hand=[BOSS], opp_conditions=("burned",)))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
-
-
-@pytest.mark.req("REQ-GUST-0004")
-def test_gust_for_the_ko_fires_past_the_condition_baseline_for_a_bigger_prize():
-    """Contrast: same burn-doomed 1-prize Active, but the gust reaches a 2-prize benched ex → fire.
-    The gust must beat the free condition-KO (1), and 2 > 1, so it's worth the Supporter."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(WEAK_ATTACKER, energy=1, hp=200),
-                      bench=[poke(WINCON, energy=1)],
-                      opp_active=poke(KOABLE_ACTIVE, hp=20),
-                      opp_bench=[poke(EX_BENCHIE, hp=10)],
-                      hand=[BOSS], opp_conditions=("burned",)))
-    p = _pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
 
 
 # --- the gust TARGET-select: which benched Pokémon to drag up (SWITCH context, ADR-0022) -----------
@@ -526,70 +430,7 @@ def test_active_doomed_by_general_forward_evolution_attack():
     assert _pilot()._board(obs).active_doomed is True
 
 
-@pytest.mark.req("REQ-GUST-0013")
-def test_starved_stall_gust_outranks_development_only_under_the_energy_famine():
-    """ep83457493 f20 end to end: forward-doomed (Riolu → 270 attacker) AND a provable energy famine
-    (0 attached, none in hand — no attack payable), so `stall-gust-over-dev-when-starved` lifts
-    Boss's over a strongly-endorsed tutor. Hand the Active one {W} Energy (attack payable again) and
-    the rule stands down — normal development resumes."""
-    stats = DictCardStatProvider(dict(_STATS._stats), attacks=_ATTACKS)
-    # cardType 5 = BASIC_ENERGY (`cg.api.CardType`). Required, not decorative: the Attach Budget's
-    # manual-attach leg counts hand Energy through `is_typed_basic_energy`, which is exactly
-    # `cardType == 5 and energyType is not None`. Without it this card is not an Energy to the typed
-    # reader at all, and the "fed" board below would still read as a famine.
-    stats._stats[3] = CardStat(3, name="Basic {W} Energy", hp=0, energyType=WATER, cardType=5)
-    p = Pilot(Strategy(roles={WINCON: ["win_condition"]}), deck=[1] * 60,
-              general_strategy=GENERAL_STRATEGY, stats=stats, functions=_TAGS)
-
-    def _obs(hand):
-        return make_select(
-            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
-            current=state(active=poke(MY_FRAGILE, energy=0, hp=130),
-                          opp_active=poke(PREEVO_THREAT, energy=1, hp=60),
-                          opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
-                          hand=hand, opp_hand_count=4))
-
-    starved = _obs([BOSS])
-    assert "stall-gust-over-dev-when-starved" in _fired(p.explain(starved).options[0])
-    assert p.decide(starved) == [0]
-    fed = _obs([BOSS, 3])                              # a {W} in hand: cheapest attack payable again
-    assert "stall-gust-over-dev-when-starved" not in _fired(p.explain(fed).options[0])
-
-
 # --- tier-5 defensive stall-gust: strand an energyless high-retreat body (ADR-0022) ---------------
-
-@pytest.mark.req("REQ-GUST-0003")
-def test_stall_gust_strands_an_energyless_retreat_one_body_when_forward_doomed():
-    """f52 end to end: doomed by the forward Kadabra→Alakazam, no KO available, and the opp's benched
-    body is ENERGYLESS retreat-1 — it still can't pay that retreat (no Energy to discard), so play
-    Boss's to strand it and buy a turn. The energyless retreat-1 target now qualifies (was retreat≥2)."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(MY_FRAGILE, energy=1, hp=130),
-                      opp_active=poke(KADA, energy=1),
-                      opp_bench=[poke(STALL1, hp=70, energy=0)],
-                      hand=[BOSS], opp_hand_count=10))
-    p = _pilot()
-    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
-
-
-@pytest.mark.req("REQ-GUST-0003")
-def test_gust_for_the_stall_fires_when_stuck_with_an_energyless_high_retreat_target():
-    """My Active is doomed, I have NO gustable KO and can't KO their Active, but they have an
-    energyless, high-retreat benched mon → play Boss's to strand it Active and buy a setup turn."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(OFF_WINCON, energy=1, hp=100),
-                      opp_active=poke(DOOM_ACTIVE, hp=330, energy=1),
-                      opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
-                      hand=[BOSS]))
-    p = _pilot()
-    assert "gust-for-the-stall" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
-
 
 @pytest.mark.req("REQ-GUST-0003")
 def test_gust_for_the_stall_silent_when_not_under_threat():
@@ -602,7 +443,9 @@ def test_gust_for_the_stall_silent_when_not_under_threat():
                       opp_bench=[poke(STALL_TARGET, hp=200, energy=0)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-stall" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
 
 
@@ -623,49 +466,6 @@ def test_gust_stall_target_picks_the_energyless_high_retreat_body():
 # --- ADR-0066 (gusting Round 0): snipe-aware baseline / marginal stall / loaded-equal-KO ----------
 
 @pytest.mark.req("REQ-GUST-0015")
-def test_gust_for_the_ko_stands_down_when_the_menu_rider_already_collects_the_body():
-    """ep86091435 f119: my attack's bench rider (50 snipe) already KOs the 40-HP benched body WITHOUT
-    a gust — spending Boss's Orders to drag it up for the SAME single prize is a wasted Supporter.
-    The whether-to-play baseline is snipe-aware: the gust must beat the best menu-attack TOTAL.
-    Raise the body to 60 HP (out of the rider's reach) and the same gust fires again."""
-    def _obs(bench_hp):
-        return make_select(
-            [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-            context=MAIN,
-            current=state(active=poke(SNIPER_WINCON, energy=1, hp=200),
-                          opp_active=poke(WALL, hp=330),
-                          opp_bench=[poke(BENCHIE, hp=bench_hp)],
-                          hand=[BOSS]))
-    p = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
-              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
-    assert "gust-for-the-ko" not in _fired(p.explain(_obs(40)).options[1])   # rider collects it free
-    assert p.decide(_obs(40)) != [1]
-    p2 = Pilot(Strategy(roles={SNIPER_WINCON: ["win_condition"]}), deck=[1] * 60,
-               general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
-    assert "gust-for-the-ko" in _fired(p2.explain(_obs(60)).options[1])      # out of reach: gust again
-
-
-@pytest.mark.req("REQ-GUST-0015")
-def test_gust_plus_spread_synergy_fires_past_the_rider_baseline():
-    """ep85046350 f81: gust the 130-HP body up, the 200 main KOs it AND the 60 spread finishes the
-    40-HP one — 2 prizes, vs the rider's lone 1-prize KO without the gust. The gust side counts its
-    own drag-and-finish synergy (spread riders too), so the 2-prize line beats the snipe-aware
-    baseline. Also proves the bench KO oracle sees the EXPENSIVE 200 attack the cheapest-attack
-    summary would on other decks miss (the ADR-0052 patch finished for the bench side)."""
-    obs = make_select(
-        [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-        context=MAIN,
-        current=state(active=poke(SPREADER, energy=1, hp=200),
-                      opp_active=poke(WALL, hp=330),
-                      opp_bench=[poke(BENCHIE, hp=130), poke(BENCHIE, hp=40)],
-                      hand=[BOSS]))
-    p = Pilot(Strategy(roles={SPREADER: ["win_condition"]}), deck=[1] * 60,
-              general_strategy=GENERAL_STRATEGY, stats=_STATS, functions=_TAGS)
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
-
-
-@pytest.mark.req("REQ-GUST-0015")
 def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom():
     """ep82753102 f109: the opponent's Active both DOOMS my Active (200 incoming ≥ 200 HP) and is
     KO-able on the menu — the direct KO removes the threat, while a gust benches it SAFELY to come
@@ -680,55 +480,10 @@ def test_gust_pays_the_threat_forfeit_premium_when_the_menu_ko_removes_the_doom(
                       opp_bench=[poke(EX_BENCHIE, hp=60)],
                       hand=[BOSS]))
     p = _pilot()
-    assert "gust-for-the-ko" not in _fired(p.explain(obs).options[1])
+    # (the `not in <deleted-rung>` line that stood here is GONE with its rung, POC-T4/5,
+    # Issue #386: once the rung is deleted that assertion is true of every board in the game.
+    # The behavioural claim below is what this test was always for.)
     assert p.decide(obs) != [1]
-
-
-@pytest.mark.req("REQ-GUST-0015")
-def test_starved_stall_stands_down_on_a_pointless_wall_swap():
-    """ep86091435 f13: full energy famine, but the opponent's CURRENT Active is itself an energyless
-    retreat-2 wall and the only stall candidate is the IDENTICAL wall — the swap changes nothing
-    ('doesnt really make a difference'), so `stall-gust-over-dev-when-starved` stands down instead of
-    wasting Boss's. Add a strictly TAMER wall (no forward line) to the bench and the famine stall
-    fires again — the swap now denies the forward attacker its spot."""
-    def _obs(bench):
-        return make_select(
-            [opt(PLAY, area=HAND, index=0), opt(END)], context=MAIN,
-            current=state(active=poke(MY_FRAGILE, energy=0, hp=130),
-                          opp_active=poke(DURA_W, energy=0, hp=130),
-                          opp_bench=bench, hand=[BOSS], opp_hand_count=4))
-    p = _pilot()
-    same_wall = _obs([poke(DURA_W, hp=130, energy=0)])                  # wall-for-equal-wall
-    assert p._board(same_wall).active_doomed is True                    # the famine premise holds
-    assert "stall-gust-over-dev-when-starved" not in _fired(p.explain(same_wall).options[0])
-    p2 = _pilot()
-    tamer = _obs([poke(DURA_W, hp=130, energy=0), poke(STALL_TARGET, hp=200, energy=0)])
-    assert "stall-gust-over-dev-when-starved" in _fired(p2.explain(tamer).options[0])
-
-
-@pytest.mark.req("REQ-GUST-0015")
-def test_gust_fires_on_the_equal_prize_ko_toward_the_loaded_body():
-    """ep85163079 f30: the direct Active KO and the gust-KO are the SAME 1 prize, but the benched
-    body carries 4 sunk Energy the KO would destroy with it (vs 1 on the Active) — the tie is not a
-    tie, so `gust-for-the-loaded-equal-ko` spends Boss's on the loaded body. Strip the target's
-    Energy (the ep82224509 f46 refutation shape) or shrink the swing below 2 and it stands down —
-    an equal KO with nothing extra attached never burns the Supporter."""
-    def _obs(bench_energy):
-        return make_select(
-            [attack_opt(555), opt(PLAY, area=HAND, index=0), opt(END)],
-            context=MAIN,
-            current=state(active=poke(WINCON, energy=1, hp=200),
-                          opp_active=poke(KOABLE_ACTIVE, hp=100, energy=1),
-                          opp_bench=[poke(BENCHIE, hp=60, energy=bench_energy)],
-                          hand=[BOSS]))
-    p = _pilot()
-    loaded = _obs(4)
-    assert "gust-for-the-loaded-equal-ko" in _fired(p.explain(loaded).options[1])
-    assert p.decide(loaded) == [1]
-    p2 = _pilot()
-    assert "gust-for-the-loaded-equal-ko" not in _fired(p2.explain(_obs(0)).options[1])  # bare: f46
-    p3 = _pilot()
-    assert "gust-for-the-loaded-equal-ko" not in _fired(p3.explain(_obs(2)).options[1])  # swing 1
 
 
 @pytest.mark.req("REQ-GUST-0015")

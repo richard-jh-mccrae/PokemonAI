@@ -870,10 +870,9 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
     # the `effect`, never on this body-class narrowing.
     #
     # ⚠️ **`applies_to=basic_non_dark` LEFT this ledger at Issue #410**, and so did `applies_to=stage2`
-    # (which was never in it); **`applies_to=basic` followed at Issue #433**. `board_delta._APPLIES_TO`
-    # resolves all three — the three scopes that ride a WRITING Stadium clause — so the apply seam now
-    # applies Risky Ruins' bench tax, Gravity Mountain's HP delta and Lively Stadium's, instead of
-    # refusing every transition under any of the three. `metal` stays,
+    # (which was never in it). `board_delta._APPLIES_TO` resolves both — the two scopes that ride a
+    # WRITING Stadium clause — so the apply seam now applies Risky Ruins' bench tax and Gravity
+    # Mountain's HP delta instead of refusing every transition under either card. `metal` stays,
     # because it scopes a `damage_reduction` whose write-set is EMPTY: nothing is stored, so there is
     # nothing for a resolver to narrow.
     "applies_to=metal": "1244 Full Metal Lab. A {M}-body scope on a damage modifier read off the "

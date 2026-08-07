@@ -92,22 +92,23 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.card_id == FEZANDIPITI_EX
         and c.board.line_ready and c.board.my_bench < 5,   # "entering the grind" (ADR-0040 migration:
         weight=18, status="assumed"),                      # was plan in (RACE, STABILIZE) — ≡ today
-    Hypothesis(
-        id="play-risky-ruins-when-net-positive",
-        rationale="Play Risky Ruins (SYMMETRIC bench-chip Stadium: 20 damage to any Basic non-{D} a player "
-                  "benches) only when net-positive for US: place ours to chip the opponent ONLY once our "
-                  "win-condition is in play (`board.wincon_in_play`). Before the payoff lands we are the "
-                  "bench-heavier side still laying our fragile 70-HP Dreepy line, so the symmetric chip damages "
-                  "US more (f24, CRITICAL: turn 2 vs a thin Cinderace/Mega Starmie set-up with ~no future "
-                  "bench-entries, Risky Ruins only bled our own developing spread). The OPPONENT's Stadium being "
-                  "up is a second, INDEPENDENT reason (replacing it denies them regardless of the chip). The "
-                  "engine enforces 'different from the Stadium in play', so this never re-plays our own Ruins. "
-                  "`wincon_in_play` is the sound board-only floor; the full opp-aware net-value (their remaining "
-                  "benchable non-{D} basics vs ours, via the Read) and the skip-vs-{D}-decks refinement are deferred.",
-        when=lambda c: c.option_type == _PLAY and c.card_id == RISKY_RUINS
-        and ((c.board.stadium_in_play is None and c.board.wincon_in_play)
-             or c.board.opp_stadium_in_play),
-        weight=15, status="assumed"),
+    # `play-risky-ruins-when-net-positive` (+15) DELETED — POC-T4/5, Issue #386 — and the family it
+    # priced is NOT yet taken over. Saying so plainly, because the first draft of this note said the
+    # opposite ("its worth is a `state_value` delta, and the composer scores the Stadium play as an
+    # ordinary MODELLED option") and that is false. `state_value`'s `development` term names the gap
+    # in its own `blind_to`: *"the STADIUM — `model.stadium` has a supplier and no reader, so playing
+    # or replacing one prices exactly 0. T4 lists stadium among the families it takes over, and this
+    # is the term that would have to grow the read."* Measured on both of this deck's Risky Ruins
+    # boards, the composer's 1-ply delta for the Stadium play is exactly 0.0 and it emits no gap:
+    # the option is MODELLED and priced at nothing, which is the worst of the two failure shapes
+    # because it looks like a considered valuation.
+    #
+    # The rung is still deleted rather than kept, because a flat +15 standing in for an unmeasured
+    # quantity is the thing this issue exists to stop. What is owed is the `development` read, and
+    # `tests/agents/test_dragapult_ex_triggers.py` carries two strict xfails that go RED the day it
+    # lands. Its two gates were `wincon_in_play` (a proxy for "our fragile line is through the
+    # vulnerable phase") and `opp_stadium_in_play` (replacing their Stadium removes its effect) —
+    # both board facts, so neither is lost; only the pricing is.
 ]
 
 STRATEGY = Strategy(
@@ -137,8 +138,8 @@ STRATEGY = Strategy(
     starter_priority=[BUDEW, MUNKIDORI, DUNSPARCE, FEZANDIPITI_EX, DREEPY, MEOWTH_EX],
     params={"setup_energy_target": 2,     # FP for Phantom Dive
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
-                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
-                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # functional consumer). The remaining engine sims
+                                          # (lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
                                           # hold the submission manifest at Tier-0 (test-pinned).
             "preferred_start": "second",  # Budew item-lock fires T1 only going 2nd (1st player can't attack
                                           # OR play a Supporter T1 — rules.md L72-73); guru-unanimous. (was "first")

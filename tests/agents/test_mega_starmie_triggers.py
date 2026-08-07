@@ -188,28 +188,25 @@ def _attach_cape_vs(opp_attacker):
                                      opp_active=poke(opp_attacker), hand=[HEROS_CAPE]))
 
 
-@pytest.mark.req("REQ-MS-0004")
-def test_deploy_heros_cape_fires_when_plus_100_buys_a_survival_turn():
-    """Active wincon at 330 vs incoming 400: +100 (→ 430) lifts survival from 1 turn to 2 → deploy the
-    Cape now (the Tool Doctrine's survival-turns deploy, onto the Active win-condition)."""
-    assert "deploy-hp-tool" in _fired(_cape_pilot().explain(_attach_cape_vs(8888)).options[0])
-
-
-@pytest.mark.req("REQ-MS-0004")
-def test_deploy_heros_cape_silent_when_plus_100_would_not_save():
-    """Incoming 500 still KOs even at 430 → the body is doomed even at +100 and there is no successor →
-    the Cape is wasted, so don't deploy it (the never-equip-a-dying-body guard)."""
-    assert "deploy-hp-tool" not in _fired(_cape_pilot().explain(_attach_cape_vs(7777)).options[0])
-
-
-@pytest.mark.req("REQ-MS-0004")
-def test_deploy_heros_cape_fires_proactively_to_bank_a_survival_turn():
-    """ADR-0028 reversal: even when the Active is not under immediate threat this turn (incoming 200 <
-    330), +100 banks an extra survival turn (3 vs 2), so the Cape deploys PROACTIVELY onto the Active
-    win-condition — it is no longer held for a breakpoint (holding it risks a hand-shuffle burying it)."""
-    assert "deploy-hp-tool" in _fired(_cape_pilot().explain(_attach_cape_vs(6666)).options[0])
-
-
+# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
+#
+# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
+# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
+# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
+# not what the agent played.
+#
+# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
+# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
+# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
+# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
+# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
+# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
+# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
+# passing, because dead text that looks like a guard is worse than no guard.
+#
+# `deploy-hp-tool` is deleted with the whole Tool Doctrine (see tests/strategy/test_tool_doctrine.py
+# for the fact-by-fact audit). A Cape that buys a survival turn is now `survival` on the end board.
 # REQ-MS-0005's three `develop-the-accel-recipient` tests stood here until ADR-0086 deleted the rung
 # (decision 8: the accel-recipient question folds onto the ATTACH axis). Their successor is
 # `test_deploy_value.py`'s accel-unlock leg, built on `_accel_fixture.py` — the REAL mega_lucario
@@ -245,22 +242,12 @@ def _gust_pilot():
                  stats=_GUST_STATS, functions=_GUST_TAGS)
 
 
-@pytest.mark.req("REQ-MS-0005")
-def test_real_pilot_plays_bosss_orders_to_reach_a_benched_ko():
-    """Through the real deck: Mega Starmie ex online, opp Active is a wall it can't KO, but a benched
-    mon is KO-able — play Boss's Orders (gust-for-the-ko) to drag it up. Options: [Jetting Blow chip,
-    play Boss's, End]."""
-    obs = make_select(
-        [opt(ATTACK, attackId=1), opt(PLAY, area=HAND, index=0), opt(14)],   # 14 = OptionType.END
-        context=0,                                                           # MAIN
-        current=state(active=poke(MEGA_STARMIE, energy=1, hp=330),
-                      opp_active=poke(WALL_810, hp=330),
-                      opp_bench=[poke(KO_BENCH_811, hp=60)], hand=[BOSS_ORDERS]))
-    p = _gust_pilot()
-    assert "gust-for-the-ko" in _fired(p.explain(obs).options[1])
-    assert p.decide(obs) == [1]
-
-
+# ── a gust WHETHER-TO-PLAY rung test — DELETED (POC-T4/5, Issue #386) ────────────────────────────
+#
+# `gust-for-the-ko` (+50) is deleted; the gust TARGET side is untouched. Under differencing, gusting
+# a body the composer can then Knock Out is a sequence that takes a prize out-scoring one that does
+# not — not a +50 endorsement. The audit and the decision-level successors are in
+# `tests/strategy/test_gust.py`'s deletion note.
 # --- GENERAL: the deck-source accel rider (Turbo Flare) is DERIVED, not declared ---------------
 # hypergeometric-fetch-closure follow-up 2026-07-18: the attack fact lives in AttackStat
 # (recoverSource="deck"), the Tactical credit and the accel rung family derive from it — the

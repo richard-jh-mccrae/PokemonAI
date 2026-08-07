@@ -2,17 +2,21 @@
 roster. Asserts on id SETS, not weights: weights are tuned (ADR-0009), but a refactor must never
 drop, duplicate, or misfile a rule. The decision-context axis is the contract — each `baseline_*`
 cluster owns exactly the rules that fire on its select.
+
+**A cluster that is GONE is absent from the table, never present-and-empty**, and the comment in its
+place records who took its rungs. Four went at POC-T4/5 (Issue #386) — HEAL, RETREAT, SEQUENCING,
+DISRUPTION — when `common.composer` became the MAIN decider and started pricing those families by
+differencing end states. That convention is what makes this file a deletion record rather than a
+list, and it is why the empty-set entry for `promote` is deliberate: those rungs are gone, but the
+cluster still exists as a module.
 """
 import pytest
 
 from common.strategy.baseline import (
-    BASELINE_HYPOTHESES, DISRUPTION_HYPOTHESES, ENERGY_HYPOTHESES,
-    EVOLUTION_HYPOTHESES, HEAL_HYPOTHESES, OPENING_HYPOTHESES, PHASES_HYPOTHESES,
-    POSTURE_HYPOTHESES, PROMOTE_HYPOTHESES, RETREAT_HYPOTHESES, SEQUENCING_HYPOTHESES,
-    SNIPE_HYPOTHESES,
+    BASELINE_HYPOTHESES, ENERGY_HYPOTHESES, EVOLUTION_HYPOTHESES, OPENING_HYPOTHESES,
+    PHASES_HYPOTHESES, POSTURE_HYPOTHESES, PROMOTE_HYPOTHESES, SNIPE_HYPOTHESES,
 )
-from common.strategy.doctrines import (FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES,
-                                       TOOL_HYPOTHESES as TOOL_DOCTRINE_HYPOTHESES)
+from common.strategy.doctrines import FETCH_HYPOTHESES, GUST_HYPOTHESES, REFRESH_HYPOTHESES
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.strategy.strategy import Hypothesis
 
@@ -52,31 +56,39 @@ CLUSTERS = {
     # prices the family as the Sub-lethal Residual, so the KO half is `_promote_ko_tactical` and the
     # rest is emergent from reachable damage and prize Exposure.
     "promote": (PROMOTE_HYPOTHESES, set()),
-    # Four of five retreat rungs DELETED by the same ruling. `retreat-to-wall-the-line` SURVIVES
-    # because it is a MANEUVER, not a value claim: its payoff lands on later steps, which a
-    # per-option equation cannot see. Owner #165.
-    "retreat": (RETREAT_HYPOTHESES, {"retreat-to-wall-the-line"}),
+    # The RETREAT cluster no longer EXISTS. Four of five rungs went to ADR-0100's promote/retreat
+    # decider; the fifth, `retreat-to-wall-the-line` (+30), was kept because it is a MANEUVER whose
+    # payoff lands on LATER steps, which a per-option equation cannot see. POC-T4/5 (Issue #386)
+    # deleted it: a sequence composer scores the later steps, which is exactly the capability the
+    # rung was standing in for until one existed.
     "evolution": (EVOLUTION_HYPOTHESES, {
                         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
-    "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
+    # The HEAL cluster no longer EXISTS (POC-T4/5, Issue #386): `hold-clutch-heal` (+60) and
+    # `dont-waste-clutch-heal` (−40) were the two timing halves of one claim — *is this heal worth
+    # its Energy bounce right now* — which the composer answers as the `survival` delta of the end
+    # board the heal reaches, in a sequence that can still attack afterwards.
     # The Set-Up ACTIVE pick is ONE rule over one deck declaration since ADR-0079 — `open-the-
     # accelerator`, `open-the-item-lock-starter`, `dont-open-multiprize-active` and
     # `dont-open-with-the-engine` were DELETED, not folded into a successor rung, and their job is
     # now the ORDER of each deck's `Strategy.starter_priority`.
     "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "honor-preferred-start",
                                      "open-the-declared-starter"}),
-    "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
-                                           "dont-play-damage-boost-when-cant-attack",
-                                           "use-the-draw-engine-ability",
-                                           "dont-spend-unneeded-supporter"}),  # BUILD 4 (weight-0, deferred)
-    # `play-energy-denial` RETIRED (ADR-0062); `play-harlequin-vs-hand-size` (+25),
-    # `disrupt-when-unfavored` (+18) and `strip-the-stacked-engine-hand` (+22) RETIRED (ADR-0102) —
-    # the first two replaced by `pilot._hand_size_relief_tactical`, the third an unfired forward
-    # contract carrying a live weight.
-    "disruption": (DISRUPTION_HYPOTHESES, {
-        "dont-gift-a-refresh-when-favored",
-        "disrupt-the-tailored-hand",            # one-sided-strip forward contract; weight-0
-        "unfair-stamp-comeback-posture"}),      # post-KO don't-empty-hand vs Stamp opponent; weight-0
+    # The SEQUENCING cluster no longer EXISTS (POC-T4/5, Issue #386). `dig-before-commit` (+20) and
+    # `use-the-draw-engine-ability` (+18) are named by Issue #386; the other two fall to the same
+    # whitelist rule (`sound_rules.py` — tuned and unratified means deleted):
+    # `dont-play-damage-boost-when-cant-attack` (−12) is emergent (a boost that cannot be cashed
+    # spends a card for a board delta of zero, so differencing declines it) and
+    # `dont-spend-unneeded-supporter` was weight-0, deciding nothing. The structural
+    # information-before-commitment ORDER survives — as a whitelisted sound rule, and inside the
+    # composer as its canonical in-block ordering (ADR-0095 d1/d3).
+    # The DISRUPTION cluster no longer EXISTS (POC-T4/5, Issue #386). `play-energy-denial` had gone
+    # to ADR-0062, `play-harlequin-vs-hand-size` / `disrupt-when-unfavored` /
+    # `strip-the-stacked-engine-hand` to ADR-0102; the last three —
+    # `dont-gift-a-refresh-when-favored` (−15) and the two weight-0 forward contracts
+    # `disrupt-the-tailored-hand` / `unfair-stamp-comeback-posture` — die here. What a hand-disruption
+    # play does to BOTH hands is a board delta, and Issue #263's ruled mitigation for the ordering
+    # risk is structural rather than a weight: disruption plays are ALWAYS-EXPANDED in the beam
+    # (`composer._admit`, via `apply_option.must_expand`), an escape hatch and not a valuation.
     "phases": (PHASES_HYPOTHESES, {   # ADR-0040 advisory bands — the one c.board.phase consumer
         "phase-stabilize-prefer-heal", "phase-close-stop-developing"}),
     "posture": (POSTURE_HYPOTHESES, {  # ADR-0026 prize-position posture (learnthetcg risk-scaling); weight-0
@@ -101,8 +113,10 @@ def test_baseline_hypotheses_is_the_disjoint_union_of_the_clusters():
 
 @pytest.mark.req("REQ-GEN-0025")
 def test_general_strategy_assembles_baseline_plus_doctrines_with_no_loss_or_dup():
-    doctrines = (_ids(GUST_HYPOTHESES) | _ids(FETCH_HYPOTHESES) | _ids(REFRESH_HYPOTHESES)
-                 | _ids(TOOL_DOCTRINE_HYPOTHESES))
+    # The TOOL doctrine is GONE, Mixin and all (POC-T4/5, Issue #386): its five equip rungs and the
+    # `_tool_deploy_slot` survival-turns picker that fed them were one mechanism, and the leaf's
+    # `survival` term is what ADR-0028's math always was.
+    doctrines = _ids(GUST_HYPOTHESES) | _ids(FETCH_HYPOTHESES) | _ids(REFRESH_HYPOTHESES)
     assert _ids(GENERAL_STRATEGY.hypotheses) == _ids(BASELINE_HYPOTHESES) | doctrines
     # no duplicate ids across the whole assembled strategy.
     ids = [h.id for h in GENERAL_STRATEGY.hypotheses]

@@ -119,12 +119,17 @@ def test_prose_that_is_not_a_rung_is_never_flagged(vocab):
     """The reason the vocabulary is curated. `attack-last` is the corpus's most frequent hyphenated
     token (46 occurrences) and is the Pilot's structural resequencing, not a rung — a loose
     `[a-z-]+` scan flags every note that mentions it. The live rung in the same note keeps this
-    honest: the classifier is reading the note, not ignoring it."""
-    note = "attack-last: real Pilot plays Pokegear first (dig-before-commit) — retest [1]->[0]=correct"
+    honest: the classifier is reading the note, not ignoring it.
+
+    The live exemplar was `dig-before-commit` until POC-T4/5 (Issue #386) deleted it — which is the
+    mechanism this file exists for working correctly on its own test data, and the reason the live
+    rung is now read from the vocabulary rather than hard-coded a second time."""
+    live = sorted(vocab.live)[0]
+    note = f"attack-last: real Pilot plays Pokegear first ({live}) — retest [1]->[0]=correct"
     ref = classify_note(note, vocab)
     assert ref.retired == ()
     assert "attack-last" in ref.unresolved
-    assert "dig-before-commit" in ref.live
+    assert live in ref.live
     assert stale_entries({"99999999-3": {"disposition": "covered", "reason": note}}, vocab) == []
 
 

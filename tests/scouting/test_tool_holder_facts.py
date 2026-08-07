@@ -450,40 +450,25 @@ def _fired(trace):
     return {h.id for h, _ in trace.fired}
 
 
-@pytest.mark.req("REQ-GEN-0048")
-def test_the_deploy_picker_refuses_a_body_the_owner_gate_excludes():
-    """The survival-turns picker chooses WHERE a +HP Tool goes. Cynthia's Power Weight grants its
-    +70 only to a `Cynthia's` body, so a plain body is not a carrier at all — endorsing that attach
-    would rank a no-op, which under 1-ply ordering is indistinguishable from a real gain. Read at
-    the public seam (`explain(...).fired`), not off the picker's private return."""
-    weight = CardStat(POWER_WEIGHT, synthetic=True, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
-                      holderNameFamily="Cynthia's")
-    pilot = _tool_pilot(weight)
-    trace = pilot.explain(_board(PLAIN_BODY, POWER_WEIGHT)).options[0]
-    assert "deploy-hp-tool" not in _fired(trace)
-
-
-@pytest.mark.req("REQ-GEN-0048")
-def test_the_deploy_picker_still_equips_a_body_inside_the_family():
-    """The other half of the same gate: the Tool is not inert, it is TARGETED. On a `Cynthia's`
-    Active the deploy rung fires — so widening the parser bought a decision rather than a field."""
-    weight = CardStat(POWER_WEIGHT, synthetic=True, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
-                      holderNameFamily="Cynthia's")
-    pilot = _tool_pilot(weight)
-    trace = pilot.explain(_board(FAM_BODY, POWER_WEIGHT)).options[0]
-    assert "deploy-hp-tool" in _fired(trace)
-    assert trace.score > 0
-
-
-def test_an_ungated_hp_tool_is_unaffected_by_the_gate_machinery():
-    """The no-regression assertion: Hero's Cape reaches the same plain body the gated Tool refuses,
-    so every shipped +HP decision is untouched by this issue."""
-    cape = CardStat(CAPE, synthetic=True, name="Hero's Cape", cardType=2, aceSpec=True, hpBonus=100)
-    pilot = _tool_pilot(cape)
-    trace = pilot.explain(_board(PLAIN_BODY, CAPE)).options[0]
-    assert "deploy-hp-tool" in _fired(trace)
-
-
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
+# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
+# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
+# passing, because dead text that looks like a guard is worse than no guard.
+#
+# The deploy PICKER it exercised lived inside the deleted `doctrine_tool` rungs. The owner-gate
+# fact it guarded is asserted positively by the sibling tests below, which read the same holder facts.
+# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
+#
+# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
+# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
+# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
+# not what the agent played.
+#
+# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
+# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
+# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
+# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
+# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
 def _boost_pilot():
     """A Pilot whose Active can be either family or plain, holding Hop's Choice Band, against an
     opponent exactly one boost short of a KO."""

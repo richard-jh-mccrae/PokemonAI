@@ -668,12 +668,9 @@ one-sidedly (our deck has no Stage 2) — e.g. Mega Brave 270 vs a 300-HP Stage-
 - **Trade-off vs the cut Watchtower:** dropping Watchtower cedes the anti-Colorless-ability angle
   (Pidgeot control, Meowth-reliant lists) — a meta call, not settled consensus (§2). No self-clash with
   our Meowth anymore (Gravity Mountain doesn't touch abilities).
-- **Disposition:** COMPUTED since Issue #424 by `_boost_lethal_tactical`'s HP-delta leg — the
-  −30 is priced as a KO-breakpoint crossing off the card's own `stadium_static`/`hp_delta` clause,
-  differenced against whatever Stadium is already in play. *(The deck rule
-  `gravity-mountain-vs-stage2` (+15, `board.opp_has_stage2`) is RETIRED — a flat weight could not
-  tell a board where the −30 crosses from one where it does not. The older
-  `watchtower-vs-colorless-abilities` deck rule is RETIRED too — card removed.)*
+- **Disposition:** covers-as-is via the GENERAL deck rule `gravity-mountain-vs-stage2` (+15, reads
+  `board.opp_has_stage2` — §9 T8'). *(The old `watchtower-vs-colorless-abilities` deck rule is
+  RETIRED — card removed.)*
 
 ### 11× Basic Fighting Energy — the only energy (LOCKED 2026-06-29 · count 12→11 2026-07-03)
 - **Use:** manual attach → **Riolu/Mega line first** (priority over Lunar Cycle's discard). The
@@ -938,9 +935,7 @@ viable 1-prize attacker. **Fires:** promote / which-attacker decisions in RACE/C
 - **Damage-boost OHKO-line model** (Premium Power Pro stacking + ex-breakpoints) — **BUILT** (T8').
   The +vs-ex boost now comes from **Black Belt's Training +40** (Maximum Belt removed): 270+40=310,
   +Power Pro=340 Dragapult.
-- **Stadium matchup choice** — **BUILT** (T8') as `gravity-mountain-vs-stage2` (read `opp_has_stage2`),
-  then **REPLACED BY COMPUTATION** (Issue #424, 2026-08-06): the rung is retired and
-  `_boost_lethal_tactical` prices the crossing itself.
+- **Stadium matchup choice** — **BUILT** (T8') as `gravity-mountain-vs-stage2` (reads `opp_has_stage2`).
   *(Watchtower cut 2026-07-03 → the Watchtower/Meowth-sequencing half is retired; Gravity Mountain is
   now the sole Stadium.)*
 
@@ -1019,11 +1014,8 @@ Tagging Lunatone `draw` and Hariyama `gust` is the highest-value infra task. (No
   oracle boosts, `_boost_lethal_tactical` (stacking crossings). The megaEx-as-{ex} question is
   resolved: rulebook.txt:337 says Mega Evolution Pokémon ex ARE Pokémon ex.
 - ~~**Stadium matchup choice + opponent-board reads**~~ — BUILT (T8') as card-fact reads
-  (`opp_has_stage2` — no Read/Posture dependency) + the deck rule `gravity-mountain-vs-stage2`.
-  *(2026-08-06, Issue #424: the rung is RETIRED and the crossing COMPUTED; the current-Stadium
-  visibility that "remains unread" here is now read — `_stadium_hp_shift` differences against the
-  in-play Stadium, because playing one ends the other, `docs/rulebook.txt` L136.)*
-  *(2026-07-03: Watchtower cut, so
+  (`opp_has_stage2` — no Read/Posture dependency) + the deck rule `gravity-mountain-vs-stage2`; only
+  current-Stadium visibility (bump timing) remains unread. *(2026-07-03: Watchtower cut, so
   `watchtower-vs-colorless-abilities` is RETIRED; `opp_has_colorless_ability` stays as general infra,
   now unused by this deck.)*
 - ~~**Meowth ex "bench for a needed Supporter" override**~~ — **RESOLVED (2026-07-03 grill).** Was
@@ -1124,10 +1116,6 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
     + `opp_has_colorless_ability` + `hand_ids`; DECK `gravity-mountain-vs-stage2` (+15) and
     `watchtower-vs-colorless-abilities` (+15, gated on Meowth NOT still in hand — the
     Last-Ditch-first sequencing). Stadium-slot visibility (bump timing) still unread — minor.
-    *(Historical, as authored. Both DECK rules are now RETIRED — Watchtower's with its card in
-    2026-07-03, Gravity Mountain's by Issue #424, which also closed the bump-timing gap.
-    `opp_has_stage2` survives as general Board infra with no reader in this deck, exactly as
-    `opp_has_colorless_ability` does.)*
   - **Lunar-Cycle guard (DECK pair):** probe fact — Lunar Cycle is an `ABILITY(10)` MAIN option
     (nothing endorsed it: score 0 lost to any attack!), so `fire-lunar-cycle` (+15, tier-0
     sequencing) + `dont-lunar-cycle-away-the-last-attachable-f` (−30, GENERAL Board

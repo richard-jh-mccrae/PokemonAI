@@ -470,8 +470,7 @@ def test_DISPLACING_a_stadium_whose_effect_writes_refuses_because_the_effect_END
     """The caller of the Stadium gate the parity lane could not have found, and the reason it is here
     on the RULE rather than on the measurement.
 
-    *"…discard the old one and **end its effects**"* (`docs/rulebook.txt` L136 — L137 is the
-    SAME-NAME restriction, a different bullet; corrected at Issue #433). Gravity Mountain
+    *"…discard the old one and **end its effects**"* (`docs/rulebook.txt` L137). Gravity Mountain
     leaving play gives every Stage 2 in play its 30 HP back — verified on the corpus rather than
     reasoned: `ml_dx_2001` carries Dragapult ex at **290/290 at f172 while Gravity Mountain is out,
     and 320/320 at f181 once it is gone**. A structural swap that only moved the `stadium` zone would
@@ -691,11 +690,6 @@ def test_an_UNRECOGNISED_stadium_vocabulary_value_makes_the_caller_REFUSE():
 @pytest.mark.req("REQ-APPLY-0005")
 def test_stadium_clauses_for_narrows_by_EVENT_and_BODY_and_widens_for_a_DISPLACEMENT():
     """The predicate itself, at the unit level — the four answers the three call sites depend on.
-
-    Issue #424 split this function into a `current["stadium"]` read plus a card-keyed core,
-    `stadium_clauses_of`. That the split changed no answer is not left to this file's samples:
-    `test_stadium_clauses_extraction.py` executes both versions over all 567
-    (stadium × event × body-class) cells and compares outcomes exactly.
 
     ``displace`` is the widening one and it is not symmetry for its own sake (R6): ending a Stadium
     re-renders every body it was modifying, on BOTH sides, including bodies the transition never

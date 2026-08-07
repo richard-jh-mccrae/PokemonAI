@@ -73,8 +73,10 @@ DELIBERATE = {
     ("_attached_type_counts", "attached_type_counts"):
         "pure typed arithmetic over a body's own `energies` — the generic adapter, called with "
         "synthetic bodies",
-    ("_payable_energy", "attached_type_counts"):
-        "pure typed arithmetic over a SIMULATED body inside a planner rollout — not a board read",
+    # ("_payable_energy", "attached_type_counts") was here until POC-T4/5 (Issue #386) deleted
+    # the planner rollout that made the call. Removed rather than kept "just in case": this
+    # test exists because an entry whose call site is gone is a licence nobody revoked, and
+    # the next function to take that name inherits it silently.
 }
 
 

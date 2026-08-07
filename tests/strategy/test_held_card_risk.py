@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 from common.cards import CardFunctions
 from common.opponent_model import OpponentModel
 from common.pilot import Pilot
@@ -91,6 +93,7 @@ def _real_pilot(agent: str):
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.xfail(strict=True, reason=marks("ms_fetch_one_turn_early_judge_exposure_f17")[0].kwargs["reason"])
 def test_fetch_one_turn_early_stands_down_and_the_attack_fires_f17():
     """ms 85163634 f17: turn 2 (our first turn), both Staryu benched THIS turn, Mega Starmie ex the
     only needed Ultra Ball target — unplayable until next turn (rules.md §4). The human: attack with

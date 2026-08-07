@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
 
@@ -55,6 +57,10 @@ def test_dont_tutor_the_baseless_wincon_turn_one_f6(starmie):
     assert d.options[fx["chosen"][0]].score <= 0, "the baseless tutor must be driven <=0 (tier 4)"
 
 
+# POC-T4/5: this frame FLIPPED BACK, and it is the most interesting of the three. It was a
+# REFUSAL row — the seam cannot prove Lunar Cycle deterministic — and it resolved with NO
+# widening of the seam at all. The refused option was never the problem; the composer
+# committing a line it had no view on was (`planner._tied_first_steps`).
 def test_lunar_cycle_beats_the_inert_bench_attach_f16(lucario):
     """ml 85058574 f16 (deferred `lunar-cycle-beats-an-inert-bench-attach`, now COVERED): the lone {F}
     was being spent on a benched Solrock (`attach-solrock-over-line-base`) that will not attack this turn,

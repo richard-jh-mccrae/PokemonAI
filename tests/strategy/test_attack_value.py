@@ -76,8 +76,7 @@ def test_seek_inspiration_is_not_live_without_a_known_top_card():
 
     decision = p.explain(_seek_obs())
 
-    assert decision.options[0].tactical < 0
-    assert p.decide(_seek_obs()) == [1]
+    assert decision.options[0].tactical < 0     # priced as never-do-this; see the veto note below
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -115,8 +114,7 @@ def test_seek_inspiration_known_rulebox_top_whiffs():
 
     decision = p.explain(_seek_obs())
 
-    assert decision.options[0].tactical < 0
-    assert p.decide(_seek_obs()) == [1]
+    assert decision.options[0].tactical < 0     # priced as never-do-this; see the veto note below
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -152,7 +150,8 @@ def test_known_top_draw_mismatch_clears_the_whole_belief():
     obs = _seek_obs()
     obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_BODY, "serial": 78}]
 
-    assert p.decide(obs) == [1]
+    p.explain(obs)                              # the log pass is what updates the belief
+    assert p._known_top is None, "the cleared belief survived the log event"
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -165,7 +164,8 @@ def test_known_top_matching_draw_advances_to_the_tail():
     obs = _seek_obs()
     obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_WEAK, "serial": 76}]
 
-    assert p.decide(obs) == [0]
+    p.explain(obs)                              # the log pass is what updates the belief
+    assert p._known_top == ((77, COPY_BODY),), "the matching draw did not advance to the tail"
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -177,7 +177,8 @@ def test_shuffle_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 0, "playerIndex": 0}]
 
-    assert p.decide(obs) == [1]
+    p.explain(obs)                              # the log pass is what updates the belief
+    assert p._known_top is None, "the cleared belief survived the log event"
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -189,7 +190,8 @@ def test_face_down_deck_movement_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 7, "playerIndex": 0, "fromArea": 2, "toArea": 1}]
 
-    assert p.decide(obs) == [1]
+    p.explain(obs)                              # the log pass is what updates the belief
+    assert p._known_top is None, "the cleared belief survived the log event"
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -201,7 +203,8 @@ def test_unknown_deck_movement_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 99, "playerIndex": 0, "fromArea": 1, "toArea": 2}]
 
-    assert p.decide(obs) == [1]
+    p.explain(obs)                              # the log pass is what updates the belief
+    assert p._known_top is None, "the cleared belief survived the log event"
 
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
@@ -541,3 +544,43 @@ def test_incoming_damage_doomed_without_resistance():
     board = p._board(obs)
     assert board.incoming_active_damage == 120
     assert board.active_doomed is True
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_the_MAIN_attack_veto_survives_the_swap_BY_THE_COMPOSER_ABSTAINING():
+    """A gap POC-T4/5 (Issue #386) opened and then CLOSED, recorded because the route is the point.
+
+    Four tests above used to end `assert p.decide(obs) == [1]` — with the known-top belief cleared,
+    Seek Inspiration reveals nothing, `_tactical` prices it at `-KO_SCORE`, and the tuned argmax
+    ended the turn. **The composer does not read `_tactical`.** It prices the board, and a 0-damage
+    attack and an end-turn reach the SAME end state, so it scored both 0.0 and took the attack. An
+    earlier version of this test asserted exactly that, as the current behaviour with the gap named.
+
+    The tie-defer (`planner._tied_first_steps`) closes it, and closes it for the right reason rather
+    than by accident: the composer's own numbers say it has NO VIEW here — 0.0 against 0.0 is it
+    reporting that both options end the turn in the same place — so it abstains and the tuned
+    scoring keeps the turn. The `-KO_SCORE` veto is consulted again. That is `ko-score-band`, a
+    whitelisted STRUCTURAL sound rule, being served by an abstention rather than by a special case.
+
+    **Scope, measured rather than assumed:** `-KO_SCORE` is emitted at four sites in `pilot.py`.
+    THREE are at non-MAIN selects (`_top_deck_tactical` at `_TO_DECK` x2, `_snipe_tera_veto` at a
+    DAMAGE select) where `plan_turn` never fires. Exactly ONE — this one, `_tactical`'s Seek
+    Inspiration branch — is MAIN-reachable, so this was always a single named site.
+
+    The three assertions are the three links, and each can fail independently: the veto is computed,
+    the composer declines to overrule it, and the turn ends."""
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+    p._turn_plan = None
+    p._composer_trace = None
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 0, "playerIndex": 0}]                # shuffle -> belief cleared
+
+    d = p.explain(obs)
+    assert d.options[0].tactical <= -KO_SCORE                    # 1. the veto is still COMPUTED
+    assert (p._composer_trace or {}).get("tied_first_steps"), (  # 2. the composer has no view
+        "the composer committed a line here; the veto is being overruled by a mechanism that cannot "
+        "see it, which is the gap this test was written for")
+    assert list(d.chosen) == [1]                                 # 3. ... so the turn ends

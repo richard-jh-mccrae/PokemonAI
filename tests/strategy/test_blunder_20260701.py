@@ -35,6 +35,28 @@ NEBULA, JETTING, TURBO = 10, 11, 13   # attack ids
 def _fired(o):
     return {h.id for h, _ in o.fired}
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
+    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this file's rung and started
+    testing the composer on a board no human ever ruled."""
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
+def _sequenced(pilot, obs):
+    """The ladder's own final ORDER — `_finish_turn_last` applied to its score order. A ranking
+    cannot express "develop before the turn-ending attack"; the tiers can, and they survived."""
+    select = obs["select"]
+    dec = pilot.explain(obs)
+    board = pilot._board(obs, select)
+    options = select["option"]
+    traces = list(dec.options)
+    by_score = pilot._score_order(obs, options, traces)
+    return pilot._finish_turn_last(obs, board, options, traces, by_score,
+                                   select.get("maxCount", 0), select.get("context"))
+
+
 
 def _stats():
     return DictCardStatProvider({
@@ -157,16 +179,51 @@ def test_clutch_heal_stands_down_and_the_game_winning_attack_is_taken_now():
     obs = make_select([play_salvatore, play_wallys, nebula, opt(14)], current=won)
     traces = pilot.explain(obs)
     assert traces.options[2].tactical >= KO_SCORE               # Nebula is lethal
-    assert "hold-clutch-heal" not in _fired(traces.options[1])  # the survival heal stands down
     assert not traces.options[2].deferred                       # winning attack is NOT held back
-    assert pilot.decide(obs) == [2]                             # take the win now
+    assert _ranked(pilot, obs)[0][0] == 2                       # take the win now
+    # `hold-clutch-heal` is DELETED with `baseline_heal.py` (POC-T4/5, Issue #386), so neither half
+    # of the old rung-id pair can be asserted: the positive one names nothing and the negative one
+    # is true of every board. The CLAIM — a survival heal must not out-rank a lethal attack — is
+    # asserted directly, as the comparison it always was.
+    assert traces.options[2].score > traces.options[1].score, (
+        "the clutch heal out-scores a WINNING attack; the survival term is not standing down")
 
     # Control — SAME doomed Active but CANNOT KO (opp too healthy): clutch heal still fires.
     cant = state(active=poke(WINCON, energy=3, hp=70), bench=[poke(PREEVO, hp=70)],
                  opp_active=poke(678, hp=330), hand=[SALVATORE, WALLYS], prizes=3)
     obs_c = make_select([play_salvatore, play_wallys, nebula, opt(14)], current=cant)
     assert not pilot._board(obs_c).active_can_ko
-    assert "hold-clutch-heal" in _fired(pilot.explain(obs_c).options[1])
+    # The counterfactual has no successor, and that is a finding rather than a gap in this test.
+    # `hold-clutch-heal` was CONDITIONAL — hold the save while a KO is available, fire it when one
+    # is not — and after the deletion the heal prices 0.0 on BOTH boards. So the stand-down asserted
+    # above is not the gate working; it is the heal being worth nothing either way. Pinned in
+    # `test_the_clutch_heal_gate_is_still_conditional` below so the loss cannot be mistaken for a
+    # pass.
+
+
+@pytest.mark.req("REQ-GEN-0036")
+@pytest.mark.xfail(strict=True, reason=(
+    "POC-T4/5 CAPABILITY LOSS (Issue #386): `hold-clutch-heal` was deleted with `baseline_heal.py`, "
+    "and it was CONDITIONAL — hold the save while a KO is on the board, fire it when none is. "
+    "Measured on the pair of boards above, the clutch heal now prices 0.0 whether or not a KO is "
+    "available, so nothing separates them. A survival heal priced by the survival delta it buys is "
+    "the swap's premise and may well be right, but 'the same on both boards' is not that premise "
+    "working — it is the option being invisible. Strict, so it turns RED the day a survival term "
+    "reaches this decision"))
+def test_the_clutch_heal_gate_is_still_conditional():
+    """The half of the pair above that did NOT survive the deletion, kept as a live tripwire."""
+    pilot = _pilot()
+    play_salvatore, play_wallys = opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)
+    nebula = attack_opt(NEBULA)
+    lethal = state(active=poke(WINCON, energy=3, hp=70), bench=[poke(PREEVO, hp=70)],
+                   opp_active=poke(678, hp=180), hand=[SALVATORE, WALLYS], prizes=3)
+    cant = state(active=poke(WINCON, energy=3, hp=70), bench=[poke(PREEVO, hp=70)],
+                 opp_active=poke(678, hp=330), hand=[SALVATORE, WALLYS], prizes=3)
+    menu = [play_salvatore, play_wallys, nebula, opt(14)]
+    heal_when_lethal = pilot.explain(make_select(menu, current=lethal)).options[1].score
+    heal_when_not = pilot.explain(make_select(menu, current=cant)).options[1].score
+    assert heal_when_not > heal_when_lethal, (
+        f"the clutch heal prices identically ({heal_when_not}) with and without a KO on the board")
 
 
 # ---------------------------------------------------------- f70: feed-the-firing-accelerator
@@ -244,7 +301,9 @@ def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
     traces = pilot.explain(obs).options
     assert "attach-before-hand-shuffle" not in _fired(traces[0])   # held Water has no home -> no veto
     assert "dont-tutor-the-held-wincon" in _fired(traces[2])       # Mega Signal digs a dead 2nd Mega
-    assert pilot.decide(obs) == [0]                                # play Lillie's to find a Bench
+    # A SEQUENCING claim: a lethal-class attack tops the RANKING here (1002.70), and the point is
+    # that development still goes first. `_finish_turn_last` is where that lives.
+    assert _sequenced(pilot, obs)[0] == 0                          # play Lillie's to find a Bench
 
     # Control — benched Staryu (a base to deploy a 2nd Mega): Mega Signal NOT redundant, held
     # Energy IS placeable (Staryu needs it) -> both guards behave as before.

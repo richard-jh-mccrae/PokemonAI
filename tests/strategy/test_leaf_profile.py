@@ -571,13 +571,27 @@ def test_construction_itself_touches_nothing(pilot):
 def test_the_attach_decider_profile_is_pinned(pilot):
     """The attach decider's model reads, pinned on a menu that actually offers an energy attach. Same
     tripwire as the per-decision pin: if the decider starts reading the Needs assignment or a clock
-    curve, this moves and the per-leaf cost needs re-measuring before it merges."""
+    curve, this moves and the per-leaf cost needs re-measuring before it merges.
+
+    **Driven at the DECIDERS rather than through `explain()` since POC-T4/5 (Issue #386).** The old
+    spelling ran a whole decision and subtracted the per-decision Board profile, on the premise that
+    what remained was the deciders' own reads. Arming the composer broke that premise, not the pin:
+    `plan_turn` now runs a beam search inside the same `explain()`, and it touched 51 further fields
+    — `state_value`, the damage context, both sides' bench stats — none of which the attach decider
+    reads. Left as it was, this tripwire would have been measuring the composer's cost under the
+    decider's name, and would have stopped moving when the decider changed. Calling the two deciders
+    directly measures what the docstring says it measures."""
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     ms = _build_pilot("mega_starmie")[0]
     with _Probe() as probe:
         for obs in _attach_frames():
-            ms.explain(obs)
+            sel = obs.get("select")
+            board = ms._board(obs, sel, carried=ms.carried())
+            for option in (sel or {}).get("option") or []:
+                ms._attach_decision(obs, sel, board, option)
+                ms._promote_retreat_decision(obs, sel, board,
+                                             ms._context(obs, sel, board, option), option)
     added = probe.fields - PER_DECISION_PROFILE
     expected = ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE   # not DENY_SLOT — see its comment
     assert added == expected, (
@@ -605,10 +619,11 @@ def test_an_unread_expensive_cluster_costs_nothing(pilot):
     assert probe.fields == {"mine.prizes_remaining"}
     assert not any("incoming" in f or "deck_energy" in f for f in probe.fields)
 
-# NB: the two ENGINE-DRIVEN halves of this pin live in `test_planner_engine.py`, not here.
+# NB: the ENGINE-DRIVEN halves of this pin live in `test_planner_engine.py`, not here.
 # `test_leaf_profile` collects immediately before `test_lethal_helpers` / `test_lethal_recover`, and
-# `ml_lethal_retreat_boost_to_ko_f24` is documented in `planner._develop_rollout_line` as depending on
-# "the process's RNG position — the CI heisenbug". Starting a native battle ahead of those pins shifts
-# that position and fires the heisenbug (it did, in CI). `test_planner_engine` already drives battles
-# AND sorts after the lethal pins, so the engine halves belong there. Everything above is engine-free
-# by design — keep it that way.
+# `ml_lethal_retreat_boost_to_ko_f24` used to depend on "the process's RNG position — the CI
+# heisenbug", documented in the retired `planner._develop_rollout_line`. Starting a native battle
+# ahead of those pins shifted that position and fired the heisenbug (it did, in CI). POC-T4/5 deleted
+# the rollout, so the ORIGINAL sensitivity is gone — but the placement stands, because moving these
+# back buys nothing and the ordering constraint is cheap insurance against the next engine-driven
+# test. Everything above is engine-free by design — keep it that way.

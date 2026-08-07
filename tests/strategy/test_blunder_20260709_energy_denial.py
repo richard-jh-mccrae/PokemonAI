@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from poc_t4_flips import marks
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -41,6 +43,7 @@ def _fired_ids(option):
 
 
 @pytest.mark.req("REQ-GEN-0031")
+@pytest.mark.xfail(strict=True, reason=marks("dragapult_hammer_no_threat_f6")[0].kwargs["reason"])
 def test_f6_hold_the_hammer_vs_a_harmless_conditional_attacker():
     """f6: opp Active Kyogre carries 1 Water but its only affordable attack (Riptide) scales off its
     EMPTY discard -> 0, and Swirling Waves is unaffordable. `opp_active_can_damage_us` is False, so

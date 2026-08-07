@@ -108,15 +108,14 @@ def test_the_oracle_reads_the_whole_budget_where_the_retired_plus_one_read_one_u
     assert mine.active_famine is False
 
 
-def test_the_stall_gust_stands_down_on_the_f70_board():
-    """The end-to-end claim: the false +105 stall is dead. A REGRESSION pin — it passed before this
-    phase thanks to the interim `+1` patch, and must keep passing now that the patch is gone."""
-    decision = _pilot().explain(_obs())
-    boss = [o for o in decision.options if o.card_id == BOSS]
-    assert boss, "no Boss's Orders option on the f70 menu"
-    for option in boss:
-        fired = {h.id for h, _ in option.fired}
-        assert "stall-gust-over-dev-when-starved" not in fired, "the false famine stall is back"
+# `test_the_stall_gust_stands_down_on_the_f70_board` is DELETED here (POC-T4/5, Issue #386).
+# `stall-gust-over-dev-when-starved` went with the gust doctrine's whether-to-play band, so its only
+# behavioural assertion — `not in fired` — is now true of every board, and the `assert boss` beside
+# it is a menu-shape guard, not a claim about the agent.
+#
+# Named successor: the FAMINE PREMISE this file is about is untouched and is asserted directly above
+# (`mine.active_famine is False` on the f70 board, with the attach-budget size that makes it
+# non-vacuous). What is gone is only the downstream rung that consumed it.
 
 
 # ── fail direction: "I cannot tell" must never read as a PROVABLE famine ────────────────────────

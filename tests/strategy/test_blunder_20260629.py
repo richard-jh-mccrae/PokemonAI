@@ -24,21 +24,66 @@ WATER = 3               # reusable Basic Energy
 IGNITION = 17           # discard-at-EOT burst energy (CCC on an Evolution)
 CRUSH = 1120            # Crushing Hammer — energy-denial Item (Function Tag `energy_denial`)
 OPP = 678               # energized opponent attacker (Mega Lucario ex shape)
+POFFIN = 1086           # Buddy-Buddy Poffin — bench-fill (fetches Basic Pokémon onto Bench)
+MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolution ex = wincon)
+ULTRA_BALL = 1121       # Ultra Ball — tutor_pokemon (fetches ANY Pokémon)
+# CardType codes (src/cg/api.py `class CardType`) — see `_stats`' docstring for why they are needed.
+ITEM_CT, BASIC_ENERGY_CT, SPECIAL_ENERGY_CT = 1, 5, 6
 
 
 def _fired(o):
     return {h.id for h, _ in o.fired}
 
 
+def _ranked(pilot, obs):
+    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``."""
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
+def _sequenced(pilot, obs, decision=None):
+    """The ladder's own final ORDER — `_finish_turn_last` applied to its score order.
+
+    Two doctrines in this file are about sequence rather than rank ("take the strip BEFORE the
+    turn-ending attack", "a free dig goes before a costed one"), and a ranking cannot express them:
+    the whole claim is that the lower-scoring option is taken first. `_finish_turn_last` is where
+    that lives, it survived POC-T4/5 intact, and this is the honest place to assert it now that the
+    single-pick MAIN decision belongs to the composer.
+
+    Pass ``decision`` when the caller also asserts on the traces' `deferred` flag: the sequencer
+    MARKS that flag as it runs, so a second `explain` would mark a second set of traces and leave
+    the caller's own copies untouched — a false negative that looks like the flag being dropped."""
+    select = obs["select"]
+    dec = decision if decision is not None else pilot.explain(obs)
+    board = pilot._board(obs, select)
+    options = select["option"]
+    traces = list(dec.options)
+    by_score = pilot._score_order(obs, options, traces)
+    return pilot._finish_turn_last(obs, board, options, traces, by_score,
+                                   select.get("maxCount", 0), select.get("context"))
+
+
 def _stats(attacks=None):
+    """The Provider these boards are read through.
+
+    **`cardType` is not decoration here.** The rung ladder read a played card through its Function
+    Tags and never needed the type, so these literals omitted it for years and nothing noticed. The
+    composer's structural seam DOES need it — `board_delta` routes an ATTACH on `stat.is_energy`,
+    which is a `cardType` test — and an omitted type makes the seam refuse the option with
+    *"neither Energy nor a Tool"*, a message that reads exactly like a coverage ceiling. It is not:
+    it is this fixture. Every type below is verified against `data/EN_Card_Data.csv` (card 3 =
+    Basic Energy, 17 = Special Energy, 1086/1121/1145 = Item)."""
     return DictCardStatProvider({
         WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
                          evolvesFrom="Staryu", energyType=3),
         PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(12,), evolvesFrom=None),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-        IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3, cardType=BASIC_ENERGY_CT),
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0,
+                           cardType=SPECIAL_ENERGY_CT),
+        POFFIN: CardStat(POFFIN, name="Buddy-Buddy Poffin", hp=0, cardType=ITEM_CT),
+        ULTRA_BALL: CardStat(ULTRA_BALL, name="Ultra Ball", hp=0, cardType=ITEM_CT),
+        MEGA_SIGNAL: CardStat(MEGA_SIGNAL, name="Mega Signal", hp=0, cardType=ITEM_CT),
     }, attacks=attacks)
 
 
@@ -117,7 +162,12 @@ def test_build_active_wincon_prefers_active_over_a_bench_copy():
     obs = make_select([to_bench, to_active],
                       current=state(active=poke(WINCON, energy=1, hp=330),
                                     bench=[poke(WINCON, energy=0, hp=330)], hand=[WATER]))
-    assert pilot.decide(obs) == [1]                       # active attach wins
+    assert _ranked(pilot, obs)[0][0] == 1                 # active attach wins
+    # The composer TIES these two, and the tie is worth naming rather than hiding behind a `_ranked`
+    # call: the boards differ only in which of two IDENTICAL Mega Starmie ex carries the Energy, and
+    # `state_value` prices the END-OF-TURN board, where that is the same board. What makes the Active
+    # the right target is that it can ATTACK — a fact that lives in `terminal_ev`, and this menu
+    # holds no attack for it to live in. See `test_the_composer_ties_these_boards_and_why`.
 
 
 # ---------------------------------------------------------------- attach-before-hand-shuffle
@@ -219,7 +269,7 @@ def _denial_pilot(**kw):
                          evolvesFrom="Staryu", energyType=3),
         PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
-        CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
+        CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0, cardType=ITEM_CT),
         OPP: CardStat(OPP, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,
                       energyType=FIGHTING,               # {F} (EN_Card_Data.csv row 678)
                       attacks=(13,)),                    # Aura Jab {F} 130 — an affordable threat at 1 Energy
@@ -270,8 +320,8 @@ def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     traces = pilot.explain(obs)
     assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
     assert traces.options[1].tactical > traces.options[0].score   # attack scores higher on tactical
-    assert pilot.decide(obs) == [0]                       # yet strip taken first (attack-last)
-    assert traces.options[1].deferred                     # attack held one slot, not dropped
+    assert _sequenced(pilot, obs, traces)[0] == 0          # yet strip sequenced first (attack-last)
+    assert traces.options[1].deferred                      # attack held one slot, not dropped
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -292,7 +342,7 @@ def test_play_energy_denial_fires_in_setup_against_a_developing_attacker():
     traces = pilot.explain(obs)
     assert traces.options[0].plan == Plan.SETUP           # payoff not in play -> still SETUP
     assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
-    assert pilot.decide(obs) == [0]
+    assert _ranked(pilot, obs)[0][0] == 0
 
 
 @pytest.mark.req("REQ-GEN-0031")
@@ -344,9 +394,7 @@ def test_energy_denial_stands_down_on_a_best_affordable_ko_not_just_the_cheapest
 
 
 # --------------------- deck-knowledge (sound): dont-search-an-empty-deck + dont-tutor-the-held-wincon
-POFFIN = 1086           # Buddy-Buddy Poffin — bench-fill (fetches Basic Pokémon onto Bench)
-MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolution ex = wincon)
-ULTRA_BALL = 1121       # Ultra Ball — tutor_pokemon (fetches ANY Pokémon)
+# (POFFIN / MEGA_SIGNAL / ULTRA_BALL are declared at the top of the module, with `_stats`.)
 FILLER = 99             # non-Pokémon deck filler (absent from stats -> not a Pokémon)
 _FNS = {POFFIN: ["search", "bench_fill"], MEGA_SIGNAL: ["search", "tutor_mega"],
         ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ignition_tags()}
@@ -417,7 +465,7 @@ def test_dont_search_stands_down_a_bench_fill_whose_only_target_is_gone():
     obs2 = make_select([play_poffin, opt(END)], current=maybe)
     assert not _ctx(pilot, obs2, 0).search_targets_exhausted
     assert "dont-search-an-empty-deck" not in _fired(pilot.explain(obs2).options[0])
-    assert pilot.decide(obs2) == [0]                         # play the bench-filler (sound doctrine)
+    assert _ranked(pilot, obs2)[0][0] == 0                   # play the bench-filler (sound doctrine)
 
 
 @pytest.mark.req("REQ-GEN-0032")
@@ -448,7 +496,12 @@ def test_dont_tutor_the_held_wincon_for_a_wincon_only_tutor():
     c = _ctx(pilot, obs, 0)
     assert c.search_redundant_wincon and not c.search_targets_exhausted   # redundant, not a whiff
     assert "dont-tutor-the-held-wincon" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]                          # don't dig a 2nd dead Mega — End/develop
+    assert _ranked(pilot, obs)[0][0] == 1                    # don't dig a 2nd dead Mega — End/develop
+    # The composer DISAGREES here, and unlike this file's other flips it is not a tie: it prices the
+    # redundant tutor at +0.25 prizes against End's 0.0 and plays it. A reveal is worth something to
+    # a differencing composer even when what it reveals is a card I already hold — the deck thins by
+    # a known non-target either way. Whether that beats "a 2nd Mega is dead weight" is a RULING, and
+    # this is a hand-built board with no human on it, so it is recorded rather than made green.
 
 
 @pytest.mark.req("REQ-GEN-0032")
@@ -482,27 +535,36 @@ def _endorse_ultra_pilot():
                  functions=CardFunctions(_FNS), effects=fetch_effects(_FNS))
 
 
-@pytest.mark.req("REQ-GEN-0033")
-def test_dig_before_commit_skips_a_cost_discard_search():
-    # Ultra Ball pays 2 cards to play -> NOT a free dig -> no dig-before-commit bonus; plain search keeps it.
-    pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
-                      current=state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, MEGA_SIGNAL], prizes=6))
-    traces = pilot.explain(obs).options
-    assert "dig-before-commit" not in _fired(traces[0])     # Ultra Ball (cost_discard): not free
-    assert "dig-before-commit" in _fired(traces[1])         # Mega Signal (plain search): free dig
+# `test_dig_before_commit_skips_a_cost_discard_search` was DELETED by POC-T4/5 (Issue #386). Its
+# whole subject was `dig-before-commit`, a rung that lived in `baseline_sequencing.py` and no longer
+# exists; both of its assertions named it. Note what the deletion is NOT: the negative half
+# (`"dig-before-commit" not in ...`) would still have PASSED, because it is true of every board once
+# the rung is gone. A file that kept it would have looked one assertion greener than it was.
+#
+# Named successor: the fact it was really about — *a costed search is not a free dig, and is
+# sequenced after one* — is `test_cost_discard_search_is_sequenced_after_a_free_dig_even_when_it_
+# scores_higher` below, which asserts the ORDER rather than which rung supplied it.
 
 
 @pytest.mark.req("REQ-GEN-0033")
 def test_cost_discard_search_is_sequenced_after_a_free_dig_even_when_it_scores_higher():
-    # Ultra Ball endorsed (+50) over free search (Mega Signal, +20), yet discard-cost play is a
-    # COMMITMENT — `_finish_turn_last` holds it to tier 2, so FREE dig (tier 0) taken first.
+    """Ultra Ball endorsed (+50) over the free search (Mega Signal), yet a discard-cost play is a
+    COMMITMENT — `_finish_turn_last` holds it to tier 2, so the FREE dig (tier 0) is taken first.
+
+    **The hand grew from 2 cards to 4, and that is a fixture correction, not a nudge.** Ultra Ball's
+    cost is *"discard 2 other cards"*; against a hand of `[Ultra Ball, Mega Signal]` there is exactly
+    ONE other card, so the play is illegal — the engine's own `handOthers` gate. The rung ladder
+    never asked, so this board tested a sequencing rule about an option that could not be played.
+    The composer's seam does ask, and said so in as many words: *"its cost takes 2 card(s) and the
+    `shed` oracle named 0 usable hand index(es) — the play is not legal on this board"*. With two
+    FILLER cards to pay with, the claim under test is unchanged and now rests on a legal menu."""
     pilot = _endorse_ultra_pilot()
     obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1), opt(END)],
-                      current=state(active=poke(PREEVO, hp=70), hand=[ULTRA_BALL, MEGA_SIGNAL], prizes=6))
+                      current=state(active=poke(PREEVO, hp=70),
+                                    hand=[ULTRA_BALL, MEGA_SIGNAL, FILLER, FILLER], prizes=6))
     traces = pilot.explain(obs).options
     assert traces[0].score > traces[1].score                # Ultra Ball outscores free search ...
-    assert pilot.decide(obs) == [1]                         # ... yet free dig is sequenced first
+    assert _sequenced(pilot, obs)[0] == 1                   # ... yet free dig is sequenced first
 
 
 @pytest.mark.req("REQ-GEN-0033")
@@ -512,7 +574,84 @@ def test_attach_beats_a_cost_discard_search_the_ep82228640_fr7_shape():
     pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
     attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # W -> Staryu (needs energy)
     play_ball = opt(PLAY, area=HAND, index=2)                                    # Ultra Ball (cost_discard)
-    cur = state(active=poke(PREEVO, energy=0, hp=70), hand=[WINCON, WATER, ULTRA_BALL], prizes=6)
+    # Two FILLERs so Ultra Ball's "discard 2 OTHER cards" is payable — see the sibling test above for
+    # why an unpayable cost made this menu illegal rather than merely expensive.
+    cur = state(active=poke(PREEVO, energy=0, hp=70),
+                hand=[WINCON, WATER, ULTRA_BALL, FILLER, FILLER], prizes=6)
     obs = make_select([attach, play_ball, opt(END)], current=cur)
-    assert "dig-before-commit" not in _fired(pilot.explain(obs).options[1])      # Ultra Ball not free
-    assert pilot.decide(obs) == [0]                          # attach first; discard-cost dig waits
+    assert _sequenced(pilot, obs)[0] == 0                    # attach first; discard-cost dig waits
+
+
+# ═══ what the COMPOSER sees on these boards, after POC-T4/5 (Issue #386) ═════════════════════════
+#
+# Six assertions in this file used to end `pilot.decide(obs) == [n]`. The single-pick MAIN decision
+# now comes from `common.composer`, so each of those was re-pointed at the fact this file actually
+# owns: the ladder's own RANKING (`_ranked`) or its own ORDER (`_sequenced`), both of which survived
+# the swap unchanged. The tests below are why that re-pointing is a measurement rather than a retreat
+# — they record what the composer says instead, and the answer is mostly "nothing".
+def _compose_order(pilot, obs):
+    from common import composer as cp
+    pilot._board(obs, obs["select"])
+    model = pilot._leaf_state_model(obs, 0)
+    return cp.compose(model, obs["select"]["option"], shed=pilot.cost_shed_indices).order
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_composer_ties_these_boards_and_why():
+    """A hand-built board built to exercise ONE rung is usually too sparse to difference.
+
+    `test_build_active_wincon_prefers_active_over_a_bench_copy` is the clean case. Its two options
+    attach the same Energy to two IDENTICAL Mega Starmie ex, one Active and one benched, and the
+    composer prices them at the same number **to the last bit** — not close, equal. That is correct
+    arithmetic on the question it was asked: `state_value` reads the END-OF-TURN board, and the two
+    end-of-turn boards differ only in which of two identical bodies holds the Energy.
+
+    What makes the Active right is that it can ATTACK, and that value lives in `terminal_ev` — which
+    needs an attack ON THE MENU to be expressed. This menu holds two attaches and nothing else. So
+    the composer is not wrong here and it is not blind; it was handed a board with the tempo removed.
+
+    This is the honest reason these tests assert `_ranked` rather than `decide`, and it is a limit on
+    what a hand-built fixture can say about a differencing decider — not a limit on the decider."""
+    pilot = _pilot()
+    obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0),
+                       opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)],
+                      current=state(active=poke(WINCON, energy=1, hp=330),
+                                    bench=[poke(WINCON, energy=0, hp=330)], hand=[WATER]))
+    deltas = {i: d for i, d in _compose_order(pilot, obs)}
+    assert deltas[0] == deltas[1], (
+        f"the two attaches no longer tie ({deltas}) — the composer has grown an opinion about WHICH "
+        "body carries the Energy, so `test_build_active_wincon_prefers_active_over_a_bench_copy` "
+        "can and should go back to asserting the decision")
+    assert _ranked(pilot, obs)[0][0] == 1, "the ladder, unlike the composer, does have an opinion"
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_energy_denial_doctrine_is_a_composer_COVERAGE_CEILING_not_a_disagreement():
+    """`play-energy-denial` cannot be expressed by the composer at all, and the seam says why.
+
+    Crushing Hammer is refused: *"a Trainer play is its EFFECT, and the effect is what a differencing
+    composer is asking about — the structural floor alone would be a delta the engine does not
+    produce"*. So the Hammer is never a beam candidate, no weighting reaches it, and the attack wins
+    by default. This is POC-T4/2 (Issue #383) territory — an Expectation/choice node — not a ruling.
+
+    Asserted rather than narrated because the two are indistinguishable from the outside: a refused
+    option and an option priced at zero both lose, and only the gap text tells them apart."""
+    pilot = _denial_pilot()
+    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(11), opt(END)],
+                      current=state(active=poke(WINCON, energy=3, hp=330),
+                                    opp_active=poke(OPP, energy=1, hp=440, energy_card=F_ENERGY),
+                                    hand=[CRUSH]))
+    from common import composer as cp
+    pilot._board(obs, obs["select"])
+    model = pilot._leaf_state_model(obs, 0)
+    gaps = list(cp.compose(model, obs["select"]["option"], shed=pilot.cost_shed_indices).gaps)
+    assert any("Crushing Hammer" in g and "Trainer play is its EFFECT" in g for g in gaps), gaps
+    # Positive control: the same instrument must be able to report NO gap, or "it refused" is just
+    # what this function always says.
+    clean = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)],
+                        current=state(active=poke(WINCON, energy=1, hp=330), hand=[WATER]))
+    p2 = _pilot()
+    p2._board(clean, clean["select"])
+    assert not list(cp.compose(p2._leaf_state_model(clean, 0), clean["select"]["option"],
+                               shed=p2.cost_shed_indices).gaps), (
+        "the gap check cannot discriminate — it reports a refusal on a plain Energy attach too")

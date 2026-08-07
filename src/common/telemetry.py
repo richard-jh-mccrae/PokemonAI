@@ -74,19 +74,23 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         "margin": margin,
     }
     ranked = getattr(planned, "ranked_by", None) if planned else None
-    if ranked is not None:                        # sparse: only when multi-candidate engine ranking
-        rec["planned"]["ranked"] = ranked         # ran (`planner_engine_rank`) — how the committed
-        rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # line was valued +
-                                                  # whether it beat the closed-form pick (A/B signal)
-    if planned is not None and planned.goal == "develop":     # develop-rung Phase 1: the pick turns on
-        rec["planned"]["value"] = round(planned.value, 3)     # this leaf value — a correction that
-                                                  # disagrees is a claim about the LEAF, unreadable without
-                                                  # it. Keyed on goal=="develop" so other planned records
-                                                  # stay byte-identical.
-    plan_candidates = getattr(decision, "plan_candidates", None)
-    if plan_candidates is not None:               # sparse: the develop rung's ranked end-boards (top-K,
-        rec["plan_candidates"] = plan_candidates  # sorted desc, committed/greedy flagged) — free to emit
-                                                  # (the rung already valued every candidate to pick)
+    if ranked is not None:                        # sparse: how the committed heuristic line was VALUED
+        rec["planned"]["ranked"] = ranked         # ("composer" since POC-T4/5; the retired runtime
+        rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # rollout's "engine" is
+                                                  # gone). `diverged` is now always False for pool lines.
+    if planned is not None and planned.goal == "compose":     # the composer's pick turns on this end-state
+        rec["planned"]["value"] = round(planned.value, 3)     # score — a correction that disagrees is a
+                                                  # claim about the LEAF, unreadable without it. Keyed on
+                                                  # goal=="compose" so other planned records are unchanged.
+                                                  # It replaces the identical goal=="develop" key the
+                                                  # retired rollout rung emitted.
+    composer = getattr(decision, "composer", None)
+    if composer is not None:                      # sparse: the composer's margin telemetry (Issue #263
+        rec["composer"] = composer                # § *Beam-quality package* item 3 — REQUIRED, not
+                                                  # optional), run stats and coverage-gap reasons. Emitted
+                                                  # whenever the composer RAN, including when it declined,
+                                                  # because a decline's reason is the thing worth reading.
+                                                  # Replaces `plan_candidates`, which died with the rung.
     objectives = getattr(decision, "objectives", None)
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
         rec["objectives"] = objectives            # — race delta + both cheapest-path turns

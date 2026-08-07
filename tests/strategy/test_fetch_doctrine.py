@@ -31,6 +31,18 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
+def _ranked(pilot, obs):
+    """The doctrine's own ranking of the menu, best-first, as ``[(index, score), ...]``.
+
+    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
+    sequence composer: the fetch doctrine still SCORES every option, but it no longer picks. A
+    `decide(obs) == [0]` line in this file therefore stopped testing the doctrine and started testing
+    the composer, on a hand-built board no human ever ruled. The doctrine's ranking is the fact this
+    file owns, and it is unchanged — see `test_the_doctrine_still_RANKS_but_no_longer_DECIDES`.
+    """
+    return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
+
+
 # The fetch doctrine's whiff/redundancy/confirmed-hit signals read a search's FETCH CLAUSES from
 # `card_effects.json` (ADR-0032), the tier that REPLACED the tag-keyed `_FETCH_FILTERS`. These synthetic
 # fetchers carry TAGS only, so mirror the standard fetcher tags to their clauses (`fetch_effects`).
@@ -333,7 +345,7 @@ def test_fetch_is_endorsed_when_it_can_grab_a_needed_card():
                       current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)], hand=[ULTRA]))
     assert "fetch-when-it-fills-a-need" in _fired(pilot.explain(obs).options[0])
     assert pilot.explain(obs).options[0].score > 0                   # the endorsement gives it value
-    assert pilot.decide(obs) == [0]                                  # so the fetch is played, not End
+    assert _ranked(pilot, obs)[0][0] == 0                            # so the fetch leads, not End
 
 
 # --- whether-to-play: the endorsement is correctly SILENT when nothing is lacking ----------------
@@ -456,7 +468,7 @@ def test_search_the_confirmed_hit_fires_only_once_the_tracker_proves_the_needed_
     obs["own_prizes"] = {FILLER: 6}                    # anchored: no MEGA prized -> both provably in deck
     fired = _fired(pilot.explain(obs).options[0])
     assert "search-the-confirmed-hit" in fired
-    assert pilot.decide(obs) == [0]                    # the certain hit is played over End
+    assert _ranked(pilot, obs)[0][0] == 0              # the certain hit leads over End
 
     unanchored = make_select([play_signal, opt(END)], current=cur)
     assert "search-the-confirmed-hit" not in _fired(pilot.explain(unanchored).options[0])
@@ -505,7 +517,7 @@ def test_confirmed_hit_prefers_the_provable_search_between_two_digs():
     d = pilot.explain(obs)
     assert "search-the-confirmed-hit" in _fired(d.options[0])
     assert "search-the-confirmed-hit" not in _fired(d.options[1])
-    assert pilot.decide(obs)[0] == 0                   # the provable hit leads the turn's digs
+    assert _ranked(pilot, obs)[0][0] == 0              # the provable hit leads the turn's digs
 
 
 @pytest.mark.req("REQ-GEN-0061")
@@ -562,7 +574,7 @@ def test_costly_fetch_sheds_junk_boosts_ultra_ball_to_the_free_dig_band():
     assert "costly-fetch-sheds-junk" in fired
     assert "fetch-when-it-fills-a-need" in fired
     assert pilot.explain(obs).options[0].score >= 20               # free-dig band
-    assert pilot.decide(obs) == [0]
+    assert _ranked(pilot, obs)[0][0] == 0
 
 
 BURST, NEUT_SINGLE, POWERED_ATK = 17, 662, 900
@@ -603,7 +615,7 @@ def test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts():
                                           list(pilot.functions.tags(ULTRA)), board, None)
     assert (junk, live, key) == (True, False, False)
     assert "costly-fetch-sheds-junk" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [0]
+    assert _ranked(pilot, obs)[0][0] == 0
 
 
 ENGINE_SUP = 661        # a draw Supporter — live at a forced discard (keep-engine floor)
@@ -666,7 +678,7 @@ def test_neutral_sheds_leave_the_fetch_at_the_pessimism_baseline():
     fired = _fired(trace)
     assert {"costly-fetch-sheds-junk", "dont-shed-a-live-card", "dont-shed-a-key-card"} & fired == set()
     assert "fetch-when-it-fills-a-need" in fired
-    assert pilot.decide(obs) == [0]                                # +8 still beats End
+    assert _ranked(pilot, obs)[0][0] == 0                          # +8 still leads End
 
 
 @pytest.mark.req("REQ-GEN-0065")
@@ -837,3 +849,32 @@ def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
     assert plan.row_indices != plan.hand_indices or 1 in plan.row_indices, (
         "fixture is vacuous unless the two coordinate systems actually diverge here")
     assert plan.hand_indices == taken
+
+
+# --- the doctrine's ROLE after POC-T4/5 (Issue #386) ---------------------------------------------
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_doctrine_still_RANKS_but_no_longer_DECIDES():
+    """The fetch doctrine survived the swap intact. What it lost is the last word.
+
+    Six tests in this file used to end `assert pilot.decide(obs) == [0]`. Every one of their
+    mechanism assertions still passes — the rung fires, the band is right, the shed predictor picks
+    the same cards — and only the DECISION moved, because a single-pick MAIN decision now comes from
+    the sequence composer rather than from the rung total. So those six now assert `_ranked(...)`,
+    which is the doctrine's own output and the thing this file is about.
+
+    This test is what stops that re-pointing from being a quiet climbdown. It records the role in
+    one place: on a board where the doctrine ranks the fetch top by a wide margin, the agent is
+    free to play something else, and that is not a regression. If a future change puts the ladder
+    back in charge at MAIN, the composer's disagreement disappears and this turns red — which is
+    exactly when someone should be made to look at the six re-pointed assertions again."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[ULTRA, JUNKMON, JUNKMON]))
+    ranking = _ranked(pilot, obs)
+    assert ranking[0][0] == 0 and ranking[0][1] >= 20, ranking   # the doctrine's verdict: play it
+    assert pilot.decide(obs) != [0], (
+        "the composer now agrees with the rung total here, so this test no longer demonstrates that "
+        "the two are separate mechanisms — re-point it at a board where they still differ, or "
+        "promote the six `_ranked` assertions in this file back to `decide`")
