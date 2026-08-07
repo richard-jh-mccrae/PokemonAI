@@ -260,6 +260,14 @@ DIFFERENT correct answer than the one recorded," and four of the nine turned out
 | `82748422-26` | Attach Energy → Mega Starmie ex | Play Hilda | **NOT wrong** — fetching energy here is fine |
 | `85058574-88` | Attack with Aura Jab | Play Ultra Ball | **NOT wrong** — discard an Energy + Solrock, fetch Mega Lucario ex is a good move |
 
+**The 4 genuine misses are DEFERRED to Issue #444**, which carries their margins, the developer's
+verbatim rationale for each, and one fix already measured and rejected (ranking a chance node by
+`expected()` instead of `best()`: fixes 2, breaks 5, agreement 88 -> 87 — recorded there so the next
+reader does not repeat it). The margins are the finding: Ultra Ball wins `82228640-7` by ~**0.002
+prizes** and Hilda wins `82752045-18` by ~**0.06**. That is not a gross mis-valuation, it is an
+ordering decided by a difference too small to mean anything — the same failure CLASS as ADR-0128's
+float-noise floor, three orders of magnitude up, which that floor does not catch.
+
 **4 genuine misses, 1 out-of-scope architectural gap, 4 that were never really regressions** — the
 binary metric just has no way to record "also correct." None of the 4 genuine misses trace to a
 defect in THIS issue's code: each is the composer's 1-ply valuation making a call this issue's
