@@ -10,7 +10,8 @@ verbatim; fork semantics follow docs/pyeng/determinism.md §4:
 - predicted hidden zones are RESHUFFLED by the fork (deterministically: same call + same
   steps = same outcome); callers must never trust order-dependent verdicts. A deck REVEALED
   by the select (``select.deck``) keeps its true recorded order — options index into it.
-- ``manual_coin=True``: every coin flip poses a COIN_HEAD YesNo instead of consuming rng.
+- ``manual_coin=True``: coin flips routed through `chain._flip` pose a COIN_HEAD YesNo instead of
+  consuming rng. Flips calling `GameState.coin_flip` directly do NOT honour it.
 - sessions are CLONE-PER-STEP: `session_step(id)` never mutates the state behind `id`
   (natively that is why SearchRelease exists); `session_end` clears the whole table.
 

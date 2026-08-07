@@ -39,7 +39,7 @@ restoring `gates.orphan_rulings() == []`) and the measured gate consequence belo
 ### R1 — a `match`-scope Correction should stop grading at its Anchor — RETIRED, not left open (2026-08-03)
 
 **Superseded (Issue #353): the scope itself is gone, not just this one record.** See
-[ADR-0049](../adr/0049-corrections-carry-a-scope-decision-turn-or-match.md) Amendment A — `match` is
+[ADR-0049](../../adr/0049-corrections-carry-a-scope-decision-turn-or-match.md) Amendment A — `match` is
 removed from `SCOPES` at the writer, and both gates gain a defensive `scope != "match"` read-time guard
 against archive-tolerance (a hand-edit or merged branch could still introduce the shape even with the
 writer gone). The "hypothetical future match-scope record" this section was written to wait for can no

@@ -1,7 +1,7 @@
 # ML Training Pipeline — Build Plan (living playbook)
 
 **Governing docs:** [ADR-0053](../../adr/0053-ml-training-pipeline-build-plan.md) (decisions —
-read first) · [research report](../../research/ml-training-system.md) (evidence base).
+read first) · [research report](../../archive/research/ml-training-system.md) (evidence base).
 This doc is the operational plan: per-session scopes, gate checklists, and the status ledger.
 
 **How a fresh session uses this doc:** read ADR-0053 + this file; check the status ledger;
@@ -16,7 +16,7 @@ as separate concurrent worktree sessions.
 |---------|----|-------|--------|-------|
 | S1 | WP0 | Corpus v2 + contract freeze + background gen | ☑ built 2026-07-13 | `tools/sim/corpus.py`; contracts frozen → [ml-training-contracts.md](ml-training-contracts.md); C2 `provenance` field built; ~0.028 GB-comp/game (30k games ≈ 0.84 GB) |
 | S2a | WP1 | Value net v2 | ☐ blocked on S1 | design LOCKED → [ml-training-design-s2a.md](ml-training-design-s2a.md) |
-| S2b | WP2 | Eval harness | ☑ harness built 2026-07-19 (corpus-free) | design LOCKED → [ml-training-design-s2b.md](ml-training-design-s2b.md); `tools/sim/eval_{run,report,strata,aivat,spike}.py` + CLI + guide (`tools/sim/EVAL.md`); 32 tests green. **Pending corpus/WP1:** the spike's variance-reduction verdict (driver built) + the AIVAT fill (null seam) |
+| S2b | WP2 | Eval harness | ☑ harness built 2026-07-19 (corpus-free) | design LOCKED → [ml-training-design-s2b.md](../../archive/plans/ml/ml-training-design-s2b.md); `tools/sim/eval_{run,report,strata,aivat,spike}.py` + CLI + guide (`tools/sim/EVAL.md`); 32 tests green. **Pending corpus/WP1:** the spike's variance-reduction verdict (driver built) + the AIVAT fill (null seam) |
 | — | G1 | Value-net gate | ☐ | measure per s2a design D3/D4 |
 | S3a | WP3 | Blunder labeler | ☑ plumbing built 2026-07-19 (integration G1-gated) | `tools/train/label/` (vread/triage/expert/detect/emit/report/run) + `tests/label/` (31 tests, real corpus fixture); `value_delta` category; `data/corrections/machine/` gitignored; filters.yml+ci.yml `tests/label`. θ calibration + mass emit wait on G1 (design §Acceptance). |
 | S3b-1 | WP4 | Expert-iteration plumbing | ☐ blocked on G1 | design LOCKED → [ml-training-design-s3b.md](ml-training-design-s3b.md); outer-loop re-detection invokes the S3a labeler CLI — land S3a first (fit-extension plumbing may parallelize) |
@@ -151,7 +151,7 @@ passes G1). Run `python tools/sim/corpus.py` first — see the TODO in `tools/si
 
 **Owns:** `tools/sim/eval*` (new files only).
 
-> **Design is LOCKED in [ml-training-design-s2b.md](ml-training-design-s2b.md)** (Fable design
+> **Design is LOCKED in [ml-training-design-s2b.md](../../archive/plans/ml/ml-training-design-s2b.md)** (Fable design
 > grill, 2026-07-19): arbitrary-spec common-opponent pairing; 3%-delta default power; flips_on
 > verdict + checkpoint regression tripwire (pool = submitted builds); duplicate-deal spike
 > reframed to duplicate-POSITION replay (aux mode only — fork reshuffles hidden zones and
@@ -181,7 +181,7 @@ recorded here.
 
 **Owns:** new labeler package under `tools/train/` (e.g. `tools/train/label/`).
 
-> **Design is LOCKED in [ml-training-design-s3a.md](ml-training-design-s3a.md)** (Fable design
+> **Design is LOCKED in [ml-training-design-s3a.md](../../archive/plans/ml/ml-training-design-s3a.md)** (Fable design
 > grill, 2026-07-19): detector core per s3b D1/D2, detector code homed in `tools/train/label/`
 > (S3b consumes via store/CLI/thresholds, never an import); triage Φ-deltas rank but never emit;
 > θ set by a stratified precision review (≥ 0.80 gate, committed `thresholds.json`); machine
@@ -297,5 +297,5 @@ compensations:
   [ml-training-design-s2a.md](ml-training-design-s2a.md) and
   [ml-training-design-s3b.md](ml-training-design-s3b.md). Opus executes the locked designs.
   2026-07-19: the S2b grill also ran on Fable 5 —
-  [ml-training-design-s2b.md](ml-training-design-s2b.md) locked; all three parallel-phase
+  [ml-training-design-s2b.md](../../archive/plans/ml/ml-training-design-s2b.md) locked; all three parallel-phase
   designs are now specified and every remaining session is execution.

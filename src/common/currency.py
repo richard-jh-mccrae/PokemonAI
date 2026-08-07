@@ -261,8 +261,8 @@ def item_hold_to_damage(keep_worth: float) -> float:
 # scale's whole range is 0–30 by construction (`ROLE_TIER`), so a 100-point slot would not price a
 # held card, it would delete every other card's contribution from the assignment — the `_PRIZE_UNIT
 # = 12` failure mode with the sign reversed. Pricing the hand ON ITS OWN SCALE is what the DP is for.
-# `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the constant that must settle this; it is `None`
-# and T3 (Issue #262) owns authoring it, so this is the same RECONCILIATION DEBT `DEPLOY_BAND` and
+# `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the constant that settles this; it now ships
+# `1.0 / 120.0`, so this is the same RECONCILIATION DEBT `DEPLOY_BAND` and
 # `ITEM_HOLD_WORTH_RATE` carry — with the disagreement quantified here so it is tripped over rather
 # than discovered.
 

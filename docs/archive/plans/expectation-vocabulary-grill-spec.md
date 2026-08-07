@@ -2,7 +2,7 @@
 
 > ## ⚠️ SUPERSEDED — historical record only. Do NOT build from this document.
 >
-> **The ruling record is [ADR-0130](../adr/0130-a-reveal-is-resolved-by-the-zone-it-reads-and-a-cost-is-charged-from-a-supplied-seam.md);
+> **The ruling record is [ADR-0130](../../adr/0130-a-reveal-is-resolved-by-the-zone-it-reads-and-a-cost-is-charged-from-a-supplied-seam.md);
 > the spec that was built is Issue #394's rewritten body.** This document is the FIRST grill (2026-08-05),
 > kept for its derivations and measurements. Its *design* was re-derived from the code before the build
 > and changed materially, so following it now would build something that does not match what shipped:

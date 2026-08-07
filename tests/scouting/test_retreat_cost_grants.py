@@ -63,12 +63,13 @@ removed only the first, so item 1 below still stands.
    (fail-closed, which is why they survived); ignoring a Tool SURCHARGE under-states it, so each is
    named with the direction that miss actually pushes:
 
+   STALE (2026-08-07): three of the five names below no longer resolve — `_path_bench_extra`,
+   `_can_promote` and `_retreat_mobility_credit` are gone, so the enumeration must be re-derived
+   before it can be trusted as a complete list again. `_opp_active_pinned` still exists.
+
    | site | whose body | a missed surcharge makes it… |
    |---|---|---|
-   | `objectives.py` `_path_bench_extra` | theirs | read them as MORE mobile — pessimistic about the threat, safe |
-   | `combat.py` `_can_promote` | theirs | admit the promotion — documented fail-OPEN by design, safe |
    | `planner.py` `_opp_active_pinned` | theirs | claim "not pinned", so FEWER deferrals — fail-closed, safe |
-   | `pilot.py` `_retreat_mobility_credit` | mine | credit a body as retreat-funded one Energy early — a value term, not a claim |
    | `pilot.py` the disruptor-lock retreat guard | mine | believe a retreat is reachable when it is not — a crude guard, explicitly so |
 
    None is KO_SCORE-class, and Gravity Gemstone is 0 copies across our five decks, so this is a

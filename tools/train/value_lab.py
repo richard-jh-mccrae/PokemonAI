@@ -42,9 +42,10 @@ terminal candidate in Issue #263's design and does not cost a transition.
 
 **What this deliberately does NOT report, and why that is the finding rather than a gap.** The other
 half of a per-decision cost is the apply-seam transition, and it **cannot be timed at this commit**:
-`apply_option` is POC-T0's frozen contract and raises `NotImplementedError` for every MODELLED fate
-(measured — 1690 of 1690 MODELLED options over the committed corpus, while `fate()` itself resolves
-them fine, which is the positive control that the probe was not simply broken). Issue #263 builds
+`apply_option` was POC-T0's frozen contract and raised `NotImplementedError` for every MODELLED fate
+when this was written (1690 of 1690 over the committed corpus). It has been IMPLEMENTED since
+POC-T4/1 (Issue #382) and now returns a StateModel or a `Refusal`, so the figure below is a
+historical measurement, not the current state. Issue #263 built
 that transition, so the seam its own budget depends on does not exist to be measured before it. The
 derived per-decision figure is therefore a **LOWER BOUND**, carried in the artifact as
 `per_decision_p95_ms_is_lower_bound` rather than as prose somewhere a consumer will not read.
@@ -67,8 +68,8 @@ from common.state_value import FAMILIES, state_value            # noqa: E402
 #: A consumer reading `per_decision_p95_ms` off the JSON must meet the omission there, not have to
 #: come back to this module to learn that half the cost is missing.
 APPLY_SEAM_UNMEASURED = (
-    "`apply_option` raises NotImplementedError for every MODELLED fate at this commit (POC-T0's "
-    "frozen contract; Issue #263 builds the transition), so the transition half of a per-decision "
+    "`apply_option` raised NotImplementedError for every MODELLED fate when this lab was written "
+    "(POC-T0's frozen contract); it has been implemented since Issue #382, so the transition half "
     "cost cannot be measured BEFORE the issue that needs it. This figure counts leaf evaluations "
     "only and is a LOWER BOUND."
 )

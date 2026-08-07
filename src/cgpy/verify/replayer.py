@@ -3,8 +3,8 @@
 Randomness binding (docs/pyeng/determinism.md): draw identities come from the mover's own
 full DRAW logs (a seat's draws always land in its own next window, in order), coins from that
 seat's COIN logs, and deck/prize ORDER re-syncs from the god frame at every step — with a
-multiset assertion, and order-adoption only when a shuffle actually occurred in the window
-(otherwise an order mismatch is a real divergence).
+multiset assertion, then UNCONDITIONAL order adoption from the god frame (`_sync_hidden_order`
+has no shuffle gate; only a multiset mismatch is reported as a divergence).
 
 The per-frame comparison is exact: the mover's live obs (select + logs + current) must equal
 the recorded one with no normalization.

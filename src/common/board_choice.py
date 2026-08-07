@@ -140,9 +140,8 @@ ranker falls back to expand-all in a deterministic order under the same cap.
 
 ``m`` is :data:`~common.board_expectation.BRANCH_CAP` (12), **reused, not a second constant**. A choice
 node and a chance node cost the same thing — leaf evaluations on one option — so they take the same
-cap, and the `composer-budget-caps` whitelist entry Issue #385 owes covers both. That entry does
-**not exist yet**; stated as owed rather than implied, so a reader grepping `sound_rules.py` for the
-name and finding nothing knows why. Truncation is REPORTED via `Expectation.truncated`, never silent.
+cap, and `sound_rules.py`'s `composer-budget-caps` entry covers both — its reason text names this
+module's reuse explicitly. Truncation is REPORTED via `Expectation.truncated`, never silent.
 
 ## Parent-slot beam accounting (the consumer's half, recorded here because it sizes this module)
 

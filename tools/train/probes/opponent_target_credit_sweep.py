@@ -29,7 +29,7 @@ ADR-0118 (sham control) for why the sham arms are mandatory here.
 
 ## Arms
 
-    A  shipped      CardStat.prize_value                                   what the rows do today
+    A  shipped      CardStat.prize_value                                   the PRE-ADR-0119 baseline
     B  damage       + `state_value._forward_credit(theirs.forward_payoff)` what `threat` does
     C  prize/raw    + (forward_prize - own_prize) * halve(hops)
     D  prize/band   + _READINESS_W * (forward_prize - own_prize) * halve(hops)

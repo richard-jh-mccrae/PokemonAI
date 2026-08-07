@@ -10,7 +10,7 @@ record: [docs/architecture/tier-3-match-objectives.md](../architecture/tier-3-ma
 (~75%) and [tier-4-opponent-model.md](../architecture/tier-4-opponent-model.md) (the overlay).
 Terms added to [src/common/CONTEXT.md](../../src/common/CONTEXT.md): *Prize Path*, *Path Denial*,
 *KO Race*. **Partially reverses** the prescription in
-[deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) ("do not bolt
+[deferred-multi-turn-criticals.md](../archive/todo/deferred-multi-turn-criticals.md) ("do not bolt
 multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation + the
 value-model leaf-eval") — that doc carries a correction note pointing here.
 

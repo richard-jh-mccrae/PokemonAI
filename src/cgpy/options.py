@@ -1,7 +1,8 @@
 """Option-list builders — ALL option generation and ordering lives here (ADR-0059).
 
 Ordering is the highest-risk parity surface (agents choose by index), so every builder
-encodes the pinned rules from docs/pyeng/determinism.md §3 and nothing else builds options:
+encodes the pinned rules from docs/pyeng/determinism.md §3. NOT the only builder — `chain.py`
+builds sub-select option lists at a dozen sites (SKILL / ENERGY / TOOL_TARGET and friends):
 
 - MAIN: hand-indexed options ascending (PLAY / ATTACH / EVOLVE interleaved by the source
   card's hand index; one ATTACH/EVOLVE option per in-play target, active first then bench

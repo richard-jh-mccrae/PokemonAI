@@ -4,7 +4,7 @@ This document explains, from first principles, how a flagged mistake in a game b
 change to the agent. It is written to be readable without machine-learning background, and to name
 the formal techniques used so the process can be defended to a professional data scientist. Each
 `/blunder-buster` run also writes a short, plain-language report under
-[`docs/tuning/runs/`](runs/) — this page is the "how it works" those reports link to.
+[`docs/tuning/runs/`](runs) — this page is the "how it works" those reports link to.
 
 See also: [blunder-tuner.md](../blunder-tuner.md) (the implementation), [weights.md](../weights.md)
 (the weight scale), and [ADR-0009](../adr/0009-training-methodology.md) / [ADR-0017](../adr/0017-corrections-compile-to-hypotheses.md)

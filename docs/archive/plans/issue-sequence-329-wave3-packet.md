@@ -1,7 +1,7 @@
 # Wave-3 packet — issue-sequence run (329, 332, 362, 351, 350, 349, 374, 375, 372)
 
 > **RULED 2026-08-04.** Every frame in this packet now carries a developer verdict. The answers
-> live in [`data/leaf_lab/pr359-rulings.md`](../../data/leaf_lab/pr359-rulings.md) - 1 REFUTED,
+> live in [`data/leaf_lab/pr359-rulings.md`](../../../data/leaf_lab/pr359-rulings.md) - 1 REFUTED,
 > 5 REVERT. Neither baseline was re-captured. Note two corrections recorded there: this packet's
 > flip list is NOT the gate's unruled list (it records only flips this batch caused), and
 > `83661649|0|decision|54` was never unruled - it already carried a standing `covered` ruling.

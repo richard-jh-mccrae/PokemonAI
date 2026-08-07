@@ -6,7 +6,7 @@ importantly — that nothing here returns a plausible answer before it means one
 
 Two tests carry the weight:
 
-* `test_an_unimplemented_transition_refuses_rather_than_returning_the_model_unchanged` — an identity
+* `test_a_transition_that_cannot_be_computed_refuses_rather_than_returning_the_model_unchanged` — an identity
   stub prices every play at exactly 0.0 under differencing, and 0.0 is a real answer, so an
   unimplemented build would read as a working one that thinks nothing is worth doing.
 * `test_an_unmodellable_kind_returns_a_REFUSAL_not_a_silent_no_op` — the 2026-08-01 ordering

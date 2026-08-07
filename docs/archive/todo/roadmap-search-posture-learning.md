@@ -1,9 +1,9 @@
 # Roadmap — graduating the Pilot: cheap f75 → Posture → Tier-1 Search → Self-play & Automatic Value Model
 
 > **SUPERSEDED as the architecture reference (2026-07-05).** The final architecture now lives in
-> [docs/architecture/tiers.md](../architecture/tiers.md) (seven tier docs with %-complete), decided
-> in [ADR-0039](../adr/0039-gamble-lines-are-closed-form-expectimax-over-outcome-classes.md) /
-> [ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md). This file stays as
+> [docs/architecture/tiers.md](../../architecture/tiers.md) (seven tier docs with %-complete), decided
+> in [ADR-0039](../../adr/0039-gamble-lines-are-closed-form-expectimax-over-outcome-classes.md) /
+> [ADR-0040](../../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md). This file stays as
 > the M0–M4 **milestone history** (provenance links remain valid). Mapping: M0/M2 → Tier 4,
 > M1 → the cross-tier A/B gate, M3 → Tiers 1+6 (M3's "multi-turn only behind engine search"
 > prescription is partially reversed by ADR-0040 — closed-form KO-Race arithmetic is Tier 3),
@@ -11,9 +11,9 @@
 
 **Status:** plan (2026-06-27). Sequencing + concrete scope for the four next capability jumps past the
 Tier-0 rules Pilot. Trigger-gated, not date-gated. Anchored to
-[ADR-0007](../adr/0007-learning-is-one-offline-value-model.md),
-[ADR-0008](../adr/0008-pilot-is-a-layered-rules-pipeline.md),
-[ADR-0009](../adr/0009-training-methodology.md), [agent-architecture.md](../agent-architecture.md).
+[ADR-0007](../../adr/0007-learning-is-one-offline-value-model.md),
+[ADR-0008](../../adr/0008-pilot-is-a-layered-rules-pipeline.md),
+[ADR-0009](../../adr/0009-training-methodology.md), [agent-architecture.md](../../agent-architecture.md).
 
 ## TL;DR — the dependency chain
 
@@ -51,7 +51,7 @@ See [[snipe-threat-two-signals]].
 
 **Entry:** none.
 
-**Build** — design grilled & adversarially reviewed 2026-06-28; see [ADR-0020](../adr/0020-forward-evolution-index-is-a-provider-primitive.md) and `[[snipe-threat-two-signals]]`.
+**Build** — design grilled & adversarially reviewed 2026-06-28; see [ADR-0020](../../adr/0020-forward-evolution-index-is-a-provider-primitive.md) and `[[snipe-threat-two-signals]]`.
 1. **Forward evolution index = provider primitive** (NOT a public `all_stats()`). Build it **inside**
    `EngineCardStatProvider`/`DictCardStatProvider` from the `{cardId: CardStat}` cache they already
    enumerate: a pure `_build_forward_index(cache)` that inverts `evolvesFrom` (a *name*) into
@@ -89,14 +89,14 @@ immunity field on `CardStat` yet); affordability ignored (opponent-agnostic uppe
 **Status: BUILT.** The whole M1 surface ships and is tested (28 tests; smoke A/B confirmed end-to-end):
 seat-balancing (`seat_plan`/`balanced_tally`/`by_seat`) + the `name@overlay.json` config overlay
 (→ `AGENT_OVERLAY`, `common/config.py`) in `tools/sim/battle.py`; the Battle Result → `data/battles.jsonl`
-in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../adr/0057-selfplay-corpus-uses-cabt-env-path.md)).
+in `tools/sim/result.py`; the M1b own-game corpus in `tools/sim/selfplay.py` ([ADR-0022](../../adr/0057-selfplay-corpus-uses-cabt-env-path.md)).
 A/B a config with `python tools/sim/battle.py <agent> <agent>@overlay.json`. The build notes below are
 retained as the as-built record.
 
 **Why early:** later milestones each claim "X helps"; a cheap offline A/B triages configs before spending a
 scarce real-ladder submission. It is a **Pre-filter, not the gate** — the real Kaggle ladder stays
 authoritative (ADR-0009 Job C). Local self-play is noisy/mirror-biased, so trust *negative* signals (drop
-clearly-worse configs); a positive is only a hint. *(Grilled & measured 2026-06-28; see [ADR-0021](../adr/0021-prefilter-balances-seats.md).)*
+clearly-worse configs); a positive is only a hint. *(Grilled & measured 2026-06-28; see [ADR-0021](../../adr/0021-prefilter-balances-seats.md).)*
 
 **Entry:** a working packaged agent (have it) + the cabt engine (have it). The existing **Battle** harness
 (`tools/sim/battle.py`) already runs N-match A/B in **isolated subprocesses** with Wilson CI + parallelism —
@@ -116,7 +116,7 @@ the glossary reserves for the real competition).
    rejected** (no pressure → those dynamics never occur → win-rate saturates → no discrimination; kept only as a
    crash/floor check). A representative-meta **agent gauntlet** comes later, once meta decks are handcrafted into
    agents (battle.py already does agent-A-vs-B).
-4. **Persist a Battle Result (output capture, [ADR-0021](../adr/0021-prefilter-balances-seats.md) amendment).** Today
+4. **Persist a Battle Result (output capture, [ADR-0021](../../adr/0021-prefilter-balances-seats.md) amendment).** Today
    `battle.py` only *prints* a report and discards per-Match results. Append one immutable, self-describing row per run
    to a committed `data/battles.jsonl` (reuse `tools/submit/history.py`): an aggregate header (provenance, the **overlay
    measured**, `params` incl. the seat split, `tally`, win-rate + Wilson CI, `hypothesis`) + `matches[]` rows (the source
@@ -124,7 +124,7 @@ the glossary reserves for the real competition).
    `deck_hash` per contestant; `turns` null on non-clean exits; **no `verdict`** stored (derived on read). A
    SQLite/dashboard read-path is deferred.
 5. **Own-game replay corpus (M1b, sequenced after the A/B core) — grilled & revised 2026-06-29, see
-   [ADR-0022](../adr/0057-selfplay-corpus-uses-cabt-env-path.md).** A new `tools/sim/selfplay.py`
+   [ADR-0022](../../adr/0057-selfplay-corpus-uses-cabt-env-path.md).** A new `tools/sim/selfplay.py`
    (`<agent> -n N [--overlay]`) runs **mirror self-play on the cabt-env path** (`env.run` → `env.toJSON`,
    reusing check_agent) and saves every game to `data/replays/selfplay/<stem>/<episode_id>.json`. **Why
    cabt-env, not battle.py `--save-replays`:** the Tuner needs each Correction's per-frame agent `obs`
@@ -149,7 +149,7 @@ the inspector (captured `visualize` sample, no live engine); smoke: tiny balance
 
 ---
 
-## M2 — Posture: wire the Read → play  ·  *grilled & scoped 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md), [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)*
+## M2 — Posture: wire the Read → play  ·  *grilled & scoped 2026-06-30 → [ADR-0026](../../adr/0026-posture-generic-core-is-net-new-read-levers.md), [ADR-0027](../../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)*
 
 **Reality check (corrects "the Read is built").** The Read *code* exists
 (`scouting/scout.py`,`read.py`,`scorer.py`,`matchup.py`), but no `artifact.json` was compiled/committed,
@@ -199,9 +199,9 @@ off vs **recognised**; **unknown** → no regression (`γ→0`). Trace emits a o
 ## M3 — Tier-1 Search: escalation under a budget  ·  *Search API exists; build the policy*  ·  **first slices BUILT**
 
 **Status.** The entry trigger fired (multi-step-sequencing corrections) and the first M3 slices ship: the
-**Lethal Solver** ([ADR-0030](../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md),
+**Lethal Solver** ([ADR-0030](../../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md),
 the sound win-this-turn case) and the **Turn Planner**
-([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md), the general
+([ADR-0031](../../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md), the general
 Goal-Ladder case: goal-directed candidate generation → engine-sim to end-of-turn → leaf-eval ranking,
 layer-on-top). Build (2)'s "leaf eval = the Tier-0 score initially" is realized as the closed-form leaf
 scalar; the **always-engine-sim** budget question is retired by the cost spike (`search_step`≈0.1 ms).
@@ -255,14 +255,14 @@ is absent.
 ## Decision log
 - **DE-RISKED:** engine Search API exists (`cg/api.py search_begin/step/end`); the Read *code* is built
   (`scouting/`) — though M2 grilling found it **unwired** (no compiled artifact, Scout absent from `pilot.py`,
-  predicted-intel layer incomplete; corrected in [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md)).
-- **RESOLVED (M1, grilled 2026-06-28 → [ADR-0021](../adr/0021-prefilter-balances-seats.md)):** M1 is a *pre-filter,
+  predicted-intel layer incomplete; corrected in [ADR-0026](../../adr/0026-posture-generic-core-is-net-new-read-levers.md)).
+- **RESOLVED (M1, grilled 2026-06-28 → [ADR-0021](../../adr/0021-prefilter-balances-seats.md)):** M1 is a *pre-filter,
   not the gate*; **extend `tools/sim/battle.py`** (drop `tools/selfplay/`); **seat-balancing is required** (measured
   ~13pt first/second skew; engine has **no seed** → reproducibility is statistical); config via an **env-var experiment
   overlay** factored into `common`; opponent = **same-deck self** now (gauntlet later; random rejected); own-game
   taggable replays via `--save-replays`/`visualize_data()` (M1b), not the cabt-env path.
-- **RESOLVED (M2, grilled 2026-06-30 → [ADR-0026](../adr/0026-posture-generic-core-is-net-new-read-levers.md),
-  [ADR-0027](../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)):** the generic Posture core is scoped
+- **RESOLVED (M2, grilled 2026-06-30 → [ADR-0026](../../adr/0026-posture-generic-core-is-net-new-read-levers.md),
+  [ADR-0027](../../adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)):** the generic Posture core is scoped
   to the Read's *net-new* levers — **A** favorability (board-dominated weight-band, no Plan change) + **C** `γ`-gated
   accurate-development modulator on M0; generic seek/avoid stays card-fact; STABILIZE deferred. Wiring is a
   behavior-neutral staircase (M2.0 Read→`Board` → M2.1a Scout predicted layer → M2.1b levers). Per-archetype
@@ -274,10 +274,10 @@ is absent.
 - **REJECTED (ADR-0007):** RL / self-play as the primary trainer; neural policy / learned card embeddings.
 
 ## References
-- ADRs: [0003](../adr/0003-scouting-knowledge-is-a-shipped-artifact.md) (the Read is a shipped artifact),
-  [0007](../adr/0007-learning-is-one-offline-value-model.md) (one value model),
-  [0008](../adr/0008-pilot-is-a-layered-rules-pipeline.md) (layers + Posture + search_budget),
-  [0009](../adr/0009-training-methodology.md) (three training jobs), [0019](../adr/0019-submissions-are-traceable-and-tracked.md).
-- Docs: [agent-architecture.md](../agent-architecture.md), [scouting.md](../scouting.md),
-  [general-strategy.md](../general-strategy.md), [tuning/methodology.md](../tuning/methodology.md).
+- ADRs: [0003](../../adr/0003-scouting-knowledge-is-a-shipped-artifact.md) (the Read is a shipped artifact),
+  [0007](../../adr/0007-learning-is-one-offline-value-model.md) (one value model),
+  [0008](../../adr/0008-pilot-is-a-layered-rules-pipeline.md) (layers + Posture + search_budget),
+  [0009](../../adr/0009-training-methodology.md) (three training jobs), [0019](../../adr/0019-submissions-are-traceable-and-tracked.md).
+- Docs: [agent-architecture.md](../../agent-architecture.md), [scouting.md](../../scouting.md),
+  [general-strategy.md](../../general-strategy.md), [tuning/methodology.md](../../tuning/methodology.md).
 - Memory: `snipe-threat-two-signals`, `agent-decision-architecture`, `kaggle-execution-model`, `card2vec-rejected`.

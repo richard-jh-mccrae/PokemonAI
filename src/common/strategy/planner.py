@@ -229,8 +229,8 @@ def _rng_probe(cgapi, my_index: int, *, prize: bool):
 
 # ═══ READINESS LEAF + SPEND ACCOUNT (board-state-valuation-grill.md / t0-planner-disposition.md,
 #     decided 2026-07-16) ═════════════════════════════════════════════════════════════════════════
-# The MY-side "how close am I to executing my win" positional term — a P(win) proxy over my board,
-# REPLACING `_board_development`'s coarse `10·bodies + 5·energy` inside `_engine_leaf_value`. Gated-
+# The MY-side "how close am I to executing my win" positional term. NO PRODUCTION CALLER since
+# POC-T3: `_engine_leaf_value` is `KO_SCORE x state_value(end board) + min(_LINE_CAP, line)`. Gated-
 # additive: every term capped so Σ readiness < one prize (KO_SCORE), preserving the hard-rung invariant
 # (a positional board never outranks a real prize). The opponent is NOT modelled here (the survival term
 # + the later 2-ply own that). The measured problem it fixes: full within-turn search reaches ~36 distinct

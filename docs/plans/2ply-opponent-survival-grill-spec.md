@@ -6,11 +6,11 @@ below; **graduated to [ADR-0064](../adr/0064-incoming-counts-the-opponents-next-
 grant-awareness + charged matched-Read relaxation + promote stand-down — all suite-green; only the
 ADR-0043 escalation code-removal remains, gated on a corpus re-check. See ADR-0064 §Build status).
 This doc remains the build plan. Companion to
-[board-state-valuation-grill.md](board-state-valuation-grill.md) (the leaf — my-side readiness; this doc
-is its deliberately-excluded opponent-facing counterpart), [ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md)
+[board-state-valuation-grill.md](../archive/plans/board-state-valuation-grill.md) (the leaf — my-side readiness; this doc
+is its deliberately-excluded opponent-facing counterpart), [ply1-turn-search-grill-spec.md](../archive/plans/ply1-turn-search-grill-spec.md)
 (the sound within-turn search; this layer is heuristic, sits above it), and
 [t0-planner-disposition.md](t0-planner-disposition.md) (class D — opponent-facing — is this doc's scope).
-[hypergeometric-fetch-closure.md](hypergeometric-fetch-closure.md) is the deferred probability refinement
+[hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md) is the deferred probability refinement
 this layer will eventually want. Despite the historical title, this layer is best understood as a
 **hidden-development Incoming**, not a search — see §Relationship to ADR-0043.
 
@@ -193,7 +193,7 @@ reach costs a −20 nudge; under-counting it feeds them the 3-prize wincon):
 - **Safety direction (interpose/dont-promote stand-down):** requires the **matched Read** — the rep
   list contains the evolution, minus visibly-exhausted copies (KO'd/discarded/prized;
   `copies_left_odds` where cheap). No match → no stand-down; never promote the wincon on a guess.
-- Hypergeometric draw-odds stay deferred ([hypergeometric-fetch-closure.md](hypergeometric-fetch-closure.md)).
+- Hypergeometric draw-odds stay deferred ([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md)).
 
 ### 5. Transient-lock awareness is narrower than drafted
 
@@ -291,7 +291,7 @@ win/KO rung; it only adjusts sub-prize survival scoring, the loss rung, and prom
   (`copies_left_odds`, `hand_size_delta`); rep-list scan sources: brief artifact +
   `src/common/card_functions.json` (`energy_accel`) + `EN_Card_Data.csv` (special energy units).
 - **The amended WON'T-FIX:** `docs/todo/incoming-affordability.md` — the ADR must record the amendment.
-- **Deferred sharpening:** [hypergeometric-fetch-closure.md](hypergeometric-fetch-closure.md).
+- **Deferred sharpening:** [hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md).
 
 ## Residual build-verify items (post-grill audit 2026-07-16 — none reopens a locked decision)
 

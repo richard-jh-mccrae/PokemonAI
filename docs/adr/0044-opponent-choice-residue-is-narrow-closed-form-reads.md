@@ -8,7 +8,7 @@ revert), gated `REQ-READ-0001..0006` in
 the #30 KO-Race ordering gate `REQ-OBJ-0014` in
 [tests/strategy/test_objectives.py](../../tests/strategy/test_objectives.py); full suite green.
 Resolves the three deferred 2026-07-04 corrections in
-[deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) §2026-07-04. Extends
+[deferred-multi-turn-criticals.md](../archive/todo/deferred-multi-turn-criticals.md) §2026-07-04. Extends
 [ADR-0040](0040-match-judgment-is-per-turn-closed-form-objectives.md) (Prize Path / Path Denial / KO
 Race) and the [ADR-0026](0026-posture-generic-core-is-net-new-read-levers.md)/Tier-4 opponent model. New
 glossary terms *Forced-Promotion Read*, *Prize-Redundant Target* in

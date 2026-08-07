@@ -5,7 +5,8 @@ The Layer-2 currency, ruled: value(remove opponent body b) = prize_advance + sur
 (ruling 1 two-term sum; ruling 5 phase-scaled by the KO-race margin). The survival term is grounded
 in the S1a curve — `survival_shift` = Δ `turns_to_ko_me` from removing the body — and stays sub-prize
 (the gust-marginal discipline: a bought turn breaks ties, never overrides a real prize). These are
-pure primitives + a shadow, DECIDING NOTHING; the live snipe/gust/deny picks are unchanged.
+primitives whose rows are now a LIVE decision input: `Pilot._board` resolves and caches
+`_opponent_target_rows` once per decision, and the shipped gust/deny picks read it.
 """
 import types
 

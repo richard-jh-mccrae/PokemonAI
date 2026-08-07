@@ -1,6 +1,7 @@
 """S2 — the Match Planner (ADR-0045): `plan_match` produces the Game Plan (route + mode + confidence +
-directed Turn Goal), computed first each turn and emitted for the blunder-buster. COMPUTE-ONLY: zero
-decisions change until the seam (S3) wires the directed goal into the Turn Planner.
+directed Turn Goal), computed first each turn and emitted for the blunder-buster. S3 and S4 are both
+BUILT and tested below — the directed goal scores through `planner._gameplan_goal_bonus` and the
+forgo-KO gate reads the mode, so this is no longer compute-only.
 """
 import sys
 from pathlib import Path

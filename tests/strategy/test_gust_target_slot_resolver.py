@@ -5,9 +5,9 @@ instrument).
 `doctrine_gust.py`: a gust effect only ever forces a switch of a BENCHED Pokémon, never the Active) —
 gated by the `gust_target_slots` kill-switch. VALUE is the real per-body removal value
 (`_opponent_target_rows`, the shared S3 computation), not the disruption card-tier `deny_slot`
-still prices against. OFF (default) leaves gust-tagged cards routing through `deny` exactly as
-shipped — the existing `test_needs_deny_resolver.py` coverage already pins that byte-identical
-behavior; this file only asserts the ON-path and the OFF/ON boundary.
+still prices against. With the switch OFF, gust-tagged cards route through `deny` — the existing
+`test_needs_deny_resolver.py` coverage pins that byte-identical behavior. It is NOT the shipped
+default: runtime.PROFILE arms `gust_target_slots` (ON since 2026-07-27). This file asserts both paths.
 
 The `deny` slots this file counts are read on the ARMED instrument (Deny Relevance, ADR-0080 /
 Issue #187 — the ADR-0062 magnitude oracle it replaced was deleted by Issue #228), which prices an

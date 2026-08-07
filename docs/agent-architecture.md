@@ -157,23 +157,9 @@ artifacts — is the [Strategy Writeup guidelines](writeup-guidelines.md).
 
 ## Layout
 
-```
-src/
-  common/
-    pilot.py    Sense→Plan→Score→Act, choose_plan, Tactical Evaluator
-    strategy/   data API (strategy.py: Hypothesis/Line/Plan/Ready/Strategy), engine vocab (context.py),
-                general_strategy.py (assembly), baseline/ (11 decision-context clusters),
-                doctrines/ (gust · fetch · shuffle_refresh — each owns a Pilot *Mixin)   [ADR-0025]
-    cards.py    CardFunctions (Function Tag loader)
-    scouting/   Scout / Read
-    value/      Automatic Value Model loader            [planned]
-  agents/<deck>/  main.py · deck.csv · strategy.py · tuned.json (machine overrides)
-tools/
-  meta_tracker/  replays → meta + scouting artifact + card_functions
-  sim/           Agent Checks (Playability / Deployability on the real cabt env)
-  train/         replay parser · blunder inspector · weight-tuner · value trainer   [planned]
-  selfplay/      self-play harness (evaluator + on-policy + correction source)       [planned]
-```
+Not restated here. A hand-kept tree goes stale silently — this one marked `src/common/value/` and
+all of `tools/train/` as *[planned]* while both were among the largest built subsystems in the repo.
+Read the tree from disk, and `CONTEXT-MAP.md` for what each context owns.
 
 ## Build · run · test
 
@@ -197,6 +183,6 @@ tools/
   lever A (favourability, as a multiplier inside the instrument it scales) is shipped (PR#7/#8,
   ADR-0026; re-expressed by ADR-0080 decision 3 and ADR-0102); deck-specific
   Read-conditioned Hypotheses and Tier-1 search-feeding remain.
-- **Designed, not yet wired**: the richer Tactical Evaluator (Jetting-Blow bench-snipe /
-  wall-disruption); the [General Strategy](general-strategy.md) roadmap (board-state rules); the
-  `tools/train` + `tools/selfplay` loop and the Automatic Value Model. These are the next slices.
+- **Designed, not yet wired**: the Automatic Value Model ships armed-OFF (`runtime.PROFILE`
+  `value_model: False`, ADR-0042). `tools/train` is BUILT — the tuner, the three offline labs and
+  the blunder pipeline all live there; the self-play harness is `tools/sim/selfplay.py`.

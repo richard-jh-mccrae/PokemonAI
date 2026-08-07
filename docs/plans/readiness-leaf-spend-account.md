@@ -2,10 +2,10 @@
 
 The MY-side board-state value function (**the readiness leaf**) + the **line account** (spend costs and
 ability-fire credits), built into `src/common/strategy/planner.py`. This is the project-memory note the
-grill spec ([board-state-valuation-grill.md](board-state-valuation-grill.md)) and the T0 disposition
+grill spec ([board-state-valuation-grill.md](../archive/plans/board-state-valuation-grill.md)) and the T0 disposition
 ([t0-planner-disposition.md](t0-planner-disposition.md)) pointed at. Companion search spec:
-[ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md); pickup doc:
-[develop-rung-handoff.md](develop-rung-handoff.md).
+[ply1-turn-search-grill-spec.md](../archive/plans/ply1-turn-search-grill-spec.md); pickup doc:
+[develop-rung-handoff.md](../archive/plans/develop-rung-handoff.md).
 
 ## The one-paragraph summary
 

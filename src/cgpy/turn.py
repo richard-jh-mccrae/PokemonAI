@@ -667,8 +667,8 @@ def _after_attack(gs: GameState, seat: int) -> None:
 
 
 def _sweep_kos(gs: GameState, *, credited: int, then: tuple) -> bool:
-    """Sweep BOTH sides for KOs — the credited seat's opponent first (the pinned
-    defender-side order: active, then bench) — queue one prize claim per KO for the KO'd
+    """Sweep BOTH sides for KOs — the CREDITED seat first (`for side in (credited, 1 - credited)`),
+    each side active then bench — queue one prize claim per KO for the KO'd
     side's opponent, then start the claims flow. Returns False when nothing was KO'd
     (the caller continues normally). KO thresholds use stadium-adjusted effective HP."""
     from .chain import stadium_hp_delta

@@ -1,0 +1,2057 @@
+{
+ "target": "common.pilot.Pilot",
+ "surface": {
+  "__init__": {
+   "hash": "1d1069b6ce26a8aa",
+   "module": "src/common/pilot.py"
+  },
+  "decide": {
+   "hash": "f4827118f6e65bd2",
+   "module": "src/common/pilot.py"
+  },
+  "explain": {
+   "hash": "f4b150f9e483bc8a",
+   "module": "src/common/pilot.py"
+  },
+  "_evaluate": {
+   "hash": "293a49597fa1362c",
+   "module": "src/common/pilot.py"
+  },
+  "_posture_record": {
+   "hash": "206eceb70eb3d9c1",
+   "module": "src/common/pilot.py"
+  },
+  "_objectives_trace": {
+   "hash": "0f23fe46de7d27fb",
+   "module": "src/common/pilot.py"
+  },
+  "_win_prob": {
+   "hash": "cbe8e6860796c1b5",
+   "module": "src/common/pilot.py"
+  },
+  "_game_plan_record": {
+   "hash": "6922a1f276d42997",
+   "module": "src/common/pilot.py"
+  },
+  "_option_trace": {
+   "hash": "185afdfb63ce3391",
+   "module": "src/common/pilot.py"
+  },
+  "_weight": {
+   "hash": "5fe09f02a28c7855",
+   "module": "src/common/pilot.py"
+  },
+  "_known_top_log_key": {
+   "hash": "3d73db1d7548fba7",
+   "module": "src/common/pilot.py"
+  },
+  "_known_top_reconcile": {
+   "hash": "4ff3bb2f066d5b19",
+   "module": "src/common/pilot.py"
+  },
+  "carried": {
+   "hash": "17e8bd1725417da1",
+   "module": "src/common/pilot.py"
+  },
+  "_snapshot": {
+   "hash": "76dacfb92b3b3ae3",
+   "module": "src/common/pilot.py"
+  },
+  "_board": {
+   "hash": "8be915238ac55d01",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_observe_known_top": {
+   "hash": "40e02ab7da85272d",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_opp_hand_strip_odds": {
+   "hash": "97d1e308e94e40be",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_turn_goal_satisfied": {
+   "hash": "480915a09060958e",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_typed_boost_total": {
+   "hash": "2b2688c0609eb52f",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_opp_has_played_gust": {
+   "hash": "a3ff675a10006172",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_energy_placeable": {
+   "hash": "9d2b83db8f12a19b",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_reusable_energy_id": {
+   "hash": "08ab90521d205522",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_has_reusable_energy": {
+   "hash": "b3251772e776835b",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_hand_duplicate_ids": {
+   "hash": "d6acb6071ccfe6b4",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_incoming_active_damage": {
+   "hash": "494dcf8ae65af7f6",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_attack_impossible_on_menu": {
+   "hash": "00818d3b70da2f75",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_active_fully_powered": {
+   "hash": "bd4f09784a933300",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_active_cheap_attack_kos": {
+   "hash": "415458fde282989c",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_can_wall_line_with_disruptor": {
+   "hash": "3a1db9c9dd788d5d",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_can_lock_line_with_disruptor": {
+   "hash": "244291d75ec80687",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_opp_has_energy_in_play": {
+   "hash": "4e4fd0f0c8b50f1f",
+   "module": "src/common/deciders/board_build.py"
+  },
+  "_context": {
+   "hash": "0fbc1200251b2e09",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_target": {
+   "hash": "3800c7da015e0906",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_target_needs": {
+   "hash": "2a39ae23e22fc9e9",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_is_utility_body": {
+   "hash": "31bf42fd4dbe472a",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_is_energy": {
+   "hash": "d02b932353567091",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_fuels_dormant_ability": {
+   "hash": "3f0ddf007cbad9f7",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_in_play_attack_colors": {
+   "hash": "cbadc90aa6c13034",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_in_play_ability_fuel_colors": {
+   "hash": "8feb5eb05be22235",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_in_play_unfueled_ability_colors": {
+   "hash": "0720d3cb34502196",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_setup_placed_ids": {
+   "hash": "c53dc68d5ee01eb2",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_is_draw_engine_body": {
+   "hash": "bff0f6d7dba946b4",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_evolution_baseless": {
+   "hash": "2bb923ac050ebf60",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_card_base_unreachable": {
+   "hash": "6b32f32fb566a3d0",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_target_under_max": {
+   "hash": "3c86d86956e8b895",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_active_arm_available": {
+   "hash": "b5f7b40cd330aeec",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_immediate_preevo_in_play": {
+   "hash": "3684f74972d480e6",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_deploy_now_ids": {
+   "hash": "e7c74b9dfb86b469",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_from_target_needs": {
+   "hash": "be6bd7d15c58b518",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_attach_from_concentrate_slot": {
+   "hash": "f1d2a96ef4d822e5",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_target_energy": {
+   "hash": "5747fb80c714f476",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_target_hp": {
+   "hash": "ef1f78db4e35694f",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_target_forward_damage": {
+   "hash": "5b1dceebfd4475e5",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_forward_hand_size_damage": {
+   "hash": "11d8dac2106d004c",
+   "module": "src/common/deciders/context_build.py"
+  },
+  "_option_pokemon": {
+   "hash": "fbdc0bf630800ecc",
+   "module": "src/common/deciders/views.py"
+  },
+  "_option_card_id": {
+   "hash": "536538d231008a87",
+   "module": "src/common/deciders/views.py"
+  },
+  "_my_active": {
+   "hash": "61973c32db0c8876",
+   "module": "src/common/deciders/views.py"
+  },
+  "_my_active_id": {
+   "hash": "a9fc5c6a751f1d2f",
+   "module": "src/common/deciders/views.py"
+  },
+  "_opp_active": {
+   "hash": "6de725200823d783",
+   "module": "src/common/deciders/views.py"
+  },
+  "_my_bench_raws": {
+   "hash": "fcd76a08a2ad7d87",
+   "module": "src/common/deciders/views.py"
+  },
+  "_my_in_play_raws": {
+   "hash": "d5828dbecedc3a41",
+   "module": "src/common/deciders/views.py"
+  },
+  "_stat_of": {
+   "hash": "acdf82a3093d165e",
+   "module": "src/common/deciders/views.py"
+  },
+  "_attack_stat": {
+   "hash": "7f559b4872691948",
+   "module": "src/common/deciders/views.py"
+  },
+  "_attack_cost": {
+   "hash": "475b5594000c5734",
+   "module": "src/common/deciders/views.py"
+  },
+  "_attack_damage": {
+   "hash": "ec1a2d41746b3b49",
+   "module": "src/common/deciders/views.py"
+  },
+  "_hand_count_of": {
+   "hash": "b541652e9c5aba05",
+   "module": "src/common/deciders/views.py"
+  },
+  "predicted_damage": {
+   "hash": "297041d244c9a93c",
+   "module": "src/common/deciders/views.py"
+  },
+  "_predicted_max_damage": {
+   "hash": "3f2ec10861e2ff12",
+   "module": "src/common/deciders/views.py"
+  },
+  "_damage_context": {
+   "hash": "b6d9d5966a770d67",
+   "module": "src/common/deciders/views.py"
+  },
+  "_my_damage_context": {
+   "hash": "342affc960982190",
+   "module": "src/common/deciders/views.py"
+  },
+  "_discard_energy_counts": {
+   "hash": "b890da8a8c3295d2",
+   "module": "src/common/deciders/views.py"
+  },
+  "_unseen_deck_counts": {
+   "hash": "bac7bdbde8c53ec3",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_basic_energy_in_deck": {
+   "hash": "464eb0b47bd30e23",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_basic_energy_types_in_deck": {
+   "hash": "5160a2edf1df2c5f",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_deck_basic_energy_fuel": {
+   "hash": "79b2d42e89c1a223",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_deck_body_names": {
+   "hash": "07559040c5bdc479",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_visible_card_counts": {
+   "hash": "a7299c9fd5c8b992",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_deck_known_counts": {
+   "hash": "522927501bde9bb0",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_deck_contains_prob": {
+   "hash": "62cb8db026346e7c",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_deck_empty_ids": {
+   "hash": "1b23eda4960c4fa8",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_count_in_play": {
+   "hash": "ed6c933c64e5021e",
+   "module": "src/common/deciders/deck_view.py"
+  },
+  "_wincon_lines": {
+   "hash": "8c7e839f3904a720",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_set": {
+   "hash": "35c78b355791eb72",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_prize_value": {
+   "hash": "e5aa87de56e7ac4b",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_in_hand": {
+   "hash": "8b5dded0e140b0bf",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_in_hand_undeployable": {
+   "hash": "3aaa33765632d928",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_in_play": {
+   "hash": "3d2b332ed646c740",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_wincon_payoff_ids": {
+   "hash": "1cea7b53440581f1",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_line_preevo_set": {
+   "hash": "ef4f363c42b13974",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_recognized_line_preevo_set": {
+   "hash": "06c75ceae464b6b8",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_active_is_weak_preevo": {
+   "hash": "04b1127db926e951",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_line_preevo_in_play": {
+   "hash": "2b86fd7038290688",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_line_preevo_in_hand": {
+   "hash": "f731d4cf8487f3f2",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_successor_evolvable_now": {
+   "hash": "ea4912e4dda5f364",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_line_readiness_deadline": {
+   "hash": "6f71a1456cd1ebce",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_bench_line_member_needs": {
+   "hash": "a0b19125292f08de",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_line_member_set": {
+   "hash": "365adb324d4567d4",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_payoff_immediate_preevo_set": {
+   "hash": "e91ddab4d5397975",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_payoff_immediate_preevo_available": {
+   "hash": "d330c1ea34d4eef5",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_roles_of": {
+   "hash": "3e0b73c8dbe40f06",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_derived_accel_body_ids": {
+   "hash": "be8739b08e1b21b4",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_accel_recipient_missing": {
+   "hash": "4d9cbb5d27e9b7b7",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_evolve_to_ready_wincon_available": {
+   "hash": "4f5a0e555b7d279c",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_priority_wincon_slot": {
+   "hash": "f88af8717cd3c2b3",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_bench_wincon_ready": {
+   "hash": "f378279a652efc35",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_opp_cannot_punish_wincon": {
+   "hash": "0696f672a7c70627",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_bench_wincon_prize_value": {
+   "hash": "02666c3ef1990149",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_bench_wincon_underpowered": {
+   "hash": "89a28a9b42644b54",
+   "module": "src/common/deciders/lines.py"
+  },
+  "_hand_startable": {
+   "hash": "52da3bc5c694e7b0",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_is_startable_body": {
+   "hash": "76f92b131912ab71",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_opens_from_hand": {
+   "hash": "6427b98e97d5532b",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_opener_marginal": {
+   "hash": "6162ed9ff758a5b8",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_route_only_at_setup": {
+   "hash": "99c6fe8bd8e56108",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_effective_starter_order": {
+   "hash": "7b445948630222b7",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_top_starter_id": {
+   "hash": "60432414af290c31",
+   "module": "src/common/deciders/opening.py"
+  },
+  "_doom_recur_fueled": {
+   "hash": "c20f639681eb5c2b",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_recur_fueled_oa": {
+   "hash": "5ef816fbad689edc",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_doom_relax_inputs": {
+   "hash": "b4f977248ff6b06f",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_active_doomed": {
+   "hash": "4af1d8229acdc189",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_doom_relax_consulted": {
+   "hash": "45073ca2a75742f5",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_active_best_attack_locked": {
+   "hash": "2ae321112e7cbfc3",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_opp_turns_to_ready": {
+   "hash": "062f9a2719283fd7",
+   "module": "src/common/deciders/doom.py"
+  },
+  "_attach_readiness": {
+   "hash": "280894eaf64d850a",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_opp_body_hps": {
+   "hash": "c7913f5ad9b4d730",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_line_payoff_stat": {
+   "hash": "f2799f6e28d708f8",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_progress": {
+   "hash": "1eda73777435cd6e",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_payoff_attack_id": {
+   "hash": "f119f8403ca1ddcb",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_build_standing": {
+   "hash": "67d1a64f220803fd",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_build_delta": {
+   "hash": "4e56c1d840d95b62",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_partner_absent": {
+   "hash": "f97edd1c247240b1",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_accel_attack_id": {
+   "hash": "5710fd480535685c",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_accel_routed_value": {
+   "hash": "5f6bcf3a27fb3ce1",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_body_view": {
+   "hash": "3e94ce5f72e9f566",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_reusable_hand_energy_id": {
+   "hash": "92680a5000b8c288",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attacker_alternative_in_play": {
+   "hash": "a9cf251987d6181c",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_is_spent_utility_liability": {
+   "hash": "83e6242aa1c5780d",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_retreat_equity": {
+   "hash": "5d0a1209b35c0e73",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_value": {
+   "hash": "cabe7fb2975142b1",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_burst_capped_tonight": {
+   "hash": "6dadd71327a1d878",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_decision": {
+   "hash": "17f17475ab206fdc",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_value_tactical": {
+   "hash": "7f489a90d7f8e6a7",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_attach_working": {
+   "hash": "463c06270c5c0e1c",
+   "module": "src/common/deciders/attach.py"
+  },
+  "_evolve_side": {
+   "hash": "6b844cfba45f38e5",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_opp_switch_enabler": {
+   "hash": "f547661d0a69fac9",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_harvest_key_ids": {
+   "hash": "9d2ff3d0c11f1ec8",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_income_delta": {
+   "hash": "d151eac4f94bc850",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_decision": {
+   "hash": "3fcc06e52c9da0e6",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_substitution": {
+   "hash": "bfd011e158cf6162",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_target_tactical": {
+   "hash": "623fa9fec0599320",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_ability_on_menu": {
+   "hash": "bb66ae8e1bbffa2d",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_body": {
+   "hash": "1a2f1022a60de491",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_evolve_body_energy": {
+   "hash": "a4f5b3b7a53e2286",
+   "module": "src/common/deciders/evolve.py"
+  },
+  "_promote_body": {
+   "hash": "b4b4cbb7306f3061",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_wall_progress": {
+   "hash": "0e07cb0de0cf4e39",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_accel_units": {
+   "hash": "0dbf0b3f95120fb3",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_closure": {
+   "hash": "b77f76c86cfb5b43",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_tempo_step": {
+   "hash": "dece2690fe510032",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_opp_items_live": {
+   "hash": "485c3191b8784a12",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_body_kos": {
+   "hash": "e6fbf9551c4e5015",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_turn_dig_depth": {
+   "hash": "d7dc5e0bcc5f647d",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_retreat_discard_choice": {
+   "hash": "d287fe411d665d30",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_retreat_cost_legs": {
+   "hash": "7845a9089d49be4c",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_retreat_side": {
+   "hash": "2ed7ad5e16f635c1",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_retreat_decision": {
+   "hash": "977da6381aa65534",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_row": {
+   "hash": "c55a544712c165ed",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_ko_tactical": {
+   "hash": "81ff59db1e66c095",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_effective_retreat_cost": {
+   "hash": "b6476a0515a24f32",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_attached_retreat_delta": {
+   "hash": "8da033cc6678ff8e",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_can_retreat": {
+   "hash": "c9da585be388c286",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_target_kos": {
+   "hash": "17295fa4be1f4716",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_target_can_attack": {
+   "hash": "41086bef5919817d",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_target_hits_weakness": {
+   "hash": "3dc021a540ec9b83",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_best_promote_slot": {
+   "hash": "8444eada5c2565f1",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_ko_aware_promote_slot": {
+   "hash": "353430c607fb1603",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_promote_bench_names": {
+   "hash": "d5f86f661d2637af",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_forced_promotion_key": {
+   "hash": "68119023925baea4",
+   "module": "src/common/deciders/promote.py"
+  },
+  "_is_body_card": {
+   "hash": "a1313ea52dd073a4",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_offered_ids": {
+   "hash": "81ffea02ec2c0fcb",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_supplier_rows": {
+   "hash": "2d6edab3a325cc17",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_line_deadline": {
+   "hash": "8eeb674317240a5b",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_resupply": {
+   "hash": "ee4fc29aa90d3146",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_last_ditch_spent": {
+   "hash": "7fec46c58afdda8b",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_decision": {
+   "hash": "26e23628f60a07fe",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_supporter_fetch_need": {
+   "hash": "852b840af72f6970",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_needs_phase_scale": {
+   "hash": "23239f0b595ea34d",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_accel_unlock": {
+   "hash": "cb7f3a9d5cad447f",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_deploy_exposure_prizes": {
+   "hash": "f5ffbb51821f2215",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_recover_units": {
+   "hash": "678bf7c273a3f2b5",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_recover_recipient_need": {
+   "hash": "44c8ff0137e0d6fe",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_is_benchable_body": {
+   "hash": "31dfdfcb94f236f5",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_hand_has_benchable_body": {
+   "hash": "3152050fb6e9fad8",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_hand_can_develop_body": {
+   "hash": "b5065e3a4b3722c5",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_has_energy_recipient": {
+   "hash": "b4853d35e6caf6e9",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_board_has_stage2": {
+   "hash": "96f2edfe94b6db26",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_board_has_colorless_ability": {
+   "hash": "6efa86b8dbbb1ef8",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_hand_basic_energy": {
+   "hash": "072020262d8a90c0",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_no_supporter_in_hand": {
+   "hash": "17e6be864a8ea00c",
+   "module": "src/common/deciders/deploy.py"
+  },
+  "_weakest_snipe_hp": {
+   "hash": "436f1b427d778b4f",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_strongest_forward_snipe": {
+   "hash": "3652979f8118b638",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_target_forward_form_in_play": {
+   "hash": "7ab7fb0a76a4073e",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_ko_available": {
+   "hash": "dcd598e772433579",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_damage": {
+   "hash": "836658b4c0e12cac",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_target_threat_rank": {
+   "hash": "aadb276cae87021c",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_ko_dominator": {
+   "hash": "faebb98dbe5e86cb",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_tera_veto": {
+   "hash": "4877b0130ae66978",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_body_threat_rank": {
+   "hash": "d8ab9178a5932c04",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_threat_own_damage": {
+   "hash": "119a22d3f29d47d3",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_threat_damage_pair": {
+   "hash": "30305f53d8f23a5c",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_forward_card_ids": {
+   "hash": "3d952862b8e608f3",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_read_modulated_forward": {
+   "hash": "4c4428f9c5c415da",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_relevance_terms": {
+   "hash": "45cebd0cf65c00e5",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_relevance_tactical": {
+   "hash": "a0a36f7b1bafb850",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_brief_priority": {
+   "hash": "7e48c04412750517",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_brief_peers": {
+   "hash": "5a6846f5fa618304",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_snipe_brief_tiebreak": {
+   "hash": "074554c9ac50dd1b",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_bench_doomed_by_me": {
+   "hash": "7e0f51e3fb4c717a",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_general_body_facts": {
+   "hash": "15f7ef334adeaf61",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_matchup_plan": {
+   "hash": "ed9e311beecca61a",
+   "module": "src/common/deciders/snipe.py"
+  },
+  "_unfavored": {
+   "hash": "a4107e7a8259dc37",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_denial_play_tactical": {
+   "hash": "0666d45b4d7e5b9a",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_denial_target_tactical": {
+   "hash": "1bc0e77a1bde77c6",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_strip_delta_tiebreak": {
+   "hash": "f2ba04772ba95562",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_body_at": {
+   "hash": "e4573400733be370",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_option_energy_type": {
+   "hash": "ec8bb0b74431adb7",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_lock_sequence_cost": {
+   "hash": "b1d5f242a958e993",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_relevance_best": {
+   "hash": "936e46a88ad8c169",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_relevance_map": {
+   "hash": "ad35e43522b1a642",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_strip_shift_map": {
+   "hash": "414e17122a35d30e",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_deny_rows": {
+   "hash": "d57ab8b5fe0cbcb6",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_relevance_terms": {
+   "hash": "539a480929251ef7",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_strip_delta_terms": {
+   "hash": "6fdaf0597c85973c",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_best_area_weighted_relevance": {
+   "hash": "a2016a47f4626632",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_opponent_target_rows": {
+   "hash": "603d828f5cf06272",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_line_attack_costs": {
+   "hash": "3645aaf227641a2a",
+   "module": "src/common/deciders/deny.py"
+  },
+  "_best_counter_slot": {
+   "hash": "5ee4b803c1cdd8d7",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_best_counter_source_slot": {
+   "hash": "8026fbdef67734f0",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_heal_target_tactical": {
+   "hash": "de8241a3254bf1c0",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_heal_survival_gain": {
+   "hash": "75d681d932e2ef85",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_heal_bounce_cost": {
+   "hash": "2bea150d42674d90",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_max_counter_move_number": {
+   "hash": "235322298d96b1de",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_heal_insures_the_last_wincon": {
+   "hash": "0cb1bc938ca05b3d",
+   "module": "src/common/deciders/heal.py"
+  },
+  "_grab_lethal_tactical": {
+   "hash": "8f046501e943d5a5",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_grab_enabler_lethal_tactical": {
+   "hash": "f9c91d8549cc6b65",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_grab_retreat_tool_lethal_tactical": {
+   "hash": "6ea00a502316f136",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_attach_retreat_tool_lethal_tactical": {
+   "hash": "f086c60902b16fa5",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_search_pool_has_reusable_energy": {
+   "hash": "2b58eced8d706be6",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_attach_lethal_tactical": {
+   "hash": "10c93fb4c8124e65",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_retreat_to_lethal_tactical": {
+   "hash": "d6bfd6e1c6e77465",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_best_affordable_ko_value": {
+   "hash": "66ac1d50e2efa9b3",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_best_affordable_damage": {
+   "hash": "1b879a1d60c747b6",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_boost_lethal_tactical": {
+   "hash": "e35418225a5a9b67",
+   "module": "src/common/deciders/lethal.py"
+  },
+  "_is_simultaneous_draw": {
+   "hash": "6628727a7cd24f8c",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_stranded_evolution_set": {
+   "hash": "7a15fc63151a9629",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_refresh_swing_tactical": {
+   "hash": "9475a81f72229f3f",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_refresh_swing": {
+   "hash": "0c8dab324d84dcbb",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_hand_size_relief_tactical": {
+   "hash": "08e0dad577ecae18",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_grab_refresh_value": {
+   "hash": "2f0ed9e55a6fc994",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_refresh_shed_keepcost": {
+   "hash": "e00d05d7b0988cc9",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_discard_fuel_types": {
+   "hash": "34d0dbf194585836",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_discard_needs_pick": {
+   "hash": "74021e46a6e07a3b",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_discard_equation_rows": {
+   "hash": "106804e0a57eb4e6",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_apply_pitch_terms": {
+   "hash": "f9b1f3f026f1ec2e",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_removal_ranking_legs": {
+   "hash": "57b619f5c5a54f68",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_cost_shed": {
+   "hash": "0fa7ed6ccca9e1d5",
+   "module": "src/common/deciders/hand.py"
+  },
+  "cost_shed_indices": {
+   "hash": "249921ae34ed5bc0",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_as_discard_rows": {
+   "hash": "ca2f6866eb1977f3",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_refresh_slot_resupply": {
+   "hash": "f2ec4196f248a27b",
+   "module": "src/common/deciders/hand.py"
+  },
+  "_needs_v2": {
+   "hash": "24d89315efcb4786",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_resolve_needs": {
+   "hash": "2f8867185b97c9e7",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_rare_candy_reachable": {
+   "hash": "bdbfc72c203a7d84",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_playability_zones": {
+   "hash": "26057e2ac19ba345",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_unplayable_rows": {
+   "hash": "cc51711218b7e4b3",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_needs_hand_rows": {
+   "hash": "20e9395d38ef55fe",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_item_hold_price": {
+   "hash": "53d83e5c9852c573",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_held_undeployable": {
+   "hash": "242ff7decb417cec",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_hand_readiness": {
+   "hash": "af961f7d61df8abd",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_general_liquidity": {
+   "hash": "ed702be291b325a0",
+   "module": "src/common/deciders/needs.py"
+  },
+  "_tactical": {
+   "hash": "75f8f5420f377cc7",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_is_seek_inspiration": {
+   "hash": "9ee1ceb3c7e80fba",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_active_has_seek_inspiration": {
+   "hash": "4a37c79efd4cb050",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_copy_top_qualifies": {
+   "hash": "8668a1627c8bf546",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_copy_top_tactical": {
+   "hash": "2fdb293b43b76598",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_copied_attack_tactical": {
+   "hash": "0c294ced1ef65d2e",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_top_deck_tactical": {
+   "hash": "f58e76df196da216",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_snipe_ko_prizes": {
+   "hash": "8b7b7b46f1fdd642",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_best_ko_subset": {
+   "hash": "585dc5695fa43649",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_spread_ko_prizes": {
+   "hash": "2966f7257fee925f",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_is_tera": {
+   "hash": "10440a90291d7cba",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_prize_value": {
+   "hash": "1c62b920072b7696",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_attached_type_counts": {
+   "hash": "dd41c7a0c914c466",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_attack_type_payable": {
+   "hash": "1b8ff76c85bb014b",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_can_ko": {
+   "hash": "f1197870571277d9",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_active_can_ko": {
+   "hash": "85f814ee66a72c76",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_opp_active_can_damage_us": {
+   "hash": "eb1aa2ced6277ff5",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_active_maxed_kos": {
+   "hash": "fbf9de91155c0b79",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_bench_snipe_bonus": {
+   "hash": "16e4786398c6f41f",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_bench_spread_bonus": {
+   "hash": "7fe816f4492d0e64",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_valued_attack_types": {
+   "hash": "ffee7597023a068a",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_typed_can_pay": {
+   "hash": "e27bc072c5e23938",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_body_doomed_affordable": {
+   "hash": "4adbac0a594fd2c6",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_stadium_hp_shift": {
+   "hash": "20f6f12dcbd3e29a",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_recoil_flips_doom": {
+   "hash": "1473e9a158fe342c",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_self_return_escape_credit": {
+   "hash": "6ac0ef500283d714",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_known_top_card_id": {
+   "hash": "e69578d71db548e3",
+   "module": "src/common/deciders/tactical.py"
+  },
+  "_score_order": {
+   "hash": "4b74ac97ca0e5e5b",
+   "module": "src/common/deciders/order.py"
+  },
+  "_order_key": {
+   "hash": "ab668fa00bdbdc82",
+   "module": "src/common/deciders/order.py"
+  },
+  "_prefer_soonest_arming_evolve": {
+   "hash": "cf703590c862f89f",
+   "module": "src/common/deciders/order.py"
+  },
+  "_never_pre_bench": {
+   "hash": "0224a456a9428fc1",
+   "module": "src/common/deciders/order.py"
+  },
+  "_empty_bench_forced": {
+   "hash": "c45b67552fbba73f",
+   "module": "src/common/deciders/order.py"
+  },
+  "_informative_card": {
+   "hash": "5fac23730b58cd08",
+   "module": "src/common/deciders/order.py"
+  },
+  "_finish_turn_last": {
+   "hash": "d98647a37e316c57",
+   "module": "src/common/deciders/order.py"
+  },
+  "plan_turn": {
+   "hash": "09fe3cbd9baba081",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_closed_form_plan": {
+   "hash": "3f8356a7c7ae04e3",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_closed_form_candidates": {
+   "hash": "8ab64692361f5585",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_pool_floor_fails": {
+   "hash": "a82812f5348ab99d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_deferral_value": {
+   "hash": "0695257b8877552f",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_commit_best": {
+   "hash": "8dd33ecc9924234d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_develop_should_fire": {
+   "hash": "58bc5c4db80f6690",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_develop_rollout_line": {
+   "hash": "690b86587b14a68e",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_option_equivalence": {
+   "hash": "3365c320c4a49f80",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_develop_candidates_record": {
+   "hash": "93ad60b2623697d6",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_win_line": {
+   "hash": "dec327ef5c5efe71",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_legacy_win_candidates": {
+   "hash": "0061ed555964dd88",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_family_win_candidates": {
+   "hash": "73e70760a0f6e25d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_bench_body_wins_if_promoted": {
+   "hash": "280657ebda53df54",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_retreat_shortfall": {
+   "hash": "fdee5b214c11005d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_trainer_tutor": {
+   "hash": "5c8b0a1894b13104",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_deck_has_retreat_tool": {
+   "hash": "686d541b7c2fded9",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_develop_wins": {
+   "hash": "56152801b8958393",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_attach_provision_codes": {
+   "hash": "2c802160e0b52aa9",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_gust": {
+   "hash": "2cc4e164e7226384",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gust_win_target": {
+   "hash": "6ebb1b355157fc84",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_tutor_energy_certain": {
+   "hash": "1cabab4260d21eb3",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_attack_wins": {
+   "hash": "5383831debfafa82",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_win_lock_store": {
+   "hash": "34461006176d015e",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_option_identity": {
+   "hash": "95efcda59382e81a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "replay_locked_line": {
+   "hash": "add1d238414944f7",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_exact_own_zones": {
+   "hash": "94bc5dc7502dd07c",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_seed_zones": {
+   "hash": "08c8514eac2fdd42",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_engine_confirms_win": {
+   "hash": "5a86a6f81ea7f739",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gameplan_goal_bonus": {
+   "hash": "747b7bfd11870cd3",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_deckout_grind_bonus": {
+   "hash": "b0e11ee74e43e5a2",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_forgo_ko_line": {
+   "hash": "2f8313d040994bcb",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_lock_free_attack_line": {
+   "hash": "2225fd7bfbd2959a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ko_wakes_an_unanswerable_body": {
+   "hash": "da847a2ac4e9683b",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_opp_active_pinned": {
+   "hash": "048ac82bf1b3aacc",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_forgo_ko_gate": {
+   "hash": "0cdbd6ebe77d71de",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_opp_after_forced_promote": {
+   "hash": "42eb37d5abad265b",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_stabilize_then_ko_lines": {
+   "hash": "0591adc8f25f4ddf",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_condition_holds": {
+   "hash": "aed1f984b73f36d6",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_condition_holds_for": {
+   "hash": "a44545cf31d0809d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_candidate": {
+   "hash": "360b378a09e145c8",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_body_candidate": {
+   "hash": "e7d82119814964fe",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_best_hand_attach_units": {
+   "hash": "8c08a58612a20e06",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_engine_rank": {
+   "hash": "9ec7b9382b88f75d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_plan_fingerprint": {
+   "hash": "a4d350348791f331",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ko_for_prizes_lines": {
+   "hash": "fefff4197edff384",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ko_key_threat_lines": {
+   "hash": "583858042ec8656a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_best_gamble_line": {
+   "hash": "c6d453bc209bd712",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_prize_split_hit": {
+   "hash": "d8cdc10166337f85",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_burst_copies": {
+   "hash": "6ff98bcdcccb1909",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_closure_stat_of": {
+   "hash": "e038e9ffa94903be",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_closure_clauses_of": {
+   "hash": "fe5cb6ad2c8a7e10",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_card_reaccess_outs": {
+   "hash": "926f7d176f9a62ff",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_role_value": {
+   "hash": "54affd85b11ae366",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_keep_cost": {
+   "hash": "7d95cb3fad7f5c02",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gate_closing": {
+   "hash": "9671167147548b58",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_hand_keep": {
+   "hash": "b680b5eb0db212c6",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_deploy_odds": {
+   "hash": "1866f5b1b222a53f",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_slot_basic_in_zone": {
+   "hash": "5d6d6b15d0896811",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_fetch_reaches_slot": {
+   "hash": "aeced319d4e64e2c",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_supporter_energy_tutor_reaches": {
+   "hash": "d4042efbb5a3d41f",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_chain_refreshes": {
+   "hash": "dafe9bcc826ffaf3",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_draw_engines": {
+   "hash": "41557fa818a1b737",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_supporter_evolution_tutor_reaches": {
+   "hash": "3075bbcebff378b0",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_fetch_reaches_pokemon": {
+   "hash": "2c6ee043806bd661",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_ko_classes": {
+   "hash": "3679b168267a38de",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_evolution_ko_classes": {
+   "hash": "6d4b3512a48e80a0",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_pump_ko_classes": {
+   "hash": "882c85bd3cf20c9a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_gust_ko_classes": {
+   "hash": "1adecd34d16bf99f",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_restriction_ok": {
+   "hash": "3c8f47bcc06c5213",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_restriction_targets": {
+   "hash": "a51df011d32dad98",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_averts_doom": {
+   "hash": "52dd9b1df27d76be",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_heal_body_averts_doom": {
+   "hash": "87e6dec132409c52",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_survival_classes": {
+   "hash": "1ebe34c62c311879",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gamble_det_baseline": {
+   "hash": "1249c3c0e77dce73",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_retreat_snipe_candidate": {
+   "hash": "40211bf91b5024d9",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_affords_snipe_ko": {
+   "hash": "38c103f419445056",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_energy_tutor": {
+   "hash": "1e8ebe4eaf7b80cc",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_evolution_tutor": {
+   "hash": "3bb3ef3eed1d67f1",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_whiff_odds": {
+   "hash": "9a560ce65ba30ae9",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_item_pokemon_tutor": {
+   "hash": "68663b3d5f5448df",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_item_enabler_cost": {
+   "hash": "0fdcde5b37216c88",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_gust_supporter_in_hand": {
+   "hash": "b660129f814a1eb1",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_composed_budget": {
+   "hash": "ea87f2872dfc139b",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_composed_attack_p": {
+   "hash": "635933853c49e11a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ko_line_pricing": {
+   "hash": "69baa3cd1abb316f",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_item_evolve_ko_candidate": {
+   "hash": "a98d3a7b8f2e8148",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_composed_line_p": {
+   "hash": "c81fab32d2542077",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_is_rare_candy": {
+   "hash": "6d9114a2aa1291af",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_rare_candy_ko_candidate": {
+   "hash": "9ebb23bedf409b1d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_stage2_roots_at": {
+   "hash": "4033be13efb28b73",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_tutor_evolution_wins": {
+   "hash": "43b521fbddd4948e",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_retreat_ko_candidate": {
+   "hash": "4634515035b660e0",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_tutor_evolve_ko_candidate": {
+   "hash": "5c899a7b8ec4c043",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_supporter_ko_candidate": {
+   "hash": "91c8acdf51a699d1",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_evolve_ko_candidate": {
+   "hash": "ab9ea6d8d3e74c1a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_free_evolve_ko_candidate": {
+   "hash": "25343a876b519c1e",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_leaf_value": {
+   "hash": "007abf640779e3e3",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_predicted_loss": {
+   "hash": "4e14ff4455fd7527",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_survives_after_ko": {
+   "hash": "c3a2ea92b3257c8b",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_incoming_worst": {
+   "hash": "088b5e05b42858df",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_threat_magnitude": {
+   "hash": "c29c72179e084556",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_my_player": {
+   "hash": "aa7f2a28a41cd3b2",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_opp_player": {
+   "hash": "acb3efe269278699",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_engine_leaf_value": {
+   "hash": "3e15607c1075cd0d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_leaf_state_model": {
+   "hash": "7fcb0024dfc3e2aa",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_leaf_needs_resolution": {
+   "hash": "b0d494aca807af6c",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_board_hypothetical": {
+   "hash": "601bf9ee7c4f2e80",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_value_term": {
+   "hash": "2eb3d5149904a4da",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_development_plan_set": {
+   "hash": "06971b936e187bde",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_board_development": {
+   "hash": "f07141f8f1765ca0",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_readiness": {
+   "hash": "d9063baf1da1e30a",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_readiness_saturation": {
+   "hash": "032cebb52d4b8cf2",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_attack_readiness": {
+   "hash": "50f1648c32651f60",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_promotion_ease": {
+   "hash": "4f438a97d2b6d899",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_active_quality": {
+   "hash": "c73cf21f0c9eb9ed",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_bench_position_w": {
+   "hash": "c952f00ddb3ea312",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_best_reachable_attack": {
+   "hash": "204cdcde20c1c201",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_reachable_forward_ids": {
+   "hash": "57c4061dcf4f706e",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_payable_energy": {
+   "hash": "8998aef8eac28ecd",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ability_readiness": {
+   "hash": "a4584ca5dd8d3538",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ability_value": {
+   "hash": "277e52d25ed35e01",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_ability_precondition_met": {
+   "hash": "05214ec07f1d80bd",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_line_account": {
+   "hash": "990cdfe69a256aef",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_simulate_line": {
+   "hash": "22ba780bf1a7d53d",
+   "module": "src/common/strategy/planner.py"
+  },
+  "_race_attack_tactical": {
+   "hash": "ca3cccf7998ce713",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_my_max_rider": {
+   "hash": "ffd5d24f4fd03469",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_my_turns_to_ko": {
+   "hash": "1c886af27d332c07",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_their_turns_to_ko": {
+   "hash": "917b3730fab1adf2",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_threat_clock": {
+   "hash": "e435e6ddc23b0c8f",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_threat_forms": {
+   "hash": "e57925af66e9beec",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_promotion_surcharge": {
+   "hash": "c5b197c7979b6e8a",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_their_harvest_clock": {
+   "hash": "f98ca9dcd9cf9d4b",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_their_path_items": {
+   "hash": "2288d4393348f44d",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_path_signals": {
+   "hash": "a42b50087dd197b1",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_derive_phase": {
+   "hash": "edc04b8746766268",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_sticky_path": {
+   "hash": "14b289db26ff6e46",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "plan_match": {
+   "hash": "c7977fed4262afad",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_derive_mode": {
+   "hash": "8af265af6f899af8",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_target_on_path": {
+   "hash": "98fa8d587b4c1c4a",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_promote_target_on_their_path": {
+   "hash": "f5b7b0ce630649c4",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_bench_shortens_their_path": {
+   "hash": "962015fe7933d295",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_bench_path_delta": {
+   "hash": "c0173c35e2f8684d",
+   "module": "src/common/strategy/objectives.py"
+  },
+  "_gust_tactical": {
+   "hash": "1d0c233a6cfea6d3",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_target_tactical": {
+   "hash": "3e6d797a701a9e98",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_energy_denial": {
+   "hash": "36f469f3fb2377a9",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_can_ko": {
+   "hash": "d40e54b28ce2b59d",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_snipe_synergy": {
+   "hash": "7816fff1ddaf1dc3",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_snipe_after_gust_prizes": {
+   "hash": "6eea1bec78cfd5b9",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_forward_denial": {
+   "hash": "c395298c9394fc20",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_matchup_priority": {
+   "hash": "ca65f44c83e72834",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_stall_target_tactical": {
+   "hash": "7d1ac6966c2ba13a",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_target_denial": {
+   "hash": "097bf4c8235c125d",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_active_ko_prizes": {
+   "hash": "fc4442a28e17123d",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_opp_active_condition_gift": {
+   "hash": "18e8814bcbe02d87",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_active_condition_ko_prizes": {
+   "hash": "d084ff28bbff25da",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_best_ko_prizes": {
+   "hash": "819faabf6cbe7df4",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_best_total_prizes": {
+   "hash": "da94214f930eb979",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_menu_attack_total_prizes": {
+   "hash": "249ed57f7b223a8f",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_gust_ko_energy_swing_calc": {
+   "hash": "dde64ba6d4845b80",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_forward_danger": {
+   "hash": "88afab7bc60c3605",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_stall_swap_pointless": {
+   "hash": "0b3367c126e203b2",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_stall_target_exists": {
+   "hash": "144d9889ab035c7b",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_stall_target_is_keystone": {
+   "hash": "d88a4ba4ee4c34cd",
+   "module": "src/common/strategy/doctrines/doctrine_gust.py"
+  },
+  "_recycle_dead_only": {
+   "hash": "4eb3b5d243944a27",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_search_signals": {
+   "hash": "c2cdf62390d8ed1f",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_search_probable_whiff": {
+   "hash": "30b9f4ea42836d33",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_search_confirmed_hit": {
+   "hash": "b8b0fc03f49d1e02",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetch_target_matches": {
+   "hash": "bd9e6c1607f1529a",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_deck_fetch_set": {
+   "hash": "aa5bf51449a30ccc",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_search_deck_set": {
+   "hash": "a40fd1c8bb360065",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetch_deadness_set": {
+   "hash": "97f81286c855dafd",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_chain_fetch_targets": {
+   "hash": "ced21d0b523a953d",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_chain_grab_value": {
+   "hash": "a3eaf44844c8605f",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_chain_value_from": {
+   "hash": "d369975db85cb856",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_spends_last_evolution_route": {
+   "hash": "540ad9e383d2b13c",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_grab_value_of": {
+   "hash": "d9f14165b2d74875",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetch_fills_a_need": {
+   "hash": "8212a65195df86cd",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetched_playable_this_turn": {
+   "hash": "cb6d74e40c322305",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetched_playable_next_turn": {
+   "hash": "7d32d2dcce0b21fe",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_fetch_target_deferred": {
+   "hash": "fe2d15ff0cfaca8c",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_held_fetch_deferred": {
+   "hash": "829e84ffa5c10cf1",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_shed_signals": {
+   "hash": "6fa424e24845a167",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_cost_picks": {
+   "hash": "0cf22425833d8ce2",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_top_fetch_priority_id": {
+   "hash": "eb0e45c993ba6fc1",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_is_support_id": {
+   "hash": "55d663b7ca970f5f",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_virtual_grab_board": {
+   "hash": "b88459fbfcd1f10e",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_greedy_grab": {
+   "hash": "deecaa9ebe11c902",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_support_in_play": {
+   "hash": "5bc33c976460e209",
+   "module": "src/common/strategy/doctrines/doctrine_fetch.py"
+  },
+  "_refresh_probable_miss": {
+   "hash": "811f98687cce26ef",
+   "module": "src/common/strategy/doctrines/doctrine_shuffle_refresh.py"
+  },
+  "_tool_in_hand": {
+   "hash": "31a3771e921fe430",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_hp_tool_in_hand": {
+   "hash": "f8e87b12765f7c06",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_irreplaceable_tool_in_hand": {
+   "hash": "fae8212116e211cd",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_survival_turns": {
+   "hash": "738f3b4579cf3920",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_survival_gain": {
+   "hash": "846cb49a5aae0365",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_opp_bench_snipe": {
+   "hash": "110f9f8c3f44f82d",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_opp_in_play": {
+   "hash": "bba6aea86a594093",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_opp_best_attack_vs": {
+   "hash": "e02fc0b4d4fc2a7e",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_tool_reaches": {
+   "hash": "49c1e91447298ec6",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_tool_carrier_candidates": {
+   "hash": "b2728e756ccf0b47",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_best_gain_slot": {
+   "hash": "b4e07d42286cb885",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  },
+  "_tool_deploy_slot": {
+   "hash": "3f08077f5886ce3f",
+   "module": "src/common/strategy/doctrines/doctrine_tool.py"
+  }
+ }
+}

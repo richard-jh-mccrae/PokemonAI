@@ -3,8 +3,8 @@
 **Status:** grilled 2026-07-16. The audit the planner build is validated against: ALL 164 T0 hypotheses
 (145 general+doctrine, 16 mega_lucario, 3 dragapult_ex, + per-deck tuned/override weights) and all 362
 logged corrections (14 categories), dispositioned against the turn-planner design
-([board-state-valuation-grill.md](board-state-valuation-grill.md) +
-[ply1-turn-search-grill-spec.md](ply1-turn-search-grill-spec.md)). Nothing is dropped: every rule keeps a
+([board-state-valuation-grill.md](../archive/plans/board-state-valuation-grill.md) +
+[ply1-turn-search-grill-spec.md](../archive/plans/ply1-turn-search-grill-spec.md)). Nothing is dropped: every rule keeps a
 named owner; retirement only ever happens per-rule on lab proof (decision below).
 
 ## The five classes (decided)
@@ -136,7 +136,7 @@ move-counters-off-the-damaged(30) · move-max-counters(30).
 
 ### doctrine_fetch (52) — all E (search/discard sub-selects), with B dual-tags on the spend-shaped ones
 Notable: dont-search-an-empty-deck(−60)/dont-search-a-probable-whiff(−25)/search-the-confirmed-hit(15) —
-E/B, the deck-odds family ([hypergeometric-fetch-closure.md](hypergeometric-fetch-closure.md) sharpens);
+E/B, the deck-odds family ([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md) sharpens);
 dont-tutor-the-held-wincon(−45)/dont-grab-a-card-already-in-hand(−12)/dont-fetch-the-redundant-piece —
 E + the leaf's SATURATION mirrors on-board redundancy; keep-floors at discard (keep-key-cards −30 etc.) —
 E/B; grab-what-i-can-play-this-turn(−12) — E/C (search sees playability); the rest E.

@@ -1,4 +1,7 @@
-"""M2.0 — wire the Read onto the Board (Posture-OFF).
+"""The Read on the Board, and the Posture levers that consume it.
+
+Started as M2.0 (wire-only, Posture-OFF); most of the file now asserts that the Read DOES change
+scores and picks.
 
 The Pilot senses the opponent via an injected Scout and surfaces the Read on its public
 `explain()` output, without changing any decision yet (nothing scores off it — that's M2.1b).

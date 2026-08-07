@@ -1,5 +1,6 @@
-"""Deferred-planner cluster — four opponent-model-driven / new-planner consumers wired DEFAULT-OFF so
-they change NO live behavior until the ladder validates them (cf. tests/agents/test_runtime.py for the
+"""Deferred-planner cluster — four opponent-model-driven / new-planner consumers. They were wired
+DEFAULT-OFF; three now SHIP ARMED (`ko_target_whiff`, `opp_resource_reads`, `enabler_item_composer`
+are True in runtime.PROFILE) and do change live behaviour (cf. tests/agents/test_runtime.py for the
 PROFILE contract):
 
   * BUILD 1 `ko_target_whiff`       — KO/snipe-target TIEBREAK toward the body the opponent is least able

@@ -24,7 +24,7 @@ Two things this ledger is NOT:
 * **Not shipped.** It lives in `tests/` deliberately. `src/common/` is packaged into every Kaggle
   submission (ADR-0004), and a retirement record is build-time history, not runtime data.
 
-Seeded 2026-08-07 with the 81 ids then referenced across 202 sites. `MAX_RETIRED` below is a ratchet: it
+Seeded 2026-08-07 with 81 ids over 202 sites; down to 79 over 184 after the Phase 1 fixes. `MAX_RETIRED` below is a ratchet: it
 may be lowered, never raised.
 
 Prior art for the shape: `tests/test_adr_index.py` carries its one known gap as data with its reason
@@ -52,8 +52,6 @@ RETIRED: dict[str, str] = {
         "src/common/strategy/baseline/baseline_sequencing.py",
     "build-active-wincon":
         "src/common/pilot.py",
-    "concentrate-accel-on-one-line-body":
-        "src/agents/mega_lucario/strategy.py",
     "concentrate-energy-on-wincon":
         "src/agents/mega_lucario/strategy.py",
     "conserve-burst-when-no-ko":
@@ -65,7 +63,7 @@ RETIRED: dict[str, str] = {
     "develop-a-basic-in-setup":
         "src/common/currency.py",
     "develop-the-accel-recipient":
-        "src/agents/mega_lucario/strategy.py",
+        "src/common/currency.py",
     "develop-the-wincon-base-first":
         "src/agents/dragapult_ex/strategy.py",
     "discard-the-dead-opener":
@@ -118,8 +116,6 @@ RETIRED: dict[str, str] = {
         "src/common/strategy/doctrines/doctrine_fetch.py",
     "grab-a-draw-supporter-in-setup":
         "src/common/strategy/doctrines/doctrine_fetch.py",
-    "grab-what-i-can-play-now":
-        "src/common/pilot.py",
     "gravity-mountain-vs-stage2":
         "src/agents/mega_lucario/strategy.py",
     "heal-and-stall":
@@ -157,7 +153,7 @@ RETIRED: dict[str, str] = {
     "power-up-attacker":
         "src/common/strategy/doctrines/doctrine_fetch.py",
     "pre-position-attacker":
-        "src/agents/mega_lucario/strategy.py",
+        "src/common/currency.py",
     "prefer-going-second":
         "src/common/strategy/baseline/baseline_opening.py",
     "promote-the-accelerator-for-the-ko":
@@ -189,7 +185,7 @@ RETIRED: dict[str, str] = {
     "snipe-the-top-threat":
         "src/common/strategy/baseline/baseline_snipe.py",
     "spread-attach-to-the-needy":
-        "src/agents/mega_lucario/strategy.py",
+        "src/common/pilot.py",
     "start-solrock-over-lunatone":
         "src/common/strategy/baseline/baseline_opening.py",
     "strip-the-stacked-engine-hand":
@@ -201,4 +197,4 @@ RETIRED: dict[str, str] = {
 }
 
 #: Ratchet. Lower it as the reduction pass deletes stale mentions; never raise it.
-MAX_RETIRED = 81
+MAX_RETIRED = 79

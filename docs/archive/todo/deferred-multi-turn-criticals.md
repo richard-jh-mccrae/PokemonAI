@@ -1,16 +1,16 @@
 # TODO — the two multi-turn CRITICAL corrections (`a21472`, `b4649`)
 
 > ✅ **RESOLVED 2026-07-05** (`/tdd`, ADR-0040 / Tier 3): `a21472` is a GREEN regression gate —
-> `REQ-OBJ-0001` in [tests/strategy/test_objectives.py](../../tests/strategy/test_objectives.py)
+> `REQ-OBJ-0001` in [tests/strategy/test_objectives.py](../../../tests/strategy/test_objectives.py)
 > replays the captured state through the shipped Pilot, which now picks Jetting via the **KO Race**
 > (`objectives_race`, closed-form attack-sequence arithmetic — NOT the engine tree, per the
 > ADR-0040 correction below). `b4649` stays covered; its Prize-Race capability shipped as the
 > two-sided **Prize Path** objective. This file remains as the characterisation record.
 
 **Status:** open (2026-07-01), split out of the Turn Planner build
-([ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)) as **out of
+([ADR-0031](../../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md)) as **out of
 this-turn scope**. The Planner fixed the three *this-turn* CRITICALs that named it (`7f48`, `0cbc`, `4298`
-— gated in [test_planner_engine.py](../../tests/strategy/test_planner_engine.py)). These two were deferred because
+— gated in [test_planner_engine.py](../../../tests/strategy/test_planner_engine.py)). These two were deferred because
 they need capability the Planner deliberately lacks: reasoning across **more than one of my turns** and
 about the **opponent's prize trajectory**.
 
@@ -39,9 +39,9 @@ prize race. Both corrections are optimal only once you plan **≥2 of my turns**
 about *whose* KO advances *whose* win). That is the designed-but-unbuilt **M3 deep search + M4 value model**
 (and the **Prize-Race Planner**):
 
-- [ADR-0031](../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md) — this-turn Turn
+- [ADR-0031](../../adr/0031-turn-planner-is-goal-directed-engine-simulated-tier1-search.md) — this-turn Turn
   Planner; its **multi-turn** note carves these two out.
-- [ADR-0030](../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md) — carves `b4649`
+- [ADR-0030](../../adr/0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md) — carves `b4649`
   into a future **Prize-Race Planner** (fuzzy, opponent-modelled, non-committal — the *wrong* home for a
   hard lock).
 - [roadmap-search-posture-learning.md](roadmap-search-posture-learning.md) — **M3 Tier-1 Search** (budgeted
@@ -50,11 +50,11 @@ about *whose* KO advances *whose* win). That is the designed-but-unbuilt **M3 de
 **Do not** bolt multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation +
 the value-model leaf-eval, exactly where the roadmap puts it.
 
-> **Correction ([ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md),
+> **Correction ([ADR-0040](../../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md),
 > 2026-07-05): the prescription above is PARTIALLY REVERSED.** Opponent-*static* multi-turn
 > arithmetic — the **KO Race** (turns-to-KO attack sequences, riders credited to Prize-Path
 > targets) — is closed-form at the same epistemic tier as Incoming/Survival Window and is the
-> designed home for `a21472` ([Tier 3](../architecture/tier-3-match-objectives.md)), NOT the engine
+> designed home for `a21472` ([Tier 3](../../architecture/tier-3-match-objectives.md)), NOT the engine
 > tree. The engine-search escalation keeps only the opponent-*choice*-dominated residue
 > (Tier 6, deleted from the codebase 2026-07-17 (ADR-0064 decision 6)). `b4649`'s "Prize-Race Planner" is
 > realized as the two-sided **Prize Path** objective (Tier 3): fuzzy, γ-gated, non-committal — as
@@ -65,7 +65,7 @@ the value-model leaf-eval, exactly where the roadmap puts it.
 ## `a21472f6f4d2` — the live gap: pick the multi-turn attack *sequence*, not the biggest single hit
 
 - **Record:** `data/corrections/mega_starmie_20260701_fa8f649/corrections.jsonl` (id `a21472f6f4d2`, episode `83116501`, seat 0)
-- **Fixture:** [tests/fixtures/corrections/planner_a21472.json](../../tests/fixtures/corrections/planner_a21472.json) *(extracted; no test yet)*
+- **Fixture:** [tests/fixtures/corrections/planner_a21472.json](../../../tests/fixtures/corrections/planner_a21472.json) *(extracted; no test yet)*
 - **Category:** `other` (multi-turn). **Today:** `chosen=[2]` (Nebula), `correct=[1]` (Jetting), `planned=None` — **fails**.
 
 **The decision (turn 6, prizes 5–5).** My Active is a **Mega Starmie ex** (330 HP, **6 Energy**); bench is two
@@ -96,7 +96,7 @@ bench); confirm 678 = Mega Lucario ex @ 440 HP and 676 = Riolu; confirm the sequ
 ## `b4649ba9c304` — covered on its state; kept as the Prize-Race exemplar
 
 - **Record:** `data/corrections/mega_starmie_20260701_c1efef0/corrections.jsonl` (id `b4649ba9c304`, episode `83037962`, seat 1)
-- **Fixture:** [tests/fixtures/corrections/planner_b4649.json](../../tests/fixtures/corrections/planner_b4649.json) *(extracted; no test yet)*
+- **Fixture:** [tests/fixtures/corrections/planner_b4649.json](../../../tests/fixtures/corrections/planner_b4649.json) *(extracted; no test yet)*
 - **Category:** `misattachment` (mislabelled — it is a **prize-race / tempo** decision). **Today:** `chosen=[2]` == `correct=[2]`, `planned=None` — **already passes**.
 
 **The decision (turn 11, prizes: me 5, opp 3 — I'm behind).** My Active is **Cinderace** (666, 210 HP, 0
@@ -133,7 +133,7 @@ from the captured state via the engine.
 ## How to pick this up (retest harness — same as the shipped gates)
 
 Both fixtures replay through the shipped Pilot exactly like the fixed CRITICALs
-([test_planner_engine.py](../../tests/strategy/test_planner_engine.py) `test_critical_4298_…`):
+([test_planner_engine.py](../../../tests/strategy/test_planner_engine.py) `test_critical_4298_…`):
 
 ```python
 import json
@@ -177,7 +177,7 @@ single-turn heuristics they "lose" to (max-damage attack, snipe-the-top-threat b
 correct closed-form picks; the human's lines span turns / model the opponent's choices.
 
 > ✅ **RESOLVED 2026-07-06** (`/grill-with-docs`,
-> [ADR-0044](../adr/0044-opponent-choice-residue-is-narrow-closed-form-reads.md)). Re-measured through
+> [ADR-0044](../../adr/0044-opponent-choice-residue-is-narrow-closed-form-reads.md)). Re-measured through
 > the shipped T0–T4-ON Pilot: the earlier "needs M3/M4 search" framing was over-deferral — none needs
 > the (built-and-parked) T6 escalation. All three resolve **closed-form**:
 > - **`83661649-30`** — **already covered** by the KO Race (Jetting 189.9 > Nebula 184.7; toggling
@@ -195,11 +195,11 @@ correct closed-form picks; the human's lines span turns / model the opponent's c
 >   untouched).
 >
 > All behind kill-switches, γ-gated, A/B before default-ON. Glossary: *Prize-Redundant Target*,
-> *Forced-Promotion Read* ([src/common/CONTEXT.md](../../src/common/CONTEXT.md)).
+> *Forced-Promotion Read* ([src/common/CONTEXT.md](../../../src/common/CONTEXT.md)).
 >
 > ✅ **BUILT + SHIPPED 2026-07-06** (`/tdd`): #30 gated `REQ-OBJ-0014` (KO-Race ordering, GREEN); #107 +
 > #45 built behind `snipe_prize_redundant` / `forced_promotion` and gated `REQ-READ-0001..0006` in
-> [test_opponent_choice_reads.py](../../tests/strategy/test_opponent_choice_reads.py); fixtures
+> [test_opponent_choice_reads.py](../../../tests/strategy/test_opponent_choice_reads.py); fixtures
 > `planner_83661649_30/107/45.json`; full suite green. Both switches **flipped DEFAULT ON 2026-07-06**
 > (user decision — verification via ladder-match corrections, not an A/B; mega_lucario too weak for the
 > non-mirror leg — see ADR-0044 *Amendment*). Kill-switches retained for a one-line revert.

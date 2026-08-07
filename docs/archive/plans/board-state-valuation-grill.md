@@ -64,7 +64,7 @@ games**. The sequence, one day (2026-07-16), each step gating the next:
    and a regression of the flagship frame, respectively.)
 5. **The corrections + hypotheses ARE the spec.** To make the planner "account for all T0 work", we read
    **every logged correction (362)** and **every T0 hypothesis (164, with tuned weights)** and dispositioned
-   each into five classes with a named owner ([t0-planner-disposition.md](t0-planner-disposition.md)):
+   each into five classes with a named owner ([t0-planner-disposition.md](../../plans/t0-planner-disposition.md)):
    state-valuation → this leaf; spend-costs → the new spend account; sequencing crutches → the search;
    opponent-facing → survival/2-ply; sub-selects → T0 stays, inside rollouts. The design terms below are
    in near 1:1 correspondence with that corpus: the gate ("never attach a useless energy ever" ×8),
@@ -130,7 +130,7 @@ saturation(b): a body filling a UTILITY/ENGINE role already filled by another in
 ```
 
 **Line value (the planner's ranking scalar — decided with the T0 disposition,
-[t0-planner-disposition.md](t0-planner-disposition.md)):**
+[t0-planner-disposition.md](../../plans/t0-planner-disposition.md)):**
 ```
 turn_value(line) = readiness(end board) − Σ spend_costs(actions along the line)
 ```

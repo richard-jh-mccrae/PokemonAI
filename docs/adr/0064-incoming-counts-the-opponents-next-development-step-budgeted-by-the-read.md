@@ -173,7 +173,7 @@ Consumers: the reachability read vs the wincon's HP becomes the **stand-down con
 `interpose-the-cheap-attacker-to-preserve-the-wincon` (all three drivers) and
 `dont-promote-into-their-prize-reach`, letting `promote-the-ready-wincon` (+40) win when the
 opponent's board literally cannot punish it. Hypergeometric draw-odds stay deferred
-([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md)).
+([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md)).
 
 ### 5. Transient locks: narrower than drafted
 
@@ -236,7 +236,7 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
   Ultra-Ball-discard pin). Pinned by `tests/strategy/test_doom_matched_relax.py`.
 - **Escalation code removal** — behind the corpus re-check (Decision 6).
 - **Hypergeometric draw-odds** for the availability gate — its own note
-  ([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md)).
+  ([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md)).
 - **Loss-rung v2:** a bench of guaranteed-dead bodies (all KO-able next turn) as a doom equivalent of
   bench-empty — v1 gates on the literal visible fact only.
 

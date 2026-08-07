@@ -226,8 +226,8 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     out not to need one, being a CATEGORICAL RELEVANCE instrument rather than a magnitude one.
 
     So what the caller passes depends on the instrument, and this function stays agnostic:
-      * `deny_relevance` OFF — the flat disruption card-tier `TAG_TIER["gust"]` (~10), as shipped;
-      * ARMED (Issue #187) — `TAG_TIER["gust"] x relevance(this body)`, relevance being the [0,1]
+      * `deny_relevance` OFF — the Pilot emits no deny slot at all, so this is never called;
+      * ARMED (Issue #187), which is what SHIPS — `TAG_TIER["gust"] x relevance(this body)`, the [0,1]
         Deny Relevance read. The `/2**t` grade below is retained under either (user ruling
         2026-07-30): relevance is deliberately not imminence-gated, so the grade is the only term
         pricing WHEN the threat lands.

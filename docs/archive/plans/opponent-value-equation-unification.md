@@ -219,7 +219,7 @@ unbisectable — T5/T6 precedent).
     `{base_attach: 2, burst_on_evo: 2}`, recur-fuel guard) — rulings, the two grill-found corrections
     (the generic-supporter +1; the relax-only conjunction after the 82525101-14 phantom-doom
     regression), pins and holds in
-    [`doom-shadow-grill-handoff.md`](doom-shadow-grill-handoff.md) (RULED appendix).
+    [`doom-shadow-grill-handoff.md`](../../plans/doom-shadow-grill-handoff.md) (RULED appendix).
   - **S1c — the board-clock one-home extraction: BUILT (2026-07-22, TDD).** `CombatMath.turns_to_afford`
     — the deny-clock's energy/evolve model lifted onto the KO oracle beside `incoming` (the Threat Clock's
     two legs — the damage curve + the affordability clock — now share ONE home and the one forward index);

@@ -15,10 +15,10 @@ Draw) is the consistency engine; disruption (Crushing Hammer / Unfair Stamp / Ri
 MOST of the doctrine is COVERED by the General Strategy (STRATEGY.md §5), incl. parts that look
 deck-specific:
   - Boss's Orders gust-to-convert         -> the Gust doctrine (ADR-0022, id 1182)
-  - Meowth ex Last-Ditch supporter tutor  -> general `supporter_tutor` TAG + `bench-the-supporter-tutor`
-                                            + `grab-a-gust-supporter-for-the-ko` (tutor Boss's) — tag-driven,
+  - Meowth ex Last-Ditch supporter tutor  -> general `supporter_tutor` TAG + the ADR-0086 Deploy
+                                            Marginal + `grab-a-gust-supporter-for-the-ko` — tag-driven,
                                             so NO Role and NO deck rule (mega_lucario 2026-07-03 model)
-  - Crushing Hammer                        -> general `play-energy-denial` (`energy_denial` tag)
+  - Crushing Hammer                        -> `deny_relevance` (ADR-0080; `energy_denial` tag)
   - Unfair Stamp (ACE SPEC)               -> the Shuffle-Refresh doctrine (`shuffle_hand` tag) + aceSpec
                                             discard guard (same general coverage mega_lucario relies on)
   - Judge (re-added 2026-07-15)           -> the Shuffle-Refresh doctrine (`shuffle_hand` tag), like Lillie's

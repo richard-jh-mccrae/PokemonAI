@@ -86,7 +86,7 @@ Energy in a 30-card deck is a 4-out draw. The owner's insight (2026-07-16): the 
 Search → any Basic Energy; Fighting Gong → {F} only), recyclers (Energy Retrieval, from the fully
 visible discard), and draw engines (Drakloak's Recon, Dudunsparce's Run Away Draw) — so the naive
 hypergeometric systematically under-prices gambles, and the agent passes on wins it could assemble.
-A 14-round adversarial grill ([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md))
+A 14-round adversarial grill ([hypergeometric-fetch-closure.md](../archive/plans/hypergeometric-fetch-closure.md))
 turned that into a full spec. Its through-line — the finding that ties the whole feature together —
 is that every hardcoded limit examined dissolved into a **derived quantity**: the one-hop limit
 (Items reach Energy at depth 1 *by construction of this card pool*), the exactly-one-short gate

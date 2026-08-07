@@ -6,7 +6,7 @@
 [ADR-0040](../adr/0040-match-judgment-is-per-turn-closed-form-objectives.md); new glossary terms
 (*Chance Node, Outcome Class, Gamble Line, KO Race, Prize Path, Path Denial*) in
 [src/common/CONTEXT.md](../../src/common/CONTEXT.md). **Supersedes**
-[roadmap-search-posture-learning.md](../todo/roadmap-search-posture-learning.md) as the architecture
+[roadmap-search-posture-learning.md](../archive/todo/roadmap-search-posture-learning.md) as the architecture
 reference (that file stays as M0–M4 milestone history).
 
 ## Thesis

@@ -4,7 +4,7 @@
 this — deviations get recorded here with a reason. **The detector core is NOT here:** the expert
 (one-step value lookahead, terminal override, single-pick v1, frame sampling) and the
 θ-disagreement → machine-Correction emission are locked in
-[ml-training-design-s3b.md](ml-training-design-s3b.md) §D1/§D2 and are not restated or re-derived.
+[ml-training-design-s3b.md](../../../plans/ml/ml-training-design-s3b.md) §D1/§D2 and are not restated or re-derived.
 This doc locks only what S3b delegated or left open: the no-fork triage pass, the θ precision
 protocol, the emission rails and gating, the shared per-decision-P(win) reader, and the
 played-well-lost report.
@@ -12,7 +12,7 @@ played-well-lost report.
 > **Parallel-grill coordination:** the S2b (eval harness) design is being grilled concurrently and
 > its AIVAT plug-in consumes the same per-decision-P(win) reader locked in §D5. §D5's record shape
 > is the coordination point — if S2b's locked doc names a different shape, reconcile in
-> [ml-training-contracts.md](ml-training-contracts.md) (additive C4) before either session builds.
+> [ml-training-contracts.md](../../../plans/ml/ml-training-contracts.md) (additive C4) before either session builds.
 
 **Grounding (verified at design time):**
 - Film alignment: the Decision prompted at film frame `i` stores its choice in frame `i+1`'s

@@ -85,7 +85,8 @@ Two layers, so the Read is useful even off-meta:
   confidence bar.
 
 `evolution_paths` resolve from the dossier's evolution lines when recognized, else fall
-back to the engine's `evolvesFrom` chain (observed Riolu → Lucario regardless of
+back to the engine's `evolvesFrom` chain (observed Riolu → Mega Lucario ex — a SINGLE hop; there is
+no "Lucario" in this set — regardless of
 recognition). Target `role ∈ {engine, fragile_preevo, prize_liability, attacker}`.
 
 ## The artifact
@@ -145,12 +146,14 @@ authored by the `matchup-genie` skill at `src/common/scouting/briefs/<slug>.json
 The matched Brief rides on **`Board.brief`**, γ-gated to a recognized opponent (`None` when unknown /
 uncovered / Posture off). **Consumption is ADR-0038**: Brief intel *sharpens the owning Tactical
 signal* (γ-scaled) rather than minting parallel Hypotheses. The consumer table — what each Brief
-surface drives (every agent opts in via `main.py`; pinned by `tests/agents/test_agent_wiring.py`):
+surface drives. The per-lever `brief_*` kill-switches were RETIRED: `runtime.PROFILE`'s
+`matchup_targeting` (ADR-0051, ships True) supersedes them, and no agent `main.py` carries a flag —
+it is five lines calling `make_agent` (ADR-0055, pinned by `tests/agents/test_agent_wiring.py`):
 
 | Brief surface | Consumer | Kill-switch |
 |---|---|---|
-| target `fragile_preevo` | tier-crossing snipe-rank boost in `_body_threat_rank` (snipe rules + planner key-threat rung inherit) + gust-target tie-break | `brief_preevo` |
-| target `engine` + `opp_is_engine_dependent` | sub-tier snipe-rank boost + gust tie-break, hard-gated on the asserted bool | `brief_engine` (**default OFF** — the stress leg priced a wrong assertion at ~4%; arms via the first real true-asserting Brief's own A/B) |
+| target `fragile_preevo` | tier-crossing snipe-rank boost in `_body_threat_rank` (snipe rules + planner key-threat rung inherit) + gust-target tie-break | `matchup_targeting` |
+| target `engine` + `opp_is_engine_dependent` | sub-tier snipe-rank boost + gust tie-break, hard-gated on the asserted bool | `matchup_targeting` |
 | target `prize_liability` | **covered, no lever** — `_prize_value` (ex/Mega off CardStat), `gust_best_ko_prizes`, the Lethal Solver's prize math and `stall_target_is_keystone` already act on prize-heavy bodies | — |
 | `threats` (`brief_threat_ids`) | **covered, no lever** — the threat rank sees attackers by printed damage; the defensive half is `active_doomed`'s forward-doom | — |
 | `opp_donk_vulnerable` | **deferred** — the snipe half is delivered by the `fragile_preevo` lever; the residual "early aggression" half awaits a true-asserting Brief + correction evidence | — |
@@ -161,7 +164,8 @@ queue), never combat math (ADR-0038).
 
 ## The compiler (offline)
 
-`tools/build_scouting_artifact.py` (a module in the `meta_tracker` package; reuses
+`tools/build_scouting_artifact.py` (a standalone script at the `tools/` root, NOT inside the
+`meta_tracker` package; reuses
 `store.py`/`archetype.py`/`cards.py`; stays native-lib-free):
 
 1. Load episodes from `meta.db`; weight each by `0.5 ^ (age_days / HALF_LIFE)` (from
@@ -234,7 +238,7 @@ emitted block.
 
 Card data comes from a `cards.json`-backed provider in tests (the existing lib-free
 precedent), so the suite needs no native lib. REQ-IDs via `@pytest.mark.req`; run locally
-with `python -m pytest tests/ -q` (no CI for this repo — see CLAUDE.md).
+with `python -m pytest tests/ -q`. CI runs the suite plus two main-watchdog gates — see `docs/ci.md`.
 
 ## Requirements (traceability)
 

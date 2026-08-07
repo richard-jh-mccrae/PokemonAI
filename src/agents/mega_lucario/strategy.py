@@ -20,10 +20,10 @@ Most of the doctrine is COVERED by the General Strategy (STRATEGY.md §5/§5b), 
 that LOOK deck-specific:
   - Aura-Jab-vs-Mega-Brave choice   -> the Tactical energy-recover credit + self-lock cost
     (AttackStat.recoverN / nextTurnSameAttackLock; pilot._tactical)
-  - Aura Jab's bench-load targeting -> ATTACH_FROM `concentrate-accel-on-one-line-body` (2nd Mega
-    first) + `spread-attach-to-the-needy` (then Hariyama)
-  - dual-Mega retreat-swap          -> `swap-out-the-locked-attacker` (Board.active_best_attack_locked)
-    + `promote-the-ready-wincon` at the SWITCH target pick
+  - Aura Jab's bench-load targeting -> the ADR-0069 attach marginal's ATTACK AXIS
+    (`pilot._attach_value`), which prices each recipient directly
+  - dual-Mega retreat-swap          -> the ADR-0100 promote/retreat equation
+    (`promote_retreat_value`); the two rungs this named are deleted
   - prize-trade interleaving        -> `interpose-the-cheap-attacker-to-preserve-the-wincon` +
     `dont-promote-into-their-prize-reach` at TO_ACTIVE
   - Heave-Ho's TARGET pick          -> the context-keyed gust target tacticals (KO / stall / keystone)
@@ -87,8 +87,8 @@ def _reachable(board, cid):
 ROLES = {
     MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
     #                  accel_source: Aura Jab IS the deck's energy engine (attach 3 F from discard
-    #                  to the Bench) -> `develop-the-accel-recipient` endorses benching the 2nd
-    #                  Riolu while a Mega is Active; `promote-the-accelerator-for-the-ko` applies.
+    #                  to the Bench) -> the ADR-0086 Deploy Marginal endorses benching the 2nd
+    #                  Riolu while a Mega is Active; the KO-promote is `_promote_ko_tactical`.
     RIOLU:    ["win_condition_base"],            # Line pre-evo (the Line drives line-piece rules)
     SOLROCK:  ["secondary_attacker", "engine"],  # early Cosmic Beam 70 + Lunar Cycle enabler
     LUNATONE: ["engine"],                         # native draw engine (Lunar Cycle, Ability)
@@ -118,10 +118,10 @@ HYPOTHESES = [
     #  `board.top_starter_id`, never an id. The +12 could only lift Solrock above a 0-scoring field;
     #  the ranking additionally orders Riolu, Makuhita and Meowth ex, which the rung never could.)
     # (dont-attach-to-the-engine RETIRED 2026-07-10 — FOLDED into the general
-    #  `dont-fund-the-non-attacking-body` (baseline_energy, −12), which reads the same engine-only Role
-    #  universally AND covers the ATTACH_FROM seam this rule was blind to (ml f121, CRITICAL: Aura Jab's
-    #  bench-load put Energy on Lunatone). Keeping both would stack to −24 and push a LONE Lunatone below
-    #  End — the exact calibration this rule's own rationale protected.)
+    #  role gate inside `_attach_value` (ADR-0069), which reads the same engine-only Role universally
+    #  AND covers the ATTACH_FROM seam this rule was blind to (ml f121, CRITICAL: Aura Jab's bench-load
+    #  put Energy on Lunatone). It ZEROES the attack axis rather than adding a weight, so the old
+    #  −12/−24 stacking arithmetic no longer applies.)
     Hypothesis(
         id="attach-solrock-over-line-base",
         rationale="At a benched attach, prefer powering Solrock (the bridge attacker: secondary_attacker "
@@ -218,8 +218,8 @@ HYPOTHESES = [
                   "scarce Bench the Makuhita->Hariyama finisher line wants (ml 85709280 f51/m1, CRITICAL: "
                   "played a 2nd Solrock into the last Bench slot — 'we dont need two Solrocks down, reserve "
                   "this spot for a Makuhita'). This is the PLAY-side complement of `dont-fetch-the-redundant"
-                  "-piece` (the _TO_HAND/search side). Soft −25 cancels `pre-position-attacker` (+25) so the "
-                  "redundant bench-play drops below any real develop/dig, but never hard-vetoes it (a lone "
+                  "-piece` (the _TO_HAND/search side). The soft −25 keeps the "
+                  "redundant bench-play below any real develop/dig, but never hard-vetoes it (a lone "
                   "surviving backup can still be benched if nothing better exists).",
         when=lambda c: c.option_type == _PLAY and c.card_id in _ENGINE_IDS
         and c.card_id in c.board.in_play_ids

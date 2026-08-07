@@ -3,7 +3,7 @@
 **Status:** design locked 2026-07-19 (Fable 5 design grill; user-approved forks). The S2b build
 session **executes** this — it does not re-derive the decisions. Deviations discovered during
 build get recorded here with a reason, not silently applied. Emits the frozen C3 report
-([ml-training-contracts.md](ml-training-contracts.md) §C3); G2 is measured on this harness.
+([ml-training-contracts.md](../../../plans/ml/ml-training-contracts.md) §C3); G2 is measured on this harness.
 
 **Grounding (verified at design time):**
 - Contestant resolution exists: `tools/sim/battle.py` `resolve()` maps an all-digit spec → Build

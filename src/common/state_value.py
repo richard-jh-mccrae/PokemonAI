@@ -470,8 +470,8 @@ class TermFamily:
     #:
     #: Load-bearing rather than documentation. Under uniform 1-ply differencing a play that moves
     #: only a dimension listed here prices at exactly 0 delta, and at ordering time 0 means *never
-    #: explored* — not merely undervalued. Issue #263's composer reads :func:`blind_spots` directly
-    #: to tell a genuine zero from an uncovered one, so each entry is written as
+    #: explored* — not merely undervalued. NOTHING reads :func:`blind_spots` at runtime today; it is a
+    #: checklist for whoever prices a new family, so each entry is written as
     #: ``"dimension — why it is uncovered / who owns closing it"``.
     blind_to: tuple[str, ...] = ()
 
@@ -582,9 +582,9 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "by rule and is zeroed on the Active path (Issue #284). What the bench leg "
                     "prices is the STANDING position — chip already on their bench makes a body one "
                     "rider from dead between turns — never the conversion, which stays `attack_ev`'s. "
-                    "`prize_advance` then carries the forward payoff the removal DENIES "
-                    "(`TheirSide.forward_payoff`, Issue #285), on `development.evolve_marginal`'s own "
-                    "`_READINESS_W` / `PRIZE_DAMAGE_RATE` / `halve(hops)` expression — the same "
+                    "`prize_advance` then carries the denied LINE PRIZE (`needs.line_prize_advance` over "
+                    "`theirs.forward_line_prize`) — ADR-0119 REPLACED the forward-payoff leg rather "
+                    "than renaming it — the same "
                     "anchors, because forward payoff is printed damage held as POTENTIAL on either "
                     "side of the board. Not a second reading of `development`, which is MY-side only "
                     "by its own `blind_to`: this prices ONE reachable Knock Out more precisely, from "
@@ -649,9 +649,9 @@ REGISTRY: tuple[TermFamily, ...] = (
             "0.043). 0.0855 is the largest TOTAL across every target in ONE `threat()` call, which "
             "only became possible when Issue #284 let the loop append more than one body; at "
             "`_THREAT_W` that is the 0.002192 above. Both are correct at their own seam.",
-            "THE PRIZE a denied line would have YIELDED — the credit reads `owed_damage` only, so a "
-            "pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a "
-            "1-prize body of the same printed damage price IDENTICALLY. That is a real gap against "
+            "THE PRIZE a denied line would have YIELDED — CLOSED by ADR-0119: `needs.line_prize_advance` "
+            "prices the line's PRIZE, so a pre-evolution one hop from a 3-prize Mega ex no longer "
+            "prices identically to a 1-prize body of equal printed damage. Kept as the record of "
             "the doctrine's own headline, *\"trade 1 prize for a denied 3\"* — the sentence is about "
             "PRIZES and this term answers in DAMAGE. Re-checked at Issue #329 and it SURVIVES the "
             "scale anchor unchanged, because the anchor scales the whole marginal and adds no leg: "
@@ -1297,8 +1297,8 @@ def _reachable_target_values(model: "StateModel") -> tuple:
     pre-evolution — a 1-prize cost erases a 3-prize wincon"*; *"race the fragile pre-evos — KO Dreepy
     (70) / Drakloak (90) before they become the wall"* — **seven of the eight matchup docs** make this
     their primary or secondary lever, and it applies to a plain gust-and-Knock-Out too. So
-    `prize_advance` now carries the forward payoff the removal DENIES, from
-    :meth:`TheirSide.forward_payoff`.
+    `prize_advance` carries the denied LINE PRIZE, from :meth:`TheirSide.forward_line_prize` through
+    :func:`needs.line_prize_advance` (ADR-0119 replaced the forward-payoff leg).
 
     The credit is `development.evolve_marginal`'s expression, term for term — `_READINESS_W x
     (owed_damage / PRIZE_DAMAGE_RATE) x halve(hops)` — and reusing it rather than choosing a scale is
@@ -2335,7 +2335,7 @@ def blind_spots() -> dict:
     Under uniform 1-ply differencing a play that moves only state no family reads prices at exactly
     0 delta, and at ordering time 0 means *never explored* — not *undervalued*. So the composer needs
     to tell a genuine zero (nothing happened) from an uncovered one (something happened that nobody
-    prices), and this is what it reads to do it.
+    prices). No production caller reads this yet — it is a checklist, not a wired seam.
 
     Distinct from :func:`registry_gaps`, which is bookkeeping over what families SAY about each
     other: a fact one family disclaims and another claims is fine, and a fact NOBODY has written

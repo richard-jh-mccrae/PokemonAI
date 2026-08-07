@@ -11,7 +11,7 @@ the `a21472` class: 2×Jetting+Nebula = 450 ≥ 440 in the same three turns as N
 `race_values` is the pure math; `ObjectivesMixin` prices an ATTACK option as per-turn wall
 progress plus the (tempo-discounted) chip of the best min-turn sequence STARTING with it,
 consumed by `Pilot._tactical` in place of the greedy single-hit damage. Kill-switch
-`objectives_race` (wired in every agent's main.py; an overlay can force it off for A/B).
+`objectives_race` — it lives in `common.runtime.PROFILE` (ships True), not in any agent main.py.
 """
 from __future__ import annotations
 
@@ -578,7 +578,8 @@ class ObjectivesMixin:
         """The Match Planner (ADR-0045) — the Game Plan for this turn: the **mode** (the phase grown to
         six), the closed-form **confidence**, the **route** (my cheapest Prize Path target ids), and the
         **directed Turn Goal**. Runs first each turn (from ``_board``, after the objective signals are
-        set); COMPUTE-ONLY until the seam wires it (S3) — nothing scores off it yet. Re-derived every
+        set); WIRED at S3 — `planner._gameplan_goal_bonus` scores `_PLANNER_GAMEPLAN_W x confidence`,
+        and `planner._forgo_ko_gate` reads the mode. Re-derived every
         decision, never a lock; when confidence is below ``_MATCH_CONFIDENCE_MIN`` the directed goal is
         WITHHELD (defer to the Turn Planner's own ladder + the tuned weights — the fallback)."""
         from common.strategy.strategy import GamePlan

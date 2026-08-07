@@ -14,8 +14,8 @@ below — Roles / Lines / params — so any deck making the same declarations in
                                        with the rest of the Set-Up Active seam; the opening pick
                                        is now `starter_priority` below + the general
                                        `open-the-declared-starter`)
-    accel-into-main                 -> advance-the-accel-pieces              baseline_energy
-    develop-turbo-flare-recipient   -> develop-the-accel-recipient           baseline_bench
+    accel-into-main                 -> the attach marginal                  ADR-0069
+    develop-turbo-flare-recipient   -> the Deploy Marginal                  ADR-0086
     tutor-the-wincon                -> play-a-tutor-for-the-unfound-wincon   doctrine_fetch
     never-fetch-cinderace           -> dont-fetch-the-setup-only-opener      doctrine_fetch
                                        (opener tag + stranded-evolution guard: no Raboot in

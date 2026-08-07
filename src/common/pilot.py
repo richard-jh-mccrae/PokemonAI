@@ -389,7 +389,7 @@ class Board:
     energy_attached: bool = False  # already attached Energy this turn?
     supporter_played: bool = False # the one-per-turn Supporter is already spent (`current.supporterPlayed`)
                                    # — so a Supporter grabbed now cannot be PLAYED until next turn,
-                                   # while an Item still can (ml f71). Gates `grab-what-i-can-play-now`
+                                   # while an Item still can (ml f71).
     hand_startable: bool = False   # a card in hand can take Active Spot (opener tag / starter role)
     active_doomed: bool = False    # opponent can KO my Active next turn (incoming-KO estimate)
     incoming_active_damage: int = 0  # closed-form estimate of opponent's biggest attack vs my
@@ -448,7 +448,7 @@ class Board:
                                        # play — so there's something a rush-evolve tutor can evolve
     line_preevo_in_hand: bool = False  # a non-payoff Line member (a base/mid-line pre-evolution) is in
                                        # my HAND — a piece to deploy, so a hand-shuffle refresh would bury
-                                       # it (Riolu/Drakloak); gates `hold-line-piece-dont-shuffle` (ep83686860 f13)
+                                       # it (Riolu/Drakloak). NO READER since ADR-0065 retired the rung (ep83686860 f13).
     wincon_base_deployable: bool = False  # the payoff's IMMEDIATE pre-evolution (one hop below it) is
                                        # in play OR in hand — evolved payoff deployable soon. False -> fetching
                                        # payoff strands it: prefer base (`fetch-base-before-stranded-payoff`).
@@ -481,7 +481,7 @@ class Board:
     setup_placed_ids: frozenset = field(default_factory=frozenset)  # card ids already placed on my Active/Bench
                                        # during the PREGAME setup, read from MOVE_CARD logs (the just-placed Active
                                        # shows only in logs, obs still reads active=[None]) — the setup-aware
-                                       # redundancy test `dont-pre-bench-a-redundant-utility` needs (dragapult f4)
+                                       # redundancy test the ADR-0086 Deploy Marginal replaced. NO READER (dragapult f4).
     hand_duplicate_ids: frozenset = field(default_factory=frozenset)  # card ids I hold 2+ copies of in
                                        # hand, EXCLUDING fungible Energy — lowest-keep pitch at a forced
                                        # discard (`discard-the-hand-duplicate`); singleton never shed over dup
@@ -900,13 +900,13 @@ class Context:
                                        # never attacks (`Pilot._is_utility_body`) — Lunatone, Meowth ex,
                                        # Dunsparce→Dudunsparce. Set at BOTH funding seams: the manual
                                        # ATTACH and the accel ATTACH_FROM recipient pick (ml f121/f84,
-                                       # dragapult f21). Gates `dont-fund-the-non-attacking-body`
+                                       # dragapult f21). NO READER: ADR-0069 moved the role gate inside `_attach_value`.
     attach_target_under_max: bool = False  # receiving Pokémon carries fewer Energy than its
                                            # HIGHEST-damage attack costs — can't yet fire its big attack
                                            # (1 W can Jetting Blow but not Nebula Beam CCC). Fail-CLOSED (False when unknown).
     attach_target_is_priority_wincon: bool = False  # this attach option puts Energy on the ONE
                                            # win-condition to concentrate on (== board.priority_wincon_slot)
-                                           # — most-built buildable wincon. Gates `concentrate-energy-on-wincon` (load one, not spread).
+                                           # — most-built buildable wincon. NO READER: ADR-0069 folded concentrate into the attack axis.
     attach_fuels_dormant_ability: bool = False  # this ATTACH's typed Basic Energy is a colour the target's
                                            # ABILITY needs as fuel (CardStat.abilityEnergyTypes) and none is
                                            # attached — the attach switches a dormant Ability on (Adrena-Brain's
@@ -1027,7 +1027,7 @@ class Context:
                                        # HP) — promote it to take the prize from the front (esp. an accelerator that also loads the bench)
     is_best_promote_target: bool = False  # at a TO_ACTIVE promote OR a SWITCH (my retreat's new-Active
                                        # pick), this option brings up board.best_promote_slot — most-built
-                                       # ready wincon. `promote-the-powered-attacker` fires so it's the built Mega, not a bare copy
+                                       # ready wincon. NO READER: ADR-0100 replaced the promote rungs with `promote_value`.
     is_ko_promote_target: bool = False  # at a promote/switch, this option brings up board.ko_promote_slot —
                                        # the benched body whose (boost-inclusive) attack KOs the opp Active
                                        # (`promote_ko_aware`). Backed `promote-the-ko-attacker`, now DELETED
@@ -1050,7 +1050,7 @@ class Context:
                                               # (None off a Damage option / no chain / no provider)
     target_on_path: bool = False        # Tier-3 (ADR-0040): this damage/snipe target sits on MY
                                         # cheapest Prize Path — its KO advances the MATCH win
-                                        # (`snipe-on-the-path`); False when the path is unknown
+                                        # False when the path is unknown. No PRODUCTION reader since ADR-0085 folded the snipe stack.
     target_prize_redundant: bool = False  # ADR-0044: a snipe target OFF my committed cheapest Prize Path
                                         # — chip here doesn't advance it ("deny the 2nd Mega"). A high-prize
                                         # body I never need is flagged ALWAYS; a low-prize one only when I'm
@@ -2126,7 +2126,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # Scoped deliberately: `>= 0` only, so
                                                                      # an evolve the equation prices as a
                                                                      # WEAKENING (f35's -30.36 forfeited
-                                                                     # Recon dig) still falls to tier 4; and
+                                                                     # Recon dig) still falls to tier 5; and
                                                                      # BENCHED only, leaving the Active's
                                                                      # KO-forfeit guard above untouched.
                                                                      # This is NOT the `>= 0` loosening
@@ -8840,15 +8840,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             read=None, gamma: float = 0.0) -> float | None:
         """Snipe-priority THREAT rank for a benched DAMAGE target (None off a Damage/bench option).
 
-        Higher = snipe first when no KO is available. The rank is the body's eventual attack power —
-        max of its OWN printed damage (so an already-evolved ex attacker like Dragapult ex 200 / Mega
-        Lucario ex 270 is seen, which the descendants-only `forward_max_damage` misses) and its
-        forward-evolution damage — plus two tiny tie-breaks (more-evolved by own damage so Drakloak >
-        Dreepy on the same line; energized = sooner). A line that CERTAINLY reaches a hand-size
-        attacker gets `_HAND_SIZE_ATTACKER_BOOST` (the latent Alakazam, hidden by its 10 printed
-        damage). This is the single generic threat order behind `snipe-the-top-threat`; it never
-        rewards a low-HP SUPPORT body. The Brief's target-role boosts now live in the MatchupPlan
-        (ADR-0051), not here."""
+        Higher = snipe first when no KO is available. This method only filters the select context and
+        delegates to :meth:`_body_threat_rank`, which defines the ordering (own printed damage vs
+        forward-evolution damage, plus the more-evolved and energized tie-breaks). The Brief's
+        target-role boosts live in the MatchupPlan (ADR-0051), not here."""
         if (select.get("context") != _DAMAGE or option.get("type") != _CARD
                 or option.get("area") != _BENCH):
             return None

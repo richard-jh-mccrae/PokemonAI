@@ -130,8 +130,8 @@ EXPECTED_SHIPPED = {
                                     # consumer — the target pick's lexicographic tiebreak among
                                     # candidates tied on relevance, which orders a tie and never GATES
                                     # one (a `strip_shift > 0` keep-price gate suppresses 128/218
-                                    # relevance-positive rows). STILL OFF, so that consumer is inert:
-                                    # arming is owed by Issue #228
+                                    # relevance-positive rows). ARMED ON — the entry it
+                                    # annotates is `True` (ADR-0084 / Issue #217)
     "snipe_relevance": True,        # ADR-0083 / Issue #188 (S4-snipe): the **Snipe Relevance** scalar
                                     # decides the DAMAGE bench-target select; the six additive target
                                     # rungs + the MatchupPlan steer stand down together while armed.

@@ -149,8 +149,8 @@ _OPPONENT_HIDDEN = tuple(re.compile(p, re.I) for p in (
 ))
 
 #: **Effect families**, in resolution order, and whether the *existing* Effect-Clause vocabulary
-#: (`snapshot_coverage.CLAUSE_WRITES` keys: accel / coin / draw / energy_provide / energy_recur /
-#: fetch / heal) can already express the family.
+#: (`snapshot_coverage.CLAUSE_WRITES`, 33 keys today — accel / coin / draw / energy_provide /
+#: energy_recur / fetch / heal among them) can already express the family.
 #:
 #: This is what turns "91 sites are a clause-vocabulary gap" into a schedulable number: a gap in an
 #: EXPRESSIBLE family is a compendium ENTRY — the builder already knows the shape — while a gap in a

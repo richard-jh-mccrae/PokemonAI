@@ -255,7 +255,7 @@ class TheirPlanInputs:
     #: means UNKNOWN (fail-closed at source), and takes no discount at all rather than reading as
     #: maximally distant, which would be the fail-open direction.
     turns_to_afford: int | None = None
-    #: `stats.forward_max_damage(card_id)`, for the developing-wincon leg.
+    #: Filled by `Pilot._snipe_relevance_terms` via `_threat_damage_pair`, for the developing-wincon leg.
     forward_damage: int = 0
     #: ADR-0044's `snipe-the-evolving-threat` discriminator — chip the pre-evo only while the evolved
     #: wincon is NOT already on board.

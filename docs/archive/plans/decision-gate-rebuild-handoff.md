@@ -3,12 +3,12 @@
 > ## ✅ CLOSED 2026-07-30 — all five items done
 >
 > Picked up after PR #227 merged. The rulings and measurements are
-> **[ADR-0085 Amendment J](../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)**;
+> **[ADR-0085 Amendment J](../../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)**;
 > this file is kept as the record of what was owed and what each item turned into.
 >
 > | item | outcome |
 > |---|---|
-> | 1. triage the 111 | **101**, not 111 — see item 2. Tiered in [`decider-disagreement-triage.md`](decider-disagreement-triage.md). Lead finding: **13 frames are "covered" by a rung that was deleted.** |
+> | 1. triage the 111 | **101**, not 111 — see item 2. Tiered in [`decider-disagreement-triage.md`](../../plans/decider-disagreement-triage.md). Lead finding: **13 frames are "covered" by a rung that was deleted.** |
 > | 2. multi-pick agree rate | **Ruled**: satisfaction is `correct ⊆ chosen` (`gates.satisfies_human`). `DISCARD` 1/12 → 10/12; corpus 220/331 → **230/331 with no decision changed**. |
 > | 3. recapture at a `main` SHA | Done, `6328ab7` → **`e50735a`**. Zero flips — two fields moved, **no rows**. |
 > | 4. a `main` watchdog | **Added.** The runtime objection failed: 31.6 s vs the leaf gate's 71 s, i.e. ~2.2× *faster*. |
@@ -21,7 +21,7 @@
 **Original status (2026-07-30, end of Issue #188 / PR #227):** the instrument is BUILT and both gates
 pass. What follows is what the build did **not** settle.
 
-**Read first:** [ADR-0085](../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)
+**Read first:** [ADR-0085](../../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)
 Amendment I (the ruling and the measurements), `tools/train/decider_lab.py` (the instrument's own
 docstring carries the reasoning), and the **Decider Lab** entry in `tools/train/CONTEXT.md`.
 

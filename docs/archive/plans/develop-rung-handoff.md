@@ -1,14 +1,14 @@
 # Develop Rung — Handoff (2026-07-16)
 
 Self-contained pickup doc for the **within-turn develop-rollout planner** work. Read this first, then
-the two design docs it points to. Companion plans: [turn-planner-develop-rung.md](turn-planner-develop-rung.md)
-(the rung + phases + leaf lab) and [phase3-tooling.md](phase3-tooling.md) (the correction→retirement tooling).
+the two design docs it points to. Companion plans: [turn-planner-develop-rung.md](../../plans/turn-planner-develop-rung.md)
+(the rung + phases + leaf lab) and [phase3-tooling.md](../../plans/phase3-tooling.md) (the correction→retirement tooling).
 
 ## TL;DR
 
 > **Update 2026-07-16 — the leaf was rebuilt.** The `_board_development` plan-tier leaf this doc describes
 > is now SUPERSEDED in `_engine_leaf_value` by the **readiness leaf + line account**
-> ([readiness-leaf-spend-account.md](readiness-leaf-spend-account.md) /
+> ([readiness-leaf-spend-account.md](../../plans/readiness-leaf-spend-account.md) /
 > [board-state-valuation-grill.md](board-state-valuation-grill.md)): SOLE-top **5%→12%**, shared **60%→72%**,
 > and Gate 0 flipped from a wash to exhaustive **beating** the 1-ply rung (27% vs 18% SOLE-top). The
 > "discrimination is the ceiling / handCount overfits" diagnosis below is exactly what the readiness leaf

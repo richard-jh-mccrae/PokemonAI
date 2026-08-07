@@ -75,11 +75,8 @@ rediscover:
 ## The branching cap, derived from the measured budget
 
 :data:`BRANCH_CAP` is a **structural constant chosen from a measurement**, not tuned strategy, and
-truncation past it is ALWAYS reported. Issue #383 records that it *"joins the whitelist under T4/4's
-``composer-budget-caps`` entry"* — that entry does **not exist yet**; it is owed by Issue #385, which
-is the issue that arms the composer and therefore the first one for which a budget cap is live.
-Stated as owed rather than implied, so a reader grepping `sound_rules.py` for the name and finding
-nothing knows why.
+truncation past it is ALWAYS reported. It joins the whitelist under `sound_rules.py`'s
+``composer-budget-caps`` entry, whose own reason text names this constant.
 
 Measured on this box at this commit, ``python tools/train/value_lab.py --menu`` over the 372 corpus
 frames both gates replay:

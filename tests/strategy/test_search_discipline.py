@@ -256,7 +256,8 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
 def test_snipe_the_threat_outranks_the_weakest():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=DictCardStatProvider({}, attacks={11: AttackStat(11, damage=50)}))
-    # idx0 carries Energy (live threat, high HP); idx1 is weakest. threat (20) > weakest (15)
+    # idx0 carries Energy (live threat, high HP); idx1 is weakest. The two DAMAGE(15)
+    # rungs this once named were deleted by ADR-0085; `snipe_relevance` orders them now.
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(700, energy=1),
                                     opp_bench=[poke(900, energy=2, hp=200), poke(901, hp=50)]))
