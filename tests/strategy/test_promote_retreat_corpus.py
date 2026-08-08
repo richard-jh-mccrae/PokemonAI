@@ -96,7 +96,6 @@ def test_whether_declines_the_needless_retreat_f9():
     assert idx not in dec.chosen and dec.chosen == fx["correct"]
 
 
-@pytest.mark.xfail(strict=True, reason=marks("pr_whether_should_retreat_f37")[0].kwargs["reason"])
 def test_whether_takes_the_retreat_into_the_finisher_f37():
     """82756664-37 (MAIN, bad_retreat): "should retreat to Mega Starmie for the KO and snipe". The
     benched finisher out-earns staying, so the retreat prices POSITIVE and is taken."""

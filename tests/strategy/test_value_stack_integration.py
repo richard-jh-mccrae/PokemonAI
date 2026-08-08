@@ -99,9 +99,11 @@ CONSUMED = frozenset({
     # REVIEWED, and NOT a `RULED_COLLAPSES` case: `MySide.attack_blocked` reads an ABSENT turn as 0,
     # which is `<= 1`, which returns True == BLOCKED — so absence fails CLOSED, into no claim.
     "model.mine.attack_blocked",
-    # ── TheirSide (6) — the newly-threaded half ──
+    # ── TheirSide (7) — the newly-threaded half ──
     "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
-    "model.theirs.reachable_incoming",
+    "model.theirs.reachable_incoming", "model.theirs.hand_size",
+    # Issue #456: absent `handCount` intentionally equals an empty hand; the collapse test pins it.
+
     # `theirs.forward_payoff` LEFT at ADR-0119: the forward DAMAGE a removal denies is already inside
     # `survival`'s clock. REVIEWED: `forward_line_prize` floors at `own_prize`, so absence fails CLOSED.
     "model.theirs.forward_line_prize",

@@ -393,6 +393,14 @@ class Expectation:
         return self.best(score) if self.resolution == CHOSEN else self.expected(score)
 
 
+@dataclass(frozen=True)
+class ScalarTransition:
+    """Known board writes plus a closed-form value for information the snapshot cannot hold."""
+
+    model: object
+    scalar: float
+
+
 class UnsupportedTransition(NotImplementedError):
     """A caller that REQUIRED a model got a :class:`Refusal`. Raised only off the ordering path — the
     composer never sees it; it reads :func:`must_expand`."""
@@ -614,7 +622,7 @@ __all__: Sequence[str] = (
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",
     "Footprint", "FOOTPRINTS", "footprint", "commutes", "footprints_commute", "option_footprint",
     "option_serials",
-    "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
+    "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "ScalarTransition", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
     "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",
 )

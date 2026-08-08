@@ -646,11 +646,11 @@ def test_the_completeness_audit_bites():
 
 @pytest.mark.req("REQ-SNAPSHOT-0004")
 def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
-    """The owed list, generated off the artifact rather than re-derived. Judge's leg is a declared
-    UNKNOWN, not unfinished work: pricing a symmetric hand-shuffle needs a term the POC lacks."""
+    """The owed list is generated from the artifact; every listed verdict names its missing leg."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert 1213 in partial and "symmetric" in partial[1213].lower()
+    assert len(partial) == 14
+    assert 1237 in partial and "coin" in partial[1237].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
     clauses = sc.clause_lists(_compendium())

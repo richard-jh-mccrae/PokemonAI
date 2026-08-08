@@ -53,7 +53,6 @@ PINS = {
     # shuffle timing & keep-value (the refresh side)
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
-    "83686860-13": "keep: don't refresh a live hand — end the turn",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
     # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
     # scoring the whole TURN.
@@ -75,6 +74,8 @@ READJUDICATED = {
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
 POC_T4_FLIPS = {
+    "83686860-13": "keep: don't refresh a live hand — end the turn (moved by Issue #456's scalar "
+                   "refresh valuation; pending human re-adjudication)",
     "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
     "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "

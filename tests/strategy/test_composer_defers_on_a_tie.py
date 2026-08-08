@@ -73,13 +73,13 @@ def test_the_structural_sequencer_gets_the_turn_and_plays_the_ruled_dig(anchor):
 def test_the_defer_does_not_fire_where_the_composer_has_a_real_view():
     """An abstention rule is only worth having if it abstains SOMETIMES. On a frame with a real
     margin, so widening the tie test into an epsilon band turns this red rather than deferring all."""
-    fx = json.loads((FIXTURES / "pr_whether_should_retreat_f37.json").read_text(encoding="utf-8"))
-    pilot = _pilot("dragapult_ex")
+    fx = json.loads((FIXTURES / "ml0705_ppp_cant_attack_f14.json").read_text(encoding="utf-8"))
+    pilot = _pilot("mega_lucario")
     pilot._turn_plan = None
     pilot._composer_trace = None
     dec = pilot.explain(fx["obs"])
     trace = pilot._composer_trace or {}
     assert not trace.get("tied_first_steps"), (
-        "the defer fired on a frame whose composer margin is 2.43 prizes — the tie test has stopped "
-        "being a float-noise floor and become a band")
+        "the defer fired on a frame with a positive composer plan — the tie test has stopped being a "
+        "float-noise floor and become a band")
     assert getattr(getattr(dec, "planned", None), "ranked_by", None) == "composer"

@@ -158,6 +158,21 @@ def test_re_resolution_follows_the_SERIAL_not_the_index():
 
 
 @pytest.mark.req("REQ-COMPOSER-0002")
+def test_re_resolution_disambiguates_a_reused_serial_by_card_id():
+    """Fixture serials can repeat, so a serial-only stamp must not turn a later attach into a play."""
+    obs = _obs(_player(active=_body(RIOLU), hand=[E_F, TOOL]))
+    for card in obs["current"]["players"][0]["hand"]:
+        card["serial"] = 7
+    before = _model(obs)
+    stamped = cp.stamp_origin(before, {"type": _PLAY, "index": 1})
+    after = ao.apply_option(before, {"type": _ATTACH, "area": HAND, "index": 0,
+                                     "inPlayArea": ACTIVE, "inPlayIndex": 0})
+    again = cp.resolve_against(after, stamped)
+    assert again["index"] == 0
+    assert after.source_obs["current"]["players"][0]["hand"][again["index"]]["id"] == TOOL
+
+
+@pytest.mark.req("REQ-COMPOSER-0002")
 def test_a_consumed_card_makes_its_option_UNRESOLVABLE_rather_than_re_pointed():
     """Dropping it is the fail-closed answer; re-pointing it at whatever now sits at that index is
     the bug."""

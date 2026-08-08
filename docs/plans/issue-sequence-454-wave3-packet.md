@@ -93,6 +93,23 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `81904451|0|decision|15` | decider | #455 | agree [2] | disagree [0] | Rerule; baseline unchanged |
 | `84889539|1|decision|30` | decider | #455 | agree [2] | disagree [1] | Rerule; baseline unchanged |
 | `85164605|1|decision|64` | decider | Issue #462 | agree [5] | disagree [1] | Re-adjudicated; baseline unchanged |
+| `82224509|1|decision|71` | leaf | Issue #456 | OK (rank 1) | MISS (rank 6) | Rerule; baseline unchanged |
+| `82225138|0|decision|19` | leaf | Issue #456 | OK (rank 1) | MISS (rank 3) | Rerule; baseline unchanged |
+| `82523811|1|decision|15` | leaf | Issue #456 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `82523811|1|decision|79` | leaf | Issue #456 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `82525101|1|decision|102` | leaf | Issue #456 | OK (rank 1) | MISS (rank 3) | Rerule; baseline unchanged |
+| `82525101|1|decision|92` | leaf | Issue #456 | OK (rank 1) | MISS (rank 4) | Rerule; baseline unchanged |
+| `82749168|1|decision|29` | leaf | Issue #456 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `82754875|0|decision|8` | leaf | Issue #456 | OK (rank 1) | MISS (rank 4) | Rerule; baseline unchanged |
+| `83038055|0|decision|40` | leaf | Issue #456 | OK (rank 1) | MISS (rank 7) | Rerule; baseline unchanged |
+| `83116081|0|decision|17` | leaf | Issue #456 | OK (rank 1) | MISS (rank 3) | Rerule; baseline unchanged |
+| `83664340|1|decision|24` | leaf | Issue #456 | OK (rank 1) | MISS (rank 4) | Rerule; baseline unchanged |
+| `84071010|0|decision|30` | leaf | Issue #456 | OK (rank 1) | MISS (rank 4) | Rerule; baseline unchanged |
+| `84897262|1|decision|100` | leaf | Issue #456 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `85786096|0|decision|38` | leaf | Issue #456 | OK (rank 1) | MISS (rank 3) | Rerule; baseline unchanged |
+| `86091435|0|decision|96` | leaf | Issue #456 | OK (rank 1) | MISS (rank 5) | Rerule; baseline unchanged |
+| `82750161|1|decision|29` | decider | Issue #456 | agree [2] | disagree [0] | Rerule; baseline unchanged |
+| `85785067|0|decision|14` | decider | Issue #456 | agree [2] | disagree [0] | Rerule; baseline unchanged |
 
 ## Issue #462 — post–Issue #455 deferred-choice re-adjudication
 

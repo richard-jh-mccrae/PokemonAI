@@ -51,7 +51,6 @@ def test_critical_f14_never_play_a_damage_boost_when_it_cannot_attack():
 
 
 @pytest.mark.req("REQ-GEN-0070")
-@pytest.mark.xfail(strict=True, reason=marks("ml0705_petrel_over_lillies_f27")[0].kwargs["reason"])
 def test_critical_f27_refresh_wins_the_supporter_slot_over_a_needless_tutor():
     """`demote-needless-search-supporter-in-setup` neutralises the tutor's dig endorsement so the
     refresh wins the mutually-exclusive Supporter slot."""
@@ -63,7 +62,6 @@ def test_critical_f27_refresh_wins_the_supporter_slot_over_a_needless_tutor():
 
 
 @pytest.mark.req("REQ-GEN-0047")
-@pytest.mark.xfail(strict=True, reason=marks("ml0705_refill_undeployable_f44")[0].kwargs["reason"])
 def test_critical_f44_refill_when_the_held_wincon_is_undeployable():
     """`hold-wincon-dont-shuffle` stands down on `wincon_in_hand_undeployable` — a held payoff with no
     base in play is dead weight."""

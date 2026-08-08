@@ -17,14 +17,6 @@ import pytest
 FLIPS = {
     # ══ REFUSAL — the seam cannot model the human's option, so no weighting reaches these ════════
     # Causes: RNG, MULTI-WRITE (`_covers`, Issue #300), UNPROVEN (`deterministic=None`).
-    "ml0705_petrel_over_lillies_f27": (
-        "REFUSAL", [1], [0],
-        "RNG — 1227 Lillie's Determination: clause 'shuffle_own_hand_in' consults RNG, and a "
-        "simulated shuffle is one sample rather than a distribution. (The first pass recorded this "
-        "as a `draw` reveal; that was the bare seam's answer, not the composer's.)"),
-    "ml0705_refill_undeployable_f44": (
-        "REFUSAL", [0], [2],
-        "RNG — 1227 Lillie's Determination, same clause and same cause as f27"),
     "dragapult_poffin_whiff_take_gust_ko_f79": (
         "VALUATION", [4], [6],
         "gust is now a closed choice transition (Issue #455), so this remains a decision-level "
@@ -36,9 +28,9 @@ FLIPS = {
         "VALUATION", [3], [4],
         "gust is now a closed choice transition (Issue #455), so this is no longer a seam refusal"),
     "pilot_6f14": (
-        "REFUSAL", [4], [5],
-        "RNG — 1223 Harlequin: clause 'shuffle_both_hands' consults RNG, the same cause as Lillie's "
-        "Determination above. Two RNG cards account for three rows in this table"),
+        "VALUATION", [4], [0],
+        "Issue #456 prices Harlequin's symmetric hand refresh as deterministic writes plus a scalar, "
+        "without inventing a shuffled hand; the composer now reaches a valuation disagreement"),
     "pilot_e1db": (
         "VALUATION", [1], [4],
         "Wally's heal/bounce is now a closed choice transition (Issue #455); this is a valuation "
@@ -83,10 +75,6 @@ FLIPS = {
         "−0.0039 vs 1.0 — the composer sees a whole prize in the alternative. Worth noting that it "
         "was promoted from a target to a pin when `evolve_value` landed, and the composer moves it "
         "back — two deciders, opposite verdicts, on a frame a human already ruled once"),
-    "pr_whether_should_retreat_f37": (
-        "VALUATION", [3], [2],
-        "take the retreat into the finisher — d(ruled) 0.0022 vs 2.4333, the widest margin in this "
-        "table"),
     "ms_fetch_one_turn_early_judge_exposure_f17": (
         "VALUATION", [5], [2],
         "don't fetch a turn early into Judge exposure — attack now. d(ruled) **2.076** vs 0.075, the "
@@ -139,17 +127,17 @@ CORPUS_RECORD_FLIPS = {
         "insurance slot at 20.0 with deadline 1, no latency haircut, the refresh declined — still "
         "holds; only the decision moved"),
     ("83457493", 31): (
-        "REFUSAL", 4, [5],
-        "ep83457493 f31: the Harlequin play remains unavailable at the one-option seam because its "
-        "multi-leg card shape is outside Issue #455's Boss-only gust synthesis"),
+        "VALUATION", 4, [0],
+        "ep83457493 f31: Issue #456 closes Harlequin's scalar chance route, so the human play is now "
+        "a valuation question rather than an unavailable one-option seam"),
     ("85163079", 30): (
         "REFUSAL", 1, [2],
         "MULTI-WRITE — Boss's Orders again (choice key 'gust'). The loaded-equal-KO gust, the pin "
         "the `gust-for-the-loaded-equal-ko` swing gate was sized on"),
     ("86091435", 119): (
-        "REFUSAL", 1, [0],
-        "the human-adjudicated 2-prize drag-and-spread remains outside Issue #455's Boss-only gust "
-        "synthesis, so this card shape still refuses at the one-option seam"),
+        "VALUATION", 2, [3],
+        "the re-measured one-option seam prices the human Night Stretcher play; full-menu disagreement "
+        "is now recorded as valuation rather than a coverage refusal"),
 }
 
 #: Decision-level gust records reclassified by Issue #455. They are valuation work, never evidence

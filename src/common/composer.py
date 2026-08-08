@@ -196,9 +196,10 @@ _ORIGIN = "_composer_origin"
 
 
 def stamp_origin(model, option: Mapping) -> dict:
-    """Called ONCE at depth 0, where the indices are still valid; later hops read the stamp."""
+    """Stamp serial plus card id: fixture serial reuse must not re-point an option to another card."""
     hand_serial, body_serial = ao.option_serials(model, option)
-    return {**option, _ORIGIN: (hand_serial, body_serial)}
+    return {**option, _ORIGIN: (_origin_key(model, option, hand_serial, hand=True),
+                                _origin_key(model, option, body_serial, hand=False))}
 
 
 def _origin_serials(option: Mapping):
@@ -210,9 +211,28 @@ def _origin_serials(option: Mapping):
     return origin[0], origin[1]
 
 
-def _index_of(cards, serial):
+def _origin_key(model, option: Mapping, serial, *, hand: bool):
+    """``(serial, card id)`` where both facts exist; a bare serial preserves unknown-card handling."""
+    if serial is None:
+        return None
+    obs = getattr(model, "source_obs", None) or {}
+    seat = int(getattr(model, "my_index", 0))
+    players = ((obs.get("current") or {}).get("players")) or []
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+    if hand:
+        cards, index = me.get("hand") or (), option.get("index")
+    else:
+        area = "active" if option.get("inPlayArea") == AREA_ACTIVE else "bench"
+        cards, index = me.get(area) or (), option.get("inPlayIndex")
+    card = cards[index] if isinstance(index, int) and 0 <= index < len(cards) else None
+    card_id = card.get("id") if isinstance(card, Mapping) else None
+    return (serial, card_id) if card_id is not None else serial
+
+
+def _index_of(cards, key):
+    serial, card_id = key if isinstance(key, tuple) else (key, None)
     for i, card in enumerate(cards or ()):
-        if card and card.get("serial") == serial:
+        if card and card.get("serial") == serial and (card_id is None or card.get("id") == card_id):
             return i
     return None
 
@@ -313,17 +333,22 @@ def canonical_tier(model, option: Mapping, footprint=None) -> int:
     kind = ao.transition_kind(option)
     if kind in (_ATTACK, _END, _RETREAT):
         return TIER_ENDER
+    card = _option_card_stat(model, option)
+    # A hand shuffle hides the resulting cards rather than revealing a usable choice.  It therefore
+    # must retain the post-attach tier even though its draw clause is marked as a potential revealer.
+    if kind == _PLAY and card is not None and getattr(card, "is_supporter", False) \
+            and _shuffles_hand(model, card):
+        return TIER_SHUFFLE
     fp = footprint if footprint is not None else ao.option_footprint(model, option)
     if fp.reveals_information:
         return TIER_INFORMATIVE
-    card = _option_card_stat(model, option)
     if kind == _EVOLVE:
         return TIER_INFORMATIVE                  # "evolve a benched Pokemon" rides the free band
     if kind == _ATTACH:
         return TIER_COMMITMENT                   # Energy AND Tool: a Tool is an `_ATTACH` (tier 3)
     if kind == _PLAY and card is not None:
         if getattr(card, "is_supporter", False):
-            return TIER_SHUFFLE if _shuffles_hand(model, card) else TIER_SUPPORTER
+            return TIER_SUPPORTER
         if getattr(card, "is_pokemon", False):
             return TIER_INFORMATIVE              # a Bench fill is free and reveals a better target
         return TIER_COMMIT_FREE                  # an Item / a Stadium: free but committing
@@ -650,6 +675,30 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
         state.gaps.append(f"{_frame_of(option)}: {reason}")
         return _Ranked(index=index, option=option, key=key, delta=None, after=None,
                        fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason)
+
+    try:
+        coin = bx.coin_expectation(node.model, option, score=state_value)
+    except Unmodellable as gap:
+        return _refuse(str(gap))
+    if coin is not None:
+        state.leaf_evals += len(coin.classes)
+        leaf = float(coin.ordering(state_value))
+        state.bounds.append(Bounds(index=index, best=float(coin.best(state_value)),
+                                   expected=float(coin.expected(state_value)),
+                                   classes=len(coin.classes), truncated=0,
+                                   total_probability=float(coin.total_probability)))
+        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+
+    try:
+        scalar = bx.refresh_transition(node.model, option)
+    except Unmodellable as gap:
+        return _refuse(str(gap))
+    if scalar is not None:
+        state.leaf_evals += 1
+        leaf = float(state_value(scalar.model)) + scalar.scalar
+        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
 
     deferred = board_choice.has_deferred_target(
         node.model, option, seat_index=int(getattr(node.model, "my_index", 0)))

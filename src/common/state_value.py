@@ -47,6 +47,8 @@ _THREAT_CAP = 0.1
 #: `threat`'s scale anchor — DERIVED (Issue #329, ADR-0107's form): the cap over
 #: `needs.TARGET_VALUE_CEILING`, `opponent_target_value`'s true ceiling. Both operands are shipped.
 _THREAT_W = _THREAT_CAP / _needs.TARGET_VALUE_CEILING
+#: A hidden hand card is one normalised target unit, so it cannot fill the threat band as a known body.
+_OPPONENT_HAND_RESOURCE_W = _THREAT_W / _needs.TARGET_VALUE_CEILING
 
 #: One body on the board, in prizes — `currency.DEPLOY_BAND` across `PRIZE_DAMAGE_RATE` (ADR-0086).
 _DEPLOY_PRIZE_BAND = currency.DEPLOY_BAND / currency.PRIZE_DAMAGE_RATE
@@ -204,7 +206,8 @@ REGISTRY: tuple[TermFamily, ...] = (
         name="threat",
         # `denied_forward_payoff` -> `denied_line_prize` (ADR-0119) is a REPLACEMENT, not a rename:
         # the old fact was forward DAMAGE, which `incoming()` already puts inside `survival`.
-        reads=("opponent_target_value", "my_reachable_kos", "denied_line_prize"),
+        reads=("opponent_target_value", "my_reachable_kos", "denied_line_prize",
+               "opponent_hand_resource"),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
@@ -349,17 +352,8 @@ REGISTRY: tuple[TermFamily, ...] = (
             "their Energy denial / resource strip — removing fuel lengthens their clock without "
             "removing a body, and `opponent_target_value` prices bodies. `deny_relevance` is the "
             "instrument and is still dark (T2 / Issue #228 arms it).",
-            "their hand and deck AS A RESOURCE — hand disruption (a Judge, a discard effect) still "
-            "prices exactly 0 in THIS family: `opponent_target_value` prices bodies, and cards in "
-            "hand are options rather than a body. Issue #280 closed the other half — `survival`'s "
-            "clocks now read `theirs.hand_size` through the Damage Formula, so shrinking the hand "
-            "of a scaling attacker IS priced, as the lengthened clock it buys. What remains dark is "
-            "the resource reading (the Supporter they no longer hold, the search they cannot make) "
-            "and `theirs.deck_count`, which still has a supplier and no reader — the Formula's "
-            "hidden-deck pair is OMITTED for a side whose deck is not exactly known, and the "
-            "opponent's never is (`_SideBase._deck_facts` claims `(None, None)`), so threading the "
-            "context did NOT quietly give the deck count a reader the way it gave the hand size "
-            "one. Narrowed, not closed; T4 must always-expand disruption plays.",
+            "their DECK as a resource — their hidden composition has no sound value supplier. Their "
+            "HAND COUNT is priced here; card identities remain hidden and are never fabricated.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
             "STEP: `_reachable_target_values` credits nothing for a body unless my Active's best "
             "reachable damage AGAINST THAT SEAT already meets its remaining HP, so a Mega "
@@ -663,7 +657,8 @@ def _terms(model: "StateModel") -> dict:
         "prize_race": prize_race(my_prizes_remaining=race.my_prizes_remaining,
                                  their_prizes_remaining=race.opp_prizes_remaining),
         "survival": survival(_exposed_bodies(model), predicted_loss=_predicted_loss(model)),
-        "threat": threat(_reachable_target_values(model)),
+        "threat": threat(_reachable_target_values(model),
+                         opponent_hand_resource=model.theirs.hand_size),
         "readiness": readiness(_ready_bodies(model)),
         "hand": hand(**_hand_legs(model)),
         "development": development(**_development_legs(model)),
@@ -888,10 +883,12 @@ def survival(bodies: Iterable[ExposedBody], *, predicted_loss: bool = False) -> 
     return -(exposure + (LOSS_PRIZES if predicted_loss else 0.0))
 
 
-def threat(targets: Iterable[float]) -> float:
+def threat(targets: Iterable[float], *, opponent_hand_resource: float = 0.0) -> float:
     """Their bodies' exposure to ME, in prizes — positive and POSITIONAL, so :data:`_THREAT_W`-scaled
     THEN capped. Converting any of it is `attack_ev`'s; the guard bites on ~7% of non-empty inputs."""
-    return min(_THREAT_CAP, _THREAT_W * float(sum(float(t) for t in targets)))
+    resource = _OPPONENT_HAND_RESOURCE_W * float(opponent_hand_resource)
+    return max(-_THREAT_CAP, min(_THREAT_CAP,
+                                 _THREAT_W * float(sum(float(t) for t in targets)) - resource))
 
 
 def readiness(bodies: Iterable[ReadyBody]) -> float:

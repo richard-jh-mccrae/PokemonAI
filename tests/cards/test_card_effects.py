@@ -303,11 +303,9 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert eff.clauses(1080) == ({"kind": "draw", "amount": 5,                     # Unfair Stamp
                                   "condition": "pokemon_ko_last_turn",
                                   "rider": "shuffle_both_hands"},)
-    # The five that remain are RULED incomplete with the leg named: four for the SYMMETRIC opponent
-    # redraw (a `state_value` term the POC does not have), and Naveen for its optional pre-discard.
-    assert [eff.covers(c) for c in (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)] == \
-        ["full"] * 9
-    for still_partial in (1080, 1213, 1223, 1237, 1239):
+    assert [eff.covers(c) for c in (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1213, 1216, 1223,
+                                    1227)] == ["full"] * 11
+    for still_partial in (1080, 1237, 1239):
         assert eff.covers(still_partial) == "partial", still_partial
         assert eff.clauses_cover(still_partial) is False, still_partial
     # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts for
@@ -621,8 +619,8 @@ def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
-    assert eff.covers(1213) == "partial" and eff.clauses_cover(1213) is False   # Judge
-    assert eff.covers(1120) == "partial" and eff.clauses_cover(1120) is False   # Crushing Hammer
+    for closed_form in (1120, 1213, 1223):
+        assert eff.covers(closed_form) == "full" and eff.clauses_cover(closed_form) is True
     assert eff.covers(1121) == "full" and eff.clauses_cover(1121) is True       # Ultra Ball
     assert eff.covers(1203) == "full" and eff.clauses_cover(1203) is True       # Surfer, Issue #302
 
