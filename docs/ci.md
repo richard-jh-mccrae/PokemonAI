@@ -95,7 +95,9 @@ full suite):
 
 ### Determinism gates (#178, ADR-0072 amendment C)
 
-Both run on every non-docs change, gating, and together they cost about 2 minutes.
+Both run on every non-docs change, gating, and together they cost about **11 minutes** — see the job
+budget below. (This line read "about 2 minutes" until 2026-08-08; the backstop is still ~1 min, but
+the cgpy twin has grown from 3,883 tests to 5,441 and now costs ~9.6 min on its own.)
 
 - **Determinism backstop** — the seven live-native-engine modules, repeated **15×**. They are the
   only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
@@ -113,6 +115,38 @@ Both run on every non-docs change, gating, and together they cost about 2 minute
   search round-trip, or a module-level skip stating why (the native determinism pins, the
   engine-audited effect probes). Those markers are the parity ledger — they disappear as cgpy
   parity grows, and a non-gating step would have hidden the same information.
+
+### Job budget and `timeout-minutes`
+
+The job runs the whole selected suite **twice** — once natively, once as the cgpy twin — so its floor
+is the sum of two full runs, not one. Measured per-step on run `31275026627`, job `93150346764`
+(ubuntu-latest, py3.12, full non-docs plan):
+
+| Step | Cost |
+| --- | --- |
+| Run tests (native, JUnit + conditional coverage gate) | **18.5 min** |
+| cgpy twin arm | **9.6 min** |
+| Determinism backstop (7 modules × 15 repeats) | 1.0 min |
+| Install dependencies | 1.1 min |
+| Everything else (checkout, Python, plan, guards, upload) | ~0.3 min |
+| **Total** | **~30.5 min** |
+
+That is the whole reason for `timeout-minutes: 45`. **The failure mode this prevents does not look
+like a failure**: the runner cancels the job at the ceiling, every test step still reads `success`,
+and the only casualty is the artifact-upload tail — but `gh pr checks` reports the check as red, so a
+PR whose tests all passed reads as broken. It has now happened at two different ceilings: at 20
+(recorded in the `ci.yml` comment's earlier revision) and at 30, where PR #461's branch was cancelled
+four consecutive times and PR #471's job died at 30m28s with a green suite behind it.
+
+**The 30 → 45 raise is headroom, not a licence to stop measuring.** The honest lever on this budget is
+the duplicated suite run; the determinism backstop, once suspected, is only 1 minute and is not worth
+touching. If the total approaches 45, re-measure per-step from the job JSON *before* raising it again —
+
+```bash
+gh api repos/richard-jh-mccrae/PokemonAI/actions/jobs/<job-id> --jq '.steps[] | "\(.name): \(.started_at) -> \(.completed_at)"'
+```
+
+— because a raise that follows a real slowdown nobody diagnosed just moves the same wall further out.
 
 ### Line-ending guard
 
