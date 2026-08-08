@@ -304,12 +304,13 @@ def test_the_CHOICE_branch_changes_the_SHAPE_and_leaves_the_point_transition_exa
 
 
 @pytest.mark.req("REQ-APPLY-0002")
-def test_the_shipped_PROFILE_leaves_deferred_target_expansion_OFF():
-    """The one flag whose ON state changes what every gate in the repo sees, pinned where an
-    implementer reading the retreat transition will meet it."""
-    from common.runtime import PROFILE
-    assert PROFILE["deferred_target_expansion"] is False
+def test_expansion_is_OPT_IN_at_the_seam_and_carries_no_deployment_flag():
+    """Asserted where an implementer reading the retreat transition will meet it. The `PROFILE` flag
+    is RETIRED (Issue #446): the composer opts in unconditionally, so a knob it never read misled."""
     import inspect
+
+    from common.runtime import PROFILE
+    assert "deferred_target_expansion" not in PROFILE
     assert inspect.signature(ao.apply_option).parameters[
         "expand_deferred_targets"].default is False
 

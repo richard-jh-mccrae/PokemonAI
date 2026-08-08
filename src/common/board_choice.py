@@ -3,8 +3,8 @@
 Three modules answer *"what board does this option produce?"*: `board_delta` for a deterministic node,
 `board_expectation` for a reveal's distribution, this one for an option whose TARGET is deferred.
 
-**INERT at runtime** — `runtime.PROFILE["deferred_target_expansion"]` ships False and nothing imports
-this module. The Target Rankers only prefilter: `state_value` decides."""
+**LIVE at runtime** — `composer._one_ply` opts in unconditionally, so this module prices every retreat
+the MAIN menu offers. The Target Rankers only prefilter: `state_value` decides."""
 from __future__ import annotations
 
 import itertools

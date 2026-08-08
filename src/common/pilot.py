@@ -169,8 +169,7 @@ class Pilot(
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, copy_top_value=False,
-                 deferred_target_expansion=False):
+                 snipe_relevance=False, copy_top_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -229,9 +228,6 @@ class Pilot(
                                                         # 19 rungs it replaced are deleted. Never a baseline.
         self.copy_top_value = copy_top_value            # Issue #289: value Seek Inspiration only from a
                                                         # self-verified known top card
-        self.deferred_target_expansion = deferred_target_expansion   # ADR-0121, armed-OFF: the apply seam
-                                                        # returns a `board_choice` CHOICE node. Nothing on this
-                                                        # Pilot consumes it, so ON changes no decision.
         self.doom_matched_relax = doom_matched_relax    # behind a γ-matched Brief with no recur fuel, a
                                                         # worst-case `active_doomed` stands only if the CHARGED
                                                         # curve confirms it. RELAX-ONLY: never adds doom.

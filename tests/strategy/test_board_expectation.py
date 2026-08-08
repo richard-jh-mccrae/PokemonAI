@@ -27,7 +27,7 @@ from common.strategy.context import _ATTACH, _PLAY
 
 MAIN = bd.CONTEXT_MAIN
 HAND = AREA_HAND
-FIGHTING, PSYCHIC, COLORLESS = 6, 5, 0
+FIGHTING, PSYCHIC, COLORLESS, WATER = 6, 5, 0, 3
 
 # The pool, quoted from `data/EN_Card_Data.csv`. 1152 Poke Pad "…doesn't have a Rule Box" | 1121
 # Ultra Ball "discard 2 other cards" | 1231 Dawn: an AND | 1141 Power Pro: NO clauses | 1122: a `dig`
@@ -43,6 +43,8 @@ LARRY, BOGUS_COST = 1206, 1194
 # on-bench-play trigger, but a `supporter` target `fetch_is_unconditional` rejects
 LUNATONE, MEOWTH_EX = 675, 1071
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112     # Mega Lucario ex evolves from Riolu ALONE
+# 1030 Staryu: Basic, HP **70**, {W} — the only fixture body Poffin's `hp_max: 70` admits (Riolu is 80)
+STARYU = 1030
 E_F = 6
 
 _ITEM, _SUPPORTER, _BASIC_ENERGY = 1, 3, 5
@@ -53,6 +55,7 @@ _STATS = {
     MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, ex=True,
                        energyType=FIGHTING, evolvesFrom="Riolu"),
     MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC),
+    STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=_BASIC_ENERGY, energyType=FIGHTING),
     MASTER_BALL: CardStat(MASTER_BALL, name="Master Ball", cardType=_ITEM),
     POKE_PAD: CardStat(POKE_PAD, name="Poké Pad", cardType=_ITEM),
@@ -397,11 +400,61 @@ def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
     assert multiset_classes({}, 3) == []
 
 
-def test_a_delivery_to_the_BENCH_still_refuses_and_now_says_so_for_the_right_reason():
-    """A Bench delivery is the deploy transition, with its Bench cap and Stadium-trigger gate — Issue
-    Issue #410's work. The refusal must land on `dest`, the reason that describes it, not on `amount`."""
+def _poffin_board(*, bench=(), copies=3):
+    """Poffin plus ``copies`` Staryu unseen in the deck. Staryu (HP 70) is the ONLY fixture body its
+    `hp_max: 70` admits, so a class containing anything else proves the filter was not applied.
+    Padded with Energy so cards remain in the deck after the four prizes are set aside."""
+    deck = [STARYU] * copies + [RIOLU] + [MEGA_LUC] + [E_F] * 6 + [POFFIN]
+    obs = _obs(_player(active=_body(RIOLU), bench=bench, hand=(POFFIN,), prize=4))
+    return _model(obs, deck)
+
+
+def _benched_ids(cls) -> list:
+    seat = ((cls.model.source_obs.get("current") or {}).get("players") or [{}])[0]
+    return [b.get("id") for b in (seat.get("bench") or ())]
+
+
+def test_a_BENCH_delivery_lands_on_the_bench_and_never_in_hand():
+    """Issue #446 S2. `dest: bench` composes the reveal with `board_delta`'s deploy primitives, so the
+    found body ARRIVES rather than being priced as a hand card it never becomes."""
+    exp = be.expectation(_poffin_board(), _play_option())
+    # `multiset_classes` delivers the MAXIMUM the cap and the pool allow, so `amount: 2` over three
+    # unseen Staryu is ONE class of two bodies — not one class per count.
+    assert [_benched_ids(c) for c in exp.classes] == [[STARYU, STARYU]]
+    for cls in exp.classes:
+        assert _ids_in_hand(cls) == [], "a `dest: bench` card must not also reach my hand"
+
+
+def test_a_BENCH_delivery_is_bounded_by_the_REAL_bench_cap():
+    """The cap is the engine's own `benchMax`, so a class the board has no room for is never
+    enumerated. Four occupied of five leaves ONE slot, so `amount: 2` may deliver only one."""
+    full = [_body(RIOLU, serial=10 + i) for i in range(4)]
+    exp = be.expectation(_poffin_board(bench=full), _play_option())
+    assert [_benched_ids(c)[4:] for c in exp.classes] == [[STARYU]]
+
+
+def test_a_BENCH_delivery_with_NO_room_refuses_rather_than_delivering_nothing():
+    """A full Bench makes the play unreachable, not free: pricing it as a zero-body delivery would
+    rank a dead Item beside a live one."""
+    full = [_body(RIOLU, serial=10 + i) for i in range(5)]
+    # Matched on the OPEN-SLOT wording, not on the word "Bench": the `dest` refusal this replaces
+    # also said "Bench cap", so a loose match passed before the capability existed.
+    with pytest.raises(bd.Unmodellable, match="no open Bench slot"):
+        be.expectation(_poffin_board(bench=full), _play_option())
+
+
+def test_an_unhandled_dest_still_fails_CLOSED():
+    """`in_play` puts an EVOLUTION onto a chosen body — a choice node, not a deploy. The positive
+    control for the test above: the `dest` gate still refuses what it cannot place."""
+    clauses = dict(_CLAUSES)
+    clauses[POFFIN] = [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck",
+                        "hp_max": 70, "amount": 2, "dest": "in_play"}]
+    combat = CombatMath(DictCardStatProvider(_STATS), functions=CardFunctions({}),
+                        transients=None, effects=CardEffects(clauses))
+    obs = _obs(_player(active=_body(RIOLU), hand=(POFFIN,), prize=4))
+    model = StateModel.build(obs, combat=combat, deck=[STARYU] * 3 + [POFFIN])
     with pytest.raises(bd.Unmodellable, match="`dest`"):
-        be.expectation(_search_board(hand=(POFFIN,)), _play_option())
+        be.expectation(model, _play_option())
 
 
 def test_an_amount_of_all_still_refuses_because_it_names_no_number():

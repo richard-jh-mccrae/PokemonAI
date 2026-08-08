@@ -1,7 +1,8 @@
 """Composer lab — replay corpus frames through the **sequence composer** and report what it would do
 (POC-T4/4, Issue #385; spec Issue #263 § *The composer lab*).
 
-An OFFLINE tool, never a runtime shadow (ADR-0092 decision 4); the composer it drives is DARK.
+An OFFLINE tool, never a runtime shadow (ADR-0092 decision 4). The composer it drives is the LIVE
+MAIN decider (`planner._composer_line`), but this lab runs it on frames production never would.
 `composer` / `chosen` / `ruled` are three different questions and only `ruled` is a judgement — see
 :data:`COLUMN_CAVEAT`, which the OUTPUT carries because a docstring is not where a column is misread.
 The 41 verbatim ideal sequences are RENDERED, never parsed into option indices.
@@ -33,8 +34,11 @@ RULINGS = REPO / "data" / "leaf_lab" / "wave3-rulings.md"
 
 #: The sentence that has to be in the OUTPUT rather than in this docstring (the Issue #356 lesson).
 COLUMN_CAVEAT = (
-    "**`composer` is not what the agent did.** It is `common.composer.compose`'s best sequence, and "
-    "the composer is DARK at this commit — nothing in production calls it. `chosen` is the committed "
+    "**`composer` is not what the agent did.** It is `common.composer.compose`'s best sequence, run "
+    "on EVERY frame. In production it is the MAIN decider but only reaches a frame the Goal Ladder's "
+    "sound rungs (win / ko_for_prizes / gamble) decline, at a MAIN single-pick menu, and it then "
+    "ABSTAINS on a tie — so a difference in this column is as often 'production never asked' as "
+    "'the composer disagrees'. `chosen` is the committed "
     "decision read off the Correction (the whole Pilot ladder, of which the leaf is one rung), and "
     "`ruled` is the human's judgement — taken from the committed FIXTURE where one has re-ruled the "
     "frame (`ruled_from`), because a re-ruling never rewrites the `data/corrections/` record and the "
