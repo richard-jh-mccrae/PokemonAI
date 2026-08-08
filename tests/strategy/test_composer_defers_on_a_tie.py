@@ -33,19 +33,19 @@ def anchor():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_the_composer_really_does_tie_every_option_on_the_anchor_frame(anchor):
-    """The premise. Without it the test below could pass because the composer AGREED with the
-    sequencer — and the options here tie at exactly 0.0, not near it, so no floor is involved."""
+def test_the_composer_ties_the_scored_options_without_pricing_the_unknown_one(anchor):
+    """The scored options tie; the ruled unknown remains a sentinel, never a numeric zero."""
     fx, pilot, _dec = anchor
     from common import composer as cp
     obs, sel = fx["obs"], fx["obs"]["select"]
     pilot._board(obs, sel)
     model = pilot._leaf_state_model(obs, int((obs.get("current") or {}).get("yourIndex") or 0))
-    order = dict(cp.compose(model, sel["option"], shed=pilot.cost_shed_indices).order)
+    result = cp.compose(model, sel["option"], shed=pilot.cost_shed_indices)
+    order = dict(result.order)
     ruled = fx["correct"][0]
+    assert result.fanned[ruled] is None and ruled not in order
     top = max(order.values())
     tied = [i for i, d in order.items() if d == top]
-    assert ruled in tied, f"the ruled option is not among the tied top: {order}"
     assert len(tied) > 1, f"nothing ties here, so this frame does not exercise the defer: {order}"
 
 

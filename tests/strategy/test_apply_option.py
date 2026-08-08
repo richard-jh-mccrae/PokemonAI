@@ -759,13 +759,23 @@ def test_an_expectation_yields_one_comparable_number_at_1_ply():
 
 
 @pytest.mark.req("REQ-APPLY-0006")
-def test_the_number_that_ORDERS_is_the_MAX_and_expected_is_the_reported_lower_bound():
-    """Both producers emit a CHOICE node, and the value of a choice is the value of the BEST branch
-    (Issue #385 §S3). The fixture makes the max the UNLIKELIEST branch, so a modal read shows."""
+def test_a_CHOSEN_expectation_orders_by_its_best_branch():
+    """A player picks the branch. The fixture makes the max the unlikely branch."""
     e = ao.Expectation(classes=(ao.OutcomeClass(0.75, model="a"), ao.OutcomeClass(0.25, model="b")))
     score = {"a": 4.0, "b": 8.0}.__getitem__
     assert e.best(score) == pytest.approx(8.0)
     assert e.expected(score) == pytest.approx(5.0)
+    assert e.ordering(score) == pytest.approx(8.0)
+
+
+@pytest.mark.req("REQ-APPLY-0006")
+def test_a_DEALT_expectation_orders_by_its_probability_weighted_value():
+    """A coin's branch is dealt, so its ordering value is its expectation, never its heads branch."""
+    e = ao.Expectation(classes=(ao.OutcomeClass(0.75, model="a"), ao.OutcomeClass(0.25, model="b")),
+                       resolution=ao.DEALT)
+    score = {"a": 4.0, "b": 8.0}.__getitem__
+    assert e.ordering(score) == pytest.approx(5.0)
+    assert e.ordering(score) != pytest.approx(e.best(score))
     assert e.best(score) > e.expected(score)
 
 

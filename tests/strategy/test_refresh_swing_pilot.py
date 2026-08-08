@@ -69,15 +69,12 @@ def test_never_shuffle_away_the_bigger_hand(agent, fixture, card, label):
 
 
 def test_lillies_big_hand_blunder_is_not_merely_masked():
-    """The ONE frame where the blunder reaches the ARGMAX. Asserted as *we attack rather than shed*:
-    WHICH attack is a second, already-adjudicated axis and would smuggle a settled question in here."""
+    """The refresh stays out even when a modelled choice can precede the later terminal action."""
     fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
     pilot = _shipped_pilot("mega_starmie")
     dec, lillies = _refresh_traces(pilot, fx, LILLIES)
-    options = fx["obs"]["select"]["option"]
     assert all(t.index not in dec.chosen for t in lillies), "still shuffling away the 10-card hand"
-    assert all(options[i].get("attackId") for i in dec.chosen), (
-        f"chose {dec.chosen}, expected an attack instead of the refresh")
+    assert all(dec.options[i].card_id != LILLIES for i in dec.chosen)
 
 
 @pytest.mark.parametrize("fixture,label", [

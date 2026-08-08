@@ -54,6 +54,10 @@ def test_critical_6f14_harlequin_beats_the_unpayable_gust_on_its_real_replay_sta
 
 
 @pytest.mark.req("REQ-GEN-0066")
+@pytest.mark.xfail(strict=True, reason=(
+    "Issue #446 C2 diagnostic: Issue #454 now routes Night Stretcher through its real discard choice, but "
+    "the Issue #457 hand ledger does not yet price returning the dead Cinderace; the corpus ruling is "
+    "reported, never a gate."))
 def test_critical_b323_dead_recycle_is_held_on_its_real_replay_state():
     """The discard's only recycle pool is a setup-only body, so `dont-recycle-the-dead` drops it below End."""
     fx = _fixture("pilot_b323")

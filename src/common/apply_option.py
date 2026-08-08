@@ -39,6 +39,11 @@ REFUSED = "refused"
 #: Not in the table. The engine enum grows during the competition — a live case, not a theoretical one.
 UNDECLARED = "undeclared"
 
+#: The player picks a CHOSEN class; a DEALT class is resolved by chance before play continues.
+CHOSEN = "chosen"
+DEALT = "dealt"
+_EXPECTATION_RESOLUTIONS = frozenset({CHOSEN, DEALT})
+
 #: TERMINAL is not among them (a turn-ender has no transition); UNDECLARED is a refusal reason.
 FATES = (MODELLED, ENGINE_RESOLVED, REFUSED)
 
@@ -350,12 +355,16 @@ class OutcomeClass:
 
 @dataclass(frozen=True)
 class Expectation:
-    """A probability-weighted set of outcome classes — the return of a STOCHASTIC transition.
-    :meth:`best` ORDERS (both producers are choice nodes); :meth:`expected` is a lower-bound diagnostic."""
+    """Outcome classes whose resolution says whether the player chooses or chance deals one."""
 
     classes: Sequence[OutcomeClass] = field(default_factory=tuple)
     #: Classes dropped by the branching cap; non-zero ⇒ the enumeration is INCOMPLETE.
     truncated: int = 0
+    resolution: str = CHOSEN
+
+    def __post_init__(self):
+        if self.resolution not in _EXPECTATION_RESOLUTIONS:
+            raise ValueError(f"unknown Expectation resolution {self.resolution!r}")
 
     @property
     def total_probability(self) -> float:
@@ -363,8 +372,7 @@ class Expectation:
         return float(sum(c.probability for c in self.classes))
 
     def best(self, score: Callable[[object], float]) -> float:
-        """The MAXIMUM of ``score`` over the classes — **the 1-ply ordering number**, because both
-        producers emit CHOICE nodes. Ignores ``probability``: averaging prices a choice made for you."""
+        """The maximum class score. It orders CHOSEN outcomes, ignoring their probabilities."""
         if not self.classes:
             raise ValueError(
                 "cannot order an Expectation with no enumerated classes — that is an un-enumerated "
@@ -372,14 +380,17 @@ class Expectation:
         return max(float(score(c.model)) for c in self.classes)
 
     def expected(self, score: Callable[[object], float]) -> float:
-        """``score`` averaged over the classes — a reported lower-bound diagnostic, NOT the ordering
-        number. Renormalised over the ENUMERATED mass, so a cap does not bias against wide branches."""
+        """The probability-weighted class score, renormalised over the enumerated mass."""
         mass = self.total_probability
         if mass <= 0.0:
             raise ValueError(
                 "cannot order an Expectation with no enumerated mass — that is an un-enumerated "
                 "effect, and returning 0.0 would price it as a worthless one")
         return float(sum(c.probability * float(score(c.model)) for c in self.classes) / mass)
+
+    def ordering(self, score: Callable[[object], float]) -> float:
+        """The value that orders this resolution: max for CHOSEN, expectation for DEALT."""
+        return self.best(score) if self.resolution == CHOSEN else self.expected(score)
 
 
 class UnsupportedTransition(NotImplementedError):
@@ -597,6 +608,7 @@ def quarantined_kinds() -> frozenset[int]:
 # longer GATES the engine route, and `KIND_SCOPE` is no longer EMITTED by `apply_option`.
 __all__: Sequence[str] = (
     "MODELLED", "ENGINE_RESOLVED", "TERMINAL", "REFUSED", "UNDECLARED", "FATES",
+    "CHOSEN", "DEALT",
     "KIND_SCOPE", "OPTION_SCOPE", "UNDECLARED_SCOPE", "QUARANTINE_SCOPE", "DEPTH_SCOPE",
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",

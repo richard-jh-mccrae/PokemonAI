@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from common import apply_option as ao
+from common import board_choice
 from common import board_expectation as bx
 from common import snapshot_coverage
 from common.board_delta import Unmodellable
@@ -150,8 +151,7 @@ class ComposerResult:
     always_expanded: frozenset = frozenset()
     blocks: tuple = ()
     gaps: tuple = ()
-    #: Both bounds of every expectation node this run met, newest last. `best` ordered; `expected` is
-    #: the reported lower bound; the gap is the exposure.
+    #: Both bounds of every expectation node this run met, newest last; the gap is its exposure.
     bounds: tuple = ()
     stats: dict = field(default_factory=dict)
 
@@ -546,7 +546,7 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
         candidates=tuple(sorted(state.candidates, key=lambda c: selection_key(model, c))),
         margin=_margin(state, ranked0, chosen),
         fanned=tuple(fan_out([state.one_ply.get(i) for i in range(len(options))], equiv)),
-        order=tuple((e.index, e.delta) for e in ranked0),
+        order=tuple((e.index, e.delta) for e in ranked0 if not e.refused),
         admitted=_admitted_indices(state, ranked0), always_expanded=_free_indices(ranked0),
         blocks=commutative_blocks(model, stamped, reps),
         gaps=tuple(state.gaps),
@@ -609,7 +609,7 @@ def _rank(state: _Run, node: _Node) -> list:
             # offered — a None must never mean "pruned" where the caller reads "unfingerprintable".
             state.one_ply[i] = entry.delta
         out.append(entry)
-    out.sort(key=lambda e: (-e.delta, e.key))
+    out.sort(key=lambda e: (e.refused, -float(e.delta or 0.0), e.key))
     return out
 
 
@@ -618,7 +618,7 @@ class _Ranked:
     index: int
     option: dict
     key: tuple
-    delta: float
+    delta: float | None
     after: object            # the model to continue from, or None (terminal / refused / reveal)
     fate: str
     footprint: object
@@ -633,8 +633,7 @@ class _Ranked:
 
 
 def _one_ply(state: _Run, node: _Node, option: dict, index: int):
-    """Apply ONE option and price it. An Expectation ranks by ``best()`` — the MAX over classes, never
-    ``expected()``; a REVEAL is a block boundary and a REPLAN point, a deferred TARGET is not."""
+    """Apply and price one option. CHOSEN outcomes take max; DEALT outcomes take expectation."""
     if ao.is_terminal(option):
         ev, _detail, gap = terminal_ev(node.model, option)
         if gap:
@@ -649,10 +648,12 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
 
     def _refuse(reason: str) -> _Ranked:
         state.gaps.append(f"{_frame_of(option)}: {reason}")
-        return _Ranked(index=index, option=option, key=key, delta=0.0, after=None,
+        return _Ranked(index=index, option=option, key=key, delta=None, after=None,
                        fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason)
 
-    if footprint.reveals_information and _reveal_rides(node.model, option):
+    deferred = board_choice.has_deferred_target(
+        node.model, option, seat_index=int(getattr(node.model, "my_index", 0)))
+    if footprint.reveals_information and _reveal_rides(node.model, option) and not deferred:
         if ao.transition_kind(option) != _PLAY:
             return _refuse(
                 "a revealing clause RIDES this option and it is not a `_PLAY`, so neither seam can "
@@ -667,12 +668,13 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
             return _refuse(str(gap))
         state.leaf_evals += len(result.classes)
         try:
-            leaf = float(result.best(state_value))          # §S3: MAX over classes, never expected()
-            lower = float(result.expected(state_value))      # §S3.5: the other bound, REPORTED
+            best = float(result.best(state_value))
+            lower = float(result.expected(state_value))
+            leaf = float(result.ordering(state_value))
         except ValueError as gap:                # an un-enumerated effect: an unknown, not a zero
             return _refuse(str(gap))
         state.truncated += result.truncated
-        state.bounds.append(Bounds(index=index, best=leaf, expected=lower,
+        state.bounds.append(Bounds(index=index, best=best, expected=lower,
                                     classes=len(result.classes), truncated=result.truncated,
                                     total_probability=float(result.total_probability)))
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
@@ -827,7 +829,9 @@ def _admitted_indices(state: _Run, ranked0: list) -> frozenset:
 def _margin(state: _Run, ranked0: list, chosen: Candidate | None) -> Margin:
     """The chosen line's first step against the beam cutoff. THREE survival fields: *"did it survive"*
     (``admitted`` / ``always_expand``) and *"did it earn its place by score"* (``in_beam``) differ."""
-    return _margin_at(tuple((e.index, e.delta) for e in ranked0), _free_indices(ranked0),
+    # Refusals are retained as free diagnostics, but are unscored unknowns rather than one-ply ranks.
+    scored = tuple((e.index, e.delta) for e in ranked0 if not e.refused)
+    return _margin_at(scored, _free_indices(ranked0),
                       _admitted_indices(state, ranked0), state.k,
                       None if chosen is None else chosen.first_index)
 

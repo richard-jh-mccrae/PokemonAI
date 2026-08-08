@@ -564,7 +564,7 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
                     cap: int = board_expectation.BRANCH_CAP, ranker=None):
     """The boards this option's deferred target can reach, as an `apply_option.Expectation`. The
     composer takes the **max** over ``classes``, never ``.expected()``. Never mutates ``model``."""
-    from common.apply_option import Expectation, OutcomeClass          # contract, imported lazily
+    from common.apply_option import CHOSEN, Expectation, OutcomeClass  # contract, imported lazily
 
     if int(cap) < 1:
         raise ValueError(
@@ -618,7 +618,7 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
             # A choice node on my own board never reaches across the table, so their side is reusable.
             model=model.rebuilt(after_obs, reuse_their_side=True),
             fingerprint=fingerprint) for fingerprint, after_obs in kept),
-        truncated=total - len(kept))
+        truncated=total - len(kept), resolution=CHOSEN)
 
 
 __all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "FETCH_DISCARD", "CHOICE_KEYS",

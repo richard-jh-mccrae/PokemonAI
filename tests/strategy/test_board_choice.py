@@ -22,7 +22,7 @@ from common.scouting import matchup_plan
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.state_model import StateModel
 from common.strategy.combat import CombatMath
-from common.strategy.context import _PLAY, _RETREAT
+from common.strategy.context import _END, _PLAY, _RETREAT
 
 MAIN = bd.CONTEXT_MAIN
 FIGHTING, PSYCHIC, DARKNESS = 6, 5, 7
@@ -507,6 +507,29 @@ def test_a_discard_search_is_routed_to_the_CHOICE_node_not_the_chance_node():
     with pytest.raises(bd.Unmodellable, match="no clause with a deferred target"):
         bc.choice_key(deck_model, play, seat_index=0)
     assert bc.has_deferred_target(deck_model, play, seat_index=0) is False
+
+
+def test_the_composer_reaches_a_discard_choice_before_the_reveal_node_can_refuse_it():
+    """Night Stretcher is a visible-zone choice, so its live composer route must price an instance."""
+    from common import composer as cp
+
+    model = _discard_board((NIGHT_STRETCHER,), (RIOLU, E_F))
+    result = cp.compose(model, [{"type": _PLAY, "index": 0}, {"type": _END}])
+    assert result.fanned[0] is not None
+    assert not any("discard-zone search" in gap for gap in result.gaps)
+    assert any(c.steps and c.steps[0].index == 0 and not c.coverage_gap for c in result.candidates)
+
+
+def test_an_unapplied_gust_still_refuses_at_the_apply_and_composer_seams():
+    """Boss's Orders remains a gap until its target application exists; discard routing must not price it."""
+    from common import composer as cp
+
+    model = _discard_board((BOSS,), (RIOLU,))
+    play = {"type": _PLAY, "index": 0}
+    assert ao.must_expand(ao.apply_option(model, play, expand_deferred_targets=True))
+    result = cp.compose(model, [play, {"type": _END}])
+    assert result.fanned[0] is None
+    assert any(c.coverage_gap and c.steps and c.steps[0].index == 0 for c in result.candidates)
 
 
 def test_a_discard_UNION_enumerates_one_card_over_both_legs():

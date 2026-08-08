@@ -16,6 +16,8 @@ from common import apply_option as ao
 from common import board_delta as bd
 from common import board_expectation as be
 from common import deck_odds
+from common import needs
+from common.state_value import state_value
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.fetch_closure import multiset_classes
@@ -300,10 +302,12 @@ def test_expected_raises_on_an_un_enumerated_effect():
         ao.Expectation().expected(lambda m: 1.0)
 
 
-def test_an_empty_pool_refuses_rather_than_returning_a_zero_class_expectation():
-    """A search whose targets are provably outside the deck is a fact worth REFUSING on."""
-    with pytest.raises(bd.Unmodellable, match="no target"):
-        be.expectation(_search_board(deck=[E_F] * 6 + [MASTER_BALL]), _play_option())
+def test_an_empty_pool_returns_one_certain_whiff_transition():
+    """A known whiff spends the source card. It is one certain transition, never an unpriced empty node."""
+    exp = be.expectation(_search_board(deck=[E_F] * 6 + [MASTER_BALL]), _play_option())
+    assert len(exp.classes) == 1 and exp.total_probability == pytest.approx(1.0)
+    assert exp.classes[0].model.mine.hand_ids == ()
+    assert exp.classes[0].model.mine.discard_ids == (MASTER_BALL,)
 
 
 def test_the_class_identity_is_taken_after_the_reveal_never_on_the_deck_reference():
@@ -401,9 +405,8 @@ def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
 
 
 def _poffin_board(*, bench=(), copies=3):
-    """Poffin plus ``copies`` Staryu unseen in the deck. Staryu (HP 70) is the ONLY fixture body its
-    `hp_max: 70` admits, so a class containing anything else proves the filter was not applied.
-    Padded with Energy so cards remain in the deck after the four prizes are set aside."""
+    """Poffin plus ``copies`` Staryu unseen; only HP-70 Staryu passes its filter.
+    Energy keeps cards in deck after four prizes; any other class proves filter drift."""
     deck = [STARYU] * copies + [RIOLU] + [MEGA_LUC] + [E_F] * 6 + [POFFIN]
     obs = _obs(_player(active=_body(RIOLU), bench=bench, hand=(POFFIN,), prize=4))
     return _model(obs, deck)
@@ -441,6 +444,52 @@ def test_a_BENCH_delivery_with_NO_room_refuses_rather_than_delivering_nothing():
     # also said "Bench cap", so a loose match passed before the capability existed.
     with pytest.raises(bd.Unmodellable, match="no open Bench slot"):
         be.expectation(_poffin_board(bench=full), _play_option())
+
+
+def test_a_provable_whiff_is_a_certain_transition_and_a_hit_still_enumerates():
+    """An empty target pool still spends Poffin. It is known, never an unpriced zero-class effect."""
+
+    board = _poffin_board(copies=0)
+    whiff = be.expectation(board, _play_option())
+    assert whiff.resolution == ao.CHOSEN and len(whiff.classes) == 1
+    assert whiff.total_probability == pytest.approx(1.0)
+    after = whiff.classes[0].model
+    assert POFFIN in after.mine.discard_ids and not after.mine.hand_ids
+    assert be.expectation(_poffin_board(), _play_option()).classes   # positive control: it can hit
+
+
+def test_a_search_with_fewer_deck_slots_than_its_cap_still_models_the_partial_hit():
+    """An up-to-two Poffin takes one reachable Staryu; it is neither an empty whiff nor a refusal."""
+    obs = _obs(_player(active=_body(RIOLU), hand=(POFFIN,), prize=1))
+    board = _model(obs, [STARYU, STARYU, RIOLU, POFFIN])
+    assert board.mine.unseen_counts[STARYU] == 2 and board.mine.deck_count == 1
+    exp = be.expectation(board, _play_option())
+    assert [_benched_ids(cls) for cls in exp.classes] == [[STARYU]]
+
+
+def test_a_zero_deck_conjunction_is_a_certain_empty_transition():
+    """A Hilda whose Evolution and Energy are certainly prized still spends the Supporter."""
+    obs = _obs(_player(active=_body(RIOLU), hand=(HILDA,), prize=2))
+    board = _model(obs, [HILDA, MEGA_LUC, E_F, RIOLU])
+    assert board.mine.deck_count == 0
+    exp = be.expectation(board, _play_option())
+    assert len(exp.classes) == 1
+    assert _ids_in_hand(exp.classes[0]) == []
+
+
+def test_a_provable_whiff_spends_its_hand_resource_in_the_existing_ledger():
+    """A known Poffin whiff is strictly worse than END when its held resource has ledger value."""
+    obs = _obs(_player(active=_body(RIOLU), hand=(POFFIN,), prize=4))
+    deck = [RIOLU, MEGA_LUC] + [E_F] * 6 + [POFFIN]
+
+    def _hand_ledger(end, seat):
+        hand = (((end.get("current") or {}).get("players") or [{}])[seat].get("hand") or ())
+        ids = tuple(card.get("id") for card in hand)
+        return needs.Resolution(hand_ids=ids, latent_worth=float(POFFIN in ids))
+
+    board = StateModel.build(obs, combat=_combat(), deck=deck, needs=_hand_ledger)
+    whiff = be.expectation(board, _play_option()).classes[0].model
+    assert state_value(whiff) < state_value(board)
 
 
 def test_an_unhandled_dest_still_fails_CLOSED():

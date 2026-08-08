@@ -388,6 +388,32 @@ def test_the_OTHER_expectation_producer_is_also_ranked_by_MAX(monkeypatch):
 
 
 @pytest.mark.req("REQ-COMPOSER-0009")
+def test_the_reveal_branch_uses_expected_for_a_DEALT_outcome(monkeypatch):
+    """The player cannot choose a coin result, so the composer must not price the best outcome."""
+    from common import board_expectation as bx
+
+    clauses = {ITEM: [{"kind": "fetch", "target": "pokemon", "zone": "deck"}]}
+    deck = [RIOLU] * 3 + [MEGA_LUC] + [E_F] * 6 + [ITEM]
+    obs = _obs(_player(active=_body(RIOLU, energy=[FIGHTING]), hand=[ITEM], deck_count=len(deck)))
+    model = StateModel.build(obs, combat=_combat(clauses), deck=deck)
+    donor = _retreat_board()
+    real = __import__("common.board_choice", fromlist=["x"]).deferred_target(
+        donor, {"type": _RETREAT}, seat_index=0)
+    dealt = ao.Expectation(classes=(ao.OutcomeClass(0.75, model=real.classes[0].model),
+                                    ao.OutcomeClass(0.25, model=real.classes[1].model)),
+                          resolution=ao.DEALT)
+    best, expected = dealt.best(state_value), dealt.expected(state_value)
+    assert best != pytest.approx(expected), "fixture is vacuous unless the outcomes differ"
+    monkeypatch.setattr(bx, "expectation", lambda *a, **kw: dealt)
+
+    result = cp.compose(model, [{"type": _PLAY, "area": HAND, "index": 0}, {"type": _END}])
+    assert dict(result.order)[0] == pytest.approx(expected - state_value(model))
+    assert dict(result.order)[0] != pytest.approx(best - state_value(model))
+    assert result.bounds[0].best == pytest.approx(best)
+    assert result.bounds[0].expected == pytest.approx(expected)
+
+
+@pytest.mark.req("REQ-COMPOSER-0009")
 def test_BOTH_bounds_reach_the_telemetry_with_the_dropped_mass():
     """§S3.4/§S3.5. The max over-reads a 5%-likely target and `expected()` under-reads a free choice;
     the GAP is the exposure. ``total_probability`` catches a capped enumeration reading as complete."""
@@ -722,6 +748,18 @@ def test_a_refused_option_becomes_a_flagged_one_action_candidate_and_reaches_the
     gapped = [c for c in result.candidates if c.coverage_gap]
     assert gapped and any(c.steps and c.steps[0].index == 0 for c in gapped)
     assert result.gaps and any("kind" in g for g in result.gaps)
+
+
+@pytest.mark.req("REQ-COMPOSER-0006")
+def test_a_refusal_is_unknown_at_the_one_ply_ordering_seam_not_a_priced_zero():
+    """The refusal remains reportable and expandable, but it cannot tie a genuinely zero-valued action."""
+    me = _player(active=_body(RIOLU), hand=[ITEM])
+    result = cp.compose(_model(_obs(me)), [{"type": _PLAY, "index": 0}, {"type": _END}])
+    assert result.fanned[0] is None
+    assert 0 not in {index for index, _delta in result.order}
+    assert 0 in result.always_expanded
+    assert result.margin.ranked == len(result.order) == 1
+    assert dict(result.order)[1] == pytest.approx(0.0)
 
 
 @pytest.mark.req("REQ-COMPOSER-0006")

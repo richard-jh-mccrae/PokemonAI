@@ -278,7 +278,7 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
                 shed=None):
     """The :class:`~common.apply_option.Expectation` over ``option``'s reveal, or
     :class:`~common.board_delta.Unmodellable`. A class's ``probability`` is an AVAILABILITY weight."""
-    from common.apply_option import Expectation, OutcomeClass          # contract, imported lazily
+    from common.apply_option import CHOSEN, Expectation, OutcomeClass  # contract, imported lazily
 
     if int(cap) < 1:
         raise ValueError(
@@ -334,6 +334,15 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
 
     paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
     dest = _dest_of(legs, card_id=card_id, name=name)
+
+    def _whiff():
+        """The known no-delivery transition — search still pays its normal play cost."""
+        after_obs, at = _revealed(model, option, (), seat_index=seat_index, stat=stat, paid=paid,
+                                  dest=dest, card_id=card_id, name=name)
+        return Expectation(classes=(OutcomeClass(
+            probability=1.0, model=model.rebuilt(after_obs, reuse_their_side=True),
+            fingerprint=_fingerprint(after_obs, at, seat_index, dest)),), resolution=CHOSEN)
+
     if dest == "bench":
         # TRUNCATES, never filters: every carrier searches for "up to" N, so one slot delivers one
         # body — dropping the oversized class would refuse a legal play.
@@ -343,14 +352,19 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
                                "into — the play is unreachable on this board, and enumerating a "
                                "zero-body delivery would rank a dead Item beside a live one")
         legs = legs._replace(cap=min(int(legs.cap), room))
+    # A single/union search says “up to” its cap, so the known deck size keeps its reachable partial class.
+    # This avoids an impossible full delivery with zero mass; conjunctions have separate per-leg budgets.
+    if legs.relation != "conjunction":
+        legs = legs._replace(cap=min(int(legs.cap), int(model.mine.deck_count)))
     pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
     candidates = _classes_for(legs, pools)
     if not candidates:
-        _no(card_id, name, "no target it can reach is still unseen in my deck — a provably-whiffing "
-                           "search is a fact to refuse on, not a zero-class Expectation")
+        return _whiff()
     weights = {klass: _class_weight(model, klass) for klass in candidates}
     mass = sum(weights.values())
     if mass <= 0.0:
+        if int(model.mine.deck_count) == 0:
+            return _whiff()
         _no(card_id, name, "no target it can reach has any availability left (`deck_odds` puts every "
                            "matching copy outside the deck), so there is nothing to enumerate")
 
@@ -367,7 +381,7 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
             # The reveal never reaches across the table, so their built side is reusable.
             model=model.rebuilt(after_obs, reuse_their_side=True),
             fingerprint=_fingerprint(after_obs, at, seat_index, dest)))
-    return Expectation(classes=tuple(classes), truncated=len(dropped))
+    return Expectation(classes=tuple(classes), truncated=len(dropped), resolution=CHOSEN)
 
 
 __all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "expectation")
