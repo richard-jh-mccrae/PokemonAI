@@ -4,7 +4,7 @@ Where `board_delta` returns ONE board, a draw/search has a DISTRIBUTION. `apply_
 frozen `OutcomeClass` / `Expectation` shapes; this only fills them. Never a sampled engine shuffle,
 and class identity is taken AFTER the reveal (ADR-0091).
 
-**Still INERT at runtime** — nothing imports this module. Verified, not assumed."""
+**LIVE at runtime** — `composer._one_ply` calls :func:`expectation` for every revealing option."""
 from __future__ import annotations
 
 from typing import NoReturn
@@ -16,8 +16,12 @@ from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
 from common.fetch_closure import (fetch_is_unconditional, fetch_target_matches,
                                   multiset_classes, reveal_legs)
-from common.option_equivalence import AREA_HAND, option_fingerprint
+from common.option_equivalence import AREA_BENCH, AREA_HAND, option_fingerprint
 from common.strategy.context import _PLAY
+
+#: `dest` values this seam can PLACE. `in_play` is deliberately ABSENT: it puts an EVOLUTION onto a
+#: body the effect CHOOSES, which is `board_choice`'s node rather than a deploy.
+_PLACED_DESTS: frozenset[str] = frozenset({"bench"})
 
 #: Max outcome classes one Expectation enumerates — the measured post-Option-Equivalence menu-width
 #: P95 (ADR-0130), never a tuned weight. Truncation past it is ALWAYS reported.
@@ -101,10 +105,11 @@ def _check_clause(clause: dict, card_id, name) -> None:
         _no(card_id, name, f"`amount` {amount!r} names no number the enumerator can range over — "
                            f"only `\"all\"` reaches here, and resolving it needs a pool to count "
                            f"against plus the Bench cap its carriers deliver into (Issue #410)")
-    if clause.get("dest") is not None:
-        _no(card_id, name, f"`dest` {clause.get('dest')!r}: the found body arrives IN PLAY, which is "
-                           f"the deploy transition with its Bench cap and Stadium-trigger gate, not "
-                           f"a hand write")
+    dest = clause.get("dest")
+    if dest is not None and dest not in _PLACED_DESTS:
+        _no(card_id, name, f"`dest` {dest!r}: the found body arrives on a body this seam does not "
+                           f"choose, which is a CHOICE node (`board_choice`) rather than the deploy "
+                           f"transition {sorted(_PLACED_DESTS)} composes with")
     unknown = sorted(set(clause) - _HANDLED_FETCH_KEYS)
     if unknown:
         _no(card_id, name, f"clause key(s) {unknown} are not in this module's handled set — fail "
@@ -158,7 +163,48 @@ def _cost_indices(model, option, legs, *, seat_index, card_id, name, shed) -> tu
     return legal
 
 
-def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple = ()):
+def _dest_of(legs, card_id, name):
+    """The ONE place this card's delivery lands, or None for a hand write. Mirrors `_cost_indices`'
+    single-value discipline: a card whose legs disagree has no single destination to compose with."""
+    dests = {leg.get("dest") for leg in legs.legs}
+    if len(dests) > 1:
+        _no(card_id, name, f"its legs declare DIFFERENT destinations {sorted(d or 'hand' for d in dests)} "
+                           f"— one play delivers to one zone, so this is either a compendium defect "
+                           f"or a shape with no single placement; refusing rather than picking one")
+    return dests.pop() if dests else None
+
+
+def _bench_room(model, seat_index: int) -> int:
+    """Open Bench slots on my side, from the engine's own ``benchMax`` — so "is there room" cannot
+    disagree with `board_delta._play`, which reads the same field for a hand-played Basic."""
+    me = ((model.source_obs.get("current") or {}).get("players") or [{}])[seat_index] or {}
+    cap = int(me.get("benchMax") or board_delta._BENCH_MAX)
+    return max(0, cap - len(me.get("bench") or ()))
+
+
+def _place_on_bench(model, me, current, delivered: tuple, *, seat_index, card_id, name) -> tuple:
+    """Deploy each delivered body, MUTATING ``me``; returns the bench indices they landed on. Built
+    from `board_delta`'s own primitives so an arriving body is taxed exactly as a hand-played one."""
+    bench = list(me.get("bench") or ())
+    at = []
+    for ordinal, cid in enumerate(delivered):
+        dstat = model.card_stat(cid)
+        if dstat is None or not getattr(dstat, "hp", None):
+            _no(card_id, name, f"it delivers {cid} onto the Bench and that card has no `CardStat` HP, "
+                               f"so the arriving body's maximum is unknown")
+        clauses = board_delta.stadium_clauses_for(current, model.combat, event="bench_play",
+                                                  stat=dstat)
+        body = board_delta.bench_body(cid, dstat, seat_index=seat_index,
+                                      serial=-(cid * 100 + ordinal))
+        board_delta.apply_bench_arrival(body, clauses, dstat)
+        bench.append(body)
+        at.append(len(bench) - 1)
+    me["bench"] = bench
+    return tuple(at)
+
+
+def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple = (), dest=None,
+              card_id=None, name="?"):
     """The observation after the search RESOLVES. ``paid`` is applied BEFORE the search, matching the
     engine's own order — charging after would let a delivered card pay for its own search."""
     new_obs, current, players = board_delta.fork(model.source_obs)
@@ -179,15 +225,19 @@ def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple 
     me["discard"] = list(me.get("discard") or ()) + [played]
     # Found cards have no observed `serial` — synthesized NEGATIVE so a dump can tell them apart, and
     # ordinal-keyed because `-card_id` alone collides when one class delivers two of the same card.
-    hand = list(me.get("hand") or ())
-    at = []
-    for ordinal, card_id in enumerate(delivered):
-        hand.append({"id": card_id, "serial": -(card_id * 100 + ordinal),
-                     "playerIndex": seat_index})
-        at.append(len(hand) - 1)
-    me["hand"] = hand
-    if me.get("handCount") is not None:
-        me["handCount"] = len(hand)
+    if dest == "bench":
+        at = _place_on_bench(model, me, current, delivered, seat_index=seat_index,
+                             card_id=card_id, name=name)
+    else:
+        hand = list(me.get("hand") or ())
+        at = []
+        for ordinal, found in enumerate(delivered):
+            hand.append({"id": found, "serial": -(found * 100 + ordinal),
+                         "playerIndex": seat_index})
+            at.append(len(hand) - 1)
+        me["hand"] = hand
+        if me.get("handCount") is not None:
+            me["handCount"] = len(hand)
     if me.get("deckCount") is not None:
         me["deckCount"] = max(0, int(me["deckCount"]) - len(delivered))
     if getattr(stat, "is_supporter", False):
@@ -195,8 +245,13 @@ def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple 
     return new_obs, tuple(at)
 
 
-def _fingerprint(obs, indices: tuple, seat_index) -> tuple:
-    """Per-card fingerprints on the POST-reveal board; the pre-reveal reference is unfingerprintable."""
+def _fingerprint(obs, indices: tuple, seat_index, dest=None) -> tuple:
+    """Per-card fingerprints on the POST-reveal board; the pre-reveal reference is unfingerprintable.
+    A benched delivery keys on the BODY it became — a hand index would name a card that never arrived."""
+    if dest == "bench":
+        return tuple(option_fingerprint({"type": _PLAY, "inPlayArea": AREA_BENCH,
+                                         "inPlayIndex": index, "playerIndex": seat_index}, obs)
+                     for index in indices)
     return tuple(option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
                                      "playerIndex": seat_index}, obs)
                  for index in indices)
@@ -275,6 +330,17 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
                            "card's structural floor is a different one")
 
     paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
+    dest = _dest_of(legs, card_id, name)
+    if dest == "bench":
+        # The Bench cap bounds the DELIVERY, from the same `benchMax` `board_delta._play` reads. It
+        # TRUNCATES rather than filtering: every shipped carrier searches for "up to" N, so one open
+        # slot delivers one body — dropping the oversized class would refuse a legal play instead.
+        room = _bench_room(model, seat_index)
+        if room <= 0:
+            _no(card_id, name, "my Bench is full, so there is no open Bench slot for it to deliver "
+                               "into — the play is unreachable on this board, and enumerating a "
+                               "zero-body delivery would rank a dead Item beside a live one")
+        legs = legs._replace(cap=min(int(legs.cap), room))
     pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
     candidates = _classes_for(legs, pools)
     if not candidates:
@@ -293,12 +359,12 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     classes = []
     for klass in kept:
         after_obs, at = _revealed(model, option, klass, seat_index=seat_index, stat=stat,
-                                  paid=paid)
+                                  paid=paid, dest=dest, card_id=card_id, name=name)
         classes.append(OutcomeClass(
             probability=weights[klass] / mass,
             # The reveal never reaches across the table, so their built side is reusable.
             model=model.rebuilt(after_obs, reuse_their_side=True),
-            fingerprint=_fingerprint(after_obs, at, seat_index)))
+            fingerprint=_fingerprint(after_obs, at, seat_index, dest)))
     return Expectation(classes=tuple(classes), truncated=len(dropped))
 
 
