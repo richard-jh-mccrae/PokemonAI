@@ -89,6 +89,10 @@ class OpponentModel:
     def took_ko_this_turn(self) -> bool:
         return self.resources.took_ko_this_turn
 
+    @property
+    def my_pokemon_koed_last_turn(self) -> bool:
+        return self.resources.my_pokemon_koed_last_turn
+
     def copies_left_odds(self, card_id: int | None = None):
         """P(the opponent's deck still holds ≥1 copy); ``None`` → the whole map. Fails OPEN at 1.0
         ("assume present") for an unknown card, so an unrecognized opponent suppresses nothing."""

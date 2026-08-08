@@ -199,7 +199,7 @@ class BoardMixin:
             my_hand_size=model.mine.hand_size,
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers. Each read fails OPEN.
             opp_took_ko_this_turn=bool(getattr(_opp_res, "took_ko_this_turn", False)),
-            my_pokemon_koed_last_turn=bool(getattr(_opp_res, "my_pokemon_koed_last_turn", False)),
+            my_pokemon_koed_last_turn=model.my_pokemon_koed_last_turn,
             opp_hand_size_delta=getattr(_opp_res, "hand_size_delta", None),
             opp_last_turn_dumped=bool(getattr(_opp_res, "last_turn_dumped", False)),
             opp_deckout_in_turns=getattr(_opp_res, "deckout_in_turns", None),

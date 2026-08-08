@@ -299,13 +299,15 @@ class GambleMixin:
             st = self.stats.get(tid) if self.stats else None
             if st is None:
                 continue
-            if getattr(st, "is_item", False):
-                if not getattr(board, "my_pokemon_koed_last_turn", False):
-                    continue
-            elif getattr(st, "is_supporter", False):
+            draw_conditions = [clause.get("condition") for clause in self.effects.clauses(tid)
+                               if clause.get("kind") == "draw"] if self.effects else []
+            if not draw_conditions or not any(self._condition_holds(condition, board)
+                                              for condition in draw_conditions):
+                continue
+            if getattr(st, "is_supporter", False):
                 if not sup_live:
                     continue
-            else:
+            elif not getattr(st, "is_item", False):
                 continue
             w = own_draw_count(tid, board.my_prizes_remaining, board.opp_prizes_remaining)
             if not w or w <= 0:

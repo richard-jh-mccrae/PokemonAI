@@ -384,8 +384,6 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
     "condition=played_supporter_this_turn": "1242 Community Center. The allowance IS homed "
                                             "(`supporter_played`); the alternating per-player "
                                             "availability is what stays unmodelled",
-    "condition=pokemon_ko_last_turn": "140 Fezandipiti ex, 1080 Unfair Stamp, 1193 Hassel. LAST "
-                                      "turn's KO is history the snapshot does not carry",
     "condition=solrock_in_play": "675 Lunatone. A named-partner board check; "
                                  "`parse_attack_bench_requirement` answers the attack-side twin, not "
                                  "this clause gate",
