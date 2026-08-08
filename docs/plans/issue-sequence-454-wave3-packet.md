@@ -92,3 +92,35 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `85785067|0|decision|14` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
 | `81904451|0|decision|15` | decider | #455 | agree [2] | disagree [0] | Rerule; baseline unchanged |
 | `84889539|1|decision|30` | decider | #455 | agree [2] | disagree [1] | Rerule; baseline unchanged |
+| `85164605|1|decision|64` | decider | Issue #462 | agree [5] | disagree [1] | Re-adjudicated; baseline unchanged |
+
+## Issue #462 — post–Issue #455 deferred-choice re-adjudication
+
+These are correction-ruling updates, not baseline recaptures.  The observations are replayed through
+the shipped `Pilot.explain()` at the production seam; their historical `correct` entries are left
+unchanged so the original human decision remains auditable.
+
+### `planner_0cbc`
+
+- Source: Wally's Compassion (index 5) synthesizes legally and scores `+8`; the composer selects
+  retreat index 9 with first-step delta `+1.42182421875`.
+- Ruling: re-adjudicate to the positive composed retreat line. This is valuation, not an apply-seam
+  refusal.
+
+### `85164605-64`
+
+- Source: historic Jetting Blow (index 5) loses to legal synthesized Boss's Orders index 1; the
+  composer first-step delta is `+0.055555555556`.
+- Ruling: re-adjudicate to Boss's Orders; retain the old correction only as history.
+
+### `82753102-109`
+
+- Source: Boss's Orders index 3 has raw `OptionTrace.score == 0` and no gust hypothesis fires, but
+  its composed first-step delta is `+3.045352564103`.
+- Ruling: keep Boss only because the composer has a strict state-value view. An exact tie abstains
+  under ADR-0131; raw menu order is never a ruling.
+
+The three assertions live respectively in `test_heal_refusal_ceiling.py`,
+`test_hyperclosure_corpus.py`, and `test_gust_round0_corpus.py`.  No planner or currency constant
+changes: changing either to force the stale correction would misattribute a post-synthesis valuation
+change to board-choice application.

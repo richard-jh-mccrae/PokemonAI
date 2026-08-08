@@ -48,3 +48,15 @@ def replay_agent(correction) -> str:
     no directory of their own, so an unknown agent replays through `mega_starmie`."""
     agent = getattr(correction, "agent", None) or ""
     return agent if agent in _REPLAYABLE else "mega_starmie"
+
+
+def opponent_active_ids(expectation) -> set[int]:
+    ids = set()
+    for outcome in expectation.classes:
+        current = outcome.model.source_obs.get("current") or {}
+        players = current.get("players") or []
+        my_index = int(current.get("yourIndex") or 0)
+        their_index = 1 - my_index
+        theirs = players[their_index] if 0 <= their_index < len(players) else {}
+        ids.update(body.get("id") for body in (theirs.get("active") or []) if body)
+    return ids

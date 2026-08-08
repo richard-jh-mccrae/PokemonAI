@@ -92,6 +92,25 @@ def test_round0_boss_blunder_is_dead(cid):
 
 
 @pytest.mark.req("REQ-CORPUS-0002")
+def test_zero_trace_score_boss_is_chosen_only_for_a_positive_composer_delta():
+    """82753102-109's zero tactical Boss needs a positive composed state delta."""
+    rec, d = _explain("82753102-109")
+    boss = _boss_options(d)
+    assert len(boss) == 1 and boss[0].score == 0.0 and boss[0].index in d.chosen
+    from common import apply_option as ao
+    pilot = _pilot(rec.agent)
+    my_index = int((rec.obs.get("current") or {}).get("yourIndex") or 0)
+    result = ao.apply_option(pilot._leaf_state_model(rec.obs, my_index), rec.obs["select"]["option"][3],
+                             expand_deferred_targets=True,
+                             search_api=getattr(pilot, "_search_api", None))
+    from corpus_helpers import opponent_active_ids
+    assert isinstance(result, ao.Expectation)
+    assert len(result.classes) == 4 and opponent_active_ids(result) == {66, 142, 305, 741}
+    assert d.composer and d.composer["first_index"] == boss[0].index
+    assert d.composer["margin"]["chosen_delta"] > 0.0
+
+
+@pytest.mark.req("REQ-CORPUS-0002")
 @pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in ADJUDICATED])
 def test_round0_adjudicated_line_is_taken(cid):
     """The ACTION, not which rung endorsed it, after the gust synthesis is available."""

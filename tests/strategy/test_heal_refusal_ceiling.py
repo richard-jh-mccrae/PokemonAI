@@ -44,6 +44,18 @@ def _refusal_for(pilot, obs, index):
                            search_api=getattr(pilot, "_search_api", None))
 
 
+def _healed_zones(expectation):
+    zones = set()
+    for outcome in expectation.classes:
+        current = outcome.model.source_obs.get("current") or {}
+        me = ((current.get("players") or [{}])[0] or {})
+        for zone in ("active", "bench"):
+            if any(int(body.get("hp") or 0) == int(body.get("maxHp") or 0)
+                   and not (body.get("energies") or ()) for body in (me.get(zone) or ())):
+                zones.add(zone)
+    return zones
+
+
 @pytest.mark.req("REQ-PLANNER-0036")
 @pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES)
 def test_the_seam_models_the_ruled_heal(fixture, ruled, _at_capture):
@@ -53,6 +65,8 @@ def test_the_seam_models_the_ruled_heal(fixture, ruled, _at_capture):
     result = _refusal_for(pilot, _fx(fixture)["obs"], ruled)
     assert isinstance(result, ao.Expectation), (
         f"{fixture}: expected the Wally choice synthesis, got {type(result).__name__}")
+    if fixture == "planner_0cbc":
+        assert len(result.classes) == 2 and _healed_zones(result) == {"active", "bench"}
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
@@ -63,14 +77,18 @@ def test_the_agent_plays_the_promoted_ruled_heal(fixture, _at_capture, ruled):
     assert _shipped_pilot().explain(fx["obs"]).chosen == fx["correct"] == [ruled]
 
 
+@pytest.mark.req("REQ-PLANNER-0036")
 @pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES[:1])
-@pytest.mark.xfail(strict=True, reason=(
-    "Issue #462 valuation follow-up: Wally's board is now synthesized, but the 0cbc human choice "
-    "still loses to another priced line."))
-def test_the_remaining_ruled_heal_is_a_valuation_follow_up(fixture, _at_capture, ruled):
-    """The remaining human ruling is retained as a strict valuation target."""
+def test_the_remaining_ruled_heal_is_re_adjudicated_to_the_positive_composer_line(
+        fixture, _at_capture, ruled):
+    """0cbc's legal Wally board loses to a strictly valued composed retreat line."""
     fx = _fx(fixture)
-    assert _shipped_pilot().explain(fx["obs"]).chosen == fx["correct"] == [ruled]
+    d = _shipped_pilot().explain(fx["obs"])
+    assert fx["correct"] == [ruled] and d.options[ruled].card_id == WALLYS
+    assert d.options[ruled].score > 0.0, "Wally must be valued, not silently refused"
+    assert d.chosen == [9], "the documented re-adjudication is the composed retreat line"
+    assert d.composer and d.composer["first_index"] == 9
+    assert d.composer["margin"]["chosen_delta"] > 0.0, "not a positional zero-score tie"
 
 
 @pytest.mark.req("REQ-PLANNER-0036")

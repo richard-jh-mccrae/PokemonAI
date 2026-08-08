@@ -67,8 +67,10 @@ TARGETS = {
     # `test_deploy_now_drakloak_is_not_pitched` below.
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
-    "85164605-64": "Issue #462 valuation follow-up: once deferred board choices are reachable, the "
-                   "human Jetting Blow KO loses to a newly-priced support line",
+}
+READJUDICATED = {
+    "85164605-64": (1, 1182, {742, 65, 741}, "Boss's Orders: deferred board synthesis outranks the "
+                                          "former Jetting Blow correction by a positive composer delta"),
 }
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
@@ -182,6 +184,16 @@ def _replay_picks_correct(cid: str) -> bool:
     return _matches_up_to_interchangeability(rec.obs, chosen, correct)
 
 
+def _expanded_deferred(rec, index):
+    from common import apply_option as ao
+    pilot = _pilot(rec.agent)
+    my_index = int((rec.obs.get("current") or {}).get("yourIndex") or 0)
+    model = pilot._leaf_state_model(rec.obs, my_index)
+    return ao.apply_option(model, rec.obs["select"]["option"][index],
+                           expand_deferred_targets=True,
+                           search_api=getattr(pilot, "_search_api", None))
+
+
 def _param(cid, reason, *, xfail):
     marks = (pytest.mark.xfail(reason=reason, strict=True),) if xfail else ()
     return pytest.param(cid, id=cid, marks=marks)
@@ -199,6 +211,29 @@ def test_correction_ranks_the_human_pick_top(cid):
     assert _replay_picks_correct(cid), (
         f"{cid}: expected {_record(cid).correct_label!r}, "
         f"got {_record(cid).chosen_label!r}")
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.parametrize("cid,expected_index,expected_card,expected_targets,_why", [
+    pytest.param(cid, index, card, targets, why, id=cid)
+    for cid, (index, card, targets, why) in READJUDICATED.items()
+])
+def test_re_adjudicated_deferred_choice_has_a_positive_composer_reason(
+        cid, expected_index, expected_card, expected_targets, _why):
+    """A legal deferred Supporter replaces the old correction only through positive leaf value."""
+    rec = _record(cid)
+    d = _pilot(rec.agent).explain(rec.obs)
+    assert rec.correct == [5], "the original Jetting Blow correction is retained as audit history"
+    choice = _expanded_deferred(rec, expected_index)
+    from common import apply_option as ao
+    from corpus_helpers import opponent_active_ids
+    assert isinstance(choice, ao.Expectation)
+    assert len(choice.classes) == len(expected_targets)
+    assert opponent_active_ids(choice) == expected_targets
+    assert d.chosen == [expected_index]
+    assert d.options[expected_index].card_id == expected_card
+    assert d.composer and d.composer["first_index"] == expected_index
+    assert d.composer["margin"]["chosen_delta"] > 0.0
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
