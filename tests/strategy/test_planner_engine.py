@@ -107,11 +107,14 @@ def test_simulate_line_reaches_a_board_and_ends_my_turn():
         battle_finish()
 
 
-@pytest.mark.req("REQ-PLANNER-0034")
-def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
-    """Live smoke for the DECIDER: every committed sequence's ``next_step`` IS the pick, so the scored
-    line and the play cannot drift. ``committed`` excludes win lines — the Lethal lock preempts (ADR-0037)."""
-    deck = _deck()
+#: Independent drives the *fires at all* claim may take. The engine has no deal-seed, so ONE drive is
+#: a sample: 3 of 60 measured ended inside 17 steps with every planned line a win lock or ko_for_prizes.
+_COMPOSER_DRIVES = 5
+
+
+def _drive_committed(deck):
+    """One live mirror drive's non-``win`` committed lines. The per-decision invariants are asserted on
+    the way past, so every drive checks them and only the existential claim is retried."""
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
     assert start.errorPlayer < 0
@@ -127,13 +130,23 @@ def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
                 if d.planned.kind == "sequence":
                     assert d.planned.next_step == list(d.chosen)    # the scored line's first action IS the pick
             obs = battle_select(d.chosen)
-        assert any(ln.kind == "sequence" for ln in committed), (
-            "the composer never committed a line across a whole mirror drive — it is the DEFAULT "
-            "decider, so a drive where it never fires means the ladder above it is swallowing "
-            "every board")
         assert all(ln.ranked_by in ("composer", None) for ln in committed)
+        return committed
     finally:
         battle_finish()
+
+
+@pytest.mark.req("REQ-PLANNER-0034")
+def test_the_composer_decides_a_live_drive_and_its_committed_step_is_the_pick():
+    """Live smoke for the DECIDER: every committed sequence's ``next_step`` IS the pick, so the scored
+    line and the play cannot drift. ``committed`` excludes win lines — the Lethal lock preempts (ADR-0037)."""
+    deck = _deck()
+    for _ in range(_COMPOSER_DRIVES):
+        if any(ln.kind == "sequence" for ln in _drive_committed(deck)):
+            return                       # existential over drives, so the first one that fires settles it
+    pytest.fail(
+        f"the composer committed no line across {_COMPOSER_DRIVES} independent mirror drives — it is "
+        f"the DEFAULT decider, so never firing means the ladder above it is swallowing every board")
 
 
 def _shipped_pilot():
