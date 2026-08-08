@@ -141,3 +141,49 @@ The three assertions live respectively in `test_heal_refusal_ceiling.py`,
 `test_hyperclosure_corpus.py`, and `test_gust_round0_corpus.py`.  No planner or currency constant
 changes: changing either to force the stale correction would misattribute a post-synthesis valuation
 change to board-choice application.
+
+## Issue #465 — continuation-provenance diagnostic gate capture
+
+This Issue adds only a training provenance relation, committed native fixtures, and tests.  It makes
+no Pilot, policy, corpus, or baseline change.  The captures below are diagnostic-only: no baseline
+was captured or restamped, and no causal claim is made from corpus disagreement.
+
+- Leaf comparison: 252 frames; corpus shifted `+3/-16`; 57 unruled `OK -> MISS` flips; 51 ruled;
+  7 voided.  Unruled flips: `81904064|0|decision|9 1->2`, `81904451|0|decision|15 1->3`,
+  `81904451|0|decision|6 1->2`, `81906755|1|decision|77 1->2`, `82224509|1|decision|40 1->6`,
+  `82224509|1|decision|41 1->2`, `82224509|1|decision|71 1->6`, `82225138|0|decision|19 1->3`,
+  `82226116|0|decision|48 1->2`, `82226759|1|decision|16 1->2`, `82227388|0|decision|30 1->5`,
+  `82523811|1|decision|105 1->3`, `82523811|1|decision|15 1->2`, `82523811|1|decision|79 1->2`,
+  `82523811|1|decision|95 1->2`, `82524455|1|decision|27 1->2`, `82525101|1|decision|102 1->3`,
+  `82525101|1|decision|87 1->2`, `82525101|1|decision|92 1->4`, `82748422|0|decision|26 1->2`,
+  `82748422|0|decision|51 1->2`, `82749168|1|decision|29 1->3`, `82749168|1|decision|61 1->3`,
+  `82750161|1|decision|16 1->3`, `82751468|1|decision|14 1->3`, `82752045|1|decision|115 1->2`,
+  `82752604|0|decision|88 1->5`, `82754875|0|decision|8 1->4`, `82756664|1|decision|35 1->3`,
+  `82756664|1|decision|37 1->2`, `83007714|1|decision|135 1->2`, `83038055|0|decision|40 1->7`,
+  `83053965|1|decision|91 1->14`, `83116081|0|decision|17 1->3`, `83116081|0|decision|76 1->2`,
+  `83456015|0|decision|35 1->2`, `83661652|0|decision|29 1->2`, `83661652|0|decision|33 1->2`,
+  `83661652|0|decision|40 1->2`, `83664340|1|decision|24 1->4`, `83664340|1|decision|45 1->8`,
+  `83667237|0|decision|120 1->6`, `83968638|1|decision|17 1->2`, `84071010|0|decision|30 1->4`,
+  `84889539|1|decision|30 1->2`, `84897262|1|decision|100 1->2`, `85045840|0|decision|6 1->2`,
+  `85045840|0|decision|8 1->2`, `85058574|1|decision|109 1->4`, `85058574|1|decision|87 1->4`,
+  `85163079|0|decision|30 1->3`, `85785067|0|decision|14 1->2`, `85786096|0|decision|24 1->2`,
+  `85786096|0|decision|38 1->3`, `85786096|0|turn|2 1->2`, `86090164|1|decision|40 1->3`,
+  `86091435|0|decision|96 1->5`.
+- Decider comparison: 371 frames; corpus shape moved `+4/-1`; 33 unruled regressions; 23 ruled;
+  2 voided.  Unruled flips: `81785223|0|decision|38 [4]->[3]`, `81904064|0|decision|49 [0]->[2]`,
+  `81904064|0|decision|9 [1]->[0]`, `81904451|0|decision|15 [2]->[0]`,
+  `82225643|1|decision|34 [0]->[1]`, `82525101|1|decision|102 [0]->[2]`,
+  `82525101|1|decision|92 [0]->[2]`, `82750161|1|decision|29 [2]->[0]`,
+  `82752604|0|decision|88 [2]->[7]`, `83116081|0|decision|76 [5]->[9]`,
+  `83664340|1|decision|45 [0]->[3]`, `83667237|0|decision|120 [3]->[0]`,
+  `83667237|0|decision|87 [2]->[0]`, `83969481|0|decision|55 [4]->[0]`,
+  `84889011|0|decision|24 [5]->[3]`, `84889539|1|decision|30 [2]->[1]`,
+  `84890060|1|decision|12 [2]->[1]`, `84897262|1|decision|100 [0]->[2]`,
+  `85046350|0|decision|79 [4]->[1]`, `85046350|0|decision|81 [2]->[1]`,
+  `85058574|1|decision|69 [1]->[0]`, `85058574|1|decision|88 [1]->[0]`,
+  `85163079|0|decision|30 [0]->[2]`, `85164605|1|decision|64 [5]->[1]`,
+  `85785067|0|decision|14 [2]->[0]`, `85785067|0|decision|42 [4]->[2]`,
+  `85785067|0|decision|54 [4]->[2]`, `85786096|0|decision|24 [0]->[4]`,
+  `85786096|0|decision|38 [0]->[4]`, `85786096|0|decision|70 [2]->[0]`,
+  `85786096|0|turn|2 [0]->[4]`, `86090164|1|decision|40 [0]->[1]`,
+  `86091435|0|decision|30 [0]->[1]`.
