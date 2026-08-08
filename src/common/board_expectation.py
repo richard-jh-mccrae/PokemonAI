@@ -332,9 +332,8 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
     dest = _dest_of(legs, card_id, name)
     if dest == "bench":
-        # The Bench cap bounds the DELIVERY, from the same `benchMax` `board_delta._play` reads. It
-        # TRUNCATES rather than filtering: every shipped carrier searches for "up to" N, so one open
-        # slot delivers one body — dropping the oversized class would refuse a legal play instead.
+        # TRUNCATES, never filters: every carrier searches for "up to" N, so one slot delivers one
+        # body — dropping the oversized class would refuse a legal play.
         room = _bench_room(model, seat_index)
         if room <= 0:
             _no(card_id, name, "my Bench is full, so there is no open Bench slot for it to deliver "
