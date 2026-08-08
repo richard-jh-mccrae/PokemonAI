@@ -423,7 +423,7 @@ def test_wp4_engine_windows_lift_the_anchored_gamble_price():
     assert isclose(tr2["evals"][0]["p"], round(plain, 3))
 
 
-def test_chain_refresh_lifts_the_window_when_a_drawn_refresh_is_live():
+def test_hydrapple_unfair_stamp_chain_uses_the_generic_ko_condition():
     """A window may miss its outs but draw ANOTHER refresh, whose replay is a fresh full window. The
     chain branch conditions on missing every out, so it adds disjointly."""
     from math import isclose
@@ -432,17 +432,18 @@ def test_chain_refresh_lifts_the_window_when_a_drawn_refresh_is_live():
     from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
     from common.strategy.refresh import own_draw_count
     from common.strategy.context import _PLAY
-    dx = _shipped_pilot("dragapult_ex")
-    counts = {5: 4, 1080: 1, 9999: 10}                     # outs = 4 Basic Psychic; 1 Unfair Stamp
-    me = {"active": [{"id": 112, "hp": 110, "energies": [5]}], "bench": [],
-          "hand": [{"id": 1227}], "discard": [], "prize": [None] * 3}
-    opp = {"active": [{"id": 666, "hp": 60, "energies": []}], "bench": [], "prize": [None] * 3}
+    ms = _shipped_pilot("mega_starmie")
+    counts = {3: 4, 1080: 1, 9999: 10}                     # outs = 4 Basic Water; 1 Unfair Stamp
+    me = {"active": [{"id": 1031, "hp": 330, "energies": []}], "bench": [],
+          "hand": [{"id": 1227}, {"id": 17}], "discard": [], "prize": [None] * 3}
+    opp = {"active": [{"id": 666, "hp": 230, "energies": []}], "bench": [], "prize": [None] * 3}
     obs = {"current": {"yourIndex": 0, "turn": 6, "players": [me, opp], "energyAttached": False},
            "select": {"option": [{"type": _PLAY, "area": 2, "index": 0}]}}
-    board = Board(turn=6, my_active_id=112, my_active_energy=1, deck_known_counts=counts,
+    board = Board(turn=6, my_active_id=1031, my_active_energy=0, deck_known_counts=counts,
                   my_prizes_remaining=3, opp_prizes_remaining=3, my_pokemon_koed_last_turn=True)
-    dx._best_gamble_line(obs, obs["select"], board, obs["select"]["option"], [])
-    tr = dx._gamble_trace
+    assert ms._condition_holds("pokemon_ko_last_turn", board) is True
+    ms._best_gamble_line(obs, obs["select"], board, obs["select"]["option"], [])
+    tr = ms._gamble_trace
     w = int(own_draw_count(1080, 3, 3))                    # the Stamp's own draw window
     assert tr["evals"][0]["chain_refresh"] == [1, w]
     pool, ns = tr["pool"], _draw_branches(1227, board)
@@ -452,24 +453,25 @@ def test_chain_refresh_lifts_the_window_when_a_drawn_refresh_is_live():
     assert isclose(tr["evals"][0]["p"], round(expect, 3))
     assert expect > sum(hitp(4, pool, n) for n in ns) / len(ns)          # a real lift
     # Same board WITHOUT the KO fact: the drawn Stamp is dead -> plain window, no chain block.
-    dx._gamble_trace = None
-    board2 = Board(turn=6, my_active_id=112, my_active_energy=1, deck_known_counts=counts,
+    ms._gamble_trace = None
+    board2 = Board(turn=6, my_active_id=1031, my_active_energy=0, deck_known_counts=counts,
                    my_prizes_remaining=3, opp_prizes_remaining=3)
-    dx._best_gamble_line(obs, obs["select"], board2, obs["select"]["option"], [])
-    tr2 = dx._gamble_trace
+    assert ms._condition_holds("pokemon_ko_last_turn", board2) is False
+    ms._best_gamble_line(obs, obs["select"], board2, obs["select"]["option"], [])
+    tr2 = ms._gamble_trace
     assert "chain_refresh" not in tr2["evals"][0]
     plain = sum(hitp(4, pool, n) for n in ns) / len(ns)
     assert isclose(tr2["evals"][0]["p"], round(plain, 3))
     # The SUPPORTER leg: play the Stamp (an Item, slot unspent) with 3 Lillie's in deck — they
     # chain (window = Lillie's own draw); played-as-Supporter above they never did.
-    dx._gamble_trace = None
-    counts3 = {5: 4, 1227: 3, 9999: 10}
+    ms._gamble_trace = None
+    counts3 = {3: 4, 1227: 3, 9999: 10}
     me3 = {**me, "hand": [{"id": 1080}]}
     obs3 = {**obs, "current": {**obs["current"], "players": [me3, opp]}}
-    board3 = Board(turn=6, my_active_id=112, my_active_energy=1, deck_known_counts=counts3,
+    board3 = Board(turn=6, my_active_id=1031, my_active_energy=0, deck_known_counts=counts3,
                    my_prizes_remaining=3, opp_prizes_remaining=3)
-    dx._best_gamble_line(obs3, obs3["select"], board3, obs3["select"]["option"], [])
-    tr3 = dx._gamble_trace
+    ms._best_gamble_line(obs3, obs3["select"], board3, obs3["select"]["option"], [])
+    tr3 = ms._gamble_trace
     w3 = int(own_draw_count(1227, 3, 3))
     assert tr3["evals"][0]["chain_refresh"] == [3, w3]
 
