@@ -38,12 +38,8 @@ EPSILON = 0.005
 def _bench_max(model) -> int:
     """The engine's own ``benchMax`` for my side, or `board_delta`'s fallback — so the two halves of
     "is this deploy legal" cannot disagree about the cap."""
-    from common.board_delta import _BENCH_MAX
-    obs = getattr(model, "source_obs", None) or {}
-    players = ((obs.get("current") or {}).get("players")) or []
-    seat = int(getattr(model, "my_index", 0))
-    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-    return int(me.get("benchMax") or _BENCH_MAX)
+    from common.board_delta import bench_max
+    return bench_max(getattr(model, "source_obs", None) or {}, int(getattr(model, "my_index", 0)))
 
 
 #: ADR-0095 decision 1's six tiers over StateModel facts. The two Pilot-side KO_SCORE nuances are

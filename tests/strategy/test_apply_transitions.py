@@ -305,7 +305,7 @@ def test_the_CHOICE_branch_changes_the_SHAPE_and_leaves_the_point_transition_exa
 
 @pytest.mark.req("REQ-APPLY-0002")
 def test_expansion_is_OPT_IN_at_the_seam_and_carries_no_deployment_flag():
-    """Pinned where an implementer reading the retreat transition will meet it. The `PROFILE` flag
+    """Asserted where an implementer reading the retreat transition will meet it. The `PROFILE` flag
     is RETIRED (Issue #446): the composer opts in unconditionally, so a knob it never read misled."""
     import inspect
 

@@ -317,6 +317,14 @@ def _stadium_ref(current: dict, combat) -> str:
     return f"{card_id} {getattr(_stat(combat, card_id), 'name', '?')}"
 
 
+def bench_max(obs: dict, seat_index: int) -> int:
+    """A seat's Bench CAP — the engine's own ``benchMax``, or this module's fallback. One reader, so
+    the seam that fills the Bench and the seam that asks whether it is full cannot disagree."""
+    players = ((obs or {}).get("current") or {}).get("players") or []
+    me = players[seat_index] if 0 <= seat_index < len(players) and players[seat_index] else {}
+    return int(me.get("benchMax") or _BENCH_MAX)
+
+
 def bench_body(card_id, stat, *, seat_index: int, serial) -> dict:
     """One freshly benched body at the PRINTED maximum, nothing attached — field-for-field the
     engine's own renderer. The Stadium's arrival tax is :func:`apply_bench_arrival`'s, not this."""

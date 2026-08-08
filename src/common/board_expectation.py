@@ -4,7 +4,7 @@ Where `board_delta` returns ONE board, a draw/search has a DISTRIBUTION. `apply_
 frozen `OutcomeClass` / `Expectation` shapes; this only fills them. Never a sampled engine shuffle,
 and class identity is taken AFTER the reveal (ADR-0091).
 
-**LIVE at runtime** — `composer._one_ply` calls :func:`expectation` for every revealing option."""
+**LIVE at runtime** — `composer._one_ply` calls :func:`expectation` for a revealing `_PLAY`."""
 from __future__ import annotations
 
 from typing import NoReturn
@@ -163,7 +163,13 @@ def _cost_indices(model, option, legs, *, seat_index, card_id, name, shed) -> tu
     return legal
 
 
-def _dest_of(legs, card_id, name):
+def _found_serial(card_id: int, ordinal: int) -> int:
+    """A found card's synthesized `serial`. NEGATIVE so a dump tells it from an observed one, and
+    ordinal-keyed because `-card_id` alone collides when one class delivers two of the same card."""
+    return -(card_id * 100 + ordinal)
+
+
+def _dest_of(legs, *, card_id, name):
     """The ONE place this card's delivery lands, or None for a hand write. Mirrors `_cost_indices`'
     single-value discipline: a card whose legs disagree has no single destination to compose with."""
     dests = {leg.get("dest") for leg in legs.legs}
@@ -175,11 +181,10 @@ def _dest_of(legs, card_id, name):
 
 
 def _bench_room(model, seat_index: int) -> int:
-    """Open Bench slots on my side, from the engine's own ``benchMax`` — so "is there room" cannot
-    disagree with `board_delta._play`, which reads the same field for a hand-played Basic."""
+    """Open Bench slots on my side. The cap comes from `board_delta.bench_max`, so "is there room"
+    cannot disagree with `_play`, which fills the Bench through the same reader."""
     me = ((model.source_obs.get("current") or {}).get("players") or [{}])[seat_index] or {}
-    cap = int(me.get("benchMax") or board_delta._BENCH_MAX)
-    return max(0, cap - len(me.get("bench") or ()))
+    return max(0, board_delta.bench_max(model.source_obs, seat_index) - len(me.get("bench") or ()))
 
 
 def _place_on_bench(model, me, current, delivered: tuple, *, seat_index, card_id, name) -> tuple:
@@ -195,7 +200,7 @@ def _place_on_bench(model, me, current, delivered: tuple, *, seat_index, card_id
         clauses = board_delta.stadium_clauses_for(current, model.combat, event="bench_play",
                                                   stat=dstat)
         body = board_delta.bench_body(cid, dstat, seat_index=seat_index,
-                                      serial=-(cid * 100 + ordinal))
+                                      serial=_found_serial(cid, ordinal))
         board_delta.apply_bench_arrival(body, clauses, dstat)
         bench.append(body)
         at.append(len(bench) - 1)
@@ -223,8 +228,6 @@ def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple 
     played = board_delta.take_from_hand(me, index, "reveal")
     # `docs/rulebook.txt` L78 — the card that performed the search is out of play once it resolves.
     me["discard"] = list(me.get("discard") or ()) + [played]
-    # Found cards have no observed `serial` — synthesized NEGATIVE so a dump can tell them apart, and
-    # ordinal-keyed because `-card_id` alone collides when one class delivers two of the same card.
     if dest == "bench":
         at = _place_on_bench(model, me, current, delivered, seat_index=seat_index,
                              card_id=card_id, name=name)
@@ -232,7 +235,7 @@ def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple 
         hand = list(me.get("hand") or ())
         at = []
         for ordinal, found in enumerate(delivered):
-            hand.append({"id": found, "serial": -(found * 100 + ordinal),
+            hand.append({"id": found, "serial": _found_serial(found, ordinal),
                          "playerIndex": seat_index})
             at.append(len(hand) - 1)
         me["hand"] = hand
@@ -330,7 +333,7 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
                            "card's structural floor is a different one")
 
     paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
-    dest = _dest_of(legs, card_id, name)
+    dest = _dest_of(legs, card_id=card_id, name=name)
     if dest == "bench":
         # TRUNCATES, never filters: every carrier searches for "up to" N, so one slot delivers one
         # body — dropping the oversized class would refuse a legal play.
