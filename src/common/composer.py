@@ -493,11 +493,6 @@ def choose_target(model, option: Mapping, *, seat_index=None, cap=None, ranker=N
     return rank_targets(model, expectation)
 
 
-#: :data:`apply_option.SCORE_PLACES` under this module's name — deliberately NOT :data:`EPSILON`,
-#: which is a beam BAND (ADR-0128). Aliased so the two orderings cannot be given different floors.
-_SCORE_PLACES = ao.SCORE_PLACES
-
-
 def selection_key(model, candidate: Candidate) -> tuple:
     """The ONE ordering key for choosing among candidates: score, then touched-card Worth, then a
     card-id sort and the menu index. Never falls through to raw generation order."""
@@ -510,7 +505,7 @@ def selection_key(model, candidate: Candidate) -> tuple:
             card_id = int(getattr(stat, "cardId", -1) or -1)
             worth = float(model.mine.role_worth(stat.cardId))
     index = candidate.first_index
-    return (bool(candidate.coverage_gap), -round(candidate.score, _SCORE_PLACES), -worth, card_id,
+    return (bool(candidate.coverage_gap), -round(candidate.score, ao.SCORE_PLACES), -worth, card_id,
             index if index is not None else 1 << 30)
 
 
@@ -586,8 +581,8 @@ def _starts_with_gust(model, candidate: Candidate) -> bool:
 
 def _same_terminal_payoff(candidate: Candidate, direct: Candidate) -> bool:
     """The gust line takes the same prizes as an available direct active Knock Out."""
-    return (round(float(candidate.terminal_ev), _SCORE_PLACES)
-            == round(float(direct.terminal_ev), _SCORE_PLACES))
+    return (round(float(candidate.terminal_ev), ao.SCORE_PLACES)
+            == round(float(direct.terminal_ev), ao.SCORE_PLACES))
 
 
 def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:

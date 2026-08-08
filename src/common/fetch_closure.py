@@ -77,6 +77,9 @@ def fetch_target_matches(clause: dict, stat, *, reading: str = REACH) -> bool:
     :data:`REACH` / :data:`DEADNESS` / :data:`WINDOW` readings? The default is the safe one."""
     if stat is None:
         return False
+    # An unknown name would otherwise be a FOURTH reading — wider than all three, since every gate
+    # below is spelled against a named one. Falls back to the safe reading rather than raising.
+    reading = reading if reading in READINGS else REACH
     if reading == REACH and not fetch_is_unconditional(clause):
         return False              # not an unconditional, decidable whole-deck search — never an edge
     deadness = reading == DEADNESS

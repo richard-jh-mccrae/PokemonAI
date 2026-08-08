@@ -134,6 +134,33 @@ this issue's.
 handed over — the thing the composer differences on. The per-group form costs one model build per
 candidate and is exact.
 
+## Found at review — four defects, three of them in the first build
+
+The two-axis `/code-review` was told the spec was **self-filed** and given the load-bearing claim to
+verify at source. It confirmed both premises (the empty-pool trap and the `D + H` identity), swept
+all five decklists to confirm the scope claim, and then found four things worth the pass:
+
+1. **The promotion was a lie in the first build.** Decision 4 says the bracket is promoted *"rather
+   than copied"* — and `window_classes` computed its whiff from its own all-zero recursion branch, so
+   `window_miss_probability` had no production caller outside `draw_hit_with_engines` and both
+   docstrings described a module that did not call it. Fixed by SEEDING `()` from the public bracket
+   and refusing to let `emit` write it, so the whiff has one definition; the brute-force pin guards the
+   equality it used to assume.
+2. **A refusal that named every field made its own regression test vacuous.** The merged message
+   spelled out `trigger` / `condition` / `name_family` whatever fired, so the Hassel (`condition`) and
+   Hop's Bag (`name_family`) rows of the must-still-refuse test passed on a substring of the
+   explanation rather than the diagnosis. The message now names only what fired, and the test asserts
+   the *absence* of every other field's name.
+3. **An unknown `reading` was a fourth, wider reading.** Every gate is spelled against a named one, so
+   a typo skipped REACH's unconditional gate AND WINDOW's narrowing at once — the ADR-0073 unsoundness
+   class, arrived at by accident. Unrecognised names now fall back to REACH.
+4. **The promotion left `draw_hit_probability` as a duplicate**, since it is exactly the miss bracket
+   inverted on every branch. It now delegates, pinned byte-identical to the retired inline form across
+   a 12k-case grid plus junk input.
+
+Also: `composer._SCORE_PLACES` survived as a private alias that `planner` imported across a module
+boundary, defeating the point of moving the floor. Deleted; both read `apply_option.SCORE_PLACES`.
+
 ## Consequences
 
 - **All 30 Pokégear 3.0 options enumerate**, at 5–7 classes each (25 of them 7), zero truncated, mass

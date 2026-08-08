@@ -11,7 +11,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 sys.path.insert(0, str(REPO / "src"))
 from common.effects import CardEffects  # noqa: E402
-from common.fetch_closure import DEADNESS as _DEADNESS, WINDOW as _WINDOW  # noqa: E402
+from common.fetch_closure import (DEADNESS as _DEADNESS, REACH as _REACH,  # noqa: E402
+                                  WINDOW as _WINDOW)
 
 
 def _deck_ids(agent) -> set:
@@ -397,6 +398,19 @@ def test_the_window_reading_resolves_supporter_and_the_dig_that_reach_still_refu
     assert fetch_closure.fetch_target_matches(gear, supporter) is False
     # `any` names no class at all, so it stays DEADNESS-only under every reading (nothing in scope).
     assert fetch_closure.fetch_target_matches({"target": "any"}, supporter, reading=_WINDOW) is False
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_an_unknown_reading_falls_back_to_REACH_rather_than_becoming_a_FOURTH_one():
+    """Every gate is spelled against a NAMED reading, so an unrecognised one would skip reach's
+    unconditional gate AND window's narrowing at once — wider than all three, the ADR-0073 defect."""
+    from common import fetch_closure
+    ms = _shipped_pilot("mega_starmie")
+    supporter, gear = ms.stats.get(1225), next(iter(ms.effects.clauses(1122)))
+    for junk in ("Window", "window ", "", None, 0):
+        assert (fetch_closure.fetch_target_matches(gear, supporter, reading=junk)
+                is fetch_closure.fetch_target_matches(gear, supporter, reading=_REACH)) is True
+    assert fetch_closure.READINGS == {_REACH, _DEADNESS, _WINDOW}
 
 
 @pytest.mark.req("REQ-WORTH-0002")

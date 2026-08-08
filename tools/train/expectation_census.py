@@ -41,8 +41,8 @@ from train.apply_parity import TRACES, _card_of, chosen_option, load, offline_co
 #: and ordered MOST-SPECIFIC-FIRST.
 _BUCKETS = (
     "more than one revealing clause", "no `draw`/`fetch` clause", "consults RNG",
-    "its `cost` names no target", "`amount`", "which this seam cannot decide",
-    "DIFFERENT dig depths", "a dig on CONJUNCTION legs", "`score` oracle",
+    "its `cost` names no target", "`amount`", "this seam cannot decide",
+    "DIFFERENT dig depths", "a dig on CONJUNCTION legs",
     "only an Item or a Supporter", "`dest`", "no target it can reach is still unseen",
     "a `draw` is an n-card window", "-zone search carries NO chance", "clause key(s)",
     "it carries a non-revealing clause", "no target it can reach has any availability",

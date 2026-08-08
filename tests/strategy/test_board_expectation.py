@@ -618,6 +618,41 @@ def test_the_window_is_the_deck_but_the_pool_it_is_drawn_from_is_deck_plus_hidde
         1.0 - deck_odds.window_miss_probability(unseen, deck + hidden, window), 12)
 
 
+def test_the_hit_form_is_the_miss_form_inverted_over_the_whole_input_grid():
+    """`draw_hit_probability` DELEGATES to the miss bracket, so the two cannot drift. Byte-identical
+    to the retired inline form on every input, junk included — the fail directions invert together."""
+    from itertools import product
+    from math import comb
+
+    def retired(copies, pool, draws):
+        try:
+            c, p, n = int(copies), int(pool), int(draws)
+        except Exception:
+            return 0.0
+        if c <= 0 or p <= 0:
+            return 0.0
+        n = min(n, p)
+        if n <= 0:
+            return 0.0
+        if c >= p:
+            return 1.0
+        return 1.0 - comb(p - c, n) / comb(p, n)
+
+    grid = list(product(range(-3, 20), repeat=3))
+    assert all(retired(*a) == deck_odds.draw_hit_probability(*a) for a in grid), "the forms drifted"
+    assert all(retired(j, 40, 7) == deck_odds.draw_hit_probability(j, 40, 7)
+               for j in (None, "x", 1.5, [], object()))
+
+
+def test_the_dig_whiff_and_the_public_miss_bracket_are_ONE_number():
+    """The bracket is promoted, not copied: `window_classes` seeds `()` from it rather than letting
+    its own all-zero branch produce a second answer that could quietly disagree."""
+    order, copies, pool, window = (1, 2), {1: 3, 2: 2}, 20, 6
+    classes = be.window_classes(order, copies, pool, window, 1)
+    assert classes[()] == deck_odds.window_miss_probability(5, pool, window)
+    assert round(sum(classes.values()), 12) == 1.0
+
+
 @pytest.mark.parametrize("groups, pool, window, take", [
     (((1, 2), (2, 3), (3, 1)), 10, 4, 2),          # a same-group PAIR is reachable
     (((1, 4), (2, 2), (3, 3), (4, 1)), 14, 5, 2),
@@ -768,7 +803,7 @@ def test_a_reveal_declared_on_a_BODY_is_an_ability_and_refuses_as_one():
 def test_an_on_bench_play_trigger_passes_the_ability_gate_and_refuses_on_its_CLAUSE():
     """`trigger: on_bench_play` DOES ride the `_PLAY`, so it passes the ability gate and refuses on
     what is actually wrong with it — the gate discriminates rather than catching a whole side."""
-    with pytest.raises(bd.Unmodellable, match=r"carries \['trigger'\]"):
+    with pytest.raises(bd.Unmodellable, match=r"cannot decide `trigger`"):
         be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option(), score=state_value)
 
 
@@ -786,8 +821,8 @@ _OUT_OF_SCOPE_DIGS = [
 
 @pytest.mark.parametrize("card_id, name, field", _OUT_OF_SCOPE_DIGS)
 def test_admitting_the_dig_field_admitted_nothing_else_in_the_family(card_id, name, field):
-    """The regression an over-broad gate would cause. Each row still refuses, and the refusal NAMES
-    its own field — a shared message would hide which of them the seam actually cannot decide."""
+    """The regression an over-broad gate would cause. Each row still refuses, and the refusal names
+    ONLY the field that fired — a message listing all of them passes every row without grading one."""
     from common.effects import CardEffects
     clauses = list(CardEffects.load().clauses(card_id))
     assert clauses, f"{card_id} {name}: no compendium row, so this test is grading nothing"
@@ -797,6 +832,9 @@ def test_admitting_the_dig_field_admitted_nothing_else_in_the_family(card_id, na
             be._check_clause(clause, card_id, name)
         refusals.append(str(caught.value))
     assert any(field in message for message in refusals), refusals
+    others = {f for _cid, _name, f in _OUT_OF_SCOPE_DIGS if f != field} | {"dig`"}
+    assert not [f for f in others if any(f in m for m in refusals)], (
+        f"the refusal names a field that did not fire, so every row would pass: {refusals}")
 
 
 def test_the_card_type_floor_is_now_UNREACHABLE_for_the_shipped_pool():

@@ -43,6 +43,14 @@ _HANDLED_FETCH_KEYS = frozenset({
     "cost", "cost_required",
 })
 
+#: The clause fields this seam cannot decide, each with its OWN reason — the refusal names only the
+#: ones that fired, so a test can tell which, and `dig` is absent because ADR-0133 prices it.
+_UNDECIDABLE_FETCH_FIELDS: dict[str, str] = {
+    "trigger": "fires off some other event than this play",
+    "condition": "reads board history the snapshot does not hold",
+    "name_family": "needs a pool index keyed by printed name",
+}
+
 _HAMMER_COIN = {"kind": "coin", "effect": "discard_opp_energy", "amount": 1}
 # The coverage exit names these complete cards. The draw-count oracle remains the source of their
 # values; partial refreshes must stay on the generic fail-closed path.
@@ -96,12 +104,10 @@ def _check_clause(clause: dict, card_id, name) -> None:
             "case's honest lower bound")
     # NOT `fetch_is_unconditional`: that is an ENDORSER's question and this node enumerates. A `dig`
     # is admitted because the window is PRICED (ADR-0133); the other three stay undecidable here.
-    undecidable = sorted(f for f in ("trigger", "condition", "name_family") if clause.get(f))
+    undecidable = [f for f in _UNDECIDABLE_FETCH_FIELDS if clause.get(f)]
     if undecidable:
-        _no(card_id, name, f"it carries {undecidable}, which this seam cannot decide — a `trigger` "
-                           f"fires off some other event, a `condition` reads board history the "
-                           f"snapshot does not hold, and a `name_family` needs a pool index keyed by "
-                           f"printed name")
+        _no(card_id, name, "this seam cannot decide " + "; ".join(
+            f"`{f}`, which {_UNDECIDABLE_FETCH_FIELDS[f]}" for f in undecidable))
     if clause.get("zone") != "deck":
         _no(card_id, name, f"a {clause.get('zone')!r}-zone search carries NO chance — that zone is "
                            f"visible — so it is a pure CHOICE node, not an expectation")
@@ -408,30 +414,34 @@ def window_classes(order: tuple, copies: dict, pool: int, window: int, take: int
     look at ``pool`` reveals. EXACT, sums to 1.0, and ``()`` is the whiff (ADR-0133)."""
     pool, window, take = int(pool), min(int(window), int(pool)), int(take)
     counts = [int(copies.get(cid, 0)) for cid in order]
-    cum, running = [0], 0
+    cum, running = [0], 0      # `cum[i]` = copies ranked ABOVE group `i`; `cum[-1]` = every match
     for c in counts:
         running += c
         cum.append(running)
     total = comb(pool, window) if 0 <= window <= pool else 0
     if total <= 0 or take < 1:
         return {(): 1.0}
-    out: dict = {}
+    # ONE definition of the whiff — the shared bracket, not this enumerator's all-zero branch, which
+    # is why `emit` will not write `()` and why a zero-mass whiff is absent rather than present at 0.
+    whiff = deck_odds.window_miss_probability(cum[-1], pool, window)
+    out: dict = {(): whiff} if whiff > 0.0 else {}
 
     def emit(prefix: tuple, ways: float) -> None:
         klass = tuple(sorted(cid for cid, a in zip(order, prefix) for _ in range(a)))
-        out[klass] = out.get(klass, 0.0) + ways / total
+        if klass:
+            out[klass] = out.get(klass, 0.0) + ways / total
 
-    def walk(i: int, left: int, prefix: tuple, ways: int) -> None:
+    def walk(i: int, slots: int, prefix: tuple, ways: int) -> None:
         if i == len(order):        # every group ranged over: the look held fewer than `take` matches
             rest = window - sum(prefix)
             if 0 <= rest <= pool - cum[i]:
                 emit(prefix, ways * comb(pool - cum[i], rest))
             return
-        for a in range(min(counts[i], left) + 1):
-            if a < left:           # group not the cutoff, so EXACTLY `a` of it showed up
-                walk(i + 1, left - a, prefix + (a,), ways * comb(counts[i], a))
+        for a in range(min(counts[i], slots) + 1):
+            if a < slots:          # group not the cutoff, so EXACTLY `a` of it showed up
+                walk(i + 1, slots - a, prefix + (a,), ways * comb(counts[i], a))
                 continue
-            # `a == left` fills the delivery HERE, so any b >= a of this group leaves the same class
+            # `a == slots` fills the delivery HERE, so any b >= a of this group leaves the same class
             # and everything ranked below is free: it was never reached.
             mass = sum(ways * comb(counts[i], b) * comb(pool - cum[i + 1], window - sum(prefix) - b)
                        for b in range(a, counts[i] + 1)

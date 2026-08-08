@@ -20,19 +20,8 @@ from math import comb
 
 def draw_hit_probability(copies, pool, draws) -> float:
     """P(≥1 of ``copies`` among ``draws`` from ``pool``) — exact hypergeometric (ADR-0039). Overdraws
-    clamp; bad input → 0.0, the ENDORSER direction (contrast ``p_contains``'s 1.0)."""
-    try:
-        c, p, n = int(copies), int(pool), int(draws)
-    except Exception:
-        return 0.0
-    if c <= 0 or p <= 0:
-        return 0.0
-    n = min(n, p)
-    if n <= 0:
-        return 0.0
-    if c >= p:
-        return 1.0
-    return 1.0 - comb(p - c, n) / comb(p, n)
+    clamp; bad input → 0.0, the ENDORSER direction, which is the MISS's 1.0 read the other way up."""
+    return 1.0 - window_miss_probability(copies, pool, draws)
 
 
 def window_miss_probability(marked, pool, window) -> float:

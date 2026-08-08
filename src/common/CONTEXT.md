@@ -614,8 +614,9 @@ reach — narrows by colour.
 `fetch_target_matches(..., reading=...)` is the single selector, and reach/deadness each carry their
 own memoised target set: `_search_deck_set` (reach) and `_fetch_deadness_set` (deadness, a
 **superset**). No two can be merged: a wider deadness set can only *suppress* a claim, while the reach
-set feeds ENDORSERS where a wider one would *fabricate* one — and narrowing DEADNESS by colour would
-fabricate a whiff the same way.
+set feeds ENDORSERS where a wider one would *fabricate* one. Each of window's two departures from
+reach is safe in only one OTHER direction, not both: resolving `supporter` would fabricate a reach
+claim if allowed there, and the colour narrowing would fabricate a deadness whiff if allowed there.
 _Avoid_: "the fetch predicate" (singular — there is one function, three readings, and conflating them
 is the ADR-0073 defect), whiff (that's the deadness reading's *outcome*, and the window reading's
 *class* — never the reading itself)
