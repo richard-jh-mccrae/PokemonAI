@@ -965,6 +965,19 @@ the opponent's deck/hand/prizes/face-down Active), so its verdict is trusted onl
 _Avoid_: rollout (implies a random playout; this is exact deterministic stepping), Automatic Value Model
 (the learned win-prob estimator — the Engine Search is exact rules, not learned), Scout/Read
 
+**Seeded CARD Continuation**:
+One depth-0, exact-menu `OptionType.CARD` answer replayed through **Engine Search** from the live
+`search_begin_input`; it preserves the engine's effect frame rather than inferring a transition from
+the SelectContext or target card.  The allowed contexts are `SETUP_ACTIVE_POKEMON`,
+`SETUP_BENCH_POKEMON`, `SWITCH`, `TO_ACTIVE`, `TO_HAND`, `DAMAGE`, `HEAL`, `ATTACH_FROM`, and
+`ATTACH_TO`.  No token, off-menu option, two-or-more-required answer, synthesized depth, or other
+context qualifies.  The engine refusal for `SETUP_BENCH_POKEMON` is explicit because native replay
+cannot preserve the opponent Active's `appearThisTurn`; it is never normalised or replaced by a
+context/card rule.  `KIND_COVERAGE[_CARD]` remains `REFUSED` — this is a provenance route, not generic
+CARD modelling.  (Issue #464.)
+_Avoid_: CARD transition (implies a closed-form card/context rule), engine success (the setup-bench
+exception is a result), fallback (would manufacture state the engine did not return)
+
 **Match Planner**:
 The Pilot's match-scale planner and the top of the decision hierarchy — it runs first each turn, above
 the **Turn Planner**. It ranks candidate routes to victory over the whole board and both prize counts

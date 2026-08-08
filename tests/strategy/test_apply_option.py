@@ -191,8 +191,7 @@ def test_terminal_and_undeclared_are_not_rescued_by_a_complete_clause_set():
 
 @pytest.mark.req("REQ-APPLY-0008")
 def test_apply_option_resolves_the_same_way_fate_does():
-    """`apply_option` adds only the refusal SCOPES: a disagreement about the FATE would let the
-    census and the composer price the same option differently, with nothing to say so."""
+    """`apply_option` agrees with `fate`, except CARD's exact seeded-continuation proof it owns."""
     api = object()
     for kind in sorted(set(ao.KIND_COVERAGE) - ao.TERMINAL_KINDS) + [999]:
         for cover in (True, False, None):
@@ -203,6 +202,9 @@ def test_apply_option_resolves_the_same_way_fate_does():
                     r = ao.apply_option(object(), {"type": kind}, **kw)
                     assert isinstance(r, ao.Refusal), (kind, kw)
                     assert r.scope and r.reason.strip(), (kind, kw)
+                    if kind == _CARD:
+                        assert r.scope == ao.OPTION_SCOPE, (kind, kw)
+                        continue
                     # Collapsing kind-scope into option-scope would let a coverage report blame
                     # the KIND for what the OPTION could not do (Issue #382).
                     if want == ao.REFUSED:

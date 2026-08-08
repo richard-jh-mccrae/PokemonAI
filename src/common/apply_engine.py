@@ -16,6 +16,13 @@ silently-unchanged board prices the option at exactly 0.0 delta, which reads as 
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+
+# These are the only CARD SelectContext values whose continuation is replayed from a seed-paired
+# native frame (Issue #464).  They name an engine route, never a hand-written card transition.
+CARD_CONTINUATION_CONTEXTS = frozenset({1, 2, 3, 4, 7, 15, 17, 21, 22})
+
 
 def _seed_zones(me: dict, opp: dict, deck) -> tuple:
     """``(your_deck, your_prize, opp_deck, opp_prize, opp_hand)`` for `search_begin`: a decklist
@@ -47,10 +54,30 @@ def option_index(obs: dict, option) -> int | None:
     for i, candidate in enumerate(menu):
         if candidate is option:
             return i
-    for i, candidate in enumerate(menu):
-        if candidate == option:
-            return i
-    return None
+    equal = [i for i, candidate in enumerate(menu) if candidate == option]
+    # A copied option is admissible only when equality identifies ONE offered option.  Two equal
+    # candidates still name distinct engine indices; choosing the first would be context fallback.
+    return equal[0] if len(equal) == 1 else None
+
+
+def continuation_index(model, option, *, card_kind: int, depth: int) -> int | None:
+    """The exact selected index for a seed-backed depth-0 CARD continuation, else ``None``."""
+    if depth != 0 or not isinstance(option, Mapping) or option.get("type") != card_kind:
+        return None
+    obs = getattr(model, "source_obs", None) or {}
+    if not obs.get("search_begin_input"):
+        return None
+    select = obs.get("select") or {}
+    try:
+        context = int(select.get("context"))
+        minimum = int(select.get("minCount", 0))
+        maximum = int(select.get("maxCount", 1))
+    except (TypeError, ValueError):
+        return None
+    # A menu can offer several cards, but an answer requiring two or more selections is multi-pick.
+    if context not in CARD_CONTINUATION_CONTEXTS or not (0 <= minimum <= 1 <= maximum):
+        return None
+    return option_index(obs, option)
 
 
 def resolve(model, option, *, search_api):
@@ -87,4 +114,4 @@ def resolve(model, option, *, search_api):
     return model.rebuilt(after)
 
 
-__all__ = ("option_index", "resolve")
+__all__ = ("CARD_CONTINUATION_CONTEXTS", "continuation_index", "option_index", "resolve")

@@ -491,6 +491,27 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
+    # The native seed retains effect-frame state a CARD target cannot identify, so this preempts
+    # generic CARD refusal; all other contexts follow `fate` and `_CARD` coverage stays REFUSED.
+    if kind == _CARD:
+        from common import apply_engine
+        if apply_engine.continuation_index(model, option, card_kind=_CARD, depth=depth) is not None:
+            if search_api is None:
+                return refuse(option, "seeded CARD continuation has no `_search_api` seam to replay its "
+                                      "live engine frame through", scope=NO_ENGINE_SCOPE)
+            after = apply_engine.resolve(model, option, search_api=search_api)
+            if after is None:
+                return refuse(
+                    option,
+                    "seeded CARD continuation engine-refused — no state was normalised, no success "
+                    "was synthesized, and no context/card fallback was used",
+                    scope=NO_ENGINE_SCOPE)
+            return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+        return refuse(
+            option,
+            "unowned CARD select — only exact, depth-0 seeded continuations in Issue #464's context "
+            "allowlist may use the engine; this call has no context/card fallback",
+            scope=OPTION_SCOPE)
     # Asked once, here, and threaded into `fate` so the two cannot disagree about the same option.
     deferred = False
     if expand_deferred_targets:
