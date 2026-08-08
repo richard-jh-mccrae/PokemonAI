@@ -145,9 +145,9 @@ them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + c
   `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
 - **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior; verify against the trace);
-  a `scope: turn` correction with a `turn_plan` note → the **develop-rung rulebook** (`references/routing.md`:
-  route on the proposal's `develop_class` — `rung-right` → `rule-retirement`, `leaf-misrank` → planner-code
-  leaf/gate tune or capability-gap when cross-turn); lethal/planned → `planner-code`; posture-mismatch →
+  a `scope: turn` correction with a `turn_plan` note carries no machine verdict — route it generically
+  and read `references/routing.md` for the rule-retirement proposal shape; lethal/planned →
+  `planner-code`; posture-mismatch →
   `matchup-brief` (or `/matchup-genie`); else → `general-hypothesis`. Never a deck-agnostic weight for a
   one-archetype misplay, never a `when()` for a Solver/Planner-driven decision, **never a weight for a
   scoped blunder** (it never entered the fit).

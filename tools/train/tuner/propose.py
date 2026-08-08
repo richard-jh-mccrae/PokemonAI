@@ -15,7 +15,6 @@ from dataclasses import dataclass
 
 from train.blunder.correction import is_critical
 from train.blunder.reviewed import review_key
-from train.tuner.develop import classify_develop_correction
 
 _SEED_WEIGHT = 20.0   # normal-preference band (docs/weights.md)
 
@@ -37,9 +36,6 @@ class ProposedHypothesis:
     # can fix it; fix lives in planner.py / lethal.py. /blunder-buster routes on these (ADR-0030/0031).
     planner_committed: bool = False   # live_trace.planned non-null (Turn Planner committed a line)
     lethal_locked: bool = False       # live_trace.lethal non-null (Lethal Solver locked a win)
-    plan_candidates: list | None = None  # the develop rung's ranked end-boards — a sequencing
-                                      # correction sits beside the alternatives it out-scored
-    develop_class: dict | None = None  # `classify_develop_correction`'s verdict. Sparse.
     # Posture (ADR-0041): a matchup-doctrine miss routes to the archetype's Brief / recognition,
     # never a generic weight or a `when()`.
     posture_mismatch: bool = False    # human flagged the opponent Read WRONG at this decision
@@ -100,11 +96,6 @@ def propose_hypothesis(correction, *, attribution: str | None = None) -> Propose
         critical=is_critical(correction.rationale),
         planner_committed=live.get("planned") is not None,
         lethal_locked=live.get("lethal") is not None,
-        plan_candidates=live.get("plan_candidates"),
-        develop_class=(classify_develop_correction(correction)   # Phase-3: the develop-rung verdict for
-                       if correction.scope == "turn"             # a turn_plan tag (rung-right / leaf-misrank
-                       and getattr(correction, "turn_plan", None) else None),  # / inactive), else sparse
-
         posture_mismatch=bool(getattr(correction, "posture_mismatch", False)),
         believed_archetype=believed_archetype(correction),
         scope=correction.scope, subject=correction.subject, seat=correction.seat,

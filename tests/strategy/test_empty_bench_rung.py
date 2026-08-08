@@ -137,7 +137,7 @@ def test_the_guard_covers_the_PLANNER_branch_too():
 
 @pytest.mark.req("REQ-DEPLOY-0010")
 def test_when_the_guard_overrides_the_planner_no_line_is_reported():
-    """`planned.next_step == chosen` is an invariant of the emitted record that the `plan_candidates`
+    """`planned.next_step == chosen` is an invariant of the emitted record that the `planned`
     telemetry rests on. Forced here, because the live drive only sometimes reaches an empty Bench."""
     stats = {ATTACKER: CardStat(ATTACKER, synthetic=True, name="attacker", hp=200, energyType=3, minAttackCost=1,
                                 minCostDamage=100, maxDamage=100, attacks=(ATK,)),
