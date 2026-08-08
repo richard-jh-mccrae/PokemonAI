@@ -432,6 +432,10 @@ def test_the_window_reading_applies_energy_type_to_a_POKEMON_target_and_the_othe
     # DEADNESS must stay WIDE: narrowing an `all(gone)` conjunction FABRICATES a whiff claim (ADR-0073).
     assert all(fetch_closure.fetch_target_matches(leg, stats.get(cid), reading=_DEADNESS)
                for cid in illegal)
+    # WHICH readings narrow is one SET, so PR #471 adding REACH is a visible line rather than a
+    # conflict resolution that silently reverts whichever of the two merges first.
+    assert _DEADNESS not in fetch_closure._COLOUR_NARROWED_READINGS
+    assert _WINDOW in fetch_closure._COLOUR_NARROWED_READINGS
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -555,7 +559,7 @@ def test_deadness_refuses_the_colour_narrowing_so_no_whiff_is_fabricated(real_st
     find it. Suppressing a claim is this module's safe direction; inventing one never is."""
     from common import fetch_closure
     assert fetch_closure.fetch_target_matches(_gong_pokemon_clause(), real_stats.get(MEOWTH_EX),
-                                              deadness=True) is True
+                                              reading=fetch_closure.DEADNESS) is True
     ml = _shipped_pilot("mega_lucario")
     reach, dead = ml._search_deck_set(FIGHTING_GONG), ml._fetch_deadness_set(FIGHTING_GONG)
     assert MEOWTH_EX not in reach and MEOWTH_EX in dead
@@ -578,7 +582,7 @@ def test_the_colour_narrowing_binds_every_pokemon_class_and_reads_a_populated_fi
             assert fc.fetch_target_matches({"target": target, "energy_type": st.energyType}, st)
             assert fc.fetch_target_matches({"target": target, "energy_type": wrong}, st) is False
             assert fc.fetch_target_matches({"target": target, "energy_type": wrong}, st,
-                                           deadness=True) is True
+                                           reading=fc.DEADNESS) is True
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -590,7 +594,8 @@ def test_a_trainer_never_reaches_the_colour_predicate(real_stats):
     assert (gear.energyType, gear.is_pokemon) == (0, False)
     assert fetch_closure.fetch_target_matches({"target": "pokemon", "energy_type": 0}, gear) is False
     assert fetch_closure.fetch_target_matches({"target": "supporter", "energy_type": 0},
-                                              real_stats.get(1225), deadness=True) is True
+                                              real_stats.get(1225),
+                                              reading=fetch_closure.DEADNESS) is True
 
 
 # `reveal_legs` is the ONE reader of the multi-leg reveal RELATION, for both `board_expectation` and

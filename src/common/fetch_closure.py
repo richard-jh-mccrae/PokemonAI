@@ -62,9 +62,8 @@ def _pokemon_body_matches(clause: dict, stat, reading: str) -> bool:
     if clause.get("no_ability") and getattr(stat, "hasAbility", False):
         return False
     etype = clause.get("energy_type")
-    # A NARROWING: safe for an ENDORSER's `any(reachable)` (REACH) and for an ENUMERATOR (WINDOW);
-    # unsafe for DEADNESS's `all(gone)`, which a narrower set satisfies too early and so fabricates a
-    # whiff (ADR-0073). Only bodies reach here, so 0 unambiguously means {C}, not "not applicable".
+    # Which readings narrow is `_COLOUR_NARROWED_READINGS`'s answer. Only BODIES reach here, so a 0
+    # unambiguously means {C} rather than "not applicable" (ADR-0073 §3's caveat, now stale).
     if (reading in _COLOUR_NARROWED_READINGS and etype is not None
             and getattr(stat, "energyType", None) != etype):
         return False
