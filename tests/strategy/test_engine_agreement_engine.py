@@ -93,57 +93,6 @@ def _cascade_reveals(name, agent):
 
 @pytest.mark.req("REQ-CGPY-M3-0012")
 @pytest.mark.parametrize("name,agent", SEEDED_FIXTURES, ids=lambda v: v)
-def test_engine_confirms_win_verdicts_agree(name, agent):
-    native, py = _both_verdicts(name, agent)
-    assert native is not None, f"{name}: native verdict unavailable — fixture seed broken?"
-    assert py == native or py is None, (
-        f"{name}: cgpy verdict {py!r} contradicts native {native!r}")
-
-
-@pytest.mark.req("REQ-CGPY-M3-0012")
-def test_agreement_is_not_vacuous():
-    """The twin must decide the decidable, or the agreement gate passes while proving nothing."""
-    native, py = _both_verdicts("ms_lethal_recover_energy_to_win_f110", "mega_starmie")
-    assert native is True and py is True
-
-
-def _cascade_reveals(name, agent):
-    """The engine-RNG reveals ``name``'s cascade consumed. A bare SHUFFLE, an identity-picked search
-    and the win's own PRIZE take are deliberately NOT counted: none can move the verdict (ADR-0050)."""
-    from cg import api as cgapi
-
-    fx = _fixture(name)
-    yi = ((fx["obs"].get("current") or {}).get("yourIndex")) or 0
-    positional = {(int(cgapi.AreaType.DECK), int(cgapi.AreaType.LOOKING)),
-                  (int(cgapi.AreaType.DECK), int(cgapi.AreaType.DISCARD))}
-    seen = set()
-
-    def _collect(st):
-        for lg in (getattr(st.observation, "logs", None) or ()):
-            t = getattr(lg, "type", None)
-            if t == cgapi.LogType.COIN:
-                seen.add("COIN")
-            elif getattr(lg, "playerIndex", None) != yi:
-                continue
-            elif t == cgapi.LogType.DRAW:
-                seen.add("DRAW")
-            elif t == cgapi.LogType.MOVE_CARD and (int(getattr(lg, "fromArea", 0) or 0),
-                                                   int(getattr(lg, "toArea", 0) or 0)) in positional:
-                seen.add("DECK_TOP_REVEAL")
-        return st
-
-    begin, step = cgapi.search_begin, cgapi.search_step
-    cgapi.search_begin = lambda *a, **kw: _collect(begin(*a, **kw))
-    cgapi.search_step = lambda *a, **kw: _collect(step(*a, **kw))
-    try:
-        engine_confirms(fx, _pilot(_deck(agent)))
-    finally:
-        cgapi.search_begin, cgapi.search_step = begin, step
-    return seen
-
-
-@pytest.mark.req("REQ-CGPY-M3-0012")
-@pytest.mark.parametrize("name,agent", SEEDED_FIXTURES, ids=lambda v: v)
 def test_every_seeded_cascade_is_really_draw_free(name, agent):
     assert not _cascade_reveals(name, agent), (
         f"{name}: this cascade consumes engine randomness, so its verdict is a sample of the "
