@@ -1,8 +1,8 @@
-"""Turn-plan capture (develop-rung Phase 3, `ADR-0037 (the develop rung it tooled is deleted)`).
+"""Turn-plan capture: the human's ideal line as evidence on a turn-scope Correction.
 
-A turn-scope Correction can carry the human's ideal-line note — `turn_plan = {intended_line,
-expected_end_board}` — so blunder-buster can drive develop-rung rule retirement from it. One sparse,
-backward-compatible field: absent on every non-turn-plan correction, so legacy records are unchanged.
+`turn_plan = {intended_line, expected_end_board}` — blunder-buster reads it as prose, since the rung
+that once classified it machine-side is deleted. One sparse, backward-compatible field: absent on
+every non-turn-plan correction, so legacy records are unchanged.
 """
 import pytest
 

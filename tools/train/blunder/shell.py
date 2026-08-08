@@ -147,7 +147,7 @@ class _Handler(BaseHTTPRequestHandler):
                 attribution=form.get("attribution") or None,
                 posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
                 scope=form.get("scope", "decision"),   # decision | turn (ADR-0049); the Span
-                turn_plan=_turn_plan_from_form(form),   # develop-rung Phase 3: the ideal-line note
+                turn_plan=_turn_plan_from_form(form),   # the human's ideal-line note
             )                                          # is assembled server-side from the Anchor
         except (KeyError, ValueError) as exc:
             return _json(self, {"error": str(exc)}, 400)
@@ -251,7 +251,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <label class="crit" title="blunder-buster resolves CRITICAL blunders first, one at a time, and never leaves one unfixed"><input type="checkbox" id="critical"> Critical</label>
  <label>Rationale — state the <b>general rule</b>, not just this instance</label><textarea id="rationale" placeholder="The rule the agent should learn (e.g. 'snipe the highest-threat benched attacker with energy'), then the intended line. This becomes the when() the Tuner authors."></textarea>
  <div id="turnplan" style="display:none">
-  <label>Intended line — your ideal decision sequence (develop-rung Phase 3)</label>
+  <label>Intended line — your ideal decision sequence</label>
   <textarea id="intended_line" style="height:70px" placeholder="e.g. retreat Cinderace → attach {F} to Solrock → KO the Active"></textarea>
   <label>Expected end-board — what the line sets up (the leaf's target)</label>
   <textarea id="expected_end_board" style="height:55px" placeholder="e.g. Mega Lucario active with 2 {F}, boost line armed for next turn"></textarea>
@@ -349,7 +349,7 @@ function applyScope(){
     :'Correct move(s) — <i>optional</i>: the first divergent option at this anchor';
   $('scopehint').textContent=s==='decision'?''
     :'keyed by the turn, not this frame — every decision of the turn travels with the tag';
-  $('turnplan').style.display=(s==='turn')?'block':'none';   // develop-rung Phase-3 ideal-line note
+  $('turnplan').style.display=(s==='turn')?'block':'none';   // the human's ideal-line note
   if(s==='turn') updateFired();
 }
 // Show which rule(s) the human's `correct` pick currently fires (from the live @T trace's opts.fired),
