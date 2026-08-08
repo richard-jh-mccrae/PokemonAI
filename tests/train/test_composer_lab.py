@@ -65,8 +65,11 @@ def test_every_acceptance_target_has_an_authoritative_ruling():
 def test_the_column_caveat_names_all_three_columns_and_the_override():
     """The `family_diag` lesson: the disambiguating sentence has to be in the OUTPUT, so it is asserted
     on the rendered string rather than on a paraphrase of it."""
-    for needle in ("composer", "chosen", "ruled", "DARK", "ruled_from"):
+    for needle in ("composer", "chosen", "ruled", "MAIN decider", "ABSTAINS", "ruled_from"):
         assert needle in COLUMN_CAVEAT
+    # Issue #446: the caveat used to say the composer was DARK. `planner._composer_line` calls it, so
+    # the word must not come back — a false caveat rides every measurement this lab prints.
+    assert "DARK" not in COLUMN_CAVEAT
 
 
 @pytest.mark.req("REQ-COMPOSERLAB-0003")
