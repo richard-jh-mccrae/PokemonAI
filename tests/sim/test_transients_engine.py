@@ -1,12 +1,9 @@
 """Engine verification of the transient takes-less family (ADR-0033, plan item 4).
 
-Drives a real two-sided battle (probe_resistance style, but BOTH seats attack): the defender's
-Basic uses its takes-less attack (Sigilyph's Wonder Shine class — "During your opponent's next
-turn, this Pokémon takes 40 less damage"), then the attacker hits it and the dealt HP delta must
-be printed − reduction. The grading engine is the authority for the window semantics the tracker
-assumes (grant lives exactly through the opponent's next turn).
+Both seats attack; the dealt HP delta must be printed − reduction. The engine is the authority for
+the window semantics the tracker assumes: the grant lives exactly through the opponent's next turn.
 
-REQ-TRANS-0005: the engine confirms the next-turn reduction the tracker models.
+REQ-TRANS-0005.
 """
 import sys
 from pathlib import Path
@@ -17,9 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 ATTACK, PLAY, ATTACH, CARD, END, YES, NO = 13, 7, 8, 3, 14, 1, 2
 
-# Shaymin (Grass) — type Sigilyph neither resists (Fighting) nor is weak to (Lightning), so
-# ONLY modifier on the hit is Reflect's transient −40 (Okidogi first draft measured 0: engine
-# composed resistance −30 THEN Reflect −40 on the 70 — itself a confirmation, but not clean).
+# Shaymin's Grass is neither resisted nor weak against Sigilyph, so Reflect's −40 is the ONLY
+# modifier on the hit — a type that resisted too would compose two reductions and muddy the read.
 ATTACKER, ATK_ENERGY, ATK_AID, PRINTED = 45, 1, 43, 50     # Shaymin: Rear Kick 50 (plain)
 DEFENDER, DEF_ENERGY, DEF_AID, REDUCTION = 591, 5, 849, 40  # Sigilyph: Reflect — "takes 40 less"
 
@@ -53,8 +49,7 @@ def _hand_ids(obs, seat):
 
 
 def _choose(obs, key, want_attack):
-    """Greedy per-seat driver: play the key basic, attach, ATTACK when offered — BOTH seats.
-    Prefers ``want_attack`` (Sigilyph must use Reflect, not Telekinesis) but takes any attack."""
+    """Greedy per-seat driver. Prefers ``want_attack`` (Sigilyph must Reflect) but takes any attack."""
     opts = (obs.get("select") or {}).get("option") or []
     seat = _seat(obs)
     attacks = [i for i, o in enumerate(opts) if o.get("type") == ATTACK]
@@ -98,7 +93,7 @@ def test_engine_confirms_next_turn_reduction():
             d = next((p for p in ((pl[1] or {}).get("active") or []) if p), None) if len(pl) > 1 else None
             hp = d.get("hp") if (d and d.get("id") == DEFENDER) else None
             if hp is not None and prev_hp is not None and hp < prev_hp:
-                dealt.append(prev_hp - hp)             # one hit on shielded/unshielded Sigilyph
+                dealt.append(prev_hp - hp)
             prev_hp = hp
             mine = _seat(obs) == 0
             obs = battle_select(_choose(obs, ATTACKER if mine else DEFENDER,
@@ -107,8 +102,7 @@ def test_engine_confirms_next_turn_reduction():
                 break
     finally:
         battle_finish()
-    # Sigilyph attacks every turn (its Wonder-Shine-class move), so EVERY hit lands under the
-    # fresh shield: printed 70 − 40 = 30. Any unshielded hit would read 70 — engine's numbers,
-    # not ours, decide.
+    # Sigilyph Reflects every turn, so EVERY hit lands under a fresh shield; an unshielded hit
+    # would read the full printed damage.
     assert dealt, "no hit landed — driver failure, not a model verdict"
     assert all(d == PRINTED - REDUCTION for d in dealt), f"dealt {dealt}, want {PRINTED - REDUCTION}"

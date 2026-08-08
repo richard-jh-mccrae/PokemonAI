@@ -46,14 +46,8 @@ def _film(replay: dict) -> list[dict]:
 
 
 def iter_decisions(replay: dict) -> list[Decision]:
-    """Every option-choice with a recorded selection, in film order.
-
-    The selection for the select prompted at frame ``i`` is recorded in the *next*
-    frame's ``selected`` (the film offsets selection by +1 -- verified: frame i's
-    selection == ``film[i+1].selected``, giving valid option positions for every
-    frame). Frames without a ``select`` with options, or whose selection is missing
-    (the terminal frame), are not Decisions.
-    """
+    """Every option-choice with a recorded selection, in film order. The selection for frame ``i``
+    lives in ``film[i+1].selected`` — the film offsets selection by +1."""
     episode_id = (replay.get("info") or {}).get("EpisodeId")
     film = _film(replay)
     out: list[Decision] = []

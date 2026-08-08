@@ -1,27 +1,20 @@
-"""ADR-0071 — bench survival is a shared-budget Harvest, and the clock accumulates (issue #163).
+"""ADR-0071 — bench survival is a shared-budget Harvest, and the clock accumulates (Issue #163).
 
-The defect: `turns_to_ko_me` asked "can their reachable damage fell THIS body?" once per body. On the
-Bench that damage is a rider, and a rider is a SHARED budget — attacking ends their turn (rules.md
-§5), so one turn of bench damage is exactly one attack's payload. Read per-body, the survival term
-credits rescuing one benched body as though the whole spread were dedicated to it; the opponent just
-redirects the counters. **The rescue only picks which body dies.**
-
-Seam: `CombatMath` over a `DictCardStatProvider` — pure, DLL-free, no Pilot (prior art:
-`test_combat.py`, `test_opponent_target_value.py`).
+Bench damage is a rider and a rider is a SHARED budget: attacking ends their turn (rules.md §5), so
+one turn of bench damage is one attack's payload and rescuing a body only picks which body dies.
+Seam: `CombatMath` over a `DictCardStatProvider` — DLL-free, no Pilot.
 """
 import pytest
 
 from common.strategy.combat import CombatMath, HARVEST_POSSIBLE, HARVEST_UNAVOIDABLE
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 
-# --- my bench ---------------------------------------------------------------------------------
-DREEPY = 601        # 70 HP, 1 prize, `win_condition_base` -> a KEY body
-DUNSPARCE = 602     # 70 HP, 1 prize, NO Role (verified: dragapult_ex declares none)
+DREEPY = 601        # 70 HP, 1 prize, KEY
+DUNSPARCE = 602     # 70 HP, 1 prize, NO Role
 DRAKLOAK = 603      # 90 HP, 1 prize, KEY — what a Dreepy evolves into
 TERA_EX = 604       # takes NO attack damage while Benched (rules.md §11)
 PLAIN_EX = 605      # 2 prizes, no Role
 
-# --- their board ------------------------------------------------------------------------------
 DRAGAPULT = 610     # Phantom Dive: 60 distributable spread ("in any way you like")
 STARMIE = 620       # Jetting Blow: 50 single-target snipe — INDIVISIBLE
 WALL = 630          # no attacks; retreatCost 2 — the promotion gate's subject
@@ -54,7 +47,7 @@ def _combat():
 
 
 def _body(cid, hp, energies=()):
-    """A board body. `hp` is REMAINING hp (pilot.py reads damage as maxHp - hp)."""
+    """`hp` is REMAINING hp (damage is maxHp - hp)."""
     return {"id": cid, "hp": hp, "energies": list(energies)}
 
 
@@ -68,7 +61,6 @@ def _snipe(n, turns=1):
     return ([n] * turns, 0)
 
 
-# ---- the shared budget (decisions 1-2) --------------------------------------------------------
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_spread_is_one_shared_budget_not_a_threshold_per_body():
     o = _combat()
@@ -117,10 +109,8 @@ def test_nothing_in_range_harvests_nothing():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_attack_choice_is_solved_not_pre_filtered_by_total_rider():
-    """WHICH attack they use is part of the choice. Picking the payload by "largest total rider"
-    would take the 70 snipe over the 60 spread — but the snipe fells ONE 20 HP body and the spread
-    fells all three. Under-reading their reach that way is the phantom-safety fail direction
-    ADR-0070 §9 refused, so every candidate is scored and their own objective picks."""
+    """"Largest total rider" would take the 70 snipe over the 60 spread, under-reading their reach —
+    the phantom-safety fail direction ADR-0070 §9 refused."""
     o = _combat()
     bench = [_body(DUNSPARCE, 20), _body(DUNSPARCE, 20), _body(DUNSPARCE, 20)]
     picked = o.bench_harvest(bench, [_snipe(70), _spread(60)], reading=HARVEST_UNAVOIDABLE)
@@ -129,15 +119,13 @@ def test_the_attack_choice_is_solved_not_pre_filtered_by_total_rider():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_an_empty_payload_harvests_nothing():
-    """Distinct from `test_nothing_in_range_harvests_nothing`: there the bodies are out of a real
-    budget's reach; here the opponent has NO bench-rider attack at all, so there is no budget."""
+    """Distinct from out-of-range: here the opponent has NO bench-rider attack, so there is no budget."""
     o = _combat()
     bench = [_body(DREEPY, 10), _body(DUNSPARCE, 10)]
     assert o.bench_harvest(bench, [], reading=HARVEST_POSSIBLE) == frozenset()
     assert o.bench_harvest(bench, [([], 0)], reading=HARVEST_POSSIBLE) == frozenset()
 
 
-# ---- the objective (decision 8) ---------------------------------------------------------------
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_wincon_tiebreak_settles_a_prize_tie():
     o = _combat()
@@ -150,8 +138,7 @@ def test_the_wincon_tiebreak_settles_a_prize_tie():
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_real_prize_difference_outranks_the_wincon_tiebreak():
     o = _combat()
-    # The ex is worth 2 prizes and carries no Role; the Dreepy is KEY but worth 1. Prize wins —
-    # the tie-break is SUB-prize (the `opponent_target_value` discipline).
+    # The wincon tie-break is SUB-prize, so the 2-prize Role-less ex outranks the 1-prize KEY Dreepy.
     bench = [_body(DREEPY, 50), _body(PLAIN_EX, 50)]
     assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE,
                            key_ids=KEY_IDS) == {1}
@@ -165,7 +152,6 @@ def test_with_no_roles_declared_the_objective_is_pure_prize_max():
     assert o.bench_harvest(bench, [_spread(60)], reading=HARVEST_UNAVOIDABLE) == frozenset()
 
 
-# ---- accumulation (decisions 4-5) -------------------------------------------------------------
 def _opp(*bodies):
     return list(bodies)
 
@@ -175,8 +161,7 @@ def test_the_bench_clock_accumulates_instead_of_reading_one_swing():
     o = _combat()
     me = _body(DREEPY, 70)
     they = _opp(_body(DRAGAPULT, 320, energies=[1, 1]))
-    # One Phantom Dive puts 60 on a 70-HP body: it survives the swing but NOT the second turn.
-    # The one-swing read called this "safe for the whole horizon" (max_t + 1).
+    # 60 on a 70-HP body: survives the swing, not the second turn.
     assert o.turns_to_ko_me(me, they, my_benched=True, my_bench=[me],
                             reading=HARVEST_UNAVOIDABLE) == 2
 
@@ -190,14 +175,9 @@ def test_the_active_clock_accumulates_too():
     assert o.turns_to_ko_me(me, they) == 2
 
 
-# ---- the f82 frame the issue was filed from ---------------------------------------------------
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_f82_the_rescue_only_picks_which_body_dies():
-    """dp_evolve_energized_line_body_first_f82 — bench Dreepy 50, Dunsparce 50, Dreepy 50 vs a 60
-    spread. Evolving one Dreepy to Drakloak (50 -> 70 remaining) lifts it out of a single spread's
-    range, and the per-body read credited that at 37.5 damage-points. It buys NOTHING: the counters
-    land on the other Dreepy instead. The DECISION in that frame is Turn-Planner scope (ADR-0070
-    amendment C, #165) — this pins only the survival read underneath it."""
+    """Evolving one Dreepy out of the spread's range buys nothing: the counters land on the other."""
     o = _combat()
     they = _opp(_body(DRAGAPULT, 320, energies=[1, 1]))
 
@@ -213,8 +193,8 @@ def test_f82_the_rescue_only_picks_which_body_dies():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_possible_reading_still_sees_the_threat_the_rescue_reading_discounts():
-    """The two readings are not redundant: `POSSIBLE` must keep calling a redirectable body
-    threatened, or a doom read would grant the whole bench phantom safety."""
+    """`POSSIBLE` must keep calling a redirectable body threatened, or a doom read grants the whole
+    bench phantom safety."""
     o = _combat()
     they = _opp(_body(DRAGAPULT, 320, energies=[1, 1]))
     bench = [_body(DREEPY, 50), _body(DUNSPARCE, 50), _body(DREEPY, 50)]
@@ -227,8 +207,7 @@ def test_the_possible_reading_still_sees_the_threat_the_rescue_reading_discounts
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_an_undeclared_caller_gets_the_conservative_reading_and_a_solo_bench():
-    """`my_bench` omitted -> the body is read alone, and the default reading is POSSIBLE. An
-    undeclared caller must never be handed the optimistic answer (ADR-0070 §9's convention)."""
+    """An undeclared caller must never be handed the optimistic answer (ADR-0070 §9)."""
     o = _combat()
     they = _opp(_body(DRAGAPULT, 320, energies=[1, 1]))
     me = _body(DREEPY, 50)
@@ -238,25 +217,19 @@ def test_an_undeclared_caller_gets_the_conservative_reading_and_a_solo_bench():
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_bodys_survival_depends_on_the_company_it_keeps():
     """Why the evolve decider must SUBSTITUTE the evolved form into the bench rather than read it
-    alone: a juicier bench-mate soaks the shared budget and genuinely buys my body time. Reading the
-    pre-evolution among its bench-mates but the result in isolation would make evolving look
-    fragile for no reason but the company — a fact about the read, not about evolving."""
+    alone: a juicier bench-mate soaks the shared budget and genuinely buys my body time."""
     o = _combat()
     they = _opp(_body(DRAGAPULT, 320, energies=[1, 1]))
     lone = _body(DRAKLOAK, 70)
-    # A 2-prize ex at the same 70 is the better target, and the PAIR (140) does not fit two turns
-    # of spread (120) — so in company my body lives a turn longer than it does alone.
     crowd = [lone, _body(PLAIN_EX, 70)]
     alone = o.turns_to_ko_me(lone, they, my_benched=True, my_bench=[lone],
                              key_ids=KEY_IDS, reading=HARVEST_UNAVOIDABLE)
     among = o.turns_to_ko_me(lone, they, my_benched=True, my_bench=crowd,
                              key_ids=KEY_IDS, reading=HARVEST_UNAVOIDABLE)
     assert alone == 2                 # 60 + 60 >= 70 on the second turn
-    assert among == 3                 # at t=2 the 2-prize ex is the better single target (120 buys
-                                      # only one 70); both fall together at t=3, when 180 covers 140
+    assert among == 3                 # at t=2 the 2-prize ex is the better target; both fall at t=3
 
 
-# ---- the promotion gate (decision 6) ----------------------------------------------------------
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_benched_attacker_waits_on_energy_their_active_does_not_have():
     o = _combat()
@@ -273,9 +246,7 @@ def test_a_benched_attacker_waits_on_energy_their_active_does_not_have():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_gate_opens_when_their_active_is_gone():
-    """Removing their Active is exactly what `survival_shift` does. After a knockout the player
-    chooses a new Active from their Bench for FREE (rulebook.txt:176) — no retreat cost — so the
-    gate must fail open rather than granting phantom safety."""
+    """After a knockout the new Active is promoted for FREE (rulebook.txt:176), so the gate fails open."""
     o = _combat()
     me = _body(DUNSPARCE, 70)
     they = _opp(_body(STARMIE, 300, energies=[1]))   # their Active was removed from the list
@@ -284,9 +255,7 @@ def test_the_gate_opens_when_their_active_is_gone():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_a_switch_enabler_reopens_the_gate():
-    """The gate can only make a threat read LESS pessimistic, so every leg fails open. A Switch we
-    cannot rule out promotes their attacker without paying retreat — under-reading that is the
-    direction CONTEXT.md's Threat Clock forbids ("a survival read must never under-prepare")."""
+    """The gate can only make a threat read LESS pessimistic, so every leg fails open."""
     o = _combat()
     me = _body(DUNSPARCE, 70)
     wall = _body(WALL, 200)                       # retreatCost 2, holding nothing
@@ -303,7 +272,6 @@ def test_their_own_active_is_never_gated():
     assert o.incoming(me, _opp(starmie), 1, opp_active=starmie) == 120
 
 
-# ---- the enabler predicate's fail direction (ADR-0071 decision 6 / amendment H) ----------------
 class _Fn:
     def __init__(self, tags):
         self._t = tags
@@ -329,9 +297,7 @@ def _pilot_stub(opponent, functions):
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_switch_predicate_fails_open_on_every_unknown():
-    """No facade, no functions table, an unrecognized opponent, or an error must all read "assume
-    they can switch" — the opposite fail direction from `_opp_hand_strip_odds`, because this OPENS a
-    threat gate where that one fires a veto."""
+    """Opposite fail direction from `_opp_hand_strip_odds`: this OPENS a threat gate, that fires a veto."""
     assert _pilot_stub(None, _Fn({}))._opp_switch_enabler() is True
     assert _pilot_stub(_Opp({1: 1.0}), None)._opp_switch_enabler() is True
     assert _pilot_stub(_Opp({}), _Fn({}))._opp_switch_enabler() is True      # no confident Read
@@ -339,11 +305,10 @@ def test_the_switch_predicate_fails_open_on_every_unknown():
 
 @pytest.mark.req("REQ-COMBAT-0071")
 def test_the_switch_predicate_closes_only_when_provably_gone():
-    """`copies_left_odds` returns 0 only when every copy is accounted for on board or in discard, so
-    p > 0 is ADR-0067's not-provably-absent test — and a copy in their hidden HAND is unseen, so it
-    keeps the gate open."""
+    """`copies_left_odds` returns 0 only when every copy is on board or in discard, so p > 0 is
+    ADR-0067's not-provably-absent test."""
     fn = _Fn({7: ["switch"], 8: ["draw"]})
     assert _pilot_stub(_Opp({7: 0.4, 8: 1.0}), fn)._opp_switch_enabler() is True    # may hold one
     assert _pilot_stub(_Opp({7: 0.0, 8: 1.0}), fn)._opp_switch_enabler() is False   # all accounted
-    # A deck that runs no switch-class card at all: nothing to rule out, so the gate may fire.
+    # No switch-class card in the deck at all: nothing to rule out.
     assert _pilot_stub(_Opp({8: 1.0}), fn)._opp_switch_enabler() is False

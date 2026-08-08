@@ -20,10 +20,8 @@ DAMAGE = 15  # SelectContext.DAMAGE — choose which Pokémon an attack deals da
 TO_HAND = 7  # SelectContext.TO_HAND — search: choose which card to add to your hand
 
 
-# The fetch doctrine's whiff/redundancy/confirmed-hit signals (`_search_deck_set`) read a search's
-# FETCH clauses from `card_effects.json` (ADR-0032) — the tier that replaced the tag-keyed
-# `_FETCH_FILTERS`. test fetchers carry TAGS only, so mirror the standard fetcher tags to
-# their clauses. Import `fetch_effects` and pass its result as `Pilot(effects=...)`.
+# `_search_deck_set` reads a search's FETCH clauses from `card_effects.json` (ADR-0032), but test
+# fetchers carry TAGS only — so pass `fetch_effects(...)` as `Pilot(effects=...)` to mirror them.
 _TAG_FETCH_CLAUSE = {
     "tutor_pokemon": {"kind": "fetch", "target": "pokemon", "zone": "deck"},
     "tutor_mega": {"kind": "fetch", "target": "mega", "zone": "deck"},
@@ -32,25 +30,14 @@ _TAG_FETCH_CLAUSE = {
 }
 
 
-#: The `cost` a `cost_discard`-tagged fetcher carries in the real compendium.
-#:
-#: The tag says *"this search is paid for"* and the clause says WHAT it costs — two stores, and the
-#: fixture has to mirror both or it builds a card that does not exist. Measured over the shipped
-#: stores: exactly ONE card carries the `cost_discard` Function Tag (1121 Ultra Ball) and its
-#: committed clause is `{"cost": "discard_2", "cost_required": true}`, so the value is that card's
-#: rather than a guess at a family. (Secret Box and Canari carry a `cost` CLAUSE and do NOT carry the
-#: tag — the tag store is the narrower of the two, which is a real inconsistency but not this
-#: helper's to resolve.)
+#: The `cost` a `cost_discard`-tagged fetcher carries in the real compendium. The tag says the
+#: search is PAID FOR and the clause says WHAT: a fixture must mirror both or it builds a fake card.
 _TAG_FETCH_COST = {"cost_discard": {"cost": "discard_2", "cost_required": True}}
 
 
 def fetch_effects(funcs_map: dict):
-    """A `CardEffects` mirroring the standard fetcher TAGS in a test's `CardFunctions` map to
-    their `card_effects.json` FETCH clauses, so a clause-driven `_search_deck_set` sees the fetch-set.
-
-    A cost tag is a MODIFIER on the fetch clause rather than a clause of its own — that is the shape
-    the real store uses (`{"kind": "fetch", …, "cost": "discard_2"}`), and mirroring it as a separate
-    entry would build a card with two effects instead of one paid effect."""
+    """Mirrors the standard fetcher TAGS to their FETCH clauses. A cost tag is a MODIFIER on the
+    fetch clause, never a clause of its own — a separate entry builds two effects, not one paid one."""
     from common.effects import CardEffects
     table = {}
     for cid, tags in funcs_map.items():
@@ -81,42 +68,8 @@ def attack_opt(attack_id: int) -> dict:
 
 def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0,
          energy_card: int = 0, attached_energy=None) -> dict:
-    """A Pokémon on the board with Energy attached, in the engine's REAL two-field shape.
-
-    The engine gives a body TWO Energy fields and they are different facts (`cg/api.py`
-    `Pokemon`)::
-
-        energies:    list[EnergyType]   the UNITS the attached cards provide
-        energyCards: list[Card]         the attached CARDS themselves
-
-    Count-shaped reads take `energies` (`len(...)` is the Energy on the body, and a cost shape is
-    paid in units); identity-shaped reads take `energyCards` (`deck_tracker`, `MySide.visible_counts`
-    and `Pilot._visible_card_counts` all derive *decklist − visible*, and a `DISCARD_ENERGY` option's
-    `energyIndex` indexes the cards). Never conflate them even though Basic Energy makes them
-    coincide (Basic {F} Energy is card id 6 and EnergyType.FIGHTING is 6, per `data/EN_Card_Data.csv`
-    and `cg.api`): the coincidence fails on the very next Energy a test reaches for — **Ignition
-    Energy is card id 17 and renders as `[0, 0, 0]`, three COLORLESS units; Rock Fighting Energy is
-    card id 20 and renders as `[6]`**. Believing the coincidence is exactly the defect Issue #297
-    fixed in `MySide._count_in_play`, and this helper could not express the counter-example.
-
-    Two ways in, and they build the same shape:
-
-    * `energy` / `energy_card` — the uniform sugar: `energy` copies of one card, each providing ONE
-      unit of its own id. Right for the eight Basic Energies, and for the default `energy_card=0`
-      the units are **COLORLESS** and no card is added (so no test gains a phantom card-0
-      attachment). ⚠️ Colourless is a real, specific answer, not a blank: a colourless unit pays a
-      colourless slot and NOTHING else, so `poke(x, energy=3)` against a `{W}{C}{C}` attack is
-      **unpayable** — it is the board two Mist Energy make, not "3 Energy of unspecified type".
-      A test that means "enough Energy to pay THIS attack" must name the colour: pass the Basic
-      Energy's card id and register that card in the test's `DictCardStatProvider`. (Deny Relevance
-      needs the same, for the same reason — it asks *which* Energy is doing the work, matching the
-      body's attached types against the attack's `energyTypes`.)
-    * `attached_energy` — the general form for anything Special: a sequence of `(card_id, units)`
-      pairs, `units` being the EnergyType codes that ONE copy of that card provides. An Ignition
-      plus a Rock Fighting on one body is `[(17, (0, 0, 0)), (20, (6,))]`. Overrides the sugar.
-      Deliberately not spelled `energy_cards` — one character from `energy_card` and a different
-      shape entirely is a typo the reader cannot see.
-    """
+    """``energies`` are UNITS and ``energyCards`` are CARDS — Basic Energy makes them coincide and
+    Ignition does not. ⚠️ `energy_card=0` means COLORLESS, so `poke(x, energy=3)` cannot pay {W}{C}{C}."""
     if attached_energy is None:
         attached_energy = [(energy_card, (energy_card,))] * max(0, int(energy))
     units, cards = [], []
@@ -139,15 +92,8 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
           opp_active=None, opp_bench=(), opp_discard=(), turn: int = 2, prizes: int = 0,
           opp_prizes: int = 0, opp_conditions=(), opp_hand_count: int = 0,
           deck_count: int | None = None) -> dict:
-    """A minimal `current` state with my board/hand (and optionally the opponent's). `prizes` /
-    `opp_prizes` set each player's remaining prize count (length of the `prize` list); 0 leaves it
-    empty (the prior default — no rule read prizes), so a lethal check only fires when a test sets it.
-    `opp_conditions` sets the opponent's Active special-condition flags (e.g. ("poisoned",)) — they
-    ride as booleans on the player dict (PlayerState.poisoned/burned/asleep/paralyzed/confused).
-    `opp_hand_count` sets the opponent's hand size (the obs exposes the count, not the cards) — the
-    magnitude behind a hand-size attacker's forward-doom threat (Alakazam). `deck_count` sets my
-    remaining deck size (`deckCount`); left UNSET by default so the probabilistic deck-odds signal
-    (ADR-0029) stays silent unless a test opts in — keeping every prior test behaviour-neutral."""
+    """`prizes`/`opp_prizes` are remaining prize COUNTS, 0 meaning an empty list; `deck_count` is
+    left UNSET by default so the deck-odds signal (ADR-0029) stays silent unless a test opts in."""
     players = [None, None]
     players[your_index] = {"active": [active] if active else [], "bench": list(bench),
                            "hand": [_hand_card(c) for c in hand], "handCount": len(hand),
@@ -165,10 +111,8 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
 def make_select(options, *, min_count: int = 1, max_count: int = 1,
                 context: int = 0, type: int = 0, current=None, deck=None,
                 remain_counters: int = 0, effect=None) -> dict:
-    """An observation whose `select` offers `options` — i.e. a decision menu. `deck` supplies the
-    revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select).
-    `remain_counters` sets `remainDamageCounter` (the budget at a DAMAGE_COUNTER_ANY spread-placement
-    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`)."""
+    """`deck` supplies the revealed search candidates a DECK (area 1) option indexes into;
+    `remain_counters` is the DAMAGE_COUNTER_ANY budget; `effect` is `{id: sourceCardId, …}`."""
     return {
         "select": {
             "type": type, "context": context,
@@ -182,14 +126,8 @@ def make_select(options, *, min_count: int = 1, max_count: int = 1,
     }
 
 
-# ── the committed parity corpus ─────────────────────────────────────────────────────────────────
-#: The parity traces are the ENGINE's own recorded output, so a census over them is the one way a
-#: test can say what the engine really poses rather than what a fixture author believes it poses.
-#: Three modules had grown their own `glob` + `gzip.open` + context-filter walk of them
-#: (`test_heal_target`, `test_evolve_target`, `test_attach_decider`), which is the many-slightly-
-#: different-ideas-of-what-the-corpus-is shape ADR-0087/ADR-0089 charge for — the corrections corpus
-#: got its single reader (`tests/corpus_helpers.py`) for exactly this reason, and the parity corpus
-#: had none.
+# ── the committed parity corpus ────────────────────────────────────────────────────────────────
+#: The ONE reader of it, for the reason ADR-0087/ADR-0089 gave the corrections corpus one.
 _PARITY = _Path(__file__).resolve().parent / "fixtures" / "parity"
 
 
@@ -200,11 +138,8 @@ def parity_frame(trace: str, index: int) -> dict:
 
 
 def parity_selects(context: int, *, effect_id: int | None = None) -> list:
-    """``[(trace_name, frame_index, select)]`` for every step in the committed parity corpus at
-    `context`, optionally narrowed to one resolving card (`select.effect.id`).
-
-    Ordered by trace filename then frame index, so a census built on it is stable across platforms
-    (`sorted(glob)`, not the filesystem's order)."""
+    """``[(trace_name, frame_index, select)]`` at `context`, optionally narrowed to one resolving
+    card. Ordered by trace filename then frame index, so a census on it is platform-stable."""
     out = []
     for path in sorted(_PARITY.glob("*.trace.json.gz")):
         with _gzip.open(path, "rt", encoding="utf-8") as fh:

@@ -1,22 +1,15 @@
 """Extract the native engine's effect-DSL vocabulary from `src/cg/libcg.so` (ADR-0050).
 
-The Linux build of the engine is not stripped: every `Chain::` effect primitive, `State::` game
-op, and damage-pipeline free function is present as a mangled C++ symbol. This tool mines those
-symbols and freezes them into `src/cgpy/defs/dsl_vocabulary.json` — names, parameter lists, and
-arities. The vocabulary is the checklist the cgpy interpreter implements 1:1, and the drift
-check (`--check`) fails loudly if a future engine update adds/changes symbols (the competition
-warns enums may grow mid-competition — the same applies to the DSL).
-
-Names and arities come from the binary; op *semantics* are pinned behaviorally by the parity
-corpus, never assumed from a name.
+The Linux build is not stripped, so every `Chain::` primitive, `State::` game op and
+damage-pipeline free function is present as a mangled C++ symbol. This mines them into
+`src/cgpy/defs/dsl_vocabulary.json` — the checklist the cgpy interpreter implements 1:1. Names
+and arities come from the binary; op SEMANTICS are pinned behaviorally by the parity corpus.
 
 Usage:
     python tools/parity/extract_dsl.py            # regenerate the committed vocabulary
     python tools/parity/extract_dsl.py --check    # exit 1 if the binary and the file disagree
 
-Demangling uses `c++filt` when available (binutils; present in Git Bash on Windows and on the
-Linux CI runner). Without it the tool still emits mangled names but cannot compute arities.
-"""
+Demangling uses `c++filt` when available; without it the tool emits mangled names but no arities."""
 from __future__ import annotations
 
 import argparse
@@ -78,12 +71,8 @@ def demangle(names: list[str]) -> dict[str, str]:
 
 
 def split_params(sig: str) -> list[str] | None:
-    """Top-level parameter type list of a demangled signature, or None if it has no arg list.
-
-    `Chain::condition(ConditionType, int, ComparatorType)` -> ["ConditionType", "int",
-    "ComparatorType"]. Handles nested template/paren commas by depth tracking; tolerates
-    cv-qualifier suffixes (`State::getEffect() const`).
-    """
+    """Top-level parameter type list of a demangled signature, or None if it has no arg list. Handles
+    nested template/paren commas by depth tracking; tolerates cv-qualifier suffixes."""
     for suffix in (" const", " volatile", " &", " &&"):
         while sig.endswith(suffix):
             sig = sig[: -len(suffix)]

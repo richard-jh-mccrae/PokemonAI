@@ -1,21 +1,16 @@
 """Pin the native engine's undocumented determinism facts (ADR-0050, milestone M0).
 
-The cgpy reimplementation needs several facts the docs don't state and the API doesn't
-guarantee. Each probe here answers one empirically against the live DLL; the findings are
-transcribed into `docs/pyeng/determinism.md` and pinned by `tests/parity/` engine tests.
+Each probe answers one fact empirically against the live DLL; findings are transcribed into
+`docs/pyeng/determinism.md` and pinned by `tests/parity/` engine tests.
 
 Probes:
-  serials    — how card serial numbers map to (seat, submitted deck position); whether the
-               god-view frame-0 deck order is the submitted order or already shuffled
-  options    — raw option-list ordering per select context (rule-fitting evidence)
-  selectdeck — whether a search select's `deck` listing preserves true deck order or is
-               canonicalized (decides how the RevealOracle binds hidden identities)
-  fork       — whether search_begin consumes `your_deck` order as-is (draws follow it) and
-               whether the fork is deterministic across identical calls
+  serials    — how card serials map to (seat, submitted deck position)
+  options    — raw option-list ordering per select context
+  selectdeck — whether a search select's `deck` listing preserves true deck order
+  fork       — whether search_begin consumes `your_deck` order as-is, and is deterministic
   mulligan   — the exact setup/mulligan/DrawCount prompt + log sequence
 
-Usage:  python tools/parity/pin_determinism.py [--probe NAME] [--games N]
-"""
+Usage:  python tools/parity/pin_determinism.py [--probe NAME] [--games N]"""
 from __future__ import annotations
 
 import argparse

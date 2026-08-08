@@ -1,25 +1,10 @@
-"""**A shipped override is checkable against its own evidence** — `attack_overrides.json` against
+"""A shipped override is checkable against its own evidence — `attack_overrides.json` against
 `attack_overrides.provenance.json` (ADR-0108, Issue #224).
 
-`reports/attack_audit/` is gitignored, so before this sidecar a shipped override could only be
-*re-derived* by re-driving the engine, never *checked*. That is not a theoretical gap. Attack 274
-(Skeledirge, Torcherto) shipped `{"scaleVar": "atk_hand", "scalePerUnit": 5}` — an attack that does
-not scale on hand size at all. The fitter is conservative by construction (exact integer fit, zero
-residuals, positive slope, >=3 points) and it *still* emitted that, because bench was a variable the
-harness neither swept nor recorded, so hand size was the only thing it could fit. Nobody could see
-it, because the measurements behind the entry were not in the repo.
+`reports/attack_audit/` is gitignored, so before the sidecar an override could only be *re-derived*,
+never *checked* — which is how attack 274 shipped a scaler on a variable no measurement supported.
 
-These are structural checks over two committed files — no engine, no measurements. Prior art for the
-style: `tests/test_adr_index.py` (a repo-shape invariant asserted straight off the filesystem).
-
-Requirements:
-    REQ-PROV-0001  Every shipped override has exactly one provenance row and every row a shipped
-                   override; every row's `method` is in the closed vocabulary.
-    REQ-PROV-0002  An `engine_fit` row carries the measurement rows that establish it; a row that
-                   was NOT fitted carries no evidence and says what it is instead.
-    REQ-PROV-0003  A row's recorded `fields` equal the shipped table entry EXACTLY — the freeze.
-    REQ-PROV-0004  The `unaudited` id set may only SHRINK. A new unaudited entry fails.
-    REQ-PROV-0005  A `text_verified` row names the issue that owes its measurement.
+Structural checks over two committed files: no engine, no measurements.
 """
 from __future__ import annotations
 
@@ -37,16 +22,8 @@ REPO = Path(__file__).resolve().parents[2]
 _TABLE = REPO / "src" / "common" / "attack_overrides.json"
 _SIDECAR = REPO / "src" / "common" / "attack_overrides.provenance.json"
 
-#: The 111 entries that were already shipped when provenance became a requirement (2026-08-02). The
-#: capture that produced each of them is gone — `reports/attack_audit/measurements.json` exists
-#: nowhere — so they are recorded as unaudited rather than re-derived, and FROZEN at that.
-#:
-#: Asserted as a SUBSET below, never an equality, and the asymmetry is the whole gate: backfilling
-#: one (unaudited -> engine_fit, once a recapture lands) shrinks the set and passes with no edit to
-#: this file, while a NEW unaudited override fails — so "nobody knows where this number came from"
-#: be added silently. Re-driving the pool would change shipped values rather than merely document
-#: them (ADR-0083's Consequences: the old measurements are stale for bench-sensitive attacks), which
-#: is why the debt is recorded rather than paid in one go.
+#: Overrides already shipped when provenance became a requirement, their captures gone. Asserted as
+#: a SUBSET, never an equality: backfilling one must cost no edit here, adding one must fail.
 UNAUDITED_AT_BOOTSTRAP = frozenset({
     6, 25, 52, 55, 64, 75, 81, 91, 126, 138, 173, 177, 195, 226, 228, 244, 259, 261, 326, 350,
     352, 363, 364, 391, 404, 408, 469, 486, 498, 505, 533, 551, 578, 595, 603, 630, 651, 657,
@@ -70,9 +47,7 @@ def entries() -> dict[int, dict]:
 
 @pytest.mark.req("REQ-PROV-0001")
 def test_the_sidecar_and_the_table_cover_exactly_the_same_attacks(table, entries):
-    """The check that would have flagged 274 immediately: an override with no provenance row is an
-    override nobody can check. The reverse also fails — an orphan row describes a fact that is not
-    shipped, which is a sidecar drifting away from the thing it documents."""
+    """An override with no row is one nobody can check; an orphan row is a sidecar already drifting."""
     assert sorted(set(table) - set(entries)) == [], "shipped override with NO provenance row"
     assert sorted(set(entries) - set(table)) == [], "provenance row for an override that is not shipped"
 
@@ -87,10 +62,8 @@ def test_every_row_declares_a_method_from_the_closed_vocabulary(entries):
 
 @pytest.mark.req("REQ-PROV-0003")
 def test_each_row_records_the_value_that_is_actually_shipped(table, entries):
-    """THE FREEZE. The row carries the override's real value, so editing a shipped number without
-    touching its provenance fails here — including for the 111 legacy entries, whose whole status is
-    "this exact value, on no surviving evidence". A hash would do the same job and show the reader
-    two opaque hex strings; the value itself shows them what moved."""
+    """THE FREEZE: editing a shipped number without touching its provenance fails here. The value
+    rather than a hash, so the failure shows what moved."""
     drifted = {aid: (entries[aid].get("fields"), table[aid])
                for aid in sorted(set(table) & set(entries))
                if entries[aid].get("fields") != table[aid]}
@@ -111,17 +84,8 @@ def test_an_engine_fit_carries_the_measurements_that_establish_it(entries):
 
 @pytest.mark.req("REQ-PROV-0002")
 def test_a_scaler_fit_keeps_a_measured_FLAT_axis_not_just_the_axes_that_won(entries):
-    """The rejected axes are load-bearing, not filler — and the assertion has to say so, or the test
-    passes on evidence that proves nothing.
-
-    Counting axes is not enough: a `both_bench` fit wins on `atk_bench` AND `def_bench`, so "at
-    least two axes" is satisfied by the two winners alone, and evidence stripped of the flat
-    hand/energy rows would sail through. What actually carries the argument is a measured axis that
-    is FLAT: 274's hand rows read 100/100 *because the benches are pinned across them*, and that
-    flatness is the whole reason hand size is unfittable now. Its ABSENCE is what let 274 ship
-    `atk_hand` in the first place — a variable no measurement supported, in a record that would have
-    looked complete.
-    """
+    """Counting axes is not enough — a `both_bench` fit wins on two by itself. What carries the
+    argument is a measured axis that stayed FLAT, i.e. a variable measured and RULED OUT."""
     for aid, e in sorted(entries.items()):
         if e.get("method") != METHOD_ENGINE_FIT or "scaleVar" not in e.get("fields", {}):
             continue
@@ -141,13 +105,8 @@ def test_a_scaler_fit_keeps_a_measured_FLAT_axis_not_just_the_axes_that_won(entr
 
 @pytest.mark.req("REQ-PROV-0002")
 def test_no_fit_ships_on_evidence_that_contradicts_itself(entries):
-    """Two measurements agreeing on every controlled variable and disagreeing on the damage do not
-    establish a fact — they show the fact is not established. Vacuous today (no shipped fit has a
-    contradicting pair) and deliberately so: it bites the day a recapture produces one, which is the
-    day someone would otherwise ship an arbitrary survivor of a collapse. `_coin_bounds` in
-    particular still takes its pair from a dict keyed on `coin` alone, so forks measured at
-    different sweep points overwrite each other there — the derived value is an arbitrary survivor,
-    and this is the check that refuses to let one ship quietly."""
+    """Vacuous today, deliberately: it bites the day a recapture produces a contradicting pair.
+    `_coin_bounds` keys on `coin` alone, so forks at different sweep points overwrite each other."""
     for aid, e in sorted(entries.items()):
         if e.get("method") != METHOD_ENGINE_FIT:
             continue
@@ -171,9 +130,8 @@ def test_a_row_that_was_not_fitted_says_so_instead_of_showing_evidence(entries):
 
 @pytest.mark.req("REQ-PROV-0005")
 def test_a_text_verified_row_names_the_issue_that_owes_its_measurement(entries):
-    """A human reading a card's printed sentence is a legitimate way to establish a fact and a debt
-    at the same time. The debt needs an OWNER, or it is a TODO nobody holds — the four entries here
-    are owed by Issue #275, which builds the axes that can actually separate their variables."""
+    """A printed sentence establishes a fact and a debt at once; an unowned debt is a TODO nobody
+    holds. These are owed by Issue #275."""
     for aid, e in sorted(entries.items()):
         if e.get("method") != METHOD_TEXT_VERIFIED:
             continue
@@ -183,9 +141,7 @@ def test_a_text_verified_row_names_the_issue_that_owes_its_measurement(entries):
 
 @pytest.mark.req("REQ-PROV-0004")
 def test_the_unaudited_set_may_only_shrink(entries):
-    """The teeth. Backfilling is welcome and free — flip a row to `engine_fit` and this passes with
-    no edit here. Adding a NEW override nobody can check fails, which is the thing that used to be
-    indistinguishable from adding an audited one."""
+    """The teeth: backfilling to `engine_fit` costs no edit here; a NEW uncheckable override fails."""
     unaudited = {aid for aid, e in entries.items() if e.get("method") == METHOD_UNAUDITED}
     new = sorted(unaudited - UNAUDITED_AT_BOOTSTRAP)
     assert new == [], (
@@ -196,10 +152,8 @@ def test_the_unaudited_set_may_only_shrink(entries):
 
 @pytest.mark.req("REQ-PROV-0004")
 def test_the_recorded_debt_may_only_SHRINK(entries):
-    """The debt ledger, monotone in the same direction as the id set above — deliberately, because
-    an equality here would contradict the sibling test's promise that backfilling costs no edit.
-    Both unmeasured classes may fall to zero without anyone touching this file; either GROWING is
-    a new debt, and a new debt is a decision someone signs for."""
+    """Monotone in the same direction as the id set above; an equality would contradict the sibling
+    test's promise that backfilling costs no edit."""
     counts = {m: sum(1 for e in entries.values() if e.get("method") == m) for m in METHODS}
     assert counts[METHOD_TEXT_VERIFIED] <= 4, (
         f"{counts[METHOD_TEXT_VERIFIED]} text-verified entries (4 at bootstrap, Issue #225's). A new "
@@ -211,14 +165,8 @@ def test_the_recorded_debt_may_only_SHRINK(entries):
 
 @pytest.mark.req("REQ-PROV-0001")
 def test_the_sidecar_is_self_describing_and_its_prose_cannot_drift(entries):
-    """Version and glossary live in the file, so a reader never has to leave it to know what a row
-    claims — and a shape change fails loudly in `load_provenance` instead of being half-parsed.
-
-    Asserted against the generator's own constants, not merely for shape. `main` re-emits
-    `ABOUT`/`METHOD_DOC` rather than echoing the file back, so the module owns this prose; without
-    this equality a hand-edit could leave the file describing a vocabulary the code no longer has —
-    drift, in the one file built to make drift impossible.
-    """
+    """Asserted against the generator's own constants, not merely for shape: `main` re-emits
+    `ABOUT`/`METHOD_DOC`, so a hand-edit could otherwise leave the file describing a dead vocabulary."""
     payload = json.loads(_SIDECAR.read_text(encoding="utf-8"))
     assert payload["version"] == PROVENANCE_VERSION
     assert payload["about"] == ABOUT
@@ -228,10 +176,8 @@ def test_the_sidecar_is_self_describing_and_its_prose_cannot_drift(entries):
 
 @pytest.mark.req("REQ-PROV-0003")
 def test_both_stores_are_committed_with_the_same_line_endings(table, entries):
-    """Dev is Windows, the grader and CI are Linux (CLAUDE.md). `Path.write_text` translates "\\n" to
-    the platform newline, so a generator that inherits it emits a different file on each OS and a
-    regenerate reads as a whole-file rewrite — a 28-line edit once became a 661-line diff that way.
-    The generator pins CRLF; this asserts both stores actually agree with it."""
+    """`Path.write_text` translates "\\n" to the platform newline, so a generator inheriting it emits
+    a different file per OS and a regenerate reads as a whole-file rewrite. The generator pins CRLF."""
     for path in (_TABLE, _SIDECAR):
         raw = path.read_bytes()
         assert raw.count(b"\n") == raw.count(b"\r\n"), f"{path.name} has bare LF line endings"

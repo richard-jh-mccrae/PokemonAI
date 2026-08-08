@@ -1,13 +1,9 @@
 """DOCTRINE: Fetch (Search) — ADR-0023. One file, end to end.
 
-A fetch presents a *choose-from-deck* select (Ultra Ball / Nest Ball / Mega Signal / Buddy-Buddy
-Poffin; tags `search`/`dig`/`bench_fill`/`tutor_*`, NOT raw draw). It is THREE decisions over one
-closed-form value primitive `fetch_value(card, board) = importance × still-lacking × available`:
-(A) whether to play now, (B) what to grab, (C) what to discard — so the play-reason, the grab, and
-the discard agree by construction. The scored sum of the `HYPOTHESES` rungs below IS `fetch_value`
-(no monolithic function — the ADR-0008 idiom); `FetchMixin` is the Pilot-side comparator/oracle
-(`_grab_value_of`) + greedy multi-pick (`_greedy_grab`) + the deck-knowledge whiff/redundant
-signals. See docs/general-strategy.md and docs/adr/0023-fetch-is-a-shared-value-comparator.md.
+A fetch is THREE decisions over one closed-form primitive
+``fetch_value(card, board) = importance × still-lacking × available``: whether to play now, what to
+grab, what to discard — so all three agree by construction. The scored sum of the `HYPOTHESES` rungs
+below IS `fetch_value`; `FetchMixin` is the Pilot-side comparator/oracle plus greedy multi-pick.
 """
 from __future__ import annotations
 
@@ -24,20 +20,12 @@ from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _BENCH_PLACEMENT_CO
                                       _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
 
-# The two target-class scopes (ADR-0073) live in `fetch_closure`, imported at the top of this file —
-# `_FETCH_POKEMON_TARGETS` is the REACH scope `_search_deck_set` ranges over (the scope the retired
-# `_FETCH_FILTERS` covered: bench_fill / tutor_mega / tutor_pokemon / rush_evolve), and
-# `_FETCH_DEADNESS_TARGETS` is the wider DEADNESS scope `_fetch_deadness_set` ranges over. The
-# per-card PREDICATE lives in the card REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032;
-# hypergeometric-fetch-closure WP3), read by `_fetch_target_matches` — so the doctrine never
-# re-encodes card knowledge in a private table.
+# The two target-class scopes (ADR-0073) live in `fetch_closure`: `_FETCH_POKEMON_TARGETS` is the REACH
+# scope, `_FETCH_DEADNESS_TARGETS` the wider DEADNESS scope. The per-card PREDICATE lives in the card.
 
 class _Reading(NamedTuple):
-    """One of the TWO readings of a fetch clause (ADR-0073), as a single value: the target-class
-    scope, the clause-predicate mode, and the memo cache that holds its answers. They are bundled
-    because they are co-determined — a deadness answer written into the reach memo is the precise
-    unsoundness the ADR's build-time amendment exists to prevent, and passing three loose arguments
-    leaves that mismatch constructible."""
+    """One of the TWO readings of a fetch clause (ADR-0073): target scope, predicate mode, memo cache.
+    Bundled because they are co-determined — a deadness answer in the reach memo is the unsoundness."""
     targets: frozenset
     deadness: bool
     cache_attr: str
@@ -48,51 +36,35 @@ _REACH = _Reading(_FETCH_POKEMON_TARGETS, False, "_fetch_cache")
 #: The pessimistic reading: what a search could find AT ALL. Feeds the whiff veto and deadline gate.
 _DEADNESS = _Reading(_FETCH_DEADNESS_TARGETS, True, "_deadness_cache")
 
-# PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when best reachable target's
-# hypergeometric P(still in deck) < this. Conservative (refuted ep82524455-f6: P~=0.98 stays above bar). SOUND whiff (P=0) is separate/unconditional.
+# PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when the best reachable
+# target's hypergeometric P(still in deck) is below this. A SOUND whiff (P=0) is separate.
 _WHIFF_PROB_THRESHOLD = 0.20
 
-# Tutor-chain grab value (seam C, built 2026-07-19 — plan doc retired; spec Round 9 §3: "a
-# tutor's held value = the closure-reachable value, recursively free"). Per-hop discount < 1 buys the
-# monotone-decay invariant — a direct target strictly outranks a tutor that merely reaches it at the
-# same select, and each extra hop (a play that reveals nothing until resolved) decays further. 2-hop
-# cap = the gamble's spec-verified one-turn Petrel → Item → target chain. The FLOOR was the flat
-# draw-Supporter band (`grab-a-draw-supporter-in-setup` +10) the chain had to out-promise to fire; that
-# rung RETIRED 2026-08-06 (ADR-0122 amendment — `_grab_refresh_value` prices a refresh by its real
-# swing instead), so the 10.0 now stands on its own as the noise floor it always also was
-# (δ² × the +3 color tie-break ≈ 1.7). Re-derive it if the chain is ever re-grilled.
+# Tutor-chain grab value (seam C). The per-hop discount < 1 buys the monotone-decay invariant: a direct
+# target strictly outranks a tutor that merely reaches it. The floor is a noise floor; re-derive if regrilled.
 _CHAIN_HOP_DISCOUNT = 0.75
 _CHAIN_MAX_HOPS = 2
 _CHAIN_OPENER_FLOOR = 10.0
 
-# HELD-CARD-RISK exposure bar (hypergeometric-fetch-closure §Round 8 §5): a FREE fetch defers past
-# the deadline only when the matched Read prices a live opponent hand-strip — `Board.opp_hand_strip_odds`
-# (max `copies_left_odds` over the rep build's `hand_disruption` cards, fail-open 0.0) at least this.
-# "More likely than not still in their deck"; a costly fetch defers regardless (its cost is paid NOW).
+# HELD-CARD-RISK exposure bar: a FREE fetch defers past the deadline only when the matched Read prices a
+# live opponent hand-strip at least this. A costly fetch defers regardless — its cost is paid NOW.
 _STRIP_ODDS_BAR = 0.5
 
 
 def _is_reusable_energy(stat, tags) -> bool:
-    """A reusable (non-discard) Energy card: hp 0 with a real `energyType`, not tagged
-    `discard_eot`. The engine reports `energyType == 0` for Trainers AND colourless specials
-    (e.g. Ignition), so a typed Basic is `energyType not in (None, 0)`."""
+    """A reusable (non-discard) Energy card. The engine reports ``energyType == 0`` for Trainers AND
+    colourless specials, so a typed Basic is ``energyType not in (None, 0)``."""
     return bool(stat and stat.hp == 0 and stat.energyType not in (None, 0)
                 and "discard_eot" not in tags)
 
 
 class FetchMixin:
-    """The Pilot-side closed-form half of the Fetch doctrine (mixed into `Pilot`). `_grab_value_of`
-    IS `fetch_value` — the shared oracle behind grab (B), whether-to-play (A, `_fetch_fills_a_need`),
-    and greedy multi-pick (`_greedy_grab`). Reads shared Pilot helpers (`_wincon_set`,
-    `_line_preevo_set`, `_weight`, `_option_trace`) + the deck-knowledge `Board.deck_empty_ids`."""
+    """The Pilot-side closed-form half of the Fetch doctrine. `_grab_value_of` IS `fetch_value` — the
+    shared oracle behind grab, whether-to-play and greedy multi-pick."""
 
     def _recycle_dead_only(self, me: dict) -> bool:
-        """True iff my discard's recycle pool (Pokémon / Basic Energy — Night Stretcher's targets)
-        is non-empty and EVERY member is a dead pick: a Pokémon this deck can never deploy from
-        hand (`_stranded_evolution_set` — the setup-only Explosiveness opener). Basic Energy is
-        never dead (always a future attach); an unknown stat fails OPEN (counted live, never a
-        false suppression). The discard-side sibling of `dont-search-an-empty-deck`'s whiff
-        oracle; backs `Board.recycle_dead_only` (ep83457493 f33)."""
+        """True iff my discard's recycle pool is non-empty and EVERY member is a dead pick. Basic Energy
+        is never dead; an unknown stat fails OPEN (counted live, never a false suppression)."""
         pool = live = 0
         stranded = self._stranded_evolution_set()
         for c in (me.get("discard") or []):
@@ -113,33 +85,16 @@ class FetchMixin:
         return pool > 0 and live == 0
 
     def _search_signals(self, option: dict, cid, board) -> tuple[bool, bool, bool]:
-        """The three deck-knowledge signals for a search/tutor PLAY (see Context): whether it WHIFFS
-        (every card it can fetch is provably gone from the deck), whether it is a REDUNDANT
-        wincon-tutor (it can fetch ONLY the win-condition, which you can't usefully deploy a second
-        of), and whether it is a BASELESS wincon-tutor (it can fetch only the win-condition and there
-        is NO base to deploy it onto and it isn't in hand/play — the fetched payoff sits dead). All
-        three False off a PLAY / a card with no fetch clause (`_search_deck_set`).
-
-        The wincon-tutor is redundant when a copy is already in HAND (a second is a dead dig) OR the
-        win-condition is already IN PLAY with no base to evolve another onto (`not
-        wincon_base_deployable` — no Line pre-evolution in play or hand): fetching a second Mega you
-        cannot deploy burns the turn while a real need (a Bench body) goes unmet (ep83038055 f40).
-
-        The wincon-tutor is baseless (DISTINCT from redundant — the win-condition is NEITHER in hand
-        NOR in play) when its payoff has no immediate pre-evolution to deploy it onto: the fetched
-        wincon just sits in hand and THIS tutor cannot fetch the missing base either. The turn-1
-        premature-tutor shape (85164605:f6 — tutoring a Mega Starmie ex with no Staryu anywhere);
-        the consuming veto (`dont-tutor-the-baseless-wincon-turn-one`) adds the turn / productive-
-        alternative narrowing so the SOUND `play-a-tutor-for-the-unfound-wincon` setup case stays."""
+        """The three deck-knowledge signals for a search/tutor PLAY: WHIFFS, a REDUNDANT wincon-tutor, and
+        a BASELESS wincon-tutor. All three False off a PLAY or a card with no fetch clause."""
         if option.get("type") != _PLAY:
             return False, False, False
         deadness_set = self._fetch_deadness_set(cid)
         fetch_set = self._search_deck_set(cid)
         if not deadness_set and not fetch_set:
             return False, False, False
-        # WHIFF reads the DEADNESS set (ADR-0073) — a dig-7 Pokégear over a Supporter-empty deck
-        # provably finds nothing, though it is no closure edge. The wincon-tutor questions below stay
-        # on the REACH set: they ask what a tutor can be relied on to pull, not what it might touch.
+        # WHIFF reads the DEADNESS set (ADR-0073); the wincon-tutor questions below stay on the REACH
+        # set — what a tutor can be RELIED ON to pull, not what it might touch.
         exhausted = bool(deadness_set) and all(c in board.deck_empty_ids for c in deadness_set)
         wincon = self._wincon_set()
         wincon_only = bool(wincon) and bool(fetch_set) and fetch_set <= wincon
@@ -151,13 +106,8 @@ class FetchMixin:
         return exhausted, redundant, baseless
 
     def _search_probable_whiff(self, option: dict, cid, board) -> bool:
-        """The PROBABILISTIC complement to `_search_signals`' SOUND `search_targets_exhausted`
-        (ADR-0029): a search whose every still-REACHABLE fetch target is UNLIKELY to remain in the deck
-        — the best reachable target's `Board.deck_contains_probability` is below `_WHIFF_PROB_THRESHOLD`,
-        though not provably gone. Mutually exclusive with the sound whiff: it requires a target NOT in
-        `deck_empty_ids` (an empty reachable set is the sound guard's certain whiff, left to it). False
-        off a PLAY / a non-search / when any target is plausibly present (so a copy that could sit in the
-        hidden prizes is never suppressed). Drives the soft `dont-search-a-probable-whiff`."""
+        """The PROBABILISTIC complement to the SOUND whiff (ADR-0029): every still-reachable target sits
+        below `_WHIFF_PROB_THRESHOLD`. Mutually exclusive with the sound whiff, which owns an empty set."""
         if option.get("type") != _PLAY:
             return False
         fetch_set = self._search_deck_set(cid)
@@ -170,12 +120,8 @@ class FetchMixin:
         return best < _WHIFF_PROB_THRESHOLD
 
     def _search_confirmed_hit(self, option: dict, cid, board, plan) -> bool:
-        """The POSITIVE deck-knowledge signal for a search/tutor PLAY (ADR-0029): True iff a card the
-        search's fetch clause can pull is PROVABLY still in the deck (`Board.deck_definitely_has` —
-        the tracker's exact post-anchor counts) AND fills a real need (positive grab value, the SAME
-        rungs the real grab scores — the ADR-0023 shared-oracle invariant). Sound-or-silent, mirroring
-        the oracle it reads: False off a PLAY, before the tracker anchors the prizes, or for a card
-        with no fetch clause — a positive endorsement is never asserted on a guess."""
+        """The POSITIVE deck-knowledge signal (ADR-0029): a fetchable card is PROVABLY still in the deck
+        AND fills a real need, on the SAME rungs the real grab scores. Sound-or-silent."""
         if option.get("type") != _PLAY or not board.deck_known_counts:
             return False
         fetch_set = self._search_deck_set(cid)
@@ -183,24 +129,14 @@ class FetchMixin:
                    for c in fetch_set)
 
     def _fetch_target_matches(self, clause: dict, stat, *, deadness: bool = False) -> bool:
-        """True iff a card with ``stat`` matches a FETCH clause's target class — the ONE predicate that
-        REPLACED the tag-keyed `_FETCH_FILTERS`, shared by the doctrine's two set-builders and the
-        gamble closure. Delegates to `common.fetch_closure` (WP7, ADR-0065) so the whole graph — this
-        doctrine, the planner gamble outs, the card-worth keep-cost — reads ONE implementation.
-        ``deadness`` selects the pessimistic reading (ADR-0073); see `fetch_closure`."""
+        """True iff a card with ``stat`` matches a FETCH clause's target class. Delegates to
+        `common.fetch_closure` (ADR-0065); ``deadness`` selects the pessimistic reading (ADR-0073)."""
         from common import fetch_closure
         return fetch_closure.fetch_target_matches(clause, stat, deadness=deadness)
 
     def _deck_fetch_set(self, cid, reading: _Reading) -> set:
-        """The deck card ids ``cid``'s ``zone: deck`` FETCH clauses reach under ONE ``reading``
-        (ADR-0073) — the shared body of `_search_deck_set` and `_fetch_deadness_set`. Empty for a card
-        with no such clause. Deck-fixed, so memoised per card id, in the reading's OWN cache.
-
-        The reading travels as one value rather than three co-determined arguments: target scope,
-        predicate mode and memo cache must agree, and passing them separately makes the mismatch that
-        would silently write a deadness answer into the reach memo constructible. That mismatch IS the
-        unsoundness this ADR's build-time amendment exists to prevent, so it is made unrepresentable
-        rather than merely avoided."""
+        """The deck card ids ``cid``'s ``zone: deck`` FETCH clauses reach under ONE ``reading`` (ADR-0073).
+        Deck-fixed, so memoised per card id in the READING's OWN cache — a shared memo would be unsound."""
         if cid is None:
             return set()
         cache = getattr(self, reading.cache_attr)
@@ -219,38 +155,18 @@ class FetchMixin:
         return cache[cid]
 
     def _search_deck_set(self, cid) -> set:
-        """The REACH set (ADR-0073): deck card ids the search/tutor ``cid`` can be RELIED ON to pull —
-        the POKÉMON targets of its ``zone: deck`` FETCH clauses, `dig`/`trigger` carriers rejected.
-
-        This is the set the ENDORSERS read — `fetch-when-it-fills-a-need`, the deferral deadline
-        (`_fetch_target_deferred`), the probabilistic whiff, and the wincon-tutor redundancy question.
-        It must NOT widen with the deadness scope: a dig-7 Pokégear over a deck that still holds a
-        Supporter would then claim it FILLS that need, when it can only probably reach it — a
-        fabricated endorsement, the fail direction `fetch_closure` forbids. For "is this search
-        dead?" use `_fetch_deadness_set`, which is a superset."""
+        """The REACH set (ADR-0073): deck card ids ``cid`` can be RELIED ON to pull. What the ENDORSERS
+        read; it must NOT widen to the deadness scope, or an endorsement is fabricated."""
         return self._deck_fetch_set(cid, _REACH)
 
     def _fetch_deadness_set(self, cid) -> set:
-        """The DEADNESS set (ADR-0073): deck card ids the search/tutor ``cid`` could find AT ALL —
-        every ``zone: deck`` FETCH target class (`_FETCH_DEADNESS_TARGETS`), `dig`/`trigger` carriers
-        INCLUDED. The set the sound whiff question ranges over: the search is dead iff every member is
-        provably gone (`Board.deck_empty_ids`), which both `dont-search-an-empty-deck` and the fetcher
-        deadline gate (`gate_library.fetch_deploy_odds`) ask — one derivation, so the play side and
-        the keep side cannot disagree about whether a card is dead.
-
-        Wider than the reach set on purpose, and sound BECAUSE the consumer is a conjunction: adding a
-        target makes `all(gone)` harder, so over-inclusion can only suppress a whiff claim, never
-        fabricate one. That is what admits a `dig` clause here (a top-7 look over a deck holding zero
-        Supporters provably finds nothing) and the documented over-inclusion of an energy-type lock on
-        a Pokémon target. Empty for a card with no deck-zone fetch clause."""
+        """The DEADNESS set (ADR-0073): deck card ids ``cid`` could find AT ALL. Wider than the reach set
+        on purpose and sound BECAUSE the consumer is a conjunction — over-inclusion can only suppress."""
         return self._deck_fetch_set(cid, _DEADNESS)
 
     def _chain_fetch_targets(self, cid) -> set:
-        """The FULL-scope set of deck card ids card ``cid``'s ``zone: deck`` FETCH clauses can pull —
-        every clause class (`trainer` / energy / Pokémon), unlike `_search_deck_set`'s Pokémon-only
-        whiff scope. The tutor-chain GRAPH leg (seam C): deck-fixed, memoised per card id (the
-        `_search_deck_set` discipline); clauses only via `fetch_closure.fetch_target_matches`, never
-        a text parse (ADR-0065). Empty for a card with no such clause."""
+        """The FULL-scope set of deck card ids ``cid``'s ``zone: deck`` FETCH clauses can pull — every
+        clause class, unlike `_search_deck_set`'s Pokémon-only scope. Memoised per card id."""
         if cid is None:
             return set()
         if cid not in self._chain_target_cache:
@@ -267,21 +183,8 @@ class FetchMixin:
         return self._chain_target_cache[cid]
 
     def _chain_grab_value(self, board, cid, plan) -> float:
-        """The discounted closure value of tutoring card ``cid`` into hand — spec Round 9 §3 ("a
-        tutor's held value = the closure-reachable value, recursively free"), backing
-        `grab-the-chain-opener`. δ × the best reachable target's `_grab_value_of` (MAX, never a sum
-        — a tutor fetches ONE card), recursing one more hop through ITEM tutors only (`_CHAIN_MAX_
-        HOPS` = 2; a fetched Item plays free the same turn, a fetched Supporter does not — the
-        gamble's `_supporter_*_tutor_reaches` post-Item precedent). A Supporter tutor with the
-        one-per-turn slot already spent prices 0 (fail-closed: the chain is not free this turn;
-        `card_unplayable_this_turn` additionally demotes). Reachability drops provably-gone targets
-        (`deck_empty_ids`) and non-Energy cards already in hand (the value must be value you LACK —
-        the chain-side mirror of `dont-grab-a-card-already-in-hand`). End values read the shared
-        oracle, so every need stand-down is inherited and the chain DECAYS as needs are met — incl.
-        `_greedy_grab`'s virtual board re-score. The chain rung itself never fires inside
-        `_grab_value_of` (its reduced Context leaves `card_chain_value` 0), so the recursion is
-        exactly this helper: cycle-safe via the path `seen` set (Petrel's `trainer` clause reaches
-        Petrel), Item-only descent, and the hop cap. Endorser fail direction: unknown card → 0."""
+        """The discounted closure value of tutoring ``cid`` into hand. δ × the best reachable target's
+        `_grab_value_of` (MAX, never a sum — a tutor fetches ONE card), through ITEM tutors only."""
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         if stat is None:
             return 0.0
@@ -290,9 +193,8 @@ class FetchMixin:
         return self._chain_value_from(board, cid, plan, _CHAIN_MAX_HOPS, {cid}, {})
 
     def _chain_value_from(self, board, cid, plan, hops: int, seen: set, memo: dict) -> float:
-        """`_chain_grab_value`'s recursive leg: δ × max over card ``cid``'s reachable fetch targets
-        of (the target's own grab value | one more Item hop). ``memo`` caches `_grab_value_of` per
-        target for THIS call tree only — the value is board-bound, never cached across boards."""
+        """`_chain_grab_value`'s recursive leg. ``memo`` caches `_grab_value_of` per target for THIS call
+        tree only — the value is board-bound and must never be cached across boards."""
         if hops <= 0:
             return 0.0
         best = 0.0
@@ -311,17 +213,8 @@ class FetchMixin:
         return _CHAIN_HOP_DISCOUNT * best
 
     def _spends_last_evolution_route(self, select: dict | None, board, cid) -> bool:
-        """True iff grabbing chain-hop candidate ``cid`` at this TO_HAND search would consume the
-        LAST free tutor reaching a WANTED evolution — an evolution still in the revealed pool whose
-        base is in my play or hand and which no other free (non-`cost_discard`) tutor in the pool or
-        my hand can still fetch. The scarcity-gated preserve-the-closure tie-break (seam C hop
-        audit): with Makuhita down, its Hariyama is the coming want, and Fighting Gong's
-        `basic_pokemon` clause can never reach a Stage 1 — spending the last Poké Pad as the hop
-        closes the only free route (Ultra Ball reaches it too, but at discard-2: not a preserve).
-        Count-aware via the revealed pool (a search select's exact within-frame deck), so it is
-        SILENT while copies abound — spending one of four Poké Pads closes nothing. False off a
-        TO_HAND reveal, for a non-tutor, and for a `cost_discard` candidate (already demoted;
-        its loss is priced). Endorser fail direction: unknown facts → False."""
+        """True iff grabbing ``cid`` here would consume the LAST free tutor reaching a WANTED evolution.
+        Count-aware via the revealed pool, so it is SILENT while copies abound. Unknown facts → False."""
         if not select or select.get("context") != _TO_HAND or cid is None:
             return False
         tags = self.functions.tags(cid) if self.functions else []
@@ -353,10 +246,10 @@ class FetchMixin:
         return False
 
     def _grab_value_of(self, board, cid: int, plan) -> float:
-        """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
-        positive TO_HAND grab Hypotheses that fire for it, scored with the SAME rungs as the real grab
-        (the shared-oracle invariant, ADR-0023). The whether-to-play lookahead's per-candidate term."""
-        from common.pilot import Context, _fires   # lazy: Context/Board live in pilot (cycle-free import)
+        """The grab comparator's value for fetching card `cid` into hand right now — the sum of the positive
+        TO_HAND grab Hypotheses that fire, on the SAME rungs as the real grab (ADR-0023)."""
+        from common.pilot import Context, _fires   # lazy re-export; Context/Board own module is
+                                                   # `deciders.facts` (cycle-free import)
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         roles = self.strategy.roles.get(cid, [])
@@ -374,10 +267,8 @@ class FetchMixin:
         return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
 
     def _fetch_fills_a_need(self, board, cid, plan) -> bool:
-        """True iff the fetch ``cid`` can pull a card I currently LACK from the deck — any still-reachable
-        candidate (its fetch-clause set minus the provably-gone `deck_empty_ids`) whose grab value is
-        positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the known deck
-        before the search reveals it. False for a non-fetch (empty fetch set)."""
+        """True iff the fetch ``cid`` can pull a card I currently LACK — any still-reachable candidate with
+        positive grab value. The whether-to-play lookahead, estimated before the search reveals."""
         fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False
@@ -385,13 +276,8 @@ class FetchMixin:
         return any(self._grab_value_of(board, c, plan) > 0 for c in reachable)
 
     def _fetched_playable_this_turn(self, obs: dict, cid, board) -> bool:
-        """Could the fetched Pokémon ``cid`` be PLAYED this turn once in hand? A Basic lands on the
-        Bench now (unless full); an evolution needs an ELIGIBLE base already on my board — a body of
-        its `evolvesFrom` name in play since last turn (`appearThisTurn` False) — and neither player
-        may evolve on their own first turn (rules.md §4, rulebook L123-128). Unknown facts fail OPEN
-        (playable), so the deferral veto reading this never fires on a guess. Exotic evolve-from-hand
-        shortcuts are not modelled (none exist in the pool's Items; Salvatore's rush-evolve fetches
-        from the DECK, bypassing the hand entirely)."""
+        """Could the fetched Pokémon ``cid`` be PLAYED this turn once in hand? An evolution needs a base in
+        play since last turn, and no one evolves on their own first turn (rules.md §4). Unknown → OPEN."""
         st = self.stats.get(cid) if self.stats else None
         if st is None or getattr(st, "hp", 0) <= 0:
             return True                              # unknown / non-Pokémon: never claim a deferral
@@ -414,12 +300,8 @@ class FetchMixin:
         return False
 
     def _fetched_playable_next_turn(self, obs: dict, cid, board) -> bool:
-        """Is NEXT turn a CONCRETE deadline for the fetched Pokémon ``cid`` — i.e. will it provably
-        become playable then? Only an evolution has one: by next turn the `appearThisTurn` and
-        own-first-turn bans lapse, so a body of its base name already in play — or a held base
-        benched this turn (Bench space) — receives it. False for a Basic (a full Bench has no
-        modelled next-turn opening) and for an evolution with no base in play or hand (no deadline
-        AT ALL — the dead-grab/baseless rungs own that, never the deferral)."""
+        """Is NEXT turn a CONCRETE deadline for the fetched Pokémon ``cid``? Only an evolution has one, and
+        only with a base in play or in hand — no base at all is the dead-grab rungs' jurisdiction."""
         st = self.stats.get(cid) if self.stats else None
         if st is None or getattr(st, "hp", 0) <= 0:
             return False
@@ -440,14 +322,8 @@ class FetchMixin:
                    for hid in board.hand_ids if self.stats)
 
     def _fetch_target_deferred(self, obs: dict, cid, board, plan) -> bool:
-        """The DEADLINE leg of the held-card risk (spec §Round 8 §5): every still-reachable NEEDED
-        target of fetch ``cid`` (positive grab value — the same set `_fetch_fills_a_need` endorses)
-        is provably unplayable this turn BUT playable next turn — a concrete deadline, so fetching
-        now gains nothing over fetching then (a whole-deck search succeeds iff the target remains in
-        deck — identical next turn) while the fetched key would sit in hand exposed across the
-        opponent's turn. False when any needed target lands this turn, when a target has NO concrete
-        deadline (a baseless payoff waits on nothing — the dead-grab rungs' jurisdiction), when
-        nothing is needed, or on unknown facts (fail-open — a suppressor never fires on a guess)."""
+        """The DEADLINE leg of the held-card risk: every needed target of ``cid`` is unplayable this turn
+        but playable next, so fetching now only exposes the card in hand. Fail-open on unknown facts."""
         fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False
@@ -459,51 +335,14 @@ class FetchMixin:
                    and self._fetched_playable_next_turn(obs, c, board) for c in needed)
 
     def _held_fetch_deferred(self, obs: dict, refresh_cid, board, plan) -> bool:
-        """The fetch-LATE leg viewed from the hand: some fetch card I HOLD (other than the refresh
-        being priced) still fills a need whose every target is deferred past this turn
-        (`_fetch_target_deferred`). A self-refresh would shuffle that held plan-vehicle away — the
-        very strip the deferral is guarding against — so `dont-shuffle-away-the-deferred-fetch`
-        reads this to hold the hand instead. False with no such held fetch (fail-open)."""
+        """The fetch-LATE leg viewed from the hand: some fetch card I HOLD still fills a need whose every
+        target is deferred past this turn, so a self-refresh would shuffle that plan-vehicle away."""
         return any(self._fetch_target_deferred(obs, hid, board, plan)
                    for hid in board.hand_ids if hid != refresh_cid)
 
     def _shed_signals(self, obs: dict, option: dict, tags: list, board, plan) -> tuple[bool, bool, bool]:
         """(sheds_junk, sheds_live, sheds_key) for a `cost_discard` fetch PLAY — the COST side of
-        cost-netting (ADR-0023 amendment): what will the discard this search forces actually take?
-
-        Priced by the equation that will take it (Issue #261 item 2h). Until then this scored the
-        hand at a virtual `_DISCARD` Context against the tuned `_DISCARD` ladder, and the whole point
-        of doing so was stated in its own docstring — *"scoring with the SAME rungs the real discard
-        select uses keeps prediction and pick agreeing."* That stopped being true the day the
-        keep-value v2 assignment took the discard select (2026-07-20) and the ladder stopped
-        deciding, and it would have become
-        vacuous the day the ladder was deleted: every score would be 0.0, all three bits permanently
-        False, and the three rungs reading them silent forever (the Issue #238 shape). So the
-        predictor moves onto the DECIDER's own machinery — the whole-hand v2 rows
-        (`_needs_hand_rows`, the refresh SHED's), the shared resolver, and `needs.removal_score`, the
-        objective `needs.cheapest_removal` minimises — and the sentence is true again.
-
-        The three bands are that ONE number, the net cost of the two cards the assignment would
-        actually shed:
-
-          * ``junk`` — costs ``<= 0`` AND every shed card is either actively dead (``pitch`` > 0) or
-            REPLACEABLE (a second copy held, or a copy already in play). The second clause is
-            load-bearing and was measured, not assumed: v2 prices a redundant spare and a role-less
-            singleton *identically* at keep 0, because neither costs anything to lose — but only the
-            first is a card we still effectively have. Reading "costs nothing" as junk lifts a fetch
-            paid for with genuine singletons into the free-dig band it has not earned, and flipped
-            `test_neutral_sheds_leave_the_fetch_at_the_pessimism_baseline` on the first run. v1 drew
-            the same three-way distinction through the ladder's `discard-the-redundant` (+20) and
-            `discard-the-hand-duplicate` (+12) rungs; this is those premises at source.
-          * ``live`` — costs ``> 0``: a real price is paid for the dig.
-          * ``key``  — costs ``>= ACE_SPEC_TIER``: the price is at least an unrecoverable card's worth.
-            The bar is the LOWEST tier the retired `keep-key-cards-at-discard` (-30) protected —
-            wincon 30, ACE SPEC 25, burst Energy 30 (`card_worth.TAG_TIER`'s own reconciliation
-            comment) — reused rather than re-invented, so no new constant enters the fit. Note the
-            keep is MARGINAL, so a duplicated wincon prices its succession slot (~15) and correctly
-            does not read as key: a second copy is not irreplaceable.
-
-        All False off a PLAY / a free fetch / with < 2 other cards (engine legality)."""
+        cost-netting (ADR-0023 amendment), read off the DECIDER's own shed assignment, not a ladder."""
         if option.get("type") != _PLAY or "cost_discard" not in tags:
             return False, False, False
         from common.card_worth import ACE_SPEC_TIER
@@ -520,20 +359,8 @@ class FetchMixin:
         return junk, cost > 0.0, cost >= ACE_SPEC_TIER
 
     def _cost_picks(self, card_id):
-        """How many cards this card's `cost` takes, off `snapshot_coverage.COST_CARDS`. ``None`` for
-        a card with no cost, or one whose cost names no fixed count (`discard_hand`, `bottom_2`).
-
-        The count used to be the literal ``2`` here. **That was not a live defect and must not be
-        described as one** — `_shed_signals` gates on the `cost_discard` FUNCTION TAG, and measured
-        over the shipped stores exactly ONE card carries it (1121 Ultra Ball, whose cost really is
-        `discard_2`). 1092 Secret Box (`discard_3`) and 1233 Canari (`discard_1`) carry a cost CLAUSE
-        and NOT the tag, so they never reach here; an earlier draft of this docstring claimed they
-        were being mispriced, and that claim was false.
-
-        What the lookup buys is that the two stores can no longer drift apart silently: the day the
-        tag is widened to a second carrier — or a sixth cost value is minted — this reads the real
-        count instead of Ultra Ball's, and `cost_card_problems()` demands a count for any value a
-        card actually carries."""
+        """How many cards this card's `cost` takes, off `snapshot_coverage.COST_CARDS`. ``None`` for a card
+        with no cost, or one whose cost names no fixed count (`discard_hand`, `bottom_2`)."""
         from common import board_delta, snapshot_coverage as sc
         for clause in board_delta.card_clauses(self.combat, card_id):
             value = clause.get("cost")
@@ -542,10 +369,8 @@ class FetchMixin:
         return None
 
     def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
-        """The highest-priority card id the deck WANTS most among a search's revealed candidates — the
-        first id in `Strategy.fetch_priority` that is present in the select's `deck` list (Tier-3, the
-        combo deck's explicit grab override). None off a TO_HAND search, an empty list, or no match.
-        `exclude` drops ids already acquired this multi-pick so the NEXT priority surfaces (greedy)."""
+        """The first id in `Strategy.fetch_priority` present in a search's revealed candidates — the combo
+        deck's explicit grab override. ``exclude`` drops ids already acquired so the NEXT one surfaces."""
         fp = getattr(self.strategy, "fetch_priority", None)
         if not fp or not select or select.get("context") != _TO_HAND:
             return None
@@ -562,9 +387,8 @@ class FetchMixin:
         return bool(st and st.hp > 0 and (_ENGINE_TAGS & set(tags)))
 
     def _virtual_grab_board(self, board, select: dict, acquired_ids: list, bench_ctx: bool):
-        """`board` as if the cards acquired so far this multi-pick were already had — the gap signals the
-        grab rungs read (wincon/support in play, bench size, in-play ids, the next fetch-priority) close as
-        needs are met, so greedy re-scoring won't re-pick an already-satisfied need (ADR-0023)."""
+        """`board` as if the cards acquired so far this multi-pick were already had, so greedy re-scoring
+        will not re-pick an already-satisfied need (ADR-0023)."""
         acq = {a for a in acquired_ids if a is not None}
         wincon = self._wincon_set()
         return replace(
@@ -578,36 +402,13 @@ class FetchMixin:
 
     def _greedy_grab(self, obs: dict, select: dict, board, traces: list, options: list,
                      min_count: int, max_count: int) -> list[int]:
-        """Resolve a fetch-grab multi-select (maxCount>1) greedily instead of static top-N: take the best
-        candidate, mark its need satisfied (a virtual board where acquired cards count as had), re-score
-        the rest, repeat. So a second copy of an already-met need stands down. TAKE-FEWER: once min_count
-        is met, stop as soon as no remaining candidate has positive grab value — don't over-grab (e.g.
-        bench a prize-liability body you don't need). ADR-0023; only for `_GRAB_CONTEXTS`.
-
-        **The decline bar differs by context, and the difference is about who prices the COST**
-        (Issue #261 item 2d). At a BENCH grab the Deploy Marginal prices the whole cost — the slot
-        it displaces and the Prize-Path exposure it hands over — so a candidate at exactly 0 is one
-        that genuinely costs nothing, and the search that revealed it is already spent. ADR-0086
-        decision 6 says so in its own words: take-fewer "is how a BELOW-zero deploy expresses
-        itself". Declining at 0 there is the Buddy-Poffin whiff. At a `_TO_HAND` grab there is no
-        equation, only one-sided endorsement rungs, so 0 means "no rung spoke" rather than "free" —
-        and a card taken into hand is not free (it thins the deck and must then be held). Those
-        stay declined, which is also the `<= 0` bar every ruled fetch frame was captured under.
-
-        The pick breaks an exact tie on the option's **Option Equivalence Class identity**, not on its
-        menu index (ADR-0103, Issue #254). It cannot consume `_score_order`'s ordering directly —
-        it re-scores between picks — so it takes the same `_order_key`, which is why that key is a
-        function rather than a lambda at each site. The canonical keys are a pure function of the
-        ORIGINAL menu, which the loop never permutes, so they are computed once."""
+        """Resolve a fetch-grab multi-select greedily rather than static top-N, re-scoring against a virtual
+        board between picks (ADR-0023). The decline bar is BELOW zero at a bench grab, ``<= 0`` at TO_HAND."""
         bench_ctx = select.get("context") in _BENCH_PLACEMENT_CONTEXTS
         canon = canonical_keys(options, obs)
         if bench_ctx:
-            # The Bench holds FIVE (`docs/rulebook.txt` L75, L122) — a game rule, so it bounds the
-            # pick as a filter rather than through a price. The marginal is 0 for a body that cannot
-            # be placed (there is no counterfactual for an impossible play), and the bench take-fewer
-            # bar declines only BELOW zero, so without this bound the greedy would keep grabbing past
-            # a full Bench. `min_count` still wins if the engine somehow asks for more, because
-            # refusing a mandatory pick is the one failure worse than an over-grab.
+            # The Bench holds FIVE (`docs/rulebook.txt` L75) — a game rule, so it bounds the pick as a
+            # filter, not a price. `min_count` still wins: refusing a mandatory pick is worse.
             max_count = max(int(min_count),
                             min(int(max_count), _BENCH_MAX - int(board.my_bench or 0)))
         remaining = set(range(len(options)))
@@ -629,9 +430,8 @@ class FetchMixin:
         return chosen
 
     def _support_in_play(self, me: dict) -> bool:
-        """True if any of my in-play Pokémon is an engine/support piece — its Ability draws, accelerates
-        or searches (an `_ENGINE_TAGS` Function Tag). The gap behind `fetch-the-support`: with an engine
-        already online I needn't tutor another. False with no functions table."""
+        """True if any of my in-play Pokémon is an engine/support piece (an `_ENGINE_TAGS` Function Tag).
+        The gap behind `fetch-the-support`: with an engine already online I needn't tutor another."""
         if not self.functions:
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
@@ -900,11 +700,8 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _TO_HAND and "item_lock" in c.tags
         and c.card_is_starter and c.board.my_bench < _THIN_BENCH,
         weight=30, status="assumed"),
-    # `bench-fill-a-basic` (+12) is DELETED (Issue #261 item 2d, ADR-0086 decision 6). Its whole
-    # reason was that "a CARD-target candidate is invisible to the `option_type==_PLAY` bench
-    # reflexes, so every candidate would score 0" — the Deploy Marginal now prices the `_TO_BENCH`
-    # entry point, so the invisibility it papered over is gone and a flat +12 that ties every
-    # candidate is exactly the indifference Issue #197 was opened to remove.
+    # `bench-fill-a-basic` (+12) is DELETED (Issue #261 item 2d, ADR-0086 decision 6): the Deploy
+    # Marginal now prices the `_TO_BENCH` entry point, so the invisibility it papered over is gone.
     Hypothesis(
         id="dont-fetch-the-setup-only-opener",
         rationale="Never take a SETUP-ONLY opener into hand at a search: an `opener`-tagged Pokémon whose "
@@ -983,12 +780,7 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_key,
         weight=-25, status="testing"),
     # `bench-the-supporter-tutor` (+25), `dont-pre-bench-the-supporter-tutor` (−15) and
-    # `dont-pre-bench-a-redundant-utility` (−15) stood here until ADR-0086. All three answered the
-    # SAME question — is this body worth a Bench slot right now? — from the fetch side, and the
-    # Deploy Marginal now prices it: the tutor's Supporter fetch is the ability leg's need-matched
-    # yield (zero at `_SETUP_BENCH` by derivation, since a pregame placement never triggers the
-    # bench-drop Ability — the hand-written stand-down, derived), and a redundant utility body
-    # prices its own displacement against the slot it would occupy.
+    # `dont-pre-bench-a-redundant-utility` (−15) stood here until ADR-0086; the Deploy Marginal prices them.
     Hypothesis(
         id="grab-a-gust-supporter-for-the-ko",
         rationale="At a TO_HAND Supporter grab (Meowth ex Last-Ditch Catch, or any supporter tutor), "

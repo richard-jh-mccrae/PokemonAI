@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-"""Normalize a pasted video transcript into clean, citeable segments.
-
-The manual-transcript source path of the ``strategy-ingest`` skill: the user pastes a raw
-transcript (e.g. YouTube "Show transcript" copy) into ``data/strategy/transcripts/<name>.txt``;
-this script turns the interleaved ``timestamp\\ntext`` lines into one ``[m:ss] text`` line per
-segment, collapsing the caption line-wrap. The result is the source-agnostic **Fetched Article**
-body (``body_kind = transcript``) that Synthesis consumes.
-
-Also reads an optional provenance header at the top of the file — lines like ``# url: ...`` /
-``# title: ...`` / ``# date: ...`` / ``# handle: ...`` before the first timestamp — and returns it
-so the skill can fill the Digest's provenance without a separate prompt (it asks only for missing
-required fields).
-
-Cross-platform (pathlib, explicit utf-8). Pure function ``parse_transcript`` for testing; thin CLI.
+"""Normalize a pasted video transcript (``timestamp\\ntext`` lines) into ``[m:ss] text`` segments plus
+an optional leading provenance header — the ``strategy-ingest`` skill's ``body_kind = transcript``.
 
 Usage:
     python parse_transcript.py <input.txt> [--out <cleaned.txt>] [--json]
@@ -26,9 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-# A pure timestamp line: M:SS, MM:SS, or H:MM:SS (optionally H:MM:SS). Whole line only.
 _TS = re.compile(r"^\s*((?P<h>\d{1,2}):)?(?P<m>\d{1,2}):(?P<s>\d{2})\s*$")
-# A header line before the body: "# key: value" or "key: value" (key is a bare word).
 _HEADER = re.compile(r"^\s*#?\s*(?P<key>[A-Za-z_]+)\s*:\s*(?P<val>.+?)\s*$")
 
 _HEADER_KEYS = {"url", "title", "date", "handle", "author", "source", "language", "series"}
@@ -48,15 +34,10 @@ def _fmt(seconds: int) -> str:
 
 
 def parse_transcript(text: str) -> tuple[dict[str, str], list[tuple[int, str]]]:
-    """Parse a pasted transcript.
-
-    Returns ``(header, segments)`` where ``header`` is the leading provenance dict (possibly empty)
-    and ``segments`` is a list of ``(start_seconds, text)`` in order. If the transcript carries no
-    timestamps at all, the whole body is returned as one segment at t=0.
-    """
+    """Returns ``(header, segments)`` of ``(start_seconds, text)``; a transcript with NO timestamps
+    yields the whole body as one segment at t=0."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
 
-    # 1. Header: contiguous key:value lines at the very top, before any timestamp or prose.
     header: dict[str, str] = {}
     i = 0
     while i < len(lines):
@@ -71,9 +52,8 @@ def parse_transcript(text: str) -> tuple[dict[str, str], list[tuple[int, str]]]:
             header[hm.group("key").lower()] = hm.group("val").strip()
             i += 1
             continue
-        break  # first non-header, non-blank, non-timestamp line ends the header
+        break
 
-    # 2. Body: group text under the most recent timestamp.
     segments: list[tuple[int, str]] = []
     cur_t: int | None = None
     cur_words: list[str] = []
@@ -102,13 +82,8 @@ def parse_transcript(text: str) -> tuple[dict[str, str], list[tuple[int, str]]]:
 def merge_segments(
     segments: list[tuple[int, str]], min_seconds: int = 30
 ) -> list[tuple[int, str]]:
-    """Reflow fine-grained caption segments into coarser blocks.
-
-    Raw auto-caption timestamps land every ~2s, giving hundreds of fragments. Group consecutive
-    segments into a block that spans at least ``min_seconds`` (anchored at the block's start time),
-    so the cleaned body reads as paragraphs with sparse, still-accurate cite anchors. ``min_seconds
-    <= 0`` disables merging (one block per original segment).
-    """
+    """Raw auto-caption timestamps land every ~2s, so group consecutive segments into blocks spanning
+    >= ``min_seconds``, anchored at the block's start time. ``min_seconds <= 0`` disables merging."""
     if min_seconds <= 0 or not segments:
         return segments
     blocks: list[tuple[int, str]] = []
@@ -124,7 +99,6 @@ def merge_segments(
 
 
 def render(segments: list[tuple[int, str]]) -> str:
-    """One ``[m:ss] text`` line per (possibly merged) block — the cleaned transcript body."""
     return "\n".join(f"[{_fmt(t)}] {txt}" for t, txt in segments)
 
 
@@ -147,12 +121,10 @@ def _selftest() -> int:
     assert segs[2] == (3782, "and this is much later"), segs[2]
     assert render(segs).splitlines()[0] == "[0:00] one of the most important skills is"
     assert render(segs).splitlines()[2] == "[1:03:02] and this is much later"
-    # Merge: 0:00 and 0:04 fall in one <30s block; 1:03:02 starts a new block.
     merged = merge_segments(segs, 30)
     assert merged[0] == (0, "one of the most important skills is something called sequencing"), merged
     assert merged[1] == (3782, "and this is much later"), merged
-    assert merge_segments(segs, 0) == segs  # disabled
-    # No-timestamp fallback: whole body as one segment.
+    assert merge_segments(segs, 0) == segs
     h2, s2 = parse_transcript("just some prose\nwith no timestamps")
     assert h2 == {} and s2 == [(0, "just some prose with no timestamps")], (h2, s2)
     print("parse_transcript selftest: OK")

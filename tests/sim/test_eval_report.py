@@ -1,7 +1,5 @@
-"""Eval harness (tools/sim/eval_report, ADR-0053 WP2): the verdict rule, the checkpoint regression
-tripwire, pure checkpoint-pool resolution, and the C3 report assembler — all engine-free. This is
-the contract G2 reads (C3 in docs/plans/ml/ml-training-contracts.md), so the field set and the
-pass/fail/inconclusive logic are pinned here."""
+"""Eval harness (tools/sim/eval_report, ADR-0053 WP2), engine-free. This is the contract G2 reads
+(C3 in docs/plans/ml/ml-training-contracts.md)."""
 import sys
 from pathlib import Path
 
@@ -12,17 +10,14 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def _pair(cand_w, base_w, n):
-    """One paired matchup cell in C3 shape (candidate and baseline each play n games vs the opp)."""
+    """One paired matchup cell in C3 shape; each arm plays n games vs the opponent."""
     return {"opponent": "o", "seat": 0, "n": n, "candidate_wins": cand_w,
             "baseline_wins": base_w, "draws": 0}
 
 
-# ---- verdict rule (step 2) -------------------------------------------------------------------
-
 @pytest.mark.req("REQ-SIM-0019")
 def test_verdict_pass_when_flips_on_and_no_regression():
-    """pass = the grilled flips_on bar (delta >= 0, CI lower bound >= -1%, zero candidate crashes)
-    with no checkpoint regression. A clean, powered win ships."""
+    """pass = delta >= 0, CI lower bound >= -1%, zero crashes, no checkpoint regression."""
     from sim.eval_report import build_report
     matchups = [_pair(1100, 1000, 2000), _pair(1150, 1000, 2000)]
     rep = build_report(baseline={"agent": "b"}, candidate={"agent": "c"}, matchups=matchups)
@@ -32,7 +27,6 @@ def test_verdict_pass_when_flips_on_and_no_regression():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_verdict_fail_when_ci_upper_below_zero():
-    """fail = the candidate is provably worse overall (CI upper bound < 0)."""
     from sim.eval_report import build_report
     matchups = [_pair(900, 1000, 2000), _pair(880, 1000, 2000)]
     rep = build_report(baseline={"agent": "b"}, candidate={"agent": "c"}, matchups=matchups)
@@ -42,9 +36,7 @@ def test_verdict_fail_when_ci_upper_below_zero():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_verdict_inconclusive_on_zero_pairs_and_on_capped_run():
-    """A run that measured NOTHING (no paired cells) can never pass; nor can a capped/partial run,
-    however strong the surviving cells — both cap at inconclusive so G2 can't adopt on a fraction
-    of the matrix."""
+    """Both cap at inconclusive, so G2 cannot adopt on a fraction of the matrix."""
     from sim.eval_report import build_report
     empty = build_report(baseline={}, candidate={}, matchups=[])
     assert empty["paired_delta"]["win_delta"] == 0.0
@@ -57,8 +49,7 @@ def test_verdict_inconclusive_on_zero_pairs_and_on_capped_run():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_per_arm_n_keeps_the_delta_sane_on_mismatched_sizes():
-    """When a resume leaves the arms different sizes, per-arm candidate_n/baseline_n keep every
-    win-rate in [0,1] — no p>1 / garbage CI from a shared min-n paired with full win counts."""
+    """A resume can leave the arms different sizes; a shared min-n would give p>1 and a garbage CI."""
     from sim.eval_report import build_report
     row = {"opponent": "o", "seat": 0, "n": 5, "candidate_wins": 40, "candidate_n": 50,
            "baseline_wins": 3, "baseline_n": 5, "draws": 0}                # arms differ: 50 vs 5
@@ -70,19 +61,16 @@ def test_per_arm_n_keeps_the_delta_sane_on_mismatched_sizes():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_verdict_inconclusive_on_crash_and_on_wide_ci():
-    """A candidate crash blocks a pass (never ship on a crash); a straddling CI at low N is
-    inconclusive, not a pass — the flip needs the interval, not just the point estimate."""
+    """The flip needs the interval, not just the point estimate."""
     from sim.eval_report import build_report
     strong = [_pair(1100, 1000, 2000), _pair(1150, 1000, 2000)]
     crashed = build_report(baseline={}, candidate={}, matchups=strong, candidate_crashes=1)
-    assert crashed["verdict"] == "inconclusive"          # positive delta, but a crash -> not pass, not fail
+    assert crashed["verdict"] == "inconclusive"          # positive delta, but a crash: not pass, not fail
 
     noisy = build_report(baseline={}, candidate={}, matchups=[_pair(55, 50, 100)])
     assert noisy["paired_delta"]["ci_low"] < -0.01 < noisy["paired_delta"]["ci_high"]
     assert noisy["verdict"] == "inconclusive"
 
-
-# ---- checkpoint tripwire (step 3) ------------------------------------------------------------
 
 def _ck(build_id, cand_w, base_w, n):
     return {"build_id": build_id, "candidate_wins": cand_w, "candidate_n": n,
@@ -91,12 +79,10 @@ def _ck(build_id, cand_w, base_w, n):
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_checkpoint_regression_caps_a_clean_pass_to_inconclusive():
-    """A candidate that would otherwise pass, but regresses against a frozen checkpoint by more
-    than the cell CI, is capped at inconclusive with the culprit named — non-transitivity drift a
-    raw gauntlet would hide. Checkpoints never enter the paired delta."""
+    """Catches non-transitivity drift a raw gauntlet hides. Checkpoints never enter the delta."""
     from sim.eval_report import build_report
     matchups = [_pair(1100, 1000, 2000), _pair(1150, 1000, 2000)]     # clean pass on live opponents
-    checkpoints = [_ck(7, 600, 1000, 2000)]                          # candidate 30% vs baseline 50% -> big drop
+    checkpoints = [_ck(7, 600, 1000, 2000)]                          # 30% vs 50% -> big drop
     rep = build_report(baseline={}, candidate={}, matchups=matchups, checkpoints=checkpoints)
     assert rep["verdict"] == "inconclusive"
     assert [r["build_id"] for r in rep["regressions"]] == [7]
@@ -106,8 +92,7 @@ def test_checkpoint_regression_caps_a_clean_pass_to_inconclusive():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_checkpoint_within_noise_does_not_trip():
-    """A checkpoint result within the cell's CI margin is not a regression — noise doesn't cap the
-    verdict, and a checkpoint can never MAKE a candidate pass (it's not in the delta)."""
+    """A checkpoint can never MAKE a candidate pass either — it is not in the delta."""
     from sim.eval_report import build_report, checkpoint_regressions
     checkpoints = [_ck(7, 1010, 1000, 2000)]                         # ~equal vs baseline -> no trip
     assert checkpoint_regressions(checkpoints) == []
@@ -119,9 +104,7 @@ def test_checkpoint_within_noise_does_not_trip():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_checkpoint_pool_is_additive_and_warns_on_missing():
-    """Pool = ALL submitted builds (agent_history rows) whose zip is on disk; --checkpoints ids ADD
-    to that pool, never restrict it; a submitted build with no zip, or a pinned id not in history,
-    is skipped with a named warning."""
+    """Pool = every agent_history build whose zip is on disk; `--checkpoints` ids ADD, never restrict."""
     from sim.eval_report import checkpoint_pool
     history = [{"submission_id": 3, "agent": "ms", "artifact": "ms-3"},
                {"submission_id": 5, "agent": "ml", "artifact": "ml-5"}]
@@ -129,19 +112,15 @@ def test_checkpoint_pool_is_additive_and_warns_on_missing():
     assert [p["submission_id"] for p in pool] == [3]                 # only the one with a zip
     assert any("#5" in w and "missing" in w for w in warnings)
 
-    # extra_ids ADD, they do not restrict: the full on-disk pool stays, #5 is not dropped
     both, _ = checkpoint_pool(history, available_artifacts={"ms-3", "ml-5"}, extra_ids=[3])
     assert [p["submission_id"] for p in both] == [3, 5]            # additive, no restriction
     unknown_pool, warns3 = checkpoint_pool(history, available_artifacts=set(), extra_ids=[9])
     assert unknown_pool == [] and any("#9" in w for w in warns3)
 
 
-# ---- C3 emitter (step 4) ---------------------------------------------------------------------
-
 @pytest.mark.req("REQ-SIM-0019")
 def test_report_carries_the_full_c3_field_set():
-    """The frozen C3 shape G2 reads: version, provenance, paired_delta in C3 names, matchups,
-    strata, checkpoints, aivat (null in v1), verdict. Missing a field breaks the gate's consumer."""
+    """Missing a field breaks the gate's consumer."""
     from sim.eval_report import build_report, REPORT_VERSION
     from sim.eval_aivat import aivat
     rep = build_report(
@@ -161,8 +140,7 @@ def test_report_carries_the_full_c3_field_set():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_empty_cells_are_excluded_from_the_delta():
-    """A matchup or checkpoint cell with zero games (an odd per-cell that samples only one seat, or
-    a fully-crashed cell) must not divide-by-zero — it's simply excluded from the aggregate."""
+    """Excluded, not a divide-by-zero: an odd per-cell samples one seat, and cells can fully crash."""
     from sim.eval_report import build_report, checkpoint_regressions
     matchups = [_pair(1050, 1000, 2000), {"opponent": "o", "seat": 1, "n": 0,
                                           "candidate_wins": 0, "baseline_wins": 0, "draws": 0}]
@@ -174,15 +152,13 @@ def test_empty_cells_are_excluded_from_the_delta():
 
 @pytest.mark.req("REQ-SIM-0019")
 def test_h2h_is_reported_but_never_enters_the_delta_or_verdict():
-    """The head-to-head block is emitted for context (tagged informational) but excluded from the
-    paired delta — a lopsided H2H can't flip the verdict, the protocol the research says not to
-    trust alone."""
+    """H2H is emitted tagged informational; a lopsided one must not flip the verdict."""
     from sim.eval_report import build_report
-    neutral = [_pair(1000, 1000, 2000)]                             # dead-even live matchups
+    neutral = [_pair(1000, 1000, 2000)]
     h2h = [{"opponent": "h2h", "seat": 0, "n": 200, "candidate_wins": 200, "baseline_wins": 0,
-            "draws": 0}]                                            # candidate crushes baseline head-to-head
+            "draws": 0}]                                            # candidate crushes baseline
     rep = build_report(baseline={}, candidate={}, matchups=neutral, h2h=h2h)
-    assert abs(rep["paired_delta"]["win_delta"]) < 1e-9            # H2H did not move the delta
-    assert rep["verdict"] != "pass"                                # ...so the crush can't ship it
+    assert abs(rep["paired_delta"]["win_delta"]) < 1e-9
+    assert rep["verdict"] != "pass"
     tagged = [m for m in rep["matchups"] if m.get("informational")]
-    assert len(tagged) == 1 and tagged[0]["opponent"] == "h2h"    # but it IS in the report for the human
+    assert len(tagged) == 1 and tagged[0]["opponent"] == "h2h"

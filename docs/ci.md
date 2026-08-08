@@ -449,7 +449,7 @@ does **not** mean the agent is right: the baseline records every frame it captur
 including the **98** where the agent contradicts a human ruling that still stands. (It was 101 over a
 332-frame corpus, and the figure is now taken over the **gradeable** set — the 25 **Voided Rulings**
 are neither agreement nor disagreement, ADR-0088.) Those are ranked in
-[`docs/plans/decider-disagreement-triage.md`](plans/decider-disagreement-triage.md) and owned by the
+the decider-lab diff report (regenerate: `python -m tools.train.decider_lab diff`) and owned by the
 correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance

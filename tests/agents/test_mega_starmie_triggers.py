@@ -37,9 +37,8 @@ _STATS = DictCardStatProvider({
     # Stage 2, evolvesFrom Raboot (none in deck -> stranded, dead in hand).
     CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
                         name="Cinderace", evolvesFrom="Raboot"),
-    # Raboot is PRINTED but never on the deck list — which is what strands the Cinderace.
-    # "Stranded" is a claim about the DECK; `common.playability` (ADR-0104) fails OPEN on a previous
-    # stage the pool holds no printing of, because that is unreadable data, not a dead card.
+    # Raboot is PRINTED but never on the deck list — which is what strands the Cinderace. ADR-0104
+    # fails OPEN on a previous stage the pool holds no printing of, so the printing must exist here.
     RABOOT: CardStat(RABOOT, synthetic=True, energyType=FIRE, weakness=WATER, hp=90, name='Raboot'),
 })
 _TAGS = CardFunctions({CINDERACE: ["opener"]})
@@ -90,11 +89,9 @@ def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
 
 # --- conserve-discard-energy-prefer-basic (needs the minCostDamage + active_cheap_attack_kos signals) ---
 WATER_ENERGY, IGNITION = 3, 17
-_A_JET_IGN, _A_NEB_IGN = 51, 52   # Jetting Blow / Nebula Beam as real records (the minCostDamage
-                                  # fallback is retired, ADR-0052). Card facts VERIFIED at source
-                                  # (data/EN_Card_Data.csv): Mega Starmie ex is a Stage 1 evolving from
-                                  # Staryu — which is what makes Ignition provide {C}{C}{C} on it — with
-                                  # Jetting Blow {W} 120 and Nebula Beam ●●● 210.
+_A_JET_IGN, _A_NEB_IGN = 51, 52   # Jetting Blow {W} 120 / Nebula Beam ●●● 210, verified in
+                                  # data/EN_Card_Data.csv. Mega Starmie ex is a Stage 1 from Staryu,
+                                  # which is what makes Ignition provide {C}{C}{C} on it.
 _IGN_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
                            hp=330, minAttackCost=1, minCostDamage=120, maxDamage=210,
@@ -105,12 +102,8 @@ _IGN_STATS = DictCardStatProvider({
     9999: CardStat(9999),                                          # generic opp body (HP set via poke)
 }, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1, energyTypes=(WATER,)),
             _A_NEB_IGN: AttackStat(_A_NEB_IGN, damage=210, cost=3, energyTypes=(0, 0, 0))})
-# REAL Function Tags, copied from `src/common/card_functions.json` rather than trimmed to the one
-# tag a test happened to read. Ignition Energy carries THREE — `discard_eot`, `provides:1` and
-# `provides_evo:3` — and the provision is the parametric pair, not the rider: since Issue #418 the
-# {C}{C}{C} on an Evolution is read off `provides_evo:3`, where before it was inferred from
-# `discard_eot` + `evolvesFrom` by a hardcode that is right only because Ignition is the sole card
-# carrying both. A fixture that omits the provision tags is asserting a card fact that is not true.
+# REAL Function Tags, not trimmed to the one tag a test reads: Ignition's {C}{C}{C} on an Evolution
+# is read off `provides_evo:3`, so a fixture omitting the provision tags asserts an untrue card fact.
 _IGN_TAGS = CardFunctions({IGNITION: ignition_tags(),
                            CINDERACE: ["opener"]})
 
@@ -129,13 +122,11 @@ def _attach_ignition_onto_active_wincon(opp_hp, hand):
 
 @pytest.mark.req("REQ-MS-0003")
 def test_conserve_ignition_fires_when_the_cheap_attack_already_kos():
-    """Cheap Jetting Blow (120) KOs the 120-HP Active and a reusable Water is in hand → don't burn the
-    finite Ignition (CCC→Nebula); prefer the Water. (dont-waste-discard-energy exempts the wincon,
-    so this deck rule is what covers it.)"""
+    """Cheap Jetting Blow (120) KOs the 120-HP Active and a reusable Water is in hand → don't burn
+    the finite Ignition (CCC→Nebula); prefer the Water."""
     obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[WATER_ENERGY, IGNITION])
-    # `conserve-discard-energy-prefer-basic` is DELETED (#139, ADR-0069 §7): the burst's tonight-credit
-    # is CAPPED at what the reusable Basic in hand would have bought unless its attack converts a KO,
-    # and the resource tie-break then spends the renewable card — so the Basic wins on arithmetic.
+    # `conserve-discard-energy-prefer-basic` is DELETED (ADR-0069 §7): the burst's tonight-credit is
+    # CAPPED at what the reusable Basic would have bought unless its attack converts a KO.
     row = _ign_pilot().explain(obs).attach_working["eq"][0]
     assert row["units"] == 3, "the burst's printed provision must stay honest — only its CREDIT is capped"
     assert row["this_turn"] == 120.0, (
@@ -159,11 +150,8 @@ def test_conserve_ignition_silent_without_a_reusable_water_alternative():
     assert "conserve-discard-energy-prefer-basic" not in _fired(_ign_pilot().explain(obs).options[0])
 
 
-# --- Hero's Cape deploy, end-to-end in the deck (GENERAL Tool Doctrine `deploy-hp-tool`) --------
-# Hero's Cape's +100 no longer hardcoded in deck: Tool Doctrine (ADR-0028) reads it off the
-# parsed `CardStat.hpBonus` (= 100), deploys PROACTIVELY by survival-turns board-math (no longer the
-# reactive breakpoint). These confirm wiring fires through real mega_starmie Pilot -- ACE SPEC
-# Cape, real deck roles (Mega Starmie ex = win_condition), weakness-aware `Board.incoming_active_damage`.
+# --- Hero's Cape deploy, end-to-end in the deck (Tool Doctrine, ADR-0028) ----------------------
+# The +100 is read off the parsed `CardStat.hpBonus`; deploy is PROACTIVE by survival-turns math.
 HEROS_CAPE, FIRE = 1159, 2
 _CAPE_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
@@ -188,41 +176,12 @@ def _attach_cape_vs(opp_attacker):
                                      opp_active=poke(opp_attacker), hand=[HEROS_CAPE]))
 
 
-# ── Tool Doctrine rung tests — DELETED (POC-T4/5, Issue #386) ────────────────────────────────────
-#
-# `doctrines/doctrine_tool.py` is gone: all five of its rungs are on Issue #386's deletion list and
-# the rungs were the whole module. Every test removed here asserted `"deploy-hp-tool" in _fired(...)`,
-# `"save-tool-for-the-attacker" in ...` or `"protect-ace-spec-tool" in ...` — which mechanism fired,
-# not what the agent played.
-#
-# WHERE THE FACTS WENT: a Tool that buys a survival turn is now `survival` on the composed end board
-# (`deploy_value`, ADR-0086, prices the deploy), and the tests that carry it at decision level are
-# `tests/scouting/test_tool_holder_facts.py`'s holder-fact readers and the corpus frames. The full
-# fact-by-fact audit is in `tests/strategy/test_tool_doctrine.py`, which survives for the one rung
-# that is NOT deleted (`hold-irreplaceable-tool-dont-shuffle`).
-# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
-# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
-# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
-# passing, because dead text that looks like a guard is worse than no guard.
-#
-# `deploy-hp-tool` is deleted with the whole Tool Doctrine (see tests/strategy/test_tool_doctrine.py
-# for the fact-by-fact audit). A Cape that buys a survival turn is now `survival` on the end board.
-# REQ-MS-0005's three `develop-the-accel-recipient` tests stood here until ADR-0086 deleted the rung
-# (decision 8: the accel-recipient question folds onto the ATTACH axis). Their successor is
-# `test_deploy_value.py`'s accel-unlock leg, built on `_accel_fixture.py` — the REAL mega_lucario
-# pilot rather than these stubs, because the leg reads card facts (Aura Jab's rider, Mega Brave's
-# {F}{F} bound) a stub would have to re-assert. It covers the same three cases: the leg pays when the
-# rider is stranded, and prices ZERO both when a recipient is already benched and when the Active is
-# not the accelerator — the two stand-downs DERIVED rather than hand-written.
-#
-# Deleted rather than left in place: with the rung gone, the two `not in _fired(...)` assertions pass
-# vacuously — they would have gone on reporting green while testing nothing at all.
+# The whole Tool Doctrine is DELETED (Issue #386); a Cape that buys a survival turn is now
+# `survival` on the composed end board. `tests/strategy/test_tool_doctrine.py` holds the audit.
 
 
-# --- Boss's Orders gust, end-to-end through the REAL mega_starmie Pilot (general doctrine, ADR-0022) ---
-# Deck runs ONE gust card (Boss's Orders, id 1182, Function Tag `gust`). These confirm GENERAL
-# gust rules fire through shipped deck Pilot -- real roles (Mega Starmie ex = win_condition),
-# `_can_ko` oracle, and SWITCH target-select.
+# --- Boss's Orders gust, end-to-end through the REAL mega_starmie Pilot (ADR-0022) -------------
+# The deck runs ONE gust card (Boss's Orders, id 1182, Function Tag `gust`).
 BOSS_ORDERS = 1182
 WALL_810, KO_BENCH_811 = 810, 811
 _A_JET_GUST = 52   # Jetting Blow as a real record (the minCostDamage fallback is retired, ADR-0052)
@@ -242,17 +201,10 @@ def _gust_pilot():
                  stats=_GUST_STATS, functions=_GUST_TAGS)
 
 
-# ── a gust WHETHER-TO-PLAY rung test — DELETED (POC-T4/5, Issue #386) ────────────────────────────
-#
-# `gust-for-the-ko` (+50) is deleted; the gust TARGET side is untouched. Under differencing, gusting
-# a body the composer can then Knock Out is a sequence that takes a prize out-scoring one that does
-# not — not a +50 endorsement. The audit and the decision-level successors are in
-# `tests/strategy/test_gust.py`'s deletion note.
+# `gust-for-the-ko` is DELETED (Issue #386); the gust TARGET side is untouched.
+
 # --- GENERAL: the deck-source accel rider (Turbo Flare) is DERIVED, not declared ---------------
-# hypergeometric-fetch-closure follow-up 2026-07-18: the attack fact lives in AttackStat
-# (recoverSource="deck"), the Tactical credit and the accel rung family derive from it — the
-# `accel_source` Role declaration becomes the confirm, so a NEW deck fielding Cinderace as its
-# starter/accelerator gets the whole bench-fill machinery with no deck rules.
+# The attack fact lives in `AttackStat.recoverSource="deck"`; the Role declaration is the confirm.
 
 def _shipped():
     import sys as _sys
@@ -263,9 +215,7 @@ def _shipped():
 
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_turbo_flare_rider_is_in_the_attack_stat_and_derives_the_accel_body():
-    """The shipped provider parses Turbo Flare (965) as a deck-source bench accel — and Cinderace
-    joins the DERIVED bench-accelerator set from that attack fact alone (the Role declaration is
-    now the confirm, not the source of truth)."""
+    """Cinderace joins the DERIVED bench-accelerator set from the parsed attack fact alone."""
     sp = _shipped()
     st = sp._attack_stat(965)
     assert (st.recoverN, st.recoverEnergyType, st.recoverTarget, st.recoverSource) == (
@@ -283,9 +233,8 @@ def _shipped_lucario_attack_stat():
 
 
 def _turbo_flare_obs(*, bench=(STARYU,), discard=(), prize=6):
-    """A mega_starmie board with Cinderace Active. Driven through the real `_board()` so the read
-    reaches its StateModel — ADR-0077 retired the hand-injectable `Board(deck_known_counts=...)`
-    path, because anchoring is now the Count Triple's own regime rather than a separate branch."""
+    """A mega_starmie board with Cinderace Active, driven through the real `_board()`: ADR-0077
+    retired the hand-injectable `Board(deck_known_counts=...)` path."""
     me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}],
           "bench": [{"id": c, "hp": 70, "energies": []} for c in bench],
           "hand": [], "discard": [{"id": c} for c in discard],
@@ -302,10 +251,8 @@ def _turbo_flare_units(sp, obs):
 
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_turbo_flare_credit_is_need_and_fuel_gated():
-    """`_recover_units` prices Turbo Flare like Aura Jab, with the fuel bound read from the DECK:
-    the full 3 with a benched Staryu (its forward Mega Starmie needs 3) and the 9-Water suite
-    untouched; 0 on an empty bench (firing blanks — the signal the deck rules hand-encoded); 0 once
-    the deck is provably dry of Basic Energy, which the expectation must NOT resurrect."""
+    """`_recover_units` reads the fuel bound from the DECK: 0 on an empty bench, and 0 once the deck
+    is provably dry of Basic Energy — which the expectation must NOT resurrect."""
     sp = _shipped()
     assert _turbo_flare_units(sp, _turbo_flare_obs()) == 3
     assert _turbo_flare_units(sp, _turbo_flare_obs(bench=())) == 0
@@ -315,11 +262,8 @@ def test_turbo_flare_credit_is_need_and_fuel_gated():
 
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_turbo_flare_keeps_its_credit_when_the_pigeonhole_floor_would_zero_it():
-    """Issue #172 / ADR-0077 at the shipped-agent seam. 6 of the 9 Water visible in the discard and
-    5 face-down prizes leaves 3 unseen: the retired pigeonhole floor read `max(0, 3 - 5)` = 0 and
-    killed the rider outright, on a deck that still holds Water with near-certainty. The expectation
-    is fractional and strictly positive, so the dividend survives — and stays bounded by the
-    printed `recoverN` of 3."""
+    """ADR-0077 at the shipped-agent seam: the retired pigeonhole floor zeroed the rider outright,
+    while the expectation stays fractional, strictly positive and bounded by `recoverN`."""
     sp = _shipped()
     obs = _turbo_flare_obs(discard=(WATER,) * 6, prize=5)
     board = sp._board(obs, obs.get("select"), carried=sp.carried())
@@ -332,10 +276,7 @@ def test_turbo_flare_keeps_its_credit_when_the_pigeonhole_floor_would_zero_it():
 
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_accel_machinery_derives_without_any_role_declaration():
-    """A Strategy with NO roles at all: `_roles_of` still carries the derived `accel_source` for
-    Cinderace (so the Role-keyed accel rungs fire), and `accel_recipient_missing` still flags a
-    bare bench with the accelerator Active / stands down once a Line member is benched — the whole
-    bench-fill trigger with zero deck rules (repeatable for new Cinderace decks)."""
+    """A Strategy with NO roles at all still derives `accel_source` and the bench-fill trigger."""
     from common.strategy import Strategy
     sp = _shipped()
     bare = Strategy(lines=STRATEGY.lines)                        # lines only, no roles

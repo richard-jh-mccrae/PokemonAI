@@ -68,9 +68,7 @@ def _corr_posture(mismatch=True):
 
 
 def test_proposal_carries_posture_mismatch_and_believed_archetype(tmp_path):
-    """ADR-0041: a posture-flagged correction surfaces its mismatch + believed archetype on the
-    proposal AND in the durable snapshot (open + skipped), so /blunder-buster routes it to the
-    matchup layer instead of authoring a deck-agnostic weight."""
+    """ADR-0041: /blunder-buster routes a posture-flagged correction to the matchup layer, not a weight."""
     p = propose_hypothesis(_corr_posture())
     assert p.posture_mismatch is True
     assert p.believed_archetype == "Mega Lucario ex"
@@ -95,9 +93,8 @@ def _corr_turn():
 
 
 def test_scoped_proposal_carries_its_scope_subject_and_ledger_key(tmp_path):
-    """ADR-0049: the snapshot /blunder-buster reads says WHAT each open blunder is about and how to
-    ledger it. The `key` is scope-aware, so disposing of a Turn Correction can't retire the Decision
-    Corrections inside that Turn — and the sketch describes the played line, not one option."""
+    """ADR-0049: the `key` is scope-aware, so disposing of a Turn Correction cannot retire the
+    Decision Corrections inside that Turn."""
     p = propose_hypothesis(_corr_turn())
     assert p.id == "sequencing-error-81785223-t12"
     assert p.scope == "turn" and p.subject == 12 and p.seat == 1

@@ -37,9 +37,7 @@ FEATURE_NAMES = (
 
 
 def features_from_board(board) -> list[float]:
-    """The feature vector for ``board`` in :data:`FEATURE_NAMES` order — pure, total, never raises.
-    Booleans map to 0.0/1.0; a ``None`` path-turn reads as :data:`_UNKNOWN_TURNS`; a missing field
-    reads as 0.0 (the null-model-safe default)."""
+    """The feature vector for ``board`` in :data:`FEATURE_NAMES` order — pure, total, never raises."""
     my_turns = board.my_path_turns if board.my_path_turns is not None else _UNKNOWN_TURNS
     their_turns = board.their_path_turns if board.their_path_turns is not None else _UNKNOWN_TURNS
     race = board.race_ahead if board.race_ahead is not None else (their_turns - my_turns)

@@ -1,23 +1,10 @@
-"""`gates.records_a_decline_it_cannot_state` — the record-shape exclusion (Issue #197, the
-2026-07-30 f3 sitting; lifted to `gates.py` by Issue #243 / ADR-0089 decision on Q1).
+"""`gates.records_a_decline_it_cannot_state` — the record-shape exclusion (Issue #197, ADR-0089).
 
-It guards a change to a gate's own INSTRUMENT, so it gets its own tests: a rule that quietly widened
-would stop a gate failing on real regressions, which is the one failure mode a gate cannot have.
-
-The gap it covers: at `decision` scope `build_correction` requires `correct` to be non-empty and to
-index a legal option, so "take none" — the answer an OPTIONAL select exists to allow — has no
-encoding. A record on such a select that reads `chosen == correct` has not stated that taking the
-option was right; it has failed to state anything, and grading a decider against it turns a CORRECT
-decline into a REGRESSION (ep83661652 f3, whose rationale says the opposite of its fields).
-
-The scope guard is the half that only a SHARED predicate needs, and the corpus proves why: at
-`turn` scope `correct: []` is encodable and is a real DECLINE, which `satisfies_human` grades
-exactly. Unguarded, this predicate would swallow `86088989|0|turn|0`.
-
-**Issue #251 ruled what the predicate is FOR: it REPORTS, it never excludes** (ADR-0112). The
-second half of this module guards that ruling from both directions — the Decision Gate readout must
-NAME an exposed frame and keep counting it, and the gate verdict must give it no excuse.
-"""
+At `decision` scope `build_correction` requires a non-empty `correct`, so "take none" — the
+answer an OPTIONAL select exists to allow — has no encoding, and grading against such a record
+turns a CORRECT decline into a REGRESSION. At `turn` scope `correct: []` IS encodable, which is
+why the scope guard exists. Issue #251 ruled the predicate REPORTS and never excludes
+(ADR-0112); the second half of this module guards that from both directions."""
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,10 +37,7 @@ def test_an_optional_select_asserting_the_agents_own_pick_is_excluded():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_a_mandatory_select_is_never_excluded_even_when_chosen_equals_correct():
-    """The narrowness that makes this safe. On a select I MUST answer, `chosen == correct` is a real
-    ruling — the pick was right — and a decider that flips away from it is a genuine regression the
-    gate must still fail on. Ten of the thirteen `chosen == correct` records repo-wide are this
-    shape; excluding them would blind the gate for the sake of the three it is aimed at."""
+    """The narrowness that makes this safe: on a select I MUST answer, `chosen == correct` is a ruling."""
     assert unstatable(_Rec(chosen=[0], correct=[0]), _obs(1)) is False
 
 
@@ -73,11 +57,8 @@ def test_ordering_does_not_defeat_the_comparison():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_a_turn_scope_decline_is_statable_and_must_not_be_swallowed():
-    """THE guard the lift added, and the corpus is the reason. `86088989|0|turn|0` records
-    `correct: []` on a `minCount 0` select — at turn scope that is an ENCODABLE decline and a real
-    ruling, which `satisfies_human` grades exactly. `[] == []` makes the bare comparison true, so
-    without the scope test this predicate would drop a live ruling out of grading. A guard that
-    blinds a ruling is worse than the false REGRESSION it was written to prevent."""
+    """THE guard the lift added: at `turn` scope `correct: []` is an ENCODABLE decline and a real
+    ruling. `[] == []` makes the bare comparison true, so without the scope test it is dropped."""
     assert unstatable(_Rec(chosen=[], correct=[], scope="turn"), _obs(0)) is False
 
 
@@ -112,9 +93,7 @@ def test_the_real_f3_record_is_the_case_this_exists_for():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_corpus_shape_census_is_what_the_scope_guard_was_sized_against():
-    """The measurement that produced the guard, asserted so it cannot rot silently. Three committed
-    records sit on an optional select asserting only the agent's own pick; exactly one is scoped
-    (a real decline) and must survive, and exactly two are `decision` scope and must be excluded."""
+    """The measurement that produced the guard, asserted so it cannot rot silently."""
     from train.gates import keyed_corrections
     hits = [(k, c) for k, c in keyed_corrections()
             if c.obs and int(((c.obs.get("select") or {}).get("minCount") or 0)) == 0
@@ -127,25 +106,8 @@ def test_the_corpus_shape_census_is_what_the_scope_guard_was_sized_against():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_decline_census_the_writer_relaxation_was_sized_against():
-    """Issue #229's measurement, asserted so the NEXT drift is loud rather than inferred.
-
-    Measured through the Corpus Reader (`keyed_corrections`), never by walking raw JSONL: 23 records
-    carry no explicit `scope` key and only default to `decision` in `Correction.from_dict`, so a raw
-    walk mis-scopes them and under-counts. The issue body's own table said *three* degenerate records
-    and it is **two** — the third is `86088989|0|turn|0`, a turn-scope decline that was always legal.
-
-    What each number is load-bearing for:
-
-    * **10 declines, every one `turn` scope** — the writer's refusal is why, not the humans' rulings.
-      When a `decision`-scope decline is first recorded this fails, and that is the shape working.
-    * **28 decision-scope optional selects, 2 exposed** — the other 26 name a `correct` that differs
-      from `chosen`, i.e. state a real preference. The gap was never "every optional select".
-
-    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0123): the first ctx-17 (`SelectContext.HEAL`)
-    rulings. Only the corpus-size denominator moves — every load-bearing number below is unchanged,
-    and that is the point of re-taking it rather than loosening it. The three new records are
-    mandatory selects (`minCount`/`maxCount` 1/1) naming a non-empty `correct`, so they are neither
-    declines nor optional-select records and touch none of the three counts this test exists for."""
+    """Issue #229's measurement. Read through the Corpus Reader, never raw JSONL: a record with no
+    explicit `scope` key only defaults to `decision` inside `Correction.from_dict`."""
     from train.gates import keyed_corrections
     recs = keyed_corrections()
     assert len(recs) == 375
@@ -161,16 +123,11 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
         "83661652|0|decision|3", "85785609|0|decision|4"]
 
     # POSITIVE CONTROL. Every assertion above is a shape that must NOT be found; an empty corpus, a
-    # broken reader or a mis-typed field would satisfy all of them at once. A reader that finds no
-    # ruling at all is a broken instrument, not a clean corpus.
-    # 362 -> 365 on 2026-08-06 (Issue #409 / ADR-0123): the three ctx-17 HEAL rulings each name a
-    # non-empty `correct`, and 375 total - 10 declines = 365 keeps this in step with `len(recs)`.
+    # broken reader or a mis-typed field would satisfy all of them at once.
     assert sum(1 for _k, c in recs if c.correct) == 365
 
 
-# ---------------------------------------------------------------------------
 # Issue #251 — the predicate REPORTS. It must never come to excuse or exclude.
-# ---------------------------------------------------------------------------
 
 def _row(key, *, chosen=None, correct=None, **extra):
     return {"key": key, "chosen": chosen, "correct": correct, **extra}
@@ -183,13 +140,8 @@ def _rpt(rows):
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_readout_names_a_synthetic_exposed_frame_and_still_counts_it(capsys):
-    """**THE test Issue #251 exists to leave behind.** Driven by a SYNTHETIC record, not the corpus:
-    neither live exposed frame's pick has moved off the baseline, so a test that only read the corpus
-    could not prove the section survives a flip — and the failure this guards against is a future
-    session "helpfully" excluding the frame to quieten the gate.
-
-    Two assertions, and the second is the load-bearing one: the frame is NAMED, and it is still
-    counted in the gradeable population. An exclusion would satisfy the first alone."""
+    """Driven by a SYNTHETIC record: neither live exposed frame's pick has moved off the baseline. The
+    load-bearing assertion is the second — the frame is still counted in the gradeable population."""
     from train.decider_lab import gradeable_rows, print_unstatable_readout
     key = "99999999|0|decision|7"
     rows = [_row(key, chosen=[], correct=[0]), _row("other|0|decision|1", chosen=[1], correct=[1])]
@@ -228,11 +180,7 @@ def test_the_readout_says_so_when_an_exposed_frame_is_NOT_gradeable(capsys):
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_an_exposed_frame_gets_no_excuse_from_either_gate():
-    """**Decision D1**, asserted behaviourally rather than by reading source. The predicate reports;
-    it never excuses. A REGRESSION (Decision Gate) or an `OK -> MISS` (Discrimination Gate) on an
-    exposed frame must FAIL exactly as any other unruled flip does — wiring the exclusion is
-    precisely what would stop that. Both verdicts are asserted because the ruling covers both, and
-    an untested one is where the exclusion would land unnoticed."""
+    """Decision D1: the predicate reports, it never excuses. Asserted behaviourally, not from source."""
     from train.gates import decision_gate_verdict, discrimination_gate_verdict
     exposed = "85785609|0|decision|4"
     assert decision_gate_verdict([{"key": exposed, "verdict": "REGRESSION"}], held_out={}) is False
@@ -245,13 +193,8 @@ def test_an_exposed_frame_gets_no_excuse_from_either_gate():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_live_exposure_is_named_and_still_carried_by_the_committed_baseline():
-    """The corpus half. Both exposed frames must still be IN the committed capture and labelled on
-    both sides — i.e. still gradeable.
-
-    The baseline is a never-auto-recaptured ruling record, so this does not go red the *instant*
-    someone excludes a frame; it goes red at the next deliberate re-capture, which is the moment a
-    human is looking. What it does catch immediately is the exposure moving — a record repaired,
-    added or re-ruled — which is the change that should never pass unnoticed."""
+    """The baseline is never auto-recaptured, so this reds at the next deliberate re-capture rather
+    than the instant someone excludes a frame. What it catches immediately is the exposure MOVING."""
     import json
     from train.decider_lab import gradeable_rows, unstatable_frames
     exposed = unstatable_frames(REPO / "data" / "corrections")
@@ -267,15 +210,8 @@ def test_the_live_exposure_is_named_and_still_carried_by_the_committed_baseline(
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_neither_exposed_frame_is_a_leaf_frame_so_no_symmetric_fix_is_owed():
-    """**Decision D4's measurement**, asserted so the next reader does not re-derive it — or worse,
-    apply symmetry by default.
-
-    Stated precisely, because the issue's own version was wrong: `is_leaf_frame` is a DISJUNCTION.
-    *"It requires `select.context == 0`"* describes only its second arm — a `turn_plan` record is a
-    leaf frame at ANY context with an EMPTY `correct`, which is why the corollary *"a repaired
-    decline is not a leaf frame either"* is false in general. What holds for these two frames is
-    narrower and is what this asserts: neither carries a `turn_plan` and both are context 2, so both
-    fail both arms — before a repair and after one, since re-ruling adds no `turn_plan`."""
+    """`is_leaf_frame` is a DISJUNCTION — a `turn_plan` record is a leaf frame at ANY context with an
+    EMPTY `correct`, so "a repaired decline is not a leaf frame either" is false in general."""
     from train.gates import keyed_corrections
     from train.leaf_lab import is_leaf_frame
     recs = keyed_corrections()
@@ -286,9 +222,8 @@ def test_neither_exposed_frame_is_a_leaf_frame_so_no_symmetric_fix_is_owed():
         assert not getattr(c, "turn_plan", None), k
         assert is_leaf_frame(c) is False, k
 
-    # THE DISJUNCTION, asserted directly on the corpus so the false reading cannot come back:
-    # `86088989|0|turn|0` is context 2 with `correct: []` and IS a leaf frame, purely on its
-    # `turn_plan`. It is also the record the scope guard above exists to protect.
+    # THE DISJUNCTION: `86088989|0|turn|0` is context 2 with `correct: []` and IS a leaf frame,
+    # purely on its `turn_plan`.
     turn_plan_decline = next(c for k, c in recs if k == "86088989|0|turn|0")
     assert turn_plan_decline.correct == [] and turn_plan_decline.turn_plan
     assert ((turn_plan_decline.obs or {}).get("select") or {}).get("context") == 2

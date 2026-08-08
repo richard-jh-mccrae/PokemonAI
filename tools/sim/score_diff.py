@@ -1,25 +1,15 @@
-"""score_diff — the behavior-neutrality gate for Pilot/Strategy refactors.
+"""score_diff — the behavior-neutrality gate for Pilot/Strategy refactors. Replays recorded ``obs``
+through the CURRENT Pilot and compares per-frame decisions against a saved reference capture.
 
-Replays a corpus of recorded decision states (``obs``) through the CURRENT build's Pilot and
-compares per-frame decisions against a saved capture of a reference build. Two modes:
-
-- ``scores`` — per-option scores AND the chosen option must be identical (score-equality; the
-  fold-into-general gate). Fired rule IDS are deliberately not compared — a fold renames rules
-  without moving scores.
-- ``choice`` — only the chosen option must be identical (decision-equality; the gate for
-  near-neutral vocabulary fixes, e.g. a Function-Tag addition).
-
-Corpus sources (both offline, engine-backed via the committed cg binaries):
-- Corrections (``data/corrections/**/corrections.jsonl``) — every record carries the live ``obs``.
-- Replay films (``env.toJSON()`` files, e.g. ``tools/sim/selfplay.py`` output) — every decision
-  frame whose next frame recorded ``obs`` + ``selected``.
+``scores`` mode demands identical per-option scores AND choice (the fold-into-general gate); fired
+rule IDS are deliberately NOT compared, since a fold renames rules without moving scores.
+``choice`` mode demands only the same chosen option.
 
     python tools/sim/score_diff.py capture --agent mega_starmie --out data/score_diff/base.json
     python tools/sim/score_diff.py diff    --agent mega_starmie --baseline data/score_diff/base.json
     # both accept: --corrections data/corrections --replays data/replays/selfplay/<stem> [--mode]
 
-Exit code 0 = no divergence. Any divergence prints per-frame detail (key, chosen, first score
-delta) and exits 1.
+Exit code 0 = no divergence; any divergence prints per-frame detail and exits 1.
 """
 from __future__ import annotations
 
@@ -60,9 +50,8 @@ def diff_records(before: dict | None, after: dict | None, *, mode: str = "scores
 
 def corrections_corpus(root: Path | str):
     """Yield ``("corr:<episode>:<frame>", obs)`` for every committed Correction carrying obs."""
-    # The store owns both HOW a record is constructed and WHERE the logs live (ADR-0087
-    # decision 1). This already constructed correctly; asking for the file list too removes the last
-    # local copy of the layout.
+    # The store owns both HOW a record is constructed and WHERE the logs live (ADR-0087 decision 1),
+    # so the file list comes from it too — no local copy of the layout.
     from train.blunder.store import jsonl_files, load_corrections
     for f in jsonl_files(root):
         for c in load_corrections(f):
@@ -71,10 +60,8 @@ def corrections_corpus(root: Path | str):
 
 
 def replay_corpus(replays):
-    """Yield ``("replay:<episode>:<frame>", obs)`` for every decision frame of loaded replays.
-
-    A decision prompted at film frame ``i`` records its ``selected`` and the aligned agent ``obs``
-    one frame later (``film[i+1]``) — same alignment as the blunder pipeline (backfill_obs)."""
+    """Yield ``("replay:<episode>:<frame>", obs)`` per decision frame. A decision prompted at film
+    frame ``i`` records its ``selected`` and aligned ``obs`` one frame LATER."""
     from train.blunder.decisions import _film
     for replay in replays:
         episode = (replay.get("info") or {}).get("EpisodeId")

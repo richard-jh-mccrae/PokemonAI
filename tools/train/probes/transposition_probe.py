@@ -79,9 +79,8 @@ def probe_frame(pilot, c):
         pl = (end_obs.get("current") or {}).get("players") or []
         m = pl[mi] if 0 <= mi < len(pl) and pl[mi] else {}
         if res == mi:
-            # IMPORTED, not re-derived (Issue #362) — see `gate0_ab.py`'s note: the shipped win
-            # short-circuit is now the derived `WIN_PRIZES` band, and the same honest limit applies
-            # here, since the non-win branch below is still the retired `_leaf_value`.
+            # IMPORTED, not re-derived (Issue #362): the win short-circuit is the derived
+            # `WIN_PRIZES` band, while the non-win branch below is still the retired `_leaf_value`.
             return KO_SCORE * WIN_PRIZES, ("WIN",)
         taken = max(0, start_prizes - len(m.get("prize") or []))
         act = next((p for p in (m.get("active") or []) if p), None)

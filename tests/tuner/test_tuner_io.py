@@ -32,9 +32,8 @@ def test_sparse_overrides_keeps_only_changed_weights():
 
 
 def test_authored_seeds_merge_weight_overrides_as_the_baseline():
-    """REQ-WEIGHTS-0003 (ADR-0035): the tuner's seed baseline is the authored-EFFECTIVE weight
-    (Hypothesis defaults merged with the deck's ``weight_overrides``), so ``sparse_overrides``
-    emits only genuine learned deltas — a fit equal to the authored override ships nothing."""
+    """ADR-0035: the seed baseline is the authored-EFFECTIVE weight (defaults merged with the deck's
+    `weight_overrides`), so `sparse_overrides` emits only genuine learned deltas."""
     general = Strategy(hypotheses=[Hypothesis("g", "", when=lambda c: True, weight=15.0)])
     deck = Strategy(hypotheses=[Hypothesis("d", "", when=lambda c: True, weight=10.0)],
                     weight_overrides={"g": 30.0})

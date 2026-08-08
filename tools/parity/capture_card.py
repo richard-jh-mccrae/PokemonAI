@@ -1,21 +1,14 @@
 """Per-card micro-trace capture (ADR-0050 M4 item 2, needs the DLL).
 
-Records 1..N native games per TARGET card, driven by a target-biased policy that reuses the
-audit drive-shell heuristics (`tools/sim/audit_attacks.py`): build a legal side deck around
-the target's evolution line, climb it on the Active, bank energy, then
-
-- attack targets: fire the target attack (all its attacks when ``--attack`` omitted), then
-  keep playing a chaos tail so post-attack checkup ticks / promotions land in the trace;
-- trainer / tool / energy targets: play or attach the target whenever the menu offers it;
-- ability targets: choose the target's ABILITY option whenever offered.
-
-Each game is written as a standard `parity-trace/1` (with god frames), so `replay_diff.py`
-and the CI parity gate consume micro-traces exactly like match traces.
+Records 1..N native games per TARGET card under a target-biased policy that reuses the audit
+drive-shell heuristics (`tools/sim/audit_attacks.py`): attack targets fire the target attack and
+keep a chaos tail running; trainer / tool / energy targets are played whenever offered; ability
+targets take the ABILITY option. Each game is written as a standard `parity-trace/1`, so
+`replay_diff.py` and the CI parity gate consume micro-traces exactly like match traces.
 
     python tools/parity/capture_card.py 674 -n 2                 # card id, 2 seeds
     python tools/parity/capture_card.py 674 --attack 1301        # one specific attack
-    python tools/parity/capture_card.py 1105 --out tests/fixtures/parity --prefix heal
-"""
+    python tools/parity/capture_card.py 1105 --out tests/fixtures/parity --prefix heal"""
 from __future__ import annotations
 
 import argparse
@@ -64,11 +57,8 @@ def _live_pool(db: CardDB) -> dict[int, dict]:
 
 def build_decks(db: CardDB, card_id: int,
                 body_id: int | None = None) -> tuple[list[int], list[int], list[int]]:
-    """(own deck, opponent deck, own evolution chain) for a target card. Fodder and the
-    opponent body come from the LIVE pool (no deferred attacks), so the chaos tail can't
-    poison the trace with an unmodeled attack. ``body_id`` swaps the trainer-target
-    carrying line for a specific basic's evolution line (typed gates: Spikemuth Gym
-    needs Marnie's mons in the deck, Surfing Beach a {W} board)."""
+    """(own deck, opponent deck, own evolution chain) for a target card. Fodder and the opponent body
+    come from the LIVE pool, so the chaos tail cannot poison the trace with an unmodeled attack."""
     pool = _plain_pool(db)
     live = _live_pool(db)
     card = db.card(card_id)
@@ -79,9 +69,8 @@ def build_decks(db: CardDB, card_id: int,
             cost_types += [int(e) or int(card.energyType) or 3
                            for e in db.attacks[aid].energies]
         fodder = bench_fodder(live, set(chain))
-        # 1 copy each, not 4: an off-chain Basic can win the setup Active and strand the line
-        # (the engine only offers the redraw on a Basic-less hand), which `_drive_to_attack`
-        # reports as `_SetupMiss` and this module retries. Fewer copies, fewer wasted deals.
+        # 1 copy each, not 4: an off-chain Basic can win the setup Active and strand the line, which
+        # `_drive_to_attack` reports as `_SetupMiss` and this module retries.
         own = build_side_deck(chain, cost_types or [int(card.energyType) or 3], fodder,
                               fodder_copies=1)
     else:
@@ -255,9 +244,8 @@ def _deferred_attack_ids(db: CardDB) -> set[int]:
 
 def _chaos_tail(rec: _Recorder, rng: random.Random, steps: int,
                 avoid_attacks: set[int] = frozenset()) -> int:
-    """Keep playing chaos after the goal so checkup ticks / promotions / EOT flows land
-    in the record — steering clear of deferred attacks (a tail that wanders into an
-    unmodeled attack poisons the whole trace). Returns the terminal result (or -1)."""
+    """Keep playing chaos after the goal so checkup ticks / promotions / EOT flows land in the record,
+    steering clear of deferred attacks. Returns the terminal result (or -1)."""
     for _ in range(steps):
         cur = rec.obs.get("current") or {}
         res = cur.get("result", -1)
@@ -289,9 +277,8 @@ def capture_attack(db: CardDB, card_id: int, attack_id: int, seed: int):
     own_type = int(db.card(card_id).energyType) or 3
     cost = [int(e) for e in db.attacks[attack_id].energies]
     fill = [e or own_type for e in cost] or [own_type]
-    # NO fodder in the attacker's deck (the audit convention): a fodder basic could win
-    # the setup Active Spot and the drive-shell only evolves the Active. Snipe/spread
-    # targets live on the DEFENDER's bench.
+    # NO fodder in the attacker's deck (the audit convention): a fodder basic could win the setup
+    # Active Spot and the drive-shell only evolves the Active. Snipe targets live on the DEFENDER.
     own = build_side_deck(chain, fill)
     opp_body = bench_fodder(live, set(chain), n=3)
     def_chain = [opp_body[0]]
@@ -332,9 +319,8 @@ def capture_attack(db: CardDB, card_id: int, attack_id: int, seed: int):
 
 def capture_card(card_id: int, seed: int, *, attack_id: int | None = None,
                  body_id: int | None = None):
-    """One recorded native game biased around `card_id` → Trace (parity-trace/1).
-    Pokémon targets with a specific --attack go through the audit drive-shell;
-    everything else uses the target-biased chaos policy."""
+    """One recorded native game biased around `card_id` → Trace (parity-trace/1). Pokémon targets with
+    a specific --attack go through the audit drive-shell; everything else uses the chaos policy."""
     import json
 
     from capture_match import strip_obs

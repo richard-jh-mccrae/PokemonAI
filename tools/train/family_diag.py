@@ -4,36 +4,14 @@ cannot give.
     python tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json --out gate.json
     python tools/train/family_diag.py --diff gate.json --out data/leaf_lab/t3-term-diagnosis.md
 
-`wave_scan.py` answers *which frames does the leaf get wrong* and hands them to a human to rule.
-This answers the question that comes AFTER the ruling: *which term is responsible*. It simulates the
-developer's ruled option and the leaf's top-ranked option, scores both end boards with
-`state_value(..., working=...)`, and prints the per-family delta — so a flip stops being "the leaf
-ranked it 4th" and becomes "`development` credited a card play +0.20 that nothing charged for".
+Simulates the developer's ruled option and the leaf's top-ranked option, scores both end boards with
+`state_value(..., working=...)`, and prints the per-family delta. A family marked `FLAT` did not
+participate; flat on EVERY frame means inert on this path. The `line acct` row is reported beside
+the families because it is NOT part of the scalar — `planner._engine_leaf_value` adds it outside.
 
-It exists because of what the un-attributed view cost. Wave 3 closed with 65 frames still gating and
-one diagnosis available for all of them — *"the leaf cannot represent sequencing within a turn"* —
-which is true of 31 of them and says nothing about the other 34. Reading the family deltas split
-those 34 into two clusters with different owners in a single pass (`data/leaf_lab/t3-term-diagnosis.md`),
-and surfaced two defects no ruling had named: `threat` saturating into a one-bit term, and `hand`
-reading exactly 0.0000 on every leaf board.
-
-**How to read the output.** A family marked `FLAT` moved not at all between the two lines, so it did
-not participate in the decision. A term flat on EVERY frame is inert on this path, which is a
-stronger finding than a term that is merely wrong — a wrong term can be re-weighted, an inert one is
-a blind spot (`state_value.blind_spots`). The `line acct` row is reported beside the families
-because it is the only spend charge on the leaf path and is NOT part of the scalar
-(`planner._engine_leaf_value` adds it outside), so a comparison that ignored it would mis-attribute
-every card play.
-
-**Whose decision is which column** (Issue #356). `leaf` is `_engine_leaf_value`'s argmax over the
-menu — ONE rung feeding `_commit_best`, not the agent's answer. `chosen` is what the agent actually
-committed, read off the Correction. They are different objects and on real frames they are different
-values: on the twelve frames Issue #330 quotes they differ on **12 of 12**. Three issues read the
-`leaf` column as the agent's behaviour and filed a claim off it that the corpus does not support, so
-both columns are now rendered, explicitly compared, and counted in the header. A `--keys` list must
-declare `--source` for the same reason: handed decider-corpus keys — frames selected because the
-*live agent* got them wrong — this tool still produces a *leaf* diagnosis, and an unlabelled key list
-is the input that produced the false claim.
+`leaf` is that argmax, ONE rung feeding `_commit_best`, NOT the agent's answer; `chosen` is the
+committed decision. Three issues confused the two, hence both columns and `--keys`' mandatory
+`--source` (Issue #356).
 """
 from __future__ import annotations
 
@@ -46,15 +24,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-#: Below this, in prizes, a family's delta is reported but never named as the frame's DECIDER. The
-#: two frames it excludes moved on `readiness` by 0.0034 and 0.0004 prizes — 3.4 and 0.4 points on
-#: the leaf's KO_SCORE axis — which is not a term making a judgement, it is float noise wearing one.
-#: Naming a decider there would send the next reader after a term that did nothing.
+#: In prizes. Below it a family's delta is reported but never named the frame's DECIDER: a few
+#: thousandths on the leaf's KO_SCORE axis is float noise wearing a judgement.
 DECIDER_FLOOR = 0.005
 
-#: The one sentence that has to be in the OUTPUT rather than in a docstring, because the misreading
-#: happened to a session that had read the surrounding docs (Issue #356). Named so the test can
-#: assert on the rendered artifact instead of on a paraphrase of it.
+#: In the OUTPUT rather than a docstring: the misreading happened to a session that had read the
+#: surrounding docs (Issue #356). Named so a test can assert on the rendered artifact.
 LEAF_CAVEAT = ("**`leaf` is not what the agent did.** It is `planner._engine_leaf_value`'s argmax "
                "over the menu — ONE rung feeding `_commit_best`, which other rungs reach before a "
                "decision is committed. `chosen` is the committed decision, read off the Correction. "
@@ -76,22 +51,8 @@ SOURCE_CAVEAT = {
 
 
 def agent_columns(correction, leaf_top, label, *, equiv=None) -> dict:
-    """The AGENT-side columns the leaf columns keep getting mistaken for (Issue #356).
-
-    ``label`` is the caller's index→text renderer, threaded rather than rebuilt so `chosen` is
-    formatted by the same `_option_summary` as `ruled` and `leaf` — three columns rendered three ways
-    would invite the reader to attribute a wording difference to a decision difference.
-
-    * ``chosen`` — EVERY index the agent committed, joined. A multi-pick select is one decision with
-      several slots, and keeping only the first would reproduce this issue's defect in the new column.
-      A recorded DECLINE (``[]``) is named rather than left blank; an unreplayable pick is ``?``.
-    * ``leaf_is_chosen`` — literal, un-widened: did the leaf's single argmax name exactly the agent's
-      pick? It answers "would this row's `leaf` cell have misled me", which is a question about the
-      RENDERING, so widening it by equivalence would be answering a different one.
-    * ``agent_satisfies_ruled`` — `gates.satisfies_human`, the repo's ONE agreement predicate.
-      Equality is the wrong test and measurably so: reading it as equality scored `DISCARD` 1/12
-      where the honest number was 10/12. ``equiv`` is threaded in, exactly as both gates thread it.
-    """
+    """``leaf_is_chosen`` is UN-widened by equivalence on purpose — it asks whether this row's `leaf`
+    cell misleads, a question about rendering. ``agent_satisfies_ruled`` is `gates.satisfies_human`."""
     from train.gates import satisfies_human
 
     chosen = None if correction.chosen is None else list(correction.chosen)
@@ -108,11 +69,8 @@ def agent_columns(correction, leaf_top, label, *, equiv=None) -> dict:
 
 
 def _working(pilot, obs, idx) -> tuple:
-    """`state_value`'s per-family breakdown for the end board of taking option ``idx`` first.
-
-    Rides `planner._simulate_line` and `planner._leaf_state_model` rather than rebuilding either, so
-    the boards scored here are byte-for-byte the ones the Discrimination Gate ranks. A diagnostic
-    that scored its OWN reconstruction would attribute flips to terms the agent never evaluated."""
+    """Rides `planner._simulate_line` and `planner._leaf_state_model` rather than rebuilding either,
+    so the boards scored here are the ones the Discrimination Gate ranks."""
     from train.leaf_lab import _PLACEHOLDER_SBI
     from common.state_value import state_value
 
@@ -136,11 +94,8 @@ def _working(pilot, obs, idx) -> tuple:
 
 
 def diagnose(keys, *, corrections=None) -> list:
-    """One attribution record per frame: the two options, every family's delta, and the DECIDER.
-
-    The decider is the family with the largest delta AGAINST the ruled option — the term that has to
-    change for the frame to flip back. Ties and sub-:data:`DECIDER_FLOOR` margins report ``None``
-    rather than the argmax of noise."""
+    """The decider is the family with the largest delta AGAINST the ruled option — the term that has
+    to change to flip the frame back. Ties and sub-`DECIDER_FLOOR` margins report ``None``."""
     from common.option_equivalence import option_equivalence
     from train.blunder.frame_view import _Cards, _option_summary
     from train.gates import keyed_corrections
@@ -219,11 +174,8 @@ def render(rows: list, *, issue: str, source: str) -> str:
            "|---|---|---|---|---|---|---|---|---|" + "---|" * (len(families) + 1)]
     esc = lambda s: (s or "").replace("|", "\\|")                      # noqa: E731 — table cells
     for r in sorted(rows, key=lambda r: (r.get("decider") or "~", r.get("category") or "", r["key"])):
-        # The agent-side cells are read off the CORPUS, so they survive a leaf failure and are
-        # rendered on an errored row too — blanking them would hide the one column this issue adds.
-        # A row with no Correction at all (`not in corpus`) knows NEITHER, and says so with `—`
-        # rather than falling through to `DIFFERS`/`disagrees`, which would assert a comparison
-        # nothing performed — the same defect one column over.
+        # Read off the CORPUS, so they survive a leaf failure and render on an errored row too. A row
+        # with no Correction knows NEITHER and says `—`, not `DIFFERS`, which asserts a comparison.
         known = "leaf_is_chosen" in r
         agent_cells = (f"{esc(r.get('chosen')) if known else '—'} | "
                        f"{('same' if r['leaf_is_chosen'] else '**DIFFERS**') if known else '—'} | "
@@ -265,9 +217,8 @@ def main(argv=None) -> int:
         excused = set(diff.get("held_out") or {}) | set(diff.get("voided") or {})
         keys = [k for k in (diff.get("ok_to_miss") or []) if k not in excused]
     else:
-        # FAILS CLOSED (Issue #356). A bare key list is exactly what three issues fed this tool
-        # before reading its LEAF column as the AGENT's behaviour; the tool cannot infer the
-        # provenance, so it refuses rather than diagnosing an unlabelled corpus.
+        # FAILS CLOSED (Issue #356): the tool cannot infer a key list's provenance, and a bare one is
+        # what three issues fed it before reading its LEAF column as the AGENT's behaviour.
         if not args.source:
             ap.error("--keys requires --source {leaf,decider}: a key list carries no provenance and "
                      "the diagnosis means different things per source (see SOURCE_CAVEAT)")

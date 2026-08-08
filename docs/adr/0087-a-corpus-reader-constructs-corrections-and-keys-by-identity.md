@@ -212,7 +212,7 @@ one whose absence made the old sweeps vacuous.
 
 **6. Whoever moves an instrument owes the corrected reading; a RULING belongs to its chartered
 issue.** This issue re-derives every *number* over the full 372 — the capture's own summary,
-`docs/plans/decider-disagreement-triage.md`'s totals (dated, not overwritten, matching how that doc
+``python -m tools.train.decider_lab diff``'s totals (dated, not overwritten, matching how that doc
 already records `220/331 → 230/331`), and Issue #238's Tier B candidate join. It adjudicates no
 frame. Opening each newly-surfaced candidate with `frame_view.py` and ruling it right-or-wrong is
 Issue #238's charter, and the new rows land there labelled as unadjudicated candidates.

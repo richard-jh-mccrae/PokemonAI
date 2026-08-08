@@ -17,16 +17,14 @@ from pathlib import Path
 
 
 def episode_id(run_stem: str, index: int) -> int:
-    """A globally-unique deterministic `EpisodeId` for one corpus game. Unique across runs and
-    games because the dedup/review keys (`store._dedup_key`, per-replay review) assume each game
-    has a distinct id — colliding ids would silently merge two games' Corrections."""
+    """A globally-unique deterministic `EpisodeId` for one corpus game. Must be unique across runs
+    AND games: the Correction dedup keys assume it, so a collision silently merges two games."""
     return int(hashlib.sha1(f"{run_stem}:{index}".encode("utf-8")).hexdigest()[:12], 16)
 
 
 def run_stem(agent: str, when, sha: str, overlay=None) -> str:
-    """The provenance stem `<agent>_<YYYYMMDD-HHMMSS>_<sha>-selfplay[-<overlay_digest>]` — matches
-    `provenance.build_identity` so self-play Corrections file under a real build folder; an overlay
-    digest keeps a candidate-config corpus distinct from the baseline."""
+    """The provenance stem, matching `provenance.build_identity` so self-play Corrections file under
+    a real build folder. The overlay digest keeps a candidate-config corpus off the baseline's."""
     marker = "selfplay"
     if overlay:
         marker += "-" + hashlib.sha1(str(overlay).encode("utf-8")).hexdigest()[:8]
@@ -34,18 +32,16 @@ def run_stem(agent: str, when, sha: str, overlay=None) -> str:
 
 
 def tag_replay(replay: dict, *, episode_id: int, team_names: list[str]) -> dict:
-    """Inject `info.EpisodeId` + `info.TeamNames` into an `env.toJSON()` replay (a local `env.run`
-    leaves them unset) so the inspector keys Corrections and `detect_seat` resolves a seat. The
-    film (`steps`) is left untouched."""
+    """Inject `info.EpisodeId` + `info.TeamNames` into an `env.toJSON()` replay, which a local
+    `env.run` leaves unset. The film (`steps`) is untouched."""
     info = {**(replay.get("info") or {}), "EpisodeId": episode_id, "TeamNames": list(team_names)}
     return {**replay, "info": info}
 
 
 @contextmanager
 def _overlay_env(overlay):
-    """Expose `overlay` (absolute) as `AGENT_OVERLAY` for the in-process `env.run` games, then
-    restore — so both mirror seats play the chosen config, and nothing leaks to later code. A
-    baseline run (`overlay=None`) clears any inherited overlay so the corpus is truly the default."""
+    """Expose `overlay` as `AGENT_OVERLAY` for the in-process `env.run` games, then restore.
+    ``overlay=None`` CLEARS any inherited one, so a baseline corpus is truly the default."""
     prev = os.environ.get("AGENT_OVERLAY")
     if overlay:
         os.environ["AGENT_OVERLAY"] = str(Path(overlay).resolve())
@@ -62,9 +58,8 @@ def _overlay_env(overlay):
 
 def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, overlay=None,
                     syspath_roots=()) -> Path:
-    """Run `n` mirror games of `agent` and save each as a tagged, Tuner-usable replay under
-    `out_root/selfplay/<stem>/<episode_id>.json`; return the run dir. Reuses `check_agent._run_match`
-    (the cabt-env path whose `env.toJSON()` carries the per-frame `obs` the Tuner needs)."""
+    """Run `n` mirror games of `agent`, saving each as a tagged replay -> the run dir. Uses
+    `check_agent._run_match`, the cabt-env path whose `env.toJSON()` carries the per-frame `obs`."""
     from sim.check_agent import _run_match  # lazy: pulls in kaggle_environments only when generating
 
     stem = run_stem(agent, when, sha, overlay)

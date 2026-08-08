@@ -17,7 +17,7 @@ weight.
 |---|---|
 | 0–5 | faint tiebreaker — "all else equal, lean this way" |
 | 10–20 | normal preference — a standard setup / tempo rule |
-| 30–50 | strong preference — core doctrine (e.g. `open-cinderace` = 40) |
+| 30–50 | strong preference — core doctrine (e.g. `open-the-declared-starter` = 40) |
 | 60–100 | near-imperative positional — rarely outweighed by other positional rules |
 | >100 | combat-scale positional — rivals a chip attack; reserve |
 | **1000** | `KO_SCORE` (not a Hypothesis) — game-deciding lethal |
@@ -29,13 +29,15 @@ weight.
   lethal ([ADR-0008](adr/0008-pilot-is-a-layered-rules-pipeline.md)).
 
 Set seeds by band as an interpretable prior; the linear-rank tuner refines the magnitude while
-the band keeps it legible. Current deck seeds (`tutor` 25, `accel` 30, `open-cinderace` 40) sit
-in the normal→strong range.
+the band keeps it legible. Live exemplars, verified 2026-08-07: `dig-before-commit` 20 (normal),
+`prefer-rush-evolve-tutor` 30 and `open-the-declared-starter` 40 (strong). The agent `strategy.py`
+files carry no `weight=` literals of their own — deck seeds are Roles, not weights.
 
 **Weights can be negative** — a penalty steers *away* from an option. General-Strategy energy/opening
 seeds ([general-strategy.md](general-strategy.md), [ADR-0016](adr/0016-energy-attachment-is-a-layered-procedure.md)):
-`power-up-attacker` +15 and `use-acceleration` +25 (normal tempo); `dont-feed-the-doomed` −30 (strong
-penalty); `keep-a-startable-hand` −40 (strong — avoid a clear blunder); `attach-energy-last` −5 (faint
-sequencing nudge). (The old `build-before-attack` / `dont-chip-with-a-doomed-active` chip penalties and
-their `_CHIP_CEILING` value floor were **removed** — the Pilot's `_finish_turn_last` "attack last"
-sequencing supersedes them; see [general-strategy.md](general-strategy.md).)
+`use-acceleration` +25 (normal tempo); `keep-a-startable-hand` −40 (strong — avoid a clear blunder);
+`dont-search-an-empty-deck` −60 (near-imperative). The energy rungs this section used to cite
+(`power-up-attacker`, `dont-feed-the-doomed`, `attach-energy-last`) were DELETED by the ADR-0069
+attach-decider swap, along with `build-before-attack` and its `_CHIP_CEILING` floor: attach is now an
+arithmetic marginal in `Pilot._attach_value`, and sequencing is structural in `_finish_turn_last`.
+`baseline_energy.py`'s fold map records where each one went.

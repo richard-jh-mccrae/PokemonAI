@@ -112,10 +112,8 @@ def test_posture_mismatch_flag_roundtrips_and_defaults_false():
 
 
 def test_provenance_distinguishes_machine_labels_and_defaults_human():
-    """Contract C2 (ADR-0053 WP3, docs/plans/ml-training-contracts.md): the ML labeler tags a
-    Correction ``provenance="machine"``; `source` stays "own"/"peer" (whose GAME it was), so every
-    existing filter is unchanged. The field round-trips, and a record saved before it defaults to
-    "human" — the backward-compatibility guarantee the whole encoding rests on."""
+    """Contract C2 (ADR-0053 WP3): `source` stays "own"/"peer" (whose GAME it was), so every
+    existing filter is unchanged; a record saved before the field defaults to "human"."""
     d = _a_main_decision()
     machine = build_correction(d, source="own", agent="mega_starmie", correct=[4],
                                category="missed_win", rationale="ΔP(win) 0.31", provenance="machine")

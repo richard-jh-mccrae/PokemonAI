@@ -104,12 +104,8 @@ def test_cabt_episode_replays_clean(name, frames):
 
 
 def test_froslass_freezing_shroud_fires():
-    """Froslass "Freezing Shroud" puts a Checkup damage counter on every ability-Pokémon
-    (both sides, except Froslass). This episode isn't clean end-to-end (a later,
-    unrelated blocker), but WITHOUT the ability cgpy diverges at the very first
-    Freezing-Shroud checkup (frame 54: both Drakloak + both Munkidori take a counter,
-    the Froslass Active skipped); WITH it, the replay sails well past. Guards the
-    between-turns counter placement + order without needing a fully-clean fixture."""
+    """Froslass "Freezing Shroud" puts a Checkup counter on every ability-Pokémon, both sides,
+    except Froslass. Guards the between-turns placement + order on a NOT-clean fixture."""
     path = FIXTURES / "episode-83697279-replay.json.gz"
     payload = json.loads(gzip.decompress(path.read_bytes()))
     report = replay(convert(payload))
@@ -149,11 +145,8 @@ def test_dusknoir_cursed_blast_self_ko():
 
 
 def test_ogerpon_teal_dance_fires():
-    """Teal Mask Ogerpon ex "Teal Dance": attach a Basic {G} from hand to THIS Pokémon,
-    then draw a card. This episode isn't clean end-to-end (a later, unrelated blocker),
-    but WITHOUT the ability cgpy diverges at the very first activation (frame ~20: the
-    ATTACH_TO {G} pick → ATTACH + DRAW, no ATTACH_FROM since it self-targets); WITH it
-    the replay reaches frame 40. Guards the holderSelf + thenDraw attach branch."""
+    """Teal Mask Ogerpon ex "Teal Dance": attach a Basic {G} from hand to THIS Pokémon, then draw.
+    Guards the holderSelf + thenDraw attach branch on a NOT-clean fixture."""
     path = FIXTURES / "episode-81906755-replay.json.gz"
     payload = json.loads(gzip.decompress(path.read_bytes()))
     report = replay(convert(payload))

@@ -118,11 +118,8 @@ def test_opponents_frost_barrier_shrinks_my_tactical_damage_and_expires():
 
 @pytest.mark.req("REQ-TRANS-0004")
 def _incoming(p, ma, oa):
-    """`Board.incoming_active_damage` through a FRESH per-decision snapshot.
-
-    The read routes via the StateModel now (POC-T1, Issue #260) and the model MEMOIZES, so a
-    transient grant observed between two reads needs a rebuilt snapshot to be seen — which is the
-    model's purity contract working, not a workaround for it."""
+    """`Board.incoming_active_damage` through a FRESH per-decision snapshot: the StateModel MEMOIZES,
+    so a transient grant observed between two reads needs a rebuilt snapshot to be seen."""
     p._snapshot({"current": {"yourIndex": 0, "players": [
         {"active": [ma], "bench": []}, {"active": [oa], "bench": []}]}})
     return p._incoming_active_damage(ma, oa)

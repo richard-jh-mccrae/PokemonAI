@@ -1,30 +1,10 @@
-"""Replay every RULED `_TO_HAND` (ctx 7) correction frame through the real Pilot — the seam-scoped
-gate the grab has lacked (ADR-0122, Issue #406).
+"""Replay every RULED `_TO_HAND` (ctx 7) correction frame through the real Pilot (ADR-0122).
 
-    python tools/train/grab_sweep.py                 # every agent, every ruled ctx-7 frame
-    python tools/train/grab_sweep.py --agent mega_lucario
-    python tools/train/grab_sweep.py --breadth       # the eligibility-breadth census
+    python tools/train/grab_sweep.py [--agent mega_lucario] [--breadth]
 
-For each frame it prints the human ruling, the pick BEFORE (the live trace as recorded) and the pick
-AFTER (re-derived through the shipped Pilot), plus each option's score and the rungs that fired — or,
-when a grab EQUATION is wired, its legible working instead. A human rules a MOVE by reading that,
-which is why a bare pick would not do (the `deploy_working` discipline, ADR-0086).
-
-**Why a sweep of its own rather than `tune.py`.** The Discrimination Gate grades the develop-rung
-LEAF and the Decision Gate grades whatever frames its baseline happens to hold; neither is scoped to
-this context. ctx 7 is the second-largest non-MAIN population in the corpus (31 frames against
-MAIN's 279, of which 30 name a `correct` option), so it can and should be graded at its own seam.
-
-**It exists because it caught something.** Issue #406 proposed replacing the 23 `_TO_HAND` rungs
-with a `needs.keep_v2` add-marginal. Built to spec and run here, the equation scored **17/30**
-against the incumbent ladder's **23/30** — and at four times its band, **14**, below doing nothing
-at all. Nothing about that was visible from the seam's own unit tests, which all passed. The build
-is preserved at commit `bd9187d7` and ADR-0122 records the five structural findings; this tool now
-grades whatever the successor proposes, and the incumbent in the meantime.
-
-Note the asymmetry ADR-0122 closes on, because it is the reason to run this at all: ctx 5 — the
-`_TO_BENCH` seam whose Deploy Marginal that equation was modelled on — has exactly ONE ruled corpus
-frame. A design validated at one frame was carried onto a seam with thirty.
+Per frame it prints the human ruling, the pick before and after, and each option's score with the
+rungs that fired (or a wired grab equation's working). A human rules a MOVE by reading that, which
+is why a bare pick would not do.
 """
 from __future__ import annotations
 
@@ -44,17 +24,15 @@ import importlib
 
 _TO_HAND = 7
 
-#: Frames the DEVELOPER has ruled off-policy — MOVED to `train.blunder.off_policy.RULINGS` (Issue
-#: #412), which now carries every verdict and its reason rather than only the ones the corpus scan
-#: cannot see. Kept as a derived view because this module's docstring and ADR-0122 both name it.
+#: Frames the developer ruled off-policy — a derived view of `train.blunder.off_policy.RULINGS`,
+#: kept because this module's docstring and ADR-0122 both name it.
 _RULED_OFF_POLICY = frozenset(
     key for key, ruling in _off_policy_mod.RULINGS.items()
     if ruling.verdict == _off_policy_mod.OFF_POLICY)
 
 
 def _ctx7(store: str) -> list:
-    """Every correction whose select is a `_TO_HAND` search — read off the OBS the frame carries,
-    never off the human-written `select_context` label, which is prose."""
+    """Every correction whose select is a `_TO_HAND` search — off the OBS, never the human-written label."""
     out = []
     for c in load_corrections(store):
         sel = ((c.obs or {}).get("select") or {})
@@ -64,22 +42,7 @@ def _ctx7(store: str) -> list:
 
 
 def _off_policy(c, by_ep: dict) -> list:
-    """Why this follow-up frame is UNGRADEABLE, or `[]` if nothing says it is —
-    `train.blunder.off_policy.reasons`, **consumed**.
-
-    The detector moved out of this module (Issue #412): it was never ctx-7-specific — only `_ctx7`
-    was — and `composer_lab.py` was already reaching across to import it, which is the second-consumer
-    moment ADR-0087 says to extract at. 96 of the corpus's 375 Corrections are non-MAIN and every
-    sweep and gate that grades one inherits the same exposure.
-
-    **The test it applies changed, and the change is not cosmetic.** This used to flag any ruled
-    Correction on an earlier frame of the same turn. Measured corpus-wide that is over-broad: five
-    ctx-15 snipe frames were killed by a predecessor ruling *"play Pokégear 3.0 earlier in the
-    turn"*, and Pokégear (`EN_Card_Data.csv` id 1122) cannot touch the opponent's Bench the ruling
-    names. The scan is now a CANDIDATE list, and a human's `RULINGS` entry turns one into a verdict.
-    A candidate nobody has ruled reports as `UNRULED` and is still returned here, so a sweep that
-    printed "OFF-POLICY" keeps flagging exactly what it flagged before minus the two measured bugs
-    (endorsement predecessors; the null-episode collision)."""
+    """Why this follow-up frame is UNGRADEABLE, or `[]`. A CANDIDATE list; a `RULINGS` entry makes it a verdict."""
     return _off_policy_mod.reasons(c, by_ep)
 
 
@@ -121,10 +84,8 @@ def sweep(agent_filter: str | None, store: str) -> int:
             print(f"  before  : {before}   after: {after}   fixed: {r.get('fixed')}")
             dec = pilot.explain(c.obs)
             for t in dec.options:
-                # `grab_working` is populated only while a grab EQUATION is wired. It is absent on
-                # `main` (Issue #406's build was measured worse and reverted, ADR-0122), so the
-                # sweep degrades to score + fired rungs rather than breaking — which is exactly the
-                # view needed to grade the incumbent ladder it now measures.
+                # `grab_working` is populated only while a grab EQUATION is wired; it is absent on
+                # `main`, so the sweep degrades to score + fired rungs rather than breaking.
                 w = getattr(t, "grab_working", None) or {}
                 mark = "*" if t.index in (after or []) else (
                     "+" if t.index in correct else " ")
@@ -161,15 +122,8 @@ def sweep(agent_filter: str | None, store: str) -> int:
 
 
 def breadth(agent_filter: str | None, store: str) -> int:
-    """Acceptance criterion 8: the MEASURED eligibility-breadth distribution at both keep_v2 sites.
-
-    `needs._keep_slot_dp` is exponential in eligible-slot BREADTH (how many slots one card can
-    supply), not in the slot count its `_MAX_KEEP_SLOTS` bound caps — 1.6 ms at breadth 1 against
-    748 ms at the declared bound of 16. Cost here is therefore safe only because real hands are
-    SPARSE, and a property that holds by luck should be checked rather than assumed.
-
-    Both sites are censused because the exposure is not confined to the new one: `pilot._needs_v2`
-    already runs one `keep_v2` per hand row at every forced discard, and that path DECIDES."""
+    """The MEASURED eligibility-breadth distribution at both `keep_v2` sites. `needs._keep_slot_dp` is
+    exponential in eligible-slot BREADTH, so the cost is safe only because real hands are SPARSE."""
     tune = importlib.import_module("train.tune")
     corrs = _ctx7(store)
     if agent_filter:

@@ -1,12 +1,7 @@
 """Every shipped agent's main.py IS the shared runtime (ADR-0055) — nothing else.
 
-Pre-0055 each main.py carried a byte-copied shell with an 18-line kill-switch smear, and this
-test pinned the smear file-by-file (AST `_params.get("<key>", True)` patterns) so an
-incomplete copy couldn't ship a layer dark. The deployment config is now DATA
-(``common.runtime.PROFILE``, pinned by ``test_runtime.py`` against the Pilot ctor signature),
-so the invariant inverts: a main.py must contain NO local wiring at all — one ``make_agent``
-call, no ``Pilot(...)``, no per-file flag literals. Hand-adding a flag to one agent (the
-pre-0055 drift class) fails here.
+Deployment config is DATA (``common.runtime.PROFILE``), so a main.py must carry NO local wiring:
+one ``make_agent`` call, no ``Pilot(...)``, no per-file flag literals.
 """
 import ast
 from pathlib import Path
@@ -24,9 +19,6 @@ _IDS = [p.parent.name for p in AGENT_MAINS] + ["fixture_mega_starmie"]
 @pytest.mark.req("REQ-WIRE-0001")
 @pytest.mark.parametrize("main_py", ALL_MAINS, ids=_IDS)
 def test_main_is_only_the_shared_runtime(main_py):
-    """REQ-WIRE-0001 (inverted, ADR-0055): main.py = import STRATEGY, call make_agent, bind
-    ``agent`` (the harness contract). Any local Pilot build or flag literal is drift from the
-    one deployment profile."""
     tree = ast.parse(main_py.read_text(encoding="utf-8"))
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
     assert sum(c.func.id == "make_agent" for c in calls) == 1, (
@@ -47,8 +39,7 @@ def test_main_is_only_the_shared_runtime(main_py):
 
 @pytest.mark.req("REQ-WIRE-0001")
 def test_fixture_main_is_a_byte_copy_of_the_shipped_agent():
-    """REQ-WIRE-0001: the fixture bundle's main.py stays byte-identical to the shipped
-    mega_starmie main.py — the packaged-bundle system tests exercise the fixture, so a drift
-    here silently tests a DIFFERENT deployable."""
+    """The packaged-bundle system tests exercise the fixture, so drift here tests a DIFFERENT
+    deployable."""
     src = (REPO / "src" / "agents" / "mega_starmie" / "main.py").read_bytes()
     assert FIXTURE_MAIN.read_bytes() == src

@@ -49,11 +49,8 @@ def _lib_hashes() -> dict:
 
 
 def _probe_validation(cards: list) -> dict:
-    """Pin BattleStart's deck-validation verdicts (errorPlayer/errorType) for malformed decks.
-
-    Each probe seats the malformed deck as deck0 against a known-legal deck1, then re-checks a
-    legal/legal control. `battle_finish` frees whatever the engine allocated.
-    """
+    """Capture BattleStart's deck-validation verdicts for malformed decks. Each probe seats the
+    malformed deck as deck0 against a legal deck1, then re-checks a legal/legal control."""
     from cg.game import battle_finish, battle_start
 
     by_id = {c["cardId"]: c for c in cards}

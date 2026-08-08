@@ -19,9 +19,8 @@ _AREA = {
     6: "prize", 7: "stadium", 9: "tool", 12: "looking",
 }
 
-# attackId -> name, built once from engine (scouting provider uses same source).
-# Lazily resolved so a label-only caller doesn't load native engine until it tags an Attack;
-# degrades to "Attack #<id>" if engine unavailable.
+# Lazily resolved so a label-only caller never loads the native engine until it tags an Attack;
+# degrades to "Attack #<id>" when the engine is unavailable.
 _ATTACK_NAMES: dict[int, str] | None = None
 
 
@@ -68,12 +67,8 @@ def _card_name(current: dict, area: int | None, index: int | None, player_index:
 
 def _board_target(current: dict, area: int | None, index: int | None,
                   player_index: int, seat: int | None) -> str | None:
-    """Disambiguating descriptor for a Pokemon on the field: ``Name (slot · hp/max · N⚡)``.
-
-    ``slot`` is ``active`` (area 4) or ``bench K`` (area 5, 1-based). Prefixed ``opp`` when the
-    target belongs to the opponent. Returns None when ``(area, index)`` is not a board Pokemon
-    (e.g. a deck/hand/discard card), so callers fall back to a plain card name.
-    """
+    """A field Pokemon as ``Name (slot · hp/max · N⚡)``; ``bench K`` is 1-BASED. None when
+    ``(area, index)`` is not a board Pokemon, so callers fall back to a plain card name."""
     if area == 4:
         slot = "active"
     elif area == 5 and index is not None:

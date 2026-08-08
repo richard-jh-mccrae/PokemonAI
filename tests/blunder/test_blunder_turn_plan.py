@@ -1,4 +1,4 @@
-"""Turn-plan capture (develop-rung Phase 3, `docs/plans/phase3-tooling.md`).
+"""Turn-plan capture (develop-rung Phase 3, `ADR-0037 (the develop rung it tooled is deleted)`).
 
 A turn-scope Correction can carry the human's ideal-line note — `turn_plan = {intended_line,
 expected_end_board}` — so blunder-buster can drive develop-rung rule retirement from it. One sparse,

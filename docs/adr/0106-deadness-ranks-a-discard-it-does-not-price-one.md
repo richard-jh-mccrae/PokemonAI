@@ -42,7 +42,7 @@ Issue #238 shape, and the two strict-xfail TARGETs committed with 2h are the rat
 
 ### What WP-N3 believed it had built
 
-ADR-0065's WP-N3 build note (`keep-value-needs-assignment-grill-spec.md` §3) records the tiebreak's
+ADR-0065's WP-N3 build note (`ADR-0065` §3) records the tiebreak's
 purpose as *"the deploy-dead Cinderace sheds before a live spare."* That sentence describes this
 ADR's outcome and has been false since the day it was written: `_deploy_odds` knows about dead
 evolutions, dead fetchers and need-met tutors, and about none of the five expired-role facts

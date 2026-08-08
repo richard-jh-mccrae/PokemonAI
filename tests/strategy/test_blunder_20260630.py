@@ -1,19 +1,10 @@
 """Blunder round 2026-06-30 (mega_starmie) — the rules + signals authored by /blunder-buster.
 
-Four fixes, each pinned to the correction it resolves (ADR-0018). Lib-free: synthetic obs dicts via
-pilot_helpers + DictCardStatProvider, so the fast suite needs no native engine.
-
-  - dont-waste-discard-energy (new branch)  ep82717711-fr18: don't burn Ignition on an already-powered
-                                            non-wincon (covered end-to-end in test_discard_energy.py too)
-  - _attach_lethal_tactical turn<=1 guard   ep82226116-fr7 : no phantom lethal on turn 1 going first
-  - _retreat_to_lethal_tactical             ep82717711-fr37: retreat the spent opener into the ready
-                                            wincon to TAKE the KO with the right attacker
-  - spread-attach-to-the-needy              ep82224509-fr31: at ATTACH_FROM (Turbo Flare's bench attach),
-                                            put the Energy on the bare body, not an already-powered one
+Lib-free: synthetic obs dicts via pilot_helpers + DictCardStatProvider, so no native engine.
 """
 import pytest
 
-from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
+from card_facts import ignition_tags
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
@@ -26,8 +17,8 @@ ATTACH = 8
 RETREAT = 12
 END = 14
 WINCON = 900        # Mega Starmie ex shape: Jetting Blow {W} 120 (+50 snipe), Nebula CCC 210
-PREEVO = 800        # Staryu shape (bare bench body, needs Energy)
-CINDER = 666        # an opener/accelerator (Cinderace shape): Stage-2 Evolution, 1-cost 50-dmg attack
+PREEVO = 800        # Staryu shape
+CINDER = 666        # Cinderace shape: Stage-2 Evolution, 1-cost 50-dmg attack
 WATER = 3
 IGNITION = 17
 OPP = 678
@@ -37,14 +28,9 @@ def _fired(o):
     return {h.id for h, _ in o.fired}
 
 def _ranked(pilot, obs):
-    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the sequence composer, so a
-    `decide(obs) == [n]` line on a HAND-BUILT board stopped testing this file's rung and started
-    testing the composer on a board no human ever ruled. The ranking is the fact these tests own,
-    and every mechanism assertion above them still holds."""
+    """``[(index, score), ...]`` best-first. The composer owns the MAIN pick (Issue #386), so on a
+    HAND-BUILT board the ranking is the fact these tests own."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
-
 
 
 def _stats():
@@ -56,12 +42,11 @@ def _stats():
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=50, attacks=(20,), evolvesFrom="Raboot",
-                         energyType=2),                      # {R} — needed for turn-1 weakness test
+                         energyType=2),                      # {R} — the turn-1 weakness test needs it
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
-        OPP: CardStat(OPP, synthetic=True, name="opp", hp=60, weakness=2),  # weak to {R} -> Cinderace doubles into it
+        OPP: CardStat(OPP, synthetic=True, name="opp", hp=60, weakness=2),  # weak to {R}
     }, attacks={
-        # Jetting Blow (11) carries a 50-dmg bench-snipe rider; Nebula (10) doesn't.
         10: AttackStat(10, damage=210, cost=3),
         11: AttackStat(11, damage=120, cost=1, benchSnipe=50),
         12: AttackStat(12, damage=20, cost=1),
@@ -76,90 +61,72 @@ def _pilot(**kw):
                  functions=CardFunctions({IGNITION: ignition_tags()}), **kw)
 
 
-# ----------------------------------------------- dont-waste-discard-energy: already-powered non-wincon
 @pytest.mark.req("REQ-GEN-0048")
 def test_dont_waste_ignition_on_an_already_powered_cinderace():
-    """ep82717711-fr18: Cinderace Active already holds a {W} for its 1-cost Turbo Flare. Attaching
-    Ignition adds nothing (it discards at end of turn) — so the agent should just attack, not attach."""
+    """The Active already holds a {W} for its 1-cost attack, so the Ignition evaporates uncashed."""
     pilot = _pilot()
-    attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # Ignition hand[0]
+    attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # Ignition
     attack = attack_opt(20)                                                          # Turbo Flare, 50
     obs = make_select([attach_ign, attack, opt(END)],
                       current=state(active=poke(CINDER, energy=1, hp=160),
                                     opp_active=poke(OPP, hp=60), hand=[IGNITION]))
     traces = pilot.explain(obs)
-    # the wasteful Ignition attach: it evaporates uncashed, so it costs its own worth (ADR-0069 §5a)
     assert next(r for r in traces.attach_working["eq"] if r["i"] == 0)["evaporates"] is True
     assert traces.options[0].tactical < 0
-    assert traces.options[0].score <= 0                               # sunk -> sequenced last (tier 4)
-    assert pilot.decide(obs) == [1]                                   # attack, don't waste it
+    assert traces.options[0].score <= 0                               # sunk -> sequenced last
+    assert pilot.decide(obs) == [1]
 
 
-# ----------------------------------------------- _attach_lethal_tactical: turn-1-going-first guard
 @pytest.mark.req("REQ-GEN-0049")
 def test_lethal_attach_stands_down_on_turn_one_going_first():
-    """ep82226116-fr7: on turn 1 the first player CANNOT attack (rules.md §first-turn), so attaching
-    a burst Energy that would 'unlock' a KO is illusory — the lethal-attach lookahead must return 0
-    (else it tiers the attach as 'take the win' and the Energy is discarded for nothing)."""
+    """On turn 1 the first player CANNOT attack (rules.md §first-turn), so the unlocked KO is illusory."""
     pilot = _pilot()
     attach_ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     # Cinderace 0 Energy; opp 60 HP weak to {R} -> +Ignition lets Turbo Flare (50x2=100) KO.
     cur = state(active=poke(CINDER, energy=0, hp=160), opp_active=poke(OPP, hp=60), hand=[IGNITION], turn=1)
     obs = make_select([attach_ign, opt(END)], current=cur)
-    # no phantom lethal on turn 1 — and the burst is scored BELOW doing nothing, which is the whole
-    # of `dont-attach-discard-energy-turn1` without a −60 rung (ADR-0069 §5a).
     assert pilot.explain(obs).options[0].tactical < 0
-    assert pilot.decide(obs) == [1]                                  # End beats the wasted attach
+    assert pilot.decide(obs) == [1]
 
-    # Control: same board, later turn -> lethal attach is real (CAN attack) -> KO-class.
+    # Control: same board, later turn -> lethal attach is real -> KO-class.
     later = state(active=poke(CINDER, energy=0, hp=160), opp_active=poke(OPP, hp=60), hand=[IGNITION], turn=3)
     assert pilot.explain(make_select([attach_ign, opt(END)], current=later)).options[0].tactical >= KO_SCORE
 
 
-# ----------------------------------------------- _retreat_to_lethal_tactical
 @pytest.mark.req("REQ-GEN-0050")
 def test_retreat_into_ready_wincon_to_take_the_ko():
-    """ep82717711-fr37: a spent Cinderace Active can KO the 10-HP opponent, but the fully-powered
-    benched Mega Starmie ex can take the SAME KO (and snipe the bench). Retreat into the wincon —
-    same prize, the tanky win-condition ends up Active — instead of chipping with the spent opener."""
+    """Both take the KO, but the benched wincon also snipes — same prize, better board."""
     pilot = _pilot()
-    attack = attack_opt(20)                                          # Cinderace Turbo Flare 50 -> KO (opp 10)
+    attack = attack_opt(20)                                          # Turbo Flare 50 -> KO (opp 10)
     cur = state(active=poke(CINDER, energy=1, hp=160),
-                bench=[poke(WINCON, energy=3, hp=330)],             # ready wincon (Jetting Blow affordable)
-                opp_active=poke(OPP, hp=10), opp_bench=[poke(PREEVO, hp=60)])  # bench target -> snipe rider
+                bench=[poke(WINCON, energy=3, hp=330)],             # ready wincon
+                opp_active=poke(OPP, hp=10), opp_bench=[poke(PREEVO, hp=60)])  # a snipe target
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO ...
-    assert traces.options[1].tactical >= KO_SCORE                    # ... and so is retreat->wincon KO
+    assert traces.options[0].tactical >= KO_SCORE
+    assert traces.options[1].tactical >= KO_SCORE
     assert traces.options[1].tactical > traces.options[0].tactical   # wincon's KO (snipe) is better
-    assert _ranked(pilot, obs)[0][0] == 1                            # retreat into it
-
+    assert _ranked(pilot, obs)[0][0] == 1
 
 
 def _lethal_only(trace) -> float:
-    """The RETREAT-to-lethal layer's own contribution, with the promote/retreat decider's residual
-    netted out.
-
-    `OptionTrace.tactical` is a SUM across layers (ADR-0069 §1: `max` within an axis, sum across),
-    and since ADR-0100 (#141) a RETREAT option also carries the promote/retreat decider's Sub-lethal
-    Residual. These frames are about whether the LETHAL lookahead fires, so pinning the total would
-    now assert two claims at once and fail on the one it never meant to make."""
+    """`OptionTrace.tactical` SUMS across layers, and a RETREAT also carries ADR-0100's Sub-lethal
+    Residual — netted out here so these frames assert only whether the LETHAL lookahead fires."""
     row = trace.promote_retreat_working
     return trace.tactical - (row["tactical"] if row is not None else 0.0)
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_retreat_lethal_stands_down_when_no_benched_wincon_can_ko():
-    """The lookahead never forfeits a KO: when no ready benched wincon can KO the opponent's Active,
-    the retreat carries no KO-class value (so a genuine Active KO is still taken)."""
+    """The lookahead never forfeits a KO."""
     pilot = _pilot()
     attack = attack_opt(20)
     cur = state(active=poke(CINDER, energy=1, hp=160),
-                bench=[poke(WINCON, energy=0, hp=330)],             # NOT ready -> can't KO after retreat
+                bench=[poke(WINCON, energy=0, hp=330)],             # NOT ready
                 opp_active=poke(OPP, hp=10))
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
     assert _lethal_only(traces.options[1]) == 0                      # retreat carries no lethal value
-    assert pilot.decide(obs) == [0]                                  # take the Active's KO instead
+    assert pilot.decide(obs) == [0]
 
 
 @pytest.mark.req("REQ-GEN-0050")
@@ -174,42 +141,35 @@ def test_retreat_lethal_does_not_fire_when_the_active_is_the_wincon():
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_retreat_lethal_stands_down_when_the_active_already_takes_an_equal_ko():
-    """ep82867148 f62: the Active (a Cinderace) ALREADY KOs the opponent, and a benched body would take
-    only the SAME single-prize KO — so retreat-to-lethal stands down (it fires ONLY for a STRICTLY
-    BETTER KO). Don't waste the Active's attack and strand an energised base you would rather evolve."""
+    """Retreat-to-lethal fires ONLY for a STRICTLY BETTER KO, not an equal one."""
     pilot = _pilot()
-    attack = attack_opt(20)                                          # Cinderace Turbo Flare 50 -> KO (opp 10)
+    attack = attack_opt(20)                                          # Turbo Flare 50 -> KO (opp 10)
     cur = state(active=poke(CINDER, energy=1, hp=160),
-                bench=[poke(PREEVO, energy=4, hp=70)],               # energised Staryu: also KOs, but only
-                opp_active=poke(OPP, hp=10))                          # the SAME 1-prize KO (no snipe edge)
+                bench=[poke(PREEVO, energy=4, hp=70)],               # also KOs, but no snipe edge
+                opp_active=poke(OPP, hp=10))
     obs = make_select([attack, opt(RETREAT), opt(END)], context=0, current=cur)
     traces = pilot.explain(obs)
-    assert traces.options[0].tactical >= KO_SCORE                    # Active's own attack is a KO
+    assert traces.options[0].tactical >= KO_SCORE
     assert _lethal_only(traces.options[1]) == 0                      # no EXTRA value -> stand down
-    assert pilot.decide(obs) == [0]                                  # just attack with the Active
+    assert pilot.decide(obs) == [0]
 
 
-# ----------------------------------------------- spread-attach-to-the-needy (ATTACH_FROM)
 @pytest.mark.req("REQ-GEN-0051")
 def test_spread_attach_to_the_needy_at_attach_from():
-    """ep82224509-fr31: Turbo Flare's 'attach a Basic to a Benched Pokémon' (SelectContext ATTACH_FROM)
-    offers an already-powered Mega Starmie ex (3 E) and a bare Staryu (0 E). Put it on the bare body
-    that still needs Energy, not the one already online."""
     pilot = _pilot()
-    powered = card_opt(BENCH, 0)        # bench[0] = Mega Starmie ex, 3 Energy (doesn't need)
-    bare = card_opt(BENCH, 1)           # bench[1] = Staryu, 0 Energy (needs)
+    powered = card_opt(BENCH, 0)        # Mega Starmie ex, 3 Energy
+    bare = card_opt(BENCH, 1)           # Staryu, 0 Energy
     cur = state(active=poke(CINDER, energy=1, hp=160),
                 bench=[poke(WINCON, energy=3, hp=330), poke(PREEVO, energy=0, hp=70)])
     obs = make_select([powered, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
-    assert "spread-attach-to-the-needy" not in _fired(traces.options[0])   # already powered
-    assert next(r for r in traces.attach_working["eq"] if r["i"] == 1)["build"] > 0  # bare body needs it
+    assert "spread-attach-to-the-needy" not in _fired(traces.options[0])
+    assert next(r for r in traces.attach_working["eq"] if r["i"] == 1)["build"] > 0
     assert pilot.decide(obs) == [1]
 
 
 @pytest.mark.req("REQ-GEN-0051")
 def test_attach_from_target_needs_signal_is_off_outside_attach_from():
-    """The signal is scoped to ATTACH_FROM — a CARD option in another context carries no spread nudge."""
     pilot = _pilot()
     bare = card_opt(BENCH, 1)
     cur = state(active=poke(CINDER, energy=1, hp=160),
@@ -218,16 +178,13 @@ def test_attach_from_target_needs_signal_is_off_outside_attach_from():
     assert "spread-attach-to-the-needy" not in _fired(pilot.explain(obs).options[0])
 
 
-# ----------------------------------------------- concentrate-accel-on-one-line-body (ATTACH_FROM)
 @pytest.mark.req("REQ-GEN-0051")
 def test_concentrate_accel_on_one_line_body_at_attach_from():
-    """ep83116081-fr21: Turbo Flare offers two Staryu recipients — one already carrying 1 Energy, one
-    bare. `spread-attach-to-the-needy` reads the 1-Energy Staryu as 'done' (it clears Staryu's own
-    1-cost attack), but the deck's payoff is the 3-Energy Mega — so CONCENTRATE the accelerated Energy
-    on the started Staryu to bring ONE body online, don't spread onto the bare one."""
+    """The 1-Energy Staryu clears its OWN 1-cost attack but the deck's payoff is the 3-Energy Mega, so
+    the accelerated Energy concentrates on the started body."""
     pilot = _pilot()
-    started = card_opt(BENCH, 0)     # bench[0] = Staryu, 1 Energy (closest to the Mega payoff)
-    bare = card_opt(BENCH, 1)        # bench[1] = Staryu, 0 Energy
+    started = card_opt(BENCH, 0)     # Staryu, 1 Energy
+    bare = card_opt(BENCH, 1)        # Staryu, 0 Energy
     cur = state(active=poke(CINDER, energy=1, hp=160),
                 bench=[poke(PREEVO, energy=1, hp=70), poke(PREEVO, energy=0, hp=70)])
     obs = make_select([started, bare], context=ATTACH_FROM, current=cur)
@@ -237,20 +194,16 @@ def test_concentrate_accel_on_one_line_body_at_attach_from():
     assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # bare body
     assert pilot.decide(obs) == [0]
 
-    # EVOLVED win-condition (Mega) beats a MORE-energised pre-evo — it's the actual attacker
-    # (no evolution step left), so concentrate on it (ep83007714-fr22 wants Mega, not Staryu).
+    # An EVOLVED wincon beats a MORE-energised pre-evo: no evolution step left, so it is the attacker.
     cur2 = state(active=poke(CINDER, energy=1, hp=160),
                  bench=[poke(WINCON, energy=1, hp=330), poke(PREEVO, energy=2, hp=70)])
     obs2 = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur2)
-    assert pilot.decide(obs2) == [0]     # Mega, though Staryu carries more Energy
+    assert pilot.decide(obs2) == [0]
 
 
-# ----------------------------------------------- conserve-burst-when-no-ko (discard_eot vs un-KO-able Active)
 @pytest.mark.req("REQ-GEN-0051")
 def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
-    """ep83116501-fr70: the Active Mega Starmie can't KO the opponent's Active even fully powered
-    (Nebula Beam 210 < 300 HP). Don't burn the one-shot Ignition to reach Nebula — attach the reusable
-    Basic (Jetting Blow 120 + a snipe is as useful and KEEPS the Ignition for a turn it can finish)."""
+    """Even fully powered, Nebula Beam 210 < 300 HP, so the one-shot buys nothing worth spending."""
     pilot = _pilot()
     ign = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)     # Ignition -> Active
     water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)   # Basic {W} -> Active
@@ -261,9 +214,9 @@ def test_conserve_burst_when_the_opponent_cannot_be_koed_even_maxed():
     rows = {r["i"]: r for r in traces.attach_working["eq"]}
     assert rows[0]["tactical"] < rows[1]["tactical"]     # the burst is capped + costs the tie-break
     assert "conserve-burst-when-no-ko" not in _fired(traces.options[1])   # not the reusable Basic
-    assert _ranked(pilot, obs)[0][0] == 1                                 # attach the Basic, keep Ignition
+    assert _ranked(pilot, obs)[0][0] == 1
 
-    # Control: KO-able Active (60 HP < 210 maxed) — burst DOES buy the KO, exemption holds.
+    # Control: a KO-able Active (60 HP < 210 maxed) — the burst DOES buy the KO.
     cur2 = state(active=poke(WINCON, energy=0, hp=330), opp_active=poke(OPP, hp=60), hand=[IGNITION, WATER])
     obs2 = make_select([ign, water, opt(END)], context=0, current=cur2)
     assert "conserve-burst-when-no-ko" not in _fired(pilot.explain(obs2).options[0])

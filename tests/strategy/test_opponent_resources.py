@@ -54,9 +54,8 @@ def test_visible_counts_are_discard_board_and_faceup_prizes_never_hand():
 # ============================================================ copies_left_odds (probabilistic)
 @pytest.mark.req("REQ-OPP-0002")
 def test_copies_odds_treats_hand_as_hidden_nondeck_pool_with_prizes():
-    # 4 copies in the build, 1 visible in discard -> 3 unseen. deck 30, prizes 6, hand 5.
-    # A card not in the deck is in a prize OR the hand, so the hidden non-deck pool is 6+5=11,
-    # NOT just the 6 prizes (the own-side model, where hand is visible, would use 6).
+    # A card not in the deck is in a prize OR the hand, so the hidden non-deck pool is 6+5=11, NOT
+    # just the 6 prizes (the own-side model, where hand is visible, would use 6).
     build = Counter({9: 4, 8: 3})
     opp = _opp(deck_count=30, prizes_hidden=6, hand_count=5, discard=[9])
     odds = copies_left_odds(build, opp)
@@ -176,11 +175,8 @@ def test_deckout_is_silent_when_the_deck_is_not_declining():
 
 @pytest.mark.req("REQ-OPP-0007")
 def test_my_pokemon_koed_last_turn_reads_the_opp_prize_drop_across_turns():
-    """The mirror of `took_ko_this_turn` (Unfair Stamp's own play condition, rules.md §6: the
-    attacker prizes from their OWN pile): the OPPONENT's prize count at the start of my current
-    turn is below its count at the start of my previous distinct turn — they took a prize in
-    between, so one of MY Pokémon was Knocked Out during their last turn. False until two distinct
-    turns are seen; a quiet turn clears it; within-turn changes wait for the next turn start."""
+    """The attacker prizes from their OWN pile (rules.md §6), so an opponent prize drop across two
+    of MY turn starts means one of MY Pokémon was Knocked Out during their last turn."""
     m = OpponentResourceModel()
     m.observe(_obs(_opp(prizes_hidden=6), turn=5))
     assert m.my_pokemon_koed_last_turn is False          # no previous turn to compare against

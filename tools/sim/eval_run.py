@@ -1,21 +1,12 @@
-"""Eval harness (ADR-0053 WP2, design LOCKED in docs/plans/ml/ml-training-design-s2b.md).
+"""Eval harness (ADR-0053 WP2): the offline instrument G2 is measured on. A candidate vs a baseline
+`battle.py` spec, compared **common-opponent** — both arms play the SAME opponent field, seat
+schedule and games-per-cell — never head-to-head as the measurement. The paired difference subtracts
+out the raw deck matchup, leaving only the candidate-vs-baseline effect (`sim.paired_ab`).
 
-The offline instrument G2 is measured on: a candidate contestant vs a baseline contestant,
-each an arbitrary `battle.py` spec (name / build id / optional `@overlay.json`), compared
-**common-opponent** (both arms play the SAME opponent field, seat schedule, and games-per-cell) —
-never head-to-head as the measurement, the protocol the research verifies as misleading
-(Hearthstone c5-vs-b4, AlphaStar's ~3M rock-paper-scissors cycles). The paired on−off difference
-subtracts out the raw deck matchup, leaving only the candidate-vs-baseline effect (`sim.paired_ab`).
+Power math + cell plan are pure and stdlib-only; the runner and CLI import the engine lazily.
 
-This module owns the run: the power math + cell plan (pure, below), and the live matrix runner
-+ CLI (imports the engine lazily inside the functions that need it, like `corpus.py`, so the
-pure planning atoms stay stdlib-only and import-cheap). The C3 report itself is assembled by
-`sim.eval_report`; strata by `sim.eval_strata`; the AIVAT seam by `sim.eval_aivat`; the
-duplicate-position spike by `sim.eval_spike`.
-
-The runner is **serial** (one server pair per cell): battle.py's `run_battle` worker fan-out
-emits only win/crash lines, no film channel, and every eval game must be filmed for strata/AIVAT;
-parallelising means extending the worker protocol (a v2 lever, not this build).
+The runner is **serial** (one server pair per cell): `battle.run_battle`'s worker fan-out emits only
+win/crash lines, no film channel, and every eval game must be filmed for strata/AIVAT.
 """
 from __future__ import annotations
 
@@ -29,10 +20,8 @@ DEFAULT_PRESET = "default"
 
 
 def per_arm_games(delta: float) -> int:
-    """Total games ONE arm plays across all its matchup cells to detect a win-rate difference of
-    ``delta`` at 95% confidence / 80% power: ``n = 0.5·(z/d)²`` (the two arms share the field, so
-    the paired contrast needs ~half the naive per-proportion N). Quick(5%)≈1568, default(3%)≈4356,
-    fine(2%)≈9800 — matched to the design table. Raises on a non-positive delta."""
+    """Total games ONE arm plays across all cells to detect a win-rate difference of ``delta`` at
+    95%/80%: ``n = 0.5·(z/d)²`` — halved because the paired arms share the field."""
     if delta <= 0:
         raise ValueError(f"delta must be positive, got {delta}")
     return round(0.5 * (_Z_POWER / delta) ** 2)
@@ -54,9 +43,7 @@ def games_per_matchup(per_arm_total: int, n_opponents: int) -> int:
 
 
 def matchup_cells(opponents: list[str]) -> list[dict]:
-    """The paired matchup cells, one per ``(opponent, seat)`` — each played by BOTH arms so the
-    per-cell candidate−baseline delta subtracts out the raw deck matchup. The candidate's own deck
-    appearing in ``opponents`` is the mirror cell (self-matchup regressions); the direct
+    """The paired cells, one per ``(opponent, seat)``, each played by BOTH arms. The direct
     candidate-vs-baseline head-to-head is a SEPARATE informational block, never a cell here."""
     return [{"opponent": o, "seat": s} for o in opponents for s in (0, 1)]
 
@@ -74,9 +61,8 @@ def _flush(manifest: dict, path) -> None:
 
 
 def _cell_stem(kind: str, arm: str, opponent) -> str:
-    """A cell's on-disk / manifest key, namespaced by KIND so a user opponent literally named
-    ``h2h`` or ``ck12`` can never collide with the head-to-head or a checkpoint cell (each kind is
-    its own namespace)."""
+    """A cell's on-disk / manifest key, namespaced by KIND so an opponent literally named ``h2h`` or
+    ``ck12`` cannot collide with the head-to-head or a checkpoint cell."""
     prefix = {"matchup": "m", "checkpoint": "ck", "h2h": "h2h"}[kind]
     return f"{prefix}__{arm}" if kind == "h2h" else f"{prefix}__{arm}__{opponent}"
 
@@ -84,14 +70,8 @@ def _cell_stem(kind: str, arm: str, opponent) -> str:
 def run_cell(arm_dir, opp_dir, arm_deck, opp_deck, n, *, film_dir=None, extra_syspath=(),
              run_id: str = "", stem: str = "", start_index: int = 0, arm_overlay=None,
              opp_overlay=None, arm_label: str = "cand", opp_label: str = "opp") -> dict:
-    """Run ``n`` seat-balanced games of one ARM (candidate or baseline, with its ``arm_overlay``
-    config) vs one opponent, the arm as contestant A alternating engine seats (ADR-0021). Captures
-    a clean-game film per game into ``film_dir`` (crashed games are skipped from the film corpus, as
-    in ``corpus.py``); film ``team_names`` label the acting seat by the real ``arm_label`` so a
-    baseline-arm film isn't mislabelled ``cand``. Returns ``{by_seat: {"0"/"1": {n, wins, draws}},
-    crashes, bytes, films: [{path, seat, won}]}`` — ``wins``/``won`` are the ARM's, ``crashes`` the
-    arm's crash count (a crashed arm game is a loss AND a flag), ``seat`` the engine seat the arm
-    occupied (its OWN-decision seat, for strata)."""
+    """Run ``n`` seat-balanced games of one ARM vs one opponent (ADR-0021), filming clean games into
+    ``film_dir``. ``wins``/``won``/``crashes``/``seat`` in the result are all the ARM's."""
     import gzip
     import json
     from pathlib import Path
@@ -146,10 +126,8 @@ def run_cell(arm_dir, opp_dir, arm_deck, opp_deck, n, *, film_dir=None, extra_sy
 
 
 def _matchup_rows(cand_cell: dict, base_cell: dict, opponent) -> list[dict]:
-    """Two C3 matchup rows (seat 0, seat 1) pairing the candidate arm's and baseline arm's results
-    vs the same opponent — the common-opponent paired contrast, per seat (ADR-0021 audit kept).
-    Each row carries per-arm ``candidate_n``/``baseline_n`` so the delta stays correct even if a
-    resume left the arms different sizes (a shared ``n`` with full win counts could read >1)."""
+    """Two C3 rows (seat 0, seat 1) pairing both arms vs the same opponent. Each row carries per-arm
+    ``candidate_n``/``baseline_n`` so a resume leaving the arms different sizes stays correct."""
     rows = []
     for s in ("0", "1"):
         c, b = cand_cell["by_seat"][s], base_cell["by_seat"][s]
@@ -162,9 +140,8 @@ def _matchup_rows(cand_cell: dict, base_cell: dict, opponent) -> list[dict]:
 
 
 def _work_list(opponents: dict, checkpoints: dict, *, do_h2h: bool) -> list[dict]:
-    """The ordered cell work-list: both arms vs every opponent, both arms vs every checkpoint, and
-    (optionally) the candidate-arm head-to-head vs the baseline. Each entry names the arm, the
-    opponent key, its kind, and its kind-namespaced stem."""
+    """The ordered cell work-list: both arms vs every opponent and every checkpoint, plus the
+    optional head-to-head."""
     work = []
     for opp in opponents:
         for arm in ("candidate", "baseline"):
@@ -181,11 +158,8 @@ def _work_list(opponents: dict, checkpoints: dict, *, do_h2h: bool) -> list[dict
 
 
 def _strata(films_meta: list, *, agent: str | None) -> list[dict]:
-    """Best-effort C3 strata over the clean eval films: value-swing sensitivity per game (the
-    committed seed model over ``agent``'s ``_board``, scored on the ARM's OWN decisions), median-
-    split into high/low-swing. ``agent`` is the real agent NAME (not a build-id spec). Returns
-    ``[]`` if no pilot is available or no film scores — the block is optional (C3 allows
-    ``strata: []``); it upgrades for free when a better value model ships."""
+    """Best-effort C3 strata: per-game value-swing sensitivity, median-split into high/low. ``agent``
+    is the real agent NAME, not a build-id spec. ``[]`` when unavailable — the block is optional."""
     if not agent or not films_meta:
         return []
     try:
@@ -214,13 +188,8 @@ def run_eval(*, run_id: str, created_at: str, git_rev: str, candidate: dict, bas
              opponents: dict, out_root, per_cell: int, checkpoints: dict | None = None,
              h2h_n: int = 0, caps: dict | None = None, extra_syspath=(),
              resume: bool = False, preset: str = "") -> dict:
-    """Run the common-opponent matrix and write ``<out_root>/eval/<run_id>/`` (corpus-pattern:
-    manifest header + gzip films + resume + caps), returning the C3 report (also written to
-    ``report.json``). ``candidate``/``baseline``/opponents/checkpoints entries are resolved-spec
-    dicts ``{label, dir, deck, overlay, agent, descriptor}``. Resume is cell-granular: the manifest
-    is flushed after EVERY cell and a completed cell's tally is reused; on resume the ORIGINAL run's
-    ``per_cell``/``h2h_n``/``preset`` are used (never a caller's new value) so cell sizes can't
-    diverge mid-run."""
+    """Run the matrix into ``<out_root>/eval/<run_id>/`` -> the C3 report. Resume is cell-granular
+    and reuses the ORIGINAL run's ``per_cell``/``h2h_n``/``preset``, never a caller's new value."""
     import json
     from pathlib import Path
 
@@ -288,9 +257,8 @@ def run_eval(*, run_id: str, created_at: str, git_rev: str, candidate: dict, bas
 
 def _assemble(manifest: dict, opponents: dict, checkpoints: dict, *, git_rev, created_at,
               strata_agent, n_planned) -> dict:
-    """Turn the run's per-cell tallies into the C3 report: paired matchup rows, the informational
-    H2H block, checkpoint cells (regression tripwire), strata, and the verdict. Navigates cells by
-    their stored ``(kind, arm, opponent)`` — never by re-deriving stems."""
+    """Per-cell tallies -> the C3 report. Navigates cells by their STORED ``(kind, arm, opponent)``,
+    never by re-deriving stems."""
     from sim.eval_aivat import aivat
     from sim.eval_report import build_report
 
@@ -349,19 +317,14 @@ def _assemble(manifest: dict, opponents: dict, checkpoints: dict, *, git_rev, cr
 
 
 def _descriptor(row: dict, label: str, config) -> dict:
-    """The frozen C3 contestant descriptor ``{agent, label, config}`` — one shape whatever the entry
-    point, so a G2 consumer reads the same fields for a name, a build id, or an overlay spec.
-    ``config`` is a concise label (the overlay's basename), not a machine-specific absolute path."""
+    """The frozen C3 contestant descriptor ``{agent, label, config}``. ``config`` is the overlay's
+    BASENAME, never a machine-specific absolute path."""
     return {"agent": row.get("agent", label), "label": row.get("label", label), "config": config}
 
 
 def _resolve_spec(spec, rows, *, agents_root, out, into):
-    """A ``battle.resolve`` contestant -> a resolved-spec dict. A name is a working-tree agent, a
-    digit is a Build-Ledger zip extracted under ``into``, and a trailing ``@overlay.json`` is the
-    config under test (threaded into the AgentServer and recorded in the C3 ``config`` descriptor).
-    A relative overlay resolves against the CWD (like ``battle.py``), NOT the bundle dir — the
-    bundle is a name's source dir or a build's ephemeral tempdir, neither of which holds the user's
-    experiment file."""
+    """A ``battle.resolve`` contestant -> a resolved-spec dict. A relative ``@overlay.json`` resolves
+    against the CWD (like `battle.py`), NOT the bundle dir, which may be an ephemeral tempdir."""
     from pathlib import Path
 
     from sim.battle import parse_spec, read_deck, resolve
@@ -374,9 +337,8 @@ def _resolve_spec(spec, rows, *, agents_root, out, into):
 
 
 def _resolve_checkpoint(entry: dict, *, out, into):
-    """Resolve a checkpoint from the HISTORY row's own artifact zip (the same zip
-    ``checkpoint_pool`` verified on disk) — NOT by re-looking-up the submission id in the local
-    builds ledger, whose id space can diverge from committed agent_history on a fresh/reset clone."""
+    """Resolve a checkpoint from the HISTORY row's own artifact zip — NOT by re-looking-up the
+    submission id in the local builds ledger, whose id space can diverge on a fresh clone."""
     from sim.battle import _bundle_dir, read_deck
     row = {"submission_id": entry["submission_id"], "agent": entry.get("agent"),
            "artifact": entry["artifact"], "label": "checkpoint"}
@@ -404,7 +366,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Eval harness (ADR-0053 WP2): common-opponent paired eval of a candidate vs a "
                     "baseline, emitting the C3 report G2 reads. See "
-                    "docs/plans/ml/ml-training-design-s2b.md.")
+                    "docs/plans/ml/ml-training-build.md.")
     ap.add_argument("candidate", help="candidate spec: agent name / build id / spec@overlay.json")
     ap.add_argument("baseline", help="baseline spec: agent name / build id / spec@overlay.json")
     ap.add_argument("--opponents", nargs="*", default=None,

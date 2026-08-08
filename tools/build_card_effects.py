@@ -1,37 +1,17 @@
 """Build the shipped Effect-Clause table (ADR-0032 item 6; see card_effects.py).
 
-Drives the existing probe (``probe_cards.probe_card``) over the Trainer pool — a
-stable pass (draw counts) plus several controlled-combat passes (heal visibility,
-like the functions builder) — feeds each record to ``classify_effect_clauses``
-**separately** (riders/counts are per-resolution facts), merges by max, unions the
-hand-authored ``effect_overrides.json`` by kind, and writes ``{cardId: [clauses]}``
-to ``common/card_effects.json``. Lib-using — run offline, deliberately.
+Drives ``probe_cards.probe_card`` over the Trainer pool, feeds each record to
+``classify_effect_clauses`` separately, merges by max, unions ``effect_overrides.json`` by kind,
+and writes ``{cardId: [clauses]}`` to ``common/card_effects.json``. Lib-using — run offline.
 
-Re-runs **accumulate** by default (``accumulate_effects``): a clause once measured is
-never dropped and amounts only grow, so successive stochastic runs converge on the
-printed heal values. Overrides are re-stamped AFTER accumulating
-(``apply_overrides``) so an override edit replaces stale prior-run clauses of its
-kind without a full rebuild. ``--fresh`` rebuilds from scratch (after a
-classify-rule change).
-
-Heal-clause ``restriction`` values are **engine-OBSERVED** (ADR-0032 item 6:
-probe_restrictions.py seeds a damaged bench Mega + damaged non-Mega Active and records
-which targets the select offers). ``--observe-restrictions`` re-measures and persists
-to ``observed_restrictions.json``; every run re-stamps the persisted observations
-AFTER the hand-authored overrides — on conflict the OBSERVED value wins (the engine is
-the authority) and the conflict is printed loudly. ``--limit 0`` skips the trainer
-probe entirely (observe-only / re-stamp-only runs).
-
-Per-card clause-set completeness verdicts (`_covers`, Issue #300) ride through from the overrides
-file to the shipped table verbatim — they are a hand ruling, never measured, and they are what stops
-a PARTIAL clause set pricing as a complete one at the apply seam. Every card with clauses owes one;
-a missing or unreasoned verdict is printed loudly here and fails
-`tests/strategy/test_snapshot_coverage.py`.
+Re-runs ACCUMULATE by default: a clause once measured is never dropped and amounts only grow;
+``--fresh`` rebuilds from scratch. Heal ``restriction`` values are engine-OBSERVED, and on a
+conflict with an override the OBSERVED value wins, loudly. ``--limit 0`` skips the trainer probe.
+Per-card `_covers` verdicts (Issue #300) ride through from the overrides file verbatim.
 
 Usage:
     python tools/build_card_effects.py [--out PATH] [--limit N] [--overrides PATH]
-                                       [--observed PATH] [--observe-restrictions] [--fresh]
-"""
+                                       [--observed PATH] [--observe-restrictions] [--fresh]"""
 from __future__ import annotations
 
 import argparse
@@ -58,11 +38,8 @@ _COMBAT_PASSES = 4   # heal aligns ~1-in-N combat games (same rationale as funct
 
 def probe_trainer_records(cards: dict, *, limit: int | None = None,
                           log=print) -> dict[int, list[dict]]:
-    """Probe each Trainer, keeping the per-pass records SEPARATE → ``{cardId: [records]}``.
-
-    Unlike the functions builder's ``_merge``, records are not concatenated: a draw
-    count summed across passes or a rider paired across games would be fiction.
-    """
+    """Probe each Trainer, keeping the per-pass records SEPARATE → ``{cardId: [records]}``. Records are
+    not concatenated: a draw count summed across passes or a rider paired across games is fiction."""
     ids = [c for c in sorted(cards) if cards[c].get("category") in _TRAINER_CATS]
     if limit is not None:
         ids = ids[:limit]
@@ -87,15 +64,8 @@ def _load_overrides(path) -> dict[int, list[dict]]:
 
 
 def _load_covers(path) -> dict:
-    """The hand-ruled ``{cardId: {covers, reason}}`` block, verbatim — never measured, never merged.
-
-    Kept out of :func:`_load_overrides` on purpose: an override entry REPLACES the measured clauses
-    of its kind, and most cards owing a verdict carry only measured clauses. A verdict is a statement
-    ABOUT a clause set, so it rides beside the sets rather than inside them.
-
-    The authored `_note` rides along with the verdicts: it is what tells a reader of the SHIPPED
-    artifact what the field means and where it is edited, and dropping it would leave the compendium
-    carrying a vocabulary it does not explain."""
+    """The hand-ruled ``{cardId: {covers, reason}}`` block, verbatim — never measured, never merged. A
+    verdict is a statement ABOUT a clause set, so it rides beside the sets rather than inside them."""
     p = Path(path)
     if not p.exists():
         return {}
@@ -182,8 +152,7 @@ def main() -> None:
     for problem in snapshot_coverage.covers_problems(payload):
         print(f"  !! COVERS: {problem}")
     # Binary write: `Path.write_text` rewrites LF to CRLF on Windows, which would turn every rebuild
-    # into a whole-file diff on a committed store — and this repo builds on Windows and grades on
-    # Linux, so the store must not depend on which one last touched it.
+    # into a whole-file diff on a committed store (ADR-0116).
     out.write_bytes(json.dumps(payload, ensure_ascii=False, indent=0).encode("utf-8"))
     kinds: dict[str, int] = {}
     for cls in table.values():

@@ -8,19 +8,14 @@ not the model — park T5 pointing there, don't flip a model that can't move a m
 """
 from __future__ import annotations
 
-# The dead-vs-live boundary, NOT a strength bar. A mirror-only / Read-less corpus leaves favorability
-# a constant → a weight indistinguishable from zero (the "dead" pipeline signature). At corpus scale
-# (~90k rows) a standardized logistic weight has SE ≈ 0.003, so 0.02 is ~6 SE off zero — safely above
-# noise while still admitting a WEAK-but-real feature (the board primitives legitimately dominate the
-# matchup prior; a live favorability need only be materially non-zero with the right sign, not large).
+# The dead-vs-live boundary, NOT a strength bar: at corpus scale a standardized logistic weight has
+# SE ~= 0.003, so this is ~6 SE off zero while still admitting a WEAK-but-real feature.
 _DEFAULT_EPS = 0.02
 
 
 def favorability_is_live(model: dict, *, eps: float = _DEFAULT_EPS) -> bool:
-    """True iff the trained ``model`` assigns a materially-non-zero (|weight| ≥ ``eps``) standardized
-    weight to the ``favorability`` feature — the tell that the Read is wired AND the corpus varies the
-    matchup, so the model can use its matchup signal. False when the feature is absent or its weight is
-    within ``eps`` of zero (the dead pipeline signature: mirror-only corpus, or a Read-less extractor)."""
+    """The tell that the Read is wired AND the corpus varies the matchup. A weight within ``eps`` of
+    zero is the DEAD pipeline signature: a mirror-only corpus, or a Read-less extractor."""
     feats = model.get("features") or []
     weights = model.get("weights") or []
     if "favorability" not in feats:

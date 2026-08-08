@@ -1,36 +1,9 @@
-"""The resolver's opponent DENY leg (keep-value v2 thread 2; the grill's Round-3 ruling).
+"""The resolver's opponent DENY leg — ADR-0080 / Issue #187.
 
-`pilot._resolve_needs` emits DENY slots for the opponent's IN-PLAY bodies from VISIBLE facts only.
-VALUE = the disruption CARD-tier (`TAG_TIER["gust"]` ≈ 10 in the ONE currency — the grill's
-currency ruling, 2026-07-20) SCALED BY DENY RELEVANCE, then GRADED by the ruled basic lookahead
-(`_opp_turns_to_ready` → `needs.turns_to_ready`: energy deficit at the 1-attach/turn quota,
-rules.md §3, in parallel with the forward evolution hops still owed, rules.md §4). Eligibility
-routes through the `needs.SUPPLIES` net (the deny-supplying tags: gust / energy_denial), so the
-Hammer/gust classes stop riding the WP-N3 hedge. Fail-closed everywhere: unknown stats, absent
-opponent read, a strip that bites nothing, or no deny-capable held row → NO slot (the shipped hedge
-keeps pricing those rows).
-
-**The instrument moved (ADR-0080 / Issue #187, armed and the incumbent DELETED by Issue #228).**
-The ADR-0062 oracle (`_denial_at`) used to be a pure GATE here — `> 0` meant "the strip bites this
-body" — and the card tier was then paid FLAT. Armed, the tier is multiplied by that body's
-relevance, so a Hammer is worth keeping in proportion to how much the Energy it would take is
-actually doing; the tier survives as the CEILING rather than the value. This is still not a damage
-magnitude: relevance is a ``[0, 1]`` scalar, so the currency ruling ("never the play-side damage
-swing on the keep price") is intact, which is the claim these tests carry. The gate survives too —
-relevance is 0 for a bare body, for surplus Energy and for one dying to my KO this turn, so the
-whiff cases below arrive structurally rather than through a separate predicate.
-
-Two fixture consequences, named rather than discovered:
-  * the read resolves an Energy's TYPE through the Stat Provider, so an opponent body must carry a
-    real Basic ``{F}`` Energy **card id** and each attack must declare its per-slot cost types —
-    a colourless placeholder is on no plan's critical path and scores 0;
-  * the rows are built by `_opponent_target_rows`, which needs MY Active as well as theirs (its
-    clock legs are differences of `turns_to_ko_me`). A board with an empty Active spot returns NO
-    rows at all, where the old opponent-only oracle happily priced one.
-
-boards mirror `test_discard_keep_rows._setup`; the captured-board case replays a REAL
-recorded correction through the real shipped pilot (`test_gust_round0_corpus` pattern — fresh
-pilot per replay, the statefulness lesson).
+A deny slot is the disruption CARD-tier SCALED by that body's relevance (a ``[0, 1]`` scalar, so the
+tier is a CEILING and never the play-side damage swing) and GRADED by `_opp_turns_to_ready`.
+Fail-closed everywhere: unknown stats, no opponent read, a strip that bites nothing, or no
+deny-capable held row all emit NO slot.
 """
 from __future__ import annotations
 
@@ -59,26 +32,14 @@ FIGHTING_ENERGY = 6         # Basic {F} Energy (SVE 6). Card id and EnergyType c
 
 
 def _deny_value(setback_damage: float, turns: int) -> float:
-    """The armed keep price of a deny slot: the disruption card tier, scaled by the body's relevance,
-    halved once per turn the body is still short of attacking.
-
-    ``setback_damage`` is spelled out from CARD FACTS at each call site rather than read back off the
-    pilot, so these tests pin the FORMULA instead of restating whatever the pilot computed."""
+    """``setback_damage`` is spelled out from CARD FACTS at each call site rather than read back off
+    the pilot, so these tests pin the FORMULA instead of whatever the pilot computed."""
     return TAG_TIER["gust"] * (setback_damage / _DENY_RELEVANCE_K) / (2.0 ** turns)
 
 
 def _setup(hand_ids, *, opp_active=None, opp_bench=(), minc=1):
-    """A forced Discard over ``hand_ids`` against a visible opponent board — the
-    `test_discard_keep_rows` fixture shape plus the opponent side the deny leg reads. The Riolu →
-    Mega Lucario ex forward line (single hop — rulebook Appendix 1) carries real attack records so
-    the deny read prices strips: Riolu Accelerating Stab {F}=30; Mega Lucario ex Aura Jab {F}=130 /
-    Mega Brave {F}{F}=270 (verified, data/EN_Card_Data.csv).
-
-    ``energyTypes`` on each attack record and a real Basic {F} Energy card in the Provider are what
-    the ARMED read needs and the retired magnitude oracle did not: relevance is a function of an
-    Energy's TYPE against a cost's typed slots, so an untyped placeholder scores 0 everywhere. My
-    own Active is present for the same reason — `_opponent_target_rows` builds the deny rows off
-    differences of `turns_to_ko_me`, and returns nothing at all when my Active spot is empty."""
+    """Relevance is a function of an Energy's TYPE against a cost's typed slots, so every attack
+    needs `energyTypes` and MY Active must exist — `_opponent_target_rows` returns nothing without it."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         HAMMER: CardStat(HAMMER, name="Crushing Hammer", cardType=1),
@@ -122,11 +83,8 @@ def _deny_slots(pilot, obs, board=None):
 # ============================================================ the visible lookahead helper
 @pytest.mark.req("REQ-NEEDS-0002")
 def test_opp_turns_to_ready_is_the_visible_parallel_lookahead():
-    """`_opp_turns_to_ready`: max of the energy leg (the LINE's biggest-attack cost — max
-    `maxDamageCost` over current + forward forms — minus attached, at 1 attach/turn) and the
-    forward-hop leg (`evolvesFrom` name-chain depth, one evolve/turn). A banked Riolu (1 Energy,
-    one hop to Mega Lucario ex whose Mega Brave costs 2) is ONE turn out on both legs; a powered
-    Mega Lucario ex is ready NOW; an unknown body reads None — fail-closed, no deny slot."""
+    """The MAX of the energy leg (the LINE's biggest-attack cost, at 1 attach/turn) and the
+    forward-hop leg (`evolvesFrom` chain depth, 1 evolve/turn); an unknown body reads None."""
     pilot, _obs = _setup([HAMMER])
     pilot._snapshot(_obs)        # the clock reads THEIR side off the snapshot now (POC-T1)
     assert pilot._opp_turns_to_ready(None) is None       # …and None without a snapshot, likewise
@@ -140,20 +98,8 @@ def test_opp_turns_to_ready_is_the_visible_parallel_lookahead():
 # ============================================================ the deny leg in the resolver
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_resolver_emits_a_graded_deny_slot_at_the_disruption_card_tier():
-    """The graded Hammer, wired at the CURRENCY ruling: a banked opponent Riolu (1 Energy toward
-    Mega Lucario ex) opens ONE deny slot, priced in the ONE currency off the disruption CARD-tier
-    (`TAG_TIER["gust"]` = 10) and graded by turns-to-ready (1 turn out → halved, `needs.deny_slot`).
-    Never the play-side damage swing.
-
-    **The tier is now the CEILING, not the value (ADR-0080 / Issue #187).** Armed, it is scaled by
-    the body's relevance before the grade: that Riolu's lone {F} is banked toward Mega Brave
-    ({F}{F}, 270) — "Evolving keeps attached cards", rules.md:98 — credited at the mandated
-    `_DENIAL_FORWARD` discount because the payoff is a turn away and contingent, so the setback is
-    135 of a 350 normalizer. 10 x (135/350) / 2¹ ≈ 1.93. The ADR-0062 oracle that used to supply
-    the bare bite GATE here is deleted (Issue #228); relevance > 0 subsumes it.
-
-    ONLY the deny-supplying rows (energy_denial Hammer, gust Boss's) are eligible, via the
-    `needs.SUPPLIES` net."""
+    """Energy banked on a pre-evolution counts toward the evolved form's cost ("Evolving keeps
+    attached cards", rules.md:98) at the `_DENIAL_FORWARD` discount, since the payoff is contingent."""
     pilot, obs = _setup([HAMMER, FILLER, BOSS], opp_active=_energized(RIOLU, 70))
     rows, slots, elig, denys = _deny_slots(pilot, obs)
     assert len(denys) == 1
@@ -170,14 +116,8 @@ def test_resolver_emits_a_graded_deny_slot_at_the_disruption_card_tier():
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_deny_leg_is_fail_closed():
-    """Every unknown reads as NO slot (erring toward the shipped hedge): an unknown-stats body, a
-    surplus-Energy body (the ADR-0062 whiff — stripping denies 0), an absent opponent read, and a
-    hand with no deny-capable row each emit nothing.
-
-    The surplus case is the one that changed CHARACTER rather than outcome: it used to be the
-    ADR-0062 oracle pricing the strip at 0 and the gate declining, and it is now the relevance read
-    reaching 0 STRUCTURALLY — a Mega Lucario ex on 3 {F} is surplus in the typed slot of both its
-    attacks and over the total cost of both, so no strip puts either further out of reach."""
+    """The whiff cases arrive STRUCTURALLY through relevance reaching 0 rather than through a
+    separate predicate — surplus Energy puts no attack further out of reach."""
     # unknown body id -> `_opp_turns_to_ready` is None -> no slot
     pilot, obs = _setup([HAMMER], opp_active=_energized(424242, 0))
     assert _deny_slots(pilot, obs)[3] == []
@@ -194,18 +134,8 @@ def test_deny_leg_is_fail_closed():
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_deny_drops_the_doomed_active_and_grades_by_timing():
-    """The `active_can_ko` drop, consumed intact: with my Active able to KO theirs the doomed Active
-    denies nothing and emits NO slot, while every biting body still opens a slot graded by its OWN
-    turns-to-ready — the ready Mega Lucario ex Active at the full band (2⁰), the banked bench Riolu
-    one turn out at half (2¹). Bench vs Active is a TIMING grade, not a fixed weight: the
-    damage-model `_DENIAL_BENCH` discount was retired from the keep price and Issue #228 deleted it.
-
-    Each slot's ceiling is the card tier scaled by that body's own relevance (ADR-0080): the Active
-    Mega Lucario ex sits on exactly the {F}{F} Mega Brave needs, so the strip puts its full 270 out
-    of reach; the bench Riolu's lone {F} is banked one evolution away, so it takes the
-    `_DENIAL_FORWARD` discount on the same 270. Nothing in either figure is an AREA term — the
-    deadlines asserted below are where bench-vs-Active shows up, and they come from each body's own
-    turns-to-ready."""
+    """Bench vs Active is a TIMING grade, not an area term: nothing here is a fixed bench discount,
+    and the deadlines below come from each body's own turns-to-ready."""
     pilot, obs = _setup([HAMMER], opp_active=_energized(MLUC, 340, 2),
                         opp_bench=[_energized(RIOLU, 70)])
     board = pilot._board(obs)
@@ -225,35 +155,10 @@ def test_deny_drops_the_doomed_active_and_grades_by_timing():
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
-    """The currency ruling on a REAL recorded board (82867148-48, mega_starmie): the held Boss's
-    Orders (gust-tagged) never towers over its own general worth (4.5), whether priced through the
-    pre-ADR-0076 `deny` route (a card-tier value graded down for distance) or — the armed default
-    now — its own `gust_target` slot (the real per-body marginal, ADR-0076): either way the
-    DECIDED pick stays unmoved (the discard corpus stays 12/12; `keep_v2` is unchanged at 4.5,
-    its general floor). Under the pre-ruling damage-denominated value the same board priced the
-    strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
-    original ruling retired, and the ADR-0076 migration does not reopen.
-
-    **The slot is WORTH-denominated as of Issue #313 item 2g**, so the number below is a band
-    fraction (`10.0 x prize_equivalents/3.9`) rather than the raw prize-equivalent it used to be.
-
-    **ADR-0119 moved this frame's number, and the old prose explaining WHY it was chosen no
-    longer describes it.** It read: *"the only gustable body is a 1-prize Dreepy whose removal buys
-    no survival turns — the MODAL corpus target"*, held up as the "not everywhere" half of the
-    denomination fix. The survival half of that is still true. The prize half is not: Dreepy is two
-    hops from **Dragapult ex**, so its LINE is worth 2 where its body is worth 1, and
-    `needs.line_prize_advance` reads `1 + (2−1) x halve(2)` = **1.25**. The frame is therefore no
-    longer a pure "nothing to see" board — it is a mild lift, which is exactly what a two-hop line
-    to a 2-prize ex should earn.
-
-    What the frame actually pins is unchanged, and survives the move: the slot still prices UNDER
-    the card's own general floor (3.21 against 4.5), so the held Boss's still never towers over its
-    own general worth and the decided pick still moves nothing. That claim is asserted below against
-    the floor directly, so it cannot silently become vacuous the next time the marginal moves."""
-    # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The inline raw walk
-    # this replaced `pytest.skip`ped when the frame was absent — a skip on a test that names a
-    # literal frame it asserts real behaviour about is a green nobody can notice, so the helper
-    # RAISES instead.
+    """A held gust card's slot must price UNDER the card's own general floor, so it never anchors the
+    hand; asserted against the floor directly so it cannot go vacuous when the marginal moves."""
+    # THE Corpus Reader (ADR-0087 / ADR-0089): it RAISES on a missing frame, where the inline walk
+    # it replaced skipped — a green nobody can notice.
     from corpus_helpers import corpus_record
     rec = corpus_record("82867148", 48)
     spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
@@ -265,22 +170,13 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
                                            rec.obs["select"]["option"])
     slots, _elig = pilot._resolve_needs(rec.obs, board, rows)
     gust_target = [x for x in slots if x.kind == "gust_target"]
-    # EXACT, so the marginal's formula is pinned rather than merely bounded (the original assertion
-    # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift
-    # anywhere below the floor unnoticed). Their bench holds one gustable body, a 1-prize Dreepy
-    # whose removal buys 0 survival turns — so the survival leg is `phase x 0` = 0 and the whole
-    # marginal is `prize_advance`. Since ADR-0119 that is the LINE's prize: Dreepy is two hops
-    # from Dragapult ex (2 prizes), so `1 + (2-1) x halve(2)` = 1.25, denominated into Worth by
-    # `currency.target_value_to_worth` at the band fraction 1.25/3.9. It read 1.0 while
-    # `prize_advance` was the body's own prize.
+    # EXACT, so the formula is pinned rather than bounded: the survival leg is 0 here, leaving the
+    # whole marginal as `prize_advance` — the LINE's prize since ADR-0119, not the body's own.
     assert len(gust_target) == 1
     assert pilot.combat.forward_line_prize(DREEPY) == (2, 2), (
         "the premise of the number below — a two-hop line to a 2-prize ex, not a dead end")
     assert gust_target[0].value == pytest.approx(currency.target_value_to_worth(1.25))
     assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
-    # `keep_v2` used to be read off `Decision.discard_shadow`, deleted with the other three by
-    # Issue #261 item 2h. The number was never the shadow's — it is the decider's own keep, so it is
-    # read from the assignment that decides.
     keeps, _pick = pilot._needs_v2(rec.obs, board, rows, rec.obs["select"]["maxCount"])
     boss = next(k for r, k in zip(rows, keeps) if r["cid"] == BOSS)
     assert boss == pytest.approx(4.5)                        # its general floor — the strip is below it

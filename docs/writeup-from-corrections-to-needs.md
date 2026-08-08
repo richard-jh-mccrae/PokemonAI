@@ -6,7 +6,7 @@ reviewed and rebuilt 2026-07-19/20, merged as PR #121 — because it is the clea
 of the project's method: *human corrections are the teacher, hand-built features are the
 curriculum, and the destination is a general mechanism that derives what the features asserted.*
 Full chronological detail: [ADR-0065 §Build status](adr/0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)
-and [the grill spec](plans/keep-value-needs-assignment-grill-spec.md).
+and its §Grill run.
 
 ---
 
@@ -202,7 +202,7 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
 | `src/common/{card_worth,deck_odds,gate_library,fetch_closure}.py` | the v1 oracle (Worth · Odds · Gates · Closure) |
 | `src/common/playability.py` | BACKWARD line topology (ADR-0104): can a held card ever be played? The gate on eligibility, and the `deploy` gate's own answer |
 | `docs/adr/0065-glossary.md` | the five-term ubiquitous language |
-| `docs/plans/keep-value-needs-assignment-grill-spec.md` | the grill, rulings, WP build log with all measurements |
-| `docs/plans/keep-value-v2-session-handoff.md` | live state + open threads for the next session |
+| `ADR-0065` | the grill, rulings, WP build log with all measurements |
+| `ADR-0065` | live state + open threads for the next session |
 | `tests/strategy/test_needs.py`, `test_discard_shadow.py` | the mechanism's pinned proofs |
 | `tools/train/probes/needs_sweep.py` | reproduces the acceptance numbers |

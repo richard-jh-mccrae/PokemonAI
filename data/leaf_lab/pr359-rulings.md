@@ -1,6 +1,6 @@
 # PR #359 ruling record — the issue-sequence batch's packet
 
-The developer's per-frame verdicts on `docs/plans/issue-sequence-329-wave3-packet.md`, the packet
+The developer's per-frame verdicts on `docs/archive/plans/issue-sequence-329-wave3-packet.md`, the packet
 raised by the nine-issue batch in **PR #359** (Issues #329, #332, #362, #351, #350, #349, #374, #375,
 #372).
 

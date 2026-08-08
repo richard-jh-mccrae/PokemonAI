@@ -12,8 +12,7 @@ import math
 
 
 def standardize(rows: list[list[float]]) -> tuple[list[float], list[float]]:
-    """Per-column ``(mean, std)`` of ``rows`` (std floored to 1.0 so a constant column — e.g. the
-    bias, or a feature unseen in this corpus — divides cleanly and contributes nothing)."""
+    """std is FLOORED to 1.0, so a constant column divides cleanly and contributes nothing."""
     n = len(rows)
     d = len(rows[0]) if rows else 0
     mean = [0.0] * d
@@ -49,9 +48,8 @@ def log_loss(weights, rows, labels, mean, std) -> float:
 
 
 def fit(rows, labels, *, mean, std, lr: float = 0.3, epochs: int = 400, l2: float = 1e-3):
-    """Full-batch gradient descent on standardized ``rows`` → weight vector (bias column NOT
-    L2-penalized, the standard convention). Deterministic (no shuffling / no RNG — reproducible and
-    grader-safe), so the same corpus always yields the same model."""
+    """Full-batch gradient descent; the bias column is NOT L2-penalized. Deterministic — no shuffling
+    and no RNG — so the same corpus always yields the same model."""
     n = len(rows)
     d = len(rows[0]) if rows else 0
     w = [0.0] * d

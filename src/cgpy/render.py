@@ -1,13 +1,8 @@
 """Observation rendering: per-seat masking identical to native GetBattleData (ADR-0059).
 
-The live-obs contract (pinned from raw native dumps, see docs/pyeng/determinism.md §7):
-- top level {select, logs, current, search_begin_input}
-- select always carries all ten keys; absent deck/contextCard/effect are null
-- options are SPARSE dicts (only the keys that apply), int enums
-- players carry the full key set; own hand = list (possibly empty), opponent hand = null;
-  facedown prize slots = null entries; a facedown active renders [null] EVEN TO ITS OWNER;
-  discard/bench/stadium fully visible both ways
-- logs are the drained per-seat outbox (REVERSE variants already substituted at emission)
+The live-obs contract is pinned from raw native dumps in docs/pyeng/determinism.md §7. The traps:
+select always carries all ten keys (absent ones null), options are SPARSE dicts, opponent hand is
+null rather than absent, and a facedown active renders [null] EVEN TO ITS OWNER.
 """
 from __future__ import annotations
 
@@ -24,10 +19,8 @@ def pokemon_dict(gs: GameState, p: PokemonInPlay) -> dict:
 
     energies: list[int] = list(provided_energy(gs, p))
     delta = stadium_hp_delta(gs, p)
-    # A negative stadium/energy delta (Gravity Mountain −30) floors the RENDERED hp
-    # at 0 — a KO'd Stage-2 renders 0, not −30 (kaggle 85050368: Aura Jab into a
-    # Gravity-Mountain Dragapult ex). Raw damage-counter overkill (stored hp already
-    # negative, delta 0) is unaffected — native renders that raw.
+    # A negative stadium delta floors the RENDERED hp at 0; raw damage-counter overkill (hp already
+    # negative, delta 0) must stay unfloored, because native renders that raw.
     return {
         "id": gs.card_id(p.top),
         "serial": p.top,
@@ -125,12 +118,12 @@ def god_frame(gs: GameState) -> dict:
     """Full-information state projection (both decks/hands revealed) for the differ."""
     def board(seat: int) -> dict:
         b = gs.players[seat]
-        d = player_dict(gs, seat, viewer=seat)          # own view: hand visible
-        d["hand"] = [card_dict(gs, s) for s in b.hand]  # force-visible for god
+        d = player_dict(gs, seat, viewer=seat)
+        d["hand"] = [card_dict(gs, s) for s in b.hand]
         d["deck"] = [card_dict(gs, s) for s in b.deck]
         d["prize"] = [card_dict(gs, s) for s in b.prize]
         if b.active is not None and b.active_facedown:
-            d["active"] = [pokemon_dict(gs, b.active)]  # god sees facedown cards
+            d["active"] = [pokemon_dict(gs, b.active)]
         return d
 
     cur = current_dict(gs, viewer=0)

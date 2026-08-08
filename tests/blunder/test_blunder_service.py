@@ -42,9 +42,8 @@ def test_record_correction_from_posted_form_appends_labeled_correction(tmp_path)
 
 
 def test_frames_payload_matches_heroz_film_indexing():
-    """REQ-BLUNDER-0012: frames_payload enumerates ALL 44 film frames with HEROZ-style
-    1-based step numbers (X/44); taggable frames carry options + a Selected-Action label,
-    so the pane lines up 1:1 with the colorful viewer's stepper."""
+    """HEROZ-style 1-based step numbers (X/44), so the pane lines up 1:1 with the viewer's
+    stepper."""
     p = frames_payload(load_replay(FIXTURE), our_team="keidroid")
     assert p["total"] == 44 and len(p["frames"]) == 44
 
@@ -60,11 +59,8 @@ def test_frames_payload_matches_heroz_film_indexing():
 
 
 def test_a_taggable_frame_carries_the_selects_min_count(tmp_path):
-    """REQ-BLUNDER-0021: the panel cannot offer a DECLINE it has no way to know is legal. `minCount`
-    lives only in the agent `obs`, so the payload carries it — read from the SAME place
-    `build_correction` validates against, so the button and the validator can never disagree.
-
-    `None` on an untaggable or obs-less frame is the fail-closed signal, not a default of 0."""
+    """`minCount` is read from the SAME place `build_correction` validates against, so button and
+    validator can never disagree; `None` is the fail-closed signal, not a default of 0."""
     p = frames_payload(load_replay(FIXTURE))
     main = next(f for f in p["frames"] if f["context"] == "Main")
     assert main["min_count"] == 1                        # this fixture's MAIN select is mandatory

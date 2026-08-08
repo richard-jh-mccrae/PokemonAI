@@ -52,9 +52,8 @@ def _fixture(name):
 
 
 def _tutor_menu_card_ids(pilot, obs, first_step):
-    """Drive ``first_step`` through the pilot's OWN seeded search and return the resolved card ids of
-    the next select's options (the tutor menu). Uses ``pilot._seed_zones`` so the kill-switch decides
-    exact-vs-prefix, exactly as the live verify does."""
+    """Resolved card ids of the tutor menu after ``first_step``. Goes through ``pilot._seed_zones`` so
+    the kill-switch decides exact-vs-prefix, exactly as the live verify does."""
     cur = obs["current"]
     yi = cur["yourIndex"]
     me, opp = cur["players"][yi], cur["players"][1 - yi]

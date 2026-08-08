@@ -1,7 +1,5 @@
-"""Attack-audit pure helpers (ADR-0032 item 5, measurement half): panel selection, deck
-construction, scenario planning, log-window damage extraction, record shaping, merge.
-
-Lib-free — the engine drive-shell is covered by ``tests/test_audit_attacks_engine.py``.
+"""Attack-audit pure helpers (ADR-0032 item 5, measurement half), lib-free. The engine drive-shell
+is covered by ``tests/sim/test_audit_attacks_engine.py``.
 """
 import pytest
 
@@ -12,7 +10,6 @@ from sim.audit_attacks import (
     pick_panel, plain_vanilla_pred, plan_scenarios, record_key, rule_box_count, shape_record,
 )
 
-# pool: plain dicts, same as drive-shell builds from all_card_data().
 W, F, P, G, FIRE = 3, 6, 5, 1, 2   # EnergyType ints
 
 
@@ -111,9 +108,8 @@ def test_side_deck_seeds_bench_fodder_within_copy_limits():
 
 @pytest.mark.req("REQ-AUDIT-0018")
 def test_side_deck_can_hold_fodder_to_the_fewest_copies_that_fill_a_bench_target():
-    # Off-chain Basics are a SETUP hazard, not just bench bodies: the engine only offers the
-    # opening redraw on a Basic-less hand, so every fodder copy is another way to open on a body
-    # the line can never evolve. The bench target is the ceiling on how many are worth carrying.
+    # Off-chain Basics are a SETUP hazard: the engine only offers the opening redraw on a
+    # Basic-less hand, so every extra fodder copy is another way to open on an unevolvable body.
     assert _fodder_copies(0) == 1 and _fodder_copies(1) == 1      # 2 bodies already cover 1
     assert _fodder_copies(2) == 1 and _fodder_copies(4) == 2
     assert _fodder_copies(20) == 4                                # never past the 4-copy rule
@@ -165,8 +161,8 @@ def test_sweep_adds_single_variable_points_on_vanilla_only():
         ("def_bench", 0), ("def_bench", 1), ("def_bench", 2),
         ("def_energy", 1), ("def_energy", 2)}
     assert all(p["defender"] == 20 for p in sweeps)
-    # every sweep point is on `vanilla` or on its MATCHED control, never on weak/resist/prevent_ex:
-    # a modifier bakes itself into the dealt number, so a fit taken there is not the attack's own.
+    # never on weak/resist/prevent_ex: a modifier bakes itself into the dealt number, so a fit
+    # taken there is not the attack's own.
     assert {p["scenario"] for p in plans if p["sweep"]} == {"vanilla", PLAIN_SCENARIO}
     e1 = next(p for p in sweeps if p["sweep"] == {"var": "energy", "step": 1})
     assert e1["extra_energy"] == 1 and e1["delay_turns"] == 0
@@ -175,9 +171,7 @@ def test_sweep_adds_single_variable_points_on_vanilla_only():
 
 
 # --- defender-side attach axis (REQ-AUDIT-0020) ------------------------------------------
-# The defender never attached anything, so `atk_active_energy` and `both_active_energy` were the
-# SAME number at every point the harness could produce — attack 120 measured 120 at three attacker
-# Energy (30 + 30x3) with the defender on zero, which both readings predict exactly.
+# Without it `atk_active_energy` and `both_active_energy` are the SAME number at every point.
 
 
 @pytest.mark.req("REQ-AUDIT-0020")
@@ -191,8 +185,7 @@ def test_a_defender_energy_sweep_moves_the_defender_and_pins_the_attacker():
 
 @pytest.mark.req("REQ-AUDIT-0020")
 def test_every_other_plan_pins_the_defender_at_zero_attachments():
-    """The pin is what makes the attacker's own energy axis single-variable — and it is also the
-    historical value, since the defender never attached at all before this axis existed."""
+    """The pin is what makes the attacker's own energy axis single-variable."""
     plans = plan_scenarios(_pool()[10], _pool(), sweep=True)
     for p in plans:
         if (p["sweep"] or {}).get("var") != "def_energy":
@@ -210,10 +203,7 @@ def test_the_defender_energy_gate_reads_the_defenders_active_not_the_attackers()
 
 
 # --- rule-box composition, with a MATCHED control (REQ-AUDIT-0021) ------------------------
-# The default panel is not {ex}-BLIND, it is {ex}-SATURATED: `_panel_body` and `bench_fodder` both
-# rank by highest HP, and the top eight panel-eligible basics in the real pool are all Mega
-# Pokemon ex — which ARE Pokemon ex (docs/rulebook.txt Appendix 1). So `def_ex_in_play` moved in
-# lockstep with `def_bench` and a fit named the wrong variable with full confidence.
+# The panel ranks by HP and the top basics are all Mega ex, so the two variables are collinear.
 
 
 @pytest.mark.req("REQ-AUDIT-0021")
@@ -226,10 +216,8 @@ def test_bench_fodder_takes_a_predicate_and_defaults_to_todays_behaviour():
 
 @pytest.mark.req("REQ-AUDIT-0021")
 def test_not_rule_box_excludes_MEGA_ex_as_well_as_plain_ex():
-    """A Mega Evolution Pokemon ex IS a Pokemon ex (docs/rulebook.txt Appendix 1), which is why the
-    oracle counts `stat.ex or stat.megaEx`. A control that tested only `ex` would bench Mega ex
-    bodies and reproduce the very confound it exists to break — every default fodder body in the
-    real pool is a Mega ex, not a plain one."""
+    """A Mega Evolution Pokemon ex IS a Pokemon ex (docs/rulebook.txt Appendix 1), so a control
+    testing only `ex` would bench Mega ex bodies and reproduce the confound it exists to break."""
     assert not_rule_box(_mon(100)) is True
     assert not_rule_box(_mon(100, ex=True)) is False
     assert not_rule_box(_mon(100, mega=True)) is False
@@ -244,7 +232,6 @@ def test_pick_panel_takes_extra_predicate_scenarios():
     panel = pick_panel(pool[10], pool, extra={PLAIN_SCENARIO: plain_vanilla_pred(pool[10])})
     assert panel["vanilla"] == 22                                  # highest HP, and it is an {ex}
     assert panel[PLAIN_SCENARIO] == 20                             # the matched non-{ex} control
-    # an unmatchable predicate is None, like every other unmeasurable scenario — never a guess
     assert pick_panel(pool[10], pool, extra={"nope": lambda c: False})["nope"] is None
 
 
@@ -282,11 +269,7 @@ def test_rule_box_and_stage2_counts_read_the_board_the_oracle_reads():
 
 
 # --- per-seat bench control (REQ-AUDIT-0018) ---------------------------------------------
-# Bench population used to be an UNCONTROLLED confound: both seats benched every drawn basic,
-# and no record carried the attacker's count. A bench-scaling attack therefore varied with
-# whatever the shuffle benched, and the fitter — offered only hand size and attacker Energy —
-# fitted the one variable it could see (the spurious `atk_hand` on 274 Torcherto). Every plan
-# now PINS both seats; only the swept seat moves.
+# Every plan PINS both seats; loose benches let a bench scaler fit hand size instead.
 
 
 @pytest.mark.req("REQ-AUDIT-0018")
@@ -309,7 +292,6 @@ def test_a_bench_sweep_moves_one_seat_and_pins_the_other():
 
 @pytest.mark.req("REQ-AUDIT-0018")
 def test_energy_and_hand_sweeps_also_pin_both_benches():
-    # The root-cause fix: with the benches loose, a bench scaler could still fit hand size.
     sweeps = [p for p in plan_scenarios(_pool()[10], _pool(), sweep=True) if p["sweep"]]
     for p in (p for p in sweeps if p["sweep"]["var"] in ("energy", "hand")):
         assert p["atk_bench"] == _BENCH_REF and p["def_bench"] == _BENCH_REF
@@ -368,7 +350,7 @@ def test_attack_window_is_empty_when_the_attack_never_fired():
 
 @pytest.mark.req("REQ-AUDIT-0004")
 def test_attack_window_uses_the_last_replayed_chunk_not_the_first():
-    # Engine logs are per-viewing-player: defender-view chunk REPLAYS the turn, so a naive
+    # Engine logs are per-viewing-player: the defender-view chunk REPLAYS the turn, so a
     # first-occurrence slice stops at the replayed boundary and drops rider damage.
     attacker_view = [{"type": _ATTACK, "attackId": 1487},
                      {"type": _HP, "serial": 900, "value": -120}]
@@ -446,8 +428,8 @@ def test_record_carries_the_full_measurement_shape():
     assert r["scenario"] == "prevent_ex" and r["printed"] == 210
     assert r["dealtActive"] == 210 and r["dealtBench"] == []
     assert r["defenderCardId"] == CRUSTLE and r["defenderHp"] == 150
-    assert r["defenderBench"] == 2                          # whiffed rider vs no target
-    assert r["attackerBench"] == 1                          # the combined-bench scaler's other half
+    assert r["defenderBench"] == 2
+    assert r["attackerBench"] == 1
     assert r["attackerEnergies"] == 3 and r["myHandSize"] == 4
     assert r["coin"] is None and r["koed"] is True
     assert "error" not in r
@@ -462,10 +444,8 @@ def test_error_record_is_an_explicit_ledger_entry():
 
 @pytest.mark.req("REQ-AUDIT-0006")
 def test_a_failed_sweep_point_survives_the_merge_instead_of_being_swallowed():
-    # An error record that forgot its sweep shares a record_key with the plain panel record on
-    # the same scenario — and since an error never clobbers a success, it silently disappears.
-    # That is a silent skip, which is precisely what the ledger exists to prevent. Adding bench
-    # sweeps put ten points on `vanilla`, so the collision went from rare to routine.
+    # An error record that forgot its sweep would share a record_key with the plain panel record,
+    # and since an error never clobbers a success it would vanish — the silent skip the ledger bans.
     ok = _rec(scenario="vanilla", sweep=None)
     failed = error_record(1488, 1031, "vanilla", "match ended before the attack could fire",
                           {"var": "atk_bench", "step": 2})
@@ -493,8 +473,7 @@ def test_merge_never_clobbers_a_success_with_an_error():
     assert record_key(good) == record_key(err)
     merged = merge_records([good], [err])
     assert merged == [good]                                # measurement survives flaky re-run
-    # error IS recorded when nothing better exists; success replaces it
-    assert merge_records([], [err]) == [err]
+    assert merge_records([], [err]) == [err]               # but IS recorded when nothing better exists
     assert merge_records([err], [good]) == [good]
 
 

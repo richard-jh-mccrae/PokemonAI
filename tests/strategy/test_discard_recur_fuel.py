@@ -1,5 +1,5 @@
 """Threat-Clock unification S2 — the discard-recur FUEL primitive (design:
-docs/plans/opponent-value-equation-unification.md).
+docs/plans/ADR-0078).
 
 `CombatMath.discard_recur_fuel` reads the opponent's DISCARD as a fuel/recovery pool for a
 `discard_energy_recur` line — the Threat Clock's first NET-NEW input. Verified card facts

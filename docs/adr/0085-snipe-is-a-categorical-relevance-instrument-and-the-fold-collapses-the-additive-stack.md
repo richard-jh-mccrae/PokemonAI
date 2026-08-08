@@ -26,8 +26,8 @@ ADR-0076 (the slot-family split that keeps snipe outside the DP), ADR-0078 (the 
 ADR-0044 (the prize-redundant / forced-promotion reads that turn out to be the discriminators),
 ADR-0062 (the "no monotone pricing of magnitude alone can separate them" precedent),
 ADR-0065 (the fold discipline and the no-fudge rule),
-`docs/plans/opponent-value-equation-unification.md` (the design), `docs/plans/snipe-system-handoff.md`
-(the standing fold question).
+`ADR-0078` (the design), and the snipe-system handoff note
+(the standing fold question; the file was removed once the fold landed).
 
 ## Context
 
@@ -668,7 +668,7 @@ are sanity floors, not the acceptance bar (decision 7).
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
   Relevance instrument"* — the same recharter ADR-0080 decision 4 gave Issue #187, for the same reason.
-- **The design doc's S4 is now two-thirds refuted.** `docs/plans/opponent-value-equation-unification.md`
+- **The design doc's S4 is now two-thirds refuted.** `ADR-0078`
   ruling 3 ("one backend feeding snipe + gust + deny") holds only for gust. Its S4 bullet's *"then snipe
   (its rungs → the marginal; the ADR-0065 snipe fold)"* is superseded here, and ADR-0078's Consequences
   claim that *"snipe is now the shortest [hop]"* is wrong on the evidence — snipe needs a whole
@@ -1442,7 +1442,7 @@ auto-recapture it, or the gate becomes a mirror that agrees with whatever it is 
 ## Amendment J — the rebuild's owed work, closed (2026-07-30)
 
 Amendment I shipped the instrument and listed five things it did **not** settle
-(`docs/plans/decision-gate-rebuild-handoff.md`). All five are closed here. Two of them turned on a
+(`ADR-0085`). All five are closed here. Two of them turned on a
 measurement that contradicted the hand-off's own expectation, which is the part worth reading.
 
 ### J1 — a Correction's `correct` is a CONSTRAINT, not the whole answer
@@ -1523,7 +1523,7 @@ becomes two.
 
 ### J5 — the 111 blessed disagreements are triaged, and there are 101
 
-`docs/plans/decider-disagreement-triage.md`. First finding is J1's: **ten of the 111 were a
+``python -m tools.train.decider_lab diff``. First finding is J1's: **ten of the 111 were a
 vocabulary artifact, not a defect.** The remaining 101 sort by `data/corrections/reviewed.json`
 disposition:
 

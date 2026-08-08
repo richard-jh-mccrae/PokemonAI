@@ -1,12 +1,6 @@
-"""Matchup Brief consumer — load the hand-authored Briefs and match one to the Read (ADR-0027).
-
-Pure and lib-free (mirrors ``artifact.load_artifact`` + ``matchup.matchup_favorability``). A Brief is the
-objective, shared counterplay profile of one opponent **Variant Cluster**, authored by ``/matchup-genie``
-at ``src/common/scouting/briefs/<slug>.json``. This bridge loads them and, given the Scouting Read,
-returns the Brief whose ``covers`` list contains the Read's top candidate archetype — the variant routing
-of ADR-0027. It never acts; the γ-gated consumers live in the Pilot's Tactical layer (ADR-0038: the
-`fragile_preevo` / `engine` snipe-rank boosts and gust tie-breaks), exactly as the card-fact posture and
-``matchup_favorability`` stay data the Pilot reads.
+"""Matchup Brief consumer — load the hand-authored ``briefs/<slug>.json`` and match one to the Read
+by ``covers`` (ADR-0027 variant routing). Pure and lib-free. It never ACTS: the γ-gated consumers
+live in the Pilot's Tactical layer.
 """
 from __future__ import annotations
 
@@ -62,12 +56,8 @@ def load_briefs(path: str | Path | None = None) -> list[Brief]:
 
 
 def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
-    """The Brief whose ``covers`` contains the Read's top candidate archetype, else None.
-
-    Plain string routing (ADR-0027: the Read matches ``candidates[0]`` against each Brief's ``covers``);
-    γ tempers how the match is USED downstream, not whether it matches. None on no Read / no candidates /
-    no covering Brief.
-    """
+    """Plain string routing on ``candidates[0]``; γ tempers how the match is USED downstream, never
+    whether it matches."""
     if not read or not read.candidates:
         return None
     top = read.candidates[0][0]
@@ -75,22 +65,8 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
 
 
 def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:
-    """Resolve a Brief's name-keyed ``threats``/``targets`` to card ids (ADR-0027 consumer substrate).
-
-    The authored Brief names cards, but the Pilot/Board works in card ids; this bridges the two via an
-    injected ``ids_for_name`` lookup (a ``name -> iterable[int]``, e.g. a provider's ``ids_for_name``),
-    which keeps the resolution pure and testable without the engine.
-
-    Args:
-        brief: the matched Matchup Brief.
-        ids_for_name: ``name -> iterable[int]`` — every card id printed under a card name.
-
-    Returns:
-        ``(threat_ids, target_roles)`` — ``threat_ids`` is the frozenset of ids of every
-        ``threats[].card``; ``target_roles`` maps each resolved ``targets[].card`` id to its ``role``.
-        A name that resolves to no id is skipped (never raises); a name mapping to several ids maps all
-        of them; a card that is both a threat and a target appears in both outputs (independent surfaces).
-    """
+    """``(threat_ids, target_roles)``. A name resolving to no id is skipped; one mapping to several
+    ids maps all of them; a card that is both threat and target appears in both (independent)."""
     threat_ids: set[int] = set()
     for t in brief.threats or []:
         threat_ids.update(ids_for_name(t.get("card", "")) or ())

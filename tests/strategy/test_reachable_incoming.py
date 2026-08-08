@@ -1,6 +1,6 @@
 """ADR-0064 — the reachable-Incoming primitive (`CombatMath.reachable_incoming`).
 
-The worked example, verified card facts (docs/plans/2ply-opponent-survival-grill-spec.md):
+The worked example, verified card facts (ADR-0064):
 my Mega Starmie ex at 270 HP remaining ({L}-weak, so Fighting damage is un-adjusted); the opponent's
 benched Riolu is a single hop from Mega Lucario ex (Aura Jab {F} 130 / Mega Brave {F}{F} 270). The
 old `_incoming_worst` sees only Riolu's own 30 and reports "survives" even when the bench Riolu holds
@@ -61,9 +61,8 @@ def test_ceiling_is_pessimistic_even_off_a_zero_energy_riolu():
 
 
 def test_evo_min_energy_skips_the_forward_hop_of_a_bare_pre_evo():
-    # evo_min_energy=1 (the loss rung's stricter read): a 0-Energy Riolu can't fund its own 2-cost
-    # attack and its forward hop is skipped, so it contributes NOTHING — not a credible evolving
-    # threat. (Under the default evo_min_energy=0 the ceiling would instead credit the evolved 270.)
+    # evo_min_energy=1 is the loss rung's stricter read; the default 0 stays pessimistic and credits
+    # the evolved 270.
     assert _combat().reachable_incoming(MY_BODY, [_riolu(0)], evo_min_energy=1) == 0
     assert _combat().reachable_incoming(MY_BODY, [_riolu(0)]) == 270          # default still pessimistic
     # a 1-Energy Riolu still counts (it is being powered toward the evolved attack) → 270.
@@ -98,9 +97,8 @@ def test_charged_variant2_bench_riolu_zero_energy_only_reaches_aura_jab():
 
 
 def test_charged_colorless_burst_pays_a_colorless_nuke_but_never_a_typed_cost():
-    # A colorless-burst allowance (Ignition {C}{C}{C} on an Evolution) pays Nebula's ●●● from 0
-    # attached (0 + 1 base + 2 burst ≥ 3), but can NEVER pay Mega Brave's typed {F}{F} — the
-    # planner_6858-safe typed/colorless split. Burst applies because Mega Starmie ex is an Evolution.
+    # A colorless burst pays Nebula's ●●● from 0 attached but can NEVER pay Mega Brave's typed
+    # {F}{F}. Burst applies at all only because Mega Starmie ex is an Evolution.
     stats = DictCardStatProvider({
         MY: CardStat(MY, synthetic=True, name='Mega Starmie ex', hp=330, maxDamage=270, minAttackCost=1,
                      attacks=(MEGA_BRAVE, NEBULA), evolvesFrom="Staryu", energyType=3),
@@ -140,13 +138,8 @@ def test_charged_returns_zero_when_body_cannot_afford_anything():
     assert c.reachable_incoming(MY_BODY, [lucario0], charged={"base_attach": 1, "burst_on_evo": 0}) == 0
 
 
-# ---- the BENCH branch: area-at-damage-time (ADR-0070 §9) ---------------------------------------
-#
-# An attack's printed damage hits the ACTIVE. A benched body is reachable only by the snipe/spread
-# RIDERS, which ignore Weakness/Resistance (ADR-0022) — and not at all if it is Tera (rules.md §185).
-# Without this branch every benched pre-evolution reads as doomed, which would make the evolve
-# decider OVER-evolve. ``my_benched`` is the area the body occupies WHEN THE DAMAGE LANDS, declared
-# by the caller: the lethal tiers ask about bodies benched now but Active when the opponent replies.
+# ---- the BENCH branch (ADR-0070 §9): ``my_benched`` is the area the body occupies WHEN THE DAMAGE
+# LANDS — the lethal tiers ask about bodies benched now but Active when the opponent replies.
 
 DRAKLOAK = 120          # 90 HP, no Tera
 DRAGAPULT = 121         # Tera: no attack damage while Benched
@@ -213,23 +206,15 @@ def test_bench_read_counts_only_riders_the_attacker_can_afford():
 
 
 def test_turns_to_ko_me_honours_the_bench_branch():
-    # The KO-clock is the survival half of the two clocks (ADR-0070 §6), read at the body's AREA:
-    # printed damage lands on the Active, so the benched read sees only the riders and the clock
-    # runs far slower there.
-    #
-    # RE-DERIVED for ADR-0071 decision 4, which made the read ACCUMULATE on BOTH areas. The old
-    # expectation here was 9 (`max_t + 1`, "survives the horizon") and it encoded the one-swing
-    # semantics this issue overturned: damage counters PERSIST, so a 30-point snipe fells a 90 HP
-    # benched Drakloak in exactly 3 turns (30 + 30 + 30), not never. CONTEXT.md's Threat Clock
-    # already specified "accumulating over turns when one hit doesn't KO"; the code was the outlier.
+    # Damage counters PERSIST (ADR-0071 decision 4), so the read ACCUMULATES on both areas: a
+    # 30-point snipe fells a 90 HP benched body in 3 turns, not never.
     c, me = _bench_combat(), {"id": DRAKLOAK, "hp": 90}
     assert c.turns_to_ko_me(me, [_sniper()]) == 1
     assert c.turns_to_ko_me(me, [_sniper()], my_benched=True) == 3      # 90 HP / 30 per turn
 
 
 def test_default_is_active_so_an_undeclared_caller_stays_pessimistic():
-    # Fail direction: the survival family must OVER-count their threat, never under-count it. A
-    # caller that does not declare the area gets the Active read — the conservative answer — so the
-    # bench branch is strictly opt-in and cannot silently grant immunity.
+    # Fail direction: an undeclared area gets the Active read, so the bench branch is strictly
+    # opt-in and cannot silently grant immunity.
     c = _bench_combat()
     assert c.reachable_incoming({"id": DRAGAPULT, "hp": 320}, [_sniper()]) == 270

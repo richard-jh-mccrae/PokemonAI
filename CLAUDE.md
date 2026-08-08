@@ -62,6 +62,14 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
   vocabulary in `tools/train/CONTEXT.md` (Decision Claim / Axis Claim / Endorsement Claim, etc.),
   which already retired "pin" in favor of those more precise names and reserves "test" for the
   pytest suite specifically — that glossary remains authoritative as written.
+- **Write no comment you would not miss.** The code is the documentation: prose earns its place only
+  by carrying what the code cannot — why a constant has its value, a trap an edit would spring, a
+  deliberately inert seam, an index space, the owning ADR. Never restate a signature, narrate a body,
+  record history, or quote a measurement (that goes in the ADR). Budget: **2 lines** for a `#` block
+  or a function/class docstring, **15** for a module docstring, 120 characters a line.
+  `.claude/skills/code-as-docs/SKILL.md` argues the numbers; `python -m tools.doc_budget` measures
+  them and `tests/test_comment_budget.py` is the gate. This applies to every build, not just cleanup
+  passes — `/implement` and `/tdd` included.
 
 ## Secrets
 

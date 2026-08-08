@@ -3,7 +3,7 @@
 **Status:** frozen 2026-07-13 in S1 (WP0). These are the three interfaces that let WP1–WP4 build
 in parallel worktree sessions without stepping on each other. Changing one after a downstream
 session has consumed it is a breaking change — amend here first, with a reason, then update every
-consumer. Governing plan: [ADR-0053](../adr/0053-ml-training-pipeline-build-plan.md); playbook:
+consumer. Governing plan: [ADR-0053](../../adr/0053-ml-training-pipeline-build-plan.md); playbook:
 [ml-training-build.md](ml-training-build.md).
 
 ---

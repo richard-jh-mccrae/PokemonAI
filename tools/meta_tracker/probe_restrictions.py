@@ -1,28 +1,16 @@
-"""Restriction-observation boards (ADR-0032 item 6): OBSERVE which heal targets the
-engine offers, instead of hand-authoring the clause ``restriction``.
+"""Restriction-observation boards (ADR-0032 item 6): OBSERVE which heal targets the engine offers,
+instead of hand-authoring the clause ``restriction``.
 
-The instrument is ONE seeded board that disambiguates the observable vocabulary in a
-single offer: a **damaged Mega Evolution Pokémon ex on the Bench** (its evolution line
-driven up the Active, chipped, then retreated — probe_evolution-style machinery) plus a
-**damaged non-Mega Active**. On that board:
+ONE seeded board disambiguates the observable vocabulary in a single offer — a damaged Mega
+Evolution Pokémon ex on the Bench plus a damaged non-Mega Active:
 
-  * Wally's-class cards offer only the bench Mega            -> ``mega_only``
-  * Arven's-class cards offer/heal only the Active           -> ``active_only``
-  * Potion-class cards offer both                            -> unrestricted
+  * offers only the bench Mega   -> ``mega_only``
+  * offers only the Active       -> ``active_only``
+  * offers both                  -> unrestricted
 
-Auto-targeting cards (Arven's Sandwich raises NO select) fall back to the
-``HP_CHANGE`` log's healed serial — a forced offer is still an offer. A card whose
-select never appears and that never heals is an explicit **error record**, never a
-guess; type-gated cards (Jacinthe's ``psychic_only``) are skipped upstream
-(``restriction_observable``) because one board can't separate a type gate from an
-active gate.
-
-Layered like probe_cards.py: pure helpers (unit-tested, lib-free) + a lazy-``cg``
-drive shell validated by running. Derivation itself lives in card_effects.py
-(``derive_restriction``); the builder pass persists observations to
-``observed_restrictions.json`` and stamps them AFTER the hand-authored overrides —
-on conflict the engine wins.
-"""
+Auto-targeting cards raise no select and fall back to the ``HP_CHANGE`` log's healed serial. A
+card whose select never appears and that never heals is an explicit ERROR record, never a guess.
+Derivation itself lives in card_effects.py (``derive_restriction``)."""
 from __future__ import annotations
 
 from .probe_cards import (
@@ -51,10 +39,8 @@ _STURDY_MIN_HP = 180  # bench bodies that can safely take one chip
 # --- pure helpers (unit-tested) ------------------------------------------------------
 
 def find_chip_attacker(cards: dict[int, dict]) -> tuple[int | None, int | None]:
-    """``(cardId, energyCardId)`` for the opponent's chip attacker: a non-Mega Basic
-    with a *vanilla* (no effect text — no status locks the retreat dance) 10–60-damage
-    attack payable by 1–2 of its own type / colorless. Deterministic: cheapest, then
-    weakest, then lowest id."""
+    """``(cardId, energyCardId)`` for the opponent's chip attacker: a non-Mega Basic with a VANILLA
+    10-60-damage attack payable by 1-2 energy. Deterministic: cheapest, then weakest, then lowest id."""
     best = None
     for cid in sorted(cards):
         c = cards[cid]
@@ -73,9 +59,8 @@ def find_chip_attacker(cards: dict[int, dict]) -> tuple[int | None, int | None]:
 
 
 def pick_sturdies(cards: dict[int, dict], exclude_names=(), n: int = 2) -> list[int]:
-    """Non-Mega Basics sturdy enough to take a chip (>= _STURDY_MIN_HP), cheapest
-    retreat first (the case-B Active must retreat to promote the Mega), excluding the
-    Mega line's names."""
+    """Non-Mega Basics sturdy enough to take a chip (>= _STURDY_MIN_HP), cheapest retreat first — the
+    case-B Active must retreat to promote the Mega. Excludes the Mega line's names."""
     cand = [cid for cid, c in cards.items()
             if c.get("category") == "pokemon" and c.get("stage") == "basic"
             and not c.get("megaEx") and (c.get("hp") or 0) >= _STURDY_MIN_HP
@@ -118,9 +103,8 @@ def snapshot_board(obs: dict, me: int, cards: dict[int, dict]) -> list[dict]:
 
 
 def offered_heal_targets(obs: dict, me: int) -> list[int]:
-    """Serials of MY in-play bodies the current select's CARD options point at —
-    the engine's revealed target set. Non-CARD options (energy picks), opponent-side
-    and non-in-play areas don't count."""
+    """Serials of MY in-play bodies the current select's CARD options point at — the engine's revealed
+    target set. Non-CARD options, opponent-side and non-in-play areas do not count."""
     players = (obs.get("current") or {}).get("players") or []
     out: list[int] = []
     for o in (obs.get("select") or {}).get("option") or []:
@@ -183,9 +167,8 @@ def _setup_bench_picks(obs, me, line_ids):
 
 
 def _attach_active_energy(obs, me, cards):
-    """Option index attaching a basic Energy from hand to my ACTIVE (retreat fuel —
-    and both final bodies must hold Energy so energy-discard riders don't skew the
-    offer), or None."""
+    """Option index attaching a basic Energy from hand to my ACTIVE, or None. Both final bodies must
+    hold Energy so energy-discard riders do not skew the offer."""
     hand = _hand(obs, me)
     for i, o in enumerate(obs["select"]["option"]):
         if (o.get("type") == _OPT_ATTACH and o.get("area") == _AREA_HAND
@@ -273,12 +256,8 @@ def _board_ready(board) -> bool:
 
 
 def _capture_resolution(battle_select, obs, me):
-    """Walk the played card's resolution; return ``(offered, contexts, logs)``.
-
-    Offers come from HEAL / REMOVE_DAMAGE_COUNTER selects (recorded BEFORE advancing);
-    other sub-decisions advance minCount-first, preferring a damaged own target so the
-    heal actually lands. Logs accumulate for the auto-target fallback.
-    """
+    """Walk the played card's resolution; return ``(offered, contexts, logs)``. Offers come from HEAL /
+    REMOVE_DAMAGE_COUNTER selects, recorded BEFORE advancing."""
     offered: list[int] = []
     contexts: list[int] = []
     logs: list[dict] = list(obs.get("logs") or [])
@@ -314,16 +293,8 @@ def _capture_resolution(battle_select, obs, me):
 
 def probe_heal_restriction(target_id: int, cards: dict[int, dict], *, me: int = 0,
                            mega_id: int = _DEFAULT_MEGA, max_steps: int = 600) -> dict:
-    """Drive the observation board and play ``target_id`` on it; return the record.
-
-    Sequence (run-validated): the line's Basic starts Active and climbs to the Mega
-    (probe_evolution-style); the opponent — a dedicated vanilla chip attacker — chips
-    whichever sturdy body is Active and undamaged; the damaged Mega retreats behind a
-    damaged non-Mega; then the trainer is played and every heal-target select is
-    captured. Record: ``{cardId, board, offered, source, contexts, error}`` — offered
-    is select-derived, falling back to healed serials (auto-target cards); ``error``
-    is set when the board or the play never happened (never a guessed restriction).
-    """
+    """Drive the observation board and play ``target_id`` on it; return
+    ``{cardId, board, offered, source, contexts, error}`` — ``error`` set rather than a guessed gate."""
     from .probe_cards import _engine, _evolution_data
     chain = evolution_chain(mega_id, _evolution_data())
     if len(chain) < 2 or not cards.get(mega_id, {}).get("megaEx"):
@@ -454,13 +425,8 @@ def _weakest_attack(obs):
 def observe_restriction_table(cards: dict[int, dict], table: dict[int, list[dict]], *,
                               retries: int = 3, log=print
                               ) -> tuple[dict[int, dict], dict[int, str], list[int]]:
-    """Observe every observable heal-clause card in ``table`` on the seeded board.
-
-    Returns ``(measured, errors, skipped)``: measured maps ``cardId ->
-    {"restriction", "offered", "source"}`` (offered as readable provenance); errors
-    map to the last failure reason (values stay authored); skipped lists cards whose
-    restrictions are outside the board's vocabulary (type gates).
-    """
+    """Observe every observable heal-clause card in ``table``; returns ``(measured, errors, skipped)``.
+    On error the authored value stays; ``skipped`` lists gates outside the board's vocabulary."""
     from .card_effects import derive_restriction, restriction_observable
     measured: dict[int, dict] = {}
     errors: dict[int, str] = {}

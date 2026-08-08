@@ -1,21 +1,16 @@
 """One-command card onboarding: seed → capture → replay → ledger (ADR-0050 M4 item 6).
 
-The future-card path: when the competition ships new cards (or a chain needs its first
-verification), this runs the whole loop for one card:
-
-1. regenerate the machine seed layer (`seed_chains.py` — picks up new table rows; run
-   `snapshot_tables.py` first if the DLL itself changed),
+1. regenerate the machine seed layer (`seed_chains.py`; run `snapshot_tables.py` first if the
+   DLL itself changed),
 2. capture N per-card micro-traces on the native engine (`capture_card.py`),
 3. replay them through cgpy (`replay_diff.py` semantics) — divergences are the spec,
-4. on all-green: optionally promote the traces to committed fixtures (`--promote`) and
-   rebuild the coverage ledger so the card's chains flip to `verified`.
+4. on all-green: optionally promote the traces to fixtures (`--promote`) and rebuild the ledger.
 
-A genuinely new mechanic (a new native symbol) still needs an interpreter op + a
-conformance fixture — `extract_dsl.py --check` is the alarm for that.
+A genuinely new mechanic (a new native symbol) still needs an interpreter op plus a conformance
+fixture — `extract_dsl.py --check` is the alarm for that.
 
     python tools/parity/onboard_card.py 674 -n 2
-    python tools/parity/onboard_card.py 121 --attack 154 --promote
-"""
+    python tools/parity/onboard_card.py 121 --attack 154 --promote"""
 from __future__ import annotations
 
 import argparse

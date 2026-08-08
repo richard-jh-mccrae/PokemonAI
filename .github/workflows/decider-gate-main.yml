@@ -38,7 +38,7 @@
 # WHAT A GREEN RUN DOES NOT MEAN. It means nothing REGRESSED against the last blessed build. It does
 # NOT mean the agent is right: the baseline records every frame it captured as the reference,
 # including the 101 where the agent contradicts a human ruling. Those are ranked in
-# docs/plans/decider-disagreement-triage.md and owned by the correction rounds, not by this job.
+# `python -m tools.train.decider_lab diff` and owned by the correction rounds, not by this job.
 name: Decider gate (main)
 
 on:

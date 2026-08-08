@@ -1,72 +1,22 @@
-"""The POC-T4/5 FLIP TABLE — corpus frames whose DECISION moved when the composer took the wheel.
+"""The POC-T4/5 FLIP TABLE (Issue #386) — corpus frames whose DECISION moved when the composer took
+the wheel. Each row is a question for a human, not a number to make green.
 
-Issue #386 swaps the rung ladder for `common.composer`'s within-turn sequence search. On most ruled
-frames the agent plays the same option it did before. On these it does not, and each one is a
-question for a human rather than a number to make green.
+``REFUSAL`` means `compose` declines to model the human's option, so NO scoring change reaches the
+frame; ``VALUATION`` means it priced it and ranked another above. To classify one, compose a menu
+holding that option ALONE and read `gaps` — a refusal is a per-option property, and every attempt
+to read it off the full menu (`apply_option` directly, membership in `.order`, re-deriving
+`_frame_of`) returns a clean, plausible, WRONG answer.
 
-**This table is the wave-3 packet in machine-readable form.** Every row names the fixture, what the
-human ruled, what the composer plays instead, and — the part that decides what to DO about it — the
-DIAGNOSIS, measured at the composer's own seam rather than inferred from the score:
-
-* ``REFUSAL`` — `compose` declines to model the human's option at all, so it is never a candidate
-  the beam can commit. **No scoring change reaches these frames.** They are not rulings about
-  valuation; they are the seam's coverage boundary showing up as a decision. The reason string is
-  the seam's own, quoted.
-* ``VALUATION`` — the seam DID price the human's option and the composer ranked something above it.
-  These are the real rulings: two mechanisms looked at the same board and disagreed about what is
-  worth more. ``d(ruled)`` and ``d(composer)`` are the two 1-ply deltas, in prizes.
-
-Both are marked `xfail(strict=True)`, deliberately. Strict is what stops this becoming a graveyard:
-the day a frame is ruled and the behaviour returns, the XPASS turns the suite red and someone has to
-come back and promote it. An xfail table nobody is forced to revisit is worse than a deleted test,
-because it looks like coverage.
-
-The assertions themselves are NOT rewritten. Each test keeps asserting the human's `correct` option,
-verbatim, because that is the ruling — the only thing this table changes is whether failing to meet
-it stops the build today.
-
-──────────────────────────────────────────────────────────────────────────────────────────────────
-HOW THE DIAGNOSIS COLUMN WAS MEASURED, AND THE THREE INSTRUMENTS THAT GOT IT WRONG FIRST
-──────────────────────────────────────────────────────────────────────────────────────────────────
-This column was rebuilt from scratch after the first version proved to be measuring something else.
-Recording the failures, because each one returned a clean, plausible, WRONG answer rather than an
-error, and the next person reaching for the obvious tool will reach for the same three:
-
-1. **A bare `apply_option` is not what the composer asks.** It REFUSES a `_PLAY` whose clauses
-   reveal information; `compose` routes that exact case to `board_expectation` and PRICES it. Same
-   option, same board, opposite verdicts. This produced a whole fictitious *"REVEAL family"* of
-   coverage ceilings — frames that are in fact priced and outranked, i.e. rulable.
-2. **`ruled_index in compose(...).order` is vacuous.** `_refuse` emits a `_Ranked` with
-   ``delta=0.0``, so a refused option sits in `order` beside the priced ones. Everything came back
-   PRICED, including the five that genuinely refuse.
-3. **`_frame_of(option)` cannot be reconstructed by the caller.** A fixture's option dict carries no
-   serials, so its frame is ``(hand None, body None)`` while the gaps `compose` emits carry real
-   ones. The keys never matched, so again everything came back PRICED.
-
-What works: a refusal is a PER-OPTION property, independent of the rest of the menu — so compose a
-menu holding **that option alone** and read `gaps`. Nothing to key, nothing to match. The check
-discriminates (5 REFUSED / 12 PRICED across this table), which is the positive control that says it
-is looking at something.
-
-Net correction: **3 of the 8 rows originally recorded as REFUSAL are valuation disagreements**, and
-2 more had the right verdict for the wrong reason.
+`xfail(strict=True)` throughout: an XPASS is what forces a fixed frame back to a human, and an
+xfail table nobody must revisit reads as coverage. The assertions still name the human's ruling.
 """
 import pytest
 
-#: ``fixture id -> (diagnosis, ruled, composer, note)``.
-#:
-#: ``ruled``/``composer`` are the option indices measured on this branch. They are documentation, not
-#: assertions — `test_the_flip_table_still_describes_real_flips` is what keeps them honest, and the
-#: strict xfail is what catches a frame that starts agreeing again.
+#: ``fixture id -> (diagnosis, ruled, composer, note)``. The indices are documentation;
+#: `test_the_flip_table_still_describes_real_flips` is what keeps them honest.
 FLIPS = {
     # ══ REFUSAL — the seam cannot model the human's option, so no weighting reaches these ════════
-    # Three distinct causes, and they are worth keeping apart because they need different work.
-    #
-    #   RNG          a clause consults the shuffle. One simulated sample is not a distribution, so
-    #                the seam refuses rather than pricing one draw of it.
-    #   MULTI-WRITE  the clause writes several zones at once and Issue #300's `_covers` refuses to
-    #                model three quarters of a play.
-    #   UNPROVEN     `deterministic=None` — the gate is PROOF of determinism, not its absence.
+    # Causes: RNG, MULTI-WRITE (`_covers`, Issue #300), UNPROVEN (`deterministic=None`).
     "ml0705_petrel_over_lillies_f27": (
         "REFUSAL", [1], [0],
         "RNG — 1227 Lillie's Determination: clause 'shuffle_own_hand_in' consults RNG, and a "
@@ -101,8 +51,7 @@ FLIPS = {
         "transition. The composer takes a 3.107-prize line instead"),
 
     # ══ VALUATION — the seam priced the human's option and ranked another above it ════════════════
-    # These are the frames where a human actually has to choose between two opinions. The two
-    # numbers are the 1-ply deltas in prizes: what the composer thinks each option is worth.
+    # ``d(...)`` in each note is a 1-ply delta, in prizes.
     "dragapult_dont_feed_draw_engine_f21": (
         "VALUATION", [1], [4],
         "don't feed the draw engine the only {D} — d(ruled) 0.0667 vs 0.0670. Three ten-thousandths "
@@ -178,26 +127,14 @@ FLIPS = {
         "to the LADDER rather than to the composer, and the one the composer cannot be asked to fix"),
 }
 
-#: Rows RETIRED from this table by the tie-defer (`planner._tied_first_steps`), 2026-08-07. Kept by
-#: name because a flip table that only ever grows is one nobody trusts to have been re-measured, and
-#: because each of these is evidence FOR the defer: on all three the composer's own numbers tied, the
-#: structural sequencer took the turn back, and it played the human's ruling.
-#:
-#:   ml0703_develop_riolu_not_shuffle_f40        VALUATION  ruled [3] -> now [3]
-#:   ml_dont_energize_the_supporter_tutor_f84    VALUATION  ruled [3] -> now [3]
-#:   ml_lunar_cycle_over_inert_bench_attach_f16  REFUSAL    ruled [6] -> now [6]
-#:
-#: The third is the interesting one: a REFUSAL that resolved with no widening of the seam at all. The
-#: refused option was never the problem — the composer committing a line it had no view on was.
+#: Rows RETIRED by the tie-defer (`planner._tied_first_steps`). Kept by name because a flip table
+#: that only grows is one nobody trusts to have been re-measured.
 RETIRED_BY_THE_TIE_DEFER = ("ml0703_develop_riolu_not_shuffle_f40",
                             "ml_dont_energize_the_supporter_tutor_f84",
                             "ml_lunar_cycle_over_inert_bench_attach_f16")
 
-#: The same table for frames that live in the CORPUS RECORD rather than as a fixture file, keyed
-#: ``(episode, frame) -> (diagnosis, ruled, composer, note)``. A separate dict because `FLIPS`'
-#: guards resolve every key to `tests/fixtures/corrections/<name>.json` and a record frame has no
-#: such file — and because these are the frames `decider_lab`'s gate already tracks by the same key,
-#: so a reader can join the two without a second convention.
+#: CORPUS RECORD frames, keyed ``(episode, frame)`` — the key `decider_lab`'s gate already uses.
+#: A separate dict because `FLIPS`' guards resolve every key to a `tests/fixtures/corrections/` file.
 CORPUS_RECORD_FLIPS = {
     ("83969481", 55): (
         "VALUATION", 4, [0],
@@ -223,12 +160,8 @@ CORPUS_RECORD_FLIPS = {
         "it is unable to see a line a human explicitly endorsed"),
 }
 
-#: Every gust frame in both tables, named together because they share ONE cause and will be fixed by
-#: one change. `CLAUSE_WRITES['gust']` is non-empty, so Issue #300's `_covers` refuses the whole
-#: transition and no weighting reaches any of them. Five frames, and between them they are the ONLY
-#: decision-level coverage the gust doctrine had: `test_gust.py`'s deletion note named two of these
-#: as its successors, and they do not carry the fact. Counted here so the size of the hole is a
-#: number rather than an impression.
+#: Every gust frame in both tables: ONE cause (`CLAUSE_WRITES['gust']` is non-empty, so Issue #300's
+#: `_covers` refuses the transition) and between them the ONLY decision-level gust coverage there is.
 GUST_REFUSALS = ("dragapult_poffin_whiff_take_gust_ko_f79", "dragapult_gust_ko_over_accel_f81",
                  "pilot_cd91", ("85163079", 30), ("86091435", 119))
 
@@ -237,8 +170,7 @@ VALUATIONS = {k for k, v in FLIPS.items() if v[0] == "VALUATION"}
 
 
 def reason(name: str) -> str:
-    """The xfail reason for a flipped fixture — diagnosis first, so a reader of `-rx` output can
-    tell a coverage ceiling from a valuation call without opening this file."""
+    """Diagnosis first, so `-rx` output separates a coverage ceiling from a valuation call."""
     kind, ruled, got, note = FLIPS[name]
     tail = ("no scoring change reaches this frame" if kind == "REFUSAL"
             else "the seam priced the ruled option and the composer ranked another above it")
@@ -246,7 +178,6 @@ def reason(name: str) -> str:
 
 
 def record_reason(ep: str, fr: int) -> str:
-    """The xfail reason for a CORPUS RECORD flip — same shape as :func:`reason`, different key."""
     kind, ruled, got, note = CORPUS_RECORD_FLIPS[(ep, fr)]
     tail = ("no scoring change reaches this frame" if kind == "REFUSAL"
             else "the seam priced the ruled option and the composer ranked another above it")
@@ -255,32 +186,19 @@ def record_reason(ep: str, fr: int) -> str:
 
 
 def marks(name: str):
-    """`pytest.mark.xfail(strict=True)` if this fixture is a known flip, else no marks.
-
-    **Callers spelled `marks(name)[0].kwargs["reason"]` raise `IndexError` AT COLLECTION when the
-    name leaves this table, and that is the desired behaviour rather than a rough edge.** A row
-    leaves because the frame stopped flipping; the decorator that quoted it is then excusing the
-    agent from a decision it now gets right, and the caller has to be visited. A softer helper — one
-    returning `None`, or a no-op mark — would leave a stale `xfail(strict=True)` in place, which
-    turns into an XPASS only if someone runs that file, and reads as considered coverage until then.
-    A loud collection error costs one edit and cannot be missed. Three callers were updated this way
-    when the tie-defer retired three rows."""
+    """Callers spelled `marks(name)[0].kwargs["reason"]` raise `IndexError` AT COLLECTION once a name
+    leaves the table — deliberate: a softer return would leave a stale strict xfail reading as cover."""
     if name not in FLIPS:
         return ()
     return (pytest.mark.xfail(strict=True, reason=reason(name)),)
 
 
 def param(name: str, *rest, id=None):
-    """`pytest.param` carrying the flip marks — for parametrised corpus tests where only SOME ids
-    flipped, so the unflipped ones keep asserting normally. The FIXTURE NAME is the first value."""
+    """The FIXTURE NAME is the first value."""
     return pytest.param(name, *rest, id=id or name, marks=marks(name))
 
 
 def param_for(fixture: str, *values, id=None):
-    """`pytest.param` marked by ``fixture`` but carrying ``values`` verbatim.
-
-    For parametrisations whose first column is NOT the fixture — `test_evolve_corpus_pin` is
-    ``(agent, fixture, leg)`` — where `param` would silently drop a column and change the test's
-    arity. Keeping the two helpers separate is deliberate: a marking helper that guesses which
-    argument is the fixture is one that eventually marks the wrong row."""
+    """For parametrisations whose first column is NOT the fixture. Kept separate from `param` because
+    a helper guessing which argument is the fixture eventually marks the wrong row."""
     return pytest.param(*values, id=id or fixture, marks=marks(fixture))

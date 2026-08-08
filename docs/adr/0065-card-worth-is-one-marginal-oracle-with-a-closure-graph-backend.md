@@ -5,7 +5,7 @@
 (`fetch_closure.py`). Every equation below is `value = Worth × Odds`.
 
 **Status.** Accepted (grilled 2026-07-17 across Rounds 7–9 of
-[`docs/plans/hypergeometric-fetch-closure.md`](../plans/hypergeometric-fetch-closure.md)) and
+the hypergeometric fetch-closure plan (since deleted)) and
 **BUILT 2026-07-18 — the module seam + two consumers converged, suite-green.** The gamble keep-floor
 (WP6) and the **refresh SHED** consume the oracle; the **fetch grab/pitch** shadow was investigated
 and found ALREADY subsumed (its tuned discard ladder prices roles + redundancy; its residual gaps are
@@ -156,7 +156,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   ladder's `_BASE_ROLES` exemptions and REGRESS the covered-Drakloak pin `83686860-18`, so that
   discrimination stays the gated seam-D migration. The gamble keep-floor / refresh SHED re-audit is
   a no-op (no pin moved). Suite + corpus green (3105).
-- **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `keep-value-needs-assignment-grill-spec.md`).**
+- **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `ADR-0065`).**
   The successor to the gate stack the user flagged as brittle ("more and more gates that begin to
   undermine each other"): needs reified as deadline-tagged SLOTS (`common/needs.py`, the fifth
   glossary term), a card's keep-value its MARGINAL slot coverage under EXACT bitmask-DP assignment —
@@ -208,7 +208,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   discard family cleared 12/12 because the discard corpus lived within that scope; the refresh's
   whole-hand valuation exposes the gap. So the refresh site does NOT swap — the shadow did its job,
   and its telemetry stages the prerequisite: general-worth slot coverage, which is the readiness
-  leaf's board-value terms (`board-state-valuation-grill.md`) — i.e. WP-N5's fold, not a bolt-on
+  leaf's board-value terms (`ADR-0037`) — i.e. WP-N5's fold, not a bolt-on
   gate. v1 stays the refresh/gamble keep-value spine meanwhile. Suite + corpus green (3055).
 - **WP-N5 — the general-worth slot: the resolver enrichment WP-N4b demanded (2026-07-20).** The
   refresh sweep proved the v0 resolver blind to a card's LATENT worth (a spare engine/attacker with
@@ -230,7 +230,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   green (3057).
 - **WP-N5b — the readiness-leaf fold: BUILT behind a flag, MEASURED, verdict MIXED → armed OFF
   (2026-07-20).** Round 5's "readiness consumes the needs module" fold — the leaf's own deferred v2
-  "actionable-resource term" (`board-state-valuation-grill.md` §v1→v2) IS the needs assignment. Two
+  "actionable-resource term" (`ADR-0037` §v1→v2) IS the needs assignment. Two
   pieces built behind `Pilot.leaf_hand_value` (PROFILE armed OFF — flag-off is byte-identical, suite
   3057): (a) the HAND-VISIBILITY PLUMBING the grill named the v2 enabler — the sim end-obs is
   OPPONENT-perspective so my hand is hidden (verified empirically: `handCount` present, no `hand`
@@ -299,7 +299,8 @@ comparator) and ADR-0032 (Effect-Clause tier).
   pitch-side fuel stay 0.0; `fund_attack` windows widen by the quota deadline (`quota_window`
   re-derived). **In-build adjudication: `general` slots stay 0.0** — `_GENERAL_WORTH_W` (0.45) was
   measured at resupply 0.0 and empirically already carries the site's re-access discount; stacking
-  ×(1−r) flipped the sweep unsafe (under-pricing 19→62). **Measured (83 frames): sign-flips 13→8
+  ×(1−r) flipped the sweep unsafe (under-pricing 19→62, sign-flips 13→17). Re-open only as a JOINT
+  re-measure of `_GENERAL_WORTH_W` and the resupply rate, never the rate alone. **Measured (83 frames): sign-flips 13→8
   (every large baseline over-pricing flip fixed, worst −46; 3 new tips all |swing_v2| ≤ 2),
   mean |v2−v1| 9.7→6.7, bias +5.8→−2.2 (centered); discard 12/12 held (that site keeps resupply
   0.0 — no redraw window).** The swap bar (flips ≈ 0) is NOT met and the residuals are v2 SCOPE
@@ -430,7 +431,7 @@ already converged; its residue rides with the gate library.
   (2026-07-19, the reconciliation bullet above), the **pressure gate** and the **quota gate**
   (2026-07-19, the bullet below). The one remaining gate-adjacent piece — the discard-side
   deploy-now spike (`86091435-68`), which needs a principled discard convergence first, NOT a flat
-  rung — is owned by `docs/plans/seam-discard-convergence.md`.
+  rung — is owned by `ADR-0065`.
 - ~~The held-card-risk tier-2 seam (Round 8 §5)~~ **BUILT 2026-07-19**
   (`dont-fetch-before-the-deadline` + `dont-shuffle-away-the-deferred-fetch`,
   `tests/strategy/test_held_card_risk.py`;

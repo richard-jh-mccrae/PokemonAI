@@ -28,22 +28,14 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 def _ranked(pilot, obs):
-    """The tuned ladder's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
-    sequence composer: the rungs in this file still SCORE every option, but they no longer pick. A
-    `decide(obs) == [n]` line here therefore stopped testing this file's subject and started testing
-    the composer, on a hand-built board no human ever ruled. The ranking is the fact this file owns.
-    """
+    """The tuned ladder's own ranking, best-first. Not `decide`: Issue #386 moved the single-pick MAIN
+    decision to the composer, so a `decide` assertion here would test the composer, not these rungs."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
 
 
 def _sequenced(pilot, obs):
-    """The ladder's own final ORDER — `_finish_turn_last` applied to its score order.
-
-    A ranking cannot express a SEQUENCING claim: the whole point of "the costly search is tiered
-    ahead of the hand-nuking shuffle" is that it holds *regardless of raw scores*. The tiers survived
-    POC-T4/5 intact, so this is where that claim still lives."""
+    """The ladder's final ORDER — `_finish_turn_last` applied to its score order. A ranking cannot
+    express a SEQUENCING claim, whose whole point is that it holds regardless of raw scores."""
     select = obs["select"]
     dec = pilot.explain(obs)
     board = pilot._board(obs, select)
@@ -59,9 +51,7 @@ def _sequenced(pilot, obs):
 @pytest.mark.req("REQ-GEN-0042")
 def test_a_dead_hand_refresh_is_still_played_over_end():
     """A Shuffle-Refresh alone in a dead hand, with the deck still holding a card I lack, plays over
-    End — carried by `dig-before-commit`'s +20 alone (the `refresh-when-hand-is-dead` rung and its
-    full-menu scan retired 2026-07-03, ADR-0024 amendment: nothing else is endorsed on a dead hand,
-    so the extra +8 changed no behavior)."""
+    End. The `refresh-when-hand-is-dead` rung is retired (ADR-0024 amendment) as behaviour-neutral."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, synthetic=True, hp=70),
@@ -80,9 +70,8 @@ def test_a_dead_hand_refresh_is_still_played_over_end():
 # --- a live tutor is sequenced before the refresh (tier 2 vs tier 3) --------------------------------
 @pytest.mark.req("REQ-GEN-0044")
 def test_a_playable_tutor_is_played_before_the_refresh():
-    """A `cost_discard` tutor that fills a need is a LIVE play the refresh must not shuffle away:
-    `_finish_turn_last` tiers the costly search (tier 2) before the hand-nuking shuffle (tier 3), so
-    the tutor plays first regardless of raw scores."""
+    """`_finish_turn_last` tiers the costly search (tier 2) before the hand-nuking shuffle (tier 3),
+    so the tutor plays first regardless of raw scores."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, synthetic=True, hp=70), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
@@ -95,19 +84,16 @@ def test_a_playable_tutor_is_played_before_the_refresh():
                       current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
                                     hand=[LILLIES, ULTRA]))
     assert "fetch-when-it-fills-a-need" in _fired(pilot.explain(obs).options[1])
-    # A SEQUENCING claim, so it is asserted at the sequencer. The ladder's RANKING no longer
-    # puts the tutor top — `dig-before-commit`'s +20 is deleted — but the tiering that the
-    # docstring actually describes ("regardless of raw scores") is intact and is the claim.
-    assert _sequenced(pilot, obs)[0] == 1                                  # play the tutor, not the refresh
+    # A SEQUENCING claim, so it is asserted at the sequencer: the ladder's RANKING no longer puts
+    # the tutor top, and the tiering is what "regardless of raw scores" means.
+    assert _sequenced(pilot, obs)[0] == 1                                # play the tutor, not the refresh
 
 
 # --- dont-refresh-into-a-probable-miss also owns K=0: a provably-spent deck, post-anchor -----------
 @pytest.mark.req("REQ-GEN-0066")
 def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
-    """The K=0 case (ADR-0024 amendment, revised at the 2026-07-03 A/B): post-anchor the deck
-    provably holds NOTHING I lack — P(hit) = 0 — so the refresh is churn, netted below End. (The
-    broader pre-anchor sound veto regressed 47%/43% in the A/B and was deleted; the spent deck is a
-    post-anchor situation in practice.)"""
+    """The K=0 case (ADR-0024 amendment): post-anchor the deck provably holds NOTHING I lack, so the
+    refresh is churn. The broader PRE-anchor veto was A/B-refuted and deleted."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
@@ -129,22 +115,8 @@ def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
 
 @pytest.mark.req("REQ-GEN-0066")
 def test_disruption_value_survives_the_probable_miss_veto():
-    """−25 is deliberately clearable: a SYMMETRIC refresh with a live disruption trigger (opponent
-    runs a hand-size attacker AND a stacked hand to shrink) still nets positive and plays AS
-    disruption even though my own pull is provably dead.
-
-    `opp_hand_count=8` added 2026-07-14 (ADR-0060). It used to default to 0 — an Alakazam-class
-    attacker holding ZERO cards, which deals zero damage. Judging it would have REFILLED them to 4
-    and ARMED the very attacker we were claiming to disrupt. The swing oracle prices that gift
-    (−8/card) and correctly refuses, so the old board no longer plays the Judge. The board, not the
-    assertion, was wrong: this test's own docstring describes a hand worth shrinking, so give it one.
-
-    `handSizeDamage=20` added 2026-08-02 (ADR-0102). The clearing force used to be the flat
-    `play-harlequin-vs-hand-size` +25, which fired off a `hand_size_attacker` TAG and so needed no
-    printed threat at all; the term that replaced it reads the survival clock, so the stand-in
-    attacker has to actually scale off their hand for there to be any disruption value to survive
-    the veto. Same board, same claim, a card fact instead of a label.
-    """
+    """The veto is deliberately CLEARABLE. The stand-in attacker must carry a real `handSizeDamage`
+    and the opponent a hand worth shrinking, or there is no disruption value to survive it."""
     HSATK = 640
     stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
@@ -194,8 +166,8 @@ def _anchored_refresh_pilot(refresh_id, refresh_tags, *, opp_prizes=0):
 
 @pytest.mark.req("REQ-GEN-0067")
 def test_dont_refresh_into_a_probable_miss_vetoes_a_diluted_draw():
-    """POST-ANCHOR probabilistic veto (ADR-0024 amendment): one needed card among 30 (P(hit in
-    Judge's 4) ≈ 0.13 < 0.20) — the refresh is a probable re-roll of dregs, netted below End."""
+    """POST-ANCHOR probabilistic veto (ADR-0024 amendment): one needed card among 30 is below the
+    0.20 bar, so the refresh is a probable re-roll of dregs."""
     pilot, obs = _anchored_refresh_pilot(JUDGE, ["draw", "shuffle_hand"])
     trace = pilot.explain(obs).options[0]
     assert "dont-refresh-into-a-probable-miss" in _fired(trace)
@@ -205,9 +177,8 @@ def test_dont_refresh_into_a_probable_miss_vetoes_a_diluted_draw():
 
 @pytest.mark.req("REQ-GEN-0067")
 def test_laceys_8_draw_window_lifts_the_probable_miss():
-    """The conditional draw windows fold into N: Lacey draws 4 (P(hit) = 4/30 < 0.20 → vetoed) — but
-    at opp prizes ≤ 3 she draws 8 (P = 8/30 ≥ 0.20), the veto stands down and the refresh plays.
-    Draw-counts verified at data/EN_Card_Data.csv."""
+    """The conditional draw windows fold into N: Lacey draws 4, or 8 at opp prizes ≤ 3, which crosses
+    the 0.20 bar and stands the veto down."""
     LACEY = 1199
     pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=6)
     assert "dont-refresh-into-a-probable-miss" in _fired(pilot.explain(obs).options[0])
@@ -220,21 +191,8 @@ def test_laceys_8_draw_window_lifts_the_probable_miss():
 # --- Shuffle-Refresh IS still a hand-cycling draw -- but the SWING ORACLE owns it (ADR-0060) --------
 @pytest.mark.req("REQ-GEN-0046")
 def test_the_swing_oracle_owns_the_shuffle_refresh_and_a_plain_draw_gets_nothing():
-    """A Shuffle-Refresh is still endorsed as a hand-cycle — ADR-0024's 'only when the hand is dead'
-    premise stays REFUTED (hoarding cost ~3:1 in the mega_starmie mirror). But ADR-0060 moves that
-    endorsement OUT of `dig-before-commit`, which is hand-size-BLIND and so endorsed Judge just as
-    warmly when we held 8 cards and the opponent held 1 (ml f111, CRITICAL).
-
-    The cycling credit is preserved EXACTLY (`_REFRESH_CYCLE` = 20, the same +20 dig used to give)
-    and now arrives as a tactical term that also prices what the shuffle actually moves.
-
-    **`dig-before-commit` is itself deleted by POC-T4/5 (Issue #386), which changes what the second
-    half of this test can say.** It used to be *"a plain draw card is untouched — dig still owns
-    it"*, asserted by naming the rung. There is no rung to name, and the mirror-image
-    `"dig-before-commit" not in _fired(refresh)` assertion is now true of every board and every
-    option, so keeping it would have left the test one assertion greener than it is. What survives is
-    the CONTRAST the ADR is actually about, and it needs no rung id: the swing oracle prices the
-    refresh at exactly 20.0 tactical and stays SILENT on a plain draw."""
+    """ADR-0060 moved the cycling endorsement out of a hand-size-BLIND rung and into the swing
+    oracle, preserving `_REFRESH_CYCLE` exactly. The oracle stays SILENT on a plain draw."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINDRAW: CardStat(PLAINDRAW, synthetic=True, hp=0),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
@@ -255,10 +213,8 @@ def test_the_swing_oracle_owns_the_shuffle_refresh_and_a_plain_draw_gets_nothing
 # --- regression fix: Shuffle-Refresh played BEFORE the turn-ending attack (cycle, then KO) ----------
 @pytest.mark.req("REQ-GEN-0046")
 def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
-    """The post-refactor mirror loss: the agent ATTACKED instead of playing its draw Supporter, forgoing
-    the refill. With the endorsement restored, the Shuffle-Refresh scores positive -> `_finish_turn_last`
-    tiers it (tier 3) BEFORE the attack (tier 4), so the agent cycles its hand THEN attacks the same turn
-    (the engine re-presents the menu after the non-ending refresh)."""
+    """`_finish_turn_last` tiers a positive refresh (tier 3) BEFORE the attack (tier 4), so the agent
+    cycles its hand THEN attacks the same turn — the engine re-presents the menu after the refresh."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90),
                                   BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
@@ -273,11 +229,8 @@ def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
 # --- hold-wincon-dont-shuffle: don't shuffle a held win-condition back into the deck -----------------
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_away():
-    """A Shuffle-Refresh shuffles the WHOLE hand into the deck — including a win-condition you are
-    holding. The graded SHED (ADR-0065, `_refresh_shed_keepcost`) prices that held wincon at its role
-    value × how UN-recoverable it is, so the refresh scores NEGATIVE (its CYCLE credit is outweighed)
-    and the agent doesn't bury the piece it just found — the fold of the retired `hold-wincon-dont-
-    shuffle` guard into the one currency. (A realistic deck so the closure's re-access math is live.)"""
+    """The graded SHED (ADR-0065) prices a held wincon at its role value × how UN-recoverable it is,
+    so the refresh scores NEGATIVE — the retired `hold-wincon-dont-shuffle` guard, in one currency."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
@@ -299,8 +252,7 @@ def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_a
 
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
-    """No win-condition in hand -> nothing precious to shuffle away -> the reluctance stays silent
-    (the refresh is then judged purely on the dead-hand fallback)."""
+    """Nothing precious to shuffle away, so the reluctance stays silent."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
@@ -315,10 +267,8 @@ def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
 # --- hold-wincon-with-base-dont-shuffle: benched base to evolve held wincon -> hold firmly ----------
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
-    """The held win-condition has its Line BASE already on the Bench (deploy-soon), so the shuffle
-    would bury an imminent evolution. The graded SHED prices the held wincon (ADR-0065), so the refresh
-    scores NEGATIVE and the agent takes a board action this turn instead of refilling — the fold of the
-    retired `hold-wincon-with-base-dont-shuffle` stack. ep82867148 f52."""
+    """The held wincon's Line BASE is already benched, so the shuffle would bury an imminent
+    evolution — the retired `hold-wincon-with-base-dont-shuffle` stack, folded into ADR-0065."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
@@ -336,9 +286,8 @@ def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
 
 @pytest.mark.req("REQ-GEN-0047")
 def test_hold_wincon_is_cheap_to_shuffle_when_the_hand_is_dregs():
-    """The mirror: NO high-role card in hand (only the refresh + a role-less basic) -> the graded SHED
-    is ~0, so the refresh keeps its full CYCLE credit and stays POSITIVE — a genuinely dead hand still
-    refills freely (the graded shed is not a blanket anti-refresh, ADR-0065)."""
+    """The mirror: with no high-role card in hand the graded SHED is ~0, so a genuinely dead hand
+    still refills freely — the shed is not a blanket anti-refresh (ADR-0065)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   STARYU: CardStat(STARYU, synthetic=True, hp=70), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
@@ -352,10 +301,8 @@ def test_hold_wincon_is_cheap_to_shuffle_when_the_hand_is_dregs():
 
 
 def _undeployable_pilot(base_in_deck: bool):
-    """A held Mega ex (evolves from Staryu) + a Lillie's refresh, on a realistic deck. ``base_in_deck``
-    toggles whether a Staryu (the base) is still reachable — the ONE difference the evolution gate reads.
-    The Staryu stat is always KNOWN to the provider (so `evolvesFrom` resolves to an id); it is only its
-    presence in the DECK that changes."""
+    """``base_in_deck`` toggles whether the base is still reachable — the ONE difference the evolution
+    gate reads. The base's STAT is always known, so only its presence in the DECK changes."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0, name="Lillie's Determination"),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
@@ -375,13 +322,8 @@ def _undeployable_pilot(base_in_deck: bool):
 
 @pytest.mark.req("REQ-GATE-0001")
 def test_undeployable_wincon_is_cheap_to_shuffle_but_a_deployable_one_is_not():
-    """The evolution gate (ADR-0065 Stage 1), through the real refresh scorer. Same held Mega ex, same
-    hand, same deck size — only its base's reachability differs:
-      * base still in the deck  → the wincon is deployable, `keep_cost` full, refresh RELUCTANT (< 0);
-      * base gone from the deck → the wincon is a DEAD card (`deploy_odds`→0), `keep_cost` collapses, so
-        the refresh is FREE (> 0) — shuffle it away to dig (ep83966336 f44, the retired
-        `wincon_in_hand_undeployable` stand-down, now graded in the one equation).
-    A flat keep-value can't tell these two boards apart — the gate is exactly that discriminator."""
+    """The evolution gate (ADR-0065 Stage 1): only the base's reachability differs, and a flat
+    keep-value cannot tell these two boards apart — the gate is exactly that discriminator."""
     deployable = _undeployable_pilot(base_in_deck=True)
     undeployable = _undeployable_pilot(base_in_deck=False)
     assert deployable.score < 0, f"a deployable wincon must make the refresh reluctant ({deployable.score:+.1f})"

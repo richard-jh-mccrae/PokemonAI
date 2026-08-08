@@ -1,29 +1,11 @@
 """The HEAL target select (ctx 17) — `Pilot._heal_target_tactical` (Issue #409).
 
-Before this term nothing in the strategy layer gated on `SelectContext.HEAL` at all, so every
-option scored 0.0 and `_order_key` fell through to `canonical_keys`, a lexicographically sorted JSON
-board fragment whose first differing field is the AREA — `ACTIVE` 4 against `BENCH` 5. The Pilot
-therefore healed the Active on every board, for every heal card, as an artefact of string
-comparison rather than a policy anyone chose.
+With nothing gating on `SelectContext.HEAL`, every option scored 0.0 and `_order_key` fell through
+to `canonical_keys`, whose first differing field is the AREA — so the Active was healed on every
+board as an artefact of string comparison.
 
-**Validation is BY CONSTRUCTION, and that is forced rather than chosen** (Issue #409 R5). Measured
-over all 28 committed correction files: **372** ruled frames carry a select context and **zero** of
-them are ctx 17 (nor ctx 16, its sibling), so *"no ruled frame moves"* is vacuous here and cannot be
-the bar. What stands in for it:
-
-* the four REAL multi-option ctx-17 boards in the committed parity corpus, used as **constructed
-  fixtures** — their board states are genuine engine output, and their recorded ``choice`` is
-  discarded. All four live in traces whose ``meta.policy`` reads ``chaos:seed=NNNN``
-  (`ms_mirror_1001`, `v2_ms_mirror_5000`, `v2_ms_mirror_5001`): `tools/parity/capture_match.py`
-  drives those with a randomised policy to exercise the engine, so the picks are NOISE. Reading them
-  as rulings would anchor this file to a coin flip, which is exactly why the numbers asserted below
-  are the term's own legs and not the trace's choice. (Stated of *these* traces rather than of the
-  corpus — the one Potion step is captured under a targeted `card-target:1117:seed=9760` policy
-  instead, and it is width-1/forced, so it poses no choice either way.)
-* unit assertions on each leg of the equation, including the fail-closed floor.
-
-The corpus census itself is asserted (`test_corpus_ctx17_census_is_what_the_equation_was_built_on`)
-so a future capture that adds ctx-17 frames makes this file say so rather than silently drifting.
+Validation is BY CONSTRUCTION: zero ruled frames carry ctx 17, so the four real multi-option parity
+boards serve as fixtures with their recorded ``choice`` DISCARDED — those traces run a chaos policy.
 """
 from __future__ import annotations
 
@@ -52,17 +34,14 @@ STARYU = 1030
 CAPE = 1159            # Hero's Cape — +100 HP
 
 
-# ─────────────────────────────────────────────────────────── the four real corpus boards
-#: ``(trace, frame)`` of every ctx-17 step in the committed parity corpus that offers a real CHOICE
-#: (menu width 2). The other eleven ctx-17 steps are width 1 — forced, no decision to make.
+#: ``(trace, frame)`` of every ctx-17 step in the committed parity corpus offering a real CHOICE
+#: (menu width 2); the other eleven are width 1, forced.
 REAL_CHOICES = [("ms_mirror_1001", 90), ("v2_ms_mirror_5000", 82),
                 ("v2_ms_mirror_5000", 126), ("v2_ms_mirror_5001", 100)]
 
 
 def _shipped_pilot():
-    """mega_starmie's REAL Pilot — every kill-switch at its shipped default, exactly as `main.py`
-    builds it. The corpus boards are all Mega Starmie mirrors, so this is the agent that actually
-    faced them."""
+    """mega_starmie's REAL Pilot, every kill-switch at its shipped default, as `main.py` builds it."""
     import sys
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
@@ -93,10 +72,7 @@ def _legs(pilot, frame: dict):
 
 
 def test_corpus_ctx17_census_is_what_the_equation_was_built_on():
-    """The ground truth Issue #409 measured, re-measured here so a later capture cannot quietly
-    change it: 15 ctx-17 steps over the 377 committed traces, 11 of them FORCED (menu width 1) and
-    4 offering a real choice; Wally's Compassion x14 and Potion x1; every one a mandatory single
-    pick (`minCount`/`maxCount` 1/1)."""
+    """The ground truth, re-measured so a later capture cannot quietly change it."""
     steps = parity_selects(_HEAL)
     widths, cards = {}, {}
     for _trace, _index, sel in steps:
@@ -111,18 +87,8 @@ def test_corpus_ctx17_census_is_what_the_equation_was_built_on():
 
 @pytest.mark.parametrize("trace,index", REAL_CHOICES)
 def test_the_four_real_boards_rank_by_the_equation_and_not_by_a_string_sort(trace, index):
-    """Every real ctx-17 choice in the corpus now scores STRICTLY apart, and the winner is the body
-    the equation prefers rather than whichever fingerprint sorts first.
-
-    On all four the Active wins — and that is a result, not the old bug re-expressed: on each board
-    the Active is the body actually being attacked, so it carries the whole ``survival_gain`` while
-    the benched Mega ex is reachable only by Jetting Blow's 50-damage rider. The proof that the
-    *equation* is deciding rather than the AREA field is
-    `test_the_bounce_rider_flips_the_pick_when_the_re_attach_is_gone`, where the same f126 board with
-    its re-attach removed picks the BENCH.
-
-    The recorded ``choice`` on these frames is deliberately NOT asserted: `meta.policy` is
-    ``chaos:seed=NNNN`` on every trace, so it is a random pick and proves nothing about good play."""
+    """A TIE hands the pick back to the canonical string sort. The Active winning all four is a
+    result, not the old bug: `test_the_bounce_rider_flips_the_pick...` is the proof."""
     pilot = _shipped_pilot()
     legs, chosen = _legs(pilot, parity_frame(trace, index))
     assert len(legs) == 2
@@ -134,14 +100,8 @@ def test_the_four_real_boards_rank_by_the_equation_and_not_by_a_string_sort(trac
 
 
 def test_bounce_cost_is_zero_on_every_real_corpus_board_and_the_reason_is_the_re_attach():
-    """**A measured correction to Issue #409's own reading of f126.** The issue names
-    `v2_ms_mirror_5000` f126 as *the* discriminating frame because healing its Active bounces two
-    attached Energy. On the real board that costs NOTHING: the hand holds an Ignition Energy (17,
-    {C}{C}{C} on an Evolution), so the one manual attach still affords Nebula Beam's ●●● and
-    ``best_affordable(before) == best_affordable(after)``. The same holds on the other three.
-
-    Recorded as an assertion rather than a footnote because it is the premise of the next test — the
-    dilemma is real, but the corpus does not happen to contain it, so it has to be CONSTRUCTED."""
+    """The premise of the next test: the bounce dilemma is real, but no corpus board contains it —
+    a re-attach in hand always leaves `best_affordable` unchanged — so it has to be CONSTRUCTED."""
     pilot = _shipped_pilot()
     for trace, index in REAL_CHOICES:
         legs, _ = _legs(pilot, parity_frame(trace, index))
@@ -149,13 +109,8 @@ def test_bounce_cost_is_zero_on_every_real_corpus_board_and_the_reason_is_the_re
 
 
 def test_the_bounce_rider_flips_the_pick_when_the_re_attach_is_gone():
-    """R2's dilemma, on `v2_ms_mirror_5000` f126's real board with its two Ignition Energy removed
-    from hand — the ONE change, so everything else is genuine engine output.
-
-    The Active is now the most-damaged body (120 to the bench's 50) **and** the wrong target: healing
-    it bounces its two {W}, and with no re-attach in hand that forfeits Jetting Blow outright. The
-    ctx-16 rule (`_best_counter_source_slot`'s most-damaged body) picks the Active here; this term
-    picks the BENCH, which is the whole reason R2 refuses to reuse it."""
+    """A real board with ONE change: the re-attach removed. The Active is now the most-damaged body
+    AND the wrong target, which is why the ctx-16 most-damaged rule cannot be reused here."""
     pilot = _shipped_pilot()
     frame = parity_frame("v2_ms_mirror_5000", 126)
     cur = frame["obs"]["current"]
@@ -223,18 +178,8 @@ def test_off_ctx_17_the_term_is_silent():
 
 
 def test_a_bench_body_no_attack_can_reach_gains_nothing():
-    """AC3 / R2's bench asymmetry, and it is DERIVED rather than authored: `incoming(my_benched=True)`
-    reads the snipe/spread RIDERS only, because printed damage always lands on the Active
-    (ADR-0070 §9). So a benched body no opponent attack can reach gains nothing from being healed,
-    however damaged it is.
-
-    Both arms are real boards and real cards, because the claim is about card facts. NEGATIVE: swap
-    `v2_ms_mirror_5001` f100's opponent Active for a **Staryu**, whose only attack is Water Gun {W}
-    20 with no rider at all (`EN_Card_Data.csv`) — the benched Mega ex becomes unreachable and its
-    gain drops to exactly 0. POSITIVE CONTROL, same instrument on the untouched frame: the real
-    opponent is a **Mega Starmie ex**, whose Jetting Blow *"also does 50 damage to 1 of your
-    opponent's Benched Pokémon"*, so reach is 50 and the gain is non-zero. Without the control, a
-    broken reach read and a genuinely-unreachable body return the same 0.0."""
+    """`incoming(my_benched=True)` reads the snipe/spread RIDERS only (ADR-0070 §9). The positive
+    control is required: a broken reach read and a genuinely unreachable body both return 0.0."""
     pilot = _shipped_pilot()
     frame = parity_frame("v2_ms_mirror_5001", 100)
     obs = frame["obs"]
@@ -265,13 +210,8 @@ def test_a_benched_bounce_costs_nothing_because_only_the_active_swings():
 
 
 def test_an_unreadable_restriction_contributes_exactly_zero_and_never_a_guess():
-    """AC5 / R3. Dragon Elixir's ``active_dragon_only`` is not in the restriction vocabulary — it is
-    a recorded, deliberate under-count (`snapshot_coverage.UNCONSUMED_SELECTORS`) — so the clause
-    fails CLOSED and the option contributes 0.0. Jacinthe's ``psychic_only`` is readable and simply
-    does not match a {W} body, which is the same 0.0 for a different reason: a refusal, not a guess.
-
-    The positive control sits alongside: Potion, unrestricted, on the identical board is NON-zero —
-    so the 0.0s above are the restriction speaking and not a dead code path."""
+    """An unreadable restriction fails CLOSED (a recorded under-count,
+    `snapshot_coverage.UNCONSUMED_SELECTORS`); the unrestricted Potion is the positive control."""
     pilot = _pilot()
     board_kw = dict(active=poke(M_STARMIE, hp=100, max_hp=330),
                     bench=[poke(M_STARMIE, hp=300, max_hp=330)])
@@ -283,11 +223,8 @@ def test_an_unreadable_restriction_contributes_exactly_zero_and_never_a_guess():
 
 
 def test_an_unevaluable_condition_fails_closed_too():
-    """R3 again, on the other gate. Bianca's Devotion is ``condition: remaining_hp_30_or_less``, and
-    the condition qualifies the CHOSEN Pokémon (card text, `EN_Card_Data.csv`): *"Heal all damage
-    from 1 of your Pokémon that has 30 HP or less remaining."* A body above 30 HP is refused; one at
-    or below it is priced. Reading the gate off the ACTIVE — which is what the reader before Issue
-    #409 did — would answer for the wrong Pokémon whenever the target is benched."""
+    """The condition qualifies the CHOSEN Pokémon, not the Active, so reading it off the Active
+    answers for the wrong body whenever the target is benched."""
     pilot = _pilot()
     stat = pilot.stats.get(M_STARMIE)
     healthy = pilot._heal_body_candidate(BIANCA, stat, is_active=False, cur_hp=300, attached=0,
@@ -299,9 +236,8 @@ def test_an_unevaluable_condition_fails_closed_too():
 
 
 def test_the_restore_ceiling_is_the_body_not_the_printed_card():
-    """A Hero's Cape (+100) puts a 330-HP Mega Starmie ex on a board ``maxHp`` of 430, and
-    ``amount: "all"`` heals to THAT. Measured on `ms_mirror_1001` f90, where reading the printed HP
-    under-heals the caped Active by a full 100."""
+    """A Tool's +HP puts the body on a board ``maxHp`` above its printed one, and ``amount: "all"``
+    heals to THAT; reading the printed HP under-heals a caped Active."""
     pilot = _pilot()
     stat = pilot.stats.get(M_STARMIE)
     assert pilot._heal_body_candidate(WALLYS, stat, is_active=True, cur_hp=190, attached=0,
@@ -311,16 +247,8 @@ def test_the_restore_ceiling_is_the_body_not_the_printed_card():
 
 
 def test_the_pick_survives_a_permuted_menu_and_is_not_the_string_sort():
-    """AC6: the ordering is a function of the BOARD, not of where an option sits in the menu — and,
-    critically, **not of `canonical_keys`' string order**, which is what decided before this term
-    existed.
-
-    The board has to be one where the two disagree, or the test is vacuous. `canonical_keys` writes
-    ``[area, card]`` and sorts lexicographically, so ``"4" < "5"`` makes it pick the ACTIVE on every
-    board ever — a fixture the equation also resolves to the Active would pass with the term deleted.
-    So this uses the one board where the equation says BENCH: f126 with its re-attach removed. The
-    same body is healed from either menu order, and it is the body the string sort would NOT have
-    chosen."""
+    """`canonical_keys` sorts ``[area, card]`` lexicographically, so ``"4" < "5"`` picks the ACTIVE
+    on every board — the fixture must be one where the equation says BENCH, or it is vacuous."""
     pilot = _shipped_pilot()
     frame = parity_frame("v2_ms_mirror_5000", 126)
     obs = frame["obs"]
@@ -344,10 +272,8 @@ _RESTRICTIONS = (None, "active_only", "mega_only", "psychic_only", "active_drago
 
 @pytest.mark.parametrize("restriction", _RESTRICTIONS)
 def test_the_active_restriction_reader_is_byte_identical_to_the_body_generic_one(restriction):
-    """AC2: `_heal_restriction_ok` is now `_heal_restriction_targets(..., is_active=True)`, and the
-    two agree on the WHOLE shipped vocabulary. ``active_only`` is the one term the Active-only form
-    could not express — it had to hardcode True, which is correct for its own caller and would
-    silently offer a benched Cook / Lumiose Galette target if reused unchanged."""
+    """The two agree on the WHOLE shipped vocabulary. ``active_only`` is the one term the Active-only
+    form could not express: it hardcoded True, which would offer a benched target if reused."""
     pilot = _pilot()
     for stat in (pilot.stats.get(M_STARMIE), pilot.stats.get(STARYU)):
         assert (pilot._heal_restriction_ok(restriction, stat)
@@ -357,14 +283,8 @@ def test_the_active_restriction_reader_is_byte_identical_to_the_body_generic_one
 
 
 def test_only_wallys_is_in_any_shipped_deck_so_no_active_path_decision_can_move():
-    """AC2's *"preserved bit-for-bit"*, measured rather than asserted.
-
-    `_heal_candidate` used to check ``mega_only`` INLINE and let every other restriction through;
-    it now routes the shared `_heal_restriction_targets`, which additionally refuses an unknown one
-    and type-gates ``psychic_only``. That is strictly more correct, and the census below is why it
-    moves nothing: **Wally's Compassion is the only `kind: heal` card in any shipped deck**, and its
-    ``mega_only`` reads identically under both spellings. A deck that later fields Dragon Elixir or
-    Jacinthe will get the corrected reading, and this test will say so by failing."""
+    """Why the stricter shared reader moves nothing: Wally's is the only `kind: heal` card in any
+    shipped deck. A deck that later fields another will say so by failing here."""
     import csv
     healers = {cid for cid, clauses in CardEffects.load()._table.items()
                if any(c.get("kind") == "heal" for c in clauses)}
@@ -377,10 +297,8 @@ def test_only_wallys_is_in_any_shipped_deck_so_no_active_path_decision_can_move(
 
 
 def test_the_legacy_clutch_heal_tag_path_stays_active_only():
-    """R3 at the fallback. The `clutch_heal` Function Tag records *"full heal + Energy bounce"* and
-    nothing about WHICH bodies the card may reach, so on a benched candidate it would be a guess at a
-    restriction rather than a reading of one — Wally's ``mega_only`` is a clause fact the tag cannot
-    carry. Clause-blind, the Active still gets its legacy answer and the Bench gets None."""
+    """The `clutch_heal` tag records the EFFECT and nothing about which bodies the card may reach,
+    so clause-blind the Active keeps its legacy answer and the Bench gets None, never a guess."""
     pilot = _pilot(effects=CardEffects({}))            # clause-blind: only the tag path is left
     stat = pilot.stats.get(M_STARMIE)
     assert pilot._heal_body_candidate(WALLYS, stat, is_active=True, cur_hp=100, attached=2,

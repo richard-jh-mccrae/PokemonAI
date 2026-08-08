@@ -214,10 +214,8 @@ def create_app(*, replay_dir: Path | None = None, cap: int = 4,
             return
 
         async def pump_out():
-            # Snapshot model: each connection tracks the seq it has rendered, so
-            # reconnects replay the current state exactly once and can never steal
-            # a frame from another connection. Short waits keep an abandoned
-            # to_thread worker from outliving its socket by more than a few seconds.
+            # Snapshot model: each connection tracks the seq it has rendered, so a reconnect replays the
+            # current state exactly once and can never steal a frame from another connection.
             seen = 0
             while True:
                 snap = await asyncio.to_thread(table.wait_change, seen, 5.0)

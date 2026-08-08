@@ -57,7 +57,7 @@ This is the **attack-side twin** of two primitives the repo already has on other
    right (the `snipe-for-the-ko` corpus is at 16/19 and tangled — see §A).
 2. **Single anchor.** No other corpus frame yet isolates "two equal-prize KO lines, one removes the
    live threat." Building a threat-weighted equal-prize tie-break off one frame risks the
-   anti-speculation trap (board-state-valuation-grill.md). The Alakazam-threat magnitude is itself
+   anti-speculation trap (ADR-0037). The Alakazam-threat magnitude is itself
    uncertain here (my Mega Starmie is 300 HP; Powerful Hand at opp hand-size 0 threatens nothing *this
    turn*) — the ruling hinges on how a threat read prices a *scaling, next-turn* attacker.
 

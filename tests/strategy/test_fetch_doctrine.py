@@ -1,9 +1,7 @@
-"""Fetch Doctrine (ADR-0023): the need-gated grab / discard comparator that generalises the shipped
-fetch rules (tests/test_search_discipline.py). Each behaviour is one need-gated Hypothesis on the
-grab side or its keep-value mirror on the discard side, verified through the PUBLIC Pilot interface
-(`decide` picks the option; `explain(...).fired` names the rules that fired). Importance is derived
-(Lines / Function Tags / CardStat) and gated by a gap (what I currently lack); see
-docs/general-strategy.md "Fetch (Search) doctrine".
+"""Fetch Doctrine (ADR-0023): the need-gated grab / discard comparator.
+
+Verified through the PUBLIC Pilot interface. Importance is derived (Lines / Function Tags /
+CardStat) and gated by a gap; see docs/general-strategy.md "Fetch (Search) doctrine".
 """
 import pytest
 
@@ -32,20 +30,13 @@ def _fired(option_trace):
 
 
 def _ranked(pilot, obs):
-    """The doctrine's own ranking of the menu, best-first, as ``[(index, score), ...]``.
-
-    **Why this and not `decide`.** POC-T4/5 (Issue #386) moved the single-pick MAIN decision to the
-    sequence composer: the fetch doctrine still SCORES every option, but it no longer picks. A
-    `decide(obs) == [0]` line in this file therefore stopped testing the doctrine and started testing
-    the composer, on a hand-built board no human ever ruled. The doctrine's ranking is the fact this
-    file owns, and it is unchanged — see `test_the_doctrine_still_RANKS_but_no_longer_DECIDES`.
-    """
+    """The doctrine's ranking, best-first, as ``[(index, score), ...]``. Not `decide`: since
+    Issue #386 the single-pick MAIN decision is the composer's, so `decide` would test that instead."""
     return [(o.index, o.score) for o in sorted(pilot.explain(obs).options, key=lambda o: -o.score)]
 
 
-# The fetch doctrine's whiff/redundancy/confirmed-hit signals read a search's FETCH CLAUSES from
-# `card_effects.json` (ADR-0032), the tier that REPLACED the tag-keyed `_FETCH_FILTERS`. These synthetic
-# fetchers carry TAGS only, so mirror the standard fetcher tags to their clauses (`fetch_effects`).
+# The whiff/redundancy/confirmed-hit signals read FETCH CLAUSES (ADR-0032); these synthetic fetchers
+# carry TAGS only, so `fetch_effects` mirrors the standard fetcher tags to clauses.
 from pilot_helpers import fetch_effects as _fetch_effects   # noqa: E402
 
 
@@ -87,9 +78,7 @@ def test_fetch_the_support_grabs_an_engine_piece_when_none_is_in_play():
 # --- fetch-deck-priority: the deck's explicit Tier-3 grab order overrides the derived rungs -------
 @pytest.mark.req("REQ-GEN-0037")
 def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
-    """A deck declares an explicit ordered `fetch_priority`; among the candidates present, grab the
-    one earliest in that list (the combo deck's escape hatch). Candidates are Stage-1s so no derived
-    rung fires — the deck's list is the only signal."""
+    """Candidates are Stage-1s so no derived rung fires — the deck's list is the only signal."""
     stats = DictCardStatProvider({COMBO: CardStat(COMBO, synthetic=True, hp=90, evolvesFrom="X"),
                                   FILLER: CardStat(FILLER, synthetic=True, hp=90, evolvesFrom="Y")})
     strat = Strategy(fetch_priority=[COMBO, FILLER])
@@ -105,12 +94,8 @@ def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
 # --- discard-the-redundant: at a forced discard, shed a need-already-met card (keep-value floor) --
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
-    """The discard side of the comparator: among cards you must pitch, shed the one whose need is
-    already satisfied — here a duplicate of a Pokémon already in play — over one you still lack.
-
-    Graded on the DECISION since Issue #261 item 2h deleted the `_DISCARD` ladder: the keep-value v2
-    needs-assignment reproduces this pick without the rung, which is the evidence that the rung was
-    redundant rather than load-bearing."""
+    """Graded on the DECISION since Issue #261 deleted the `_DISCARD` ladder: keep-value v2
+    reproduces the pick without the rung, which is the evidence the rung was redundant."""
     stats = DictCardStatProvider({DUP: CardStat(DUP, synthetic=True, hp=90), NEEDED: CardStat(NEEDED, synthetic=True, hp=90)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # forced to discard one of {DUP, NEEDED}: DUP already benched (redundant); NEEDED not in play.
@@ -125,10 +110,8 @@ BASEP, PAYP = 1030, 1031
 
 @pytest.mark.req("REQ-GEN-0039")
 def test_fetch_prefers_the_base_when_the_payoff_is_not_yet_deployable():
-    """At a search revealing BOTH the evolved payoff and its own pre-evolution, with NO base for the
-    payoff in play OR hand, grab the deployable base — fetching a payoff you have nothing to evolve
-    from just strands it (and a bench-accelerator like Cinderace gets no recipient). `fetch-the-wincon`
-    otherwise pulls the un-evolvable payoff (the verified mega_starmie trap)."""
+    """Fetching a payoff with nothing to evolve from strands it; `fetch-the-wincon` would otherwise
+    pull the un-evolvable payoff."""
     stats = DictCardStatProvider({BASEP: CardStat(BASEP, hp=70),
                                   PAYP: CardStat(PAYP, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basep")})
     strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
@@ -159,9 +142,7 @@ def test_fetch_takes_the_payoff_once_a_base_is_in_hand():
 
 @pytest.mark.req("REQ-GEN-0039")
 def test_fetch_base_rule_never_zeroes_the_payoff():
-    """Additive guard: with NO base deployable but the base absent from the reveal, the payoff is still
-    the best grab over an off-need filler — `fetch-base-before-stranded-payoff` lifts the base, it never
-    suppresses the payoff, so when only the payoff is on offer you still take it."""
+    """`fetch-base-before-stranded-payoff` lifts the base; it never suppresses the payoff."""
     stats = DictCardStatProvider({PAYP: CardStat(PAYP, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basep"),
                                   860: CardStat(860, synthetic=True, hp=90, evolvesFrom="Z")})   # off-need Stage-1 filler
     strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
@@ -176,9 +157,8 @@ def test_fetch_base_rule_never_zeroes_the_payoff():
 # --- discard-the-hand-duplicate: shed a hand-internal duplicate before a singleton disruptor ------
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singleton():
-    """The hand-internal mirror of `discard-the-redundant`: among cards you must pitch, shed one you
-    hold 2+ copies of in hand (keep one) before a SINGLETON — so a lone disruptor (which the flat
-    keep-floors miss, scoring 0) is never discarded over a duplicate engine card."""
+    """A lone disruptor scores 0 under the flat keep-floors, so it must never be pitched over a
+    duplicate engine card."""
     stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, synthetic=True, hp=0, cardType=SUPPORTER_CT),
                                   HSINGLE: CardStat(HSINGLE, synthetic=True, hp=0, cardType=SUPPORTER_CT)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -214,9 +194,7 @@ def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
 # --- multi-pick (greedy gap-update): a single max>1 grab dedups a satisfied need -----------------
 @pytest.mark.req("REQ-GEN-0040")
 def test_multi_pick_grab_dedups_a_satisfied_need():
-    """A TO_HAND grab of up to 2 (one select, maxCount=2): revealing two win-condition copies plus a
-    Basic, grab ONE wincon (its need is met after the first pick) and then the Basic — not two dead
-    wincon copies, which static top-N would take."""
+    """The wincon's need is met after the first pick, so static top-N would take a dead second copy."""
     stats = DictCardStatProvider({WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -231,9 +209,7 @@ def test_multi_pick_grab_dedups_a_satisfied_need():
 # --- multi-pick (take-fewer): with minCount 0, stop grabbing once nothing is still needed ---------
 @pytest.mark.req("REQ-GEN-0040")
 def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
-    """A TO_HAND grab of up to 2 with minCount 0: one Basic fills the lone starter need; the remaining
-    off-need Stage-1s are worth nothing, so grab ONLY the Basic — don't take a second dead card just
-    because maxCount allows it (static top-N would)."""
+    """With minCount 0, a second dead card must not be taken just because maxCount allows it."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
                                   STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -247,18 +223,8 @@ def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
 # --- bench-fill grab (TO_BENCH): a min0 bench placement must bench the Basics, not whiff to [] -------
 @pytest.mark.req("REQ-GEN-0035")
 def test_bench_fill_grab_benches_basics_at_to_bench():
-    """A Buddy-Poffin-style bench placement (`_TO_BENCH`, up to 2, minCount 0) must not whiff to `[]`.
-
-    The rung that used to carry this — `bench-fill-a-basic` (+12) — is DELETED (Issue #261 item 2d):
-    the Deploy Marginal prices this entry point now, so a flat weight that tied every candidate is
-    exactly the indifference Issue #197 was opened to remove. What keeps the whiff away is the
-    take-fewer bar, which at a BENCH grab declines only a candidate priced BELOW zero — ADR-0086
-    decision 6's own wording, and correct because the marginal prices the whole cost (the slot it
-    displaces, the Prize-Path exposure it hands over) while the search that revealed the body is
-    already spent.
-
-    Asserted with the decider at its class DEFAULT (off), which is the degraded path: nothing scores
-    these options at all, and the bar alone must still place bodies rather than waste the search."""
+    """Asserted with the decider at its class DEFAULT (off), the degraded path: nothing scores these
+    options, so the take-fewer bar alone must place bodies rather than waste the search."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
                                   STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -273,16 +239,8 @@ def test_bench_fill_grab_benches_basics_at_to_bench():
 
 @pytest.mark.req("REQ-DEPLOY-0001")
 def test_the_deploy_marginal_prices_the_to_bench_entry_point():
-    """The third entry point ADR-0086 decision 6 claims is LIVE (Issue #261 item 2d).
-
-    It abstained silently until now: `_deploy_decision` resolved the candidate against hand rows, and
-    a `_TO_BENCH` candidate is a DECK card, so the lookup returned `None` for every option. The
-    measured cost was that all four options on the corpus's only such frame scored identically and
-    the pick fell to menu position.
-
-    Here the win-condition's Line base is on offer beside a body that covers nothing. Only the base
-    fills a live slot, so only it carries a marginal — and the working row is attached to the trace,
-    which is what makes the decision rulable at the Decision Gate."""
+    """ADR-0086 decision 6's third entry point. A `_TO_BENCH` candidate is a DECK card, so a
+    `_deploy_decision` resolving against HAND rows returns `None` for every option."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, name="Basicmon", hp=70),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basicmon"),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=60)})
@@ -304,13 +262,8 @@ def test_the_deploy_marginal_prices_the_to_bench_entry_point():
 
 @pytest.mark.req("REQ-DEPLOY-0001")
 def test_the_to_bench_multi_pick_stops_when_the_bench_runs_out():
-    """The greedy's virtual board shrinks CAPACITY, and the marginal must answer to it.
-
-    Decision 6 resolves a multi-pick by re-deriving against the board after each take, so the second
-    pick is priced on a Bench one slot smaller. With the last slot spent, `needs.deploy_marginal`
-    returns 0 — there is no counterfactual for a body that cannot be placed — and a take-fewer bar
-    that declined only below zero would otherwise keep grabbing. Here the Bench holds four, one slot
-    is free, and two bodies are offered: exactly one is taken."""
+    """The greedy re-derives after each take, so the second pick is priced on a smaller Bench. With
+    the last slot spent `deploy_marginal` returns 0 — no counterfactual for an unplaceable body."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, name="Basicmon", hp=70),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basicmon"),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=60)})
@@ -329,9 +282,8 @@ def test_the_to_bench_multi_pick_stops_when_the_bench_runs_out():
 # --- whether-to-play (slice 7): a cost_discard fetch is endorsed when it can grab a needed card ---
 @pytest.mark.req("REQ-GEN-0041")
 def test_fetch_is_endorsed_when_it_can_grab_a_needed_card():
-    """An Ultra Ball-type cost_discard fetch gets NO endorsement from dig-before-commit (which excludes
-    cost_discard). The whether-to-play lookahead endorses it when its reachable deck set contains a card
-    I currently lack (here the unfound win-condition) — so it's played over End."""
+    """dig-before-commit excludes cost_discard, so the whether-to-play lookahead is what endorses an
+    Ultra Ball — when its reachable deck set holds a card I lack."""
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   BASIC: CardStat(BASIC, synthetic=True, hp=70)})
@@ -390,9 +342,8 @@ def test_play_a_tutor_for_the_unfound_wincon_is_role_keyed_and_gated_on_wincon_i
 # --- dont-fetch-the-setup-only-opener: folded from mega_starmie `never-fetch-cinderace` ----------
 @pytest.mark.req("REQ-GEN-0061")
 def test_dont_fetch_the_setup_only_opener_requires_the_stranded_evolution_chain():
-    """An `opener`-tagged card is penalised at a search ONLY when its previous-stage chain is
-    unreachable from the deck list (dead in hand — e.g. a Stage-2 Explosiveness opener with no
-    Stage 1 in the deck). With the chain present the penalty must stand down."""
+    """The penalty applies ONLY when the opener's previous-stage chain is unreachable from the deck
+    list; with the chain present it must stand down."""
     OPENER, RABOOT = 666, 667
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot", hasAbility=True),
@@ -457,10 +408,8 @@ def _confirmed_pilot(deck):
 
 @pytest.mark.req("REQ-GEN-0063")
 def test_search_the_confirmed_hit_fires_only_once_the_tracker_proves_the_needed_target():
-    """Once the deck-tracker has anchored the prizes (`own_prizes` -> exact deck counts), a tutor whose
-    NEEDED target (positive grab value: the unfound win-condition) is PROVABLY still in the deck is a
-    certain hit — the endorsement fires and the search plays. The SAME board without the annotation
-    makes no positive claim (sound-or-silent, ADR-0029): the rule stays quiet."""
+    """`own_prizes` anchors exact deck counts, making the hit certain. Without it the rule stays
+    quiet — sound-or-silent, ADR-0029."""
     pilot = _confirmed_pilot([MEGA] * 2 + [SIGNAL] * 2 + [FILLER] * 56)
     play_signal = opt(PLAY, area=HAND, index=0)
     cur = state(active=poke(FILLER, energy=1), hand=[SIGNAL], prizes=6, deck_count=20)
@@ -476,9 +425,8 @@ def test_search_the_confirmed_hit_fires_only_once_the_tracker_proves_the_needed_
 
 @pytest.mark.req("REQ-GEN-0063")
 def test_search_the_confirmed_hit_stands_aside_for_the_redundant_wincon_veto():
-    """A provably-present target the dig would be REDUNDANT for (the wincon-only tutor with the payoff
-    already in hand) is `dont-tutor-the-held-wincon`'s case (-45): the endorsement must not co-fire
-    against it — presence alone is not a hit worth digging for."""
+    """Presence alone is not a hit worth digging for, so the endorsement must not co-fire against
+    `dont-tutor-the-held-wincon`."""
     pilot = _confirmed_pilot([MEGA] * 2 + [SIGNAL] * 2 + [FILLER] * 56)
     play_signal = opt(PLAY, area=HAND, index=0)
     cur = state(active=poke(FILLER, energy=1), hand=[SIGNAL, MEGA], prizes=6, deck_count=20)
@@ -506,9 +454,7 @@ def test_search_the_confirmed_hit_stands_aside_for_the_sound_whiff_veto():
 
 @pytest.mark.req("REQ-GEN-0063")
 def test_confirmed_hit_prefers_the_provable_search_between_two_digs():
-    """Two searches on the menu after the anchor: the Mega-tutor provably hits the needed payoff; the
-    bench-filler's every Basic is prized away. The confirmed hit is endorsed, the certain whiff vetoed —
-    the Pilot plays the provable dig."""
+    """The Mega-tutor provably hits; the bench-filler's every Basic is prized away."""
     pilot = _confirmed_pilot([MEGA] * 2 + [BASIC] * 3 + [SIGNAL] * 2 + [ULTRA] * 2 + [FILLER] * 51)
     play_signal, play_poffin = opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)
     cur = state(active=poke(BASIC, energy=1), hand=[SIGNAL, ULTRA], prizes=6, deck_count=20)
@@ -562,9 +508,8 @@ def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_costly_fetch_sheds_junk_boosts_ultra_ball_to_the_free_dig_band():
-    """Two provably-junk sheds (hand copies of a benched Pokémon) + a needed grab in deck lift the
-    cost_discard fetch into the free-dig band: `costly-fetch-sheds-junk` rides on
-    `fetch-when-it-fills-a-need` and the fetch is played."""
+    """`costly-fetch-sheds-junk` rides on `fetch-when-it-fills-a-need`, lifting the cost_discard
+    fetch into the free-dig band."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON])
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
@@ -582,22 +527,8 @@ BURST, NEUT_SINGLE, POWERED_ATK = 17, 662, 900
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts():
-    """The predictor and the discard DECIDER share one ranking (ADR-0106, `Pilot.
-    _removal_ranking_legs`), and this is the shape where that bites — three shed candidates, all
-    priced 0 by the assignment, so nothing but the ranking legs can separate them:
-
-      * a SPENT burst — `discard_eot` with the Active already fully powered, so it self-discards at
-        end of turn anyway (`83454549-36`). Dead, and carrying catalog worth 30;
-      * a hand copy of a BENCHED Pokémon — replaceable, worth 0;
-      * a NEUTRAL singleton — worth 0, and a genuine card we would still have.
-
-    Residual worth alone gets it backwards: worth-first preserves the corpse (30) and sheds
-    `{duplicate, singleton}`, which is not a junk shed, so `costly-fetch-sheds-junk` goes silent and
-    the dig loses its free-dig band. Deadness ranks above residual worth, so the predictor sheds
-    `{burst, duplicate}` — every card dead or replaceable — and the band fires.
-
-    The junk band is what makes the miss OBSERVABLE: without a test at this seam the predictor could
-    drift off the decider silently, which is the drift ADR-0103 Amendment A re-pointed it to close."""
+    """Deadness ranks ABOVE residual worth (ADR-0106): worth-first would preserve the spent burst's
+    30 and shed a genuine singleton, so the junk band would go silent."""
     pilot = _netting_pilot(
         deck=[WINC, JUNKMON], extra_funcs={BURST: ["discard_eot"]},
         extra_stats={BURST: CardStat(BURST, name="Ignition Energy", cardType=6, energyType=0),
@@ -623,9 +554,7 @@ ENGINE_SUP = 661        # a draw Supporter — live at a forced discard (keep-en
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
-    """When a LIVE card (a draw Supporter, negative keep-value at the discard) is forced into the
-    predicted top-2 sheds, `dont-shed-a-live-card` nets the fetch below End — the ep83007714-f8
-    'tossing the supporters is a poor trade' shape."""
+    """A LIVE card forced into the predicted top-2 sheds nets the fetch below End."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON], extra_funcs={ENGINE_SUP: ["draw"]},
                            extra_stats={ENGINE_SUP: CardStat(ENGINE_SUP, synthetic=True, hp=0, cardType=SUPPORTER_CT)})
     # only two shed candidates: one junk (benched duplicate), one LIVE engine Supporter.
@@ -642,15 +571,8 @@ def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_dont_shed_a_key_card_stacks_the_fetch_unliftably_negative():
-    """A KEY card (the win-condition) forced into the predicted sheds fires `dont-shed-a-key-card`
-    ON TOP of the live suppressor (−45 total): never pitch the wincon to dig — no normal-band
-    endorsement stack can lift it back.
-
-    The Staryu on the bench is load-bearing since the predictor moved onto the v2 keep-value
-    equation (Issue #261 item 2h): WITHOUT a base in play the Mega is STRANDED — it can never be
-    put into play this game — so v2 prices it keep 0 with a positive pitch term and correctly
-    declines to call it key. The retired ladder's flat `keep-key-cards-at-discard` −30 could not
-    see that, and this fixture was relying on the blindness."""
+    """The bench Staryu is load-bearing: without a base in play the Mega is STRANDED, and keep-value
+    v2 then prices it keep 0 and declines to call it key."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON])
     # only two shed candidates: one junk, one the WIN-CONDITION (the keep floor fires on it).
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
@@ -720,9 +642,7 @@ def _recycle_pilot(deck):
 
 @pytest.mark.req("REQ-GEN-0066")
 def test_dont_recycle_the_dead_holds_the_recycler_when_every_target_is_stranded():
-    """ep83457493 f33: the only recycle target is the setup-only Explosiveness opener — a card this
-    deck can never play from hand (no previous stage on the deck list). Fetching it back just burns
-    the Item and jams the hand: End turn beats the recycler."""
+    """The only recycle target can never be played from hand, so fetching it back burns the Item."""
     pilot = _recycle_pilot(deck=[STRANDED] * 2 + [1] * 58)      # no Raboot in deck -> stranded
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1), hand=[NIGHTS],
@@ -752,10 +672,8 @@ SUPP = 2003            # the Supporter it digs for
 
 
 def _dig_pilot(deck):
-    """A Pilot holding a DIG-class Supporter fetcher — the shape that was invisible to the whiff
-    question before ADR-0073 (`fetch_target_matches` rejects a ``dig`` clause for REACH, and the
-    doctrine's reach set is Pokémon-only, so `_search_deck_set` was empty and the search could never
-    be read as dead however empty the deck was of Supporters)."""
+    """A Pilot holding a DIG-class Supporter fetcher: `fetch_target_matches` rejects a ``dig`` clause
+    for REACH, so `_search_deck_set` is empty and only the deadness reading can see it (ADR-0073)."""
     from common.effects import CardEffects
     fmap = {GEAR: ["search", "dig"]}
     stats = DictCardStatProvider({
@@ -772,10 +690,7 @@ def _dig_pilot(deck):
 
 @pytest.mark.req("REQ-GEN-0063")
 def test_the_dig_class_fetcher_is_vetoed_once_its_supporters_are_provably_gone():
-    """END TO END: a dig-7 Supporter fetcher over a deck PROVABLY empty of Supporters is dead, and
-    `dont-search-an-empty-deck` fires on it. The dig cannot find what is not there — deadness is
-    sound on a clause reach must reject. This is the #164 hole made behavioural: before ADR-0073 the
-    veto could not fire on this shape at all."""
+    """The dig cannot find what is not there, so deadness is sound on a clause REACH must reject."""
     pilot = _dig_pilot([SUPP] * 2 + [GEAR] * 2 + [FILLER] * 56)
     play_gear = opt(PLAY, area=HAND, index=0)
     cur = state(active=poke(FILLER, energy=1), hand=[GEAR], prizes=6, deck_count=20)
@@ -799,9 +714,8 @@ def test_the_dig_class_fetcher_is_left_alone_while_a_supporter_remains():
 
 @pytest.mark.req("REQ-GEN-0063")
 def test_the_dig_class_fetcher_never_claims_to_fill_a_need():
-    """The endorser stays on the REACH set: a dig-7 can only PROBABLY reach a Supporter, so it must
-    never claim `fetch-when-it-fills-a-need`, even with the class provably in deck. This is why the
-    two sets are distinct rather than one widened set (ADR-0073)."""
+    """A dig-7 can only PROBABLY reach a Supporter, which is why the reach and deadness sets stay
+    distinct rather than becoming one widened set (ADR-0073)."""
     pilot = _dig_pilot([SUPP] * 2 + [GEAR] * 2 + [FILLER] * 56)
     play_gear = opt(PLAY, area=HAND, index=0)
     cur = state(active=poke(FILLER, energy=1), hand=[GEAR], prizes=6, deck_count=20)
@@ -815,20 +729,8 @@ def test_the_dig_class_fetcher_never_claims_to_fill_a_need():
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
-    """**The two coordinate systems are not interchangeable, and conflating them is a live defect.**
-
-    `_needs_hand_rows` drops one copy of the played card BEFORE it enumerates, so each row's ``i`` —
-    the ordinal `_resolve_needs` eligibility and `needs.cheapest_removal`'s picks are aligned to — is
-    one short of that card's real hand position for every card sitting AFTER the excluded one.
-
-    `Pilot.cost_shed_indices` is consumed by `board_expectation._paid`, which pops the indices it
-    returns out of the REAL hand. Reading ``i`` there made the picks collide with the played card's
-    own index, and `_paid` — which drops the played index by design (the engine's `handOthers` gate)
-    — then reported the payment short and refused a legal Ultra Ball as *"not legal on this board"*.
-
-    The board here puts the played card in the MIDDLE of the hand, which is the only arrangement
-    that separates the two numbers: with it last, every row ordinal happens to equal its hand
-    position and the bug is invisible. That is why nothing caught this."""
+    """`_needs_hand_rows` drops the played card before enumerating, so a row ordinal is one short of
+    the hand position for every card after it. The played card sits MID-hand or the two coincide."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON])
     obs = make_select([opt(PLAY, index=1), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
@@ -841,10 +743,8 @@ def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
     assert len(taken) == 2, taken
     assert 1 not in taken, "the played card is never its own payment (the engine's `handOthers`)"
     assert all(0 <= i < len(hand) for i in taken), (taken, len(hand))
-    # Every index names a card that is really there, and never the Ultra Ball itself.
     assert [hand[i]["id"] for i in taken] == [JUNKMON, JUNKMON]
-    # The row ordinals it came from are DIFFERENT numbers — the assertion that makes this a
-    # measurement rather than a coincidence of this particular hand.
+    # the row ordinals it came from must be DIFFERENT numbers, or this hand proves nothing
     plan = pilot._cost_shed(obs, exclude_cid=ULTRA, picks=2)
     assert plan.row_indices != plan.hand_indices or 1 in plan.row_indices, (
         "fixture is vacuous unless the two coordinate systems actually diverge here")
@@ -854,19 +754,8 @@ def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
 # --- the doctrine's ROLE after POC-T4/5 (Issue #386) ---------------------------------------------
 @pytest.mark.req("REQ-PLANNER-0012")
 def test_the_doctrine_still_RANKS_but_no_longer_DECIDES():
-    """The fetch doctrine survived the swap intact. What it lost is the last word.
-
-    Six tests in this file used to end `assert pilot.decide(obs) == [0]`. Every one of their
-    mechanism assertions still passes — the rung fires, the band is right, the shed predictor picks
-    the same cards — and only the DECISION moved, because a single-pick MAIN decision now comes from
-    the sequence composer rather than from the rung total. So those six now assert `_ranked(...)`,
-    which is the doctrine's own output and the thing this file is about.
-
-    This test is what stops that re-pointing from being a quiet climbdown. It records the role in
-    one place: on a board where the doctrine ranks the fetch top by a wide margin, the agent is
-    free to play something else, and that is not a regression. If a future change puts the ladder
-    back in charge at MAIN, the composer's disagreement disappears and this turns red — which is
-    exactly when someone should be made to look at the six re-pointed assertions again."""
+    """The doctrine may rank a fetch top by a wide margin and the composer still play something
+    else. If the ladder ever returns to charge at MAIN this turns red, which is the point."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON])
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),

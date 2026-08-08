@@ -17,7 +17,7 @@ lethals, `f110` confirms end-to-end; `f26`/`f48`/`f24` (mega_lucario) do **not**
 policy cascade — a **pre-existing** condition (identical under prefix and exact seeding, so not caused
 by this fix), filed for Phase-3/blunder-buster analysis rather than blocking (per the audit policy).
 
-**Context.** The Lethal Solver ([ADR-0030](0030-lethal-solver-is-a-sound-min-bound-generator-plus-engine-verify.md) /
+**Context.** The Lethal Solver ([ADR-0030](0030-winning-this-turn-is-an-eager-engine-verified-lethal-solver.md) /
 [ADR-0037](0037-lethal-solver-is-the-turn-planners-top-rung.md)) proves a win real with
 `_engine_confirms_win` (`planner.py:529`): it forks the native engine from `obs["search_begin_input"]`,
 steps a candidate line, then drives *my* follow-up selects through `decide()` to the engine's own
@@ -135,7 +135,7 @@ model instead of `self.deck[:n]`:
     130 OHKOs Duraludon 130 with the opp bench empty. `engine_confirms` returns **True on the full
     explicit line** and **False on `[correct]`-only** (`decide()` picks Meowth ex; no
     `_family_win_candidates` tier composes a damage-boost-Item lethal). Filed as capability-gap
-    `data/strategy/proposals/capability-gap-damage-boost-item-lethal.md` (Phase-3 sibling of
+    `data/strategy/proposals/applied/capability-gap-damage-boost-item-lethal.md` (Phase-3 sibling of
     `lethal-retreat-enabler`); pinned by `test_engine_confirms_multi_step_line_proves_a_real_missed_win`.
 - **(DoD #5) Gate.** Wire `engine_confirms` into the `planner-code` authoring gate
   (`update-strategy/references/authoring-gates.md`) — multi-step lethal proposals become

@@ -22,10 +22,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
-# Ship code, not docs. `attack_overrides.provenance.json` is named because it is documentation
-# wearing a `.json` extension: 24 KB of measurement rows the runtime never reads (only
-# `attack_overrides.json` is loaded, by `load_attack_overrides`). ADR-0108 §1 rejected inline
-# evidence citing exactly this cost, so shipping the sidecar instead would have paid it anyway.
+# Ship code, not docs. `attack_overrides.provenance.json` is documentation wearing a `.json`
+# extension — the runtime loads only `attack_overrides.json` (ADR-0108 §1).
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs",
                                  "attack_overrides.provenance.json")
 
@@ -46,10 +44,8 @@ def _git_hash(repo: Path) -> str:
 
 def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | None = None,
                   repo: Path = REPO) -> str:
-    """Deploy-artifact basename `<name>_<YYYYMMDD>_<githash>` (build date + commit).
-
-    `when` / `git_hash` default to now / `HEAD`; pass them to stamp deterministically (tests).
-    """
+    """Deploy-artifact basename `<name>_<YYYYMMDD>_<githash>`; `when`/`git_hash` exist to stamp
+    deterministically in tests."""
     when = when or datetime.now()
     git_hash = _git_hash(repo) if git_hash is None else git_hash
     return f"{name}_{when:%Y%m%d}_{git_hash}"
@@ -58,18 +54,8 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
 def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True,
             prev_deck: dict | None = None, prev_build_id: int | None = None,
             prev_hyps: dict | None = None) -> Path:
-    """Stage `dist/<name>/` and zip it; return the zip path.
-
-    `name` may be a bare agent name or a path to its dir (only the basename is used).
-    `agents_root` overrides where the agent dir lives (default `src/agents/`) — e.g. a
-    test fixture; the shared `common/` and `cg/` always come from `src/`.
-    `stamp` (default) names the zip `<name>_<date>_<githash>.zip`; pass False for a stable
-    `<name>.zip`. The staged dir stays `dist/<name>/` either way (scratch, overwritten per build);
-    only the zip carries the stamp, so a build history accumulates while the stage does not.
-    Ships `tuned.json` when present and always writes a self-contained `brief.html` (the
-    embedded Manifest, ADR-0019) at the bundle root. `prev_deck`/`prev_build_id` (the previous
-    build's deck) drive the brief's highlighted deck-change callout.
-    """
+    """Stage `dist/<name>/` and zip it -> the zip path. Only the ZIP carries the stamp, so a build
+    history accumulates while the staged dir is scratch. `common/` and `cg/` always come from `src/`."""
     name = Path(name).name or name  # accept a path (e.g. tab-completed) or bare name
     agent_dir = (Path(agents_root) if agents_root else MS / "agents") / name
     if not (agent_dir / "main.py").exists():

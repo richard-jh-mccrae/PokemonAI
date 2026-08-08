@@ -1,23 +1,11 @@
-"""Corpus v2 generator (ADR-0053 WP0): the resumable, manifested, cap-bounded all-deck-pair
-corpus the ML training pipeline trains on.
+"""Corpus v2 generator (ADR-0053 WP0): the resumable, manifested, cap-bounded all-deck-pair corpus
+the ML training pipeline trains on, built on `battle.play_match` + `MatchRecorder`.
 
-`gauntlet.py` proved the primitive — our real agents played against each other through the
-process-isolated `battle.play_match` + `MatchRecorder`, emitting `visualize`-shaped films the
-value extractor mines with no new reader. This wraps that primitive with what a multi-day
-background run needs and the gauntlet lacks:
+DISK IS AUTHORITATIVE and the manifest is only a header: a resumed run recounts each pairing from
+the max on-disk film index, so a crash between a film write and a manifest flush self-heals.
 
-- **A stable run directory + manifest** (`data/replays/corpus/<run_id>/manifest.json`, contract
-  C1a in docs/plans/ml-training-contracts.md) so the corpus and the value-model artifact it feeds
-  can never silently disagree on shape.
-- **Crash-safe resume.** Films are named ``{index:06d}_{episode_id}.json``; a resumed run recounts
-  each pairing's progress from the max on-disk index, so a crash between a file write and a
-  manifest flush never double-writes or collides. Disk is authoritative; the manifest is a header.
-- **Hard caps** (``--max-games`` / ``--max-gb``) so a background run bounds its own footprint, and
-  ``prune_runs`` to reclaim disk from old complete runs.
-
-v1 matrix = our agents × our agents (unordered cross + mirror), seat-balanced (ADR-0021) so each
-deck's decisions are captured from both seats. Extra opponents (meta-deck drivers) drop into the
-``opponents`` slot with no rewrite once a generic driver bundle exists — v1 leaves it ``[]``.
+The matrix is our agents × our agents (unordered cross + mirror), seat-balanced (ADR-0021). Extra
+opponent bundles drop into the ``opponents`` slot with no rewrite.
 """
 from __future__ import annotations
 
@@ -32,10 +20,8 @@ _MANIFEST_FLUSH_EVERY = 10                 # games between manifest header flush
 
 
 def corpus_pairings(agents: list[str], opponents: tuple[str, ...] = ()) -> list[tuple[str, str]]:
-    """The decision-owning matrix: every unordered pair among ``agents`` (cross + mirror — each
-    agent's play is captured vs every other and vs itself), plus ``(agent, opponent)`` for each
-    extra opponent bundle. Opponent×opponent is omitted: we only learn from OUR seats. Order within
-    a pair is (earlier, later); seat balancing puts each deck in both engine seats at run time."""
+    """Every unordered pair among ``agents`` (cross + mirror), plus ``(agent, opponent)`` per extra
+    bundle. Opponent×opponent is omitted: we only learn from OUR seats."""
     out: list[tuple[str, str]] = []
     for i, a in enumerate(agents):
         for b in agents[i:]:
@@ -57,9 +43,8 @@ FILM_GLOB = "*.json.gz"                     # films are gzip-compressed (~8× sm
 
 
 def film_name(index: int, episode_id: int) -> str:
-    """A film filename ``{index:06d}_{episode_id}.json.gz`` — the leading zero-padded index makes disk
-    the authoritative resume cursor (max index + 1); the episode_id keeps it globally unique; gzip
-    keeps a multi-day corpus small enough for the disk cap to mean tens of thousands of games."""
+    """``{index:06d}_{episode_id}.json.gz``. The zero-padded index is what makes disk the resume
+    cursor (max + 1); the episode_id keeps it globally unique."""
     return f"{index:06d}_{episode_id}.json.gz"
 
 
@@ -99,9 +84,8 @@ def build_manifest(*, run_id: str, created_at: str, git_rev: str, agents: list[s
 
 
 def per_pairing_target(max_games: int, n_pairings: int, explicit: int | None = None) -> int:
-    """Games per pairing: ``explicit`` if given, else ``max_games`` spread evenly across pairings
-    (floored at 1). Spreading up front keeps matchup coverage balanced even if a byte cap later
-    stops the run early."""
+    """Games per pairing: ``explicit``, else ``max_games`` spread evenly (floored at 1) so coverage
+    stays balanced even if a byte cap stops the run early."""
     if explicit is not None:
         return max(1, explicit)
     if n_pairings <= 0:
@@ -120,9 +104,8 @@ def cap_hit(totals: dict, caps: dict) -> str | None:
 
 
 def prune_runs(root: Path, keep_bytes: int) -> list[str]:
-    """Delete oldest COMPLETE runs under ``root`` until total size ≤ ``keep_bytes``; return the
-    deleted run_ids. A running/capped run is never pruned (only ``status == "complete"``). Oldest
-    by ``created_at``. Reclaims disk from a long-lived corpus dir without touching live work."""
+    """Delete oldest COMPLETE runs (by ``created_at``) until total size ≤ ``keep_bytes`` -> the
+    deleted run_ids. A running or capped run is never pruned."""
     import shutil
 
     root = Path(root)
@@ -157,9 +140,8 @@ def _dir_size(path: Path) -> int:
 
 
 def _count_films(run_dir: Path) -> int:
-    """Total films on disk under ``run_dir`` — the authoritative game count a resumed run reconciles
-    its header to, so a crash between a film write and a manifest flush self-heals rather than
-    under-counting. The manifest is plain ``.json`` and never matches the film glob."""
+    """Total films on disk — the authoritative game count a resumed run reconciles its header to.
+    The manifest is plain ``.json`` and never matches the film glob."""
     return sum(1 for _ in Path(run_dir).rglob(FILM_GLOB))
 
 
@@ -167,10 +149,8 @@ def generate_corpus_run(*, run_id: str, created_at: str, git_rev: str, agents: l
                         agents_root, out_root, agent_versions: dict, opponents: tuple[str, ...] = (),
                         per_pairing: int | None = None, max_games: int = 30_000,
                         max_bytes: int = 8 * 1024**3, extra_syspath=(), resume: bool = False) -> Path:
-    """Run the matrix to its per-pairing target (or the first cap), writing seat-balanced films
-    under ``<out_root>/corpus/<run_id>/<a>__<b>/`` and a live manifest header. Reuses the
-    process-isolated `battle.play_match` + `MatchRecorder` path (the only collision-free way to run
-    two different decks). Crashed games are skipped; resume recounts from disk. Returns the run dir."""
+    """Run the matrix to its per-pairing target or the first cap -> the run dir. Crashed games are
+    skipped; resume recounts from disk."""
     from sim.battle import AgentServer, play_match, read_deck
     from sim.record import MatchRecorder
     from sim.selfplay import episode_id

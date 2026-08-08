@@ -1,38 +1,13 @@
-"""**Deny Relevance** — the read that replaced deny's magnitude (`deny_relevance`, ADR-0080 / Issue #199).
+"""Deny Relevance — the read that replaced deny's magnitude (`deny_relevance`, ADR-0080 / Issue #199).
 
-Issue #199's grill measured the Worth Damage Rate **underivable**: the corpus-wide DISCARD sweep found 12
-`Discard`-context frames, exactly one holding a Hammer (`86091435-68`), and on that board the strip
-prices 0.000 under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle — so the rate divides
-out of `m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it. The user's doctrine
-then reframed deny entirely, as a liveness gate, a redundancy gate and a **relevance** read:
+Three gates: LIVENESS (any Energy attached at all?), REDUNDANCY (do we KO that body this turn?) and
+RELEVANCE (is the Energy on their wincon, is it the right type, or is it on support we want gone?).
 
-    1. does my opponent have any energy attached to any of its pokemon? if no, hold the hammer
-    2. do we KO that pokemon this turn (the active by attack, or a benched one we can reach)? no
-       hammer on that specific pokemon
-    3. for any pokemon with energy we don't KO — is the energy on their wincon? is it the correct
-       energy type? or is it energy on a supporting pokemon we want gone?
+Asserted at the SEAM a consumer reads (`Pilot._opponent_target_rows`), because the failure that bit
+Issue #199 twice was correct arithmetic answering the wrong question on a real board. Assertions are
+RANKINGS, not magnitudes (ADR-0080 decision 3) — the scale was deliberately left free to re-shape.
 
-Asserted here at the SEAM a consumer reads (`Pilot._opponent_target_rows`), not against the pure
-scorer — the failure mode that bit Issue #199 twice was never bad arithmetic, it was correct arithmetic
-answering the wrong question on a real board, which a pure-function test passes and a row-level test
-does not.
-
-Assertions are **rankings, not magnitudes** (ADR-0080 decision 3): the doctrine is a set of orderings
-and the scale was deliberately left free to re-shape, so pinning scalars would make an honest
-recalibration look like a regression.
-
-**Card facts verified at source** (`data/EN_Card_Data.csv`, `src/cg/api.py` EnergyType) at authoring:
-  * Riolu 677 (Basic, `{F}`) → **Mega Lucario ex** 678 (Stage 1, a SINGLE hop — no intermediate
-    Lucario in this set), Aura Jab `{F}` 130 / Mega Brave `{F}{F}` 270.
-  * Solrock 676 (Basic, `{F}`) — Cosmic Beam `{F}` 70, *"If you don't have Lunatone on your Bench,
-    this attack does nothing"*; no forward form.
-  * Munkidori 112 — Adrena-Brain, *"if this Pokémon has any {D} Energy attached"*; Mind Bend `{P}●` 60.
-  * Dragapult ex 121 — Phantom Dive `{R}{P}` 200; Jet Headbutt `●` 70 (all-colourless).
-  * Meowth ex 1071 — Last-Ditch Catch needs no Energy; Tuck Tail `●●●` 60 (all-colourless).
-  * Makuhita 673 → Hariyama 674, Wild Press `{F}{F}{F}` 210.
-  * Basic Energy card ids COINCIDE with their EnergyType code — `{F}` 6, `{P}` 5, `{D}` 7, `{R}` 2,
-    `{M}` 8 — but that is a coincidence in the data, NOT an identity: Ignition Energy is card **17**,
-    a Special Energy (`provides:1` / `provides_evo:3`).
+Card facts below are verified at `data/EN_Card_Data.csv` and `src/cg/api.py` EnergyType.
 """
 from __future__ import annotations
 
@@ -65,10 +40,8 @@ def _pilot(deck="mega_lucario", *, on=True):
 
 
 def _obs(bench=(), *, active=None, my_energies=()):
-    """My Active (a harmless 200-HP body unless overridden) against an opponent board.
-
-    ``active`` / ``bench`` entries are ``(card_id, energies)`` — energies as CARD IDS, the shape a
-    real observation carries."""
+    """My Active (a harmless 200-HP body unless overridden) against an opponent board. ``active`` /
+    ``bench`` entries are ``(card_id, energies)``, energies as CARD IDS — the shape an obs carries."""
     def body(spec):
         cid, es = spec
         return {"id": cid, "hp": 200, "maxHp": 200, "energies": list(es)}
@@ -94,9 +67,8 @@ def _rel(pilot, obs, board=BOARD):
 # ── the derived normalizer ───────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0001")
 def test_the_normalizer_recomputes_from_the_card_set():
-    """`MAX_ATTACK_DAMAGE` is DERIVED, in the same spirit as `currency.PRIZE_DAMAGE_RATE`: the
-    largest attack damage printed in the set. This test IS that recomputation — pinning the literal
-    instead would make it tuned-by-another-name (ADR-0065)."""
+    """`MAX_ATTACK_DAMAGE` is DERIVED — the largest attack damage printed in the set — and this test
+    IS that recomputation; pinning the literal would tune by another name (ADR-0065)."""
     best = 0
     with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -109,9 +81,8 @@ def test_the_normalizer_recomputes_from_the_card_set():
 # ── gate 1: liveness ─────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0002")
 def test_a_body_holding_no_energy_is_irrelevant():
-    """Doctrine step 1 — *"does my opponent have any energy attached to any of its pokemon? if yes,
-    continue, if no, stop, hold hammer."* Also ADR-0062's whiff, arriving structurally: there is
-    nothing to strip, so no gate has to say so."""
+    """Doctrine step 1. Also ADR-0062's whiff, arriving STRUCTURALLY: there is nothing to strip, so
+    no gate has to say so."""
     p = _pilot()
     rel = _rel(p, _obs(active=(MEGA_LUCARIO, [])))
     assert rel[MEGA_LUCARIO] == 0.0
@@ -120,10 +91,8 @@ def test_a_body_holding_no_energy_is_irrelevant():
 # ── gate 2: redundancy ───────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0003")
 def test_an_active_we_are_about_to_ko_denies_nothing():
-    """Doctrine step 2 — *"does the opponents active have energy and we KO that active at end of our
-    turn? if KO, dont hammer on that specific pokemon."* This is ADR-0063's `active_can_ko` drop,
-    which ADR-0078's re-audit ruled NOT subsumed and required to survive the swap: `turns_to_ko_me`
-    cannot see that we are about to Knock Out their Active, so without it the read prices a corpse."""
+    """Doctrine step 2, and ADR-0063's `active_can_ko` drop that ADR-0078 ruled NOT subsumed:
+    `turns_to_ko_me` cannot see we are about to KO their Active, so the read prices a corpse."""
     p = _pilot()
     obs = _obs(active=(MEGA_LUCARIO, [FIGHTING]))
     live = _rel(p, obs, BOARD)
@@ -135,16 +104,8 @@ def test_an_active_we_are_about_to_ko_denies_nothing():
 
 @pytest.mark.req("REQ-DENYREL-0004")
 def test_a_benched_body_we_can_snipe_ko_denies_nothing():
-    """Doctrine step 2's bench clause — *"or maybe its a benched pokemon that we can snipe and KO.
-    same thing, no hammer on that specific pokemon."* Needs the identity of the sniped body, which
-    the aggregate prize read cannot give, hence `combat.bench_ko_indices` (Issue #199).
-
-    My Active is Dragapult ex holding `{R}{P}`: Phantom Dive is affordable and puts 6 damage counters
-    (60) on the bench, which finishes a 50-HP body but not a 200-HP one.
-
-    Phantom Dive is a DISTRIBUTABLE spread, not a single-target snipe rider — *"in any way you like"*
-    — so all 60 may land on one body. Reading only the snipe rider left this gate blind here, i.e.
-    blind on one of our own three decks, which is why the reach is the max of the two."""
+    """Doctrine step 2's bench clause, which needs the IDENTITY of the sniped body. Phantom Dive is a
+    DISTRIBUTABLE spread, not a single-target rider, so the reach is the MAX of the two."""
     p = _pilot("dragapult_ex")
     obs = _obs(bench=[(SOLROCK, [FIGHTING]), (RIOLU, [FIGHTING])],
                active=(MEGA_LUCARIO, []), my_energies=[FIRE, PSYCHIC])
@@ -160,13 +121,8 @@ def test_a_benched_body_we_can_snipe_ko_denies_nothing():
 # ── the doctrine's five worked rulings ───────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0005")
 def test_the_energy_on_the_wincon_line_outranks_the_one_on_support():
-    """The user's worked ruling — *"if we KO opponents active Lucario with energy, and they have a
-    benched riolu and solrock, each with an energy, we hammer the Riolu."*
-
-    Raw current-form damage orders these BACKWARDS (Riolu's Accelerating Stab is 30, Solrock's Cosmic
-    Beam is 70), which is exactly why the read scans the whole LINE: attached Energy carries through
-    an evolution, and Riolu's `{F}` is banking toward Mega Lucario ex's Mega Brave 270 while Solrock
-    evolves into nothing and needs a benched Lunatone to deal anything at all."""
+    """Raw current-form damage orders these BACKWARDS, which is why the read scans the whole LINE:
+    attached Energy carries through an evolution, and Solrock evolves into nothing."""
     p = _pilot()
     rel = _rel(p, _obs(bench=[(RIOLU, [FIGHTING]), (SOLROCK, [FIGHTING])]))
     assert rel[RIOLU] > rel[SOLROCK]
@@ -175,12 +131,8 @@ def test_the_energy_on_the_wincon_line_outranks_the_one_on_support():
 
 @pytest.mark.req("REQ-DENYREL-0006")
 def test_the_type_that_advances_their_attack_outranks_the_stray_one():
-    """The user's worked ruling — *"if opponent has a dragapult with a darkness energy (mistakes
-    happen) + a fire energy, hammer against fire only, ignore the darkness."*
-
-    Phantom Dive costs `{R}{P}` for 200; the `{D}` advances neither slot. Note the read is NOT gated
-    on current affordability — this body cannot pay Phantom Dive yet (no `{P}`), and the `{R}` is
-    still the Energy worth taking, because relevance asks what is on the plan's critical path."""
+    """Phantom Dive costs `{R}{P}`, so the `{D}` advances neither slot. NOT gated on current
+    affordability — relevance asks what is on the plan's critical path, not what is payable now."""
     p = _pilot("dragapult_ex")
     rows = _rows(p, _obs(active=(DRAGAPULT_EX, [DARKNESS, FIRE])))
     row = next(r for r in rows if r["id"] == DRAGAPULT_EX)
@@ -190,14 +142,8 @@ def test_the_type_that_advances_their_attack_outranks_the_stray_one():
 
 @pytest.mark.req("REQ-DENYREL-0007")
 def test_the_ability_fuel_outranks_the_attack_cost_on_the_same_body():
-    """The user's worked ruling — *"if opponent have a benched or active Munkidori that we cannot KO
-    that has a darkness and a psychic energy, we hammer against the darkness to mute the ability."*
-
-    Adrena-Brain fires *"if this Pokémon has any {D} Energy attached"*; Mind Bend costs `{P}●`. So
-    the `{P}` pays a real 60-damage attack slot and the `{D}` pays none — yet the `{D}` is the strip,
-    because muting the Ability is the larger loss. This is a WITHIN-body ruling, which is why the
-    mute leg is scored to dominate its own body and no further (ADR-0080; valuing it at a flat 1.0
-    would rank this Munkidori above a nuke-ready attacker, which the doctrine never claimed)."""
+    """The `{P}` pays a real attack slot and the `{D}` pays none, yet the `{D}` is the strip because
+    muting the Ability is the larger loss. A WITHIN-body ruling, so the mute leg goes no further."""
     p = _pilot("dragapult_ex")
     rows = _rows(p, _obs(bench=[(MUNKIDORI, [DARKNESS, PSYCHIC])], active=(DRAGAPULT_EX, [FIRE])))
     row = next(r for r in rows if r["id"] == MUNKIDORI)
@@ -207,8 +153,7 @@ def test_the_ability_fuel_outranks_the_attack_cost_on_the_same_body():
 
 @pytest.mark.req("REQ-DENYREL-0008")
 def test_a_second_copy_of_the_gated_type_means_the_strip_mutes_nothing():
-    """Adrena-Brain needs *"any {D}"*, so a Munkidori holding two `{D}` keeps its Ability through a
-    strip — the mute leg must not fire. Derived from the card text, not a special case."""
+    """Adrena-Brain needs *"any {D}"*, so two `{D}` survive a strip — derived from the card text."""
     p = _pilot("dragapult_ex")
     rows = _rows(p, _obs(bench=[(MUNKIDORI, [DARKNESS, DARKNESS])], active=(DRAGAPULT_EX, [FIRE])))
     row = next(r for r in rows if r["id"] == MUNKIDORI)
@@ -217,11 +162,8 @@ def test_a_second_copy_of_the_gated_type_means_the_strip_mutes_nothing():
 
 @pytest.mark.req("REQ-DENYREL-0009")
 def test_an_energy_on_a_body_that_does_nothing_with_it_is_ignored():
-    """The user's worked ruling — *"does opponent has a meowth with an energy, ignore it."*
-
-    Meowth ex's Last-Ditch Catch needs no Energy and Tuck Tail costs `●●●` — ALL colourless, so no
-    attached Energy is ever on a specific-type slot. The 0 falls out of the cost, with no card-level
-    special case."""
+    """Meowth ex's attacks are all-colourless, so no attached Energy is ever on a specific-type slot.
+    The 0 falls out of the cost, with no card-level special case."""
     p = _pilot("dragapult_ex")
     rel = _rel(p, _obs(bench=[(MEOWTH_EX, [DARKNESS])], active=(DRAGAPULT_EX, [FIRE])))
     assert rel[MEOWTH_EX] == 0.0
@@ -229,11 +171,8 @@ def test_an_energy_on_a_body_that_does_nothing_with_it_is_ignored():
 
 @pytest.mark.req("REQ-DENYREL-0010")
 def test_the_marginal_target_lands_between_dead_and_critical():
-    """The user's worked ruling — *"if opponent has makuhuta with single energy, hammer? maybe."*
-
-    A genuine maybe: Makuhita's own attacks are 10 and 30, but it evolves into Hariyama whose Wild
-    Press is `{F}{F}{F}` 210. So it must be neither ignorable like the Meowth nor as urgent as the
-    Riolu — which is the case a boolean gate cannot express and is why relevance is a scalar."""
+    """A genuine maybe: Makuhita's own attacks are 10 and 30 but Hariyama's Wild Press is 210. The
+    case a boolean gate cannot express, and the reason relevance is a scalar."""
     p = _pilot()
     rel = _rel(p, _obs(bench=[(MAKUHITA, [FIGHTING]), (RIOLU, [FIGHTING]), (MEOWTH_EX, [FIGHTING])]))
     assert rel[MEOWTH_EX] < rel[MAKUHITA] < rel[RIOLU]
@@ -242,10 +181,8 @@ def test_the_marginal_target_lands_between_dead_and_critical():
 # ── surplus, and the Energy-identity trap ────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0011")
 def test_surplus_energy_prices_zero_the_way_adr_0062_says_it_should():
-    """ADR-0062's worked table records that a Mega Lucario ex holding THREE `{F}` denies **0** — it
-    can still pay Aura Jab `{F}` and Mega Brave `{F}{F}` after losing one. Here that arrives
-    STRUCTURALLY from the surplus clause rather than from a separate whiff gate, and the 1- and
-    2-Energy rows (which its table prices 130 and 140) stay live."""
+    """ADR-0062's table prices three `{F}` at 0 — both attacks stay payable after a strip. Arrives
+    STRUCTURALLY from the surplus clause here, rather than from a separate whiff gate."""
     p = _pilot()
     at = lambda n: _rel(p, _obs(active=(MEGA_LUCARIO, [FIGHTING] * n)))[MEGA_LUCARIO]
     assert at(1) > 0.0 and at(2) > 0.0
@@ -254,17 +191,8 @@ def test_surplus_energy_prices_zero_the_way_adr_0062_says_it_should():
 
 @pytest.mark.req("REQ-DENYREL-0012")
 def test_a_special_energy_is_resolved_by_type_not_by_card_id():
-    """The trap this must not fall into. Attached Energy is a list of CARD IDS, and for Basic Energy
-    the id coincides with the `EnergyType` code (Basic `{F}` is card 6, FIGHTING is 6) — a
-    coincidence in the data, not an identity. **Ignition Energy is card id 17**, a Special Energy
-    that pays colourless slots only, so it is never on a specific-type critical path.
-
-    The discriminating case is `[IGNITION, PSYCHIC]` on a Mega Lucario ex, whose costs are `{F}` and
-    `{F}{F}`. A card-id-as-type reading would treat Ignition's id 17 as a type and the `{P}` card 5
-    as PSYCHIC — neither matching FIGHTING — and land on 0 by luck. The Provider-resolved reading
-    reaches the same 0 for a REASON, and the two separate the moment a real `{F}` is added: only a
-    correct reading picks index 2. Both halves are asserted, since a test that its own bug would
-    pass is not a test."""
+    """Attached Energy is a list of CARD IDS, and a Basic Energy's id COINCIDES with its `EnergyType`
+    code — a coincidence in the data, not an identity. Ignition (17) is a colourless Special."""
     p = _pilot()
     row = next(r for r in _rows(p, _obs(active=(MEGA_LUCARIO, [IGNITION, PSYCHIC])))
                if r["id"] == MEGA_LUCARIO)
@@ -277,15 +205,8 @@ def test_a_special_energy_is_resolved_by_type_not_by_card_id():
 
 @pytest.mark.req("REQ-DENYREL-0016")
 def test_the_binding_count_catches_a_typed_attack_the_body_is_exactly_paying_for():
-    """The second way a strip sets an attack back: every specific-type slot is already covered and
-    the body sits exactly on the total cost, so losing ANY Energy drops it under.
-
-    Hariyama's Wild Press is `{F}{F}{F}` — three specific slots — so a Makuhita line holding two
-    `{F}` is short on the type and the typed clause already fires. The clause that needs its own
-    test is the guard on it: a body still MISSING a colour is bound by the type, not the count, so
-    the off-type Energy stays irrelevant. Dragapult ex holding `{D}` + `{R}` against Phantom Dive
-    `{R}{P}` sits exactly on the 2-Energy total, and the `{D}` must still score 0 — the user's
-    *"ignore the darkness"*. Without the type-ready guard a plain total-count rule flags both."""
+    """The second way a strip sets an attack back: every typed slot covered and the body exactly on
+    the total cost. A body still MISSING a colour is bound by the TYPE, not the count."""
     p = _pilot("dragapult_ex")
     row = next(r for r in _rows(p, _obs(active=(DRAGAPULT_EX, [DARKNESS, FIRE])))
                if r["id"] == DRAGAPULT_EX)
@@ -294,10 +215,8 @@ def test_the_binding_count_catches_a_typed_attack_the_body_is_exactly_paying_for
 
 @pytest.mark.req("REQ-DENYREL-0017")
 def test_a_brief_named_threat_is_sharpened_but_a_whiff_is_never_promoted():
-    """ADR-0080 decision 2: a matched Brief's `threats` MULTIPLY the derived rank, never source it.
-    So a named body outranks the same body unnamed — and, because the boost is a multiplier, it can
-    never make an irrelevant Energy worth taking (`0 x anything == 0`). That is the same discipline
-    `_DENIAL_UNFAVORED` follows: *"a booster must scale the oracle, never add to it"* (ADR-0063)."""
+    """ADR-0080 decision 2: a Brief's `threats` MULTIPLY the derived rank, never source it, so it can
+    never promote a whiff — the same discipline as *"a booster must scale, never add"* (ADR-0063)."""
     p = _pilot()
     obs = _obs(bench=[(SOLROCK, [FIGHTING]), (MEOWTH_EX, [FIGHTING])])
     plain = _rel(p, obs)
@@ -310,10 +229,8 @@ def test_a_brief_named_threat_is_sharpened_but_a_whiff_is_never_promoted():
 
 @pytest.mark.req("REQ-DENYREL-0018")
 def test_the_forward_contribution_is_reported_separately():
-    """The forward-potential leg is the scan's SCOPE rather than a separate addend, so it stays
-    inspectable via `relevance_forward` — otherwise a surprising ranking could not be diagnosed
-    without a debugger. A Riolu's whole claim comes from Mega Lucario ex, which it is not yet; a
-    Solrock has no forward form at all, so its claim is entirely its own."""
+    """The forward leg is the scan's SCOPE, not a separate addend, so it stays inspectable via
+    `relevance_forward` — otherwise a surprising ranking needs a debugger to diagnose."""
     p = _pilot()
     rows = {r["id"]: r for r in _rows(p, _obs(bench=[(RIOLU, [FIGHTING]), (SOLROCK, [FIGHTING])]))}
     assert rows[RIOLU]["relevance_forward"] > 0, "Riolu's claim is Mega Lucario ex's Mega Brave"
@@ -323,9 +240,8 @@ def test_the_forward_contribution_is_reported_separately():
 # ── the kill-switch ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0013")
 def test_the_switch_off_path_emits_nothing_at_all():
-    """Ships OFF and byte-identical (ADR-0080 decision 4 / the `deny_strip_delta` precedent): no
-    field emitted, and the redundancy gate not even computed. Nothing reads these yet — Issue #187 is the
-    consumer — so ON must change no decision either."""
+    """Ships OFF and byte-identical (ADR-0080 decision 4): no field emitted and the redundancy gate
+    not even computed. Nothing reads these yet, so ON must change no decision either."""
     off = _rows(_pilot(on=False), _obs(active=(MEGA_LUCARIO, [FIGHTING])))
     assert all("relevance" not in r for r in off)
     on = _rows(_pilot(on=True), _obs(active=(MEGA_LUCARIO, [FIGHTING])))
@@ -338,8 +254,7 @@ def test_the_switch_off_path_emits_nothing_at_all():
 
 @pytest.mark.req("REQ-DENYREL-0014")
 def test_the_read_is_resolved_once_per_decision_not_once_per_option():
-    """ADR-0076 Amendment C's caching promise, which this must not break: a real decision computes
-    the per-body simulation ONCE and shares it through `_opponent_target_cache`."""
+    """ADR-0076 Amendment C: the per-body simulation runs ONCE, shared via `_opponent_target_cache`."""
     p = _pilot()
     obs = _obs(active=(MEGA_LUCARIO, [FIGHTING]))
     calls = []
@@ -351,8 +266,7 @@ def test_the_read_is_resolved_once_per_decision_not_once_per_option():
 
 @pytest.mark.req("REQ-DENYREL-0015")
 def test_an_unknown_card_degrades_to_zero_rather_than_raising():
-    """Fail toward NOT spending the Hammer: an unknown body is not evidence that its Energy is
-    valuable, and a missing card fact must never crash a decision."""
+    """Fail toward NOT spending the Hammer: an unknown body is not evidence its Energy is valuable."""
     p = _pilot()
     rel = _rel(p, _obs(active=(123456789, [FIGHTING])))
     assert rel[123456789] == 0.0

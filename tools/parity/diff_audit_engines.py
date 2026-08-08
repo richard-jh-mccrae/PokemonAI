@@ -1,23 +1,14 @@
 """Cross-engine audit diff (ADR-0050 M4 item 7): native vs cgpy attack measurements.
 
-Both sides are produced by the SAME harness — ``tools/sim/audit_attacks.py`` — with the
-engine swapped via ``CG_ENGINE=py`` (the alias seam). Join records by identity
-(``record_key``) and compare the dealt-damage split with **zero tolerance**:
+Both sides come from the SAME harness (``tools/sim/audit_attacks.py``) with the engine swapped
+via ``CG_ENGINE=py``. Records join by ``record_key`` and the dealt-damage split compares with
+ZERO tolerance: plain coin rows ride live rng and are skipped, the deterministic ``coin: min``
+and ``max`` fork rows must be EQUAL, one-sided errors are coverage findings, and both-sided
+errors are jointly unmeasurable.
 
-- both measured, no coin involved → ``dealtActive``/``dealtBench``/``dealtSelf``/``koed``
-  must be EQUAL;
-- coin attacks: the plain (``coin: None``) rows ride live rng luck — skipped; the
-  deterministic ``coin: min``/``max`` fork rows must be EQUAL;
-- one-sided errors are coverage findings, split by whether the chain is deferred
-  (expected — cgpy refuses unmodeled attacks) or live (a real gap);
-- both-sided errors are jointly unmeasurable (panel gaps) and skipped.
-
-    # the sample loop (or --all for the nightly full-pool run):
     python tools/sim/audit_attacks.py --attack 87 --out reports/attack_audit/native.json
     CG_ENGINE=py python tools/sim/audit_attacks.py --attack 87 --out reports/attack_audit/cgpy.json
-    python tools/parity/diff_audit_engines.py reports/attack_audit/native.json \\
-        reports/attack_audit/cgpy.json
-"""
+    python tools/parity/diff_audit_engines.py reports/attack_audit/{native,cgpy}.json"""
 from __future__ import annotations
 
 import argparse
@@ -56,10 +47,8 @@ def compare(native: list[dict], cgpy: list[dict]) -> dict:
         if coin_involved:
             out["skipped_luck"] += 1      # plain row of a coin attack: rng luck differs;
             continue                      # the min/max fork rows carry the comparison
-        # Each engine stages its own chaos game to the attack; when the incidental
-        # boards differ, board-sensitive scalers (own in-play count, hand size) measure
-        # legitimately different values — non-comparable like coin luck. Micro-trace
-        # replay is the exact verifier for that family (707/708/1114/1386 all pinned).
+        # Each engine stages its own chaos game to the attack; when the incidental boards differ,
+        # board-sensitive scalers measure legitimately different values — like coin luck.
         staging = ("defenderBench", "attackerEnergies", "myHandSize", "defenderHp")
         if any(a.get(f) != b.get(f) for f in staging):
             out["skipped_staging"] = out.get("skipped_staging", 0) + 1

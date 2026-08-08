@@ -14,7 +14,7 @@
 - [x] Phase 2 counterplay research synthesised (high confidence, 58/69 claims verified) — engine-fact reconciled (Tera bench-immunity VERIFIED)
 - [x] Phase 3 weakness grill: **8/8 seams locked**
 - [x] Phase 4 Brief-field reconciliation complete — **3 decisions resolved** (D1 mint `opp_spreads_bench` ✓ · D2 mint `opp_item_locks` ✓ · D3 `opp_is_engine_dependent`=false ✓); both new keys registered in `src/common/scouting/opponent_properties.json` (`consumer: "unwired"`)
-- [x] Phase 5 signed off (2026-07-09) → **Phase B complete**: Strategy Proposal emitted → `data/strategy/proposals/matchup-dragapult_ex.md` (`target_layer: matchup-brief`, `verification_contract: brief-validator`, provenance → this doc). **Hand-off to `/update-strategy`** to author `src/common/scouting/briefs/dragapult_ex.json` behind the validator gate (ADR-0046).
+- [x] Phase 5 signed off (2026-07-09) → **Phase B complete**: Strategy Proposal emitted → `data/strategy/proposals/applied/matchup-dragapult_ex.md` (`target_layer: matchup-brief`, `verification_contract: brief-validator`, provenance → this doc). **Hand-off to `/update-strategy`** to author `src/common/scouting/briefs/dragapult_ex.json` behind the validator gate (ADR-0046).
 
 **Decisions resolved (see §7):** D1 mint `opp_spreads_bench` (YES) · D2 mint `opp_item_locks` (YES) · D3 `opp_is_engine_dependent` = false (NOT set).
 **matchup-genie is DONE for this archetype.** Next: `/update-strategy` applies the proposal (writes the Brief JSON, runs `validate_brief.py`, human commits). The Brief does not ship — and the two new keys stay inert — until then.

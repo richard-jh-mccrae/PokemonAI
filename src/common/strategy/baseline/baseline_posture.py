@@ -1,23 +1,14 @@
-"""BASELINE cluster: POSTURE — risk scales with prize position (learnthetcg fundamentals digest,
-proposal `risk-scales-with-prize-position`). The *ahead* half only: when I'm clearly AHEAD on prizes
-I should minimise whiff — stabilise and don't gamble a working position for variance I don't need.
-The *behind* half (safe-line-loses -> take the low-% line) is already modelled by the gamble tier
-(ADR-0039, closed-form expectimax), so it is NOT re-authored here.
+"""BASELINE cluster: POSTURE — risk scales with prize position; the *AHEAD* half only, the behind
+half being the gamble tier's (ADR-0039). Pure data, no Pilot Mixin (ADR-0025).
 
-Pure-data General-Strategy Hypotheses, no Pilot Mixin (ADR-0025). Fires on the PLAY select. This
-cluster is an opponent-position-driven PRIOR that must not move live behavior until the ladder tunes
-it: every rule ships default-OFF (`weight=0`, `status="assumed"`, intended seed noted as
-`SEED(ladder): NN` in the rationale). Weight 0 = wired + telemetry-visible, contributes nothing to
-the argmax.
+⚠️ Every rule here ships default-OFF at `weight=0` — wired and telemetry-visible, contributing
+nothing to the argmax — until the ladder tunes the `SEED(ladder)` value named in its rationale.
 """
 from common.strategy.context import _PLAY
 from common.strategy.strategy import Hypothesis
 
-_AHEAD_MARGIN = 1   # prizes I must be AHEAD by (opp_remaining − my_remaining) before the play-safe
-                    # prior engages. `my_prizes_remaining < opp_prizes_remaining` says I'm ahead;
-                    # the margin guards the 0/0 UNPOPULATED default (both 0 -> diff 0 -> silent) and
-                    # the 6/6 opening (diff 0 -> silent), and lets the ladder raise the bar to "clearly
-                    # ahead" (>=2) without a code change. ladder-tunable.
+_AHEAD_MARGIN = 1   # prizes ahead (opp_remaining − my_remaining) before the prior fires; ladder-tunable,
+                    # and it guards the 0/0 UNPOPULATED default and the 6/6 opening (both diff 0).
 
 HYPOTHESES = [
     Hypothesis(

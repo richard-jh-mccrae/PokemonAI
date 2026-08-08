@@ -1,13 +1,8 @@
 """Validate a Matchup Brief JSON — the deterministic Phase-B gate for /matchup-genie (ADR-0027).
 
-Checks the Brief shape, that `covers` is non-empty (and matches the deck export's index.json), that
-every `threat`/`target` card actually appears in the opponent deck (the analogue of deck-genie's
-per-Hypothesis trigger checks — catches typos / hallucinated cards), that `target` roles are legal, and
-that every `opponent_properties` key is registered in src/common/scouting/opponent_properties.json.
-
-Hard failures exit 1; warnings are printed but pass. Usage (from anywhere in the repo):
+Hard failures exit 1; warnings print and pass. Runs from anywhere in the repo:
     python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>
-    python .claude/skills/matchup-genie/scripts/validate_brief.py <slug> --brief path.json --deck-dir dir --index index.json
+        [--brief path.json --deck-dir dir --index index.json]
 """
 from __future__ import annotations
 
@@ -16,18 +11,14 @@ import json
 import sys
 from pathlib import Path
 
-# The BRIEF-assignable roles only. `support`/`unknown` are legal role strings but READ-ONLY —
-# `Scout._target_role` emits them for "no claim", which a human author never writes.
+# `support`/`unknown` are legal role strings but READ-ONLY — Scout emits them, an author never writes them.
 _TARGET_ROLES_FALLBACK = {"prize_liability", "fragile_preevo", "disruption_target", "attacker",
                           "enabler", "engine", "avoid"}
 _REQUIRED = ("slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets")
 
 
 def _target_roles(repo: Path) -> set[str]:
-    """Legal `target` roles, sourced from the Brief schema's role enum so this list can never drift
-    from src/common/scouting/brief.schema.json (ADR-0051 added `disruption_target` / `avoid` there but
-    this hardcoded set was missed — the drift that would have rejected an enriched Brief). Falls back
-    to the known set if the schema can't be read."""
+    """Legal `target` roles, read from brief.schema.json's enum so this list cannot drift from it."""
     try:
         schema = json.loads((repo / "src" / "common" / "scouting" / "brief.schema.json").read_text(encoding="utf-8"))
         enum = schema["properties"]["targets"]["items"]["properties"]["role"]["enum"]
@@ -45,7 +36,7 @@ def _find_repo(start: Path) -> Path:
 
 
 def _norm(s: str) -> str:
-    """Fold case/accents/whitespace/curly-apostrophe for name matching (mirrors deck_convert.norm)."""
+    """Mirrors deck_convert.norm."""
     import unicodedata
     s = (s or "").replace("’", "'")
     s = unicodedata.normalize("NFKD", s)
@@ -54,7 +45,6 @@ def _norm(s: str) -> str:
 
 
 def _deck_names(deck_dir: Path, repo: Path) -> set[str] | None:
-    """Normalized card names in deck.csv, or None if the deck can't be read (warn, skip card checks)."""
     csv = deck_dir / "deck.csv"
     if not csv.exists():
         return None
@@ -79,7 +69,6 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     except json.JSONDecodeError as e:
         return ([f"brief is not valid JSON: {e}"], warnings)
 
-    # --- required fields + types ---
     for k in _REQUIRED:
         if k not in brief:
             problems.append(f"missing required field: {k!r}")
@@ -92,7 +81,6 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     if "tempo" in brief and brief["tempo"] not in {"fast", "midrange", "slow"}:
         problems.append(f"tempo {brief['tempo']!r} not in fast|midrange|slow")
 
-    # --- covers vs the deck export index (warn only — the meta regenerates) ---
     if index_path.exists():
         try:
             entry = next((e for e in json.loads(index_path.read_text(encoding="utf-8"))
@@ -106,8 +94,7 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
     else:
         warnings.append(f"no {index_path} — skipped covers cross-check")
 
-    # --- covers collision vs every OTHER shipped Brief (ADR-0038 hardening): match_brief routes an
-    # archetype to the alphabetically-FIRST covering Brief, so an overlap misroutes SILENTLY ---
+    # ADR-0038: an overlap misroutes SILENTLY.
     if isinstance(covers, list) and brief_path.parent.is_dir():
         for other in sorted(brief_path.parent.glob("*.json")):
             if other.name == brief_path.name:
@@ -121,7 +108,6 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
                 problems.append(f"covers collide with {other.name}: {clash} — every archetype string "
                                 f"must route to exactly ONE Brief (match_brief takes the first)")
 
-    # --- threats / targets reference real cards in the deck ---
     names = _deck_names(deck_dir, repo)
     if names is None:
         warnings.append(f"no deck.csv in {deck_dir} — skipped threat/target card checks")
@@ -140,7 +126,6 @@ def validate(slug: str, brief_path: Path, deck_dir: Path, index_path: Path,
         if names is not None and _norm(t["card"]) not in names:
             problems.append(f"target card not in the deck: {t['card']!r}")
 
-    # --- opponent_properties keys registered + typed ---
     reg = json.loads((repo / "src" / "common" / "scouting" / "opponent_properties.json").read_text(encoding="utf-8")).get("properties", {})
     props = brief.get("opponent_properties", {})
     if not isinstance(props, dict):

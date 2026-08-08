@@ -1,18 +1,13 @@
 """Engine verification of the retreat-lock mechanic (ADR-0033 follow-up, wiring item 4).
 
-Drives a real two-sided battle: Maractus (255) Corners the defending Totodile ("During your
-opponent's next turn, the Defending Pokémon can't retreat" — 1-colorless, so any Energy pays it).
-The defender keeps a benched body and attached Energy, so RETREAT (OptionType 12) would normally
-be offered — and IS, on its pre-lock turn. On every post-Corner turn the engine must OMIT the
-RETREAT option from the locked side's menu.
+Maractus Corners the defender; the engine must OMIT RETREAT from the locked side's menu, and
+offer it on the pre-lock turn.
 
-This test is the reason there is NO `retreat_lock` transient field (deleted 2026-07-02): the
-engine enforces the lock at the menu, so a menu-driven this-turn Pilot has nothing to read — a
-parsed-but-unconsumed field was dead weight. Re-adding a parse requires a real consumer AND this
+This is the reason there is NO `retreat_lock` transient field: the engine enforces the lock at the
+menu, so a menu-driven Pilot has nothing to read. Re-adding a parse needs a real consumer AND this
 enforcement fact changing.
 
-REQ-TRANS-0006: the engine omits RETREAT from the locked defender's menu; an unlocked defender
-with Energy + a Bench is offered it.
+REQ-TRANS-0006.
 """
 import sys
 from pathlib import Path
@@ -55,9 +50,8 @@ def _bench_count(obs, seat):
 
 
 def _choose(obs, attack_now):
-    """Seat 0 (Maractus): attach; Corner only once ``attack_now`` (so the defender's unlocked
-    control menu is observed first, whatever the draw order). Seat 1 (defender): bench one body,
-    attach, END — it never retreats or attacks, so its menu shows exactly what the engine offers."""
+    """Seat 0 holds Corner until ``attack_now``, so the unlocked control menu is observed first.
+    Seat 1 never retreats or attacks, so its menu shows exactly what the engine offers."""
     opts = (obs.get("select") or {}).get("option") or []
     s = _seat(obs)
     if any(o.get("type") in (YES, NO) for o in opts):            # mulligan: accept any keepable hand

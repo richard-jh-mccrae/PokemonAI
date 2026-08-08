@@ -1,26 +1,11 @@
 """**The expectation-node census** (Issue #394) — what `common.board_expectation` reaches, what it
-refuses, and how wide the enumeration each refused family would produce actually is.
+refuses, and how wide the enumeration each refused family would produce.
 
-`tools/train/apply_parity.py` answers *"does the closed-form transition agree with the engine?"* over
-the committed native traces. This answers the sibling question the vocabulary work needs: *"of the
-`_PLAY` steps the deterministic seam refuses, which does the expectation node enumerate, why does it
-refuse the rest, and what would a widening COST in branching?"*
+* **`--families`** (default) — refused `_PLAY` steps grouped by `expectation`'s own refusal message.
+* **`--sizes`** — the pool a widened enumerator would range over: per LEG, their UNION
+  (disjunction), their PRODUCT (conjunction), `C(pool, m)`. What `BRANCH_CAP` is re-checked against.
 
-Two reports, one walk:
-
-* **`--families`** (default) — every refused `_PLAY` step grouped by `expectation`'s own refusal
-  message, with the per-card breakdown. Reproduces the counted backlog in `board_expectation`'s
-  header, which is what makes it a positive control rather than a fresh claim: if the buckets stop
-  summing to that table, this instrument is broken and not the codebase.
-* **`--sizes`** — for every refused step carrying a reveal clause, the pool the widened enumerator
-  would range over: per LEG, their UNION (the disjunction reading), their PRODUCT (the conjunction
-  reading), and `C(pool, m)` for a multi-card delivery. This is the measurement `BRANCH_CAP` is
-  re-checked against, per Issue #394's acceptance criterion — *"the measurement is the acceptance
-  evidence, not a claim."*
-
-DLL-free by construction, exactly like the parity lane it borrows its walk from: the trace IS the
-native side and cgpy's committed tables supply the card facts, so this runs on Windows and Linux
-alike. Minutes over the full 377-trace corpus; `--limit N` for a subset.
+DLL-free: the trace IS the native side. Minutes over the full corpus; `--limit N` for a subset.
 
 Usage:
     python tools/train/expectation_census.py                    # the family backlog
@@ -36,9 +21,8 @@ from collections import Counter, defaultdict
 from math import comb
 from pathlib import Path
 
-# Self-bootstrapping, as every sibling CLI in this directory is (`frame_view.py`,
-# `blunder_correction.py`): the Usage lines above are bare `python tools/train/...`, and without
-# this they cannot run from a clean checkout.
+# Self-bootstrapping, like every sibling CLI here: the Usage lines above are bare
+# `python tools/train/...`, which cannot run from a clean checkout without this.
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
@@ -52,11 +36,8 @@ from common.state_model import StateModel  # noqa: E402
 from common.strategy.context import _PLAY  # noqa: E402
 from train.apply_parity import TRACES, _card_of, chosen_option, load, offline_combat  # noqa: E402
 
-#: The refusal-message fragments `expectation` raises, each mapped to the backlog bucket it names.
-#: Matched as substrings of the message TAIL (the part after ``"<id> <name>: "``), because the
-#: message is destined for the telemetry line and is grouped by exactly that string
-#: (`apply_option.EngineResolved.clause_gap`). Ordered most-specific-first for the same reason
-#: `_check_clause`'s own gates are.
+#: Refusal-message fragments, matched as substrings of the message TAIL (after ``"<id> <name>: "``)
+#: and ordered MOST-SPECIFIC-FIRST.
 _BUCKETS = (
     "more than one revealing clause", "no `draw`/`fetch` clause", "consults RNG",
     "its `cost` names no target", "`amount`", "not the unconditional",
@@ -69,20 +50,14 @@ _BUCKETS = (
 
 
 def bucket_of(message: str) -> str:
-    """The backlog bucket a refusal belongs to. Falls back to a truncated message, so a NEW refusal
-    shows up as its own row rather than being folded into a neighbour — the same fail-loud rule the
-    seam keeps for an unrecognised clause key."""
+    """Falls back to a truncated message, so a NEW refusal gets its own row."""
     tail = message.split(": ", 1)[-1]
     return next((b for b in _BUCKETS if b in tail), tail[:70])
 
 
 def leg_pool(model, clause: dict) -> dict:
-    """`board_expectation.outcome_pool` for ONE leg, with the four reach fields stripped.
-
-    Stripping them is deliberate and is what makes this a SIZING instrument rather than a second
-    reach predicate: a leg blocked by a `dig` or a `name_family` still has a pool, and its size is
-    the number this census exists to report. It endorses nothing — `fetch_is_unconditional` remains
-    the only answer to *"is this a search we may act on?"* (ADR-0087)."""
+    """The four reach fields are STRIPPED, making this a sizing instrument and not a second reach
+    predicate: a leg blocked by a `dig` still has a pool, and its size is what is being reported."""
     probe = {k: v for k, v in clause.items()
              if k not in ("dig", "trigger", "condition", "name_family")}
     return {cid: n for cid, n in (model.mine.unseen_counts or {}).items()
@@ -90,44 +65,20 @@ def leg_pool(model, clause: dict) -> dict:
 
 
 def _census_shed(model, option, picks):
-    """A STAND-IN cost oracle for the census only, and it must not be mistaken for the real one.
-
-    The real seam is `Pilot.cost_shed_indices`, which asks `needs.cheapest_removal` — the equation
-    that decides the live discard. This walk builds a bare `StateModel` with no Pilot, so it cannot
-    ask that. It takes the first legal hand cards instead.
-
-    That is sound for THIS measurement and only this one: the question here is *"can the node
-    enumerate this step at all?"*, and the pool a search ranges over does not depend on WHICH hand
-    cards paid for it — `MySide.visible_counts` counts hand and discard alike, so a hand->discard
-    move leaves `unseen_counts` untouched. It would NOT be sound for anything that reads the
-    resulting board's hand.
-
-    ⚠️ **It also makes the enumerated figure an UPPER BOUND relative to production**, and the reason
-    is a real difference rather than a rounding one: this pays whenever the hand holds enough cards,
-    while `Pilot._cost_shed` returns `None` — and `cost_shed_indices` then `()`, which the seam
-    refuses — when the priced ROWS come up short. Rows can be fewer than cards. So a board where the
-    cost is nominally payable but the resolver declines counts as enumerable here and would refuse
-    live. Reported as a bound, never as the live number."""
+    """A STAND-IN for `Pilot.cost_shed_indices`, sound ONLY for "can the node enumerate this step?".
+    It pays whenever the hand holds cards, so the enumerated figure is an UPPER BOUND."""
     hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[
         int(getattr(model, "my_index", 0))].get("hand") or ()
     return [i for i in range(len(hand)) if i != option.get("index")][:picks]
 
 
 def walk(paths, *, combat):
-    """Every refused `_PLAY` step, as ``(card_id, bucket, facts)`` rows. One pass serves both
-    reports — the walk is the expensive half (a `StateModel` per step), and running it twice to
-    print two tables would double a minutes-long measurement for nothing.
-
-    **Both reveal nodes are asked, and that is a correction rather than a widening.** A reveal is
-    resolved by whichever node owns its zone: `board_expectation` for a DECK search (hidden, so a
-    distribution) and `board_choice` for a DISCARD one (face-up, so a pure choice). Asking only the
-    first under-reported the seam by every visible-zone search — 46 steps sat in a bucket whose own
-    refusal sentence names the other module."""
+    """BOTH reveal nodes are asked, because a reveal is resolved by whichever owns its zone:
+    `board_expectation` for a hidden DECK search, `board_choice` for a face-up DISCARD one."""
     effects = combat.effects
     rows, enumerated, choices, refused = [], Counter(), Counter(), 0
-    #: Per-step sizing for the VISIBLE-zone half, keyed by card. `--sizes` cannot show it: that
-    #: report builds rows for REFUSED steps only, so a discard search vanishes from it the moment it
-    #: starts enumerating. Collected here so the choice node's pool is reportable at all.
+    #: The VISIBLE-zone half, keyed by card: `--sizes` builds rows for REFUSED steps only, so a
+    #: discard search vanishes from that report the moment it starts enumerating.
     discard_sizes: dict = defaultdict(list)
     for path in paths:
         body = load(path)
@@ -140,8 +91,7 @@ def walk(paths, *, combat):
             obs, nxt = frames[k]["obs"], frames[k + 1]["obs"]
             seat = (obs.get("current") or {}).get("yourIndex", 0)
             # The parity lane's incomparable steps: the next frame is the OPPONENT's perspective, so
-            # there is nothing on my side to compare. Skipped here for the same reason, so this
-            # census and that lane report the same denominator (706, not 712).
+            # this census and that lane report the same denominator.
             if (nxt.get("current") or {}).get("yourIndex") != seat:
                 continue
             card_id = _card_of(obs, option, seat)
@@ -170,7 +120,6 @@ def walk(paths, *, combat):
 
 
 def _facts(model, combat, card_id, obs, seat) -> dict:
-    """The clause + board facts both reports read, gathered once per refused step."""
     every = tuple(board_delta.card_clauses(combat, card_id))
     rev = [c for c in every if c.get("kind") in sc.REVEALING_CLAUSES]
     me = ((obs.get("current") or {}).get("players") or [{}])[seat] or {}
@@ -240,12 +189,8 @@ def report_sizes(rows, cards, out=print) -> None:
 
 
 def report_discard_sizes(discard_sizes, cards, out=print) -> None:
-    """The VISIBLE-zone pool, per step — the half `--sizes` structurally cannot report.
-
-    `--sizes` builds its rows from REFUSED steps, so a discard search disappears from it the moment
-    it starts enumerating; without this the choice node's branching would be unmeasurable exactly
-    because it works. Reports the discard's SIZE (what the search looks at) beside the CLASS count
-    (what it resolved to), and the gap between them is the duplicate-collapse doing its job."""
+    """The discard's SIZE (what the search looks at) beside the CLASS count (what it resolved to);
+    the gap between them is the duplicate-collapse doing its job."""
     if not discard_sizes:
         return
     out("")

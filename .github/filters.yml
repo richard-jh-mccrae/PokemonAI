@@ -47,6 +47,9 @@ full:
 # cgpy/parity twin -- none of which import any of this.
 common_agent_core:
   - 'src/common/*.py'
+  # `src/common/*.py` matches ONE directory level, so the Pilot's families need naming: without
+  # this line a change to any decider reached the suite only via the `any` fail-safe.
+  - 'src/common/deciders/**'
   - 'src/common/scouting/**'
   - 'src/common/strategy/**'
   - 'src/common/value/**'

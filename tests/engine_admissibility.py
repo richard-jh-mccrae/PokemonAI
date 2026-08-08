@@ -1,25 +1,15 @@
-"""Is this engine drive's answer a fact about the board, or a sample? (#178, ADR-0072 amendment C)
+"""Is this engine drive's answer a fact about the board, or a sample? (ADR-0072 amendment C)
 
-A test that pins an exact engine verdict — `engine_confirms(...) is True`, a leaf value, a chosen
-option — is only meaningful if the drive that produced it could not have answered differently. ml f24
-was pinned that way for weeks and answered `[5]` or `[3]` depending on the shuffle, failing ~2 of 3
-full-suite runs through three different tests while passing in isolation every time.
-
-The rule for "could this have answered differently" lives in ONE place, `planner._rng_probe`, and is
-imported here rather than restated — a second copy would drift, and a drifted copy of this particular
-rule is indistinguishable from not having it. What this module adds is the ability to point that rule
-at an arbitrary drive:
+Pinning an exact engine verdict is only meaningful if the drive could not have answered differently.
+The rule for that lives in ONE place, `planner._rng_probe`, and is imported rather than restated;
+this module points it at an arbitrary drive:
 
     with measure_rng(my_index) as reveals:
         verdict = pilot._engine_confirms_win(obs, [[5]])
     assert not reveals, "this verdict is a sample"
 
-Two knobs, and the difference matters (see `_rng_probe`):
-
-- ``prize=False`` (default) — the VERDICT question. A face-down prize take does not change WHO wins
-  (ADR-0050), so it does not disqualify a win/refute claim.
-- ``prize=True`` — the BOARD question. A prize reveal puts a predicted card in hand, which can change
-  a resulting board and anything scored off it.
+``prize=False`` (default) is the VERDICT question — a face-down prize take does not change WHO wins
+(ADR-0050). ``prize=True`` is the BOARD question, where a reveal can change anything scored off it.
 """
 from __future__ import annotations
 
@@ -28,16 +18,8 @@ import contextlib
 
 @contextlib.contextmanager
 def measure_rng(my_index: int, *, prize: bool = False):
-    """Yield a ``set`` that fills with the engine-RNG channels the enclosed drive consumed.
-
-    Empty set == the drive is reproducible under the rule, so an exact assertion on its answer is
-    admissible. Non-empty == the answer is one sample; pin something else, or exclude the frame with
-    a recorded re-ruling (never by re-running until it lands — ADR-0072 amendment C).
-
-    Wraps `cg.api`'s search entry points for the duration, and restores them even on failure. Works
-    on whichever engine is mapped at call time (native, or the cgpy twin under `CG_ENGINE=py`), since
-    the probe reads log types off the module it is handed.
-    """
+    """Yield a ``set`` that fills with the engine-RNG channels the enclosed drive consumed. Empty ==
+    admissible for an exact assertion; non-empty == the answer is one SAMPLE."""
     from cg import api as cgapi
     from common.strategy.planner import _rng_probe          # ONE rule, imported not restated
 
@@ -83,14 +65,8 @@ def _channel(cgapi, ob, my_index: int, *, prize: bool) -> str:
 
 
 def cascade_reveals(fixture: dict, pilot, *, line=None, prize: bool = False) -> set[str]:
-    """`measure_rng` around `lethal_helpers.engine_confirms` — the common case.
-
-    Returns the channels the fixture's cascade consumed under THIS pilot and THIS line. Deliberately
-    takes a built pilot and an explicit line rather than a fixture name: admissibility is a property
-    of the DRIVE, not of the board. Measured 2026-07-27, ml f24 answers it both ways — its
-    `[correct]`-only drive lets `decide()` walk into a shuffle-and-draw card and is a sample, while
-    its full explicit win line is reveal-free and may be pinned exactly.
-    """
+    """Takes a built pilot and an explicit line rather than a fixture name, because admissibility
+    is a property of the DRIVE, not of the board."""
     from lethal_helpers import engine_confirms
 
     yi = ((fixture.get("obs", {}).get("current") or {}).get("yourIndex")) or 0

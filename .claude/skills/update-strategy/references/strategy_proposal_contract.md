@@ -40,7 +40,7 @@ WHY it wins; the concrete trigger/weight are resolved at apply time, not pre-bak
   a rule that also fires on KO/lethal turns, *demote* — narrow the `when()`) a scoring Hypothesis the
   develop rollout rung subsumes. `update-strategy` deletes the Hypothesis definition + its `tuned.json`
   weight and ledgers it. `verification_contract: seed-ladder` — proof is the **batched R-off ladder run**
-  (`docs/plans/phase3-tooling.md`): candidates' weights are zeroed in ONE committed build, submitted, and
+  (ADR-0037; the develop rung it tooled is deleted): candidates' weights are zeroed in ONE committed build, submitted, and
   a neutral-or-positive ladder delta confirms the batch (a regression bisects). The `spec` names the rule
   id, its charter (why it's inside the rung's within-turn-development mandate), and the corroboration
   count; it must NOT be applied before its R-off ladder run returns.

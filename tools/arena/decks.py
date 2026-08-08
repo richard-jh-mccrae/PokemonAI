@@ -139,11 +139,8 @@ class Preset:
 
 
 def list_presets(root: Path | None = None) -> list[Preset]:
-    """The gallery: every preset that resolves to a playable deck, alphabetical.
-
-    A broken preset file is excluded, never fatal — a bad drop-in must not take
-    the deck screen down.
-    """
+    """The gallery: every preset that resolves to a playable deck, alphabetical. A broken preset file
+    is excluded, never fatal — a bad drop-in must not take the deck screen down."""
     root = PRESETS_DIR if root is None else Path(root)
     out = []
     for path in sorted(root.glob("*.txt")):

@@ -15,10 +15,8 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def _first_forkable_main(pilot, replay, model):
-    """The first single-pick MAIN frame the expert can actually fork. The expert forks the **prompt
-    obs** ``film[i].obs`` — the state AT the decision, whose ``select.option`` menu matches the moves
-    the recorded ``chosen`` indexes (NOT ``film[i+1].obs``, the post-choice state vread reads).
-    Returns (prompt_obs, my_seat, option_count, vals) or None."""
+    """The expert forks the PROMPT obs ``film[i].obs``, whose menu matches what ``chosen`` indexes
+    — not ``film[i+1].obs``. Returns (prompt_obs, my_seat, option_count, vals) or None."""
     from train.label.expert import evaluate_options, is_single_pick
 
     from train.blunder.decisions import _film

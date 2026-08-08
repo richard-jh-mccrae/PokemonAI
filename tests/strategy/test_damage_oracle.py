@@ -258,9 +258,8 @@ def test_hidden_scaler_feeds_the_incoming_ceiling():
 
 @pytest.mark.req("REQ-DMG-0016")
 def test_tera_benched_body_is_never_a_snipe_ko():
-    # Tera Pokémon take NO damage from attacks while benched (engine CardData.tera) — bench-snipe
-    # rider must not claim the KO/prize (32 Tera bodies in pool; a phantom snipe-prize could lock a
-    # false Lethal). A non-Tera body at same HP still credits.
+    # Tera Pokémon take NO damage from attacks while benched (engine CardData.tera), so the
+    # bench-snipe rider must not claim the KO/prize — a phantom snipe-prize could lock a false Lethal
     p = _pilot()
     p.stats._stats[70] = CardStat(synthetic=True, cardId=70, name="Tera ex", hp=40, ex=True, tera=True)
     p.stats._stats[71] = CardStat(synthetic=True, cardId=71, name="Plain", hp=40)
@@ -313,9 +312,8 @@ def _lethal_obs(attack_id):
 
 @pytest.mark.req("REQ-DMG-0008")
 def test_coin_attack_never_locks_a_phantom_lethal():
-    # Best Punch: printed 40 would "KO" the 40-HP last-prize defender — but tails does NOTHING.
-    # Lethal Solver must read sound floor (0) and refuse the lock (ADR-0030: a phantom
-    # lethal is the one catastrophic error). A deterministic 120 still locks.
+    # Best Punch: printed 40 would "KO" the 40-HP last-prize defender, but tails does NOTHING — the
+    # Lethal Solver must read the sound floor (0) and refuse the lock (ADR-0030).
     p = _pilot(attack_stats={142: BEST_PUNCH, 1487: JETTING})
     coin = p.explain(_lethal_obs(142)).planned                  # coin floor 0 -> no guaranteed win
     assert coin is None or coin.goal != "win"

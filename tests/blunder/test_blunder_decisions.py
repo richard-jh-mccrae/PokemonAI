@@ -28,9 +28,8 @@ def test_iter_decisions_yields_taggable_decisions_from_film():
 
 
 def test_decision_embeds_selfcontained_full_info_snapshot():
-    """REQ-BLUNDER-0002: a Decision embeds the legal options and an *independent*
-    full-information snapshot -- both hands visible, decoupled from the source
-    replay so the record survives replay mutation/deletion (the 'embed' guarantee)."""
+    """Both hands visible, decoupled from the source replay so the record survives replay
+    mutation/deletion."""
     replay = load_replay(FIXTURE)
     main = next(d for d in iter_decisions(replay) if d.select_context == "Main")
 
@@ -50,9 +49,8 @@ def test_decision_embeds_selfcontained_full_info_snapshot():
 
 
 def test_decision_carries_pilot_ready_obs_aligned_to_its_options():
-    """REQ-BLUNDER-0014: each Decision embeds the agent obs (int enums, the Pilot's input) for
-    the Tuner, aligned option-for-option with the Decision (the film records it one frame after
-    the prompt, like `selected`)."""
+    """The obs carries int enums (the Pilot's input); the film records it one frame AFTER the
+    prompt, like `selected`."""
     main = next(d for d in iter_decisions(load_replay(FIXTURE)) if d.select_context == "Main")
     assert main.obs is not None
     assert isinstance(main.obs["select"]["type"], int)                  # int enum = Pilot-ready

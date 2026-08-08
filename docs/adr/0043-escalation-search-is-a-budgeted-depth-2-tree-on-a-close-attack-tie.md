@@ -1,7 +1,6 @@
 # ADR-0043: Escalation Search is a budgeted depth-2 tree on a close attack tie
 
-> **Status: DEPRECATED & REMOVED (2026-07-16/17, ADR-0064 Locked Decision 6,
-> [`docs/plans/2ply-opponent-survival-grill-spec.md`](../plans/2ply-opponent-survival-grill-spec.md)).**
+> **Status: DEPRECATED & REMOVED (2026-07-16/17, ADR-0064 Locked Decision 6).**
 > The reply sim is structurally blind to hidden-hand development (it can only make the opponent play
 > visible cards), which is the threat class that decides these boards; the hidden-development Incoming
 > layer (ADR-0064) supersedes its survival role. It was already dead in production (every shipped agent
@@ -28,7 +27,7 @@
 
 **Status.** Accepted + **Built 2026-07-05** (`/tdd`, Tier 6). The narrowly-triggered engine tree for
 the one thing closed-form provably cannot see — **opponent choice**. Build record:
-[docs/architecture/tier-6-escalation-search.md](../architecture/tier-6-escalation-search.md).
+`docs/architecture/tier-6-escalation-search.md`, removed — the tier was deleted from the codebase 2026-07-17 (ADR-0064 decision 6).
 
 **Context.** Tiers 0-3 are opponent-*static*: the KO Race, Incoming, and the Prize Path all assume
 the opponent's board answers as it stands. But two attacks can price identically this turn and leave

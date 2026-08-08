@@ -7,17 +7,12 @@ import pytest
 # Make meta_tracker package importable without installation.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-# Tests live in per-subsystem subdirs (tests/<subsystem>/); keep tests/ itself on path
-# so shared helpers (pilot_helpers, scouting_helpers) and `from conftest import ...` resolve
-# from any subdir.
+# Keep tests/ itself on path so shared helpers and `from conftest import ...` resolve from any
+# per-subsystem subdir.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# cgpy owns its randomness and is UNSEEDED by default, deliberately — `cgpy/game.py` mirrors the
-# native engine there so self-play is realistic. A test suite wants the opposite: pin the seed so a
-# cgpy-driven game is the same game every run, on every machine, in CI. `game.py` re-reads the var
-# per `battle_start`, so setting it here covers every call regardless of import order, and
-# `setdefault` lets an explicit CGPY_SEED (a deliberate seed sweep, or test_compat_game's own
-# monkeypatch) win.
+# cgpy is deliberately UNSEEDED by default; a suite wants the opposite. `game.py` re-reads the var
+# per `battle_start`, so this covers every call whatever the import order, and `setdefault` yields.
 os.environ.setdefault("CGPY_SEED", "1178")             # 178 = the issue that earned this line
 
 if os.environ.get("CG_ENGINE") == "py":                # ADR-0050 M3: run the suite on the
@@ -36,30 +31,16 @@ def on_cgpy_twin() -> bool:
     return installed()
 
 
-#: Skip a test that asserts the NATIVE search round-trips from a LIVE battle board (#178).
-#:
-#: cgpy reseeds a MAIN-select board from an observation (`cgpy.search.state_from_obs`) but cannot
-#: reconstruct an arbitrary mid-battle one, so on the twin `_simulate_line` / `_engine_confirms_win`
-#: return **None** there. That is the twin being honest — None never lies — but it makes "assert the
-#: search reached a board / a verdict" unanswerable rather than false, so the assertion measures the
-#: parity gap instead of the thing under test.
-#:
-#: This is a PARITY marker, not a native-only one: delete it when cgpy grows live-board reseeding,
-#: and do not weaken the assertion to `is None or ...` to make it pass on both arms — an assertion
-#: that accepts both answers pins neither.
+#: A PARITY marker, not a native-only one: cgpy cannot reseed an arbitrary mid-battle board, so it
+#: answers None there. Delete this when the twin grows live-board reseeding; never weaken the assert.
 needs_live_board_search = pytest.mark.skipif(
     on_cgpy_twin(),
     reason="asserts a live-board search round-trip; cgpy cannot reseed an arbitrary live board")
 
 
 def require_kaggle_environments():
-    """Quietly import kaggle_environments, or skip the test if it isn't installed.
-
-    Drop-in for ``pytest.importorskip("kaggle_environments")`` that routes the *first*
-    import through check_agent's muter, so the library's one-time OpenSpiel env-discovery
-    dump (native stderr writes + INFO logs) never reaches the console. Later calls are
-    cached no-ops.
-    """
+    """Drop-in for ``pytest.importorskip("kaggle_environments")`` that routes the FIRST import
+    through check_agent's muter, so the one-time OpenSpiel env dump never reaches the console."""
     import pytest
 
     from sim.check_agent import _import_make  # cheap: ke is imported lazily inside it
@@ -74,10 +55,7 @@ def pytest_configure(config):
 
 
 # --- Blunder-labeler fixtures (WP3, tests/label/) ---------------------------------------------
-# These live here, not in a tests/label/conftest.py, because the suite uses a single global
-# `conftest` module (`from conftest import ...` resolves the root one via the sys.path entry above);
-# a sibling conftest.py of the same basename shadows it and breaks that import in other subdirs.
-# Session-scoped, so the engine-driven corpus generation runs once and only when a label test asks.
+# Here rather than in tests/label/conftest.py: a sibling conftest.py SHADOWS this global one.
 
 _FIXTURE_AGENTS = FIXTURES / "agents"
 _SRC = [Path(__file__).resolve().parents[1] / "src"]
@@ -85,9 +63,8 @@ _SRC = [Path(__file__).resolve().parents[1] / "src"]
 
 @pytest.fixture(scope="session")
 def corpus_films(tmp_path_factory):
-    """A real 2-game mega_starmie mirror corpus (films under a session tmp dir). Corpus films carry
-    ``search_begin_input`` on their frame obs, so the labeler sees the same films the real pipeline
-    does (no synthetic obs). Session-scoped: generated once for the whole label suite."""
+    """A real 2-game mega_starmie mirror corpus: the films carry ``search_begin_input`` on their
+    frame obs, so the labeler sees what the real pipeline does rather than a synthetic obs."""
     from sim.corpus import generate_corpus_run
 
     out = tmp_path_factory.mktemp("label_corpus")

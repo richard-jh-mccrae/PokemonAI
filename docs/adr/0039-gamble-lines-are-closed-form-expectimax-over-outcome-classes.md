@@ -4,8 +4,7 @@
 Gamble rung (`planner._best_gamble_line`, switch `gamble_lines`) + `deck_odds.draw_hit_probability`
 + the type-payable attach fix + coin-EV ranking; gated REQ-GAMBLE-0001..0005; A/B **52%**
 (CI 50–54, 0 crashes, 2000 games, Battle Result #58) → **default ON**. Build record:
-[docs/architecture/tier-2-chance-ev.md](../architecture/tier-2-chance-ev.md) (~70%: recovery
-classes / multi-class EV / non-MAIN fallback terms remain). Terms in
+[docs/architecture/tiers.md](../architecture/tiers.md) (T2). Terms in
 [src/common/CONTEXT.md](../../src/common/CONTEXT.md): *Chance Node*, *Outcome Class*, *Gamble Line*.
 
 **Context.** The Turn Planner (ADR-0031/0037) is deterministic: `_simulate_line` auto-resolves

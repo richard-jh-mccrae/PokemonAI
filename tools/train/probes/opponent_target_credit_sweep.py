@@ -1,55 +1,12 @@
 """Opponent-target discrimination sweep. **Not a gate.**
 
-Measures how much the opponent-target ranking (`pilot._opponent_target_rows`) can actually tell
-its candidates apart, and what each candidate leg adds over a MEANINGLESS leg of the same size.
+Measures how much `pilot._opponent_target_rows` can tell its candidates apart, and what each
+candidate leg adds over a MEANINGLESS leg of the same size. A2 is the null control — arm A against
+itself, and it MUST read 0 every run. Both control kinds are required and are not interchangeable.
 
-## What this probe found, and the correction it carries
-
-It was written to measure one thing and found another. The original reading — *"adding
-`state_value`'s denial credit moves the top target on 46 of 314 frames"* — was wrong twice:
-
-1. **Mis-scoped.** `gust_target_slot` is BENCH-ONLY (the opponent's Active is never a legal gust
-   target), and ranking Active+Bench together lets the Active dominate the argmax. Bench-only is
-   69/241, not 46/314.
-2. **Not evidence.** A deliberately meaningless leg of the same magnitude (`cid % 7`) moves the
-   same argmax on 64/241. The real credit separates from noise by five frames out of 241.
-
-The cause is printed below every run: equal-prize groups whose rows carry an IDENTICAL value, so the
-pick falls to list order and ANY continuous term appears to "improve" it.
-
-⚠️ **The numbers above were measured BEFORE the Fractional Survival Clock landed, and this probe's
-tie line reads lower now.** Re-run it before citing any figure here — and note it compares
-`survival_shift`, a strict SUB-population of the Flat Tie, which is identical `value`
-(`fractional_clock_sweep.py` reports both, and is the one to read for the tie population). The original
-draft of this docstring said the ties were *"`survival_shift` integer-quantized to 0 for every
-row"*; that was measured false — quantization was 10.0% of it. The rest is a **Structural Zero**:
-`incoming()` aggregates their forms with a per-turn MAX, so removing a body that is not the argmax
-moves nothing at any resolution. See ADR-0117 (fractional survival clock) for the correction and
-ADR-0118 (sham control) for why the sham arms are mandatory here.
-
-## Arms
-
-    A  shipped      CardStat.prize_value                                   what the rows do today
-    B  damage       + `state_value._forward_credit(theirs.forward_payoff)` what `threat` does
-    C  prize/raw    + (forward_prize - own_prize) * halve(hops)
-    D  prize/band   + _READINESS_W * (forward_prize - own_prize) * halve(hops)
-
-    A2      null control   — arm A against itself. MUST be 0, every run.
-    S_cid   sham           — (cid % 7),  band-matched. No causal claim.
-    S_hp    sham           — (hp % 70),  band-matched. No causal claim.
-    S_pos   sham           — position index. The degenerate case: a leg that cannot beat LIST ORDER
-                             is not ordering anything.
-
-A candidate leg's number means nothing until it is read against the sham arms. Both control kinds
-are required and they are not interchangeable: the null proves the comparison is stable, the shams
-prove movement is attributable.
-
-    python tools/train/probes/opponent_target_credit_sweep.py
-    python tools/train/probes/opponent_target_credit_sweep.py --examples 8
-
-Reads what SHIPS: a fresh stateful Pilot per frame (the `snipe_decider_sweep` discipline — a reused
-Pilot leaks the previous frame's board), deployment profile untouched. Offline, read-only, always
-exits 0.
+⚠️ **Every figure this docstring used to quote predates the Fractional Survival Clock; re-run before
+citing anything.** The original reading was wrong twice — mis-scoped (the gust seam is BENCH-ONLY)
+and not evidence (a `cid % 7` sham moved almost the same argmax). ADR-0117 and ADR-0118 carry it.
 """
 from __future__ import annotations
 

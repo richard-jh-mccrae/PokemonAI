@@ -1,23 +1,10 @@
 """The corpus-wide off-policy census — every non-MAIN context, not just ctx 7 (Issue #412).
 
-    python tools/train/off_policy_census.py                 # the per-context tally
-    python tools/train/off_policy_census.py --frames        # every candidate frame, with its verdict
-    python tools/train/off_policy_census.py --frames --ctx 15
-    python tools/train/off_policy_census.py --review        # the REVIEW PACKET: unruled candidates
-                                                            # beside their predecessors' rulings
+    python tools/train/off_policy_census.py [--frames] [--ctx 15] [--review]
 
-**Why a census and not a number.** Issue #412 measured the off-policy fraction at ctx 7 alone and
-generalised the exposure to the other eleven non-MAIN contexts by argument. `--frames` is what turns
-that into a measurement: it names each frame, so the reading can be checked rather than believed.
-
-**Why `--review` prints both rulings in full.** The dependency test (`blunder/off_policy.py`) asks
-whether the ruled-CORRECT predecessor play would have prevented this select or changed a board fact
-this ruling NAMES. That cannot be answered from a frame key — it needs the predecessor's card text
-read against the follow-up's prose. This mode lays the pair out so a human can rule it in one read.
-
-Every run prints the POSITIVE CONTROL. *"Found nothing"* and *"my instrument is broken"* return the
-same empty output (CLAUDE.md), and a census is precisely the shape where a broken scan reads as good
-news.
+`--frames` names each candidate frame, so the reading can be checked rather than believed; `--review`
+lays one out beside its predecessors' rulings, because the dependency test needs the predecessor's
+card text read against the follow-up's prose. Every run prints the POSITIVE CONTROL.
 """
 from __future__ import annotations
 
@@ -34,11 +21,8 @@ from train.blunder.store import load_corrections                                
 
 
 def _context_name(ctx) -> str:
-    """The engine's own name for a select context, or ``?``.
-
-    `cg.api` owns this vocabulary (CLAUDE.md), and importing it MAPS THE NATIVE LIBRARY — which is
-    fine here (this is a CLI, never the offline unit suite) but is why `gates.py` writes its
-    constants literally instead."""
+    """The engine's own name for a select context, or ``?``. Importing `cg.api` MAPS THE NATIVE LIBRARY
+    — fine in a CLI, and the reason `gates.py` writes its constants literally instead."""
     try:
         from cg.api import SelectContext
         return SelectContext(ctx).name

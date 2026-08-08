@@ -29,19 +29,8 @@ def _move(correction) -> str:
 
 
 def _at(correction) -> str:
-    """One Correction's id, as the LEDGER keys it (`reviewed.review_key`, ADR-0049).
-
-    **What the report prints must be what the writer accepts** (ADR-0090 decision 4, Issue
-    #250). This returned `ep <id> f<frame>` for every Correction regardless of scope, so a
-    turn-scoped record was displayed under its *Anchor* frame — and an operator copying that string
-    into `review_correction.py` produced `86091435-119`, a human refutation that reached no record
-    and voided nothing for twelve days. The docstrings in `reviewed.py` and `gates.ruling_index`
-    have always claimed the ledger is keyed by "the same id the reports print"; this is the line
-    that makes the claim true.
-
-    Distinct from `_where`, which stays prose (`ep 86091435 turn 14 (seat 1)`) because it answers a
-    different question — *where to go look*, not *what to type*.
-    """
+    """**What the report prints must be what the writer accepts** (ADR-0090 decision 4). Distinct
+    from `_where`, which stays prose: that answers *where to look*, this answers *what to type*."""
     from train.blunder.reviewed import review_key
     return review_key(correction)
 
@@ -62,12 +51,7 @@ def _driving(result, hid: str):
 def render_run_report(agent: str, result, seeds: dict, changed: dict, *, reg: float,
                       when_iso: str, build: str | None, n_corrections: int,
                       methodology: str = "../methodology.md", reviewed=None) -> str:
-    """Return the Markdown report for one tune run.
-
-    ``changed`` is the sparse `{hyp_id: new_weight}` actually shipped (``io.sparse_overrides``);
-    ``result`` is the ``run.TuneResult``; ``seeds`` the authored weights (for the seed→new delta).
-    ``reviewed`` is ``[(correction, entry)]`` excluded by the reviewed ledger (already assessed).
-    """
+    """``changed`` is the sparse map actually SHIPPED (`io.sparse_overrides`), against ``seeds``."""
     sat = result.n_constraints - len(result.unsatisfied)
     verdict = ("fit **adopted**" if result.fit_adopted else
                "authored weights **kept** (the fit could not satisfy more without overfitting)")

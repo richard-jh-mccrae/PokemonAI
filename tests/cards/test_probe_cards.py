@@ -305,9 +305,8 @@ def test_find_evolve_option_none_when_evolution_not_in_hand():
 
 @pytest.mark.req("REQ-FUNC-0015")
 def test_build_trigger_deck_stacks_the_line_and_two_supporter_targets():
-    """Two DISTINCT Supporter lines, not one: a Supporter-fetching trigger is skipped entirely by
-    the engine when the deck holds none, so a single 4-copy line lets the shuffle decide the shape
-    (measured at ~1 run in 12)."""
+    """Two DISTINCT Supporter lines, not one: a single 4-copy line lets the shuffle decide the
+    shape, and the engine skips the trigger entirely when the deck holds none."""
     deck = build_trigger_deck([BASIC_MON, STAGE1], BASIC_ENERGY, _pool())
     assert len(deck) == 60
     assert deck.count(BASIC_MON) == 4 and deck.count(STAGE1) == 4

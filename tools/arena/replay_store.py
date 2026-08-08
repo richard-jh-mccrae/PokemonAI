@@ -25,11 +25,8 @@ REPLAY_DIR = _TOOLS.parent / "data" / "replays" / "PvC"
 def save_replay(replay: dict, dest_dir: Path, *, agent: str, visitor: str | None,
                 human_seat: int, forfeit: str | None = None,
                 stamp: str | None = None) -> Path:
-    """Tag + write one PvC replay; returns the file path.
-
-    `forfeit` is None (played out), "concede", or "timeout"; only a timeout counts
-    as abandoned — a concede is still a deliberate finish (CONTEXT.md: Forfeit).
-    """
+    """Tag + write one PvC replay; returns the file path. `forfeit` is None (played out), "concede"
+    or "timeout"; only a timeout counts as abandoned — a concede is a deliberate finish."""
     stamp = stamp or time.strftime("%Y%m%d-%H%M%S")
     # the random tail keeps concurrent same-second finishes (and their EpisodeIds)
     # from silently overwriting each other

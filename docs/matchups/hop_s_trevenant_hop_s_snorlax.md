@@ -16,7 +16,7 @@
 - [x] Phase 3 weakness grill: `8/8` seams locked (3 decisions resolved 2026-07-09)
 - [x] Phase 4 Brief-field reconciliation complete (4 opponent_properties incl. 2 new keys, 3 threats, 1 target)
 - [x] Phase 5 signed off → Phase B authorised (user: Snorlax threat-only, exclude Dunsparce, **mint both keys**)
-- [x] Phase B: Strategy Proposal emitted → `data/strategy/proposals/matchup-20260709-hop_s_trevenant_hop_s_snorlax.md` + 2 keys registered. **matchup-genie stops here** (→ `/update-strategy` authors the Brief JSON)
+- [x] Phase B: Strategy Proposal emitted → `data/strategy/proposals/applied/matchup-20260709-hop_s_trevenant_hop_s_snorlax.md` + 2 keys registered. **matchup-genie stops here** (→ `/update-strategy` authors the Brief JSON)
 
 Open seams to grill: single-prize economy, fragile pre-evos (Phantump 70 / Dunsparce 60), boost-stack dependence + Postwick stadium war, Mist-Energy effect-immunity (blunts OUR disruption), Corner retreat-lock, Horrifying Revenge punish-the-trade, all-special-energy base (denial live), mixed weakness (Darkness vs Trevenant / Fighting vs Snorlax+Dunsparce), donk window, Dudunsparce-is-a-trap. Open questions: tempo = midrange vs fast; does Mist-immunity warrant a new opponent_properties key.
 

@@ -1,43 +1,16 @@
-"""Attach decider sweep — the per-axis DIAGNOSTIC for the no-shadow swap (#139, ADR-0069 §8). **Not a gate.**
+"""Attach decider sweep — the per-axis DIAGNOSTIC for the no-shadow swap (ADR-0069 §8). **Not a gate.**
 
 Runs the corpus through the SHIPPED attach decider and reports, per attach frame, which target it
-funds, whether that satisfies the corpus ruling, and the decider's AXES BREAKDOWN behind the call.
-The breakdown is why this file outlived the gate it used to be — `decider_lab.py` records the
-decision, never the axes that produced it.
-
-Comparison is by the resolved target SLOT ``(area, position)``, never the raw option index —
-duplicate energy-source options and identical-effect target copies otherwise read as false flips
-(82523811-59, 82750161-59).
+funds, whether that satisfies the corpus ruling, and the AXES BREAKDOWN behind the call — which is
+the thing `decider_lab.py` does not record. Comparison is by resolved target SLOT, never the raw
+option index: duplicate energy sources and identical-effect copies otherwise read as false flips.
 
     python tools/train/probes/attach_decider_sweep.py            # the miss table + the tally
     python tools/train/probes/attach_decider_sweep.py --all      # every frame, not only the misses
     python tools/train/probes/attach_decider_sweep.py --scale 6 --pref 3 --quiet   # retune grid
 
-Offline and read-only; one engine-backed Pilot build per frame. Always exits 0: it reports, it does
-not gate.
-
-## Why the OLD arm is GONE (ADR-0085 Amendment J, 2026-07-30)
-
-This probe used to build TWO pilots per frame — NEW (``attach_value`` ON, the 19 retired rungs forced
-to weight 0) and OLD (``attach_value`` OFF, the pile at its shipped weights) — and classify each
-disagreement `FIX` / `REGRESSION` / `DIVERGENT`. ADR-0072 called that pairing the **Decision Gate**,
-and at the swap it was right: OLD *was* the incumbent pile, so the diff measured the equation against
-what it replaced.
-
-The deletion commit ended that, as tracker directive 1 requires. `baseline_energy` holds **3** of its
-22 rungs now — `use-acceleration`, `prefer-active-attach-in-setup`,
-`feed-the-line-for-disruptor-lock` — so OLD was ``attach_value`` OFF over a near-empty scorer whose
-argmax falls to option index. All four sweeps sat in that state simultaneously and none of them said
-so; a comparison that cannot produce a REGRESSION is not evidence of not regressing.
-
-Amendment I moved the gate to `tools/train/decider_lab.py diff --baseline
-data/decider_lab/baseline.json`, which diffs against a RECORDED capture. Amendment J removes the dead
-arm here. What remains is the one reading that means something: the shipped agent, against the human.
-
-The ``--scale`` / ``--pref`` retune search is UNAFFECTED and stays — it overrides shipped constants
-to search the feasible region (ADR-0069's retune protocol), and this probe is the only place they are
-ever poked, so a shipped constant is never quietly different from the one measured. Note `--pref`
-still bites: `prefer-active-attach-in-setup` is one of the three survivors.
+Offline and read-only; one engine-backed Pilot build per frame. Always exits 0. The Decision Gate is
+`decider_lab.py diff --baseline data/decider_lab/baseline.json` (ADR-0085 Amendment I).
 """
 from __future__ import annotations
 
@@ -70,15 +43,12 @@ def _names() -> dict:
 
 
 def _frames():
-    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
     from train.probes._corpus import frames
     return frames()
 
 
 def _agent(rec) -> str:
-    """The shared replay fallback (`_corpus.replay_agent`). It is no longer papering over a missing
-    `agent` — `from_dict` backfills that from `agent_build` — but it is not cosmetic either: the
-    corpus holds one `SkiChu` record with no agent directory."""
+    """The shared replay fallback — not cosmetic: one corpus record has no agent directory."""
     from train.probes._corpus import replay_agent
     return replay_agent(rec)
 
@@ -93,20 +63,15 @@ def _strategy_and_deck(agent: str):
 
 
 def _pilot(agent: str, *, seams):
-    """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
-    tracker, per-decision caches) and sharing one pollutes verdicts (the `needs_sweep` lesson — that
-    probe is gone with the shadow it read, Issue #261 item 2h, but the lesson is not).
-
-    No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
-    deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""
+    """A fresh SHIPPED Pilot per frame — the Pilot is stateful and sharing one pollutes verdicts. No
+    params overridden, no rungs zeroed: a probe reading anything but the PROFILE reports no agent."""
     from common.runtime import build_pilot
     strategy, deck = _strategy_and_deck(agent)
     return build_pilot(strategy, deck, **seams)
 
 
 def _seams():
-    """Build the engine-backed knowledge seams ONCE and inject them into every Pilot — they are
-    immutable card knowledge, so sharing them is safe where sharing a Pilot is not."""
+    """The knowledge seams, built ONCE — immutable, so sharing them is safe where sharing a Pilot is not."""
     from common.scouting.artifact import load_artifact
     from common.scouting.briefs import load_briefs
     from common.scouting.provider import EngineCardStatProvider
@@ -118,9 +83,7 @@ def _seams():
 
 
 def _opt_slot(option: dict, ctx) -> tuple | None:
-    """The target slot an attach option names. Delegates to the shared resolver so this sweep, the
-    evolve sweep and an Axis Claim can never disagree about what a slot is (ADR-0072 decision 3);
-    ATTACH_LANE carries this lane's rule as DATA — ATTACH always, CARD only under ATTACH_FROM."""
+    """The target slot an attach option names, via the shared resolver so no two consumers disagree."""
     if not in_lane(option, ATTACH_LANE, ctx):
         return None
     return option_slot(option)
@@ -147,9 +110,8 @@ def _axes_line(row, names) -> str:
 
 
 def sweep(show_all: bool, scale=None, pref_weight=None, quiet: bool = False) -> None:
-    """``scale`` / ``pref_weight`` override the shipped constants for the retune's feasible-region
-    search (the constraint-first step of ADR-0069's retune protocol) — the probe is the ONLY place
-    they are ever poked, so a shipped constant is never quietly different from the one measured."""
+    """``scale`` / ``pref_weight`` override shipped constants for the retune's feasible-region search.
+    This probe is the ONLY place they are poked, so a shipped constant is never quietly different."""
     import common.pilot as pilot_mod
     if scale is not None:
         pilot_mod._ATTACH_VALUE_SCALE = float(scale)
@@ -185,9 +147,7 @@ def sweep(show_all: bool, scale=None, pref_weight=None, quiet: bool = False) -> 
         correct_slots = _slots(correct or [], options, ctx)
         tally["frames"] += 1
         # A frame whose `correct` is a NON-attach play still labels this decision: the question it
-        # answers is "attach at all?", and matching it means making NO energy attach. Reading only the
-        # attach slots would silently score that frame "unlabelled" and hide a real miss
-        # (83007714-65: the Ignition onto the doomed Cinderace before the retreat).
+        # answers is "attach at all?", and reading only the attach slots would hide a real miss.
         if correct is None:
             tally["unlabelled"] += 1
             reading = "unlabelled"

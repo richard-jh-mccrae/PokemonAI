@@ -1,20 +1,9 @@
 """Tables: the Arena's capped live-match slots (CONTEXT.md: Table).
 
-One Table = one worker subprocess hosting one PvC Match. The manager owns the cap,
-routes the Visitor's choices to the worker's stdin, and forfeits idle Tables so a
-walker-away can't hold a slot (CONTEXT.md: Forfeit).
-
-Consumers read a Table through a seq/snapshot model (`wait_change`): the reader
-thread publishes every worker message under a Condition and bumps `seq`; any number
-of observers (each WebSocket connection) wait on the seq they last saw and get a
-consistent snapshot. State-based, not queue-based — a dropped/reconnected socket
-can never steal a message from the next one, and `_pump` is the *only* writer of
-`state`, so a late click can't resurrect a finished Table.
-
-Pure threads — no asyncio — so it is testable headless; the web layer bridges with
-asyncio.to_thread (wait_change returns on a short timeout, so an abandoned waiter
-thread exits promptly instead of blocking forever).
-"""
+One Table = one worker subprocess hosting one PvC Match. Consumers read it through a
+seq/snapshot model (`wait_change`), not a queue, so a reconnected socket can never steal the
+next message, and `_pump` is the ONLY writer of `state`. Pure threads, no asyncio — the web
+layer bridges with `asyncio.to_thread`."""
 from __future__ import annotations
 
 import json
@@ -139,9 +128,8 @@ class TableManager:
     def __init__(self, *, replay_dir: Path, cap: int = 4, idle_timeout: float = 600,
                  clock=time.monotonic, worker_cmd: list[str] | None = None,
                  warm_picker=None):
-        """warm_picker: () -> (agent_name, agent_dir). When given, one worker is
-        kept booted ahead of the next Visitor (its agent chosen at warm time), so
-        the click-to-first-frame wait collapses from seconds to instant."""
+        """warm_picker: () -> (agent_name, agent_dir). When given, one worker is kept booted ahead of
+        the next Visitor, so click-to-first-frame collapses from seconds to instant."""
         self.replay_dir = Path(replay_dir)
         self.cap = cap
         self.idle_timeout = idle_timeout

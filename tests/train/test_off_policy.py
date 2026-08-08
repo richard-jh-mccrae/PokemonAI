@@ -1,29 +1,8 @@
-"""`train.blunder.off_policy` — *is this follow-up frame gradeable at all?* (Issue #412, ADR-0123).
+"""`train.blunder.off_policy` — is this follow-up frame gradeable at all? (Issue #412, ADR-0123).
 
-A non-MAIN select exists because the agent played something earlier in the turn. **A follow-up
-select is only gradeable if the decision that opened it was correct**: if that earlier play was
-itself the blunder, the board is one the agent should never have reached and a Correction filed here
-is evidence about a board state that should not exist.
-
-The detector shipped inside `grab_sweep.py` scoped to ctx 7, calling itself *"sound but
-incomplete"*. Measured corpus-wide it is **incomplete AND over-broad**, and the over-broad half is
-the expensive one because it deletes good evidence: 34 frames flagged by the naive same-turn scan,
-only **15** survive the developer's dependency test. Dropping on the raw flag would have deleted 19
-gradeable frames — the same wrong-denominator error the issue exists to stop, pointed the other way.
-
-So the module SPLITS what the old helper conflated: :func:`candidates` is the mechanical scan and
-:data:`RULINGS` is the human's verdict on each candidate, with the reason. Two properties carry the
-whole design and both are asserted here:
-
-* **the scan never returns a verdict on its own reasoning** — an unruled candidate is `UNRULED`,
-  which is a first-class answer, not a failure;
-* **a ruled-`GRADEABLE` frame reports no reasons even though candidates exist** — that is the entire
-  point of ruling one, and the property a future "simplification" is most likely to delete.
-
-Every census assertion below is paired with its POSITIVE CONTROL. *"Found nothing"* and *"my
-instrument is broken"* return the same empty output (`CLAUDE.md`), and a detector whose success
-state is *fewer flags* is precisely the shape where a broken scan reads as good news.
-"""
+A follow-up select is gradeable only if the decision that opened it was correct. `candidates`
+is the mechanical scan and `RULINGS` is the human's verdict on each candidate. Every census
+assertion below is paired with its POSITIVE CONTROL."""
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,9 +16,6 @@ from train.blunder import off_policy as op  # noqa: E402
 
 
 # ── synthetic records ────────────────────────────────────────────────────────────────────────────
-# The live corpus cannot prove the negative cases: it holds no endorsement-only predecessor left to
-# clear (the ruling ledger now covers every real frame), so a test reading only the corpus could not
-# tell a working narrowing from a deleted one.
 
 
 @dataclass
@@ -91,13 +67,6 @@ def test_a_LATER_frame_and_a_DIFFERENT_turn_are_not_predecessors():
 
 @pytest.mark.req("REQ-OFFPOLICY-0002")
 def test_an_ENDORSEMENT_predecessor_is_not_a_blunder():
-    """`chosen == correct` is the human AGREEING with the play — a note or a regression guard, not a
-    ruling against it. 15 such records are committed (`85058574-109` says so in its own rationale as
-    a *"match planer note"*), and reading one as *"an earlier decision was ruled wrong"* inverts its
-    meaning. It cleared one live flag outright and thinned two more.
-
-    The CONTROL is the same record with `correct` moved off `chosen`: if that stops scanning too,
-    the narrowing is over-broad rather than correct."""
     follow_up = _rec(frame=10, turn=3)
     endorsement = _rec(frame=8, turn=3, ctx=0, chosen=[2], correct=[2])
     assert op.candidates(follow_up, op.episode_index([follow_up, endorsement])) == []
@@ -109,23 +78,14 @@ def test_an_ENDORSEMENT_predecessor_is_not_a_blunder():
 
 @pytest.mark.req("REQ-OFFPOLICY-0002")
 def test_an_endorsement_is_compared_as_a_SET_not_a_sequence():
-    """`correct` is a list of option indices whose ORDER the human never ruled on (ADR-0086), so
-    `[1, 4]` and `[4, 1]` are one ruling. A positional compare would read an endorsement as a
-    blunder on every multi-pick record — and ctx 8 (DISCARD) is full of them."""
+    """`correct` order was never ruled on (ADR-0086), so `[1, 4]` and `[4, 1]` are one ruling."""
     assert op.endorses_the_play(_rec(chosen=[4, 1], correct=[1, 4]))
     assert not op.endorses_the_play(_rec(chosen=[4, 1], correct=[1, 5]))
 
 
 @pytest.mark.req("REQ-OFFPOLICY-0003")
 def test_a_NULL_episode_asserts_no_predecessor_relation_at_all():
-    """`episode_id is None` means the record came from somewhere with no episode — the committed
-    engine-parity captures (`v2_ms_mirror_5000` / `_5001`), not games. Keyed `(agent, None)` all
-    three ctx-17 records landed in ONE bucket, so f82 of one trace scanned as a predecessor of f100
-    of ANOTHER. A null episode is not an episode identity; two such records cannot be shown to share
-    a game, so no relation may be asserted.
-
-    CONTROL: the identical pair with a real episode id still scans, so this narrows on the null and
-    not on the shape."""
+    """Engine-parity captures carry no episode; keyed `(agent, None)` they all collide into one bucket."""
     follow_up = _rec(frame=100, turn=19, episode_id=None, ctx=17)
     other = _rec(frame=82, turn=19, episode_id=None, ctx=17, chosen=[0], correct=[1])
     assert op.candidates(follow_up, op.episode_index([follow_up, other])) == []
@@ -140,9 +100,6 @@ def test_a_NULL_episode_asserts_no_predecessor_relation_at_all():
 
 @pytest.mark.req("REQ-OFFPOLICY-0004")
 def test_an_unruled_candidate_is_UNRULED_and_never_OFF_POLICY():
-    """The dependency test needs the predecessor's card text read against the follow-up's prose, so
-    no corpus scan can reach a verdict. `UNRULED` is a first-class answer; an instrument that guessed
-    would manufacture exactly the unfounded confidence this module removes."""
     follow_up = _rec(frame=10, turn=3)
     by_ep = op.episode_index([follow_up, _rec(frame=8, turn=3, ctx=0)])
     assert op.classify(follow_up, by_ep) == op.UNRULED
@@ -158,12 +115,6 @@ def test_a_frame_with_no_candidate_is_GRADEABLE():
 
 @pytest.mark.req("REQ-OFFPOLICY-0005")
 def test_a_ruled_GRADEABLE_frame_reports_NO_reasons_despite_its_candidates(monkeypatch):
-    """The whole point of ruling a candidate gradeable — and the property a future "simplification"
-    is most likely to delete, because the candidate list is still non-empty underneath.
-
-    `mega_starmie 81785223-39` is the live case: its predecessor rules *"play Pokégear 3.0 earlier
-    in the turn"*, and Pokégear (`EN_Card_Data.csv` id 1122, `Look at the top 7 cards of your deck …
-    reveal a Supporter`) cannot touch the opponent's Bench the snipe ruling names."""
     follow_up = _rec(frame=10, turn=3)
     by_ep = op.episode_index([follow_up, _rec(frame=8, turn=3, ctx=0)])
     monkeypatch.setitem(op.RULINGS, op.ruling_key(follow_up),
@@ -175,10 +126,7 @@ def test_a_ruled_GRADEABLE_frame_reports_NO_reasons_despite_its_candidates(monke
 
 @pytest.mark.req("REQ-OFFPOLICY-0005")
 def test_a_ruling_is_honoured_on_a_frame_the_SCAN_cannot_see():
-    """The "incomplete" half Issue #412 documented. `mega_lucario 84889011-7` is off-policy because
-    the developer said so — nobody ever filed a Correction on the play that opened its select, so
-    there is no earlier ruled frame to detect. The ledger is keyed on the FRAME, not on a candidate,
-    exactly so this ruling has somewhere to live."""
+    """The ledger is keyed on the FRAME, not on a candidate, so a ruling needs no detectable predecessor."""
     key = ("mega_lucario", 84889011, 7)
     assert op.RULINGS[key].verdict == op.OFF_POLICY
     ghost = _rec(agent="mega_lucario", episode_id=84889011, frame=7, turn=1)
@@ -197,10 +145,7 @@ def corpus():
 
 @pytest.mark.req("REQ-OFFPOLICY-0006")
 def test_the_positive_control_still_fires_on_the_ctx7_base(corpus):
-    """**A negative result needs a positive control** (`CLAUDE.md`). This module's success state is
-    *fewer flags*, so a scan that silently stopped working would look like progress. The control
-    counts CANDIDATES rather than verdicts — deliberately, because a verdict-keyed control fades to
-    zero exactly as the review succeeds, which is when it is most needed."""
+    """Counts CANDIDATES, not verdicts: a verdict-keyed control fades to zero exactly as review succeeds."""
     control = op.control(corpus)
     assert control["population"] >= 30, "the ctx-7 base Issue #412 ruled on must still be readable"
     assert control["healthy"], (
@@ -211,13 +156,7 @@ def test_the_positive_control_still_fires_on_the_ctx7_base(corpus):
 
 @pytest.mark.req("REQ-OFFPOLICY-0006")
 def test_every_non_MAIN_context_has_been_censused_and_nothing_is_left_UNRULED(corpus):
-    """Issue #412 scope item 2: the exposure was measured at ctx 7 and *generalised by argument* to
-    the other eleven non-MAIN contexts. This is the measurement.
-
-    The zero-UNRULED assertion is the one that decays: a Correction filed on a new follow-up frame
-    whose turn already carries a ruling lands here as UNRULED and fails this test. **That is the
-    intended behaviour** — it routes the frame to `off_policy_census.py --review` for a ruling
-    rather than letting it grade on an unexamined premise."""
+    """A new UNRULED frame failing here is INTENDED — it routes to `off_policy_census.py --review`."""
     census = op.census(corpus)
     assert census, "no non-MAIN frames found at all — the census is reading nothing"
     assert set(census) >= {7, 15, 8, 21}, "the four largest non-MAIN populations must be censused"
@@ -231,14 +170,7 @@ def test_every_non_MAIN_context_has_been_censused_and_nothing_is_left_UNRULED(co
 
 @pytest.mark.req("REQ-OFFPOLICY-0006")
 def test_the_dependency_test_kept_more_than_half_the_flagged_frames(corpus):
-    """The measurement that justifies the whole design (ADR-0123 decision 1).
-
-    Issue #412 proposed *any ruled predecessor in the same turn* and called it *"sound but
-    incomplete"*. Over the corpus that detector flags 34 frames; only 15 survive the dependency
-    test. Shipping the naive rule would have deleted **19** gradeable frames.
-
-    Asserted as an inequality, not an exact pair: the corpus grows, and a test that pinned today's
-    counts would fail on the next Correction rather than on a real change of behaviour."""
+    """An inequality, not a pair: the corpus grows, and pinned counts would fail on the next Correction."""
     census = op.census(corpus)
     flagged = sum(row["candidates"] for row in census.values())
     off = sum(row["off_policy"] for row in census.values())
@@ -251,9 +183,6 @@ def test_the_dependency_test_kept_more_than_half_the_flagged_frames(corpus):
 
 @pytest.mark.req("REQ-OFFPOLICY-0007")
 def test_every_ruling_names_a_real_frame_and_carries_a_reason(corpus):
-    """An orphaned entry rules on nothing, and a bare verdict is indistinguishable from a frame
-    nobody looked at — the same two defects `gates.print_ruling_readout` surfaces for the other
-    ledger. Checked here because a re-keyed or deleted Correction is exactly how one appears."""
     live = {op.ruling_key(c) for c in corpus}
     orphans = sorted(k for k in op.RULINGS if k not in live)
     assert not orphans, f"{orphans} rule on no committed Correction — re-key or delete them"
@@ -265,9 +194,6 @@ def test_every_ruling_names_a_real_frame_and_carries_a_reason(corpus):
 
 @pytest.mark.req("REQ-OFFPOLICY-0007")
 def test_a_ruling_only_ever_addresses_a_FOLLOW_UP_frame(corpus):
-    """Nothing "opened" a MAIN decision, so the doctrine cannot speak about one. Extending it to
-    MAIN → MAIN within a turn is a generalisation the developer has NOT ruled on — `composer_lab`
-    reports that count and deliberately never filters on it."""
     by_key = {op.ruling_key(c): c for c in corpus}
     main = sorted(k for k in op.RULINGS if k in by_key and not op.is_follow_up(by_key[k]))
     assert not main, f"{main} rule a MAIN decision, which no earlier play opened"
@@ -278,9 +204,6 @@ def test_a_ruling_only_ever_addresses_a_FOLLOW_UP_frame(corpus):
 
 @pytest.mark.req("REQ-OFFPOLICY-0008")
 def test_the_gate_join_resolves_to_real_frame_keys():
-    """`gates.off_policy_frames` joins the ledger onto the **Frame Key** both gates speak. The
-    ledger addresses one Anchor frame of one game; ADR-0049's identity folds scope and subject, so
-    the join is a real translation and an empty result would be a silent no-op."""
     from train.gates import off_policy_frames
 
     joined = off_policy_frames()
@@ -291,15 +214,8 @@ def test_the_gate_join_resolves_to_real_frame_keys():
 
 @pytest.mark.req("REQ-OFFPOLICY-0008")
 def test_neither_gate_verdict_consults_the_off_policy_set():
-    """Issue #412 decision 3, ruled 2026-08-06: **flag and warn, never drop.**
-
-    A baseline is a RULING RECORD (`CLAUDE.md`) and both gates already refuse to auto-recapture one,
-    so silently shrinking the gated set is the same class of act as auto-recapture — it makes a gate
-    weaker without anyone ruling that it should be. The identical argument Issue #251 settled for
-    the **Unstatable Decline**.
-
-    Asserted structurally, because "does the verdict consult it" cannot be seen in a count and the
-    tempting edit is one line inside either verdict function."""
+    """Issue #412 decision 3: flag and warn, never drop. Asserted structurally, because "does the
+    verdict consult it" cannot be seen in a count."""
     import inspect
 
     from train import gates
@@ -312,10 +228,6 @@ def test_neither_gate_verdict_consults_the_off_policy_set():
 
 @pytest.mark.req("REQ-OFFPOLICY-0008")
 def test_the_readout_is_silent_at_zero_and_names_only_the_frames_that_MOVED(capsys):
-    """Two tiers, because they carry very different weight: the tally answers *how much of what this
-    gate graded stands on a board the agent should not have reached*, while the named list is the
-    subset an operator must act on. A section naming every frame on every push to `main` becomes
-    wallpaper — the failure mode `print_ruling_readout` documents for itself."""
     from train.gates import print_off_policy_readout
 
     ledger = {"ep|0|decision|9": "the search should not have been played",
@@ -339,24 +251,8 @@ def test_the_readout_is_silent_at_zero_and_names_only_the_frames_that_MOVED(caps
 
 @pytest.mark.req("REQ-OFFPOLICY-0008")
 def test_the_DISCRIMINATION_gate_has_no_off_policy_exposure_today_and_this_is_a_tripwire():
-    """The Discrimination Gate prints nothing, and that silence is **structural, not a broken join**.
-
-    Measured 2026-08-06: its committed baseline holds 268 scorable rows and the corpus resolves 267
-    of them to `SelectContext.MAIN` — the Leaf Lab grades the develop-rung leaf, and
-    `leaf_lab.is_leaf_frame` admits no follow-up select. Off-policy frames are non-MAIN by
-    construction, so the intersection is empty by shape rather than by accident. The Decision Gate,
-    which grades every context, prints `OFF-POLICY (15)`.
-
-    That is exactly the asymmetry `tools/train/CONTEXT.md` already records for the **Unstatable
-    Decline**, arrived at independently.
-
-    **This test is a TRIPWIRE, not a certificate.** *"Found nothing"* and *"my instrument is broken"*
-    return the same empty output (`CLAUDE.md`), and the wiring stays in `leaf_lab.py` precisely
-    because the leaf population could widen. If it ever admits a non-MAIN frame this fails, which is
-    the signal to check that the readout fires rather than to delete the assertion.
-
-    The POSITIVE CONTROL is the second half: the same join against the Decision Gate's baseline must
-    be non-empty, or the join itself is broken and the leaf reading means nothing."""
+    """The silence is structural: the leaf population is all MAIN and off-policy frames are non-MAIN.
+    A TRIPWIRE, not a certificate — if it fails, check the readout fires before deleting it."""
     import json
 
     from train.blunder.store import DEFAULT_ROOT, load_corrections
@@ -383,9 +279,6 @@ def test_the_DISCRIMINATION_gate_has_no_off_policy_exposure_today_and_this_is_a_
 
 @pytest.mark.req("REQ-OFFPOLICY-0008")
 def test_a_moved_key_that_is_not_off_policy_is_never_named(capsys):
-    """`moved` is the gate's whole fail-direction list, so the printer must intersect it with the
-    ledger rather than trusting it. Naming an ordinary regression as off-policy would excuse it in
-    the reader's mind — the opposite of what this section is for."""
     from train.gates import print_off_policy_readout
 
     print_off_policy_readout({"ep|0|decision|9": "ruled off-policy"},

@@ -1,46 +1,7 @@
-"""BASELINE cluster: ENERGY — what is LEFT of the Energy rungs after the attach decider (ADR-0069).
-
-The energy-attach decision is no longer a pile of tuned Hypotheses. Nineteen of the 23 rungs that
-used to live here were DELETED in the Phase-1a swap (#139): their logic is now stated arithmetic in
-`Pilot._attach_value` — the axes-sum marginal (attack axis + Retreat Equity + Ability Fuel −
-evaporation loss) that DECIDES every energy attach and every accel-recipient pick. They were not
-suppressed behind a flag; a weight coincidence that no longer exists cannot re-enter tuning.
-
-What each deleted family became — the fold map, kept here because this file is where a reader looks
-for a rung that is gone:
-
-  * concentrate / build-active / power-up / spread / concentrate-accel / feed-the-accelerator /
-    arm-the-doomed / advance-the-accel-pieces  ->  the ATTACK AXIS
-    (`max(this_turn, build, accel_value)`): tonight's counterfactual under the full Attach Budget,
-    typed convex build toward the line payoff, and the forward build an accelerator's routed Energy
-    buys. Concentrate falls out of convexity; arm-the-doomed out of the survival gate crediting ANY
-    attack tonight, not only the biggest.
-  * dont-waste-discard-energy / dont-attach-discard-energy-turn1 / conserve-burst-when-no-ko /
-    conserve-discard-energy-prefer-basic / prefer-reusable-over-burst  ->  the BURST discipline:
-    honest printed provision, the evaporation loss (an uncashed one-shot scores MINUS its worth, so
-    End beats torching an Ignition on turn 1), the no-KO cap against the best reusable Basic in hand,
-    and the resource tie-break.
-  * dont-fund-the-non-attacking-body / dont-power-the-draw-engine  ->  the BOARD-EVALUATED role
-    gate, which zeroes the ATTACK AXIS only (a role-gated body still banks mobility and fuel) and
-    only while a real attacker alternative is in play.
-  * dont-feed-the-doomed / dont-overbuild-the-doomed-wincon  ->  the SURVIVAL gate and its
-    evolution-escape (a doomed wincon-Line pre-evolution keeps build credit: Energy carries through
-    evolution, and a Mega evolving does not end the turn).
-  * dont-waste-off-type-energy  ->  EMERGENT. Build is a typed slot-fraction by the same matcher
-    reachability uses, so an Energy that fills no slot scores zero build — and a colourless slot
-    absorbs any type, which the old colourless-blind boolean could not see.
-  * fuel-the-dormant-ability  ->  the ABILITY FUEL channel, additive rather than a tie-break.
-  * attach-energy-last  ->  a decide()-only ORDERING deferral. Sequencing is structural in
-    `Pilot._finish_turn_last`'s tiers (free development 0 -> Supporter 1 -> ATTACH 2 -> hand-shuffle
-    3 -> turn-enders 4), so attach-late no longer costs an attach any SCORE — which is what let the
-    desperation floor stop depending on out-scoring a −5.
-
-What survives is STRUCTURE, not value — positional facts the marginal has no way to express. Each
-is held to an EXECUTABLE band constraint asserted in `tests/strategy/test_attach_bands.py`: a
-positional prior may break a tie, never override one real build step.
-
-NO Pilot Mixin — the valuation half of energy lives in the Pilot per ADR-0016.
-"""
+"""BASELINE cluster: ENERGY — what is LEFT after the attach decider (ADR-0069). Nineteen of 23 rungs
+were DELETED into `Pilot._attach_value`'s marginal; fold map in `tools/rung_registry.py`. What
+survives is STRUCTURE, not value, each held to an executable band in `test_attach_bands.py`: a
+positional prior may break a tie, never override one real build step. No Pilot Mixin (ADR-0016)."""
 from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACKER_ROLES, _PLAY
 from common.strategy.strategy import Hypothesis
 

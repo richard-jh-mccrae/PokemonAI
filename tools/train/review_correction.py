@@ -4,23 +4,14 @@
     python tools/train/review_correction.py --list
     python tools/train/review_correction.py --remove <locator>
 
-``disposition`` is one of: refuted (a bad correction — e.g. it forgoes a Knock Out; also dropped
-from the weight fit), deferred (an evidenced capability-gap ONLY — the fix is a designed-but-unbuilt
-roadmap layer, with a fixture + docs/todo definition-of-done; a missing signal is built, not
-deferred), covered (already handled by an existing rule). Edits ``data/corrections/reviewed.json``
-in place, preserving the ``_note`` and existing entries. See ``tools/train/blunder/reviewed.py``.
+``disposition`` is one of: refuted (a bad correction; also dropped from the weight fit), deferred
+(an evidenced capability-gap ONLY — a missing signal is built, not deferred), covered (already
+handled by an existing rule). Edits ``data/corrections/reviewed.json`` in place, preserving the
+``_note`` and existing entries.
 
-**A locator is RESOLVED against the corpus, never taken as the key** (ADR-0090, Issue #250).
-Give it any of the four spellings `reviewed.resolve_locator` accepts — the canonical `review_key`,
-the **Frame Key**, the ``Correction.id``, or the Anchor form the reports print — and the *canonical*
-key is what gets written. A locator matching no committed Correction is REFUSED, non-zero, with
-near-miss candidates; nothing is written.
-
-That guard exists because this tool used to take the key as free text and check it against nothing,
-which put two human rulings into the ledger ruling on **nothing**: `85046350-10` (wrong episode —
-the record is ep 85045840 f10) and `86091435-119` (wrong key shape — the record is turn-scoped, so
-its key is `86091435-t14s0`). The second was copied verbatim off a report that printed the Anchor
-frame for every scope; that report now prints the ledger key, so the two surfaces agree.
+**A locator is RESOLVED against the corpus, never taken as the key** (ADR-0090, Issue #250): any of
+the four spellings `reviewed.resolve_locator` accepts is fine, the *canonical* key is written, and a
+locator matching no committed Correction is REFUSED non-zero with near-miss candidates.
 """
 from __future__ import annotations
 
@@ -42,9 +33,7 @@ def _load_raw(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
-#: Shared by the positional and by ``--remove``, so the two can never document different vocabularies
-#: — which is the drift that produced this build (the ledger accepted three ADR-0049 key shapes while
-#: the writer's help named one).
+#: Shared by the positional and by ``--remove``, so the two cannot document different vocabularies.
 _LOCATOR_HELP = ("how to find the Correction — any of: its ledger key ('86091435-t14s0'), its "
                  "Frame Key ('86091435|0|turn|14'), its Correction id ('948537a24fb2'), or the "
                  "Anchor form the reports print ('86091435-119'). Resolved to the canonical "
@@ -52,14 +41,8 @@ _LOCATOR_HELP = ("how to find the Correction — any of: its ledger key ('860914
 
 
 def _resolve_or_report(locator: str, store, *, quiet: bool = False) -> str | None:
-    """The canonical ledger key ``locator`` names, or None — printing the refusal on the way out
-    unless ``quiet`` (``--remove``, which has a legitimate ledger-key fallback and must not announce
-    a failure it is about to recover from).
-
-    The corpus is loaded HERE rather than at import, so `--list` never pays for it, and it is loaded
-    through `gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1) — so this tool can
-    never become the thirteenth thing with its own idea of what a record is.
-    """
+    """``quiet`` is for ``--remove``, which has a ledger-key fallback and must not announce a failure
+    it is about to recover from. The corpus loads HERE, so `--list` never pays for it."""
     from train.gates import keyed_corrections
 
     keyed = keyed_corrections(store)
@@ -77,22 +60,8 @@ def _resolve_or_report(locator: str, store, *, quiet: bool = False) -> str | Non
 
 
 def _save(path: Path, data: dict) -> None:
-    """Write the ledger as UTF-8 bytes, **framed with the line ending the file already uses**.
-
-    `Path.write_text` frames newlines per the WRITING platform, so one ruling edit emitted LF from
-    Linux and CRLF from Windows and the loser re-serialised the whole file. The committed ledger is
-    CRLF, so recording the wave-3 verdicts from Linux turned a four-entry ruling change into a
-    726-line rewrite (measured 2026-08-02, Issue #262) — burying the only thing a reviewer of a
-    ruling edit needs to see, and taking `git blame` on every standing ruling with it.
-
-    `gates.write_json_artifact` fixed exactly this defect for the two gate baselines and states the
-    reason at length; this writer was missed. It deliberately does not *share* that function: the
-    baselines are LF and ASCII-escaped, while this ledger is CRLF and `ensure_ascii=False` because
-    its reasons carry real em dashes — routing it through the artifact writer would escape every one
-    of them and rewrite the file it is trying to leave alone.
-
-    A ledger that does not exist yet is written LF: new files should not inherit a framing from
-    whichever platform happened to create them."""
+    """Framed with the line ending the file ALREADY uses (a new one gets LF): the ledger is CRLF, and
+    `Path.write_text` frames per the writing platform, so a four-entry edit rewrites the whole file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     newline = b"\r\n" if path.exists() and b"\r\n" in path.read_bytes() else b"\n"
     body = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
@@ -128,8 +97,8 @@ def main(argv=None) -> int:
     path = Path(args.path)
     data = _load_raw(path)
 
-    # BEFORE the corpus load: `--list` prints the ledger's literal contents and is the audit surface
-    # for the file itself, so it must stay instant and must not need a corpus to exist.
+    # BEFORE the corpus load: `--list` is the audit surface for the file itself, so it must stay
+    # instant and must not need a corpus to exist.
     if args.list:
         for k, v in data.items():
             if not k.startswith("_"):
@@ -145,11 +114,8 @@ def main(argv=None) -> int:
         ap.error("--supersede requires a non-empty reason")
 
     if args.remove:
-        # Removal is an operation on the LEDGER, so the ledger's own keys are a legitimate second
-        # source for it — and a necessary one. Resolving `--remove` against the corpus alone made the
-        # one entry that most needs deleting, an ORPHAN, un-deletable: no Correction resolves it, by
-        # definition. Resolution still wins where it succeeds (that is what makes the Anchor form
-        # work); the literal key is only the fallback.
+        # The ledger's own keys are a necessary fallback: an ORPHAN entry resolves to no Correction
+        # by definition, so corpus-only resolution makes the entry that most needs deleting undeletable.
         key = _resolve_or_report(locator, args.store, quiet=True) or locator
         if data.pop(key, None) is None:
             print(f"no ledger entry for {key}"

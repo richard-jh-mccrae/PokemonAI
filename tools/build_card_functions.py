@@ -1,20 +1,13 @@
 """Build the shipped card-function-tag table (see docs/card-functions.md).
 
-Probes every Trainer (Items / Supporters / Stadiums / Tools) in the engine to derive
-behavioral tags, merges static + curated-override tags, and writes ``{cardId: [tags]}`` to
-``common/card_functions.json``. Lib-using (drives the engine) — run offline, deliberately,
-like ``dump_cards.py`` / ``build_scouting_artifact.py``. The pure assembly
-(``build_function_table``) and the probe helpers are unit-tested; this orchestration is
-validated by running.
+Probes every Trainer in the engine to derive behavioral tags, merges static + curated-override
+tags, and writes ``{cardId: [tags]}`` to ``common/card_functions.json``. Lib-using — run offline.
 
-Re-runs **accumulate** by default: each (stochastic) build unions into the existing table so a
-tag once observed is never lost and successive runs only improve coverage of the rng-gated tags
-(recycle/energy_denial/heal/energy_accel). Use ``--fresh`` to rebuild from scratch (e.g. after
-changing ``classify_functions`` rules, to drop stale tags).
+Re-runs ACCUMULATE by default: a tag once observed is never lost, so successive stochastic runs
+only improve coverage of the rng-gated tags. ``--fresh`` rebuilds from scratch.
 
 Usage:
-    python tools/build_card_functions.py [--out PATH] [--limit N] [--overrides PATH] [--fresh]
-"""
+    python tools/build_card_functions.py [--out PATH] [--limit N] [--overrides PATH] [--fresh]"""
 from __future__ import annotations
 
 import argparse
@@ -56,12 +49,8 @@ def _merge_into(probes: dict[int, dict], more: dict[int, dict]) -> None:
 
 
 def probe_trainers(cards: dict, *, limit: int | None = None, log=print) -> dict[int, dict]:
-    """Probe each Trainer under stable, controlled-combat, *and* attrition scenarios; union them.
-
-    Stable captures draw/search/dig/gust/switch/energy_accel/hand_disruption; combat (opponent
-    chips my sturdy board) captures heal; attrition (opponent KOs my frail board) captures
-    recycle/energy_denial. Several games per card — the latter two align in only ~1-in-N.
-    """
+    """Probe each Trainer under stable, controlled-combat and attrition scenarios; union them. Combat
+    captures heal, attrition captures recycle/energy_denial — the latter two align in only ~1-in-N."""
     ids = [c for c in sorted(cards) if cards[c].get("category") in _TRAINER_CATS]
     if limit:
         ids = ids[:limit]
@@ -112,11 +101,8 @@ def probe_pokemon_ability_pool(cards: dict, *, limit: int | None = None, log=pri
 
 
 def probe_evolution_pool(cards: dict, *, limit: int | None = None, log=print) -> dict[int, dict]:
-    """Probe each Stage 1/2 Pokémon (evolve up its line) → ``{cardId: record}``.
-
-    Captures the evolved Pokémon's Ability and its *costliest* attack — this is what unlocks
-    ``spread`` (Dragapult class) plus evolved `status`/`draw`/`energy_accel`/`dig`/`search`.
-    """
+    """Probe each Stage 1/2 Pokémon (evolve up its line) → ``{cardId: record}``, capturing its Ability
+    and its COSTLIEST attack."""
     ids = [c for c in sorted(cards) if cards[c].get("category") == "pokemon"
            and cards[c].get("stage") in ("stage1", "stage2")]
     if limit:
@@ -140,15 +126,8 @@ def _load_overrides(path) -> dict[int, list[str]]:
 
 
 def _load_table(path) -> dict[int, list[str]]:
-    """The previously-shipped ``{cardId: tags}`` table, to accumulate into (empty if none).
-
-    Reserved keys are SKIPPED rather than `int()`-ed (Issue #395 D6.5). Both this and
-    `CardFunctions.__init__` used to walk every key unconditionally, so the store had no capacity for
-    a `_note` or a provenance block the way its two siblings (`function_overrides.json`,
-    `card_effects.json`) already do — a hard ceiling on extensibility that costs one predicate to
-    lift. The predicate is `card_tags.is_card_key`, the same one `snapshot_coverage` states for the
-    effects family, because *a reader that rolls its own `int(k)` walk is the one that trips on the
-    next reserved key somebody adds*."""
+    """The previously-shipped ``{cardId: tags}`` table, to accumulate into (empty if none). Reserved
+    keys are SKIPPED rather than `int()`-ed, via `card_tags.is_card_key` (Issue #395 D6.5)."""
     p = Path(path)
     if p.exists():
         return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()
@@ -157,25 +136,8 @@ def _load_table(path) -> dict[int, list[str]]:
 
 
 def shipped_bytes(table: dict[int, list[str]]) -> bytes:
-    """The shipped store's EXACT bytes for ``table`` — the one writer, so the format is a fact rather
-    than a habit (Issue #395 D6.4).
-
-    Two things it fixes, and the second is what makes the first worth anything:
-
-    * **Binary write.** `Path.write_text` rewrites LF to CRLF on Windows, and this repo builds on
-      Windows and grades on Linux. `tools/build_card_effects.py` already writes its sibling store
-      this way for exactly that reason. The `.gitattributes` default is `* text=auto`, so this store
-      normalises on commit and the CI line-ending guard cannot see the churn (cf. ADR-0116) — the
-      damage is a whole-file diff on a committed artifact, not a red test.
-    * **One canonical format.** The shipped store was `indent=1` and STRING-sorted while this writer
-      emitted `indent=0` and INT-sorted, so the very next rebuild reformatted all 275 entries and a
-      real change would have been one line hidden in a 275-line diff. Fixing the line endings while
-      leaving that in place would have been a fix to a smaller version of the same defect. The store
-      is re-emitted through this function in the same commit, and
-      `test_card_functions_oracle.py` asserts the committed bytes still match it.
-
-    `indent=0` and int-sorted are the sibling's format (`build_card_effects.py`), which is why they
-    are the ones kept."""
+    """The shipped store's EXACT bytes for ``table`` — the one writer (Issue #395 D6.4). Binary write
+    (`write_text` CRLFs on Windows), `indent=0`, int-sorted: `build_card_effects.py`'s format."""
     payload = {str(cid): tags for cid, tags in sorted(table.items())}
     return json.dumps(payload, ensure_ascii=False, indent=0).encode("utf-8")
 

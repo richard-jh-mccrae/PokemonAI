@@ -44,9 +44,8 @@ def _select_current(obs):
 @pytest.mark.req("REQ-CGPY-M3-0001")
 @pytest.mark.parametrize("path", TRACES, ids=lambda p: p.name.split(".")[0])
 def test_seeded_states_rerender_the_recorded_obs_and_step(path):
-    """Every seedable recorded select re-renders select+current byte-exactly and accepts
-    the recorded choice. Non-seedable frames must be rejected with a diagnosable error,
-    never mis-seeded (the fail-loud contract)."""
+    """Byte-exact re-render, and the recorded choice is accepted. A non-seedable frame must be
+    REJECTED with a diagnosable error, never mis-seeded."""
     tr = Trace.load(path)
     seeded = 0
     for k, fr in enumerate(tr.frames):
@@ -201,9 +200,8 @@ def test_sessions_clone_per_step_and_native_error_strings():
 
 @pytest.mark.req("REQ-CGPY-M3-0005")
 def test_state_from_visualize_god_seeding():
-    """God-view seeding: with the paired select, the render matches the recorded obs
-    exactly; without one, the engine REBUILDS the MAIN menu and it must equal the recorded
-    option list (the option builder is the parity-owned surface)."""
+    """With the paired select the render matches the recorded obs exactly; without one the engine
+    REBUILDS the MAIN menu, and the option builder is the parity-owned surface."""
     tr = Trace.load(FIXDIR / "ms_mirror_1000.trace.json.gz")
     decks = tr.decks
     checked = 0
@@ -265,9 +263,8 @@ def test_compat_api_search_flow():
 
 @pytest.mark.req("REQ-CGPY-M3-0007")
 def test_mid_effect_trainer_seeding():
-    """A select posed by a trainer's own program (the fetch class correction fixtures
-    capture) seeds without a token: the frame is reconstructed from the effect card and
-    the recorded pick applies. Ambiguous/unsupported mid-effect states raise."""
+    """A select posed by a trainer's own program seeds without a token, reconstructed from the
+    effect card. Ambiguous/unsupported mid-effect states RAISE."""
     seeded = 0
     for path in TRACES:
         tr = Trace.load(path)

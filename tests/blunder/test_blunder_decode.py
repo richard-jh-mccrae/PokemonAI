@@ -13,9 +13,8 @@ def _frame(ctx):
 
 
 def test_main_option_labels_resolve_against_board():
-    """REQ-BLUNDER-0008: Main options render readable labels (Play/Attach/End),
-    resolving cards by (area, index) position in the full-info board. The Attach
-    target carries its disambiguating board descriptor (slot + current/max HP)."""
+    """Cards resolve by (area, index) position in the full-info board; the Attach target carries
+    its disambiguating board descriptor (slot + current/max HP)."""
     d = _frame("Main")              # opts: Play, Play, Play, Attach, End
     labels = [option_label(o, d.current) for o in d.options]
     assert labels[-1] == "End turn"

@@ -1,7 +1,7 @@
 """The Pilot's ENERGY-CARD signals — the reads the attach decider's burst discipline stands on.
 
 The five `discard_eot` rungs this file used to pin (`dont-waste-discard-energy` and its family) are
-DELETED (#139, ADR-0069 §7). Their behaviour now lives in the decider's equation — honest printed
+DELETED (Issue #139, ADR-0069 §7). Their behaviour now lives in the decider's equation — honest printed
 provision, the evaporation loss, the no-KO cap, the resource tie-break — and is pinned as BEHAVIOUR
 in `test_attach_decider.py`, at the decision seam rather than on a rung's `when()`.
 
@@ -37,9 +37,8 @@ def test_reusable_energy_detection_excludes_trainers_and_discard_energy():
 
 
 def test_the_burst_caps_conservation_alternative_is_the_same_predicate():
-    """REQ-ATTACH-DECIDER-0014's cap compares against a specific card, while the board fact is a
-    boolean. If the two could disagree the cap would fire with no alternative to fall back on, so
-    they must answer the same question: exists <-> which one."""
+    """The cap compares against a specific card while the board fact is a boolean; if they disagreed
+    the cap would fire with no alternative to fall back on. exists <-> which one."""
     p = _pilot()
     obs = {"current": {"yourIndex": 0,
                        "players": [{"hand": [{"id": 17}, {"id": 1182}, {"id": 666}]}]}}

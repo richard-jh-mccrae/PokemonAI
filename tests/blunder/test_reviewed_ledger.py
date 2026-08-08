@@ -28,9 +28,8 @@ class _Corr:
 
 
 def _keyed(*corrs):
-    """`keyed_corrections()`'s shape — ``[(Frame Key, Correction), ...]`` — from stubs. The Frame
-    Key is spelled out rather than derived, so these tests never depend on `gates` (the layering
-    `resolve_locator`'s injected-corpus signature exists to protect)."""
+    """`keyed_corrections()`'s shape — ``[(Frame Key, Correction), ...]``. The key is spelled out
+    rather than derived, so these tests never depend on `gates`."""
     return [(f"{c.episode_id}|{c.seat}|{c.scope}|{c.subject}", c) for c in corrs]
 
 
@@ -73,14 +72,7 @@ def test_partition_splits_active_from_dispositioned():
 
 
 # ── the Ruling Locator (ADR-0090, Issue #250) ─────────────────────────────────────────────────
-#
-# Both orphans `gates.orphan_rulings` found named LIVE committed records under the wrong name:
-# `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10), `86091435-119` the wrong key
-# SHAPE (the record is turn-scoped, so its `review_key` is `86091435-t14s0` — 119 is the Anchor
-# frame the report printed). Neither was stale. A hand-typed ledger key IS a hand-built key.
-#
-# Stub-driven and corpus-free by design: `resolve_locator` takes the corpus as an ARGUMENT, so its
-# tests need no JSONL on disk. That is decision 5's injected-corpus signature paying for itself.
+# Stub-driven and corpus-free by design: `resolve_locator` takes the corpus as an ARGUMENT.
 
 _TURN = _Corr(86091435, 119, scope="turn", subject=14, id="948537a24fb2")     # the real orphan 2
 _DEC = _Corr(85045840, 10, id="d374430e9bc7")                                # the real orphan 1
@@ -88,9 +80,7 @@ _DEC = _Corr(85045840, 10, id="d374430e9bc7")                                # t
 
 @pytest.mark.req("REQ-TUNE-0035")
 def test_every_locator_form_resolves_to_the_one_canonical_review_key():
-    """Four ways to name a record, ONE key written. The operator supplies a way to FIND the record;
-    the key is still derived from it (ADR-0087 decision 2) — a locator is that rule applied to the
-    writer, not a relaxation of it."""
+    """Four ways to name a record, ONE key written: the key is still DERIVED (ADR-0087)."""
     keyed = _keyed(_TURN, _DEC)
     for locator in ("86091435-t14s0",              # the canonical review_key
                     "86091435|0|turn|14",          # the Frame Key, as a gate readout prints it
@@ -121,9 +111,8 @@ def test_an_unknown_locator_resolves_to_nothing():
 
 @pytest.mark.req("REQ-TUNE-0035")
 def test_the_canonical_key_outranks_a_colliding_anchor_form():
-    """A string that is simultaneously one record's `review_key` and a DIFFERENT record's anchor
-    form resolves to the key. Contrived, but the ranking must be decided somewhere, and resolving to
-    the anchor would silently re-point a ruling at a record the operator did not name."""
+    """Resolving to the anchor would silently re-point a ruling at a record the operator did not
+    name, so the ranking has to be decided somewhere."""
     ruled = _Corr(7, 3)                                                  # review_key "7-3"
     anchored = _Corr(7, 3, scope="turn", subject=99)                     # anchor form ALSO "7-3"
     assert resolve_locator("7-3", _keyed(ruled, anchored)) == "7-3"
@@ -139,28 +128,16 @@ def test_a_near_miss_names_the_same_frame_under_a_different_episode():
 
 @pytest.mark.req("REQ-TUNE-0036")
 def test_a_near_miss_names_the_episodes_own_rulings_when_the_subject_is_unknown():
-    """Rule 2 — the generalised anchor↔Scope-subject case. Orphan 2's LITERAL spelling
-    (`86091435-119`) now *resolves* via the anchor form rather than being suggested, which is that
-    rule succeeding instead of guessing; what remains for it to catch is a locator naming a known
-    episode and an unknown subject."""
+    """Rule 2 — the generalised anchor/Scope-subject case: what remains for it to catch is a
+    locator naming a KNOWN episode and an unknown subject."""
     keyed = _keyed(_TURN, _DEC, _Corr(86091435, 60))
     assert near_misses("86091435-120", keyed) == ["86091435-60", "86091435-t14s0"]
 
 
 @pytest.mark.req("REQ-TUNE-0036")
 def test_the_two_near_miss_rules_UNION_and_the_operators_own_episode_leads():
-    """The rules must never suppress each other, and the episode the operator got RIGHT is the
-    stronger signal.
-
-    Found by review, reproduced on the real corpus: with the rules as a fallback chain
-    (``same_frame or same_episode``), `near_misses("86091435-120")` returned
-    ``['82753102-120', '83667237-120']`` — two UNRELATED episodes that happen to carry a frame 120 —
-    while all eleven rulings in the operator's OWN episode were suppressed. Confident, wrong, and
-    hiding the right candidate: precisely the failure the no-fuzzy-matching rule exists to prevent,
-    arrived at from the other direction.
-
-    The stub that first covered rule 2 passed only because its corpus had no other episode carrying
-    that frame, i.e. the setup guaranteed the result. This one supplies exactly that other episode."""
+    """As a fallback chain (``same_frame or same_episode``) the rules suppress each other, and
+    unrelated episodes carrying the same frame number outrank the operator's own."""
     keyed = _keyed(_TURN, _DEC, _Corr(86091435, 60), _Corr(82753102, 120), _Corr(83667237, 120))
     assert near_misses("86091435-120", keyed) == [
         "86091435-60", "86091435-t14s0",          # the operator's OWN episode, first
@@ -170,9 +147,8 @@ def test_the_two_near_miss_rules_UNION_and_the_operators_own_episode_leads():
 
 @pytest.mark.req("REQ-TUNE-0036")
 def test_a_near_miss_is_silent_rather_than_wrong():
-    """No edit distance, no fuzzy matching. A confident wrong suggestion points at SOMEONE ELSE's
-    human ruling, and the entry it produces would be correctly-formed and therefore invisible to
-    `gates.orphan_rulings` — strictly worse than saying nothing."""
+    """No edit distance, no fuzzy matching: a wrong suggestion produces a correctly-formed entry
+    pointing at SOMEONE ELSE's ruling, which `gates.orphan_rulings` can no longer see."""
     keyed = _keyed(_TURN, _DEC)
     assert near_misses("99999999-42", keyed) == []          # unknown episode AND unknown frame
     assert near_misses("nonsense", keyed) == []
@@ -207,15 +183,8 @@ def test_cli_records_lists_and_removes(tmp_path, capsys):
 
 @pytest.mark.req("REQ-TUNE-0033")
 def test_the_writer_PRESERVES_the_ledgers_own_line_ending(tmp_path):
-    """A ruling edit must move the ruled lines and nothing else.
-
-    `Path.write_text` frames newlines per the WRITING platform, so the same one-entry edit emitted LF
-    on Linux and CRLF on Windows. The committed ledger is CRLF (the two gate baselines are LF), so a
-    Linux edit re-serialised all 726 lines and buried a two-line ruling change in a whole-file diff —
-    measured 2026-08-02 recording the wave-3 verdicts (Issue #262). `gates.write_json_artifact` was
-    fixed for the same defect on the baselines; this writer was missed, and it cannot simply share
-    that one: the ledger is `ensure_ascii=False` (its reasons carry real em dashes) and newline
-    terminated, so re-serialising it through the artifact writer would escape every one of them."""
+    """`Path.write_text` frames newlines per the WRITING platform; the committed ledger is CRLF.
+    It cannot share `gates.write_json_artifact` — the ledger is `ensure_ascii=False`."""
     p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
     assert cli(["81904451-37", "refuted", "a", "--path", str(p), "--store", str(store)]) == 0
     p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))     # make it a CRLF store, as committed
@@ -280,13 +249,8 @@ def test_cli_remove_resolves_a_locator_too(tmp_path):
 
 @pytest.mark.req("REQ-TUNE-0035")
 def test_cli_remove_can_still_delete_an_ORPHANED_entry(tmp_path):
-    """Found by review. Resolving `--remove` against the corpus made the one entry that most needs
-    deleting — an ORPHAN, the thing `gates.orphan_rulings` exists to surface — un-deletable, because
-    by definition no Correction resolves it.
-
-    Removal is an operation on the LEDGER, so the ledger's own keys are a legitimate second source
-    for it. Resolution still wins when it succeeds (that is what makes the Anchor form work); the
-    literal key is the fallback, not the other way round."""
+    """Removal is an operation on the LEDGER, so its own keys are a legitimate second source;
+    resolution still wins when it succeeds, and the literal key is only the fallback."""
     p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
     p.write_text(json.dumps({"85046350-10": {"disposition": "covered", "reason": "", "round": "x"}}),
                  encoding="utf-8")
@@ -296,9 +260,8 @@ def test_cli_remove_can_still_delete_an_ORPHANED_entry(tmp_path):
 
 @pytest.mark.req("REQ-TUNE-0035")
 def test_cli_still_refuses_to_RECORD_under_an_unresolvable_key(tmp_path):
-    """The ledger-key fallback is scoped to `--remove` alone. Recording must never accept a key the
-    corpus cannot reach, or the whole guard is back to free text — including the case where the
-    operator is 'correcting' an existing orphan in place."""
+    """The ledger-key fallback is scoped to `--remove` alone: recording under a key the corpus
+    cannot reach puts the whole guard back to free text."""
     p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
     p.write_text(json.dumps({"85046350-10": {"disposition": "covered", "reason": "", "round": "x"}}),
                  encoding="utf-8")

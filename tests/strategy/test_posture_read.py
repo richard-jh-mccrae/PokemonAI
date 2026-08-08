@@ -1,9 +1,4 @@
-"""M2.0 — wire the Read onto the Board (Posture-OFF).
-
-The Pilot senses the opponent via an injected Scout and surfaces the Read on its public
-`explain()` output, without changing any decision yet (nothing scores off it — that's M2.1b).
-See ADR-0026 (the wiring staircase) and docs/scouting.md (the Read).
-"""
+"""The Read on the Board, and the Posture levers that consume it (ADR-0026, docs/scouting.md)."""
 import pytest
 
 from common.cards import CardFunctions
@@ -38,7 +33,6 @@ def _pilot(scout=None, my_archetype=None, briefs=None, posture=True):
 
 
 def _obs_facing_mega_lucario():
-    """A MAIN-phase menu where the opponent's board reveals the Mega Lucario ex line."""
     me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
           "hand": [{"id": 1}], "discard": [], "prize": []}
     opp = {"active": [{"id": MEGA_LUCARIO, "energies": [], "hp": 0}],
@@ -51,7 +45,6 @@ def _obs_facing_mega_lucario():
 
 
 def _obs_two_option_menu():
-    """A 2-option MAIN menu vs the recognized Mega Lucario ex board (ordering can matter)."""
     obs = _obs_facing_mega_lucario()
     obs["current"]["players"][0]["hand"] = [{"id": 1}, {"id": 2}]
     obs["select"]["option"] = [{"type": PLAY, "index": 0}, {"type": PLAY, "index": 1}]
@@ -77,7 +70,6 @@ def test_wiring_a_scout_changes_no_decision_or_score():
 
 
 def _obs_early_unknown():
-    """Early game: the opponent has revealed nothing diagnostic (empty board)."""
     me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
           "hand": [{"id": 1}], "discard": [], "prize": []}
     opp = {"active": [], "bench": [], "discard": [], "prize": []}
@@ -149,9 +141,6 @@ def _snipe_pilot(stats):
 
 @pytest.mark.req("REQ-POSTURE-0003")
 def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
-    # Benched Riolu's generic threat rank is its forward-evolution damage (Mega Lucario ex 270). When
-    # Read CONFIRMS that line (on an evolution_path) rank is unchanged; when a recognized
-    # archetype runs NO such line, lever C suppresses the forward signal (γ-scaled); unknown -> generic
     stats = DictCardStatProvider({
         SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", maxDamage=120, attacks=(11,)),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
@@ -183,14 +172,8 @@ F_ENERGY = 6      # Basic {F} Energy — the CARD ID (EN_Card_Data.csv: `6,Basic
 def _unfavored_pilot(win_rate, funcs):
     art = tiny_artifact()
     art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
-    # Mega Lucario ex with an affordable attack (Aura Jab {F} 130) so `opp_active_can_damage_us` sees a
-    # real threat at its 1 Energy — the energy-denial gate needs the opp to be able to hurt us, and an
-    # empty stat provider would mask that (2026-07-09).
-    #
-    # Aura Jab's cost is TYPED, and saying so records a card fact rather than inventing one:
-    # `data/EN_Card_Data.csv` row 678 reads `Mega Lucario ex,…,{F},…,Aura Jab,{F},130`. The typed cost
-    # plus the Basic {F} the body actually holds are what let Deny Relevance (armed below) read this
-    # board at all — untyped, every strip here scores 0 and Lever A would have nothing to scale.
+    # Aura Jab's cost is typed {F} (`EN_Card_Data.csv` row 678) and the body holds a Basic {F}:
+    # untyped, every strip here scores 0 and Lever A would have nothing to scale.
     stats = DictCardStatProvider({
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True,
                                attacks=(11,), energyType=FIGHTING),
@@ -198,21 +181,15 @@ def _unfavored_pilot(win_rate, funcs):
     }, attacks={11: AttackStat(11, damage=130, cost=1, energyTypes=(FIGHTING,))})
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,
-                 # Armed EXPLICITLY: OFF is documented DEGRADED MODE since Issue #228 deleted the
-                 # ADR-0062 magnitude oracle — every deny surface stands down, so a Lever A claim
-                 # stated OFF would be a claim about nothing. Set here rather than inherited from
-                 # PROFILE so these tests keep meaning the same thing whichever way the flag ships
-                 # (guarding the shipped value is `test_runtime`'s job). `deny_strip_delta` stays off:
-                 # it only orders a DISCARD_ENERGY target pick, and this menu has none.
+                 # Armed explicitly (Issue #228): OFF is degraded mode — every deny surface stands
+                 # down, so a Lever A claim stated OFF would be a claim about nothing.
                  deny_relevance=True,
                  functions=funcs, scout=Scout(art))
 
 
 def _obs_hammer_vs_energized_mega_lucario():
-    # `energies` holds attached Energy CARD IDS, resolved to their type through the Stat Provider
-    # (`combat.attached_type_counts`) — so a Basic {F} is card 6, and it is the only Energy that can
-    # pay Aura Jab's {F}. The old board attached card id 1 (Basic {G}), which the provider did not
-    # know and which could not have paid the cost the same fixture claims makes this body a threat.
+    # `energies` holds Energy CARD IDS, typed through the Stat Provider: a Basic {F} is card 6, the
+    # only Energy that can pay Aura Jab's {F}.
     me = {"active": [{"id": 1, "energies": [], "hp": 100}], "bench": [],
           "hand": [{"id": HAMMER}], "discard": [], "prize": []}
     opp = {"active": [{"id": MEGA_LUCARIO, "energies": [F_ENERGY], "hp": 200}],
@@ -224,34 +201,8 @@ def _obs_hammer_vs_energized_mega_lucario():
 
 @pytest.mark.req("REQ-POSTURE-0004")
 def test_lever_a_boosts_useful_disruption_when_unfavored():
-    """Lever A still up-weights a USEFUL energy denial when the Read says the race is lost — but it
-    now does so by SCALING the priced denial oracle, not by adding a flat rung beside it (ADR-0063).
-
-    The rung `disrupt-when-unfavored` used to carry the `energy_denial` half and was retired: after
-    ADR-0062 made denial a signed tactical, a flat +18 riding the coarse `opp_denial_best > 0` gate
-    could OVERRIDE the oracle's own hold and play a Hammer into a KO turn (ms 83968638 f17, CRITICAL).
-    So the assertion moves off "which rung fired" and onto the thing that actually matters: an
-    unfavored Read must make a real strip score strictly MORE.
-
-    Stated against DENY RELEVANCE since Issue #228 (armed in `_unfavored_pilot`), the ADR-0062
-    magnitude instrument this used to score on having been deleted. Lever A survived deny's move by
-    re-expression rather than retirement (ADR-0080 Amendment B), and the property is scale-invariant,
-    so the assertion below reads verbatim as it did against the magnitude.
-
-    An earlier revision of this docstring held that arming the fixture "would mean inventing a typed
-    cost". That was wrong on the facts, and the objection is withdrawn: this body IS Mega Lucario ex
-    (`scouting_helpers.MEGA_LUCARIO` == the real card id 678) and `data/EN_Card_Data.csv` prints Aura
-    Jab's cost as `{F}` — writing `energyTypes=(FIGHTING,)` RECORDS that fact where the fixture had
-    silently dropped it. What was invented was the OLD board: a {F}-costed attacker holding a Basic
-    {G} it could never pay with. Nothing here is hand-fitted to produce a result.
-
-    What this test carries that `test_energy_denial_guards.py` does not: that file's
-    `test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign[relevance]` monkeypatches
-    `_unfavored` outright, so it pins the MULTIPLIER's arithmetic on real frames but never the READ
-    that decides to apply it. Here the only thing that differs between the two Pilots is a dossier
-    win_rate (0.3 vs 0.5), so the whole Scout -> favorability -> coverage -> `_unfavored` path is
-    under test — which is what REQ-POSTURE-0004 is about.
-    """
+    """Lever A SCALES the priced denial oracle rather than adding a flat rung beside it (ADR-0063);
+    only a dossier win_rate differs, so the whole Scout -> favorability -> `_unfavored` path is live."""
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()
     unfavored = _unfavored_pilot(0.3, funcs).explain(obs).options[0].score
@@ -262,16 +213,8 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
 
 @pytest.mark.req("REQ-POSTURE-0004")
 def test_lever_a_cannot_make_a_worthless_disruption_worth_playing():
-    """The multiplier's whole point (ADR-0063): scaling cannot flip a sign. Their Active is a Mega
-    Lucario ex on 3 {F} — SURPLUS for the one {F} Aura Jab costs, so the strip still leaves it
-    affording the same attack and denies nothing. However badly the matchup reads, the Hammer must
-    stay held: 0 x anything is 0.
-
-    Armed (Issue #228) the whiff now arrives STRUCTURALLY, through Deny Relevance's surplus clause
-    (`type_count <= needed` fails at 3 <= 1), which is the shape ADR-0080 wanted: the hold is derived
-    rather than gated. The three Energy are typed for exactly that reason — left as unresolvable card
-    ids they would read 0 for the wrong reason and this test would pass while asserting nothing.
-    """
+    """Scaling cannot flip a sign (ADR-0063): 3 {F} is surplus for a 1-{F} cost, so the strip denies
+    nothing. The Energy must be TYPED or the score reads 0 for the wrong reason."""
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()
     obs["current"]["players"][1]["active"][0]["energies"] = [F_ENERGY] * 3   # surplus for a 1-{F} cost
@@ -285,15 +228,8 @@ JUDGE_SUP = 1213
 
 
 def _obs_judge_vs_mega_lucario(opp_hand=8):
-    """A symmetric refresh (Judge) as the only play, facing a recognized Mega Lucario ex. Pre-anchor
-    (no own_prizes), so the Layer-B post-anchor veto stays out of frame — the lever-A rung is
-    isolated.
-
-    `handCount` added 2026-07-14 (ADR-0060). It was absent — i.e. 0 — which made these boards
-    describe an opponent with an EMPTY hand. Judge is a symmetric REFILL, so playing it there would
-    hand them 4 cards for nothing (and, in the hand-size-attacker test below, arm the very attacker
-    the test claims to be disrupting: 0 cards = 0 damage, 4 cards = 80). The swing oracle prices that
-    gift at −8/card and correctly refuses. Give them a hand actually worth shrinking."""
+    """Judge as the only play, facing a recognized Mega Lucario ex; pre-anchor, so the Layer-B veto
+    stays out of frame. `handCount` must be non-zero or the Judge is a pure gift (ADR-0060)."""
     me = {"active": [{"id": 1, "energies": [1], "hp": 100}], "bench": [{"id": 2}],
           "hand": [{"id": JUDGE_SUP}], "discard": [], "prize": []}
     opp = {"active": [{"id": MEGA_LUCARIO, "energies": [1], "hp": 200}],
@@ -305,8 +241,7 @@ def _obs_judge_vs_mega_lucario(opp_hand=8):
 
 
 def _favored_pilot(win_rate, funcs):
-    """`_unfavored_pilot` with a deck of startable Basics (id 77) — a realistic pull pool for the
-    refresh play under test."""
+    """`_unfavored_pilot` with a deck of startable Basics (id 77) — a real pull pool for a refresh."""
     art = tiny_artifact()
     art.dossiers["MyDeck"] = {"matchups": {"Mega Lucario ex": {"win_rate": win_rate, "n": 30.0}}}
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[77] * 60,
@@ -316,24 +251,17 @@ def _favored_pilot(win_rate, funcs):
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_favored_half_taxes_the_gift_but_never_the_strip():
-    """Lever A's favored half (ADR-0026 amendment), sign-gated (hand-disruption grill ruling 3,
-    2026-07-19): favorability ≥ 0.55 fires `dont-gift-a-refresh-when-favored` on a `hand_disruption`
-    play ONLY when it actually REFILLS the losing opponent (their hand below the card's redraw count).
-    It stays silent when the same play STRIPS a stacked hand (ep83664991 f43), and at even AND at
-    unfavored (structural exclusion with the shipped half)."""
+    """Lever A's favored half is sign-gated (ADR-0026 amendment): a refresh that REFILLS a losing
+    opponent is taxed, one that STRIPS a stacked hand is never taxed, at any favorability."""
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
     gift = _obs_judge_vs_mega_lucario(opp_hand=2)    # Judge redraws them 2 → 4: a GIFT (opp_net +2)
     strip = _obs_judge_vs_mega_lucario(opp_hand=8)   # Judge redraws them 8 → 4: a STRIP (opp_net −4)
     def _score(fav, obs):
         return _favored_pilot(fav, funcs).explain(obs).options[0].score
 
-    # The GIFT/STRIP half survives the rung, and survives it by a wide margin: the swing oracle
-    # prices the same Judge at 4.0 when it refills a 2-card hand and 36.0 when it strips an 8-card
-    # one. That is the substantive claim, and it is now a board reading rather than a rung.
     assert _score(0.7, strip) > _score(0.7, gift) * 2, (
         f"the swing oracle no longer separates a gift from a strip: "
         f"gift={_score(0.7, gift)} strip={_score(0.7, strip)}")
-    # Structural exclusions, restated at the score: a strip is never taxed, at any favorability.
     assert _score(0.5, strip) > _score(0.5, gift)
     assert _score(0.3, strip) > _score(0.3, gift)
 
@@ -347,13 +275,8 @@ def test_favored_half_taxes_the_gift_but_never_the_strip():
     "recorded as a strict xfail rather than deleted: it turns RED the day something re-wires "
     "favorability into this decision, which is exactly when someone should look at it"))
 def test_matchup_favorability_still_reaches_the_refresh_decision():
-    """The half of the old test that did NOT survive, kept as a live tripwire.
-
-    ADR-0041 built the Posture Read so a matchup fact could steer a decision. On this board it no
-    longer can: refilling a losing opponent's hand costs the same whether we are winning the matchup
-    or losing it. That may well be the right call under differencing — the end-of-turn board is the
-    same either way — but it is a RULING nobody has made, and deleting the test would have made the
-    loss invisible."""
+    """A live tripwire: ADR-0041 built the Read so a matchup fact could steer a decision, and on this
+    board it no longer can. That is a RULING nobody has made, so the loss stays visible."""
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})
     gift = _obs_judge_vs_mega_lucario(opp_hand=2)
     favored = _favored_pilot(0.7, funcs).explain(gift).options[0].score
@@ -364,15 +287,8 @@ def test_matchup_favorability_still_reaches_the_refresh_decision():
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_a_hand_size_attacker_tag_no_longer_buys_the_refresh_a_flat_endorsement():
-    """The design-B latent hole, CLOSED (ADR-0102, Issue #261 item 2c).
-
-    This test used to assert the opposite: favored + a `hand_size_attacker` anywhere in play meant
-    `play-harlequin-vs-hand-size` (+25) fired and OUTWEIGHED the gift tax, so the Pilot played a
-    Judge into a 2-card hand — refilling the opponent and arming the very attacker it claimed to be
-    disrupting. The grill recorded that as an unbuilt hole; it is unbuildable now, because the flat
-    is deleted. A TAG buys nothing: the survival term reads the clock, and on this board shrinking
-    nobody's hand shortens nothing (the benched stand-in prints no scaling attack), so all that is
-    left is the gift tax and a negative swing."""
+    """The design-B latent hole, CLOSED (ADR-0102, Issue #261 item 2c): a TAG buys the refresh
+    nothing, because the survival term reads the clock."""
     HSATK = 4321
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"],
                            HSATK: ["hand_size_attacker"]})
@@ -381,10 +297,6 @@ def test_a_hand_size_attacker_tag_no_longer_buys_the_refresh_a_flat_endorsement(
     trace = _favored_pilot(0.7, funcs).explain(obs).options[0]
     fired = {h.id for h, _ in trace.fired}
     assert "play-harlequin-vs-hand-size" not in fired      # RETIRED (ADR-0102)
-    # `dont-gift-a-refresh-when-favored` is itself deleted (POC-T4/5), so asserting it fired is no
-    # longer possible and asserting it did NOT is true of every board. What the test is about — a
-    # `hand_size_attacker` TAG buys the refresh nothing — is unchanged and is asserted directly:
-    # the same board WITHOUT the tag must price identically.
     without = _favored_pilot(0.7, CardFunctions(
         {JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"]})).explain(
             _obs_judge_vs_mega_lucario(opp_hand=2)).options[0]
@@ -397,7 +309,6 @@ def test_a_hand_size_attacker_tag_no_longer_buys_the_refresh_a_flat_endorsement(
 
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_recognized_opponent_routes_its_matchup_brief_onto_board():
-    # A Brief whose `covers` includes the recognized archetype is surfaced on board.brief (variant routing)
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"])
     board = _board_of(_pilot(scout=Scout(tiny_artifact()), briefs=[brief]), _obs_facing_mega_lucario())
     assert board.brief is not None and board.brief.slug == "ml"
@@ -462,9 +373,6 @@ def _mp_pilot(matchup_targeting=True, posture=True):
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_board_carries_a_matchup_plan_from_brief_and_general_tiers():
-    # A recognized opponent composes the spine onto the Board: the Brief names Riolu a
-    # fragile_preevo (positive target), and Solrock's general `draw`-engine card fact
-    # de-prioritizes it (avoid) with no Brief entry needed.
     board = _board_of(_mp_pilot(), _obs_facing_mega_lucario())
     assert board.matchup_plan.priority(RIOLU) > 0
     assert board.matchup_plan.priority(SOLROCK) < 0
@@ -511,16 +419,8 @@ def _damage_select_over_ml_bench():
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
-    # Solrock's general draw-engine fact -> an `avoid` MatchupPlan priority; Riolu (Brief
-    # fragile_preevo) -> a positive one. The pick lands on the wincon line, not the engine.
-    #
-    # ADR-0085 moved WHERE that steer is expressed. It used to be a signed ADDEND in the tactical
-    # band (`_snipe_matchup_tactical`, now deleted with the six rungs), so the requirement could be
-    # read as "tactical positive on one, negative on the other". Decision 5 folded it into the graded
-    # scalar as a MULTIPLIER on `their_plan`, which is why the sign is now asserted on
-    # `brief_multiplier` instead: > 1 sharpens the briefed target, < 1 de-prioritises the engine, and
-    # only the SIGN crosses the seam (`_BRIEF_THREAT_BOOST` supplies the magnitude, so no rate is
-    # invented to map a damage-scale priority into the [0,1] band).
+    # ADR-0085 folded the steer into a MULTIPLIER on `their_plan`, so the sign is asserted on
+    # `brief_multiplier`: > 1 sharpens the briefed target, < 1 de-prioritises the engine.
     pilot = _mp_snipe_pilot()
     obs = _damage_select_over_ml_bench()
     select = obs["select"]
@@ -534,10 +434,8 @@ def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_matchup_term_silent_under_kill_switch():
-    # The ADR-0051 spine's kill-switch: with `matchup_targeting` OFF the Brief cannot steer the pick
-    # at all. Asserted on `brief_multiplier` rather than on the retired tactical addend (see the
-    # sibling test above) — a flat 1.0 on BOTH targets is what "silent" means for a multiplier, and
-    # unlike `tactical == 0.0` it cannot pass merely because the term was deleted.
+    # A flat 1.0 on BOTH targets is what "silent" means for a multiplier; unlike `tactical == 0.0` it
+    # cannot pass merely because the term was deleted.
     pilot = _mp_snipe_pilot(matchup_targeting=False)
     obs = _damage_select_over_ml_bench()
     select = obs["select"]
@@ -550,9 +448,6 @@ def test_snipe_matchup_term_silent_under_kill_switch():
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_gust_target_drags_up_the_briefed_preevo_over_the_draw_engine():
-    # Phase 2: the gust target-select reads the SAME MatchupPlan. Two 1-prize KO-able bench bodies;
-    # my Active (120 dmg, 1 energy) KOs either → the sub-prize tie-break drags up the briefed Riolu
-    # (fragile_preevo), not the draw-engine Solrock.
     cur = state(active=poke(SNIPER, energy=1), opp_active=poke(MEGA_LUCARIO, hp=280),
                 opp_bench=[poke(SOLROCK, hp=90, max_hp=90), poke(RIOLU, hp=70, max_hp=70)], turn=4)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
@@ -586,7 +481,6 @@ def test_brief_accessors_safe_when_no_brief():
 
 
 def _ml_stats():
-    """A provider that knows the Mega Lucario ex line by name (so the Brief's cards resolve to ids)."""
     return DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True,
                        minAttackCost=1, minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
@@ -605,8 +499,6 @@ def _ml_brief_full():
 
 
 def _ml_pilot(briefs):
-    """A posture Pilot that recognizes Mega Lucario ex and knows its line by name (so a matched
-    Brief's threats/targets resolve to ids)."""
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_ml_stats(),
@@ -627,9 +519,8 @@ def test_board_resolves_the_matched_briefs_threats_and_targets_to_ids():
 
 @pytest.mark.req("REQ-POSTURE-0005")
 def test_resolving_the_brief_changes_no_decision_or_score():
-    # Scope containment: the MatchupPlan steers only bench snipe (DAMAGE) and gust (SWITCH), so a
-    # resolved Brief on the Board must yield byte-identical choices AND scores at a MAIN play menu vs
-    # a Pilot with no Brief — the spine never leaks into a decision it doesn't own.
+    # The MatchupPlan steers only bench snipe (DAMAGE) and gust (SWITCH); it must not leak into a
+    # MAIN play menu.
     obs = _obs_two_option_menu()
     on, off = _ml_pilot([_ml_brief_full()]), _ml_pilot(None)
     assert on.decide(obs) == off.decide(obs)
@@ -646,9 +537,6 @@ TERA_WINCON = 722  # a Tera ex WINCON — takes NO damage from attacks while BEN
 
 
 def _lever_stats(attacks=None):
-    """Provider for the ADR-0038 lever tests: the Mega Lucario line (Riolu's forward-evo damage =
-    270), the Solrock engine body, a Gardevoir line (a NON-briefed evolving pre-evolution, for
-    denial parity in gust tests) and a plain bruiser."""
     return DictCardStatProvider({
         SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", hp=200, maxDamage=120, minAttackCost=1,
                          minCostDamage=120, attacks=(11,)),
@@ -657,32 +545,24 @@ def _lever_stats(attacks=None):
                                maxDamage=270, evolvesFrom="Riolu"),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, maxDamage=70),
         KIRLIA: CardStat(KIRLIA, name="Kirlia", hp=80, maxDamage=0),
-        # `megaEx` added by ADR-0119, which made the LINE's prize load-bearing and so reached
-        # this row for the first time. **This id is a STAND-IN, not the pool card** — `GARDEVOIR` is
-        # 101 (the pool's 101 is Jynx), so the claim below is that the fixture models Kirlia's real
-        # line faithfully, NOT that it is that card. What was verified at source is the line itself:
-        # the pool's **Mega Gardevoir ex** (747) has `evolvesFrom` Kirlia and yields **3** prizes,
-        # the same shape as Riolu -> Mega Lucario ex. That is what keeps the equal-pre-evos premise
-        # below TRUE — both lines reach a 3-prize Mega ex, so the Brief is genuinely the only thing
-        # separating Riolu from Kirlia. Left at 2 prizes the test would pass for the wrong reason.
+        # A STAND-IN, not the pool card: modelled on Mega Gardevoir ex (747, evolvesFrom Kirlia,
+        # 3 prizes) so both lines reach a 3-prize Mega ex — at 2 prizes the tests pass for the wrong reason.
         GARDEVOIR: CardStat(GARDEVOIR, name="Mega Gardevoir ex", hp=310, maxDamage=190,
                             evolvesFrom="Kirlia", megaEx=True),
         BRUISER: CardStat(BRUISER, synthetic=True, name="Bruiser", hp=120, maxDamage=120),
         EX_INERT: CardStat(EX_INERT, synthetic=True, name="Inert ex", hp=80, ex=True, maxDamage=120),
         SUPPORT_EX: CardStat(SUPPORT_EX, synthetic=True, name="Support ex", hp=80, ex=True, maxDamage=0),
         TERA_WINCON: CardStat(TERA_WINCON, synthetic=True, name="Tera ex", hp=200, ex=True, maxDamage=200, tera=True,
-                              minAttackCost=1, minCostDamage=200),   # a READY attacker (as a real Tera-ex
-                              #                                        wincon is) — so the forced-promotion
-                              #                                        key can legitimately land on it
+                              minAttackCost=1, minCostDamage=200),   # READY, so the forced-promotion
+                                                                     # key can land on it
 
     }, attacks=attacks)
 
 
 def _lever_pilot(attack_table=None, **kw):
     table = attack_table or {11: AttackStat(11, damage=120, cost=1)}
-    # `snipe_relevance` armed to match the shipped PROFILE. ADR-0085's deletion pass removed the six
-    # DAMAGE target rungs, so an unarmed Pilot scores every bench target 0 and the snipe assertions
-    # below would pass or fail on option index rather than on the Brief steer under test.
+    # `snipe_relevance` armed to match the shipped PROFILE: unarmed, every bench target scores 0 and
+    # the snipe assertions below turn on option index rather than the Brief steer (ADR-0085).
     kw.setdefault("snipe_relevance", True)
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=_lever_stats(table), **kw)
@@ -690,9 +570,6 @@ def _lever_pilot(attack_table=None, **kw):
 
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
-    # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the
-    # roles into the MatchupPlan → the snipe pick flips to the briefed preevo. The ADR-0051 spine
-    # (`matchup_targeting`, default ON) is now the switch; OFF reverts to generic order.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=2, hp=110)]
@@ -701,23 +578,14 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
                                     opp_bench=bench))
     on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])                       # default ON
     off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], matchup_targeting=False)
-    # Asserted on the SCORES, not on the pick. Both bodies price relevance 0.0 on this board, so
-    # index order alone already returns [0] — a `decide(obs) == [0]` assertion passes with the Brief
-    # unwired and witnesses nothing (verified by deleting the tiebreak from the score sum: it stayed
-    # green). A strict score ORDERING can only come from the tiebreak, so that is what is asserted.
+    # Asserted on the SCORES, not the pick: both bodies price relevance 0.0, so index order alone
+    # returns [0] and a `decide(obs) == [0]` assertion would witness nothing.
     scores = {o.index: o.score for o in on.explain(obs).options}
     assert scores[0] > scores[1], "the Brief must ORDER the tie, not merely coincide with index order"
     assert on.decide(obs) == [0]                           # the bare briefed Riolu (fragile_preevo)
 
-    # The kill-switch is asserted as SILENCE, not as a rival pick. It used to read
-    # `off.decide(obs) == [1]` — "generic order: the energized Solrock" — which was the deleted
-    # `snipe-the-threat` rung (+20 for carrying Energy) doing the work. ADR-0085 Amendment E removed
-    # it, so on this board OFF has no signal at all: both bodies price relevance 0.0, and the pick
-    # falls to option index, which is [0] — the same answer ON gives, for an entirely different
-    # reason. A pick assertion here can no longer distinguish the switch's two states and would pass
-    # whether or not the Brief were wired in (the E4 vacuity, one test down). What IS still
-    # distinguishable, and is the switch's actual contract, is that the Brief contributes nothing:
-    # every option's tiebreak is flat 0.0, so no authored preference reaches the pick.
+    # The kill-switch is asserted as SILENCE, not a rival pick: OFF has no signal on this board, so a
+    # pick assertion could not distinguish its two states (ADR-0085 Amendment E).
     sel = obs["select"]
     board = off._board(obs, sel)
     breaks = [off._snipe_brief_tiebreak(obs, sel, board, o, off._context(obs, sel, board, o))
@@ -727,8 +595,6 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
 
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_briefed_preevo_boost_never_overrides_a_ko():
-    # KO supremacy is structural: a KO-able target (snipe-for-the-ko, +60) still beats the MatchupPlan
-    # boost on the non-KO-able briefed preevo — the matchup term stands down while a snipe-KO is on offer.
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=1, hp=40)]     # Solrock dies to the 50 rider
@@ -752,22 +618,8 @@ def _tera_snipe_pilot():
 
 @pytest.mark.req("REQ-POSTURE-0013")
 def test_a_benched_tera_carries_a_structural_snipe_veto_not_a_tunable_weight():
-    """A benched Tera takes NO damage from attacks (rules.md §185, `CardStat.tera`) — sniping one is
-    ALWAYS strictly wasted, in every board, forever. That is a CARD FACT, so it must be a hard
-    structural veto, never a tunable preference competing on points.
-
-    The old `dont-snipe-a-benched-tera` was a −60 POSITIONAL weight with `status="assumed"` — i.e.
-    tuner-mutable — and its rationale's claim that "−60 cancels the largest positional stack" was only
-    ever true by a 10-point margin: `snipe-the-top-threat` (30) + `snipe-the-threat` (20) = 50 held,
-    but adding `snipe-on-the-path` (12) reaches 62 and DEFEATS it. The bigger rungs happen to be
-    excluded elsewhere (`snipe-for-the-ko` via `target_kos`; `snipe-the-forced-promotion` via
-    `_forced_promotion_key`; `snipe-the-evolving-threat` only because no Tera card currently has
-    `forward_max_damage > 0` — a DATA accident, not a guarantee). One weight-tune or one new snipe rung
-    silently reintroduces the misplay.
-
-    So the veto lives in the TACTICAL layer and dominates any positional stack: no weight can outvote
-    it, and a benched Tera can never be preferred over a body that can actually hold the counters.
-    """
+    """A benched Tera takes NO damage from attacks (rules.md §185, `CardStat.tera`) — a CARD FACT, so
+    the veto lives in the TACTICAL layer and dominates any positional stack, never competing on points."""
     p = _tera_snipe_pilot()
     obs = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2), poke(BRUISER, hp=120))
     tera, bruiser = p.explain(obs).options
@@ -778,20 +630,12 @@ def test_a_benched_tera_carries_a_structural_snipe_veto_not_a_tunable_weight():
 
 @pytest.mark.req("REQ-POSTURE-0013")
 def test_a_positive_role_priority_cannot_erode_the_tera_veto_through_the_tiebreak(monkeypatch):
-    """**The Brief Tiebreak was the one leg that had not added itself to the stand-down gate**
-    (Issue #395). `TheirPlanInputs.brief_boost_gated()` stands a POSITIVE priority down on a
-    redundant / mirage / benched-Tera body, and the relevance MULTIPLIER honours it — but the
-    tiebreak read the raw priority, so a Tera carrying a strict-maximum role won a derived bonus and
-    lifted the structural veto off `-KO_SCORE`.
-
-    Latent before this issue (a Brief could always have named a Tera) and reached daily by widening
-    the general tier, since a derived role now lands on nearly every in-play body. The veto is a CARD
-    FACT — a benched Tera takes no damage from attacks at all — so nothing positive may erode it."""
+    """Issue #395: the Brief Tiebreak read the RAW priority rather than `brief_boost_gated()`, so a
+    Tera carrying a strict-maximum role won a bonus and lifted the veto off `-KO_SCORE`."""
     from common.scouting.matchup_plan import build_matchup_plan
     p = _tera_snipe_pilot()
     obs = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2), poke(BRUISER, hp=120))
-    # The Tera alone carries a positive role — a strict maximum among the relevance-tied peers, which
-    # is exactly the shape the tiebreak fires on.
+    # A strict maximum among the relevance-tied peers is the shape the tiebreak fires on.
     plan = build_matchup_plan(read_roles={TERA_WINCON: "prize_liability"}, gamma=1.0)
     real_board = p._board
     monkeypatch.setattr(p, "_board",
@@ -811,15 +655,8 @@ def _with_plan(board, plan):
 
 @pytest.mark.req("REQ-POSTURE-0013")
 def test_the_tera_veto_never_freezes_a_forced_snipe_select():
-    """EDGE CASE: our attack REQUIRES a snipe and the opponent's ONLY benched body is a Tera. The veto
-    must ORDER the Tera last, never REMOVE it — the agent has to answer a forced select or the engine
-    stalls. Safe by construction: the take-fewer trims only `while len(chosen) > min_count`, so it can
-    never return fewer picks than the select demands, and DAMAGE is not in `_GRAB_CONTEXTS` (so the
-    multi-pick greedy path never applies to a snipe).
-
-    Three variants, all forced (minCount=1): one Tera; several Teras (every option vetoed, so the veto
-    can't act as a tiebreak — it must still commit); and the Tera alongside the opponent's ACTIVE, which
-    is NOT immune (the immunity is bench-ONLY, so the Active must remain freely choosable)."""
+    """At a forced select (minCount=1) the veto must ORDER the Tera last, never REMOVE it — the agent
+    has to answer or the engine stalls, even when every option is vetoed."""
     p = _tera_snipe_pilot()
 
     only = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2))
@@ -832,10 +669,8 @@ def test_the_tera_veto_never_freezes_a_forced_snipe_select():
 
 @pytest.mark.req("REQ-POSTURE-0013")
 def test_the_tera_veto_declines_only_when_the_snipe_is_OPTIONAL():
-    """The mirror: at an OPTIONAL select (minCount=0) whose only target is an immune benched Tera, the
-    take-fewer correctly DECLINES rather than placing a counter that provably does nothing. Legal by
-    definition (minCount=0) and strictly better than wasting the placement — and it is the ONLY case in
-    which the veto yields an empty selection."""
+    """At minCount=0 the take-fewer DECLINES rather than placing a counter that provably does nothing
+    — the ONLY case in which the veto yields an empty selection."""
     p = _tera_snipe_pilot()
     obs = make_select([card_opt(BENCH, 0, player=1)], context=DAMAGE, min_count=0,
                       current=state(active=poke(SNIPER, energy=1), opp_active=poke(MEGA_LUCARIO, hp=340),
@@ -845,16 +680,8 @@ def test_the_tera_veto_declines_only_when_the_snipe_is_OPTIONAL():
 
 @pytest.mark.req("REQ-POSTURE-0012")
 def test_snipe_matchup_boost_stands_down_on_a_benched_tera():
-    """A Tera Pokémon takes NO damage from attacks while BENCHED (`CardStat.tera`, rules.md §185), so a
-    snipe aimed there does literally nothing. A Brief will NATURALLY role a Tera-ex win-condition
-    `prize_liability` — it IS the wincon — and the ADR-0051 matchup boost is TACTICAL (priority ×5 =
-    +500 at γ=1). `_snipe_tera_veto` already orders a benched Tera last structurally, but the boost must
-    ALSO stand down so it never credits an immune body (belt to the veto's suspenders), exactly as it
-    does on an ADR-0044 redundant/mirage body.
-
-    The GUST is deliberately unaffected: dragging a Tera Active REMOVES the immunity (it is bench-only),
-    so `_can_ko` may still take it there — which is what makes it safe for a Brief to role a Tera wincon
-    at all."""
+    """The ADR-0051 matchup boost must stand down on a benched Tera, as it does on a redundant/mirage
+    body. The GUST is unaffected: dragging a Tera Active removes the immunity (it is bench-only)."""
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                   targets=[{"card": "Tera ex", "role": "prize_liability", "why": "the wincon"}])
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
@@ -872,11 +699,8 @@ def _gust_obs(*bench):
 
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_gust_target_prefers_the_briefed_wincon_preevo():
-    # ADR-0051: among equal-prize KO-able evolving pre-evos, the gust drags up the briefed WINCON-line
-    # pre-evo (Riolu, fragile_preevo) over a non-wincon one (Kirlia). Phase 3b gives a wincon-line role
-    # the denial bump, so this preference is deliberate and above the bare sub-prize tie-break that a
-    # non-wincon role gets (that pure-sub-prize path is covered by the disruption-target test). Sourced
-    # from the one spine, not the retired _gust_brief_denial lever; γ=0 → inert plan, perfectly neutral.
+    # ADR-0051 Phase 3b gives a wincon-line role the denial bump, above the bare sub-prize tie-break a
+    # non-wincon role gets; γ=0 → inert plan.
     obs, select = _gust_obs(poke(RIOLU, hp=80), poke(KIRLIA, hp=80))
     board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
                   opp_bench=((RIOLU, 80), (KIRLIA, 80)),
@@ -913,19 +737,8 @@ def test_gust_target_prefers_a_disruption_target_sub_prize():
 
 @pytest.mark.req("REQ-POSTURE-0014")
 def test_gust_prefers_the_damaged_wincon_over_an_equal_prize_support_ex():
-    """GENERAL rule (nothing to do with Tera): among EQUAL-prize KO-able gust targets, drag up the
-    opponent's WIN CONDITION, not a support ex. Both bodies here are 2-prize ex's my Active can KO —
-    prize value alone TIES them, so the tie must break toward the body whose loss actually ends their
-    game.
-
-    Card facts CANNOT make this call: in the real Dragapult deck the support Latias ex hits for 200,
-    exactly as hard as the Dragapult ex wincon. Only the Brief knows which is the payoff — so the
-    discriminator is the ROLE: `prize_liability` (the wincon → `_gust_wincon_denial` +1.5 prizes) vs
-    `disruption_target` (an enabler → sub-prize tie-break only).
-
-    "Damaged" is implicit: the gust is KO-gated (`_can_ko`), so the wincon only becomes a candidate once
-    it is actually finishable — a full-HP wincon we cannot kill simply never enters this comparison, and
-    the support prize is correctly taken instead."""
+    """Card facts cannot break an equal-prize tie (a support Latias ex hits as hard as the Dragapult ex
+    wincon): the ROLE discriminates — `prize_liability` gets +1.5 prizes, `disruption_target` does not."""
     obs, select = _gust_obs(poke(EX_INERT, hp=80), poke(SUPPORT_EX, hp=80))   # both 2-prize, both KO-able
     p = _lever_pilot()
     board = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
@@ -941,24 +754,8 @@ def test_gust_prefers_the_damaged_wincon_over_an_equal_prize_support_ex():
 
 @pytest.mark.req("REQ-POSTURE-0011")
 def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
-    """A 1-prize wincon pre-evo outranks a 2-prize INERT ex in the gust target pick — deny the line,
-    do not take the fatter prize.
-
-    **The γ=0 half of this test inverted at ADR-0119, deliberately, and that is the whole point
-    of the change rather than fallout from it.** Under ADR-0051 Phase 3b the lift was
-    `_WINCON_DENIAL_PRIZES` (1.5) × γ, role-scoped to a briefed `fragile_preevo` — so at γ=0, on any
-    opponent the Read did not recognise, it VANISHED and the bigger prize won. The lift is now the
-    LINE's own prize read from card facts (`needs.line_prize_advance`), which has no γ and no role
-    gate: Riolu is one hop from a 3-prize Mega Lucario ex, so it advances 1 + (3−1)×halve(1) = 2.0,
-    exactly tying the inert ex's own 2 — and the evolving-threat denial then breaks that tie toward
-    the line.
-
-    So the preference now holds on EVERY board, recognised or not. That is the improvement the ADR
-    claims (an authored, γ-gated constant becomes a derivation that cannot fall silent), and this is
-    where its cost is visible too: we will spend a gust taking ONE prize off a body whose line is
-    big, over TWO off a body whose line is dead. The tie on `prize_advance` is what makes that
-    defensible — a 1-hop 3-prize line is genuinely worth about what a standing 2-prize body is —
-    rather than a bare preference for pre-evolutions."""
+    """A 1-prize wincon pre-evo outranks a 2-prize INERT ex. ADR-0119 replaced the γ-gated constant
+    with the LINE's own prize (`needs.line_prize_advance`), so this now holds on an unrecognised board."""
     obs, select = _gust_obs(poke(RIOLU, hp=80), poke(EX_INERT, hp=80))
     p = _lever_pilot()
     hot = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
@@ -976,25 +773,13 @@ def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
     assert cold_preevo > cold_inert, (
         "the line reading is a CARD fact — it must survive an unrecognised opponent, which is "
         "exactly what the γ-gated constant it replaced could not do")
-    # ...and the plan really is inert, so what survives is the derivation and not a live Brief.
-    assert p._gust_matchup_priority(cold, {"id": RIOLU}) == 0
-    # The advance ties at 2.0 either way; only the card-fact denial separates them. Asserted so a
-    # future change that made the pre-evo win by a LARGER margin than the prize gap is caught.
+    assert p._gust_matchup_priority(cold, {"id": RIOLU}) == 0   # inert plan: the derivation survives
+    # The advance ties; only the card-fact denial separates them, so the margin stays sub-prize.
     assert cold_preevo - cold_inert < 1.0
 
 
-# ---- ADR-0051 Phase 3b `strip-the-stacked-engine-hand` (+22): RETIRED (ADR-0102, Issue #261 2c) ---
-#
-# Its three tests are DELETED with it, and deliberately not re-pointed onto a successor, because
-# there is none and inventing one would misrecord what happened. The rung was narrowed by ADR-0060 to
-# a ONE-SIDED strip (a card that empties the opponent's hand without refilling it); no such card is
-# in the pool, so it never fired on a real board, and every one of those tests had to mint a
-# `PROBE_CARD` that does not exist to exercise it. What the POC changes is the standard, not the
-# analysis: a live weight behind an unfired gate is an untested rung waiting for a future set, and
-# `disrupt-the-tailored-hand` (weight 0) already carries the same forward contract inertly. The
-# doctrine is recorded in docs/plans/hand-disruption-grill-spec.md's fold list.
-#
-# `_fired` stays — the tests above it use the helper.
+# `strip-the-stacked-engine-hand` RETIRED with its three tests (ADR-0102, Issue #261 2c): ADR-0060
+# narrowed it to a one-sided strip and no such card is in the pool, so it never fired on a real board.
 
 
 def _fired(trace):

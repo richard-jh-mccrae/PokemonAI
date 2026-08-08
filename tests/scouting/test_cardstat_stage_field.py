@@ -22,10 +22,8 @@ CSV_PATH = ROOT / "data" / "EN_Card_Data.csv"
 #: quietly change what the `stage1` / `stage2` FETCH classes reach.
 EXPECTED_CENSUS = {"basic": 600, "stage1": 345, "stage2": 116, None: 206}
 
-#: `cardType` ITEM, yet the engine reports `basic=True` — and it is right: *"Play this card as if it
-#: were a 60-HP Basic {C} Pokémon."* They are why the partition below is `hp > 0` and not
-#: `cardType == POKEMON`, and why the fixture audit maps the CSV's `Item` label through the effect
-#: text instead of straight to None.
+#: `cardType` ITEM, yet `basic=True` — *"Play this card as if it were a 60-HP Basic {C} Pokémon."*
+#: They are why the partition below is `hp > 0` and not `cardType == POKEMON`.
 FOSSILS = (1099, 1136, 1138, 1150, 1151)
 
 
@@ -52,9 +50,8 @@ def test_every_card_carries_the_engines_own_stage(pool, cards):
 
 
 def test_the_stage_census_matches_the_pool(pool):
-    """Positive control on the test above: `stage == stage_from_card(...)` is also satisfied by a
-    pool where BOTH sides are None, which is exactly the state this issue found. Pin the counts so
-    an all-None pool — the regression — cannot pass."""
+    """Positive control: `stage == stage_from_card(...)` is also satisfied by a pool where BOTH
+    sides are None, so the counts are pinned and an all-None pool cannot pass."""
     census = {}
     for stat in pool.values():
         census[stat.stage] = census.get(stat.stage, 0) + 1
@@ -62,9 +59,8 @@ def test_the_stage_census_matches_the_pool(pool):
 
 
 def test_stage_is_populated_for_exactly_the_bodies(pool):
-    """The partition: a card with HP has a stage, a card without has none. `CardStat.is_pokemon` is
-    `hp > 0`, and over this pool that agrees with the stage flags exactly — including the Fossils,
-    which `cardType` would misfile."""
+    """A card with HP has a stage and a card without has none — `is_pokemon` is `hp > 0`, which
+    agrees with the stage flags including the Fossils that `cardType` would misfile."""
     assert [s.cardId for s in pool.values() if s.is_pokemon and s.stage is None] == []
     assert [s.cardId for s in pool.values() if not s.is_pokemon and s.stage is not None] == []
 
@@ -78,17 +74,15 @@ def test_the_fossils_are_basics_despite_printing_as_items(pool):
 
 def test_a_stage_is_never_ambiguous(cards):
     """`stage_from_card` returns the FIRST flag set, so two flags on one card would silently pick
-    basic over stage2. Nothing in the pool sets two — pinned, so the day one does, this fails
-    instead of the closure quietly under-reaching."""
+    basic over stage2. Nothing in the pool sets two — pinned, so the day one does this fails."""
     multi = [c.cardId for c in cards.values()
              if (bool(c.basic) + bool(c.stage1) + bool(c.stage2)) > 1]
     assert multi == []
 
 
 def test_dump_cards_stage_of_delegates_rather_than_respelling(cards):
-    """ADR-0087's drift charge: `tools/meta_tracker/dump_cards.stage_of` and the provider must not be
-    two readings of the same question. Asserted by AGREEMENT over the whole pool, not by reading the
-    source — a delegation that stopped delegating would still have to keep answering identically."""
+    """Asserted by AGREEMENT over the whole pool, not by reading the source: a delegation that
+    stopped delegating would still have to keep answering identically."""
     import sys
     if str(ROOT / "tools") not in sys.path:
         sys.path.insert(0, str(ROOT / "tools"))
@@ -97,10 +91,8 @@ def test_dump_cards_stage_of_delegates_rather_than_respelling(cards):
 
 
 def test_csv_stage_truth_matches_the_engine_pool(cards):
-    """The fixture audit's CSV-side mapping (`_stage_flags`) is INDEPENDENT ground truth, so it has
-    to be checked against the engine rather than assumed. Zero mismatches over all 1267 cards.
-
-    Without the Fossil leg this fails on exactly five rows — the CSV files them under `Item`."""
+    """The fixture audit's CSV-side mapping is INDEPENDENT ground truth, so it is checked against
+    the engine rather than assumed. Without the Fossil leg it fails on the five `Item` rows."""
     from test_cardstat_fixture_facts import _csv_truth        # sibling module (no tests package)
     truth = _csv_truth()
     missing = [cid for cid in cards if cid not in truth]

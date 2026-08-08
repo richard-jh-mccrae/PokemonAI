@@ -1,34 +1,10 @@
 """Munkidori the counter-mover: the attach seam serves the Ability fuel and the stuck Active.
 
-User doctrine (2026-07-19, follow-up to the attach-target-priority seam): every deck Pokémon has a
-declared strategic purpose. Munkidori's is Adrena-Brain — relay damage counters onto the opponent's
-board to assemble multi-KO Phantom Dive turns AND peel counters off our own bodies (keep an Active
-Budew alive). It is declared `counter_mover` (worth: the engine band — a plan piece, not junk).
-
-Two attach behaviours follow, replayed on boards derived from the real 86091728-19 record:
-  * The {D} that switches Adrena-Brain on is FUEL, never "wasted" — now the decider's **Ability Fuel**
-    channel (#139, ADR-0069), additive rather than a tie-break, so a colour doing double duty wins
-    outright. In setup the line still eats first, and that priority is now EMERGENT: the deck declares
-    Munkidori `counter_mover` — no attacker Role — so the board-evaluated role gate zeroes its attack
-    axis while a real attacker alternative is in play.
-  * A STUCK Active Munkidori — no un-powered benched line, no better benched body to promote — takes
-    the {P} it needs on top of the {D} so Mind Bend (60 + Confusion) is live.
-
-Both the line-first priority and the {D}-fuel-once-fed half are EMERGENT and pinned below, with no
-rung and no needs-conditioned gate. What does NOT reproduce is the third pin, the stuck-Active {P}
-arm-up: ADR-0069 §4 states the role gate on "an attacker alternative is IN PLAY", so a fed-but-
-still-building Dreepy keeps gating Munkidori's own attack. Making the gate per-colour instead was
-measured and INVERTS the committed 86091728-19 correction (the human ruled the line eats the {P}
-first even though the {D} beside it is dead to the line), so the correction wins and that pin is
-marked. The choices are written up in `docs/plans/attach-decider-swap-review.md` §Ruling 3.
-
-**The third pin's marker was rewritten 2026-08-02, and the reason is worth keeping.** It asserted an
-OUTCOME (`d.chosen == [psy_active]`) under a NON-strict xfail, and once ADR-0103's canonical ordering
-landed it began to XPASS — silently, because non-strict xfail reports neither direction. The gap had
-not closed: the {P} arm-up and the dead second {D} score EXACTLY equal (1.000 each, from a rung that
-fires on both), so the "pass" was the tie-break landing somewhere new. The marker now asserts the
-substance — whether the ranking distinguishes them at all — and is STRICT, so closing the gap turns
-the test red and forces the marker off instead of letting it rot into another quiet XPASS.
+Munkidori is declared `counter_mover` — no attacker Role — so the board-evaluated role gate (ADR-0069
+§4) zeroes its attack axis while an attacker alternative is IN PLAY, while the additive Ability Fuel
+channel survives. Two of the three behaviours below are EMERGENT from that, with no rung and no
+needs-conditioned gate; the third (the stuck-Active {P} arm-up) is an owed ruling carried as a STRICT
+xfail. The doctrine is the user ruling of 2026-07-19, stated in full at that test.
 """
 from __future__ import annotations
 
@@ -45,12 +21,8 @@ _P_ENERGY, _D_ENERGY, _MUNKIDORI, _DREEPY = 5, 7, 112, 119
 
 
 def _record():
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089).
-
-    What this replaced named a BUILD DIRECTORY outright — `dragapult_ex_20260715_32530b9` — which no
-    glob pattern can see and which breaks silently the day that directory is renamed. That is why
-    ADR-0089 decision 5 widened the rule from "no raw glob" to "nothing outside the store reaches
-    the corpus": a check that forbids a spelling teaches people to find another one."""
+    """THE Corpus Reader, via the shared test helper — ADR-0089 decision 5: nothing outside the store
+    reaches the corpus."""
     from corpus_helpers import corpus_record
     return corpus_record("86091728", 19)
 
@@ -67,8 +39,7 @@ def _me(obs):
 
 
 def _feed_the_line(obs):
-    """Give each benched Dreepy the 1 {P} its cheapest attack costs — no benched Line member needs
-    Energy any more, so the setup line-first priority (the 86091728-19 pin) is satisfied."""
+    """Give each benched Dreepy the 1 {P} its cheapest attack costs, so no Line member needs Energy."""
     for serial, body in enumerate(_me(obs)["bench"], start=100):
         if body["id"] == _DREEPY:
             body["energies"] = [_P_ENERGY]
@@ -83,8 +54,7 @@ def _attach_options(rec, obs, *, card, area):
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_munkidori_declares_the_counter_mover_role():
-    """The deck declares Munkidori's purpose — `counter_mover` — and the worth oracle prices it as a
-    plan piece (> 0), not a freely-pitchable role-less body."""
+    """The worth oracle must price it as a plan piece (> 0), not a freely-pitchable role-less body."""
     pilot = _pilot("dragapult_ex")
     assert "counter_mover" in pilot.strategy.roles.get(_MUNKIDORI, []), (
         "Munkidori carries no counter_mover Role in the dragapult overlay")
@@ -93,10 +63,8 @@ def test_munkidori_declares_the_counter_mover_role():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
-    """The {D} onto a bare Munkidori is FUEL. Two facts carry it, and both hold unconditionally: it
-    fills Mind Bend's colourless slot (typed build — a colourless slot absorbs any type, so the old
-    colourless-blind waste boolean's verdict is structurally unreachable), and it wakes Adrena-Brain
-    (the Ability Fuel channel). So the {D} out-prices the same-build {P} on the SAME body outright."""
+    """The {D} fills Mind Bend's colourless slot AND wakes Adrena-Brain, so it out-prices the
+    same-build {P} on the SAME body outright."""
     rec = _record()
     obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
@@ -111,13 +79,8 @@ def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
-    """Line fed, Munkidori bare and Active, hand holds {P}+{D}: the turn's Energy IS the {D}→Munkidori
-    fuel attach (the {P} stays for a body that attacks with it).
-
-    EMERGENT, with no rung and no needs-conditioned gate: each Dreepy already holds its {P}, and a
-    SECOND {P} fills no remaining slot of Phantom Dive's {R}{P}, so the typed build credits the line
-    nothing. Munkidori's attack axis is still gated, but Retreat Equity + Ability Fuel are additive
-    and survive the attack-axis gate — which is exactly enough when every alternative is zero."""
+    """EMERGENT: a SECOND {P} fills no remaining slot of Phantom Dive's {R}{P}, and Retreat Equity +
+    Ability Fuel are additive, so they survive the attack-axis gate."""
     rec = _record()
     obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
@@ -129,10 +92,8 @@ def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_line_still_eats_first_in_setup():
-    """On the UNTOUCHED 86091728-19 board (two bare benched Dreepy) the human's pinned pick — the {P}
-    to a bare benched Dreepy — stands. EMERGENT now, from the board-evaluated role gate: the deck gave
-    Munkidori only `counter_mover`, so while a Line member is in play its ATTACK AXIS is zero and only
-    its mobility/fuel channels speak — which the line's real build step comfortably outbids."""
+    """EMERGENT from the board-evaluated role gate: while a Line member is in play Munkidori's ATTACK
+    AXIS is zero and only its mobility/fuel channels speak, which the line's build step outbids."""
     rec = _record()
     d = _pilot(rec.agent).explain(rec.obs)
     [dark_active] = _attach_options(rec, rec.obs, card=_D_ENERGY, area=_ACTIVE_AREA)
@@ -145,31 +106,11 @@ def test_the_line_still_eats_first_in_setup():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.xfail(strict=True, reason="RULING OWED — the role gate discards the very "
-                   "discrimination the doctrine turns on; see the docstring and "
-                   "docs/plans/attach-decider-swap-review.md §Ruling 3.")
+                   "discrimination the doctrine turns on; see this test's docstring "
+                   "and ADR-0069.")
 def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
-    """Line fed, Munkidori Active already fuelled with its {D}, no better benched body to promote
-    (two 1-Energy Dreepy): the user doctrine says the {P} goes to Munkidori so Mind Bend (60 +
-    Confusion) is live.
-
-    **What this asserts, and why it changed (2026-08-02).** It used to assert the OUTCOME —
-    ``d.chosen == [psy_active]`` — under a NON-strict xfail, and that combination went quietly
-    XPASS once ADR-0103's canonical ordering landed. Measured on the board below, the pass was
-    luck, not the doctrine returning:
-
-        psy : total 1.000   build 45.0   ability_fuel 0.0   role_gated True
-        dark: total 1.000   build  0.0   ability_fuel 0.0   role_gated True
-
-    The two attaches score **exactly equal**, so nothing in the ranking prefers the {P} — the 1.000
-    is `prefer-active-attach-in-setup`, which fires identically on both, and the winner is whichever
-    the tie-break hands over. A non-strict xfail turned that into silence in both directions.
-
-    So the assertion now names the SUBSTANCE: does the decider distinguish the arm-up from the dead
-    second {D} at all? It does not, and the working says why — the discrimination exists (`build`
-    45 vs 0) and the ATTACK-AXIS ROLE GATE zeroes it, exactly as ADR-0069 §4 specifies while a Line
-    member is in play. That is the owed ruling, unchanged. **Strict**, so the day the gate learns
-    this case the test goes red and the marker must be removed deliberately rather than decaying
-    into another silent XPASS."""
+    """The doctrine says the {P} goes to Munkidori so Mind Bend is live. It asserts the SUBSTANCE —
+    whether the ranking distinguishes at all — because an OUTCOME assertion here went silently XPASS."""
     rec = _record()
     obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)

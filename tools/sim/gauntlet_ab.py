@@ -31,15 +31,8 @@ def _wins(results):
 
 
 def run(agents, n, *, jobs, overlay, out_dir, stage):
-    """Run the 6 directed matchups (both battles each) and report the aggregate paired delta,
-    graded under the ``stage`` rule the caller names (ADR-0072 decision 1).
-
-    ``--stage`` is REQUIRED, for the reason ADR-0072 Amendment B gave the swap runner: a
-    post-composition run must never be silently graded by the looser mid-build bound, and — the
-    half this runner was missing until Issue #228 — a MID-BUILD run must never be graded by
-    `flips_on`. This runner printed "FLIP ... (rule: delta>=0 AND CI-lo>=-0.01 ...)" for every
-    run regardless of stage, which is both the wrong bound and a phrase on the Tripwire's own
-    _Avoid_ list (tools/sim/CONTEXT.md)."""
+    """The directed matchups -> the aggregate paired delta, graded under ``stage`` (ADR-0072
+    decision 1). ``--stage`` is REQUIRED: neither bound may silently grade the other's run."""
     verdict_fn, reg_tol, rule_text, verdict_label = STAGES[stage]
     agents_root = REPO / "src" / "agents"
     src = [REPO / "src"]

@@ -134,3 +134,33 @@ Tests: `tests/test_attack_stats.py`, `tests/test_damage_oracle.py`, the behavior
 `tests/sim/test_attack_override_provenance.py` together with
 `tests/sim/test_generate_attack_overrides.py`. Related: [card-functions.md](card-functions.md)
 (the card-level behavioral tags this tier complements).
+
+## REQ-AUDIT — what the attack-measurement harness is required to do
+
+`@pytest.mark.req` markers across `tests/sim/` cite these ids, so they need a home outside the
+modules they grade. Owners: `tools/sim/audit_attacks.py` (the harness), `diff_attack_audit.py` (the
+oracle diff), `generate_attack_overrides.py` (the emitter). Reasoning: ADR-0032, ADR-0083, ADR-0108.
+
+| id | requirement |
+|---|---|
+| 0001 | Panel selection from card data: vanilla/weak/resist by the attacker's type (basic, no ability, non-Tera, highest HP); `prevent_ex` = Crustle 345 for ex/megaEx attackers only; an unmatchable scenario yields None, never a guess. |
+| 0002 | Side decks are legal 60-card: 4× each chain card + basic-Energy fill mapped from the attack's cost (colorless → a real Energy card). |
+| 0003 | Evolution chains resolve basic-first by walking `evolvesFrom` names. |
+| 0004 | Dealt damage is extracted from the attack log window (ATTACK → turn boundary): split active/bench/self by serial, KO censoring flagged, coins counted, heals never counted as damage. |
+| 0005 | Records carry attackId / attackerCardId / scenario / printed / dealtActive / dealtBench / defenderCardId / attackerEnergies / myHandSize / coin (+ hp, koed, self). |
+| 0006 | An unmeasurable attack × scenario is an explicit `{"error": …}` ledger entry — never a silent skip. |
+| 0007 | Re-runs merge by record key: a new measurement wins, but an error never clobbers an existing success (accumulative, like `card_functions`). |
+| 0008 | Sweep planning varies exactly ONE state variable (attached energy, my hand size via delayed attack, or one seat's bench) across 2–3 points, only when requested. |
+| 0009 | Coin fork: fork the pre-attack position via `search_begin(manual_coin=True)`, walk both outcomes of every coin select, record min and max dealt. |
+| 0010 | Engine smokes reproduce the known goldens: Resistance −30, Weakness ×2, Nebula Beam 1488 = 210 vs Crustle, Jetting Blow 1487 = 0 active + 50 bench. |
+| 0011 | Each successful measurement diffs against the oracle — a coin-fork record against its own bound (min/max), a sweep/panel record with the attacker-side scaling context off the record; match iff equal. |
+| 0012 | Error-ledger, live-coin (random outcome, no fork) and unknown-attack records are classified SKIPS — counted, never silently dropped. |
+| 0013 | A gap carries ids, scenario, printed/dealt/predicted and a coarse class: `scaler` (printed 0, dealt > 0), `over_prediction` (dealt 0, predicted > 0), else `modifier`. |
+| 0014 | Coin bounds come from vanilla-panel fork pairs only — a fork on the weak or resist panel has the modifier baked into the dealt number, so its bounds are not the attack's own. A measured coin bound is board-scoped (ADR-0083 Amendment A). |
+| 0015 | A printed-0 attack dealing one CONSTANT across ≥ 2 modifier scenarios yields a fixed effect damage; anything varying does not. |
+| 0016 | Sweep points must fit an EXACT integer linear model, or the attack stays on the gap ledger. |
+| 0017 | Never emit a field the parser already got right — overrides are DELTAS. |
+| 0018 | Per-seat bench counts are CONTROLLED (both seats driven to a target within bench patience) and RECORDED on every measurement. Uncontrolled bench was free to co-vary with the swept variable, which is how a combined-bench scaler shipped an exact-looking `atk_hand` fit (274 Torcherto). |
+| 0019 | A scaler's VARIABLE is named by measurement, never guessed: the bench family needs TWO joined single-variable sweeps, because one sweep gives the same slope for an attacker-bench and a combined-bench scaler. A fit may only claim a variable the harness actually controls. |
+| 0020 | The DEFENDER's attached Energy is a swept axis — the defender attaches to a per-plan target while the attacker's count stays pinned, and every record carries `defenderEnergies`. Without it `atk_active_energy` and `both_active_energy` are numerically identical at every producible point (Issue #275). |
+| 0021 | The defender seat's RULE-BOX composition is controlled and recorded: each defender-bench sweep is PAIRED with a matched non-ex control at the same bench count, and records carry `defenderExInPlay` / `attackerBenchStage2`. The default panel is ex-SATURATED, so without the control `def_ex_in_play` is perfectly collinear with `def_bench` (Issue #275). |

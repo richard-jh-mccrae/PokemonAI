@@ -1,4 +1,4 @@
-"""The automatic blunder labeler (ADR-0053 WP3; design: docs/plans/ml/ml-training-design-s3a.md).
+"""The automatic blunder labeler (ADR-0053 WP3; design: docs/plans/ml/ADR-0053).
 
 Turns self-play corpus films into machine Corrections by grading each own decision against a value
 net: the labeler IS the disagreement detector (S3b unifies WP3+WP4). This package owns the shared

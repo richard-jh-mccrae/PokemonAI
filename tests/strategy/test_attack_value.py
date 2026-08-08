@@ -8,16 +8,16 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from pilot_helpers import ACTIVE, BENCH, HAND, attack_opt, card_opt, make_select, opt, poke, state
 
-MY_ATK = 920        # my Active attacker (two equal-cost KO attacks, one with a bench rider)
-MY_EX = 921         # my Active: a 2-prize ex (its self-KO hands opponent 2 prizes)
-FIGHT_ATK = 922     # my Active: a Fighting attacker (exercises Resistance)
-MY_RESISTER = 923   # my Active: HP 100, RESISTS Fighting — incoming Fighting damage reduced -30
+MY_ATK = 920        # my Active attacker
+MY_EX = 921         # my Active: a 2-prize ex
+FIGHT_ATK = 922     # my Active: a Fighting attacker
+MY_RESISTER = 923   # my Active: HP 100, RESISTS Fighting (-30 incoming)
 OPP = 800           # opp Active, KO-able for 1 prize
 RESISTER = 801      # opp Active: HP 100, RESISTS Fighting (survives a 120 hit: 120-30=90)
-OPP_FIGHTER = 802   # opp Active: Fighting attacker hitting 120 (would KO a 100-HP non-resister)
+OPP_FIGHTER = 802   # opp Active: Fighting attacker hitting 120
 OPP_BENCH = 700     # opp benched Pokémon — a snipe target
-OPP_BENCH2 = 701    # a second opp benched Pokémon (multi-KO spread test)
-EX_BENCHIE = 702    # a benched 2-prize ex (spread-placement prize-preference test)
+OPP_BENCH2 = 701    # a second opp benched Pokémon
+EX_BENCHIE = 702    # a benched 2-prize ex
 A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT, A_SPREAD = 101, 102, 110, 103, 104   # attack ids
 SLOWKING = 163
 COPY_BODY = 750
@@ -53,8 +53,7 @@ def _pilot(attacks=None, **kw):
 
 
 def _gpilot(**kw):
-    """Pilot WITH the general strategy loaded — so baseline Hypotheses (e.g. `place-counter-to-convert`)
-    actually fire (the tactical-only `_pilot` above doesn't load them)."""
+    """Pilot WITH the general strategy loaded, so baseline Hypotheses fire; `_pilot` above omits them."""
     from common.strategy.general_strategy import GENERAL_STRATEGY
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=DictCardStatProvider(_CARDS), **kw)
@@ -150,7 +149,7 @@ def test_known_top_draw_mismatch_clears_the_whole_belief():
     obs = _seek_obs()
     obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_BODY, "serial": 78}]
 
-    p.explain(obs)                              # the log pass is what updates the belief
+    p.explain(obs)                              # the log pass updates the belief
     assert p._known_top is None, "the cleared belief survived the log event"
 
 
@@ -164,7 +163,7 @@ def test_known_top_matching_draw_advances_to_the_tail():
     obs = _seek_obs()
     obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_WEAK, "serial": 76}]
 
-    p.explain(obs)                              # the log pass is what updates the belief
+    p.explain(obs)                              # the log pass updates the belief
     assert p._known_top == ((77, COPY_BODY),), "the matching draw did not advance to the tail"
 
 
@@ -177,7 +176,7 @@ def test_shuffle_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 0, "playerIndex": 0}]
 
-    p.explain(obs)                              # the log pass is what updates the belief
+    p.explain(obs)                              # the log pass updates the belief
     assert p._known_top is None, "the cleared belief survived the log event"
 
 
@@ -190,7 +189,7 @@ def test_face_down_deck_movement_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 7, "playerIndex": 0, "fromArea": 2, "toArea": 1}]
 
-    p.explain(obs)                              # the log pass is what updates the belief
+    p.explain(obs)                              # the log pass updates the belief
     assert p._known_top is None, "the cleared belief survived the log event"
 
 
@@ -203,7 +202,7 @@ def test_unknown_deck_movement_clears_known_top():
     obs = _seek_obs()
     obs["logs"] = [{"type": 99, "playerIndex": 0, "fromArea": 1, "toArea": 2}]
 
-    p.explain(obs)                              # the log pass is what updates the belief
+    p.explain(obs)                              # the log pass updates the belief
     assert p._known_top is None, "the cleared belief survived the log event"
 
 
@@ -252,8 +251,6 @@ def test_top_deck_select_is_silent_without_active_seek_inspiration():
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
-    """Two equal-cost KO attacks; one ALSO snipes a benched Pokémon → it scores higher (best total
-    board value), so the agent picks the sniping attack."""
     p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=120, cost=1),
                 A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
@@ -268,7 +265,6 @@ def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_bench_snipe_bonus_is_silent_with_no_benched_target():
-    """No benched target → the rider hits nothing, so it adds no value and the two KO attacks tie."""
     p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=120, cost=1),
                 A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
@@ -280,8 +276,7 @@ def test_bench_snipe_bonus_is_silent_with_no_benched_target():
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_bench_snipe_chip_bonus_never_overrides_a_prize():
-    """A snipe that only CHIPS (rider < the benched HP) is a sub-prize tiebreak: even a big (120) chip
-    on a 1-prize KO stays BELOW a 2-prize KO's floor, so it can never override real prize value."""
+    """A chip stays below a 2-prize KO's floor, so it can never override real prize value."""
     p = _pilot({A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=120)})
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
@@ -293,9 +288,7 @@ def test_bench_snipe_chip_bonus_never_overrides_a_prize():
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
-    """A bench-snipe rider that KNOCKS OUT a benched Pokémon banks a PRIZE — it is a knockout, scored
-    KO_SCORE-class — so it beats a bigger chip that KOs nothing (ep82749168 f62: Jetting Blow 120 + 50
-    snipe finishes a 20-HP Dreepy, over a 210 Nebula Beam that only chips an un-KO-able 320-HP Active)."""
+    """A snipe KO is a knockout (KO_SCORE-class), so it beats a bigger chip that KOs nothing."""
     p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=210, cost=3),
                 A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SNIPE)],
@@ -310,8 +303,7 @@ def test_snipe_ko_of_a_bench_pokemon_banks_a_full_prize():
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
-    """Control: the rider does NOT reach the benched HP (50 < 60) → a chip, not a knockout → with no
-    KO of the Active either, the attack stays a plain chip (well below KO_SCORE)."""
+    """Control for the test above: the rider does NOT reach the benched HP (50 < 60)."""
     p = _pilot({A_SNIPE: AttackStat(A_SNIPE, damage=120, cost=1, benchSnipe=50)})
     obs = make_select([attack_opt(A_SNIPE)],
                       current=state(active=poke(MY_ATK, energy=1),
@@ -324,9 +316,7 @@ def test_snipe_that_only_chips_a_survivor_is_not_a_ko():
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_spread_kos_a_softened_bench_pokemon_banks_a_prize():
-    """A distributable bench spread (Phantom Dive benchSpread=60) that KOs a softened benched Pokémon
-    (remaining HP <= spread) banks a PRIZE this turn — scored KO_SCORE-class — even when the Active
-    survives (200-to-Active here is only a chip vs a 320-HP wall)."""
+    """A bench KO banks a prize even when the Active survives."""
     p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2),
@@ -337,8 +327,7 @@ def test_spread_kos_a_softened_bench_pokemon_banks_a_prize():
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_spread_can_ko_multiple_bench_mons_within_its_total():
-    """The spread is DISTRIBUTABLE: 60 splits to KO two 30-remaining bench mons (30+30 <= 60) → two
-    prizes, worth more than KOing a single one."""
+    """The spread is DISTRIBUTABLE: 60 splits into two 30s."""
     p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     two = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
@@ -351,8 +340,7 @@ def test_spread_can_ko_multiple_bench_mons_within_its_total():
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_spread_that_only_chips_is_a_subprize_bonus_not_a_ko():
-    """A spread too small to KO any bench mon (all HP > 60) is a sub-prize chip tiebreak — with no KO of
-    the Active either, the attack stays below KO_SCORE (never invents a prize)."""
+    """Never invents a prize: with no KO of the Active either, the attack stays below KO_SCORE."""
     p = _pilot({A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_SPREAD)],
                       current=state(active=poke(MY_ATK, energy=2), opp_active=poke(OPP, hp=320),
@@ -362,7 +350,6 @@ def test_spread_that_only_chips_is_a_subprize_bonus_not_a_ko():
 
 @pytest.mark.req("REQ-GEN-0050")
 def test_spread_silent_with_no_bench():
-    """No benched target → the spread hits nothing, adds no value."""
     p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=200, cost=2),
                 A_SPREAD: AttackStat(A_SPREAD, damage=200, cost=2, benchSpread=60)})
     obs = make_select([attack_opt(A_PLAIN), attack_opt(A_SPREAD)],
@@ -377,8 +364,7 @@ DAMAGE_COUNTER_ANY = 14
 
 @pytest.mark.req("REQ-GEN-0051")
 def test_counter_placement_finishes_a_ko_able_target():
-    """At a spread-placement select (one counter per select, 6-counter budget), put the counter on an
-    opponent mon a counter can KO within the budget — not on an un-KO-able wall."""
+    """One counter per select against a 6-counter budget."""
     p = _gpilot()
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
                       context=DAMAGE_COUNTER_ANY, remain_counters=6,
@@ -389,8 +375,7 @@ def test_counter_placement_finishes_a_ko_able_target():
 
 @pytest.mark.req("REQ-GEN-0051")
 def test_counter_placement_prefers_the_higher_prize_ko_set():
-    """Budget 50 (5 counters) can KO EITHER the 2-prize ex@50 OR the 1-prize@10 (not both: 60>50). The
-    knapsack picks the higher-prize KO set → place on the ex to finish it, not the cheap mon."""
+    """Budget 50 can KO EITHER the 2-prize ex@50 OR the 1-prize@10, not both (60 > 50)."""
     p = _gpilot()
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
                       context=DAMAGE_COUNTER_ANY, remain_counters=5,
@@ -401,8 +386,6 @@ def test_counter_placement_prefers_the_higher_prize_ko_set():
 
 @pytest.mark.req("REQ-GEN-0051")
 def test_counter_placement_preloads_lowest_hp_when_no_ko_possible():
-    """No target is KO-able within the budget (both HP > the 20 budget) → pre-load the LOWEST-HP mon
-    (concentrate toward a future KO)."""
     p = _gpilot()
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
                       context=DAMAGE_COUNTER_ANY, remain_counters=2,
@@ -413,7 +396,6 @@ def test_counter_placement_preloads_lowest_hp_when_no_ko_possible():
 
 @pytest.mark.req("REQ-GEN-0051")
 def test_counter_placement_silent_off_context():
-    """Off a DAMAGE_COUNTER_ANY select, the placement rule is silent (a plain END option is unaffected)."""
     p = _pilot()
     obs = make_select([opt(14)], context=0,
                       current=state(active=poke(MY_ATK, energy=1), opp_active=poke(OPP, hp=100)))
@@ -429,8 +411,7 @@ NUMBER = 0                   # OptionType.NUMBER
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_move_counter_target_finishes_the_best_opp():
-    """At the counter-move TARGET select (ctx 13, add to opponent), place on the opp mon a move-of-<=3
-    (30) can KO — reuses the spread placement (budget falls back to 30 for a counter-mover)."""
+    """Budget falls back to 30 for a counter-mover."""
     p = _gpilot()
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
                       context=DAMAGE_COUNTER,
@@ -441,8 +422,6 @@ def test_move_counter_target_finishes_the_best_opp():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_move_counter_source_heals_the_most_damaged_body():
-    """At the SOURCE select (ctx 16, remove from ours), pull counters off OUR most-damaged body (the
-    biggest heal / the win-con line body carrying residual chip)."""
     p = _gpilot()
     obs = make_select([card_opt(ACTIVE, 0, player=0), card_opt(BENCH, 0, player=0)],
                       context=REMOVE_DAMAGE_COUNTER,
@@ -453,7 +432,6 @@ def test_move_counter_source_heals_the_most_damaged_body():
 
 @pytest.mark.req("REQ-GEN-0052")
 def test_move_counter_amount_is_max():
-    """At the AMOUNT select (ctx 40), move the MOST counters offered (max offense + max heal)."""
     p = _gpilot()
     obs = make_select([opt(NUMBER, number=1), opt(NUMBER, number=2), opt(NUMBER, number=3)],
                       context=REMOVE_COUNT, current=state(active=poke(MY_ATK, energy=1)))
@@ -464,9 +442,7 @@ def test_move_counter_amount_is_max():
 
 @pytest.mark.req("REQ-GUST-0008")
 def test_lethal_with_recoil_double_ko_is_not_scored_as_a_win():
-    """My 2-prize ex's attack KOs the opponent's Active for my LAST prize — but its forced recoil also
-    KOs my ex, handing the opponent their LAST 2 prizes simultaneously. That is a DRAW, not a win, so the
-    attack must NOT be scored KO_SCORE-class."""
+    """Simultaneous emptying is a DRAW (the simulator delta overrides the official tiebreaker)."""
     p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2, recoil=200)})
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
@@ -477,7 +453,7 @@ def test_lethal_with_recoil_double_ko_is_not_scored_as_a_win():
 
 @pytest.mark.req("REQ-GUST-0008")
 def test_lethal_without_recoil_is_a_real_win():
-    """Control: same winning KO but the attack has NO recoil → my ex survives → a real win (KO_SCORE)."""
+    """Control for the test above."""
     p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2)})   # no recoil
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
@@ -488,8 +464,7 @@ def test_lethal_without_recoil_is_a_real_win():
 
 @pytest.mark.req("REQ-GUST-0008")
 def test_recoil_double_ko_is_a_win_when_it_does_not_empty_the_opponent():
-    """Control: the recoil self-KO hands the opponent only 2 of their 3 remaining prizes — they don't
-    reach 0, so I win on my last prize before they finish. Not simultaneous → a real win."""
+    """Control: the opponent gets 2 of their 3 remaining prizes, so the emptying is not simultaneous."""
     p = _pilot({A_RECOIL: AttackStat(A_RECOIL, damage=300, cost=2, recoil=200)})
     obs = make_select([attack_opt(A_RECOIL)],
                       current=state(active=poke(MY_EX, hp=200),
@@ -502,9 +477,7 @@ def test_recoil_double_ko_is_a_win_when_it_does_not_empty_the_opponent():
 
 @pytest.mark.req("REQ-GUST-0009")
 def test_resistance_turns_a_false_ko_into_a_chip():
-    """A 120 Fighting attack would KO a 100-HP Active at face value, but the defender RESISTS Fighting
-    (120 - 30 = 90 < 100) → it is NOT a knockout. Without the resistance subtraction this is a false KO
-    (and gusting it would be a gift)."""
+    """Resistance is a flat -30 after Weakness: 120 - 30 = 90 < 100, so no knockout."""
     p = _pilot({A_FLAT: AttackStat(A_FLAT, damage=120, cost=1)})
     obs = make_select([attack_opt(A_FLAT)],
                       current=state(active=poke(FIGHT_ATK, energy=1), opp_active=poke(RESISTER, hp=100)))
@@ -513,7 +486,7 @@ def test_resistance_turns_a_false_ko_into_a_chip():
 
 @pytest.mark.req("REQ-GUST-0009")
 def test_no_resistance_same_attack_is_a_real_ko():
-    """Control: the same 120 attack on a 100-HP Active with NO resistance to my type is a real KO."""
+    """Control for the test above."""
     p = _pilot({A_FLAT: AttackStat(A_FLAT, damage=120, cost=1)})
     obs = make_select([attack_opt(A_FLAT)],
                       current=state(active=poke(FIGHT_ATK, energy=1), opp_active=poke(OPP, hp=100)))
@@ -524,20 +497,18 @@ def test_no_resistance_same_attack_is_a_real_ko():
 
 @pytest.mark.req("REQ-GUST-0009")
 def test_incoming_damage_applies_my_active_resistance():
-    """Defensive direction: the opponent's Active hits for 120 — enough to KO my 100-HP Active at face
-    value — but my Active RESISTS Fighting, so incoming is 120 - 30 = 90 < 100. I am NOT doomed. The
-    same Weakness/Resistance check must apply to incoming damage, not just my own attacks."""
+    """The same Weakness/Resistance check must apply to incoming damage, not just my own attacks."""
     p = _pilot()
-    obs = make_select([opt(14)],   # an END option — just need a valid board
+    obs = make_select([opt(14)],
                       current=state(active=poke(MY_RESISTER, hp=100), opp_active=poke(OPP_FIGHTER, hp=200)))
     board = p._board(obs)
     assert board.incoming_active_damage == 90    # 120 reduced by my -30 resistance
-    assert board.active_doomed is False          # 90 < 100 — resistance saves my Active
+    assert board.active_doomed is False
 
 
 @pytest.mark.req("REQ-GUST-0009")
 def test_incoming_damage_doomed_without_resistance():
-    """Control: a non-resisting 100-HP Active takes the full 120 → doomed (resistance is what changed it)."""
+    """Control for the test above."""
     p = _pilot()
     obs = make_select([opt(14)],
                       current=state(active=poke(MY_ATK, hp=100), opp_active=poke(OPP_FIGHTER, hp=200)))
@@ -548,27 +519,8 @@ def test_incoming_damage_doomed_without_resistance():
 
 @pytest.mark.req("REQ-KNOWN-TOP-0001")
 def test_the_MAIN_attack_veto_survives_the_swap_BY_THE_COMPOSER_ABSTAINING():
-    """A gap POC-T4/5 (Issue #386) opened and then CLOSED, recorded because the route is the point.
-
-    Four tests above used to end `assert p.decide(obs) == [1]` — with the known-top belief cleared,
-    Seek Inspiration reveals nothing, `_tactical` prices it at `-KO_SCORE`, and the tuned argmax
-    ended the turn. **The composer does not read `_tactical`.** It prices the board, and a 0-damage
-    attack and an end-turn reach the SAME end state, so it scored both 0.0 and took the attack. An
-    earlier version of this test asserted exactly that, as the current behaviour with the gap named.
-
-    The tie-defer (`planner._tied_first_steps`) closes it, and closes it for the right reason rather
-    than by accident: the composer's own numbers say it has NO VIEW here — 0.0 against 0.0 is it
-    reporting that both options end the turn in the same place — so it abstains and the tuned
-    scoring keeps the turn. The `-KO_SCORE` veto is consulted again. That is `ko-score-band`, a
-    whitelisted STRUCTURAL sound rule, being served by an abstention rather than by a special case.
-
-    **Scope, measured rather than assumed:** `-KO_SCORE` is emitted at four sites in `pilot.py`.
-    THREE are at non-MAIN selects (`_top_deck_tactical` at `_TO_DECK` x2, `_snipe_tera_veto` at a
-    DAMAGE select) where `plan_turn` never fires. Exactly ONE — this one, `_tactical`'s Seek
-    Inspiration branch — is MAIN-reachable, so this was always a single named site.
-
-    The three assertions are the three links, and each can fail independently: the veto is computed,
-    the composer declines to overrule it, and the turn ends."""
+    """The composer does NOT read `_tactical`, so the `-KO_SCORE` veto survives only via the tie-defer
+    (`planner._tied_first_steps`) abstaining at 0.0-vs-0.0 (Issue #386). Three links, asserted separately."""
     p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
                 COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
                copy_top_value=True)

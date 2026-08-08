@@ -1,35 +1,14 @@
 """Search / verification API: fixture-seedable, clonable engine sessions (ADR-0059 M3).
 
-The cgpy twin of ``cg.api``'s search surface minus the opaque blob: where the native engine
-reconstructs a search fork from its serialized instance state (``search_begin_input``), cgpy
-reconstructs from the STRUCTURED observation plus the caller's hidden-zone predictions
-(`state_from_obs`) — or, for god-view/fixture work, from a full-information visualize frame
-(`state_from_visualize`). Validation order and error strings mirror ``cg.api.search_begin``
-verbatim; fork semantics follow docs/pyeng/determinism.md §4:
+cgpy rebuilds a fork from the STRUCTURED observation plus hidden-zone predictions, per
+determinism.md §4. The traps: predicted hidden zones are RESHUFFLED by the fork, so an
+order-dependent verdict is never trustworthy; ``manual_coin`` is honoured only by flips routed
+through `chain._flip`; sessions are CLONE-PER-STEP.
 
-- predicted hidden zones are RESHUFFLED by the fork (deterministically: same call + same
-  steps = same outcome); callers must never trust order-dependent verdicts. A deck REVEALED
-  by the select (``select.deck``) keeps its true recorded order — options index into it.
-- ``manual_coin=True``: every coin flip poses a COIN_HEAD YesNo instead of consuming rng.
-- sessions are CLONE-PER-STEP: `session_step(id)` never mutates the state behind `id`
-  (natively that is why SearchRelease exists); `session_end` clears the whole table.
-
-What a structured rebuild CANNOT recover from a single observation (the native blob carries
-these; all are refute-safe approximations for the planner's win verdicts):
-
-- once-per-turn ability gates / attack self-locks already spent this turn (seeded unspent),
-- this-turn effect markers (damage bonuses, global once-per-name ability locks, item locks),
-- the global energy ATTACH ORDER across Pokémon (seeded in board-scan order),
-- an ambiguous mid-effect chain: token-less seeding accepts a MAIN select, or a select posed
-  by a TRAINER play program whose posing op is unambiguous (`_OP_POSES` — the fetch-class
-  selects correction fixtures capture); anything else (abilities, attack riders, multi-pose
-  sequences, LOOKING) raises.
-
-Observations rendered by the live cgpy engine (`cgpy.game`) carry all of the above exactly,
-in the ``search_begin_input`` token (`export_token`/`parse_token`) — the cgpy analogue of
-the native blob. The token holds ONLY state derivable from public logs (turn markers, gates,
-attach order, chain frames whose contents are serials/indices) — never hidden card
-identities, so it grants the searcher nothing a log-reading agent could not know.
+A token-less rebuild cannot recover spent once-per-turn gates, this-turn markers, the true attach
+order, or an ambiguous mid-effect chain — refute-safe approximations, and the last RAISES rather
+than guess. The ``search_begin_input`` token holds ONLY log-derivable state, so it grants the
+searcher nothing a log-reading agent could not know.
 """
 from __future__ import annotations
 
@@ -161,9 +140,8 @@ def _fix_stadium_deltas(gs: GameState) -> None:
 
 
 def _seed_attach_order(gs: GameState) -> None:
-    """Approximate the global attach order by board scan (seat 0 then 1, active first,
-    bench order, per-Pokémon attach order) — exact order is engine-internal; the token
-    path overrides this with the true sequence."""
+    """APPROXIMATE the global attach order by board scan — the true order is engine-internal, and
+    the token path overrides this with the real sequence."""
     for seat in (0, 1):
         for p in gs.in_play(seat):
             for s in p.energy:
@@ -198,9 +176,8 @@ def _apply_internals(gs: GameState, internals: dict) -> None:
                     p.attack_locks = dict(pi.get("attack_locks") or {})
 
 
-# (SelectType, SelectContext) pairs an op can pose on its FIRST activation (vars empty).
-# Only ops whose act-phase needs nothing but the answer are listed — locating one of these
-# uniquely in a trainer's play program pins (pc, vars={}) and the frame resumes exactly.
+# (SelectType, SelectContext) pairs an op can pose on its FIRST activation (vars empty). ONLY ops
+# whose act-phase needs nothing but the answer may be listed, or the resumed frame is wrong.
 _OP_POSES = {
     "effectDeckToHandAndShuffle": {(int(SelectType.CARD), int(SelectContext.TO_HAND))},
     "effectTrashToHand": {(int(SelectType.CARD), int(SelectContext.TO_HAND))},
@@ -214,10 +191,8 @@ _OP_POSES = {
 
 
 def _reconstruct_trainer_frame(gs: GameState, select: dict, seat: int) -> None:
-    """Rebuild the EffectFrame stack for a select posed mid-trainer: the effect card names
-    the program, the (type, context) pair locates the single posing op, and the observation
-    already reflects every earlier op's side effects — so ``pc`` at that op with empty vars
-    resumes identically. Raises when the posing op cannot be located unambiguously."""
+    """Rebuild the EffectFrame stack for a select posed mid-trainer. The observation already
+    reflects every earlier op, so ``pc`` with empty vars resumes identically. RAISES on ambiguity."""
     from .chain import def_for
     eff = gs.pending.effect_card
     if eff is None:
@@ -273,13 +248,8 @@ def state_from_obs(obs: dict,
                    opponent_active: list[int],
                    manual_coin: bool = False,
                    *, db: CardDB | None = None, rng=None) -> Engine:
-    """An Engine seeded from a live observation dict plus hidden-zone predictions — the
-    ``cg.api.search_begin`` contract with the opaque blob replaced by structured rebuild.
-
-    Validation (order and error strings) mirrors the native shim. Prediction lists longer
-    than the zone are truncated to the first N entries. Without a cgpy state token on the
-    obs, the select must be MAIN — or a trainer-play select whose posing op is unambiguous
-    (`_reconstruct_trainer_frame`); other mid-effect states are not reconstructible."""
+    """An Engine seeded from a live obs plus hidden-zone predictions; over-long prediction lists
+    truncate. Without a state token the select must be MAIN or an unambiguous trainer-play select."""
     select = obs.get("select")
     cur = obs.get("current")
     if select is None or cur is None:
@@ -415,12 +385,8 @@ def state_from_obs(obs: dict,
 def state_from_visualize(frame: dict, decks: tuple[list[int], list[int]], *, seat: int,
                          select: dict | None = None, manual_coin: bool = False,
                          db: CardDB | None = None, rng=None) -> Engine:
-    """An Engine seeded from a god-view frame (`visualize_data`-style ``current``): full
-    information, no predictions — the differential/fixture seeding path.
-
-    ``seat`` is the mover (god frames render yourIndex=0 regardless). When ``select`` is
-    given (the paired live-obs select) the pending select is ingested verbatim; otherwise
-    the state must be at MAIN and the menu is REBUILT by the engine's own option builder."""
+    """An Engine seeded from a god-view frame: full information, no predictions. ``seat`` is the
+    mover — god frames render yourIndex=0 regardless. Without ``select`` the state must be at MAIN."""
     db = db or CardDB.load()
     rng = rng or SeededRng(0)
     if len(decks) != 2 or any(len(d) != 60 for d in decks):

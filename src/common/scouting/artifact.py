@@ -1,8 +1,5 @@
-"""The shipped meta artifact (see docs/scouting.md).
-
-Meta knowledge only — recognition priors/likelihoods and per-Archetype Dossiers, all
-referencing cards by id. Card *stats* are not here; they come from the engine at
-runtime. A JSON loader with fail-safe behavior is added in a later cycle.
+"""The shipped meta artifact (docs/scouting.md): recognition priors/likelihoods and per-Archetype
+Dossiers, cards by id. Card *stats* are NOT here — they come from the engine at runtime.
 """
 from __future__ import annotations
 
@@ -27,13 +24,8 @@ def _empty() -> Artifact:
 
 
 def load_artifact(path: str | Path | None = None) -> Artifact:
-    """Load the shipped artifact JSON, re-int'ing card-id keys. Fail-safe → empty.
-
-    JSON object keys are strings, so card ids are restored to ints. `card_inclusion`
-    is lifted out of each dossier to the top level (the scorer consumes it directly).
-    Any error (missing file, bad JSON, schema drift) degrades to an empty Artifact so
-    the Scout still runs on observed-only intel.
-    """
+    """Re-ints the string card-id keys and lifts `card_inclusion` to the top level. Any error
+    degrades to an EMPTY Artifact, so the Scout still runs on observed-only intel."""
     try:
         raw = json.loads(Path(path or _DEFAULT).read_text(encoding="utf-8"))
         priors = {a: float(p) for a, p in (raw.get("priors") or {}).items()}

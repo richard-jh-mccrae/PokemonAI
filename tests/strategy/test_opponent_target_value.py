@@ -1,11 +1,12 @@
 """Opponent-Value-Equation S3a — the two-term opponent-target marginal (design:
-docs/plans/opponent-value-equation-unification.md; O1 = Option B).
+docs/plans/ADR-0078; O1 = Option B).
 
 The Layer-2 currency, ruled: value(remove opponent body b) = prize_advance + survival_shift × phase
 (ruling 1 two-term sum; ruling 5 phase-scaled by the KO-race margin). The survival term is grounded
 in the S1a curve — `survival_shift` = Δ `turns_to_ko_me` from removing the body — and stays sub-prize
 (the gust-marginal discipline: a bought turn breaks ties, never overrides a real prize). These are
-pure primitives + a shadow, DECIDING NOTHING; the live snipe/gust/deny picks are unchanged.
+primitives whose rows are now a LIVE decision input: `Pilot._board` resolves and caches
+`_opponent_target_rows` once per decision, and the shipped gust/deny picks read it.
 """
 import types
 
@@ -25,10 +26,8 @@ LATE = 506          # cost 3, 250 a turn — takes the lead from t=3
 FAST_ATK, SLOW_ATK, SIXTY_ATK, NINETY_ATK = 511, 512, 513, 514
 EARLY_ATK, LATE_ATK = 515, 516
 
-# A LINE: a 1-prize Basic one hop from a 3-prize Mega ex, and a 2-hop line to a 2-prize ex. Both
-# exist to exercise `forward_line_prize`'s hop distance, which is NOT `ForwardPayoff.hops` — that
-# one measures the distance to the best-DAMAGE form (Issue #285) and the two diverge whenever a
-# line's biggest attacker is not its biggest prize, which is exactly what `MID` below arranges.
+# `forward_line_prize`'s hop distance is NOT `ForwardPayoff.hops`, which measures the distance to the
+# best-DAMAGE form (Issue #285); `MID` below is arranged so the two diverge.
 STARYU, MEGA = 507, 508          # Staryu -> Mega Starmie ex, 1 hop, prize 1 -> 3
 PIP, MID, BIGEX = 509, 510, 517  # Pip -> Mid -> Big ex, 2 hops, prize 1 -> 1 -> 2
 DEADEND = 518                    # a 1-prize Basic whose line goes nowhere
@@ -106,14 +105,8 @@ def test_two_term_value_prize_plus_capped_survival():
 # ---- turns_to_ko_me (the S1a curve inversion) ------------------------------------------------
 def test_turns_to_ko_me_and_the_survival_shift():
     c = _combat()
-    # A one-shots me next turn (t=1); B needs 3 turns of energy.
-    #
-    # RE-DERIVED by hand for ADR-0071 decision 10, when `turns_to_ko_me` became an ACCUMULATING
-    # read (`min{t : Σᵢ₌₁..ᵗ incoming(i) >= hp}`). Both numbers are unchanged, and NOT by luck:
-    # my HP is 100, A pays its 1-cost attack on the first attach and deals the whole 100 at t=1,
-    # while B is cost-3 off 0 Energy so it deals literally 0 at t=1 and t=2 — the running sum is
-    # 0 + 0 + 100, which still first reaches 100 at t=3. Accumulation only moves a pin when some
-    # earlier turn contributes non-zero damage.
+    # `turns_to_ko_me` ACCUMULATES: `min{t : Σᵢ₌₁..ᵗ incoming(i) >= hp}` (ADR-0071 decision 10), so
+    # accumulation only moves a number when an earlier turn contributes non-zero damage.
     assert c.turns_to_ko_me(MY_BODY, [_b(A)]) == 1
     assert c.turns_to_ko_me(MY_BODY, [_b(B)]) == 3
     both = [_b(A), _b(B)]
@@ -126,12 +119,8 @@ def test_turns_to_ko_me_and_the_survival_shift():
 
 # ---- the FRACTIONAL survival clock (ADR-0117, amending ADR-0071 decision 4) ---------------
 def test_the_integer_clock_is_unchanged_by_the_fractional_reading():
-    """The byte-identical guarantee, asserted literally rather than inferred from the diff.
-
-    Every shipped consumer (`survival`, `readiness`, `threat`, both deny surfaces) reads the
-    INTEGER. The fractional reading is additive, so these are the same numbers this file has
-    asserted since ADR-0071 decision 10 — restated here against the new code path so that a future
-    change to the accumulation cannot quietly move them while only the fractional tests are read."""
+    """Every shipped consumer reads the INTEGER, so the fractional reading is additive; restated
+    against the new path so a change to the accumulation cannot move it unseen."""
     c = _combat()
     assert c.turns_to_ko_me(MY_BODY, [_b(A)]) == 1
     assert c.turns_to_ko_me(MY_BODY, [_b(B)]) == 3
@@ -144,11 +133,8 @@ def test_the_integer_clock_is_unchanged_by_the_fractional_reading():
 
 
 def test_the_crossing_is_interpolated_within_the_turn_it_falls_in():
-    """`t* = (t_cross - 1) + (hp - dealt(t_cross - 1)) / incoming(t_cross)`, hand-derived.
-
-    My HP is 100 and `incoming` is the per-turn MAXIMUM over their forms (not a sum), so a lone
-    60-damage body accumulates 60 then 120: it crosses DURING t=2, four-sixths of the way in. The
-    integer clock rounds that to 2 and the precision is gone — which is the whole defect."""
+    """`t* = (t_cross - 1) + (hp - dealt(t_cross - 1)) / incoming(t_cross)`, and `incoming` is the
+    per-turn MAXIMUM over their forms, not a sum."""
     c = _combat()
     # 60 a turn: dealt(1) = 60, incoming(2) = 60  ->  1 + (100 - 60)/60 = 1.6667
     assert c.survival_clock(MY_BODY, [_b(C60)]).exact == pytest.approx(1 + 40 / 60)
@@ -165,8 +151,8 @@ def test_the_crossing_is_interpolated_within_the_turn_it_falls_in():
 
 
 def test_no_crossing_within_the_horizon_reads_the_same_both_ways():
-    """There is no crossing to interpolate, so the fractional reading must not invent one beyond
-    the horizon — it repeats `max_t + 1` exactly, the shipped "survives the window" answer."""
+    """With no crossing the fractional reading must not invent one: it repeats `max_t + 1` exactly,
+    the shipped "survives the window" answer."""
     c = _combat()
     clock = c.survival_clock(MY_BODY, [_b(B)], max_t=2)      # B deals 0 at t=1 and t=2
     assert clock.turns == 3 and clock.exact == pytest.approx(3.0)
@@ -174,22 +160,16 @@ def test_no_crossing_within_the_horizon_reads_the_same_both_ways():
     assert empty.turns == 5 and empty.exact == pytest.approx(5.0)
     dead = c.survival_clock({"id": MY, "hp": 0}, [_b(A)], max_t=4)   # no HP: no clock at all
     assert dead.turns == 5 and dead.exact == pytest.approx(5.0)
-    # NEGATIVE hp is already past dead: `dealt >= hp` holds at t=1 before anything is dealt, so
-    # there is no crossing to interpolate and the divisor would be that turn's zero damage. The
-    # integer route answered 1 before ADR-0117 and must still — this regressed to a
-    # ZeroDivisionError once, which is a louder answer rather than a sharper one.
+    # NEGATIVE hp is already past dead, so there is no crossing and the divisor would be that turn's
+    # zero damage — this regressed to a ZeroDivisionError once.
     past = c.survival_clock({"id": MY, "hp": -5}, [_b(A)], max_t=4)
     assert past.turns == 1 and past.exact == pytest.approx(1.0)
     assert c.turns_to_ko_me({"id": MY, "hp": -5}, [_b(A)], max_t=4) == 1
 
 
 def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
-    """THE defect Issue #398 measured, reproduced at the size of two bodies.
-
-    Both opponents cross my HP during t=2, so the integer `survival_shift` for removing EITHER is
-    0 — a Flat Tie, and at equal prize value the pick falls to list order. They are not equally
-    dangerous: removing the 90 leaves me facing 60 a turn and genuinely buys survival, while
-    removing the 60 changes nothing because the 90 was already the per-turn maximum."""
+    """Both bodies cross my HP inside the same turn, so the INTEGER shift is 0 for either and at
+    equal prize value the pick falls to list order — Issue #398's Flat Tie."""
     c = _combat()
     both = [_b(C60), _b(D90)]
     base = c.turns_to_ko_me(MY_BODY, both)
@@ -210,15 +190,8 @@ def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
 
 
 def test_only_the_bodies_that_LEAD_the_per_turn_max_can_score():
-    """The **Structural Zero** itself, on the two boards ADR-0117 quotes.
-
-    The ADR cited these as "confirmed analytically" while they existed only in a scratch run — the
-    citation is what makes them real. `incoming()` is a per-turn MAX over their forms, so:
-
-    * on `[C60, D90, A]` only `A` (100 a turn, the standing lead into my 100 HP) can score; removing
-      either of the other two leaves the maximum exactly where it was;
-    * on `[A, A]` NEITHER scores, because removing one leaves the other at the identical maximum —
-      the lead has to be UNIQUE, not merely held."""
+    """The Structural Zero: `incoming()` is a per-turn MAX, so only a body holding a UNIQUE lead can
+    score — two bodies tied for the lead leave the maximum untouched either way (ADR-0117)."""
     c = _combat()
     board = [_b(C60), _b(D90), _b(A)]
     base = c.survival_clock(MY_BODY, board).exact
@@ -237,22 +210,8 @@ def test_only_the_bodies_that_LEAD_the_per_turn_max_can_score():
 
 
 def test_more_than_one_body_scores_when_the_lead_changes_across_turns():
-    """The boundary of the **Structural Zero**, pinned because a stronger claim about it was drafted
-    into an ADR and was FALSE.
-
-    `incoming()` is a per-turn MAX over their forms, so removing a body that never leads that max
-    moves nothing — that much is true and `test_a_flat_tie...` above shows it. The claim that did
-    not survive was *"at most ONE body per board can carry a non-zero survival_shift"*. `incoming(t)`
-    grants each form `attached + t` energy, so the LEADING form can change across turns, and every
-    body that leads at some turn before the crossing scores.
-
-    My 300 HP against `Early` (cost 1, 100 a turn, leads at t=1 and t=2) and `Late` (cost 3, 250 from
-    t=3, leads there). Both present: dealt 100, 200, 450 — crossing during t=3 at 2 + (300-200)/250 =
-    2.4. Remove Early and `Late` alone deals 0, 0, 250, 500 — crossing during t=4 at 3 + 50/250 = 3.2.
-    Remove Late and `Early` alone deals 100, 200, 300 — crossing exactly ON t=3.
-
-    The corpus average (208 non-zero shifts over 359 frames) is consistent with the false form, which
-    is exactly why an average must never be read as a bound."""
+    """"At most ONE body per board can carry a non-zero shift" is FALSE: `incoming(t)` grants each
+    form `attached + t` energy, so the LEAD can change across turns and every leader scores."""
     stats = DictCardStatProvider({
         MY: CardStat(MY, synthetic=True, name="Me", hp=300, minAttackCost=1, attacks=()),
         EARLY: CardStat(EARLY, synthetic=True, name="Early", hp=120, minAttackCost=1,
@@ -279,13 +238,8 @@ def test_more_than_one_body_scores_when_the_lead_changes_across_turns():
 
 # ---- the LINE PRIZE (ADR-0119 decision 2) -------------------------------------------------
 def test_forward_line_prize_reads_the_lines_best_prize_and_the_hops_to_IT():
-    """`(prize, hops)` over the card's forward closure INCLUDING itself.
-
-    The hop count is the distance to the best-PRIZE form, and that is the whole reason this cannot
-    reuse `ForwardPayoff.hops`: that one measures the distance to the best-DAMAGE form (Issue #285).
-    `Pip -> Mid -> Big ex` is built to separate them — `Mid` hits for 250 at hop 1 while the 2-prize
-    `Big ex` sits at hop 2, so a damage-derived hop count would discount this line by half again as
-    much as it should."""
+    """`(prize, hops)` over the forward closure INCLUDING itself, where hops is the distance to the
+    best-PRIZE form — which is why it cannot reuse the best-DAMAGE `ForwardPayoff.hops`."""
     c = _combat()
     assert c.forward_line_prize(STARYU) == (3, 1)      # 1-prize Basic, 3-prize Mega ex one hop up
     assert c.forward_line_prize(MEGA) == (3, 0)        # already the best form: no hops
@@ -297,8 +251,7 @@ def test_forward_line_prize_reads_the_lines_best_prize_and_the_hops_to_IT():
 
 
 def test_line_prize_advance_is_the_hop_discounted_line_prize():
-    """`own + (max_line_prize - own) x halve(hops)`, hand-derived against `grading.halve`'s own
-    shipped values — the same `p_arrive` convention ADR-0070 §6 uses everywhere else."""
+    """`own + (max_line_prize - own) x halve(hops)` — the `p_arrive` convention of ADR-0070 §6."""
     adv = needs.line_prize_advance
     assert adv(own_prize=1, max_line_prize=3, hops=1) == pytest.approx(1 + 2 * 0.5)      # 2.0
     assert adv(own_prize=1, max_line_prize=3, hops=2) == pytest.approx(1 + 2 * 0.25)     # 1.5
@@ -315,10 +268,8 @@ def test_line_prize_advance_is_the_hop_discounted_line_prize():
 
 
 def test_the_line_prize_never_breaches_the_ceiling_the_whole_equation_is_normalised_against():
-    """`TARGET_VALUE_CEILING` (3.9) normalises `_THREAT_W` AND `GUST_TARGET_WORTH_RATE`, so a leg
-    that could exceed `MAX_PRIZE_VALUE` would silently rescale two derived rates in other modules.
-    Bounded by construction — the line's best prize is itself a `prize_value`, and the discount only
-    ever shrinks the gap toward it."""
+    """`TARGET_VALUE_CEILING` normalises `_THREAT_W` AND `GUST_TARGET_WORTH_RATE`, so a leg exceeding
+    `MAX_PRIZE_VALUE` would silently rescale two derived rates in other modules."""
     adv = needs.line_prize_advance
     for own in (1, 2, 3):
         for best in (1, 2, 3):
@@ -329,9 +280,8 @@ def test_the_line_prize_never_breaches_the_ceiling_the_whole_equation_is_normali
 
 
 def test_the_survival_term_still_never_outranks_a_real_prize():
-    """The gust-marginal discipline, re-checked at the new resolution: making the shift continuous
-    must not let a tie-break outgrow the thing it is breaking ties among. `_SURVIVAL_CAP` < 1 does
-    the work, and it caps the fractional shift exactly as it capped the integer one."""
+    """`_SURVIVAL_CAP` < 1 keeps a tie-break from outgrowing the thing it breaks ties among, and it
+    caps the fractional shift exactly as it capped the integer one."""
     val = needs.opponent_target_value
     assert val(prize_advance=1, survival_shift=99.9, phase=1.0) < val(prize_advance=2,
                                                                      survival_shift=0.0, phase=1.0)
@@ -341,18 +291,8 @@ def test_the_survival_term_still_never_outranks_a_real_prize():
 
 
 def test_the_live_rows_break_a_flat_tie_the_integer_clock_could_not():
-    """The behavioural claim, at the seam that actually decides: `_opponent_target_rows`.
-
-    Card facts read off the live provider `_build_pilot` hands the Pilot, never recalled — both
-    bodies are **1 prize**, so `prize_advance` ties by construction and the whole ranking rests on
-    `survival_shift`. Their Dunsparce Active's line reaches 150/turn into my 200 HP; their benched
-    Alakazam's Powerful Hand is `20 x their hand`, so at a hand of six it reaches 120/turn.
-
-    Both crossings land in turn 2, which is exactly why the INTEGER clock reports 0 turns bought for
-    removing either — a perfect Flat Tie, the shape 251 of 343 equal-prize corpus groups are in, and
-    the pick falls to list order. They are not equally worth removing: taking the Active drops the
-    per-turn maximum from 150 to 120 and genuinely pushes my crossing later, while taking the Bench
-    changes nothing because it was never the binding constraint. The fractional reading says so."""
+    """Both bodies are 1 prize, so `prize_advance` ties by construction and the whole ranking rests
+    on `survival_shift`; card facts come off the live provider, never recalled."""
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
     p._planning = False
@@ -394,20 +334,8 @@ def test_the_live_rows_break_a_flat_tie_the_integer_clock_could_not():
 
 
 def test_the_live_rows_run_mid_sim():
-    """ADR-0093 decision 3 — where the `_planning` guard belongs.
-
-    `_opponent_target_rows` is the LIVE per-body computation that both the deny fire rung and the
-    `gust_target` slot emission read. It used to early-return `None` mid-sim alongside the three
-    diagnostics, which made the agent evaluate a different policy inside its own rollout than
-    outside it — the third confirmed source of continuation collateral here (ADR-0072 finding 2,
-    ADR-0070 amendment H, Issue #228). Measured cost of that: the armed deny rung returned 0.00
-    mid-sim where the incumbent returned -5.00 / +22.50 / +74.50.
-
-    The guard was a COST decision, not a correctness one — nothing in the rows starts a nested
-    engine search, so it moved onto `_opponent_target_shadow`, the caller that actually wanted no
-    shadow work in rollouts. Issue #261 item 2h then deleted that shadow, and with it the last
-    caller the guard was protecting — so what survives is the half that was always the point: the
-    live rows value each body identically inside the rollout and outside it."""
+    """A `_planning` early-return here would make the agent evaluate a DIFFERENT policy inside its
+    own rollout than outside it (ADR-0093 decision 3); nothing in the rows starts a nested search."""
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
     obs = {"current": {"yourIndex": 0, "players": [
@@ -430,18 +358,8 @@ def test_the_live_rows_run_mid_sim():
 
 
 def test_the_deleted_pilot_duplicate_read_the_same_number_on_every_real_card():
-    """`Pilot._forward_payoff_prize_value` was deleted and its one caller rerouted to
-    `CombatMath.forward_line_prize(cid)[0]`. The commit claimed "same number, same behaviour"; that
-    is true for every card in the pool and FALSE for an unknown id, so it is pinned rather than
-    asserted.
-
-    The old read was `max(_prize_value({'id': i}) for i in {cid} | forward_ids(cid))`, and
-    `CombatMath.prize_value` answers **1** for a card it does not know — so an unknown id used to
-    claim "a 1-prize line" where the new read claims nothing (0). Measured over the whole pool: 0
-    divergences. The divergence is also unreachable at the only consumer, whose Hypothesis conjoins
-    `card_is_recognized_line_preevo` — membership in a set built from declared real cards — with
-    `0 < card_forward_payoff_prize`, so an unknown id fails on the conjunct before the number is
-    read."""
+    """`CombatMath.prize_value` answers 1 for a card it does not know, so the deleted duplicate and
+    its replacement agree on every real card and diverge only on an unknown id."""
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
 
@@ -462,13 +380,8 @@ def test_the_deleted_pilot_duplicate_read_the_same_number_on_every_real_card():
 
 
 def test_the_row_carries_the_role_priority_as_its_own_leg():
-    """D7: the sheet reaches the rows as `role_priority`, beside `prize_advance` / `survival_shift`
-    / `value` — exactly as `_relevance_terms` and `_strip_delta_terms` attach theirs and let each
-    consumer combine. It is an ORDINAL priority, not a worth, so it is never summed into `value`.
-
-    Both bodies here are 1 prize with the same clock, so `value` ties by construction and the ONLY
-    thing that can order them is the new leg — which is precisely the population Issue #398 closed
-    on (139 of 343 equal-prize groups still flat)."""
+    """`role_priority` is an ORDINAL priority, not a worth, so it rides beside `value` and is never
+    summed into it (Issue #395 D7)."""
     from common.scouting.matchup_plan import build_matchup_plan
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
@@ -499,9 +412,8 @@ def test_the_row_carries_the_role_priority_as_its_own_leg():
 
 
 def test_a_board_with_no_matchup_plan_still_produces_rows():
-    """Fail-open, stated: an inert plan (the ADR-0051 kill-switch off) or a `Board` that predates the
-    field must degrade to 0.0 — the same reading `MatchupPlan.priority` gives an unroled body — never
-    to a crash and never to a missing key a consumer would have to special-case."""
+    """Fail-open: an inert plan or a `Board` predating the field degrades to 0.0, never to a crash
+    and never to a missing key a consumer would special-case."""
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
     p._planning = False
@@ -518,12 +430,8 @@ def test_a_board_with_no_matchup_plan_still_produces_rows():
 
 
 def test_the_ceiling_and_both_rates_derived_from_it_are_unchanged():
-    """**Checked, not assumed** — Issue #395's acceptance criterion, and D1's stated consequence.
-
-    Under D1 the sheet is an ordinal priority that never enters `value`, so the opponent-target
-    ceiling and the two rates derived from it must be bit-for-bit what they were. If any of these
-    moves, the implementation drifted into a WORTH and the response is to re-read D1, not to update
-    the number."""
+    """If any of these moves, the sheet drifted from an ordinal priority into a WORTH — the response
+    is to re-read Issue #395 D1, not to update the number."""
     from common import currency, state_value
     assert needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
     assert currency.GUST_TARGET_BAND == pytest.approx(10.0)

@@ -14,9 +14,8 @@ MEGA_STARMIE, STARYU, CINDERACE = 1031, 1030, 666
 
 @pytest.mark.req("REQ-STAT-0002")
 def test_attack_facts_resolve_through_the_stat_provider_alone():
-    # The Stat Provider is the ONE card-knowledge seam (ADR-0051): a Pilot wired with a
-    # provider that carries the attack records — and NO attacks=/attack_stats= ctor args —
-    # still sees damage/cost, so a KO scores as a KO.
+    # The Stat Provider is the ONE card-knowledge seam (ADR-0051): a Pilot wired with a provider
+    # carrying the attack records — and NO attacks=/attack_stats= ctor args — still sees damage/cost.
     jetting = 11
     stats = DictCardStatProvider(
         {MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
@@ -33,9 +32,8 @@ def test_attack_facts_resolve_through_the_stat_provider_alone():
 
 @pytest.mark.req("REQ-STAT-0002")
 def test_legacy_attack_kwargs_are_retired():
-    # ADR-0051: the per-mechanic dicts and the prebuilt attack_stats table are gone from the
-    # ctor — attack facts have exactly ONE entrance (stats.attack). A resurrected kwarg must
-    # fail loudly, not silently feed a second fact path.
+    # ADR-0051: attack facts have exactly ONE entrance (stats.attack), so a resurrected kwarg must
+    # fail loudly rather than silently feed a second fact path.
     for kwarg in ("attacks", "attack_costs", "recoil", "bench_snipe", "bench_spread",
                   "ignores_active_effects", "attack_stats"):
         with pytest.raises(TypeError):
@@ -300,9 +298,8 @@ def test_context_board_exposes_my_bench_count():
 
 @pytest.mark.req("REQ-PILOT-0016")
 def test_context_board_exposes_wincon_in_hand_undeployable():
-    """`wincon_in_hand_undeployable`: an EVOLUTION win-condition in hand with NO base anywhere is a dead
-    card (ep83966336 f44). True only when the payoff sits in hand, is not in play, its Line has a
-    pre-evolution, and no pre-evolution is in play OR hand."""
+    """True only when the payoff sits in hand, is not in play, its Line has a pre-evolution, and no
+    pre-evolution is in play OR hand."""
     watch = Hypothesis(id="dead-wincon", rationale="",
                        when=lambda c: c.board.wincon_in_hand_undeployable, weight=5)
     stats = DictCardStatProvider({
@@ -348,9 +345,8 @@ def test_wincon_in_hand_undeployable_is_false_for_a_basic_payoff_wincon():
 
 @pytest.mark.req("REQ-PILOT-0020")
 def test_context_exposes_attack_target_energy_and_threat():
-    # At a Damage/snipe select, Context must expose per option the attached-energy count of
-    # the benched Pokemon it targets — and derived "threat" bool (has Energy) — so a snipe
-    # trigger can prefer the energized (closest-to-attacking) target.
+    # At a Damage/snipe select, Context exposes the targeted bench Pokemon's attached-energy count
+    # and a derived "threat" bool, so a snipe trigger can prefer the energized target.
     counts = Hypothesis(id="energy-2", rationale="", when=lambda c: c.target_energy == 2, weight=1)
     threat = Hypothesis(id="threat", rationale="", when=lambda c: c.target_is_threat, weight=1)
     pilot = Pilot(Strategy(hypotheses=[counts, threat]), deck=[1] * 60)
@@ -366,9 +362,8 @@ def test_context_exposes_attack_target_energy_and_threat():
 
 @pytest.mark.req("REQ-PILOT-0021")
 def test_target_energy_flips_the_snipe_and_is_none_off_a_damage_select():
-    # New field flips preferred target: a snipe rule lifts the energized bench option (opt1,
-    # so only real scoring can choose it). Signal is defined ONLY for attack-target options —
-    # at any other select it's None/False, so same rule can't fire and baseline holds.
+    # The signal is defined ONLY for attack-target options; at any other select it is None/False, so
+    # the same rule cannot fire and the baseline holds.
     snipe = Hypothesis(id="snipe", rationale="prefer the energized threat",
                        when=lambda c: c.target_is_threat, weight=30)
     pilot = Pilot(Strategy(hypotheses=[snipe]), deck=[1] * 60)
@@ -381,10 +376,8 @@ def test_target_energy_flips_the_snipe_and_is_none_off_a_damage_select():
     off_target = make_select(targets, context=MAIN, current=board)
     off = pilot.explain(off_target).options            # not a Damage select -> no signal -> baseline
     assert [o.fired for o in off] == [[], []]          # the rule cannot fire, so nothing separates
-    assert off[0].score == off[1].score                # the two options; which of an exact tie is
-                                                       # picked is the canonical tie-break's business
-                                                       # (ADR-0103), not this rule's — asserting the
-                                                       # index here pinned the old positional one
+    assert off[0].score == off[1].score                # which of an exact tie is picked is the
+                                                       # canonical tie-break's business (ADR-0103)
 
 
 @pytest.mark.req("REQ-GEN-0022")

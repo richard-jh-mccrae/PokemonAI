@@ -1,23 +1,9 @@
 """Hand-refresh swing (ADR-0060) through the SHIPPED Pilot — real captured boards, full option
-menu, shipped weights. The strict retest bar.
-
-Six human corrections, all on the same axis and none of them previously gated:
-
-  MUST NOT play the refresh (we would shed the bigger hand)
-    ml f111  Judge,     my 8  / opp 1   swing -7   "such an enormous blunder"          (CRITICAL)
-    ms f60   Harlequin, my 11 / opp 2   swing -9   "a HUGE blunder, HUGE!"
-    ms f94   Lillie's,  my 10 / opp 3   swing -4   "never shuffle back hand > 7"
-
-  MUST play the refresh (their hand is stacked, ours is not)
-    ms f45   Harlequin, my 6  / opp 7   swing +1   "harlequin would have done well here"
-    ms f100  Harlequin, my 5  / opp 9   swing +4   "a great time to disrupt"
-    ms f64   Harlequin, my 8  / opp 21  swing +13  "play harlequin to reduce their handsize"
+menu, shipped weights.
 
 We assert the refresh option's SCORE, not the argmax, wherever `_finish_turn_last` tiering governs
 the pick: an attack is deferred to last and an Item outranks a Supporter by TIER regardless of
-score, so the argmax can mask a badly-scored refresh in both directions. That masking is exactly why
-f111's own fixture sat in the tree ungated -- the KO dominated and hid a Judge scored at -5 on a
--7 board. f94 is the one frame where the blunder reaches the argmax, so it gets both assertions.
+score, so the argmax can mask a badly-scored refresh in both directions.
 """
 import json
 import sys
@@ -47,10 +33,8 @@ def _refresh_traces(pilot, fx, card_id):
 
 @pytest.fixture
 def refresh_ctx():
-    """The one seam the SHED tests price a refresh through: `(pilot, obs, board, ctx)` for a named
-    fixture file OR a corpus frame (`episode, n`). The ctx carries only what
-    `_refresh_swing_tactical` / `_refresh_shed_keepcost` read — `card_id` and `option_type` — so a
-    test never re-runs the heavyweight per-option `_context` just to price one card."""
+    """`(pilot, obs, board, ctx)` for a named fixture file OR a corpus frame. The ctx carries only
+    what the shed/swing readers use, so no test re-runs the heavyweight per-option `_context`."""
     from types import SimpleNamespace
 
     from common.strategy.context import _PLAY
@@ -85,18 +69,8 @@ def test_never_shuffle_away_the_bigger_hand(agent, fixture, card, label):
 
 
 def test_lillies_big_hand_blunder_is_not_merely_masked():
-    """ms f94 is the ONE frame where the blunder reaches the ARGMAX: the shipped Pilot played
-    Lillie's (10 cards in hand, redrawing 6) INSTEAD OF ATTACKING. `dont-shuffle-away-the-bigger-
-    hand` could never reach it -- Lillie's carries no `hand_disruption` tag -- so only the swing
-    catches it.
-
-    We assert the correction's actual claim: we attack rather than shed the hand. We do NOT pin the
-    human's labelled attack ([14] Nebula Beam 210) over the Pilot's ([13] Jetting Blow 120 + its
-    bench-snipe rider), because that is a SECOND, already-adjudicated axis -- the KO Race ranks
-    Jetting above Nebula on captured states like this one (reviewed.json ep83661649 f30 'fixed',
-    ep83116501 f60 'covered'). Pinning it here would smuggle a settled combat question into a
-    hand-economy test.
-    """
+    """The ONE frame where the blunder reaches the ARGMAX. Asserted as *we attack rather than shed*:
+    WHICH attack is a second, already-adjudicated axis and would smuggle a settled question in here."""
     fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
     pilot = _shipped_pilot("mega_starmie")
     dec, lillies = _refresh_traces(pilot, fx, LILLIES)
@@ -112,9 +86,8 @@ def test_lillies_big_hand_blunder_is_not_merely_masked():
     ("ms_harlequin_vs_stacked_hand_f64.json", "opp 21"),
 ])
 def test_disrupt_the_stacked_hand(fixture, label):
-    """A positive swing must keep the refresh POSITIVE. These three pass today only by
-    `dig-before-commit`'s hand-blind +20 -- the same flat pull that causes f111/f60/f94 -- so they
-    are the regression half of the gate: killing the blunders must not kill these."""
+    """A positive swing must keep the refresh POSITIVE — the regression half of the gate: killing
+    the blunders must not kill these."""
     fx = _fx(fixture)
     _, traces = _refresh_traces(_shipped_pilot("mega_starmie"), fx, HARLEQUIN)
     assert traces, f"{fixture}: no Harlequin option"
@@ -131,21 +104,12 @@ def test_harlequin_outranks_lillies_when_the_opponent_is_the_one_holding_cards()
     assert harlequin > lillies, f"Harlequin {harlequin:+.1f} must beat Lillie's {lillies:+.1f}"
 
 
-# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (POC-T4/5,
-# Issue #386). Once the rung is gone that assertion is true of every board in the game, so the test
-# went GREEN while checking nothing — a hole no failure count can show. Deleted rather than left
-# passing, because dead text that looks like a guard is worse than no guard.
-#
-# The FACT -- the swing oracle is the single owner of shuffle-refresh value -- is asserted positively
-# one test above (`harlequin > lillies` on the f60 board). That is the differencing result worth
-# keeping; this was its hand-blind negative restatement, keyed on the rung that got retired for it.
+# A test whose ONLY assertion was `"<deleted-rung>" not in _fired(...)` is DELETED here (Issue #386):
+# once the rung is gone that is true of every board, so it went GREEN while checking nothing.
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
-    """ADR-0101: the SHED leg of the live swing IS `needs.set_keep_v2` over the whole shuffled hand —
-    the same resolver/resupply the discard decider reads, not a second summation. The shadow that
-    used to carry this number is gone; the equation carries it. Asserted as a seam identity (the
-    decider equals the module call over the resolved rows) plus the swing identity: the SHED is the
-    only hand-side term, so `swing == CYCLE − shed + (the opponent-side legs)`."""
+    """ADR-0101: the SHED leg IS `needs.set_keep_v2` over the whole shuffled hand — the same
+    resolver/resupply the discard decider reads, so `swing == CYCLE − shed + opponent-side legs`."""
     from common import needs
     from common.pilot import _REFRESH_CYCLE, _REFRESH_OPPONENT_HAND_FRESH, _REFRESH_OPPONENT_HAND_GIFT, _REFRESH_OPPONENT_HAND_STRIP
     from common.strategy.refresh import fresh_cards, net_change
@@ -169,14 +133,8 @@ def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_the_shed_prices_the_hand_as_a_set_not_a_sum(refresh_ctx):
-    """The swap's whole substance (ep82522698 f36, two Wally's Compassion): v1 summed the copies, so a
-    duplicate plan piece was charged TWICE and the refresh looked too costly. The v2 shed is the SET
-    marginal `V(hand) − V(∅)`, and the assignment is submodular, so it is never below the sum of the
-    per-copy marginals — on this frame STRICTLY above, because each Wally's solo-prices 0 (its sibling
-    covers the one de-duplicated slot) while shuffling BOTH really does lose the class.
-
-    A per-copy sum cannot express that: it reads the pair as free. This is the frame the keep-value
-    handoff named as a v2 scope gap, and it is the one the set marginal exists for."""
+    """The v2 shed is the SET marginal `V(hand) − V(∅)`. Each duplicate solo-prices 0 (its sibling
+    covers the slot) while shuffling BOTH loses the class, which a per-copy sum reads as free."""
     from common import needs
     pilot, obs, board, ctx = refresh_ctx(("82522698", 36), HARLEQUIN)
     rows = pilot._needs_hand_rows(obs, board, exclude_cid=HARLEQUIN)
@@ -194,13 +152,8 @@ def test_the_shed_prices_the_hand_as_a_set_not_a_sum(refresh_ctx):
 
 @pytest.mark.req("REQ-NEEDS-0008")
 def test_refresh_slot_resupply_discounts_by_kind_and_window():
-    """`_refresh_slot_resupply` (the WP-N5 residual's fix): per-slot P(the closure re-supplies it in
-    the refresh draw window). Closing-edge kinds (deploy_now / answer_doom) stay 0.0 — re-access is
-    not bankable against a this-turn deadline (`closing_gate_reaccess` re-derived); pitch-side fuel
-    never enters the keep DP; `general` keeps 0.0 (its 0.45 W already carries the site's re-access
-    discount — measured, see the helper's docstring); an uncovered slot has no supplier classes to
-    point backwards; a live slot lands strictly inside (0, 1]; a `fund_attack` unit's window widens
-    with its quota deadline (`quota_window` re-derived), so a later unit re-supplies no less."""
+    """Per-slot P(the closure re-supplies it in the refresh draw window). Closing-edge kinds, pitch
+    fuel, `general` and an uncovered slot all stay 0.0; a live slot lands strictly inside (0, 1]."""
     from common import needs
     fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
     pilot = _shipped_pilot("mega_starmie")
@@ -226,10 +179,8 @@ def test_refresh_slot_resupply_discounts_by_kind_and_window():
 
 @pytest.mark.req("REQ-NEEDS-0008")
 def test_the_live_shed_is_resupply_discounted(refresh_ctx):
-    """The resupply leg reaches the DECIDER now, not a shadow column: the shed with the live
-    per-slot re-supply odds is cheaper than the same assignment frozen at 0.0 (the retired v0
-    pricing), so the swing it feeds is correspondingly higher. Strict on this fixture — its
-    resolver finds a live draw-engine slot the closure can point backwards at."""
+    """The resupply leg reaches the DECIDER: a shed with live per-slot re-supply odds is cheaper than
+    the same assignment frozen at 0.0, so the swing it feeds is correspondingly higher."""
     pilot, obs, board, ctx = refresh_ctx("ms_dont_lillies_away_the_bigger_hand_f94.json", LILLIES)
     live_shed = pilot._refresh_shed_keepcost(obs, board, ctx)
     live_swing = pilot._refresh_swing_tactical(obs, board, ctx)

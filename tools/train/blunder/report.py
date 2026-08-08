@@ -1,9 +1,4 @@
-"""Aggregate Corrections into trend summaries and a self-contained HTML report.
-
-The "my agents over time" view is the ``own`` pile, bucketed by Category and grouped
-by the submission timeline (see ``tools/train/CONTEXT.md`` Source/Category). ``peer``
-Corrections are counted separately (expertise injection, not our agent's blunders).
-"""
+"""Aggregate Corrections into trend summaries and a self-contained HTML report."""
 from __future__ import annotations
 
 import html as _html
@@ -22,7 +17,6 @@ def _bucket(items: list[Correction]) -> dict:
 
 
 def _group(items, keyfn, extra=None) -> dict:
-    """Group corrections by ``keyfn(c)`` into {key: {total, by_category, **extra(c)}}."""
     out: dict = {}
     for c in items:
         key = keyfn(c)
@@ -38,7 +32,6 @@ def _group(items, keyfn, extra=None) -> dict:
 
 
 def summarize(corrections: Iterable[Correction]) -> dict:
-    """Counts for the trend report: own (by category, by submission) and peer (by category)."""
     corrections = list(corrections)
     own = [c for c in corrections if c.source == "own"]
     peer = [c for c in corrections if c.source == "peer"]
@@ -51,12 +44,8 @@ def summarize(corrections: Iterable[Correction]) -> dict:
 
 
 def avg_blunders_per_game(corrections) -> dict:
-    """Per agent build: own blunder count, the distinct tagged games, and their ratio.
-
-    A "game" here is a **distinct tagged episode** — the games that surfaced ≥1 blunder. A reviewed
-    game with no blunder leaves no row in the log, so this is blunders per *blundered* game (an upper
-    bound on the true per-game-played rate), computed entirely from the Correction log. Returns
-    ``{agent_build: {"blunders", "games", "avg", "built_at"}}``."""
+    """A game with no blunder leaves no row in the log, so `avg` is blunders per *blundered* game —
+    an upper bound on the true per-game-played rate."""
     out: dict = {}
     for c in corrections:
         if c.source != "own":
@@ -70,31 +59,21 @@ def avg_blunders_per_game(corrections) -> dict:
     return out
 
 
-# --- Resolution view: tag each blunder with its /blunder-buster terminal outcome ----------------
-# `fixed` implicit — auto-reconciliation (ADR-0018) dropped it from `open[]` since a committed
-# rule now satisfies it; `covered`/`refuted`/`deferred` come from reviewed ledger; `open` still
-# needs a rule; `skipped` = tactical / no-obs pile the tuner can't route.
-# `_disposition` returns the ledger's RAW string, so these tuples must cover the ledger's whole
-# vocabulary or a census row silently vanishes: `present` filters on `_DISP_ORDER`, so a word missing
-# here drops those Corrections out of the report without a trace. That is the consumer-drift this
-# module's own ledger already suffered — `transposition` and `deferred-multi-turn` were live in
-# `reviewed.json` and absent from every list that reads it (Issue #239, ADR-0088 decision 3).
-# Derived from the writer's vocabulary rather than re-typed, so the next word added cannot skip here.
-_LEDGER_RESOLVED = tuple(DISPOSITIONS)                     # every disposition the ledger may carry
+# Derived from the writer's vocabulary, never re-typed: `_DISP_ORDER` filters the census, so a
+# disposition missing here drops those Corrections out of the report without a trace (ADR-0088).
+_LEDGER_RESOLVED = tuple(DISPOSITIONS)
 _RESOLVED = ("fixed", *(d for d in _LEDGER_RESOLVED if d != "fixed"))
 _DISP_ORDER = (*_RESOLVED, "open", "skipped")
 
 
 def _entry_key(entry: dict) -> str:
-    """A snapshot entry's ledger key. Post-ADR-0049 snapshots carry a scope-aware ``key``; older
-    ones are decision-scoped, so ``"<episode_id>-<frame>"`` reconstructs it."""
+    """Pre-ADR-0049 snapshots carry no ``key`` and are decision-scoped."""
     return entry.get("key") or f"{entry.get('episode_id')}-{entry.get('frame')}"
 
 
 def _load_proposals(proposals_dir) -> tuple[set, set, set]:
-    """Scan ``data/corrections/tuner/*.json`` → (open_keys, skipped_keys, decks_with_proposals), keyed
-    like the ledger (``reviewed.review_key``). Best-effort: a missing/unreadable dir yields empty
-    sets (every blunder then falls back to ``open`` — never wrongly claimed ``fixed``)."""
+    """Best-effort: a missing/unreadable dir yields empty sets, so every blunder falls back to
+    ``open`` rather than being wrongly claimed ``fixed``."""
     open_keys, skipped_keys, decks = set(), set(), set()
     p = Path(proposals_dir)
     if not p.exists():
@@ -111,10 +90,8 @@ def _load_proposals(proposals_dir) -> tuple[set, set, set]:
 
 
 def _disposition(c, reviewed: dict, open_keys: set, skipped_keys: set, decks: set) -> str:
-    """One Correction's terminal outcome (the /blunder-buster vocabulary): ledger disposition
-    (covered/refuted/deferred) > still-``open`` > ``skipped`` > ``fixed`` (its deck was tuned and the
-    blunder is no longer open, so a rule satisfies it). A deck with no proposals snapshot stays
-    ``open`` — we never claim ``fixed`` without the evidence that reconciliation dropped it."""
+    """``fixed`` means its deck was tuned and the blunder is no longer open; a deck with no proposals
+    snapshot stays ``open``, never ``fixed`` without the evidence that reconciliation dropped it."""
     key = review_key(c)
     entry = reviewed.get(key)
     if entry:
@@ -148,9 +125,8 @@ def _esc(value) -> str:
 
 
 def _subject_html(c: Correction) -> str:
-    """What the blunder is *about*, for the drill-down summary. A scoped Correction (ADR-0049) has
-    no ``correct`` option, so the ``chosen -> correct`` arrow is meaningless for it; say the Scope
-    and how much it spans instead."""
+    """A non-decision-scoped Correction (ADR-0049) has no ``correct`` option, so the arrow form is
+    meaningless for it."""
     if c.scope == "decision":
         return (f"<code>{_esc(c.chosen_label or c.chosen)}</code> &rarr; "
                 f"<code>{_esc(c.correct_label or c.correct)}</code>")
@@ -174,7 +150,6 @@ def _category_table(by_category: dict) -> str:
 
 
 def _per_game_table(stats: dict) -> str:
-    """Avg blunders-per-game by build, chronological — the over-time blunder-density trend."""
     if not stats:
         return "<p class='muted'>none</p>"
     rows_data = sorted(  # chronological: built_at, then build id
@@ -196,7 +171,6 @@ def _per_game_table(stats: dict) -> str:
 
 
 def _resolution_table(counts: dict) -> str:
-    """Disposition pills with counts + bars, in a stable fixed→open→skipped order."""
     present = [(d, counts[d]) for d in _DISP_ORDER if counts.get(d)]
     if not present:
         return "<p class='muted'>none</p>"
@@ -214,12 +188,8 @@ def _resolution_table(counts: dict) -> str:
 def build_report(corrections_path: Path | str, out_path: Path | str, *,
                  reviewed_path: Path | str | None = None,
                  proposals_dir: Path | str | None = None) -> Path:
-    """Render a self-contained, offline HTML trend report (no external resources).
-
-    When ``reviewed_path`` (the reviewed ledger) and/or ``proposals_dir`` (``data/corrections/tuner``) are
-    supplied, each own blunder is also tagged with its terminal outcome — fixed / covered / refuted /
-    deferred / open / skipped — the header splits resolved vs open, and a *by resolution* section is
-    added. Omit both for the plain tag-trend view (unchanged legacy output)."""
+    """Self-contained and offline: no external resources. Omitting both optional paths gives the
+    plain tag-trend view with no disposition tagging."""
     out_path = Path(out_path)
     corrections = load_corrections(corrections_path)
     if not corrections:

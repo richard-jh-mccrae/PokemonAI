@@ -34,13 +34,8 @@ from train.tuner.run import tune  # noqa: E402
 
 
 def _build_pilot(agent: str):
-    """The agent's real (engine-backed) Pilot + its authored seed weights.
-
-    Built by the shared runtime (ADR-0055). The hand-maintained kill-switch mirror this
-    function used to carry HAD drifted — promote_ko_aware / boost_lethal / brief_preevo ran
-    OFF here while shipping ON, so retests and score_diff decided with different backstops
-    than the live agent. ``common.runtime.build_pilot`` resolves the one deployment PROFILE
-    through the deck's own params; the mirror class is structurally dead."""
+    """Built by the shared runtime (ADR-0055), never a local kill-switch mirror: a mirror drifts, and
+    then retests decide with different backstops than the live agent."""
     from common.runtime import build_pilot
     from common.strategy.general_strategy import GENERAL_STRATEGY
 
@@ -55,9 +50,8 @@ def _build_pilot(agent: str):
 
 
 def _layer_tag(planner: bool, lethal: bool) -> str:
-    """Line marks for decisions the live trace shows were Planner/Solver-driven (ADR-0030/0031) —
-    scoring didn't choose there, so the fix is planner.py code (the win rung for [LETHAL], the
-    heuristic rungs for [PLANNED] — one module since ADR-0037), never a weight/when()."""
+    """Scoring did not choose on a Planner/Solver-driven decision, so the fix is `planner.py` code
+    (ADR-0030/0031/0037), never a weight or a `when()`."""
     return ("[PLANNED] " if planner else "") + ("[LETHAL] " if lethal else "")
 
 
@@ -68,17 +62,14 @@ def _live_layers(c) -> tuple[bool, bool]:
 
 
 def _posture_tag(mismatch: bool, archetype) -> str:
-    """Line mark for a correction the human flagged as an opponent-Read miss (ADR-0041): the fix is a
-    matchup-doctrine change against ``archetype`` — its Matchup Brief (/matchup-genie) or recognition —
-    NOT a generic weight/when(). /blunder-buster routes on this the way it routes [PLANNED]/[LETHAL]."""
+    """An opponent-Read miss (ADR-0041): the fix is `archetype`'s Matchup Brief or its recognition,
+    NOT a generic weight or `when()`."""
     return f"[POSTURE≠ {archetype or '?'}] " if mismatch else ""
 
 
 def _scope_tag(scope, subject) -> str:
-    """Line mark for a scoped Correction (ADR-0049): a Turn blunder is prima facie a Turn-Planner
-    (`plan_turn`) fix, never a ranking constraint. A strong routing PRIOR for /blunder-buster, not
-    an auto-route: a turn whose `planned` is null throughout means the Planner never committed, and
-    the gap is a Hypothesis."""
+    """A Turn blunder (ADR-0049) is prima facie a `plan_turn` fix. A routing PRIOR, not an auto-route:
+    a turn whose `planned` is null throughout means the Planner never committed."""
     if scope == "turn":
         return f"[TURN {subject}] "
     return ""

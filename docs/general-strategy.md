@@ -1,5 +1,13 @@
 # General Strategy — the deck-agnostic doctrine
 
+> **This document does not enumerate the rungs.** It used to, and 14 of its 23 rung sections came to describe
+> code that no longer exists — the ADR-0069/0070/0080/0085/0086/0100 decider swaps replaced whole families
+> of weighted Hypotheses with closed-form marginals. The live registry is the `Hypothesis(...)` definitions
+> in `src/common/strategy/baseline/` and `doctrines/`, each carrying its own `rationale=`. What was retired,
+> and what replaced it, is `FOLDED` in [tools/rung_registry.py](../tools/rung_registry.py) — data, so every
+> destination is resolved by a test rather than believed. `DECIDERS` in the same file maps each decision
+> seam to the module that owns it. Read those, not a second copy.
+
 > **Game rules** (turn structure, weakness ×2, prizes, per-turn limits, special conditions) are
 > canonical in **[rules.md](rules.md)** — read it before reasoning about any rule. This doc covers
 > *strategy*; rules.md covers *the rules they operate within*.
@@ -79,21 +87,6 @@ setup-heavy → first). Undeclared decks are untouched.
 **Reads:** tags `draw` / `search`. **Fires:** `SETUP`. **Source:** F12 — TCG Protectors
 (Sequencing); JustInBasil (Consistency).
 
-### `attach-energy-last` · weight −5 · status: assumed
-> Attach Energy late in the turn — it's the one irreversible setup action, so play your draw,
-> search and development first to reveal the best target before committing.
-
-**Reads:** option is an `ATTACH`. **Fires:** `SETUP`. **Source:** F12 — JustInBasil (Damage:
-"once it's on a Pokémon, it's stuck there").
-
-### `power-up-attacker` · weight 15 · status: assumed
-> Attach an Energy every turn — building energy toward an attack is the core tempo of the game;
-> without a steady stream of attachments your attackers never come online.
-
-**Reads:** option is an `ATTACH`. **Fires:** `SETUP` / `RACE`. The positive driver that makes the
-agent actually attach — it nets `+10` against `attach-energy-last`'s `−5`, so plain Energy gets
-played (sequenced after draw/search, but played). **Source:** F12 — JustInBasil (Deck Strategy).
-
 ### `use-acceleration` · weight 25 · status: assumed
 > Energy acceleration multiplies your one manual attachment per turn — getting attackers online
 > faster is tempo-positive for any deck, so prioritise playing your acceleration.
@@ -101,88 +94,9 @@ played (sequenced after draw/search, but played). **Source:** F12 — JustInBasi
 **Reads:** the option card's `energy_accel` Function Tag. **Fires:** `SETUP` / `RACE`. The universal
 form of a deck's `accel_source` rule. **Source:** F12 / F14 — JustInBasil (Consistency / Deck Strategy).
 
-### `advance-the-accel-pieces` · weight 30 · status: assumed *(folded from mega_starmie `accel-into-main`, 2026-07-02)*
-> During SETUP, PLAY or ATTACH the deck's own `accel_source`-Roled pieces (the burst Energy that IS
-> the acceleration; the accelerator body).
-
-**Reads:** the option card's `accel_source` **Role** (the deck's opt-in; `use-acceleration` is the
-tag-keyed sibling). Co-fires additively with the other SETUP energy rules — tune against that
-cluster, not alone. Also in `baseline_energy`, folded 2026-07-02:
-**`conserve-discard-energy-prefer-basic`** (weight −40, from `conserve-ignition-prefer-water`) —
-don't spend a `discard_eot` burst on the Active wincon when its cheap attack already KOs and a
-reusable Basic is in hand; the KO-aware sibling of `prefer-reusable-over-burst` (−12), carve-outs in
-`build-active-wincon` / `dont-waste-discard-energy` unchanged.
-
-### `build-before-attack` / `dont-chip-with-a-doomed-active` — **removed** (superseded by attack-last)
-These two chip-penalty rules made development beat a weak attack. The Pilot's `_finish_turn_last`
-("attack last", `pilot.py`) now does that **structurally** — at the open turn menu it sequences every
-beneficial non-ending action ahead of the turn-ending attack, then takes the attack (and its KO) the
-same turn. A blanket chip penalty became redundant *and* harmful: with no development available it
-dragged a useful chip below `End`, so the agent did nothing instead of chipping. Removed (and the
-`_CHIP_CEILING` value-floor with them). **Source:** F6 — Bulbapedia (*Attack*: using an attack ends
-your turn) — the very fact attack-last is built on.
-
 ## Bench development & prize liability
 
-### `keep-a-bench` · weight 60 · status: assumed
-> Never leave yourself with an empty Bench — if your Active is Knocked Out and you have no Pokémon
-> to promote, you lose on the spot. With an empty Bench, develop a Basic.
-
-**Reads:** `board.my_bench == 0` & a `PLAY` of a Pokémon. **Fires:** any plan. Near-imperative
-(loss prevention). **Source:** F7 — Rulebook (win condition 2: no Pokémon in play = loss).
-
-### `dont-bench-multiprize` · weight −15 · status: assumed
-> Avoid putting a 2-prize (ex) or 3-prize (Mega ex) Pokémon into play during setup unless it's
-> your win-condition attacker — every benched multi-prizer is an easy multi-prize knockout the
-> opponent can target.
-
-**Reads:** stat `ex` / `megaEx` + the deck Role `win_condition` / `primary_attacker`.
-**Fires:** `SETUP`. **Source:** F8 — TCG Protectors (Prize Trade); JustInBasil (Secondary
-Attackers).
-
-### `pre-position-attacker` · weight 25 · status: assumed
-> While racing, keep developing the next attacker on the Bench so a Knocked-Out Active is replaced
-> without losing a turn.
-
-**Reads:** a `PLAY` of a Pokémon. **Fires:** `RACE` (aggression). **Source:** F14 — JustInBasil
-(Deck Strategy: maintain a stream of attackers).
-
-### `develop-the-accel-recipient` · weight 20 · status: assumed *(folded from mega_starmie `develop-turbo-flare-recipient`, 2026-07-02)*
-> A bench-accelerator in the Active Spot accelerates onto NOTHING while the Bench holds no
-> win-condition-Line recipient — developing one is the top setup priority.
-
-**Reads:** `Board.accel_recipient_missing` (accel Active + no Line member benched) + a `PLAY` of a
-Line pre-evolution or `bench_fill` card, Bench not full. The DEVELOP half of the pair whose FETCH
-half is `fetch-base-before-stranded-payoff`.
-
-### `dont-feed-the-doomed` · weight −30 · status: assumed
-> If your Active will be Knocked Out next turn and you have a benched Pokémon, don't sink this
-> Energy into the doomed Active — attach to the successor instead so you aren't rebuilding from
-> nothing after it falls.
-
-**Reads:** at an `ATTACH_FROM` select, penalises attaching to my **Active** (`option_area`) when the
-board's **incoming-KO** estimate fires (the opponent's biggest attack, doubled on my Active's
-Weakness, ≥ my Active's remaining HP) **and** I have a Bench. The threat estimate is closed-form off
-engine stats (`maxDamage` / `weakness` / HP); attack-affordability is a future refinement.
-**Source:** F8 / F14 — TCG Protectors (Prize Trade); JustInBasil (Secondary Attackers).
-
 ## Targeting the opponent's Bench
-
-### `snipe-the-threat` · weight 20 · status: testing
-> When an attack lets you choose which benched Pokémon to damage, hit the biggest threat. A benched
-> Pokémon already carrying Energy is closest to attacking, so sniping it (chip or Knock Out) denies
-> the opponent their next attacker rather than poking a bare, not-yet-online benchsitter.
-
-**Reads:** at a `DAMAGE` select, the per-option `Context.target_energy` / `target_is_threat` — the
-Energy attached to the **benched** Pokémon a `CARD` option targets (resolved off the option's
-`area`/`index`/`playerIndex` via `Pilot._option_pokemon`, the same path as `_option_card_id`; `None`
-for non-target options). Fires on the bench target that already carries Energy. This is the first
-wired **opponent-Bench targeting** signal; its value sub-terms are reused (not its order) by the
-**Gust (Boss's Orders)** doctrine below.
-**Caveat:** "threat" has a second face — a Pokémon that *evolves* into an attacker (e.g. Riolu→Lucario)
-is a threat with **zero** Energy, which this energy signal can't see; that is a separate, deferred
-cluster (a Function-Tag / Line lookup, not Energy). **Source:** F9 — JustInBasil (Gusting: remove
-the opponent's developing attacker).
 
 ## Combat (Tactical Evaluator)
 
@@ -194,22 +108,6 @@ A knockout is computed from printed damage **doubled when the defending Active i
 Active's type** (S&V rule; Active base damage only — never Bench, never ability/effect counters).
 Closed-form Tier-0; Tier-1 Search resolves the exact figure. **Source:** F4 — Rulebook;
 Bulbapedia (*Attack*).
-
-### `prize-trade-target`
-Among knockouts, prefer the **higher-prize target** — a KO yields `Mega ex → 3`, `ex → 2`,
-`else → 1` prizes, so the agent values taking down multi-prizers. (The per-turn shadow of prize
-mapping; see below.) **Source:** F1 / F3 — TCG Protectors (Prize Trade); JustInBasil; PokeBeach
-("Small is Good").
-
-### `energy-recover-credit` *(2026-07-02, mega_lucario deck-genie)*
-An attack with an **energy-recover rider** ("Attach up to N Basic {X} Energy cards from your
-discard pile…" — `AttackStat.recoverN/recoverEnergyType/recoverTarget`; pool-verified 6: Aura Jab,
-Pick and Stick, Regi Charge ×3, Abundant Harvest) is credited `_ENERGY_RECOVER` (75) per Energy it
-would ACTUALLY re-attach — `min(N, matching Basic fuel in my open discard)`, 0 when its target scope
-has no recipient (bench-targeted with an empty Bench). Attacking IS the acceleration for these
-decks, so a fueled Aura Jab (130 + load 3) outweighs a bare bigger chip (Mega Brave 270) while an
-unfueled one doesn't. Inside the KO branch the credit is **sub-prize** (0.25/Energy, cap 0.75) —
-"the cheaper KO that also develops" — never overriding a real prize difference.
 
 ### `boost-lethal` — the damage-boost OHKO-line model *(2026-07-03, mega_lucario deck-genie)*
 The **breakpoint model** that was deferred here is now closed-form. Card facts: `CardStat.damageBoost/
@@ -223,13 +121,6 @@ that CROSSES an affordable KO line as KO_SCORE-class (a Power-Pro-class Item may
 copies together; fires only when no affordable attack already KOs; skips a simultaneous-draw crossing).
 The {ex} defender gate includes Mega ex — rulebook.txt:337.
 
-### `recoil-doom` *(2026-07-03, mega_lucario deck-genie)*
-A NON-KO attack whose unconditional recoil FLIPS my currently-safe Active into a free KO (outright
-self-KO, or post-recoil HP inside `_active_doomed` re-asked at hp−recoil) is charged `_RECOIL_DOOM`
-(100, combat-scale) — Wild Press 210 self-70 is a fine prize trade (the KO branch is never charged)
-but not a chip that leaves an 80-HP body for nothing. An already-doomed Active is never charged
-(chip big before it dies).
-
 ### Attack conditions — bench-partner gate *(2026-07-03, mega_lucario deck-genie)*
 `AttackStat.requiresBench` ("If you don't have <X> on your Bench, this attack does nothing" —
 pool-verified 2: Cosmic Beam needs Lunatone, Guardian Burst needs Uxie AND Azelf) + the live
@@ -237,13 +128,6 @@ pool-verified 2: Cosmic Beam needs Lunatone, Guardian Burst needs Uxie AND Azelf
 board — so scoring (not just the Lethal floor) sees the 0, and the phantom KO vs a low-HP Active dies.
 The **max** bound keeps printed damage: Incoming is a worst case and the opponent can bench the
 partner before attacking.
-
-### `self-lock-cost` *(2026-07-02, mega_lucario deck-genie)*
-An attack that locks itself (or all its user's attacks) for my next turn (`nextTurnSameAttackLock` /
-`nextTurnSelfLock` — Mega Brave class) is charged `_LOCK_COST` (40) **only when a lock-free attack
-was also affordable**: burning the nuke's cooldown on a non-KO turn wastes the turn it would KO. A
-lone locking attack is never charged (chipping still beats passing — Riolu's Accelerating Stab).
-Sub-prize (−0.3) inside the KO branch: among equal-prize KOs, keep the big attack off cooldown.
 
 ## Gust (Boss's Orders) — implemented (ADR-0022)
 

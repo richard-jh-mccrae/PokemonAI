@@ -14,19 +14,16 @@ from train.tuner.propose import believed_archetype   # posture belief off a Corr
 
 
 def authored_seeds(general_strategy, strategy) -> dict:
-    """The authored-EFFECTIVE seed baseline (ADR-0035): Hypothesis defaults merged with the deck's
-    authored ``Strategy.weight_overrides`` — the layer the fit starts from and ``sparse_overrides``
-    diffs against, so tuned.json stays exactly the genuine learned deltas."""
+    """The authored-EFFECTIVE baseline (ADR-0035) the fit starts from and `sparse_overrides` diffs
+    against, so `tuned.json` holds exactly the learned deltas."""
     seeds = {h.id: h.weight for h in (*general_strategy.hypotheses, *strategy.hypotheses)}
     seeds.update(strategy.weight_overrides)
     return seeds
 
 
 def sparse_overrides(weights: dict, seeds: dict) -> dict:
-    """Keep only weights that differ (after rounding) from the authored seed, so tuned.json
-    records the genuine deltas the Pilot will actually apply — not a full snapshot that no-ops
-    against the defaults. A key absent from ``seeds`` (no such Hypothesis) is dropped: it would
-    be silently ignored by ``Pilot._weight`` anyway."""
+    """Differences only, so the file is not a full snapshot that no-ops against the defaults. A key
+    absent from ``seeds`` is DROPPED — ``Pilot._weight`` would ignore it anyway."""
     return {k: round(float(v), 2) for k, v in weights.items()
             if round(float(v), 2) != round(float(seeds.get(k, v)), 2)}
 
@@ -40,16 +37,14 @@ def write_overrides(weights: dict, path: Path | str) -> Path:
 
 
 def corrections_hash(corrections) -> str:
-    """A stable 12-hex digest of the exact Corrections that produced a fit (sorted by id), so two
-    builds are comparable: same Corrections -> same hash, regardless of log order."""
+    """Sorted by id, so two builds are comparable regardless of log order."""
     ids = sorted(c.id for c in corrections)
     return hashlib.sha256("\n".join(ids).encode("utf-8")).hexdigest()[:12]
 
 
 def write_meta(path: Path | str, *, corrections, when) -> Path:
-    """Write `tuned.meta.json` — the provenance sidecar for `tuned.json` (ADR-0019): when the
-    weights were tuned and from which Corrections (count + hash). Keeps `tuned.json` itself a
-    pure `{id: weight}` map, so the runtime `overrides` contract is untouched."""
+    """A provenance SIDECAR (ADR-0019), so `tuned.json` stays a pure `{id: weight}` map and the
+    runtime `overrides` contract is untouched."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     meta = {
@@ -70,29 +65,8 @@ def load_overrides(path: Path | str) -> dict:
 
 def write_proposals(path: Path | str, deck: str, proposals, skipped, *, generated_at: str,
                     reviewed=None) -> Path:
-    """Write the durable ``missing_hypothesis`` proposals snapshot (ADR-0018).
-
-    The Tuner's proposals are otherwise stdout-only and ephemeral. This records them — with each
-    one's source provenance (category/episode/frame/build) — as a committed per-deck file, so the
-    ``/blunder-buster`` skill reads it instead of re-parsing stdout and ``git`` history of the file
-    is a per-build timeline of how the agent's open blunders shrink. Overwritten each run.
-
-    ``reviewed`` is ``[(correction, entry)]`` for blunders excluded by the reviewed ledger
-    (already assessed — refuted / deferred / covered); recorded so the snapshot shows *why* they
-    aren't in ``open`` (no silent drop).
-
-    Every entry carries its scope-aware ``"key"`` (``reviewed.review_key``) plus ``"scope"``/
-    ``"subject"`` (ADR-0049), so ``/blunder-buster`` and the dashboard know what each open blunder
-    is *about* — one Decision, a whole Turn, or the Match — and can ledger it without colliding with
-    the Decision Corrections inside it.
-
-    Each ``open``/``skipped`` entry carries ``"critical": bool`` (the rationale's CRITICAL marker)
-    so ``/blunder-buster`` can partition the must-fix-first cohort straight from the snapshot,
-    plus ``"planner_committed"``/``"lethal_locked"`` (the live trace's ``planned``/``lethal``
-    verdicts) so planner/solver-layer blunders are routed to code fixes, never a ``when()``,
-    and ``"posture_mismatch"`` + ``"believed_archetype"`` (ADR-0041) so a matchup misplay is routed
-    to the believed archetype's Brief / recognition, never a generic weight.
-    """
+    """The durable proposals snapshot (ADR-0018), overwritten each run. ``reviewed`` entries are
+    recorded rather than dropped, so the snapshot shows WHY a blunder is not in ``open``."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -34,9 +34,8 @@ class ValueModel:
 
     @classmethod
     def load(cls, path=None) -> "ValueModel":
-        """Load the model from ``path`` (default: the packaged artifact). Returns the **null model**
-        when the file is absent or malformed, or when its feature list doesn't match this build's
-        :data:`FEATURE_NAMES` (a stale artifact must never mis-map columns) — never raises."""
+        """Returns the **null model** when the artifact is absent, malformed, or its feature list
+        doesn't match this build's :data:`FEATURE_NAMES` (a stale artifact must never mis-map)."""
         p = Path(path) if path is not None else _ARTIFACT
         try:
             d = json.loads(p.read_text(encoding="utf-8"))
@@ -51,9 +50,7 @@ class ValueModel:
         return cls(weights=w, mean=mean, std=std, meta=d.get("meta", {}))
 
     def predict(self, features) -> float:
-        """``P(win)`` for a feature vector (standardize each column by the trained mean/std, then
-        the logistic of the dot product). The null model returns 0.5; a zero-variance column
-        contributes only through its weight×0 (std floored to 1.0 at train time)."""
+        """``P(win)`` for a feature vector; the null model returns 0.5."""
         if not self.present:
             return 0.5
         z = 0.0

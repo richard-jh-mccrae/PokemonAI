@@ -34,15 +34,8 @@ def _decide(pilot, fx: dict):
     return d.chosen, d
 
 
-# FUNCTION-scoped, not module-scoped: a FRESH pilot per replay, the statefulness lesson the corpus
-# harnesses already follow. Each fixture below is a different EPISODE, but a Pilot's ADR-0033
-# transient-grant tracker is MATCH-scoped by design — correct in a real game, where one Pilot plays
-# one match, and cross-contamination here, where one Pilot was replaying several.
-#
-# This scoping was introduced (#142) as the fix for f24's order-dependence. It is right on its own
-# terms and stays, but that attribution was WRONG and #178 measured it: f24 flips between `[5]` and
-# `[3]` with a fresh Pilot in a fresh process, so no fixture-scope change could ever have settled it.
-# The cause was the develop rung ranking on engine-RNG-sampled leaf values; see ADR-0072 amendment C.
+# FUNCTION-scoped: a FRESH pilot per replay. A Pilot's ADR-0033 transient-grant tracker is
+# MATCH-scoped, so one Pilot replaying several episodes cross-contaminates.
 @pytest.fixture
 def lucario():
     return _pilot("mega_lucario")
@@ -60,8 +53,7 @@ def dragapult():
 
 # ── planner-code ────────────────────────────────────────────────────────────────────────────────
 def test_lethal_bench_the_attack_enabler_f13(lucario):
-    """ml 85058051 f13 (CRITICAL): fetch the Lunatone that turns Cosmic Beam on; the KO empties their
-    board and wins. The grab must be scored KO_SCORE-class, not by the ordinary fetch rungs."""
+    """Fetching the partner that turns the attack on must be scored KO_SCORE-class, not by fetch rungs."""
     fx = _fixture("ml_lethal_bench_the_attack_enabler_f13")
     chosen, d = _decide(lucario, fx)
     assert chosen == fx["correct"]
@@ -69,8 +61,8 @@ def test_lethal_bench_the_attack_enabler_f13(lucario):
 
 
 def test_no_phantom_grab_lethal_on_an_unretreatable_active_f39(lucario):
-    """ml 85059103 f39 (CRITICAL): a 0-Energy Meowth ex (retreat 1) cannot retreat, and the benched Mega
-    already affords Aura Jab — so the Energy grab is neither legal nor necessary. No KO_SCORE claim."""
+    """The Active cannot pay its retreat and the benched attacker is already funded, so the grab is
+    neither legal nor necessary."""
     fx = _fixture("ml_phantom_grab_lethal_unretreatable_active_f39")
     chosen, d = _decide(lucario, fx)
     assert chosen == fx["correct"]
@@ -78,8 +70,7 @@ def test_no_phantom_grab_lethal_on_an_unretreatable_active_f39(lucario):
 
 
 def test_grab_lethal_still_fires_when_legal_and_necessary_f48(lucario):
-    """The counter-fixture: ml 84890060 f48 keeps its lethal — a 1-Energy Lunatone Active CAN pay its
-    retreat-1, and the benched Mega carries zero, so the fetched {F} is the marginal Energy."""
+    """The counter-fixture: the Active CAN pay its retreat, so the fetched Energy is the marginal one."""
     fx = _fixture("ml_lethal_recover_energy_via_gong_f48")
     chosen, d = _decide(lucario, fx)
     assert chosen == fx["correct"]
@@ -89,19 +80,8 @@ def test_grab_lethal_still_fires_when_legal_and_necessary_f48(lucario):
 @pytest.mark.parametrize("name", [param("ml_dont_wake_the_giant_with_the_locking_ko_f88"),
                                   "ml_dont_wake_the_giant_boost_ko_f48"])
 def test_dont_wake_the_giant_takes_the_lock_free_attack(lucario, name):
-    """ml f88 (CRITICAL) / f48: the only KO route burns the answer (Mega Brave self-locks; the boost is
-    consumable) and wakes a body we cannot KO, while their pinned Active cannot escape. Attack anyway —
-    with the lock-free attack. The Planner must own the pick (a scoring tie would be a false pass).
-
-    **Both frames still take the human's action after POC-T4/5 (Issue #386), through a different
-    mechanism.** They were carried by `_forgo_ko_line`, a gate that DECLINED a KO when it woke a
-    scarier body; that rung is deleted, and under 1-ply differencing the same board resolves as one
-    sequence out-scoring another — waking an unanswerable body is simply a worse end state. The
-    `goal == "forgo_ko"` assertion is not carried over: it named the rung, and the rung is gone.
-
-    The concern it existed for IS carried over, in the form that survives a swap. "A scoring tie
-    would be a false pass" is guarded by requiring the Planner to have COMMITTED a line whose first
-    step is the option played — not by naming which rung committed it."""
+    """The only KO route burns the answer and wakes a body we cannot KO, so take the lock-free attack.
+    Guarded on a COMMITTED Turn Line, because a scoring tie would otherwise be a false pass."""
     fx = _fixture(name)
     chosen, d = _decide(lucario, fx)
     assert chosen == fx["correct"]
@@ -111,15 +91,8 @@ def test_dont_wake_the_giant_takes_the_lock_free_attack(lucario, name):
 
 # ── general-hypothesis ──────────────────────────────────────────────────────────────────────────
 def test_dont_fund_the_non_attacking_body_at_attach_from_f121(lucario):
-    """ml f121 (CRITICAL): Aura Jab's bench-load must not go to Lunatone.
-
-    The correction's content is the ENGINE exclusion, and the attach decider satisfies it structurally:
-    the board-evaluated role gate zeroes the engine-only Lunatone's attack axis while real attackers
-    sit beside it, so it cannot win on an option-index coincidence the way it did at +15-across-the-board.
-    Which live ATTACKER takes the load — the human tagged the second Mega Lucario ex, the decider ranks
-    the Solrock whose Cosmic Beam one {F} completes outright — is a target-choice DIVERGENCE, ruled in
-    docs/plans/attach-decider-swap-review.md (the decider prices one routed unit at a time and so cannot
-    see that the Mega absorbs three; multi-unit routing is out of Phase 1a)."""
+    """The correction's content is the ENGINE exclusion, satisfied structurally by the role gate. WHICH
+    attacker takes the load is a target-choice DIVERGENCE — the decider prices one routed unit at a time."""
     fx = _fixture("ml_aurajab_dont_load_the_engine_f121")
     chosen, d = _decide(lucario, fx)
     rows = {r["i"]: r for r in d.attach_working["eq"]}
@@ -129,26 +102,17 @@ def test_dont_fund_the_non_attacking_body_at_attach_from_f121(lucario):
     assert rows[fx["correct"][0]]["tactical"] > 0, "the human's target is not even priced"
 
 
-# POC-T4/5: this frame FLIPPED BACK. It was in `poc_t4_flips.FLIPS` until the tie-defer
-# (`planner._tied_first_steps`) landed: the composer priced the ruled attach and its rival at
-# the same number, abstained, and the tuned ladder played the human's option. No xfail owed.
+# This frame FLIPPED BACK once the tie-defer (`planner._tied_first_steps`) landed. No xfail owed.
 def test_dont_fund_the_supporter_tutor_at_the_manual_attach_f84(lucario):
-    """ml f84: Meowth ex 'needs' 3 Energy for Tuck Tail and so out-scored an online Riolu."""
+    """A spent utility body 'needs' 3 Energy for its attack and so out-scored an online attacker."""
     fx = _fixture("ml_dont_energize_the_supporter_tutor_f84")
     assert _decide(lucario, fx)[0] == fx["correct"]
 
 
 @pytest.mark.xfail(strict=True, reason=marks("dragapult_dont_feed_draw_engine_f21")[0].kwargs["reason"])
 def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
-    """dragapult f21 (CRITICAL), the same rule cross-agent: Dunsparce evolves into a `draw` engine.
-
-    Satisfied structurally rather than by a weight: the board-evaluated role gate zeroes the draw
-    engine's ATTACK AXIS, so it can no longer read as an attacker just because its Colorless attack
-    makes any colour "payable". (This deck runs the JTG Dunsparce, 305, which does print Retreat 1 —
-    unlike the TEF printing — so its mobility channel is not zero; the gate is what carries the
-    exclusion here. The {D} also fills no slot of Phantom Dive's {R}{P}, so every bench option prices
-    near zero and the decider banks the Active's pivot instead of the human's tagged Dreepy — a
-    target-choice divergence ruled in docs/plans/attach-decider-swap-review.md.)"""
+    """The role gate carries the exclusion here: this deck runs the JTG Dunsparce (305), which DOES
+    print Retreat 1 unlike the TEF printing, so its mobility channel is not zero."""
     fx = _fixture("dragapult_dont_feed_draw_engine_f21")
     chosen, d = _decide(dragapult, fx)
     rows = {r["i"]: r for r in d.attach_working["eq"]}
@@ -160,8 +124,8 @@ def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
 
 @pytest.mark.xfail(strict=True, reason=marks("ml_air_balloon_on_the_active_f87")[0].kwargs["reason"])
 def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
-    """ml f87 (CRITICAL): the retreat tool belongs on the Active. Scored in isolation — at the live
-    frame the forgo-KO rung now commits Aura Jab instead, so `decide()` there is the planner's."""
+    """The retreat tool belongs on the Active. Scored in ISOLATION: at the live frame the planner
+    commits an attack instead, so `decide()` there answers a different question."""
     fx = _fixture("ml_air_balloon_on_the_active_f87")
     d = lucario.explain(fx["obs"])
     active_attach, bench_attach = fx["correct"][0], 2
@@ -170,13 +134,13 @@ def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
 
 @pytest.mark.xfail(strict=True, reason=marks("ml_ppp_attack_transient_locked_f69")[0].kwargs["reason"])
 def test_dont_buff_an_attack_you_cannot_use_f69(lucario):
-    """ml f69 (CRITICAL): Accelerating Stab self-locked, so the engine offered no ATTACK at all."""
+    """The attack was self-locked, so the engine offered no ATTACK option at all."""
     fx = _fixture("ml_ppp_attack_transient_locked_f69")
     assert _decide(lucario, fx)[0] == fx["correct"]
 
 
 def test_open_with_an_attacker_not_the_pure_engine_f1(lucario):
-    """ml f1: Lunatone and Riolu both scored 0.0 and the option index opened the engine."""
+    """Both candidates scored 0.0, so the option index opened the engine."""
     fx = _fixture("ml_open_with_an_attacker_not_the_engine_f1")
     assert _decide(lucario, fx)[0] == fx["correct"]
 
@@ -185,8 +149,8 @@ def test_open_with_an_attacker_not_the_pure_engine_f1(lucario):
                                   "ms_snipe_ko_beats_positional_stack_f63",
                                   "ms_snipe_the_energized_ex_f45"])
 def test_a_ko_dominates_the_positional_snipe_stack(starmie, name):
-    """Three positional snipe bonuses summed past `snipe-for-the-ko`; and the forced-promotion read
-    picked a body that cannot attack next turn (and, in f45, one that is Tera-immune on the Bench)."""
+    """Three positional snipe bonuses summed past the KO rung, and the forced-promotion read picked a
+    body that cannot attack next turn."""
     fx = _fixture(name)
     assert _decide(starmie, fx)[0] == fx["correct"]
 
@@ -205,14 +169,8 @@ def test_line_readiness_signals_model_the_multi_stage_line(request, name, agent_
 
 @pytest.mark.xfail(strict=True, reason=marks("ml_lethal_retreat_boost_to_ko_f24")[0].kwargs["reason"])
 def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
-    """Guard on the pre-evo fallback: with every Riolu bare there is nothing to concentrate, so the
-    attach stays free for the winning Solrock line (ml 84889011 f24).
-
-    Also the repo's determinism tracer (#178). This frame answered `[5]` or `[3]` depending on where
-    the process's engine-RNG position happened to sit — the develop rung was ranking 13 candidates
-    whose simmed leaf values were samples of the seeded deck's shuffle, and deferred only when one of
-    them happened to roll a phantom win. The rung now refuses an unreproducible ranking outright, so
-    the answer here is a property of the board again."""
+    """With every pre-evo bare there is nothing to concentrate, so the attach stays free. Also the
+    repo's determinism tracer (Issue #178) — this frame once answered by engine-RNG position."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     assert _decide(lucario, fx)[0] == fx["correct"]
 
@@ -220,16 +178,14 @@ def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
 # ── apply pass 2 (2026-07-10): the dragapult round's remaining general rules ────────────────────
 @pytest.mark.xfail(strict=True, reason=marks("dragapult_hammer_no_threat_f6")[0].kwargs["reason"])
 def test_dont_strip_energy_from_a_harmless_active_f6(dragapult):
-    """dragapult f6: Kyogre pays Riptide with its one {W}, but Riptide does 20 per Basic {W} in its OWN
-    discard — which is empty. It cannot hurt us, so the Crushing Hammer is thrown away.
-    `incoming_active_damage` is no help: it is affordability-blind and reads the unaffordable 130."""
+    """`incoming_active_damage` is no help here: it is affordability-blind and reads an unaffordable
+    attack, so the discard-scaling attack that computes to 0 has to be read separately."""
     fx = _fixture("dragapult_hammer_no_threat_f6")
     assert _decide(dragapult, fx)[0] == fx["correct"]
 
 
 def test_fetch_the_attack_color_over_an_off_colour_energy_f18(dragapult):
-    """dragapult f18: every Energy tied at `fetch-energy-when-starved` (+35) and the option index took
-    the deck's single off-colour {D}. Phantom Dive names {R}{P}."""
+    """Every Energy ties at `fetch-energy-when-starved`, so without a colour read the index decides."""
     fx = _fixture("dragapult_fetch_attack_color_f18")
     assert _decide(dragapult, fx)[0] == fx["correct"]
 
@@ -237,16 +193,13 @@ def test_fetch_the_attack_color_over_an_off_colour_energy_f18(dragapult):
 @pytest.mark.parametrize("name", [param("dragapult_poffin_whiff_take_gust_ko_f79"),
                                   param("dragapult_gust_ko_over_accel_f81")])
 def test_a_ko_setup_gust_precedes_the_supporter_that_would_eat_its_slot(dragapult, name):
-    """dragapult f79 (CRITICAL) / f81: Boss's Orders scored highest (+50) yet was sequenced behind the
-    free develops, so Crispin / Buddy-Buddy Poffin went first and forfeited the one-per-turn Supporter.
-    The old tier guard demoted any gust while ANY menu KO existed — but that KO came from a bench
-    SPREAD, which a gust does not forfeit."""
+    """The old tier guard demoted any gust while ANY menu KO existed — but a bench-SPREAD KO is not
+    forfeited by a gust, so the free develop ate the one-per-turn Supporter slot."""
     fx = _fixture(name)
     assert _decide(dragapult, fx)[0] == fx["correct"]
 
 
 def test_grab_lunar_cycle_fuel_f71(lucario):
-    """ml f71: Petrel resolved on a dead hand with the Solrock/Lunatone engine online but no {F} to pay
-    Lunar Cycle's discard. Fighting Gong is the Item that fetches exactly that."""
+    """The engine is online but there is no Energy to pay its ability's discard cost."""
     fx = _fixture("ml_grab_the_playable_item_f71")
     assert _decide(lucario, fx)[0] == fx["correct"]

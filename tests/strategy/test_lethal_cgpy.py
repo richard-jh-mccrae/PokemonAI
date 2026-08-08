@@ -1,17 +1,7 @@
 """The multi-step lethal verification harness on the cgpy twin — DLL-free (ADR-0050 M3).
 
-Three things the native gate could not do, now unit-testable everywhere:
-
-1. ``engine_confirms_py`` reaches the SAME verdicts as the native gate on every seeded
-   fixture (pinned here; the live native-vs-py comparison is
-   ``test_engine_agreement_engine.py``).
-2. Structured seeding needs NO ``search_begin_input``: a fixture stripped of its blob
-   still drives to a verdict.
-3. The two deferred retreat-to-promote maneuvers' WIN lines are REAL: driven step by step
-   (by card identity, not memorized indices) through the cgpy engine, each reaches the
-   engine's own win verdict. These drives are the Phase-3 authoring targets' ground truth —
-   when the decide() steering hooks exist, ``engine_confirms_py`` on the bare fixture goes
-   True and THAT is the fix's gate.
+The live native-vs-py comparison is ``test_engine_agreement_engine.py``. When the decide() steering
+hooks exist, ``engine_confirms_py`` on the bare fixture goes True and THAT is the fix's gate.
 """
 import json
 from dataclasses import asdict
@@ -40,7 +30,6 @@ def _deck(agent):
 
 
 def _pilot(deck):
-    """Build the Pilot on whichever engine ``cg`` currently maps to."""
     from common.cards import CardFunctions
     from common.effects import CardEffects
     from common.pilot import Pilot
@@ -51,8 +40,8 @@ def _pilot(deck):
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
-    # attack facts flow through the provider (ADR-0051), lazily built off the engine `cg`
-    # currently maps to — so native/cgpy parity holds without a hand-built table here.
+    # attack facts flow through the provider (ADR-0051), lazily built off whichever engine `cg` maps
+    # to — so native/cgpy parity holds without a hand-built table here.
     return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY,
                  stats=EngineCardStatProvider(), functions=fns, effects=CardEffects.load(),
                  lethal_verify=True, lethal_family=True, lethal_veto=True)
@@ -66,15 +55,11 @@ def _pilot(deck):
     ("ml_lethal_recover_energy_retreat_ko_f26", "mega_lucario", None, False),
     ("ml_lethal_recover_energy_via_gong_f48", "mega_lucario", None, False),
     ("ml_lethal_retreat_boost_to_ko_f24", "mega_lucario", None, False),
-    # f15 driven as the LETHAL framing ([0] = Play Petrel, the handoff's reframe), not its
-    # retired dead-hand `correct` ([1] Lillie's — a draw-6 whose verdict is draw-dependent).
-    # False = the Phase-3 steering hooks are unbuilt; their build flips exactly this pin.
+    # [0] = Play Petrel, the LETHAL framing, not the retired dead-hand `correct` ([1] Lillie's, a
+    # draw-6 whose verdict is draw-dependent). False = the steering hooks are unbuilt.
     ("ml_petrel_balloon_retreat_lethal_f15", "mega_lucario", [0], False),
 ], ids=lambda v: v if isinstance(v, str) else "")
 def test_engine_confirms_py_matches_the_native_verdicts(name, agent, line, expected):
-    """The cgpy gate reproduces every native verdict on the seeded corpus: the one real
-    end-to-end confirm (f110) and the four sound refutes (KO-handoffs and the two
-    hook-less maneuvers). DLL-free."""
     alias.install()
     try:
         pilot = _pilot(_deck(agent))
@@ -85,8 +70,7 @@ def test_engine_confirms_py_matches_the_native_verdicts(name, agent, line, expec
 
 @pytest.mark.req("REQ-CGPY-M3-0014")
 def test_engine_confirms_py_needs_no_search_begin_input():
-    """The M3 point: strip the engine blob from the fixture and the verdict still lands —
-    cgpy seeds from the structured state alone."""
+    """cgpy seeds from the structured state alone."""
     fx = _fixture("ms_lethal_recover_energy_to_win_f110")
     fx["obs"] = {k: v for k, v in fx["obs"].items() if k != "search_begin_input"}
     assert not fx["obs"].get("search_begin_input")
@@ -106,11 +90,8 @@ def _auto(sel):
 
 
 def _drive_line(pilot, obs, choosers, *, max_selects=30):
-    """Drive a fixture's turn through the aliased engine search, choosing each scripted
-    select BY IDENTITY (a chooser inspects the live obs and names its pick) — the DLL-free
-    hand-drive. Unscripted interstitial selects (attack riders, prize picks) auto-answer
-    their minimum. Returns the engine's verdict for the driver; asserts every scripted
-    chooser was consumed. A MAIN select must always match the next chooser (fail-loud)."""
+    """Each scripted select is chosen BY IDENTITY (the chooser inspects the live obs and names its
+    pick); unscripted interstitials — attack riders, prize picks — auto-answer their minimum."""
     from cg import api as cgapi
 
     from common.strategy.planner import _prune_none
@@ -223,11 +204,8 @@ def _deck_pick(cid):
 
 @pytest.mark.req("REQ-CGPY-M3-0015")
 def test_f15_retreat_enabler_win_line_is_real_on_cgpy():
-    """The deferred `lethal-retreat-enabler` target (correction 84071010 f15): Petrel ->
-    tutor Air Balloon -> Tool onto Makuhita -> free retreat -> promote Mega Lucario ex ->
-    Aura Jab 130 vs Riolu 80, empty bench -> the ENGINE declares the win. This is the
-    hand-drive proof (previously native-only, scratchpad-only) as a committed, DLL-free
-    regression — and the gate the Phase-3 steering hooks must turn green without a script."""
+    """Petrel -> tutor Air Balloon -> Tool onto Makuhita -> free retreat -> promote Mega Lucario ex
+    -> Aura Jab 130 vs Riolu 80 with an empty bench -> the ENGINE declares the win."""
     fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     obs = dict(fx["obs"], search_begin_input="cgpy")
     alias.install()
@@ -248,9 +226,8 @@ def test_f15_retreat_enabler_win_line_is_real_on_cgpy():
 
 @pytest.mark.req("REQ-CGPY-M3-0015")
 def test_f24_boost_to_ko_win_line_is_real_on_cgpy():
-    """The f24 missed win (bench-empty): attach {F} to the benched Solrock, double Premium
-    Power Pro (+30 {F} each), retreat Lunatone (pay 1), promote the energized Solrock,
-    Cosmic Beam 70+60 = 130 OHKOs Duraludon 130 with an empty bench -> engine win."""
+    """Attach {F} to the benched Solrock, 2x Premium Power Pro (+30 {F} each), retreat Lunatone,
+    promote the energized Solrock, Cosmic Beam 130 OHKOs Duraludon with an empty bench."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     obs = dict(fx["obs"], search_begin_input="cgpy")
     alias.install()

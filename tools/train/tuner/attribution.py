@@ -11,13 +11,8 @@ from collections.abc import Iterable
 
 def derive_attribution(chosen_ids: Iterable[str], correct_ids: Iterable[str],
                        tactical_delta: float = 0.0) -> str:
-    """Route a blunder to where the fix lands.
-
-    - fired sets **differ** → ``hypothesis:<ids>`` (the discriminating Hypotheses; a weight
-      change can reorder them).
-    - fired sets **identical** → no weight can reorder identical features, so:
-      ``tactical`` if the combat term explains the gap, else ``missing_hypothesis`` (a new rule).
-    """
+    """Differing fired sets are reorderable by a weight; IDENTICAL ones are not, so the gap is either
+    the combat term (``tactical``) or a missing rule."""
     discriminating = set(chosen_ids) ^ set(correct_ids)
     if discriminating:
         return "hypothesis:" + ",".join(sorted(discriminating))

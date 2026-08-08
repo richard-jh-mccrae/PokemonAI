@@ -8,7 +8,7 @@ revert), gated `REQ-READ-0001..0006` in
 the #30 KO-Race ordering gate `REQ-OBJ-0014` in
 [tests/strategy/test_objectives.py](../../tests/strategy/test_objectives.py); full suite green.
 Resolves the three deferred 2026-07-04 corrections in
-[deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) §2026-07-04. Extends
+a since-deleted deferred-criticals note §2026-07-04. Extends
 [ADR-0040](0040-match-judgment-is-per-turn-closed-form-objectives.md) (Prize Path / Path Denial / KO
 Race) and the [ADR-0026](0026-posture-generic-core-is-net-new-read-levers.md)/Tier-4 opponent model. New
 glossary terms *Forced-Promotion Read*, *Prize-Redundant Target* in
@@ -107,7 +107,7 @@ one decision) so it never disturbs `_sticky_path`'s card-id cross-turn coherence
 
 **Consequences.** New kill-switches (or a fold under `objectives_path`), each A/B'd before default-ON.
 The snipe baseline gains the off-path-redundant suppression and the forced-promotion redirect;
-`objectives.py`'s on-path snipe check matches the specific body identity. `deferred-multi-turn-criticals.md`
+`objectives.py`'s on-path snipe check matches the specific body identity. `ADR-0040`
 records the three resolved (a `REQ-OBJ` gate for #30; build-this-closed-form for #107/#45). T6 remains
 parked with its ADR-0043 evidence unchanged. The value model's feature set is unaffected (these are
 target-selection reads, not new leaf features).

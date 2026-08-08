@@ -1,13 +1,8 @@
-"""Measure the deck-tracker ANCHOR rate across real self-play matches (#175 grill follow-up).
+"""Measure the deck-tracker ANCHOR rate across real self-play matches (Issue #175 follow-up).
 
-Drives the native engine directly (`cg.game`, the offline path `tools/sim/battle.py` uses —
-kaggle_environments is not installed here), with the real agent policy in BOTH seats so search
-cards are played realistically. For every observation our seat is asked to act on, `OwnCardModel`
-is fed the obs and we record whether the prizes were anchored at that moment.
-
-Reports the share of decision frames that are UN-anchored (the only frames where #175's
-probability weighting can change anything), split by turn, plus DE-ANCHOR events and how many
-followed one of our own prize takes.
+Drives the native engine directly (`cg.game`) with the real agent policy in BOTH seats, and records
+whether the prizes were anchored at each own-seat decision frame. Reports the UN-anchored share by
+turn — the only frames Issue #175's probability weighting can change anything on — plus DE-ANCHOR events.
 
 Usage: python anchor_rate.py <agent> [-n GAMES]
 """
@@ -89,8 +84,7 @@ def run_game(agent_dir: Path, deck: list, stats: dict) -> None:
                     except Exception:
                         anchored = prev_anchored[seat]
                     # PAIRED control: the pre-#175 tracker is behaviourally identical to the fixed
-                    # one fed an obs with `logs` stripped (it never read them), so the same frames
-                    # grade both arms — no unseeded-sample confound.
+                    # one fed an obs with `logs` stripped, so the same frames grade both arms.
                     try:
                         baseline[seat].observe({**obs, "logs": []})
                         if baseline[seat].prize_export() is None:

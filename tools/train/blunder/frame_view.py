@@ -1,53 +1,15 @@
-"""Render ONE frame's complete board state as plain text — the diagnostic read-out.
+"""Render ONE frame's complete board state as plain text — one ``<episode>-<frame>`` key in, one
+fixed-order dump out.
 
-Diagnosing a blunder always starts the same way: "pull up the full board state of `82756664-97`".
-Done by hand that is slow and, worse, *inconsistent* — a different subset of the state each time,
-formatted a different way, so two sittings on the same frame aren't comparable. This module is the
-single deterministic answer: one frame key in, one fixed-order plain-text dump out.
+Two snapshot shapes normalize into one output: the full-information **film** (both decks, hands and
+prize piles; enums as strings) and the per-seat agent **Observation** (opponent hand ``None``, no
+deck, enums as ints). Film-only zones are labelled `[hid]` — never read one as agent knowledge.
 
-**The key** is the repo's existing Anchor form ``<episode>-<frame>`` (`/blunder-buster` SKILL.md),
-e.g. ``82756664-97``. ``82756664-f97`` and ``ep82756664 f97`` also parse — the forms that show up
-in ADRs, fixture notes and chat.
+The turn flags (``energyAttached`` / ``supporterPlayed`` / ``retreated`` / ``stadiumPlayed``) belong
+to the TURN PLAYER, not the asked seat; a seat is regularly prompted out of turn (post-KO promote).
 
-**Two snapshot shapes, one output.** A frame reaches us as either
-
-* the **full-information film** snapshot (``current`` from a replay's ``visualize`` film, or the
-  copy a Correction embeds in ``decision.current``) — both decks, both hands, both prize piles are
-  listed, and cards carry ``name``; enums are *strings* (``"Attach"``, ``"ToActive"``); or
-* the per-seat **agent Observation** (``obs.current``, what a fixture records) — opponent hand is
-  ``None``, ``prize`` is a bare count, ``deck`` is absent entirely, cards carry only ``id``, and
-  every enum is an *int*.
-
-Both normalize into the same section order here, so the read-out never changes shape with the
-source. Where the film shows more than the agent could see, the zone is labelled — see
-`LABELS`. The full-info deck/prize contents are a diagnostic aid, never evidence the agent had
-them: reasoning "it should have known" off a `[hid]` zone is the whole trap this labelling exists
-to stop.
-
-**Laid out for a phone.** The read-out is normally read on a handset, so the default column is
-`WIDTH` = 38 characters and every line is wrapped to it with a hanging indent — nothing is
-truncated and nothing needs a wide terminal. Card zones are grouped by category and comma-joined
-rather than given a line each, which is what keeps a 25-card deck to a handful of lines instead of
-four screens. `--width` widens it; `effects=False` drops attack/ability rule text, the bulk of the
-length.
-
-**The turn flags belong to the TURN PLAYER, not to whoever is being asked.** ``energyAttached`` /
-``supporterPlayed`` / ``retreated`` / ``stadiumPlayed`` are properties of the turn in progress. A
-seat is regularly prompted *out of turn* — the post-KO ``ToActive`` promotion is the common case —
-and then those flags describe the **opponent's** turn. ``82756664-97`` is exactly that frame, which
-is why the read-out names the turn player explicitly instead of implying "you". Turn player is
-``(firstPlayer + turn - 1) % 2`` for ``turn >= 1`` (`turn_player` below); ``turn
-0`` is the shared setup phase with no single actor (`tools/train/CONTEXT.md`).
-
-Card enrichment (printed HP, type, weakness, retreat, attack names/costs, prize value) comes from
-the committed pure-Python tables `cgpy.cards.CardDB` (`src/cgpy/defs/`) — no native engine, so this
-runs on a bare clone. Enrichment is **fail-open**: without the tables you still get every zone, and
-the header says enrichment is off. The state itself is never inferred.
-
-Deliberately NOT computed: whether an attack is affordable. That is an *inference* over
-`common.strategy` cost rules, not board state, and a subtly wrong affordability verdict is worse
-than none. The read-out prints attached energy and each attack's printed cost side by side and
-leaves the judgment to the reader.
+Card enrichment comes from `cgpy.cards.CardDB` and is FAIL-OPEN — no tables still yields every zone.
+Attack affordability is deliberately NOT computed: that is an inference, not board state.
 """
 from __future__ import annotations
 
@@ -74,9 +36,8 @@ _AREA = {1: "DECK", 2: "HAND", 3: "DISCARD", 4: "ACTIVE", 5: "BENCH", 6: "PRIZE"
 _CARD_TYPE = {0: "Pokemon", 1: "Item", 2: "Tool", 3: "Supporter", 4: "Stadium",
               5: "Basic Energy", 6: "Special Energy"}
 
-# Symbols verified against the Basic Energy card names in src/cgpy/defs/card_data.json
-# (energyType 1 == "Basic {G} Energy", ...). DRAGON/RAINBOW/TEAM_ROCKET have no Basic card to
-# confirm a symbol, so they are named rather than invented.
+# Verified against the Basic Energy card names in src/cgpy/defs/card_data.json. DRAGON/RAINBOW/
+# TEAM_ROCKET have no Basic card to confirm a symbol, so they are named rather than invented.
 _ENERGY = {0: "{C}", 1: "{G}", 2: "{R}", 3: "{W}", 4: "{L}", 5: "{P}", 6: "{F}", 7: "{D}",
            8: "{M}", 9: "Dragon", 10: "Rainbow(any)", 11: "TeamRocket(P+D)"}
 
@@ -166,12 +127,8 @@ def _context_name(value) -> tuple[str, str]:
 
 
 def turn_player(turn, first_player) -> int | None:
-    """The seat whose turn ``turn`` (1-based) is — ``firstPlayer`` takes the odd turns.
-
-    ``None`` for turn 0 (the shared setup phase, where both seats act) or when either input is
-    missing. Was mirrored by `train.probes.doom_audit.turn_player` until Issue #261 item 2h
-    deleted that probe with the shadow it read; this is now the only copy.
-    """
+    """The seat whose turn ``turn`` (1-based) is — ``firstPlayer`` takes the odd turns. ``None`` for
+    turn 0 (the shared setup phase) or a missing input."""
     if turn is None or first_player is None:
         return None
     try:
@@ -186,11 +143,8 @@ def turn_player(turn, first_player) -> int | None:
 # --- card enrichment (fail-open) --------------------------------------------------------------
 
 class _Cards:
-    """`cgpy.cards.CardDB` if the committed tables load, else a null object.
-
-    Enrichment is a convenience over the raw state; a bare environment that cannot import the
-    tables still gets every zone (the header says so). Never used to *infer* board state.
-    """
+    """`cgpy.cards.CardDB` if the committed tables load, else a null object. Enrichment is never
+    used to *infer* board state."""
 
     def __init__(self):
         self.db = None
@@ -224,11 +178,8 @@ UNKNOWN_CARD = "(face down — identity not in this snapshot)"
 
 
 def _card_name(card: dict | None, cards: _Cards) -> str:
-    """A card's name — from the film's own ``name``, else resolved from ``id``.
-
-    A per-seat Observation spells a card the seat cannot see as a bare ``null`` (its prize pile is
-    six of them), so a non-dict entry is a *known unknown*, not corrupt data.
-    """
+    """A card's name — the film's own ``name``, else resolved from ``id``. A non-dict entry is a
+    KNOWN unknown (an Observation spells an unseeable card as bare ``null``), not corrupt data."""
     if not isinstance(card, dict):
         return UNKNOWN_CARD
     name = card.get("name")
@@ -289,10 +240,8 @@ def _stage(stat) -> str:
 
 _KEY = re.compile(r"^\s*(?:ep)?(\d+)\s*[-_:\s]\s*f?(\d+)\s*$", re.IGNORECASE)
 
-# The same pair spotted *inside* free text — fixture notes write it as "82756664-37" or
-# "83686860 f29", so both separators count. The 6-digit floor on the episode is what keeps a bare
-# "f82" and, more importantly, a date ("2026-07-13" -> ep 2026 frame 7) from scanning as a key;
-# Kaggle episode ids run to 8 digits, well clear of it.
+# The same pair inside free text. The 6-digit floor stops a date ("2026-07-13" -> ep 2026 frame 7)
+# scanning as a key; Kaggle episode ids run to 8 digits, well clear of it.
 _KEY_IN_TEXT = re.compile(r"(?:ep)?(\d{6,})\s*[-_:\s]\s*f?(\d+)", re.IGNORECASE)
 
 
@@ -302,12 +251,8 @@ def _note_keys(note) -> set[tuple[int, int]]:
 
 
 def parse_frame_key(key: str) -> tuple[int, int]:
-    """``"82756664-97"`` -> ``(82756664, 97)``. Also accepts ``82756664-f97``, ``ep82756664 f97``.
-
-    Raises ``ValueError`` on anything else — including the *scoped* Correction keys
-    (``<ep>-t<turn>s<seat>``, ``<ep>-m<seat>``), which name a Turn or a Match rather than one
-    frame and so have no single board state to dump.
-    """
+    """``"82756664-97"`` -> ``(82756664, 97)``; also ``82756664-f97``, ``ep82756664 f97``. Raises on
+    the SCOPED Correction keys (``<ep>-t<turn>s<seat>``, ``<ep>-m<seat>``): those name no frame."""
     text = str(key).strip()
     m = _KEY.match(text)
     if not m:
@@ -353,16 +298,8 @@ def _read_json(path: Path) -> dict:
 
 
 def _corrections_in(path: Path):
-    """Every Correction in one log file, CONSTRUCTED (ADR-0087 decision 1).
-
-    Per-file rather than through `gates.keyed_corrections` because the viewer is addressed by the
-    ``<episode>-<frame>`` shorthand a human types, not by a **Frame Key**, and it displays the source
-    path — which a keyed reader does not carry. What it needs from the contract is the *construction*
-    (so `agent` is backfilled from `agent_build`), not the keying. Dedup off: a viewer showing the
-    append history is right where a gate collapsing it is.
-
-    A malformed line is skipped rather than raised on — the same tolerance the raw read had, and the
-    viewer is a diagnostic that must still answer when one record is broken."""
+    """Every Correction in one log file, CONSTRUCTED (ADR-0087 decision 1) but not keyed or deduped:
+    the viewer needs the source path and the append history. A malformed line is skipped."""
     from .correction import Correction
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -449,17 +386,8 @@ def _hit_from_fixture(rec: dict, path: Path, episode_id: int, frame: int) -> Fra
 def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
                corrections=DEFAULT_CORRECTIONS, fixtures=DEFAULT_FIXTURES,
                replay_path: Path | None = None) -> FrameHit:
-    """Locate ``episode-frame`` in the best source available, richest first.
-
-    1. ``replay_path`` when given — the full film, so *any* frame resolves, not only tagged ones.
-    2. the Correction tree — the frames a human tagged, each carrying its own embedded
-       full-information snapshot plus the ruling.
-    3. any replay under ``replays`` whose ``info.EpisodeId`` matches.
-    4. ``tests/fixtures/corrections`` — the per-seat Observation a test records, matched on the
-       ``<ep>-<frame>`` key in its ``note``.
-
-    Raises ``LookupError`` naming every place searched when nothing matches.
-    """
+    """Locate ``episode-frame``, richest source first: explicit replay, Correction tree, any matching
+    replay, fixture. Raises ``LookupError`` naming every place searched."""
     searched: list[str] = []
 
     if replay_path is not None:
@@ -472,15 +400,8 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
         searched.append(f"{corrections}/**/corrections.jsonl")
-        # CONSTRUCT the records (ADR-0087 decision 1) rather than re-parsing the raw lines: a
-        # record with an empty `agent` carries a populated `agent_build`, and only `from_dict`
-        # backfills the deck from that stem. 40 committed records are that shape, and a raw read
-        # renders every one of them with a blank agent. Per-file so the source path survives.
-        # The store owns where the logs live (`store.jsonl_files`) as well as how a record is
-        # constructed - re-deriving the layout with a local glob is a second idea of what the
-        # corpus IS, one level below the second idea of what a RECORD is that cost the Decision
-        # Gate 40 records (ADR-0087). Equivalent to the rglob it replaces: same 28 files,
-        # and the store additionally knows the legacy root-level log.
+        # CONSTRUCT rather than re-parse (ADR-0087 decision 1): only `from_dict` backfills `agent`
+        # from `agent_build`. The store owns the layout, so no local glob.
         for path in jsonl_files(corrections):
             for c in _corrections_in(path):
                 if c.episode_id != episode_id:
@@ -535,10 +456,7 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
 
 
 # --- rendering ---------------------------------------------------------------------------------
-# Laid out for a NARROW column. The read-out is normally read on a phone, so the default width is
-# 38 characters and every line is wrapped to it with a hanging indent: nothing is truncated, and
-# nothing relies on a wide terminal. Long zone lists are grouped by card category and comma-joined
-# rather than given a line each, which is what keeps a 25-card deck to a handful of lines.
+# Laid out for a NARROW column: every line wraps to `WIDTH`, zone lists group by category.
 
 WIDTH = 38
 """Default column width — sized for reading the read-out on a phone."""
@@ -567,14 +485,8 @@ _CAT_ORDER = ["Pokemon", "Basic Energy", "Special Energy", "Item", "Tool", "Supp
 
 
 class _Out:
-    """A width-bounded line accumulator.
-
-    Every line goes through `textwrap` at ``width`` with a hanging indent for its continuations,
-    so a narrow column stays readable and nothing is silently cut. Words are not broken (a card
-    name must never be corrupted mid-word), so a name longer than the column overflows it — the
-    one case where exceeding the width is the lesser evil. ``hard=True`` opts into breaking, for
-    paths and JSON blobs where a wrong-looking break costs nothing.
-    """
+    """A width-bounded line accumulator. Words are never broken, so a name longer than the column
+    OVERFLOWS it; ``hard=True`` opts into breaking, for paths and JSON blobs."""
 
     def __init__(self, width: int = WIDTH):
         self.width = max(20, int(width))
@@ -604,11 +516,8 @@ class _Out:
         self.lines.extend(wrapped or [pad + str(text)])
 
     def path(self, text: str, *, indent: int = 0) -> None:
-        """A path, broken at ``/`` rather than mid-segment.
-
-        Hard-wrapping a path splits a directory name in half, which reads as a typo. Packing whole
-        ``/``-terminated segments keeps every break at a boundary a reader recognises.
-        """
+        """A path, broken at ``/`` rather than mid-segment (a split directory name reads as a
+        typo)."""
         segments = [s + "/" for s in text.split("/")[:-1]] + [text.split("/")[-1]]
         pad, room = " " * indent, max(4, self.width - indent)
         line = ""
@@ -655,11 +564,7 @@ def _count_names(cards_list, cards: _Cards) -> list[str]:
 
 
 def _zone(out: _Out, cards_list, cards: _Cards, *, indent: int = 0) -> None:
-    """A card zone grouped by category, one line per category, names comma-joined.
-
-    A 25-card deck listed one card per line is four screens on a phone; grouped it is six lines.
-    The category label is emitted once per group instead of repeated on every card.
-    """
+    """A card zone grouped by category, one line per category, names comma-joined."""
     if not cards_list:
         out.add("(empty)", indent=indent)
         return
@@ -757,11 +662,7 @@ def _pokemon(out: _Out, pk: dict | None, cards: _Cards, *, head: str, indent: in
 
 
 def _option_parts(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> list[str]:
-    """One offered option as a head line plus a line per thing it names.
-
-    Split rather than joined: at a narrow width a single joined line wraps into an unscannable
-    block, whereas one target per line stays aligned down the column.
-    """
+    """One offered option as a head line plus a line per thing it names."""
     otype = _enum_name(opt.get("type"), _OPTION_TYPE, "optionType")
     parts = [f"[{idx}] {otype}"]
 
@@ -793,9 +694,8 @@ def _option_parts(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> 
         ref = f"s{seat} {area_name}" + ("" if area_name == "ACTIVE" else str(index))
         return f"{ref} = {_card_name(entries[index], cards)}"
 
-    # A PLAY option carries a bare hand index and no `area` — see the engine's own builder
-    # (`cgpy.options`: {"type": PLAY, "index": i} over the hand). Everything else that points at a
-    # card says which area it means.
+    # A PLAY option carries a bare hand index and no `area` (`cgpy.options`); everything else that
+    # points at a card says which area it means.
     area = opt.get("area")
     if area is None and otype == "Play":
         area = 2                                          # AreaType.HAND
@@ -824,11 +724,8 @@ def _option_parts(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> 
 
 
 def _option_summary(idx: int, opt: dict, cur: dict, cards: _Cards, asked_seat) -> str:
-    """The same option on one line — for echoing a choice or a ruling.
-
-    The index already sits on the ``AGENT CHOSE [1]`` line above, so it is dropped here and the
-    line leads with what was actually picked; those characters are worth more in a narrow column.
-    """
+    """The same option on one line, index dropped — for echoing a choice or a ruling under a line
+    that already carries it."""
     parts = _option_parts(idx, opt, cur, cards, asked_seat)
     if len(parts) > 1:
         return " · ".join(parts[1:])
@@ -918,11 +815,8 @@ def _side(out: _Out, seat: int, cur: dict, cards: _Cards, *, asked_seat, label: 
 
 def render(hit: FrameHit, *, deck_order: bool = False, cards: _Cards | None = None,
            width: int = WIDTH, effects: bool = True) -> str:
-    """The frame as a plain-text list — fixed section order, wrapped to ``width``.
-
-    ``effects=False`` drops attack and ability rule text, which is the bulk of the length; every
-    zone, count and flag stays.
-    """
+    """The frame as a plain-text list — fixed section order, wrapped to ``width``. ``effects=False``
+    drops attack/ability rule text; every zone, count and flag stays."""
     cards = cards or _Cards()
     cur = hit.current or {}
     out = _Out(width)
@@ -1101,11 +995,8 @@ def dump(key: str, *, deck_order: bool = False, replay_path: Path | None = None,
 
 def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRECTIONS,
                      fixtures=DEFAULT_FIXTURES) -> list[str]:
-    """Every ``<ep>-<frame>`` key resolvable from the committed stores, sorted.
-
-    What a "not found" should offer next: with no replay on disk only tagged frames resolve, so
-    naming them beats a bare failure.
-    """
+    """Every ``<ep>-<frame>`` key resolvable from the committed stores, sorted — what a "not found"
+    offers next, since with no replay on disk only tagged frames resolve."""
     keys: set[str] = set()
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():

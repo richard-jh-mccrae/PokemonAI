@@ -1,21 +1,11 @@
 """Seam 4 (Issue #213): the scaled threat rank on REAL corpus frames, through a real Pilot.
 
-`threat_sweep.py --rank` reported 0 decided-pick flips over 331 frames (the probe is gone with the
-shadows it read, Issue #261 item 2h; this names a measurement's provenance). That was the ADR-0072
-Decision Gate and it proves the swap is SAFE — but zero flips proves nothing about the fix
-*firing*, and a rank change that never fires is indistinguishable from a rank change that isn't
-wired. These tests close that gap from the other side: on frames the corpus really contains, the
-scaled read must differ from the printed one for the cards the issue is about.
+Zero decided-pick flips proves the swap is SAFE but proves nothing about the fix FIRING, and a rank
+change that never fires is indistinguishable from one that isn't wired. These tests close that gap
+from the other side.
 
-That mode was deleted by Issue #243 (ADR-0083 records its answer; a ruling's artifact is the record,
-not the script), which makes THIS file the surviving instrument for the swap. It also widened what
-runs: routed through THE Corpus Reader the corpus is 372 frames, not the 332 the raw walk saw, so the
-Kadabra/Alakazam loop below covers 18 frames rather than 11 — measured 2026-07-31, all 7 newly
-visible frames satisfy every in-loop invariant.
-
-Everything here is driven by `train.tune._build_pilot` against the real card provider and a real
-captured `obs`, per the spec's testing rule — a hand-built stat table can describe a board that
-cannot exist and will happily manufacture a passing test.
+Driven by `train.tune._build_pilot` against the real card provider and a real captured `obs`: a
+hand-built stat table can describe a board that cannot exist and manufacture a passing test.
 """
 import pathlib
 
@@ -28,15 +18,7 @@ KADABRA, ALAKAZAM = 742, 743          # Powerful Hand: printed 0, 20 per card in
 
 def _corpus():
     """Every committed Correction carrying a replayable `obs`, keyed by frame — through THE Corpus
-    Reader (ADR-0087 / ADR-0089).
-
-    This file was the one test carrying the raw walk's `d.get("obs") and d.get("agent")` filter
-    VERBATIM, so it was short the same **40** records: a falsy `agent` is *recoverable* from
-    `agent_build`, and only `Correction.from_dict` backfills it. Unlike its ten siblings this is a
-    corpus-WIDE reader — it selects frames by board content, not by literal ids — so the widening
-    changes what runs. Measured 2026-07-31 before the swap: Lillie's Clefairy ex 8 frames (0 new),
-    Kadabra/Alakazam 18 frames (**7 new**), and all seven satisfy every in-loop invariant. A coverage
-    widening, not a behaviour change."""
+    Reader (ADR-0087 / ADR-0089), which selects frames by board content rather than by literal ids."""
     from corpus_helpers import corpus_index
     return corpus_index()
 
@@ -63,11 +45,8 @@ def corpus():
 
 
 def _pair_on_real_frame(rec, card_ids):
-    """`{cid: (own_off, fwd_off, own_on, fwd_on)}` for the frame's opponent bodies of interest.
-
-    Keyed by CARD id, not by body: a board can hold two copies of the same card and the read is a
-    card fact, so the second copy would only ever repeat the first.
-    """
+    """`{cid: (own_off, fwd_off, own_on, fwd_on)}`, keyed by CARD id rather than body: the read is a
+    card fact, so a second copy of the same card only repeats the first."""
     from train.tune import _build_pilot
     wanted = {b.get("id") for b in _opp_bodies(rec.obs) if b.get("id") in card_ids}
     out = {cid: [] for cid in wanted}

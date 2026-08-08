@@ -1,9 +1,7 @@
 """ADR-0050 Phase 2(D) — the reusable end-to-end lethal gate ``engine_confirms(fixture, pilot)``.
 
-It drives a seeded correction fixture's win line through the real engine cascade
-(``pilot._engine_confirms_win``) and returns the engine's verdict, so a multi-step lethal proposal is
-gated on 'real play completes the line', not just closed-form recognition. Skips cleanly when the
-native lib is absent, and is a no-op (None) on a fixture with no seed — the offline suite stays green.
+Skips cleanly when the native lib is absent, and is a no-op (None) on an unseeded fixture, so the
+offline suite stays green cross-platform.
 """
 import json
 from pathlib import Path
@@ -41,60 +39,35 @@ def _pilot(agent="mega_starmie"):
 
 @pytest.mark.req("REQ-LETHAL-SEED-0005")
 def test_engine_confirms_returns_none_without_a_seed():
-    """The gate is a no-op on an unseeded fixture — returns None (keep the closed-form verdict), never
-    raises and never needs the native lib. This is what keeps the offline suite green cross-platform."""
     fx = {"obs": {"current": {"yourIndex": 0, "players": [{}, {}]}}, "correct": [0]}
     assert engine_confirms(fx, pilot=None) is None
 
 
 @pytest.mark.req("REQ-LETHAL-SEED-0005")
 def test_engine_confirms_a_shipped_lethal_wins_end_to_end():
-    """Proof-of-life: the applied recover-energy lethal f110 (seeded) drives to a real engine WIN
-    verdict through the cascade — the gate's positive case, independent of any new steering hook."""
     require_cg()
     fx = _fixture("ms_lethal_recover_energy_to_win_f110")
     assert engine_confirms(fx, _pilot("mega_starmie")) is True
 
 
-# f24's full win line (ADR-0050 DoD#3): attach {F}->Solrock, play 2x Premium Power Pro (+30 each to
-# {F} attacks), retreat Lunatone (its {F} pays the cost), promote Solrock, Cosmic Beam 70+60=130 OHKOs
-# Duraludon 130 — opp bench empty -> a bench-empty win. Explicit per-select picks through the attack;
-# decide() then handles the trailing prize cascade. See docs/adr/0050-*, [[lethal-verification-tool-grill]].
+# attach {F}->Solrock, 2x Premium Power Pro, retreat Lunatone, promote Solrock, Cosmic Beam 130 for
+# a bench-empty win (ADR-0050 DoD#3); decide() then handles the trailing prize cascade.
 _F24_WIN_LINE = [[5], [1], [1], [2], [0], [0], [2]]
 
 
-# The verdict of ONE `engine_confirms` drive is not a fact about the agent — it is a sample. The
-# native engine's RNG stream is process-global and unseedable, so each drive shuffles the seeded
-# hidden zones afresh and the cascade's draws differ; on ml f24 the [correct]-only form refutes on
-# essentially every stream but confirms on a rare lucky one (measured 1-in-150 in suite context,
-# and it is what turned this test red on CI twice). So both directions below are stated as claims
-# over K INDEPENDENT streams instead of over one:
-#
-#   * the target win is REAL          -> confirmed on at least one stream (an existence claim; one
-#                                        engine verdict of True is a proof, and a stray None/False
-#                                        on another stream cannot unprove it),
-#   * decide() cannot COMPOSE it      -> refuted on at least one stream (the capability is unbuilt;
-#                                        a lucky confirm is engine noise, not a shipped hook).
-#
-# The gate the docstring below promises is preserved and made sharper: once the Phase-3 steering
-# hooks ship, the [correct] form confirms on EVERY stream, no refute survives, and this test goes
-# red — which is exactly the signal the fix is meant to trip.
+# The engine's RNG stream is process-global and unseedable, so ONE drive is a sample: both claims
+# below are existence claims over K independent streams (ADR-0050).
 _F24_STREAMS = 5
 
 
 def _verdicts(fx, agent, line=None, k=_F24_STREAMS):
-    """``engine_confirms`` sampled over ``k`` independent engine RNG streams (each drive advances the
-    process-global stream, so repeated calls are genuinely different samples)."""
     return [engine_confirms(fx, _pilot(agent), line=line) for _ in range(k)]
 
 
 @pytest.mark.req("REQ-LETHAL-SEED-0005")
 def test_engine_confirms_multi_step_line_proves_a_real_missed_win():
-    """The multi-step gate (proof-of-target for a capability-gap): ml f24 is a REAL bench-empty win when
-    the whole retreat/promote/tool line is driven explicitly, but its [correct]-only form REFUTES because
-    decide()'s follow-up steering hooks are unbuilt (it never composes the line). This pins the target the
-    `capability-gap-damage-boost-item-lethal` proposal builds toward; once its hooks ship, the [correct]
-    form goes green on its own — that is the fix's gate."""
+    """decide()'s follow-up steering hooks are UNBUILT, so the [correct]-only form refutes; once they
+    ship it goes green on its own and this capability-gap gate should be retired."""
     require_cg()
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     driven = _verdicts(fx, "mega_lucario", line=_F24_WIN_LINE)

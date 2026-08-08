@@ -36,7 +36,7 @@ Two facts framed the design:
 - **The scattered status quo.** Six forward-looking reads each compute a slice of "opponent threat" and
   none cohere: `_forward_incoming_damage` (opponent **Active** evolving, one turn), `_incoming_active_damage`
   / `_active_doomed` (one turn, **affordability-blind** — credits attacks the opponent can't pay for, an
-  open over-doom bug, [incoming-affordability.md](../todo/incoming-affordability.md)), `_their_turns_to_ko`
+  open over-doom bug, [ADR-0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)), `_their_turns_to_ko`
   (Tier-3, current-form damage + γ-predicted attackers on a flat lead), `_forced_promotion_key` (ADR-0044,
   **offensive** only), `_body_threat_rank` (snipe order). None models the **energy-attach clock** the user's
   "attaching the LAST energy" scenario needs; none sees a **benched** attacker powering up and being
@@ -106,7 +106,7 @@ Planner one scope up (`plan_match` : match :: `plan_turn` : turn).
    and which line the opponent actually runs; **with zero Read it is pure card fact — the base fallback the
    user required.** It **subsumes** `_forward_incoming_damage` / `_incoming_active_damage` /
    `_their_turns_to_ko` / `_forced_promotion_key`, and **fixes the affordability over-doom bug**
-   ([incoming-affordability.md](../todo/incoming-affordability.md)) as a side effect.
+   ([ADR-0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)) as a side effect.
 
 8. **Forgo-KO behind a tight sound gate (the user's "don't wake the giant" play).** The Game Plan may direct
    the Turn Planner to forgo an available **non-winning** KO — but ONLY when ALL hold: (i) the KO does not
@@ -176,7 +176,7 @@ one below is proven no-regression.
 - **The Turn Planner (`planner.py`) gains a directed-goal input** — a new top heuristic rung fed by the Game
   Plan, below the win rung; its own Goal Ladder becomes the fallback when confidence is low.
 - **The six scattered forward reads fold into the Threat Clock**, re-baselining every `active_doomed` consumer
-  (~19 fixtures + the two CRITICAL gates); [incoming-affordability.md](../todo/incoming-affordability.md) is
+  (~19 fixtures + the two CRITICAL gates); [ADR-0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md) is
   **subsumed** (its affordability fix is the Threat Clock's energy model). The Evolving Threat forward-evo
   index and the Forced-Promotion Read (ADR-0044) are consumed, not duplicated.
 - **The blunder-buster gains Match-Planner routing** (like ADR-0041 posture): a ladder misplay ties to the
@@ -214,6 +214,6 @@ to fire Nebula Beam. A naive 1-attach affordability cap reads it as *not* doomed
 **survival-critical `active_doomed` stays worst-case** (Incoming reads the ceiling); the Threat Clock's
 affordability model is the **multi-turn PREP read** only (off-by-a-turn is recoverable). So the ADR's
 "fixes the affordability over-doom as a side effect" is **withdrawn** for the survival boolean — the
-incoming-affordability.md fix is unsound as specified (it ignores hidden burst Energy). This is the one
+ADR-0064 fix is unsound as specified (it ignores hidden burst Energy). This is the one
 place the build corrected the design; the Threat Clock still provides the accurate multi-turn projection the
 Match Planner's confidence and prep reads consume.

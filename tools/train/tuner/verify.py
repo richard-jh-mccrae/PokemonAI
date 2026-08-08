@@ -60,36 +60,8 @@ def verify(candidate, corrections, pilot_with, seeds: dict, cluster: list[int]) 
 
 def union_verify(authored, corrections, pilot_with, seeds: dict,
                  clusters: dict[str, list[int]]) -> UnionVerifyResult:
-    """Join gate for parallel-mode fan-out: verify EVERY authored Hypothesis at once against the
-    UNION of all Corrections (ADR-0018).
-
-    Where per-cluster ``verify`` compares *pre-round* vs *pre-round + one candidate*, this compares
-    a **seeds-only baseline** against the **all-rules-merged** world — the only comparison that can
-    reveal cluster A's rule regressing cluster B's already-satisfied Correction. Two wiring hazards
-    make that comparison meaningless if a hand-rolled join gets them wrong, so both are enforced here:
-
-    1. **No double-count.** All ``authored`` rules are injected via a single ``pilot_with(authored)``
-       with the matching union seeds — never layered on a pilot that already holds them. (``score``
-       sums every fired weight with no dedupe, ``pilot.py``; a duplicated id is silently double-
-       weighted and flips which option wins.) Duplicate authored ids raise.
-    2. **Clean baseline.** ``pilot_with([])`` must be the pre-round strategy with NONE of this
-       round's authored rules — otherwise their interference sits in both ``base`` and ``union`` and
-       ``regressed`` can never see it. A contaminated baseline raises.
-
-    Args:
-        authored: the round's authored Hypotheses (each with ``.id`` / ``.weight``), one per fixed
-            cluster — exactly once each.
-        corrections: the full corpus to (re-)rank. Include the previously-``covered`` Corrections,
-            not just the parallel-batch members — a new rule can steal a covered Correction's option.
-        pilot_with: ``pilot_with(extra_hyps) -> Pilot`` whose ``general.hypotheses +
-            strategy.hypotheses`` == base + extra. ``pilot_with([])`` MUST be seeds-only.
-        seeds: the pre-round seed weights (no authored ids).
-        clusters: label -> the Correction indices that cluster is meant to fix.
-
-    Returns:
-        ``UnionVerifyResult``: ``passed`` iff every cluster is satisfied in the union AND nothing
-        previously satisfied regressed.
-    """
+    """Seeds-only baseline vs all-rules-merged (ADR-0018), the only comparison revealing cluster A's
+    rule regressing cluster B. A duplicated id or a contaminated ``pilot_with([])`` RAISES."""
     ids = [h.id for h in authored]
     dups = sorted({i for i in ids if ids.count(i) > 1})
     if dups:

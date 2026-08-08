@@ -18,15 +18,13 @@ def test_dict_provider_serves_injected_attack_records_or_none():
 
 @pytest.mark.req("REQ-STAT-0002")
 def test_dict_provider_warm_is_a_safe_no_op():
-    # warm() is the explicit pregame-window build hook; adapters stay interchangeable,
-    # so the lib-free one must accept the call.
+    # warm() is the pregame-window build hook; every adapter must accept the call.
     DictCardStatProvider({}).warm()
 
 
 @pytest.mark.req("REQ-STAT-0002")
 def test_engine_provider_serves_attack_records_with_the_audited_facts():
-    # Nebula Beam (1488): the documented full-ignore triple — pierces Crustle's ex-damage
-    # immunity (repo CLAUDE.md worked example; tests/test_attack_stats.py header).
+    # Nebula Beam (1488) is the full-ignore triple — it pierces Crustle's ex-damage immunity.
     pytest.importorskip("cg")
     from common.scouting.provider import EngineCardStatProvider
     p = EngineCardStatProvider()
@@ -67,8 +65,7 @@ def test_ids_for_name_reverse_lookups_card_ids_by_name():
 
 @pytest.mark.req("REQ-GEN-0022")
 def test_forward_max_damage_reaches_the_evolution_lines_attacker():
-    # Riolu (Basic, weak attack) evolves into Mega Lucario ex (270). Forward index reports the
-    # damage the LINE eventually reaches, read off the pre-evolution (see ADR-0020).
+    # The damage the LINE eventually reaches, read off the pre-evolution (ADR-0020).
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
@@ -90,7 +87,6 @@ def test_forward_max_damage_is_zero_for_dead_ends_and_final_forms():
 
 @pytest.mark.req("REQ-GEN-0022")
 def test_forward_max_damage_folds_max_over_same_name_printings():
-    # 'Riolu' has multiple printings; descendant name 'Eevee-mon' too. Fold MAX over printings.
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         974: CardStat(974, name="Riolu", maxDamage=30),            # second Riolu printing
@@ -118,8 +114,7 @@ def test_forward_max_damage_walks_branching_multihop_and_survives_cycles():
 
 @pytest.mark.req("REQ-GEN-0022")
 def test_engine_provider_forward_max_damage_triggers_the_lazy_cache_build():
-    # Amendment guard: forward_max_damage called BEFORE any .get() must trigger the same lazy
-    # build (not crash on a None cache). Riolu (333) -> Mega Lucario ex line (270) off real engine.
+    # Called BEFORE any .get(), so it must build rather than crash on a None cache.
     pytest.importorskip("cg")
     from common.scouting.provider import EngineCardStatProvider
     p = EngineCardStatProvider()
@@ -148,8 +143,6 @@ def test_build_cache_maps_engine_objects_to_stats():
 
 @pytest.mark.req("REQ-SCOUT-0008")
 def test_build_cache_carries_ace_spec():
-    """ACE SPEC is a structural fact the runtime reads off CardStat — for 'protect the irreplaceable
-    one-of ACE SPEC' rules (e.g. Hero's Cape)."""
     cards = [SimpleNamespace(cardId=1159, name="Hero's Cape", hp=0, ex=False, megaEx=False,
                              weakness=None, resistance=None, energyType=0, evolvesFrom=None,
                              attacks=[], aceSpec=True),
@@ -162,8 +155,7 @@ def test_build_cache_carries_ace_spec():
 
 
 def _tool(card_id, name, text, ace_spec=False):
-    """An engine CardData stand-in for a Pokémon Tool whose only datum of interest is its skill text
-    (the engine has no structured HP-bonus field — see ``_parse_tool_hp_bonus``)."""
+    """The engine has no structured HP-bonus field — only skill text (see ``_parse_tool_hp_bonus``)."""
     return SimpleNamespace(cardId=card_id, name=name, hp=0, ex=False, megaEx=False,
                            weakness=None, resistance=None, energyType=0, evolvesFrom=None,
                            attacks=[], aceSpec=ace_spec,
@@ -172,16 +164,8 @@ def _tool(card_id, name, text, ace_spec=False):
 
 @pytest.mark.req("REQ-GEN-0024")
 def test_build_cache_parses_flat_hp_bonus_and_carries_an_owner_gate_with_it():
-    """A +HP Tool's bonus lives ONLY in free skill text — parse the 'gets +N HP' sentence into a
-    structured ``CardStat.hpBonus``, the primitive the general breakpoint model reads. Source text
-    verified against data/EN_Card_Data.csv.
-
-    Issue #306 widened this: an OWNER-family variant ("The Cynthia's Pokémon …") reads its amount
-    now, because `docs/rules.md` §9 makes the owner prefix part of the printed name and so an exact
-    test over a holder we already know. It reads its CONDITION with it, in `holderNameFamily`, which
-    is what keeps the +70 from silently becoming an unconditional bonus on every body. Consumer-side
-    behaviour is unchanged for the unrestricted Tools — see tests/scouting/test_tool_holder_facts.py
-    for the gate, its negative cases, and the deploy picker that honours it."""
+    """`holderNameFamily` is what keeps an owner-gated +70 from reading as unconditional on every
+    body (Issue #306). Source text verified against data/EN_Card_Data.csv."""
     cards = [
         _tool(1159, "Hero's Cape", "The Pokémon this card is attached to gets +100 HP.", ace_spec=True),
         _tool(1173, "Cynthia's Power Weight",
@@ -198,7 +182,6 @@ def test_build_cache_parses_flat_hp_bonus_and_carries_an_owner_gate_with_it():
 
 @pytest.mark.req("REQ-GEN-0024")
 def test_build_cache_hp_bonus_defaults_to_zero_without_skills():
-    """A card record with no skills (the lib-free test shape, and any non-Tool) parses to 0 — no crash."""
     cards = [SimpleNamespace(cardId=678, name="Mega Lucario ex", hp=220, ex=True, megaEx=True,
                              weakness=6, resistance=None, energyType=6, evolvesFrom="Riolu", attacks=[])]
     assert _build_cache(cards, [])[678].hpBonus == 0
@@ -206,9 +189,7 @@ def test_build_cache_hp_bonus_defaults_to_zero_without_skills():
 
 @pytest.mark.req("REQ-GEN-0024")
 def test_build_cache_parses_bench_snipe_damage_from_attack_text():
-    """A bench-snipe rider (Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched
-    Pokémon') lives only in attack text — parse the UNCONDITIONAL single-target snipe into a structured
-    ``CardStat.benchSnipeDamage`` (max over the card's attacks), the opponent-incoming-vs-my-Bench
+    """Only the UNCONDITIONAL single-target snipe, max over the card's attacks — the incoming-damage
     primitive the Tool survival-turns math reads (ADR-0028)."""
     attacks = [
         SimpleNamespace(attackId=20, damage=120, energies=[6],

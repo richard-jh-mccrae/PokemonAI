@@ -23,16 +23,13 @@ import pytest
 _ADR_DIR = Path(__file__).resolve().parents[1] / "docs" / "adr"
 _README = _ADR_DIR / "README.md"
 
-#: `NNNN-glossary.md` is a companion vocabulary doc for `ADR-NNNN`, not an ADR of its own — stated
-#: outright in the README for `0050-glossary.md`. Sharing the prefix is correct there, so the rule
-#: excludes them by shape rather than by an exemption list that would have to be maintained.
+#: `NNNN-glossary.md` is a companion vocabulary doc for `ADR-NNNN`, not an ADR of its own, so the
+#: rule excludes them by shape rather than by an exemption list that would have to be maintained.
 _GLOSSARY = re.compile(r"^\d{4}-glossary\.md$")
 _NUMBERED = re.compile(r"^(\d{4})-.+\.md$")
 
 #: ADRs the index is KNOWN to be missing, each with the reason it is owed rather than forgotten.
-#: Declared as data so a NEW gap fails this test instead of joining a silent backlog — which is
-#: exactly how ADR-0100 went five days unindexed. Emptying this is unowned work (README §"⚠️ The
-#: index below is incomplete", Issue #167's grill notes).
+#: Declared as data so a NEW gap fails this test instead of joining a silent backlog.
 _INDEX_EXEMPT: dict[str, str] = {
     "0067": "landed on the #137 / 0a branch and never got a row; re-indexing is unowned work",
 }
@@ -62,10 +59,8 @@ def _index_rows() -> dict[str, str]:
 
 @pytest.mark.req("REQ-ADRINDEX-0001")
 def test_no_two_adrs_claim_the_same_number():
-    """The check that would have caught the 0073 collision the day it merged, instead of five days
-    later during an unrelated audit. A duplicate prefix makes every `ADR-NNNN` citation in the repo
-    ambiguous — and the repo had 127 such citations across 49 files, 27 of which meant the other
-    ADR."""
+    """A duplicate prefix makes every `ADR-NNNN` citation in the repo ambiguous, and it is silent: the
+    0073 collision sat unnoticed for five days across 127 citations in 49 files."""
     dupes = {n: files for n, files in _adr_numbers().items() if len(files) > 1}
     assert dupes == {}, (
         "two ADRs claim one number. Resolve by the README's numbering log convention — first-MERGED "
@@ -74,9 +69,8 @@ def test_no_two_adrs_claim_the_same_number():
 
 @pytest.mark.req("REQ-ADRINDEX-0001")
 def test_every_adr_on_disk_has_an_index_row():
-    """The index calls itself "the authoritative map of number → file → status". An ADR missing from
-    it is invisible to anyone who trusts that claim — a reader following the index concluded the
-    promote/retreat ADR did not exist, while 25 source comments cited it by number."""
+    """The index calls itself the authoritative map of number → file → status, so an ADR missing from it
+    is invisible to anyone who trusts that claim."""
     missing = sorted(set(_adr_numbers()) - set(_index_rows()) - set(_INDEX_EXEMPT))
     assert missing == [], (
         f"ADR(s) on disk with no row in docs/adr/README.md: {missing}. Add the row, or — if it is "
@@ -103,10 +97,8 @@ def test_an_index_row_links_its_own_number():
 
 @pytest.mark.req("REQ-ADRINDEX-0002")
 def test_the_next_free_number_pointer_is_actually_free():
-    """The pointer has been stale at least three times (README's own bracketed notes), which is why
-    the convention says to trust a disk scan over it. That advice does not make a wrong pointer
-    harmless — `/open-pr` cross-checks against it, so a pointer BELOW the highest ADR on disk hands
-    the next branch a number that is already taken."""
+    """`/open-pr` cross-checks against the pointer, so a pointer BELOW the highest ADR on disk hands the
+    next branch a number that is already taken."""
     m = re.search(r"\*\*Next free number: (\d{4})\.\*\*", _README.read_text(encoding="utf-8"))
     assert m, "docs/adr/README.md has no 'Next free number' pointer"
     pointer, highest = int(m.group(1)), max(int(n) for n in _adr_numbers())

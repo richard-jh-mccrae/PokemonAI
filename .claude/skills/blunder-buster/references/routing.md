@@ -42,7 +42,7 @@ blunder this read **determines `target_layer` + `verification_contract`**:
   win-shape; non-null-but-rejected → it over-fired.
 - **`live_trace.planned` (ADR-0031)** — the Turn Planner short-circuits → a this-turn multi-step-line
   blunder is **`planner-code`**. If the better line spans **>1 of my turns** → **capability-gap** (don't
-  bolt multi-turn onto the closed-form Planner — `docs/todo/deferred-multi-turn-criticals.md`).
+  bolt multi-turn onto the closed-form Planner — ADR-0040).
 - **`live_trace.posture` (ADR-0041)** — a `posture_mismatch` (or a member sharing one
   `believed_archetype` with others) is a **matchup-doctrine** miss → **`matchup-brief`**, never a
   deck-agnostic `when()`. Right-read-wrong-counterplay → a Brief data/lever change. No Brief covers it →
@@ -59,7 +59,7 @@ carries `scope`+`subject`+`key` and `lethal_locked`/`planner_committed`/`posture
 
 A `scope: turn` correction carrying a `turn_plan` note is the human's ideal-line tag on a
 setup/development turn — the input for retiring the whack-a-mole scoring rules the **develop rollout
-rung** subsumes (`docs/plans/phase3-tooling.md`). **Do not eyeball it — the machine verdict is on the
+rung** subsumes (ADR-0037; the develop rung it tooled is deleted). **Do not eyeball it — the machine verdict is on the
 proposal's `develop_class`** (`train.tuner.develop.classify_develop_correction`, from the live trace's
 `plan_candidates` / `planned` / `opts[correct].fired`). Route by `develop_class.kind`:
 
@@ -76,7 +76,7 @@ proposal's `develop_class`** (`train.tuner.develop.classify_develop_correction`,
 - **`leaf-misrank`, cross-turn (`cross_turn: true`)** — the human's justification reaches beyond this turn
   (e.g. "save it — evolve next turn"), which the within-turn leaf **structurally cannot see**. The leaf
   can't be tuned to fix it; the honest read is that the rung **should not have overridden** here — a
-  gate/horizon concern. Route **capability-gap** (`docs/todo/deferred-multi-turn-criticals.md`) and note
+  gate/horizon concern. Route **capability-gap** (ADR-0040) and note
   the gate-tighten option (`_develop_should_fire` too permissive) in the four artifacts. If
   `overrode_greedy: true`, that is the strongest signal the augment-not-override gate over-fired.
 - **`rung-inactive`** — no develop `planned` / no `plan_candidates`: the rung didn't fire (greedy or a
@@ -90,7 +90,7 @@ proposal's `develop_class`** (`train.tuner.develop.classify_develop_correction`,
 `candidate_signal: n/a`, `verification_contract: seed-ladder`. `spec` = R's id + its charter (why it is
 within the rung's within-turn-development mandate; a rule that also fires on KO/lethal turns is a
 **demote**, i.e. narrow its `when()`, not a retire) + the `retire_corroboration` count. **Proof is the
-batched R-off ladder run** (`docs/plans/phase3-tooling.md`): `/update-strategy` zeroes the candidates'
+batched R-off ladder run** (ADR-0037; the develop rung it tooled is deleted): `/update-strategy` zeroes the candidates'
 `tuned.json` weights in ONE committed build (the grader ignores `AGENT_OVERLAY`), submits, and a
 neutral-or-positive ladder delta confirms the whole batch (a regression bisects). Only then is R removed.
 **Charter nomination is your judgment** — `Hypothesis` carries no charter field, so read R's `id`/

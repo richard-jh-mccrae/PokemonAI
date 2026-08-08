@@ -37,9 +37,8 @@ def test_tune_routes_to_weights_and_proposals():
 
 
 def test_fit_not_adopted_when_it_cannot_beat_the_seeds():
-    """REQ-TUNER-0007: contradictory W corrections (one wants 222≻111, the other 111≻222) can't both
-    hold; the fit satisfies no more than the seeds already do, so the priors are kept (no drift) and
-    the un-honourable correction is surfaced rather than overfit away."""
+    """Contradictory W corrections cannot both hold; the fit beats no seed, so the priors are kept (no
+    drift) and the un-honourable correction is surfaced rather than overfit away."""
     likes_111 = Hypothesis("likes-111", "", when=lambda c: c.card_id == 111, weight=10)
     likes_222 = Hypothesis("likes-222", "", when=lambda c: c.card_id == 222, weight=20)
     pilot = Pilot(Strategy(hypotheses=[likes_111, likes_222]), deck=[1] * 60)
@@ -57,9 +56,8 @@ def test_fit_not_adopted_when_it_cannot_beat_the_seeds():
 
 
 def test_a_scoped_correction_never_becomes_a_ranking_constraint():
-    """ADR-0049: a turn blunder is a plan-layer error. Even when it names a discriminating
-    `correct` at its Anchor — the shape that WOULD tune weights at decision scope — it is routed
-    straight to the open worklist, so a sequencing error can never move a Tier-0 weight."""
+    """ADR-0049: a turn blunder is a plan-layer error, routed straight to the open worklist even when
+    it names a discriminating `correct` at its Anchor, so it can never move a Tier-0 weight."""
     likes_111 = Hypothesis("likes-111", "", when=lambda c: c.card_id == 111, weight=10)
     likes_222 = Hypothesis("likes-222", "", when=lambda c: c.card_id == 222, weight=10)
     pilot = Pilot(Strategy(hypotheses=[likes_111, likes_222]), deck=[1] * 60)

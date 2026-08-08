@@ -1,21 +1,9 @@
 """Decision Telemetry: serialise a Pilot Decision to a tagged stderr line (ADR-0019).
 
-The agent emits one tagged record per decision; the grader captures it in the match log's
-`stderr`, and `collect` parses it back. Pure + tiny: `to_record` is testable without I/O,
-`emit` does the one print. Tag is greppable so non-telemetry stderr is ignored.
-
-Carries the Turn Planner / Lethal Solver verdicts (`planned` / `lethal`) and the Scouting
-**posture** (ADR-0041) — what the Read believed about the opponent (archetype candidates, γ,
-matched Brief) — so every blunder Correction's `live_trace` records how the agent decided AND who
-it thought it was facing. The posture block ties a matchup misplay to a specific archetype.
-
-It also carries the **decide()-only reorder markers** — sparse flags that say when `chosen` did NOT
-come from a plain argmax over the emitted `score`s, so a trace reader (`/blunder-buster`, the
-inspector) doesn't misread "top-score not chosen" as a scoring bug: per-opt `deferred` (an attack-last
-held-back turn-ender, `_finish_turn_last`) / `needy` (the win-condition-Line attach preferred among
-EQUAL-score attaches), and top-level `reordered` (attack-last resequenced the menu) / `grabbed` (the
-multi-pick came from `_greedy_grab`'s dynamic gap-scoring). All sparse → an un-reordered record stays
-byte-identical to the pre-marker era.
+One `@T <json>` record per decision, captured in the match log's `stderr` and parsed back by
+`collect`; `to_record` is pure and testable without I/O. The reorder markers exist so a trace reader
+never misreads "top-score not chosen" as a scoring bug. Every optional key is SPARSE, so a plain
+record stays byte-identical to the pre-marker era.
 """
 from __future__ import annotations
 
@@ -26,19 +14,15 @@ TAG = "@T"
 
 
 def _opt_record(o) -> dict:
-    """One option's wire record. The decide()-only markers ride only when set, so a plain-argmax
-    option stays byte-identical to the pre-marker era — they tell the reader WHY the chosen option
-    isn't the top-`score` one: `deferred` = an attack-last held-back turn-ender (`_finish_turn_last`);
-    `needy` = the win-condition-Line attach preferred among EQUAL-score attaches (`attach_to_needy_line`)."""
+    """One option's wire record. `deferred` = an attack-last held-back turn-ender; `needy` = the
+    win-condition-Line attach preferred among EQUAL-score attaches. Both sparse."""
     rec = {"i": o.index, "cid": o.card_id, "score": round(o.score, 3),
            "tac": round(o.tactical, 3), "fired": [[h.id, w] for h, w in o.fired]}
     if getattr(o, "deferred", False):
         rec["deferred"] = True
     if getattr(o, "attach_to_needy_line", False):
         rec["needy"] = True
-    # `hs_relief` RETIRED (ADR-0102, Issue #261 item 2c): the hand-size relief is now a scoring term,
-    # so it arrives inside `tac` like every other tactical. A reporting key beside it would report a
-    # live term's own summand as if it were still inert.
+    # `hs_relief` RETIRED (ADR-0102): the hand-size relief now arrives inside `tac`
     return rec
 
 
@@ -50,10 +34,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     scores = sorted((o.score for o in opts), reverse=True)
     margin = round(scores[0] - scores[1], 3) if len(scores) > 1 else 0.0
     line = getattr(decision, "planned", None)     # the Turn Planner's committed line (ADR-0031/0037)
-    # One in-memory type, two wire keys (ADR-0037): a goal=="win" line IS the Lethal Solver's lock
-    # and serialises under the historical `lethal` key; any other goal under `planned`. The wire
-    # format is byte-identical to the two-field era, so tune/propose/retest and every historical
-    # correction's live_trace keep reading unchanged.
+    # One in-memory type, two wire keys (ADR-0037): a goal=="win" line serialises under the historical
+    # `lethal` key, any other goal under `planned`.
     lethal = line if (line is not None and line.goal == "win") else None
     planned = line if (line is not None and line.goal != "win") else None
     rec = {
@@ -61,9 +43,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         "tier": tier,
         "chosen": list(decision.chosen),
         "opts": [_opt_record(o) for o in opts],
-        # Lethal Solver's verdict rides here so a blunder Correction's live_trace carries it (the
-        # SAME record feeds the tuner retest) — always present: None when no guaranteed win locked.
-        # `verified` = the engine backstop's verdict on the lock (True / None; `lethal_verify`).
+        # always present: None when no guaranteed win locked. `verified` is the engine backstop's
+        # verdict on the lock (True / None) — never False, since a refuted candidate is dropped.
         "lethal": ({"step": list(lethal.next_step), "kind": lethal.kind, "why": lethal.rationale,
                     "verified": getattr(lethal, "verified", None)}
                    if lethal else None),
@@ -80,17 +61,11 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
                                                   # gone). `diverged` is now always False for pool lines.
     if planned is not None and planned.goal == "compose":     # the composer's pick turns on this end-state
         rec["planned"]["value"] = round(planned.value, 3)     # score — a correction that disagrees is a
-                                                  # claim about the LEAF, unreadable without it. Keyed on
-                                                  # goal=="compose" so other planned records are unchanged.
-                                                  # It replaces the identical goal=="develop" key the
-                                                  # retired rollout rung emitted.
+                                                  # claim about the LEAF, unreadable without it
     composer = getattr(decision, "composer", None)
-    if composer is not None:                      # sparse: the composer's margin telemetry (Issue #263
-        rec["composer"] = composer                # § *Beam-quality package* item 3 — REQUIRED, not
-                                                  # optional), run stats and coverage-gap reasons. Emitted
-                                                  # whenever the composer RAN, including when it declined,
-                                                  # because a decline's reason is the thing worth reading.
-                                                  # Replaces `plan_candidates`, which died with the rung.
+    if composer is not None:                      # sparse: margin telemetry, run stats and coverage-gap
+        rec["composer"] = composer                # reasons — emitted whenever the composer RAN, INCLUDING
+                                                  # when it declined; a decline's reason is worth reading
     objectives = getattr(decision, "objectives", None)
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)
         rec["objectives"] = objectives            # — race delta + both cheapest-path turns
@@ -118,9 +93,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["attach_working"] = attach_working    # attack_axis/channels/gates + the tactical each scored
     gamble = getattr(decision, "gamble", None)    # the gamble rung's full working (ADR-0039): outs
     if gamble:                                    # sought, pool, per-option p·EV, det baseline — or
-        rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when the rung
-    return rec                                    # ran; the blunder shell renders it as a dropdown.                                     # Rides into every Correction's live_trace so the
-                                                  # inspector shows it + /blunder-buster ties it to a matchup.
+        rec["gamble"] = gamble                    # the stand-down reason. Sparse: only when it ran.
+    return rec
 
 
 def emit(decision, *, tier: int = 0, out=None) -> None:

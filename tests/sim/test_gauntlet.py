@@ -1,6 +1,5 @@
-"""The cross-deck gauntlet corpus generator (tools/sim/gauntlet): our real agents played against each
-other via the process-isolated battle loop + MatchRecorder, so the Automatic Value Model trains on states
-where favorability actually VARIES (grilled 2026-07-05 — the seed's mirror-only corpus never did)."""
+"""The cross-deck gauntlet corpus generator (tools/sim/gauntlet): our agents against each other, so
+the value model trains on states where favorability VARIES — a mirror-only corpus never does."""
 import json
 import sys
 from datetime import datetime
@@ -18,9 +17,7 @@ WHEN = datetime(2026, 7, 5, 12, 0, 0)
 
 @pytest.mark.req("REQ-SIM-0014")
 def test_pairings_covers_the_cross_pairs_and_mirrors():
-    """The gauntlet's deck pairings: every unordered cross pair PLUS each mirror (the grilled corpus
-    mix — cross carries the favorability signal, mirrors keep the model calibrated on symmetric boards).
-    `include_mirror=False` drops the mirrors."""
+    """Cross carries the favorability signal; mirrors keep the model calibrated on symmetric boards."""
     from sim.gauntlet import pairings
     full = pairings(["ms", "ml", "dp"])
     assert set(full) == {("ms", "ms"), ("ms", "ml"), ("ms", "dp"),
@@ -32,10 +29,7 @@ def test_pairings_covers_the_cross_pairs_and_mirrors():
 
 @pytest.mark.req("REQ-SIM-0015")
 def test_generate_gauntlet_writes_mineable_films(tmp_path):
-    """Each pairing's games run through play_match + recorder and land as tagged replays under
-    ``<out>/gauntlet/<stem>/`` — a corpus the value extractor mines with no new reader (so
-    ``train.py --replays <out>/gauntlet`` just works). Mirror fixture here; the real run is cross-deck
-    (its process isolation is covered by test_battle's mega_starmie×crasher)."""
+    """Mineable = the value extractor needs no new reader; `train.py --replays <out>/gauntlet` works."""
     from sim.gauntlet import generate_gauntlet
     from train.value.extract import rows_from_replay
     from meta_tracker.parse import load_replay
@@ -44,7 +38,7 @@ def test_generate_gauntlet_writes_mineable_films(tmp_path):
     run_root = generate_gauntlet(["mega_starmie"], 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
                                  when=WHEN, sha="abc1234", extra_syspath=SRC)
     files = sorted(run_root.rglob("*.json"))
-    assert len(files) == 2                          # both clean mirror games written
+    assert len(files) == 2
     pilot, _ = _build_pilot("mega_starmie")
     rows = list(rows_from_replay(pilot, load_replay(files[0])))
-    assert len(rows) > 10                           # a real game → many mineable labelled states
+    assert len(rows) > 10

@@ -1,31 +1,19 @@
-"""Develop-rung correction classifier — the Phase-3 consumer's machine core (ADR-0031 / develop rung;
-`docs/plans/phase3-tooling.md`).
+"""Develop-rung correction classifier (ADR-0031). Reads a turn_plan Correction's live @T trace and
+returns the verdict a `blunder-buster` leaf routes on, WITHOUT re-running the engine.
 
-A turn-scope Correction that carries a `turn_plan` note is a develop-rung correction: the human tagged
-an ideal line on a setup/development turn. `classify_develop_correction` reads its live @T trace
-(`plan_candidates`, `planned`, per-option `fired`) and the note, and returns the verdict a
-`blunder-buster` leaf routes on — WITHOUT re-running the engine (the rung's ranking is already in the
-trace on an armed-ON game).
+  - ``rung-right``      the rung committed the human's pick — a rule-RETIREMENT datum, confirmable
+                        only by the R-off ladder run.
+  - ``leaf-misrank``    the rung fired and committed something else: leaf fodder, unless the human's
+                        reasoning is ``cross_turn``, which the within-turn leaf structurally cannot see.
+  - ``rung-inactive``   the rung did not fire; greedy or a higher rung drove the pick.
+  - ``no-prescription`` prose-only turn tag: nothing to compare.
 
-The verdict kinds:
-  - ``rung-right``     — the rung committed the human's ``correct`` pick. A rule-retirement DATUM: the
-                         rung reproduced what the tuned rules would; the rules ``correct`` leans on are
-                         retire-candidates (confirmed only by the R-off ladder run — the Catch-22).
-  - ``leaf-misrank``   — the rung fired but committed a DIFFERENT pick than ``correct``; its leaf ranked
-                         a board the human rejects above the human's. Phase-0 leaf fodder — unless the
-                         human's reasoning is ``cross_turn`` (beyond the within-turn leaf), which is a
-                         capability-gap, not a leaf tune.
-  - ``rung-inactive``  — the rung did not fire here (no develop ``planned`` / no ``plan_candidates``):
-                         greedy or a higher rung drove the pick. Route by the existing turn-scope logic.
-  - ``no-prescription``— the note names no ``correct`` option (prose-only turn tag): nothing to compare.
-
-``leans_on_rule`` is DERIVED from ``opts[correct].fired`` (positive-weight rules only), never stored —
-so it can't drift from the live trace. ``cross_turn`` is a keyword read of the note/rationale.
+``leans_on_rule`` is DERIVED from ``opts[correct].fired``, never stored, so it cannot drift.
 """
 from __future__ import annotations
 
-# Phrases in the human's note/rationale that mean the justification reaches BEYOND this turn — the
-# within-turn leaf structurally cannot see it, so a leaf tune can't fix it (it is a capability-gap).
+# Note phrases meaning the justification reaches BEYOND this turn, which the within-turn leaf
+# structurally cannot see — a capability-gap, never a leaf tune.
 _CROSS_TURN_MARKERS = ("next turn", "next-turn", "following turn", "turn after", "later turn",
                        "future turn", "subsequent turn")
 
@@ -35,8 +23,7 @@ def _opt(live_trace: dict, i: int) -> dict | None:
 
 
 def _leans_on_rule(live_trace: dict, correct: list) -> list:
-    """The positive-weight rules that fired on the human's ``correct`` option(s) — the rules the pick
-    currently leans on (retire-candidates when the rung reproduces the pick). Derived from ``fired``."""
+    """Positive-weight only: these are retire-candidates when the rung reproduces the pick."""
     rules: list = []
     for i in correct or []:
         o = _opt(live_trace, i)
@@ -90,20 +77,8 @@ def classify_develop_correction(correction) -> dict:
 
 
 def develop_batch_report(corrections) -> dict:
-    """Aggregate the develop-rung verdicts across a batch of turn_plan Corrections — the Phase-3
-    report a `blunder-buster` leaf/report reads. Buckets:
-
-    - ``counts``               — verdict kind → count.
-    - ``retire_corroboration`` — rule → how many ``rung-right`` corrections leaned on it (the rung
-      REPRODUCED that rule's pick on a real board: evidence its retirement is safe, to be CONFIRMED by
-      the R-off ladder run — the Catch-22 means the trace alone can't prove it).
-    - ``leaf_tune``            — within-turn leaf mis-ranks (the leaf can be fixed to rank right).
-    - ``capability_gaps``      — cross-turn leaf mis-ranks (the within-turn leaf structurally can't
-      fix; the rung should not have overridden — a gate/horizon concern, not a leaf tune).
-
-    Only turn_plan corrections are considered (others are skipped); ``leaf_tune``/``capability_gaps``
-    carry the per-correction verdict so the reader can act without re-deriving it.
-    """
+    """``retire_corroboration`` is EVIDENCE a rule's retirement is safe, never proof — only the R-off
+    ladder run can confirm it. Non-turn_plan corrections are skipped."""
     counts: dict = {}
     retire: dict = {}
     leaf_tune, capability_gaps = [], []

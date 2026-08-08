@@ -12,8 +12,8 @@ beside, and the +76 endorser-inflation guard),
 [ADR-0062](0062-energy-denial-is-what-the-strip-actually-takes-away.md) /
 [ADR-0063](0063-a-booster-scales-the-oracle-and-a-doomed-body-denies-nothing.md) (price the quantity,
 don't threshold it; a booster SCALES, never adds),
-[ADR-0064](0064-incoming-is-one-threat-clock-curve.md) (the Threat Clock and its per-consumer
-conservatism), [ADR-0071](0071-the-promotion-gate-and-the-accumulating-clock.md) (the accumulating
+[ADR-0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md) (the Threat Clock and its per-consumer
+conservatism), [ADR-0071](0071-bench-survival-is-a-shared-budget-harvest-and-the-clock-accumulates.md) (the accumulating
 survival clock and the promotion gate),
 [ADR-0078](0078-the-value-currencies-are-three-scales-bridged-by-derived-rates.md) **decision 6**
 (one path may not carry both race scalers), [ADR-0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md)

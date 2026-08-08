@@ -1,32 +1,14 @@
-"""**Issue #305** — a triggered Ability RIDES the option it was played by, measured not argued.
+"""Issue #305 — a triggered Ability RIDES the option it was played by, measured against the live engine.
 
-The apply-seam coverage census (`tools/apply_seam_coverage.py`, Issue #269) resolves 11 pool sites
-on the assumption that an Ability reading *"When you play this Pokemon from your hand to evolve 1 of
-your Pokemon / onto your Bench, you may…"* resolves **inside** the `_PLAY` / `_EVOLVE` option rather
-than posing its own `_ABILITY` option on a later menu. The assumption was load-bearing when this was
-written: `_ABILITY` was then the sole kind `apply_option.ENGINE_ROUTE_KINDS` routed to the engine, so
-the other answer would have moved all 11 sites onto the engine route and shrunk Issue #299's scope.
-(**Issue #299 has since ruled**: the engine route is open per-option to every declared non-terminal
-kind, so `ENGINE_ROUTE_KINDS` no longer gates and all 11 sites are engine-route eligible where they
-sit. That settles the *stake* this measurement had, not the measurement — where the effect is posed
-is a fact about the engine, and it still decides which OPTION the census files these sites under.)
-
-**No corpus frame settles it** — every one of the 17 `_ABILITY` options in the 372-frame diagnostic
-corpus is an *activated* Ability. So this file measures it against the live engine instead, driving
-`meta_tracker.probe_triggered_ability.capture` — the same function that wrote the committed fixture
-— and asserting the live shape still matches. A future engine build that moved the effect onto its
-own option fails HERE, loudly, rather than silently invalidating the census.
-
-The measured answer, both trigger kinds and both branches of the *"you may"* gate:
+No corpus frame settles it (all 17 `_ABILITY` options in the diagnostic corpus are ACTIVATED), so
+this drives `meta_tracker.probe_triggered_ability.capture` and asserts the live shape still matches
+the committed fixture. The measured answer, both trigger kinds and both branches of the gate:
 
   EVOLVE / PLAY option  ->  YES_NO / ACTIVATE gate (contextCard = the card just played)
-                        ->  the effect's OWN selects, inside the same option's resolution
-                        ->  MAIN
+                        ->  the effect's OWN selects, inside the same option's resolution  ->  MAIN
 
-and **no `OptionType.ABILITY` at any point** — not in the gate, not among the effect's selects, and
-not on the MAIN menus of this turn or the next, in either branch. Declining is the stronger half:
-an Ability the engine merely offered alongside the option would still be offered after its rider was
-refused, and it is not.
+and no `OptionType.ABILITY` at any point. Declining is the stronger half: a separately posed Ability
+would still be offered after its rider was refused, and it is not.
 """
 import json
 
@@ -47,10 +29,8 @@ from seam_census_helpers import census_pool, load_census                 # noqa:
 
 FIXTURE = FIXTURES / "triggered_ability_selects.json"
 
-#: The 11 pool sites the answer moves (Issue #305's table), by trigger. **Iono's Bellibolt ex (269)
-#: is deliberately absent** — the merged report said "12 sites" and listed it, but Electric Streamer
-#: reads *"As often as you like during your turn"*, which is ACTIVATED. `test_the_erratum_...`
-#: below pins that correction so the count cannot silently drift back to 12.
+#: The 11 pool sites the answer moves (Issue #305's table), by trigger. Iono's Bellibolt ex (269) is
+#: deliberately absent — Electric Streamer is ACTIVATED; `test_the_erratum_...` pins that correction.
 RIDER_SITES = {648: "on_evolve", 674: "on_evolve", 190: "on_evolve", 173: "on_evolve",
                742: "on_evolve", 743: "on_evolve", 310: "on_evolve",
                1071: "on_play", 75: "on_play", 135: "on_play", 209: "on_play"}
@@ -107,9 +87,8 @@ def test_the_trigger_is_gated_by_an_ACTIVATE_yes_no_on_the_card_just_played(live
 
 @pytest.mark.parametrize("mode", MODES)
 def test_no_ABILITY_option_is_ever_posed_for_a_triggered_ability(live, mode):
-    """The crux. Not in the gate, not among the effect's own selects, and not on the MAIN menus of
-    this turn or the next — including after the rider was DECLINED, which is the branch a separately
-    posed Ability would survive."""
+    """The crux. Not in the gate, not among the effect's own selects, and not on the MAIN menus of this
+    turn or the next — including after the rider was DECLINED."""
     for subject in live["subjects"]:
         rec = subject[mode]
         assert int(OptionType.ABILITY) not in [o["type"] for o in rec["gate_select"]["option"]]
@@ -120,11 +99,8 @@ def test_no_ABILITY_option_is_ever_posed_for_a_triggered_ability(live, mode):
 
 
 def test_accepting_resolves_the_effect_inside_the_same_option(live):
-    """The other half of the question: the engine goes straight to the effect's own selects as part
-    of resolving the play/evolve, and only then returns to MAIN.
-
-    Punk Up searches the deck and attaches (`ATTACH_TO` then `ATTACH_FROM`); Last-Ditch Catch
-    fetches a Supporter to hand (`TO_HAND`). Declining skips straight back to MAIN."""
+    """The engine goes straight to the effect's own selects as part of resolving the play/evolve and
+    only then returns to MAIN; declining skips straight back."""
     by_id = {s["card_id"]: s for s in live["subjects"]}
     assert [e["context"] for e in by_id[648]["accept"]["effect_selects"]] == \
         [int(SelectContext.ATTACH_TO), int(SelectContext.ATTACH_FROM)]
@@ -146,10 +122,8 @@ def test_the_option_taken_is_the_one_the_census_credits(live):
 
 
 def test_the_census_routes_every_rider_site_to_the_measured_option(seam_census):
-    """The measurement's consequence, asserted on the census itself: each of Issue #305's 11 sites
-    carries its effect on the `_EVOLVE` / `_PLAY` site the engine actually poses it on, and none of
-    them mints a separate `_ABILITY` site. If a later ruling flips this routing, the report's
-    AMBIGUOUS #3 answer needs re-reading."""
+    """Each of the 11 sites carries its effect on the `_EVOLVE` / `_PLAY` site the engine actually poses
+    it on, and none of them mints a separate `_ABILITY` site."""
     mod, cards, effects, _covers = seam_census
     for card_id, trigger in RIDER_SITES.items():
         card = cards[card_id]
@@ -162,12 +136,8 @@ def test_the_census_routes_every_rider_site_to_the_measured_option(seam_census):
 
 
 def test_the_erratum_the_pool_carries_exactly_eleven_rider_sites(seam_census):
-    """The count, DERIVED from the pool rather than retyped from the issue. The merged report said
-    *"12 sites"* and listed Iono's Bellibolt ex; Electric Streamer reads *"As often as you like
-    during your turn, you may attach…"*, which is ACTIVATED, so it poses its own `_ABILITY` option
-    and was never one of these. Walking the pool answers 11, and this fails if a deck or the
-    scouting artifact ever adds a twelfth — which is a real event worth a ruling, not a silent one.
-    """
+    """The count, DERIVED from the pool rather than retyped from the issue: walking it answers 11. Fails
+    if a deck or the scouting artifact ever adds a twelfth — a real event worth a ruling."""
     mod, cards, _effects, _covers = seam_census
     # A LIST of (card, trigger), not a dict: a card carrying two rider Abilities would collapse to
     # one key and quietly under-count — which is the exact failure mode this test exists to catch.

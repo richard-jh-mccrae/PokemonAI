@@ -1,28 +1,14 @@
 """BASELINE cluster: OPENING — opening-hand / mulligan / game-start decisions (ADR-0025). Don't
 redraw a hand you can already start; open with the body your deck declared. Pure data, no Mixin.
 
-**The Set-Up ACTIVE pick is ONE rule reading ONE deck declaration (ADR-0079).** It used to be five
-rungs across two layers — `open-the-accelerator` (+40, `accel_source` Role), `open-the-item-lock-
-starter` (+35, `item_lock` Tag), `dont-open-multiprize-active` (−15), `dont-open-with-the-engine`
-(−12), and mega_lucario's card-id-gated `start-solrock-over-lunatone` (+12). All five are DELETED.
+**The Set-Up ACTIVE pick is ONE rule reading ONE deck declaration (ADR-0079).** Five rungs across two
+layers are DELETED; per-rung fold map in `tools/rung_registry.py` (`FOLDED`, ADR-0079 group).
 
-Why the whole pile went, rather than one more rung joining it:
-
-* **The positives were deck opinions expressed by proxy.** "Open the accelerator" / "open the
-  item-locker" are a deck saying which body it wants Active, spelled as a Role and a Tag. A
-  declaration says it directly AND in order, so the proxies buy nothing the list doesn't.
-* **The negatives second-guessed an explicit ranking.** A guard that demotes a body the deck
-  deliberately ranked first is not a rail, it is an override of deck intent — and the escape hatches
-  it needed for that (`_WINCON_ROLES`) are exactly the complexity a ranking removes.
-* **They ordered each other by accident.** A deck holding both an `accel_source` and an `item_lock`
-  body had its opener settled by `+40 > +35` — a comparison between two independently-tuned numbers
-  no deck ever grilled.
-* **The card-id reflex was already shipped.** `start-solrock-over-lunatone` gated on
-  `card_id == SOLROCK`. The ids now live in the deck's declaration, never in a trigger (ADR-0034).
-
-The frames: dragapult `f2` (Dreepy/Munkidori both 0.0 → the option-index tie-break opened the
-fragile Line base) and mega_lucario `f1` (Riolu/Lunatone both 0.0 → it opened the draw engine). Two
-decks, two frames, one root cause — the seam did not rank the field.
+Why the whole pile went, rather than one more rung joining it: the positives were deck opinions
+expressed by proxy (a Role, a Tag) where a ranked declaration says it directly and IN ORDER; the
+negatives second-guessed that explicit ranking; and the two positives ordered each other by accident,
+a deck holding both settling its opener on `+40 > +35` — two independently-tuned numbers no deck ever
+grilled. The frames: dragapult `f2` and mega_lucario `f1`, both all-zero ties broken by option index.
 """
 from common.strategy.context import _IS_FIRST, _MULLIGAN, _NO, _SETUP_ACTIVE, _YES
 from common.strategy.strategy import Hypothesis

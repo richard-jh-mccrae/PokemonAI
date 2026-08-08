@@ -19,7 +19,7 @@ anyway. It stands as written because the reasoning it records is what ADR-0102 h
 ## The shared layer — CONSUMED from the gusting grill, not designed
 
 The gust-target grill (same day) ruled on the opponent-worth layer both consumers share
-(`gusting-grill-spec.md` rulings; `gusting-keepcost-design.md`; ADR-0066 "what this deliberately
+(`ADR-0066` rulings; `gusting-keepcost-design.md`; ADR-0066 "what this deliberately
 does NOT do"):
 
 - **The layer is design-only.** No opponent role sheet, no their-closure/their-deadline inputs, no
@@ -102,7 +102,7 @@ is the DAMAGE armed.)
    refresh actually REFILLS the opponent (opp_net > 0, i.e. their hand below the card's redraw
    count, from the same `refresh.py` facts). A sign-correctness gate inside a surviving lever —
    not a fold. Re-audit its pinned tests in the same motion.
-4. **Doc home** — this file; `gusting-grill-spec.md` stays the gust record.
+4. **Doc home** — this file; `ADR-0066` stays the gust record.
 
 ## Build list — BUILT 2026-07-19 (corpus + score-diff gate, suite green 3084)
 

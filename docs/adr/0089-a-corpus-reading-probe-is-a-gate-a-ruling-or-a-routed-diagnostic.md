@@ -265,8 +265,8 @@ Five modules leave `tools/train/probes/`; five stay, routed. The tree loses two 
 never have had — a gate that could only report FIX, and the last hand-built frame key — and
 `probes/` stops being a place where a dead instrument can sit looking alive.
 
-Cost, stated: `docs/plans/deploy-decider-swap-review.md`, `ADR-0076:235`'s slots numbers,
-`opponent-value-equation-unification.md` and several ADR references become historical rather than
+Cost, stated: `ADR-0086`, `ADR-0076:235`'s slots numbers,
+`ADR-0078` and several ADR references become historical rather than
 live; if the denial lane reopens, its harness is rebuilt from ADR-0080 / ADR-0084's description
 rather than edited. That is the trade this ADR takes deliberately — a stale harness is a trap, not a
 head start.

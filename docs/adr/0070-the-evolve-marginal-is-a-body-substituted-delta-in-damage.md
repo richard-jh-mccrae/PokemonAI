@@ -7,7 +7,7 @@ paired A/B). Companion vocabulary: **Build Standing · The Two Clocks · Income 
 Area-at-Damage-Time** in the Agent Runtime [`CONTEXT.md`](../../src/common/CONTEXT.md). Consumes
 ADR-0067 (#137, the Budget/reachability family), ADR-0068 (#138, the snapshot) and ADR-0069 (#139,
 the attach decider). Amends the 2026-07-15 evolve grill
-(`docs/plans/evolve-valuation-grill-spec.md`), whose Rulings 5 and 7 it partially overturns.
+(`ADR-0070`), whose Rulings 5 and 7 it partially overturns.
 
 ## Context
 
@@ -20,7 +20,7 @@ thinner than its own design in three ways:
   (`_DEPLOY_WINCON_READY = 40`, `_ENGINE = ROLE_TIER["engine"] = 12`). The leak was already
   observable: `test_advance_the_line_beats_spreading_f29` had to be rewritten from a score claim to
   a decision claim because *"a 37.5-damage build step out-numbers a +20 evolve rung"*
-  (`docs/plans/attach-decider-swap-review.md`). The evolve survived on planner tier ordering, not on
+  (`ADR-0069`). The evolve survived on planner tier ordering, not on
   value. The recorded gap ("an unready Mega evolve scores 10 but must beat a competing attach at
   45") was measured in a currency that no longer exists.
 - **Four of eleven `EvolveInputs` fields were never filled.** `pilot._evolve_shadow` passed seven;
@@ -260,7 +260,7 @@ the red gate is never silently passed.** Directive 6's A/B (`gauntlet_swap_ab.py
 0 crashes / 2400 games**. The verdict rested on one cell (−9.5 pp); re-measured at n=600 **both**
 dragapult/lucario cells changed sign (−9.5 → +2.2; +7.5 → −3.3). Pooled over 4800 games the best
 estimate is **−1.06 pp, 95% CI [−3.90, +1.78], 0 crashes**. The run demonstrated neither a regression
-nor a non-regression. Full working: `docs/plans/evolve-decider-swap-review.md`.
+nor a non-regression. Full working: `ADR-0070`.
 
 Ruled (user, 2026-07-26): **merge.** The reasoning is that the instrument, not the build, is what
 failed. Clearing `CI-lo >= −1%` near a zero delta needs n ≈ 2270/arm/matchup (~27,000 games), and

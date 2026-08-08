@@ -1,17 +1,9 @@
-"""Tier 3 — Match Objectives (ADR-0040): the KO Race.
+"""Tier 3 — Match Objectives (ADR-0040): the KO Race and the two-sided Prize Path.
 
-Closed-form turns-to-KO arithmetic over attack SEQUENCES — the opponent-static multi-turn read at
-the same epistemic tier as Incoming/Survival Window (docs/architecture/tier-3-match-objectives.md).
-Against a standing wall (no affordable attack KOs this turn) every min-turn sequence fells the
-wall in the same number of turns, so the biggest single hit is fake value; what actually differs
-between sequences is the incidental chip (bench-snipe / spread riders) they bank along the way —
-the `a21472` class: 2×Jetting+Nebula = 450 ≥ 440 in the same three turns as Nebula-first, plus
-100 chip onto the benched Riolu.
-
-`race_values` is the pure math; `ObjectivesMixin` prices an ATTACK option as per-turn wall
-progress plus the (tempo-discounted) chip of the best min-turn sequence STARTING with it,
-consumed by `Pilot._tactical` in place of the greedy single-hit damage. Kill-switch
-`objectives_race` (wired in every agent's main.py; an overlay can force it off for A/B).
+Closed-form turns-to-KO arithmetic over attack SEQUENCES. Against a standing wall every min-turn
+sequence fells it in the same number of turns, so the biggest single hit is fake value; what differs
+is the incidental bench chip banked along the way. `race_values` is the pure math; `ObjectivesMixin`
+prices an ATTACK option with it. Kill-switch `objectives_race`, in `common.runtime.PROFILE`.
 """
 from __future__ import annotations
 
@@ -21,25 +13,13 @@ from common.grading import HORIZON as _HORIZON
 from common.strategy.context import _BENCH_PLACEMENT_CONTEXTS, _PLAY
 
 _RACE_HORIZON = 8        # give up beyond this many turns — no wall math on an unbounded grind
-_RACE_LATER_CHIP = 0.9   # later-turn chip is slightly less certain than chip banked THIS turn
-                         # (the target can evolve/retreat/heal) — the tempo tiebreak that prefers
-                         # starting the chip now over an equal-chip sequence that defers it
+_RACE_LATER_CHIP = 0.9   # later-turn chip is less certain than chip banked THIS turn (the target can
+                         # evolve/retreat/heal) — the tempo tiebreak that prefers starting the chip now
 
 
 def race_values(attacks: dict, hp: int, horizon: int = _RACE_HORIZON) -> dict:
-    """The KO Race table vs a standing wall: ``{attack_id: (t_star, rest_chip)}``.
-
-    ``attacks``: ``{attack_id: (damage, chip)}`` — exact per-use damage vs the wall and the
-    face-value incidental bench chip the attack banks per use. ``hp``: the wall's remaining HP.
-
-    ``t_star`` = fewest of my turns to fell the wall in a sequence STARTING with this attack
-    (following up with the hardest hitter is always turn-optimal, so
-    ``t_star = 1 + ceil((hp - dmg) / max_dmg)``). ``rest_chip`` = the max total chip of the
-    remaining ``t_star - 1`` attacks over min-turn sequences starting with it (a small
-    memoized DP — attacks reuse freely; an early kill inside a min-turn sequence is impossible
-    by minimality, so every hit lands on the live wall). Attacks that cannot start a
-    within-``horizon`` KO are absent; empty when nothing deals damage.
-    """
+    """KO Race vs a standing wall of ``hp``, over ``attacks = {aid: (damage, chip)}``:
+    ``{aid: (my turns to fell the wall starting here, max chip banked by the rest)}``."""
     dmgs = {a: d for a, (d, _c) in attacks.items() if d > 0}
     if not dmgs or hp <= 0:
         return {}
@@ -74,25 +54,12 @@ def _best_rest_chip(items: tuple, need: int, turns: int) -> int:
 
 
 def threat_turns(hp: int, forms) -> int | None:
-    """The Threat Clock arithmetic (ADR-0045): the fewest opponent turns until a body of ``hp`` HP is
-    Knocked Out by any of ``forms``.
-
-    ``forms``: iterable of ``(cost, damage, energy, evo_hops, promo)`` per candidate attacker form —
-    ``cost`` Energy the attack needs, ``damage`` per-hit damage (already Weakness/Resistance-adjusted
-    vs my body), ``energy`` on the attacker now, ``evo_hops`` evolutions to reach this form, ``promo``
-    the promotion surcharge (turns of friction to bring a benched attacker to the Active Spot; 0 for a
-    true bench-snipe or a free promotion). Energy accrues at the ~1/turn rule floor (docs/rules.md §4).
-
-    Per form: its FIRST attack lands on turn ``max(1, evo_hops, cost − energy) + promo`` — evolution and
-    Energy attach run concurrently (one of each per turn) and the turn's attach counts toward that same
-    turn's attack (docs/rules.md §4: attach precedes attack), so a 0-Energy body needing one more Energy
-    for a KO attack still fires on the opponent's very next turn (turn 1); ``promo`` adds the benched
-    body's promotion friction. Then ``ceil(hp/damage)`` hits accumulate one per turn, so it KOs on turn
-    ``first_attack + hits − 1``. Returns the min over forms."""
+    """Threat Clock (ADR-0045): fewest opponent turns until a body of ``hp`` HP is Knocked Out by any
+    of ``forms`` = ``(cost, damage, energy, evo_hops, promo)``. Energy accrues at ~1/turn (rules.md §4)."""
     best = None
     for cost, damage, energy, evo_hops, promo in forms:
         if damage <= 0:
-            continue                       # a form that can't dent my body never sets the clock
+            continue
         first_attack = max(1, evo_hops, cost - energy) + promo
         hits = math.ceil(hp / damage)
         ko = first_attack + hits - 1
@@ -109,11 +76,8 @@ _MODE_GOAL = {"SETUP": "develop", "RACE": "ko_on_path", "STALL": "develop",
 
 
 def plan_confidence(race_ahead, survival) -> float:
-    """The Match Planner's closed-form per-strategy **confidence** ∈ [0,1] (ADR-0045): neutral 0.5, raised
-    by the race margin (turns I'm ahead in the two-sided Prize Path) and by my Active's survival window
-    (the Threat Clock turns before it is in danger). A legible LINEAR feasibility score — NOT a learned
-    win-probability (the parked value model may refine it later, never be it). Weights are seeds matured
-    via ladder corrections (the gauntlet is invalid — [[gauntlet-invalid-ladder-only]])."""
+    """The Match Planner's closed-form confidence ∈ [0,1] (ADR-0045): neutral 0.5, raised by the race
+    margin and my Active's survival window. A LINEAR feasibility score, NOT a learned win-probability."""
     c = 0.5
     if race_ahead is not None:
         c += 0.12 * race_ahead
@@ -124,9 +88,8 @@ def plan_confidence(race_ahead, survival) -> float:
 
 _PATH_BENCH_EXTRA = 1    # a benched body costs ~one extra turn to bring into KO range
                          # (gust / promote / wait) — the feasibility surcharge either side pays
-_PROMOTE_TAGS = frozenset({"switch"})   # a card that swaps the opponent's OWN Active for a benched body
-                                        # without paying a retreat — waives the Threat Clock promotion
-                                        # surcharge (gust drags MY Active, so it does NOT promote theirs)
+_PROMOTE_TAGS = frozenset({"switch"})   # swaps the opponent's OWN Active for a benched body with no
+                                        # retreat — waives the Threat Clock promotion surcharge
 
 _STAB_ENTER = -1.0       # STABILIZE hysteresis (ADR-0040): enter when clearly BEHIND in the race …
 _STAB_EXIT = 1.0         # … leave only when clearly AHEAD — between the two, hold the previous label
@@ -142,33 +105,13 @@ _PATH_STICKY = 0.5       # path stickiness (ADR-0040): keep last decision's chos
                          # the new cheapest is MORE than this many turns better — coherence across
                          # turns without commitment (the anti-oscillation twin of the phase hysteresis)
 
-_PRED_LEAD = 2.0         # the γ-gated opponent OVERLAY (Tier 4, ADR-0040 §5): a Read-predicted,
-                         # not-yet-fielded attacker joins the their-side math with a deploy lead of
-                         # ceil(_PRED_LEAD / γ) turns — γ→1 ⇒ 2 turns out, γ→0 ⇒ infinitely far
-                         # (structurally no regression on an unrecognized opponent), CONTINUOUS per
-                         # the phase-grilling contract (no confidence cliff)
+_PRED_LEAD = 2.0         # the γ-gated opponent OVERLAY (Tier 4, ADR-0040 §5): a Read-predicted, not-yet-
+                         # fielded attacker joins their-side math ceil(_PRED_LEAD / γ) turns out
 
 
 def prize_paths(bodies, prizes_needed: int, reach=None):
-    """The cheapest Prize Path over ``bodies`` (ADR-0040): ``(frozenset(keys), total_turns)``.
-
-    ``bodies``: ``((key, prize_value, turns), …)`` — each KO-able body, its prize yield ({1,2,3})
-    and the feasibility turns to fell it. The cheapest path = the subset whose prize sum reaches
-    ``prizes_needed`` in the fewest total turns (ties → fewer bodies, then bigger prize sum —
-    prefer the compact overshoot). ≤6 bodies a side ⇒ ≤64 subsets, trivial by construction.
-
-    ``reach`` (optional, snipe_prize_reach): ``{key: rider-reach-cost}`` — a PURE tie-break sorted
-    AFTER (turns, bodies, prizes), so it can never change the chosen turn count (``my_path_turns``
-    and ``race_ahead`` are untouched). Among prize-completing subsets tied on real turn cost, it
-    prefers the one whose bench member my repeatable snipe rider finishes soonest — the body that
-    rides to a KO alongside my main attacks instead of demanding a dedicated gust-up (83667237-107:
-    Makuhita @ ⌈80/50⌉=2 riders beats Lunatone/Solrock @ ⌈110/50⌉=3, so the +1 prize lands on the
-    rider-finishable body). ``None`` (or a key absent) contributes 0 → behaviour identical to before.
-
-    ``prizes_needed <= 0`` → ``(frozenset(), 0.0)`` (already won). No subset reaches the count
-    (their visible board is worth fewer prizes than I still need) → ``(frozenset(), None)`` —
-    the path runs through bodies not yet in play, so consumers stay silent.
-    """
+    """Cheapest Prize Path over ``bodies = ((key, prize_value, turns), …)``: ``(keys, total_turns)``
+    (ADR-0040). ``reach`` ties AFTER (turns, bodies, prizes), so it never moves the turn count."""
     if prizes_needed <= 0:
         return frozenset(), 0.0
     items = tuple(bodies)
@@ -193,15 +136,8 @@ def prize_paths(bodies, prizes_needed: int, reach=None):
 
 
 def _reaches_my_bench(select, option) -> bool:
-    """This option puts a Pokémon onto MY Bench — the question the exposure leg is really asking.
-
-    Three engine shapes say it (ADR-0086 decision 6's three entry points): a `PLAY` from hand at the
-    main menu, and the two `_BENCH_PLACEMENT_CONTEXTS` — the pregame placement and a `_TO_BENCH`
-    fetch — which carry a CARD-target option rather than a `PLAY`. Gating on the option TYPE alone is
-    why the exposure leg read silently zero at the entry point Issue #261 item 2d wired up.
-
-    The caller still checks that the card is a Pokémon with HP; this answers only "does taking it
-    land a body on my side of the board"."""
+    """This option puts a Pokémon onto MY Bench — a `PLAY` from hand at MAIN, or either
+    `_BENCH_PLACEMENT_CONTEXTS`, which carry a CARD-target option rather than a `PLAY`."""
     if (select or {}).get("context") in _BENCH_PLACEMENT_CONTEXTS:
         return True
     return option.get("type") == _PLAY
@@ -209,13 +145,8 @@ def _reaches_my_bench(select, option) -> bool:
 
 def _phase_from(prev, base, race_ahead, active_doomed: bool, my_prizes: int,
                 favorability: float, coverage: float, *, enabled: bool):
-    """The advisory phase's PURE core (ADR-0068): previous label in, new label out.
-
-    Extracted so the STABILIZE hysteresis stops being a side effect of building a board. The
-    Schmitt trigger genuinely needs memory — enter clearly behind, leave only clearly ahead — but
-    memory passed as an argument cannot leak a planner fork's hypothetical phase into the live game,
-    where memory read off ``self`` did (and needed a hand-written guard at each site to stop it).
-    """
+    """The advisory phase's PURE core (ADR-0068): previous label in, new label out. Memory passed as
+    an argument cannot leak a planner fork's hypothetical phase into the live game; ``self`` did."""
     from common.strategy.strategy import Plan
     if not enabled:
         return base
@@ -235,12 +166,8 @@ def _phase_from(prev, base, race_ahead, active_doomed: bool, my_prizes: int,
 
 
 def _sticky_path_from(prev, mine: list, my_prizes: int, best_keys, best_turns):
-    """Path stickiness's PURE core (ADR-0068): previous path in, ``(keys, turns, new_prev)`` out.
-
-    Same rationale as :func:`_phase_from` — coherent multi-turn targeting needs the previous choice,
-    but the caller decides whether to store the new one, so a simulated board cannot repoint the
-    live turn's path.
-    """
+    """Path stickiness's PURE core (ADR-0068): previous path in, ``(keys, turns, new_prev)`` out —
+    the caller decides whether to store, so a simulated board cannot repoint the live turn's path."""
     current = frozenset(cid for k, _pv, _t, cid in mine if k in best_keys and cid is not None)
     if best_turns is not None and prev and prev != current:
         held = [(k, pv, t) for k, pv, t, cid in mine if cid in prev]
@@ -252,21 +179,12 @@ def _sticky_path_from(prev, mine: list, my_prizes: int, best_keys, best_turns):
 
 
 class ObjectivesMixin:
-    """Pilot-side Tier-3 Match Objectives (ADR-0040). Depends on Pilot internals (``stats``,
-    ``attack_costs``, ``predicted_damage``, the rider lookups, ``_opp_active``), so it is mixed
-    into the Pilot like the PlannerMixin."""
+    """Pilot-side Tier-3 Match Objectives (ADR-0040). Depends on Pilot internals, so it is mixed into
+    the Pilot like the PlannerMixin."""
 
     def _race_attack_tactical(self, obs, board, attack_id, dmg_ctx) -> float | None:
-        """The KO-Race price of this ATTACK option against a standing wall, or None to keep the
-        greedy single-hit price (REQ-OBJ-0001).
-
-        Fires only when ``objectives_race`` is on and NO affordable attack KOs the opponent's
-        Active this turn (``board.active_can_ko`` false — the wall condition). Price =
-        ``hp / t_star`` per-turn wall progress (equal for every min-turn starter, lower for a
-        slower starter) + this attack's own chip + the tempo-discounted best rest-of-sequence
-        chip, both capped by the opponent's total benched HP (chip beyond the bench pool lands
-        nowhere). Sequences are over my Active's CURRENTLY affordable attacks (opponent-static,
-        energy assumed non-decreasing — a discard-cost Energy nuance is out of v1 scope)."""
+        """The KO-Race price of this ATTACK against a standing wall, or None to keep the greedy
+        single-hit price. Chip is capped by the opponent's benched HP — chip beyond it lands nowhere."""
         if not getattr(self, "objectives_race", False) or board.active_can_ko:
             return None
         opp = self._opp_active(obs)
@@ -295,28 +213,21 @@ class ObjectivesMixin:
     # ------------------------------------------------------ the two-sided Prize Path (Board signals)
 
     def _my_max_rider(self, ma: dict | None) -> int:
-        """My Active's biggest bench-snipe rider (Jetting Blow 50) — the per-turn damage a snipe
-        lands on a benched body WITHOUT a gust-up. Backs the ``snipe_prize_reach`` Prize-Path
-        tie-break (a body finishable by repeated riders completes a prize alongside my main KOs).
-        0 with no Active / no snipe attack."""
+        """My Active's biggest bench-snipe rider — per-turn damage onto a benched body with no
+        gust-up. Backs the ``snipe_prize_reach`` tie-break; 0 with no Active / no snipe attack."""
         stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
         if not stat:
             return 0
         return max((self.combat.rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
 
     def _my_turns_to_ko(self, obs, my_active_id: int | None, energy: int, body: dict) -> float | None:
-        """My feasibility turns to fell opponent ``body``: hp over my Active's best affordable
-        per-turn damage vs THAT defender (weakness/riders per the oracle), plus the bench
-        surcharge when it isn't their Active. None when I deal it no damage (infeasible)."""
+        """My feasibility turns to fell opponent ``body`` — hp over my Active's best affordable
+        per-turn damage vs THAT defender. None when I deal it no damage (infeasible)."""
         return self.combat.turns_to_ko(my_active_id, energy, body)
 
     def _their_turns_to_ko(self, opp: dict, body: dict, read=None, gamma: float = 0.0) -> float | None:
-        """Their feasibility turns to fell MY ``body``: hp over the biggest per-turn damage any of
-        their in-play Pokémon's attacks deal it (worst-case ceiling — affordability not charged,
-        matching Incoming's pessimistic read), OR a Read-PREDICTED attacker's damage behind its
-        γ-continuous deploy lead (the Tier-4 overlay: the second Mega Lucario is priced before it
-        is benched — ``ceil(_PRED_LEAD / γ)`` extra turns, unrecognized ⇒ never competitive).
-        None when nothing they show (or credibly threaten) damages it."""
+        """Their feasibility turns to fell MY ``body`` — worst-case ceiling (affordability not
+        charged), or a Read-PREDICTED attacker behind its γ-continuous deploy lead. None when neither."""
         hp = (body or {}).get("hp", 0)
         if not (hp and self.stats):
             return None
@@ -331,7 +242,7 @@ class ObjectivesMixin:
             lead = math.ceil(_PRED_LEAD / gamma)
             for intel in (getattr(read, "threats", None) or ()):
                 if getattr(intel, "seen", True):
-                    continue                       # on the board already — the visible pass owns it
+                    continue                       # on the board already: the visible pass owns it
                 stat = self.stats.get(intel.cardId)
                 d = self._predicted_max_damage(stat, body) if stat else 0
                 if d > 0:
@@ -344,35 +255,20 @@ class ObjectivesMixin:
     # ------------------------------------------------------------------ the Threat Clock (ADR-0045)
 
     def _threat_clock(self, my_body: dict, opp: dict, read=None, gamma: float = 0.0) -> int | None:
-        """The Threat Clock (ADR-0045): the fewest opponent turns until any of their attacker forms can
-        afford AND land a KO of ``my_body`` in the Active Spot. Opponent-static, energy/evolution/
-        promotion-aware, worst-case per-attack damage (Incoming's ceiling for coins). None when nothing
-        they field or credibly evolve threatens the body. The defensive twin of the KO Race and the Match
-        Planner's MULTI-TURN prep read (how many turns until each of my bodies is in danger, so we
-        pre-snipe / pre-gust / heal ahead). Its Energy model is ~1 attach/turn (Read-γ-sharpenable for a
-        burst-Energy archetype); it deliberately does NOT feed the survival-critical one-turn
-        ``active_doomed`` boolean, which stays worst-case — a hidden Ignition-class burst must never be
-        under-counted (the planner_6858 finding, docs/todo/incoming-affordability.md)."""
+        """The Threat Clock (ADR-0045): fewest opponent turns until any attacker form can afford AND
+        land a KO of ``my_body``. Deliberately NOT the input to the worst-case ``active_doomed``."""
         hp = (my_body or {}).get("hp", 0)
         if not (hp and self.stats):
             return None
         return threat_turns(hp, self._threat_forms(my_body, opp))
 
     def _threat_forms(self, my_body: dict, opp: dict):
-        """Yield ``(cost, damage, energy, evo_hops, promo)`` for every opponent attacker FORM vs
-        ``my_body``. Each in-play body's current form and the forms its line forward-evolves INTO
-        contribute, over the form's attacks — the **per-attack** oracle (worst-case, W/R-adjusted) when
-        the attack records resolve (real cards, affordability-exact), else the **card-level** fallback
-        (``CombatMath.card_level_damage`` at ``minAttackCost``; an unknown cost reads as 0 — payable).
-        A benched body carries the promotion surcharge; the Active carries none. v1 models a forward form
-        as ONE evolution hop (single-hop lines exact; multi-hop reads one turn optimistic — the
-        defensive-safe direction, Read-γ-sharpenable)."""
+        """Yield ``(cost, damage, energy, evo_hops, promo)`` per opponent attacker FORM vs ``my_body``
+        — each in-play body plus the forms its line evolves INTO. v1 models a forward form as ONE hop."""
         ctx = getattr(self, "_opp_attack_context", None)
-        if ctx is None:                                  # no per-decision context (a caller outside
-            ctx = {"atk_hand": opp.get("handCount", 0) or 0}   # `_board`): the hand-size scaler's
-            # variable is still knowable straight off `opp`, and this read had it before the shared
-            # fallback existed. Without it the credit would silently drop to 0 — an UNDER-read on a
-            # survival path, which is the one direction this must never fail in.
+        if ctx is None:                                  # outside `_board`: without the hand-size
+            ctx = {"atk_hand": opp.get("handCount", 0) or 0}   # scaler the credit drops to 0 — an
+            # UNDER-read on a survival path, the one direction this must never fail in
         promo_bench = self._promotion_surcharge(opp)
         bodies = ([(a, 0) for a in (opp.get("active") or []) if a]
                   + [(b, promo_bench) for b in (opp.get("bench") or []) if b])
@@ -391,18 +287,12 @@ class ObjectivesMixin:
                                energy, evo_hops, promo)
                     continue
                 cost = getattr(stat, "minAttackCost", None) or 0    # unknown cost → 0 (assume payable)
-                # ONE card-level fallback (Issue #213): `maxDamage` x W/R max'd with the hand-size
-                # scaler. This used to be an EITHER/OR branch keyed off the Function Tag, while
-                # the incoming read hand-rolled the same fact differently one module over.
                 dmg = self.combat.card_level_damage(stat, my_body, context=ctx)
                 yield (cost, dmg, energy, evo_hops, promo)
 
     def _promotion_surcharge(self, opp: dict) -> int:
-        """The Threat Clock promotion surcharge (ADR-0045): ``_PATH_BENCH_EXTRA`` turns to bring a benched
-        attacker to the Active Spot, WAIVED (0) when the opponent holds a promotion enabler — a ``switch``
-        card revealed (active/bench/discard), or a cheap/free retreat on their current Active
-        (``retreatCost`` ≤ its attached Energy). A stuck Active with no Switch keeps the full surcharge —
-        exactly the human read that a benched threat behind a trapped Active is one turn further out."""
+        """The Threat Clock promotion surcharge (ADR-0045), WAIVED (0) when the opponent holds a
+        promotion enabler — a revealed ``switch`` card, or a payable retreat on their current Active."""
         if self.functions:
             for zone in ("active", "bench", "discard"):
                 for c in (opp.get(zone) or []):
@@ -417,23 +307,8 @@ class ObjectivesMixin:
         return _PATH_BENCH_EXTRA
 
     def _their_harvest_clock(self, my_bench: list) -> dict:
-        """``{bench index: first turn it falls to their RIDERS}`` over MY whole Bench — the
-        shared-budget answer, solved ONCE for the Bench.
-
-        Per-body was the obvious spelling and it cost +36% on every Board build: the rider budget is
-        a property of the Bench, so asking body-by-body re-derives the same payload table and re-runs
-        the same subset search once per member. Measured on the Leaf-Profile pin, which is exactly
-        the instrument that exists to catch a read like this before it merges.
-
-        `HARVEST_POSSIBLE` (the oracle's default) is the right declaration: this is a THREAT read,
-        and ADR-0071 decision 3 is explicit that such a read "must not call a body safe just because
-        they could kill a different one". The rescue-side consumers declare UNAVOIDABLE for the
-        mirror-image reason.
-
-        Routed through the SNAPSHOT rather than `CombatMath` — T1's acceptance criterion — and the
-        memo is keyed by the bench snapshot, so the real Bench is solved once per decision however
-        many deploy options are priced against a hypothetical one. No snapshot means NO CLAIM (an
-        empty clock), never a model-free second reading."""
+        """``{bench index: first turn it falls to their RIDERS}`` over MY whole Bench. The rider
+        budget is a property of the Bench, so it is solved ONCE for the Bench, never per body."""
         model = getattr(self, "_state_model", None)
         if model is None or not my_bench:
             return {}
@@ -443,27 +318,8 @@ class ObjectivesMixin:
 
     def _their_path_items(self, opp: dict, ma: dict | None, my_bench: list,
                           read=None, gamma: float = 0.0) -> list:
-        """``[(key, prize_value, turns, card_id), …]`` — MY bodies as targets on THEIR Prize Path.
-
-        ONE derivation for both consumers (`_path_signals`' live read and `_bench_path_delta`'s
-        hypothetical), because `_bench_path_delta` differences its own answer against
-        `board.their_path_turns`: two spellings of "how fast do they fell my bodies" would make that
-        subtraction meaningless the moment they drifted. That is also why ``read``/``gamma`` are
-        parameters rather than defaults the hypothetical quietly skips — the γ-gated Read overlay can
-        shorten the live answer, so a hypothetical computed without it would subtract two different
-        questions and read a gift where there is none.
-
-        The Active is reached by printed damage. A BENCHED body is reached the sooner of two ways —
-        promoted and hit (`+_PATH_BENCH_EXTRA`), or harvested where it stands
-        (:meth:`_their_harvest_clock`) — and a body neither route reaches is simply absent, which is
-        how an unreachable body keeps a route uncompletable.
-
-        `_their_turns_to_ko` measures PRINTED damage, which lands on the Active, so on its own it can
-        only ever describe the promote route; riders reach the Bench directly, pay no promotion, and
-        come out of ONE shared per-turn budget (ADR-0071). That is ADR-0086 decision 5's sharpening,
-        and it is a second ROUTE rather than a better reading of the first — deleting the promote
-        route would re-import the gust-then-knock-out blind spot decision 5 rejected a harvest-only
-        exposure for."""
+        """``[(key, prize_value, turns, card_id), …]`` — MY bodies as targets on THEIR Prize Path. ONE
+        derivation for both consumers, or `_bench_path_delta`'s subtraction compares two questions."""
         bench = [b for b in (my_bench or []) if b]
         harvest = self._their_harvest_clock(bench)
         items = []
@@ -481,11 +337,8 @@ class ObjectivesMixin:
     def _path_signals(self, obs, me: dict, opp: dict, ma: dict | None, oa: dict | None,
                       my_prizes: int, opp_prizes: int, read=None, gamma: float = 0.0,
                       *, carried=None) -> dict:
-        """The per-decision two-sided Prize Path read (ADR-0040): my cheapest path over their
-        visible bodies and their cheapest path over mine, feasibility-weighted by turns-to-KO
-        (`_my_turns_to_ko` / `_their_turns_to_ko` + the bench surcharge; the their-side sees
-        Read-predicted attackers behind the γ-continuous lead — the Tier-4 overlay). Re-derived
-        every decision — a ranking objective, never a lock. Returns the five Board field values."""
+        """The per-decision two-sided Prize Path read (ADR-0040): my cheapest path over their bodies
+        and theirs over mine. Re-derived every decision — a ranking objective, never a lock."""
         energy = len((ma or {}).get("energies") or [])
         rider = self._my_max_rider(ma) if getattr(self, "snipe_prize_reach", False) else 0
         mine = []
@@ -512,42 +365,19 @@ class ObjectivesMixin:
                            if my_turns is not None and their_turns is not None else None),
             "path_target_ids": frozenset(cid for k, _pv, _t, cid in mine
                                          if k in my_keys and cid is not None),
-            "path_target_keys": frozenset(my_keys),   # ADR-0044: on-path body IDENTITIES (id(body)),
-                                                       # so a duplicate-species copy off my path is
-                                                       # distinguished from the on-path one (card-id
-                                                       # keying leaks between them)
+            "path_target_keys": frozenset(my_keys),   # ADR-0044: body IDENTITIES (id(body)) — card-id
+                                                       # keying leaks between duplicate-species copies
             "their_path_my_ids": frozenset(cid for k, _pv, _t, cid in theirs
                                            if k in their_keys and cid is not None),
         }
 
-    # --------------------------------------------------------------------- the derived advisory phase
-    # The two Carried State members' PURE cores (ADR-0068 decision 2). Previous value in, new value
-    # out — no `self`, so a derivation can never mutate Pilot state as a side effect of being
-    # computed. The methods below are the thin live-path wrappers that choose whether to store.
+    # ----------------------------------------------------------------------- the derived advisory phase
+    # The methods below are thin live-path wrappers over the PURE cores above (ADR-0068 decision 2).
 
     def _derive_phase(self, base, race_ahead, active_doomed: bool, my_prizes: int,
                       favorability: float = 0.5, coverage: float = 0.0, *, carried=None):
-        """The ADVISORY match phase (ADR-0040, hardened by the 2026-07-05 phase grilling): a pure
-        function of the objectives — memoryless (backwards transitions free) except the STABILIZE
-        label's hysteresis (enter clearly behind at ``<= _STAB_ENTER``, leave only clearly ahead at
-        ``>= _STAB_EXIT`` — the Schmitt trigger that kills near-threshold oscillation). CLOSE fires
-        with the payoff online and ≤``_CLOSE_PRIZES`` prizes left (endgame: force the line).
-
-        The **Tier-4 favorability input** (Lever A, γ-gated): a sufficiently-covered UNFAVORED Read
-        relaxes the STABILIZE enter bar by ``_FAV_STAB_SHIFT`` turns — the straight race loses, so
-        survive-first sooner. Coverage-gated (an unrecognized opponent's 0.5 prior drives nothing),
-        so it never regresses an unknown matchup, and it moves only the ENTER threshold (the exit
-        hysteresis is unchanged), so it can't cause phase flicker.
-
-        NEVER an eligibility gate — consumed only by the small baseline_phases band weights and the
-        trace; ``objectives_phases`` off → the readiness base (SETUP/RACE) unchanged.
-
-        ``carried`` (a :class:`~common.state_model.CarriedState` snapshot) makes this call PURE: the
-        hysteresis memory is read from the snapshot and the new value is NOT written back to the
-        Pilot (ADR-0068 decision 2). The hypothetical/re-score paths pass it so a *simulated* board's
-        phase can never leak into the live turn's memory — which is what the two hand-written
-        snapshot/restore guards used to buy at every call site that remembered to write them. Live
-        decisions pass nothing and keep the in-order write, byte-identically."""
+        """The ADVISORY match phase (ADR-0040) — NEVER an eligibility gate, only band weights and the
+        trace. ``carried`` makes the call PURE: no write-back of the hysteresis memory (ADR-0068)."""
         prev = (carried.get("phase_prev") if carried is not None
                 else getattr(self, "_phase_prev", None))
         phase = _phase_from(prev, base, race_ahead, active_doomed, my_prizes, favorability,
@@ -557,14 +387,8 @@ class ObjectivesMixin:
         return phase
 
     def _sticky_path(self, mine: list, my_prizes: int, best_keys, best_turns, *, carried=None):
-        """Path stickiness (ADR-0040): when LAST decision's chosen path (by opponent card-id set) is
-        still feasible and within ``_PATH_STICKY`` turns of the new cheapest, keep it — coherent
-        multi-turn targeting without commitment (a clearly better path always wins; an infeasible
-        previous path is dropped instantly).
-
-        ``carried`` makes the call PURE (ADR-0068 decision 2): the previous path is read from the
-        snapshot and the new one is not written back, so a hypothetical board cannot repoint the live
-        turn's targeting. Live decisions pass nothing and keep the in-order write."""
+        """Path stickiness (ADR-0040): keep last decision's path while it stays feasible and within
+        ``_PATH_STICKY`` turns of the new cheapest. ``carried`` makes the call PURE (ADR-0068)."""
         prev = (carried.get("my_path_prev") if carried is not None
                 else getattr(self, "_my_path_prev", None))
         keys, turns, new_prev = _sticky_path_from(prev, mine, my_prizes, best_keys, best_turns)
@@ -575,12 +399,8 @@ class ObjectivesMixin:
     # ---------------------------------------------------------------------- the Match Planner (ADR-0045)
 
     def plan_match(self, obs, board):
-        """The Match Planner (ADR-0045) — the Game Plan for this turn: the **mode** (the phase grown to
-        six), the closed-form **confidence**, the **route** (my cheapest Prize Path target ids), and the
-        **directed Turn Goal**. Runs first each turn (from ``_board``, after the objective signals are
-        set); COMPUTE-ONLY until the seam wires it (S3) — nothing scores off it yet. Re-derived every
-        decision, never a lock; when confidence is below ``_MATCH_CONFIDENCE_MIN`` the directed goal is
-        WITHHELD (defer to the Turn Planner's own ladder + the tuned weights — the fallback)."""
+        """The Match Planner (ADR-0045) — this turn's Game Plan: mode, closed-form confidence, route
+        and directed Turn Goal. Below ``_MATCH_CONFIDENCE_MIN`` the directed goal is WITHHELD."""
         from common.strategy.strategy import GamePlan
         mode = self._derive_mode(board)
         ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
@@ -593,11 +413,8 @@ class ObjectivesMixin:
                                    + (f" -> {goal}" if goal else " (low-confidence: defer)")))
 
     def _derive_mode(self, board):
-        """Grow the four-phase base (``board.phase``) to the six-mode Game-Plan axis (ADR-0045):
-        STABILIZE becomes **SACRIFICE** when my Active is doomed but a ready bench backup lets me trade it
-        and race on prize math (the b4649 delay-wall); SETUP/RACE become **STALL** when I am clearly ahead
-        in the race yet my win-condition is not online — build rather than over-press. Reuses the shipped
-        phase derivation as the spine, so the advisory/gate-ban contract is inherited (no rule keys it)."""
+        """Grow the four-phase base to the six-mode Game-Plan axis (ADR-0045): STABILIZE→SACRIFICE with
+        a ready bench backup; SETUP/RACE→STALL when clearly ahead but the win-condition is not online."""
         from common.strategy.strategy import Plan
         mode = board.phase
         if (mode == Plan.STABILIZE and board.bench_wincon_ready
@@ -611,9 +428,8 @@ class ObjectivesMixin:
     # ------------------------------------------------------------- per-option Path consumers (Context)
 
     def _target_on_path(self, obs, select, option, board) -> bool:
-        """This snipe/damage target sits on MY cheapest Prize Path (``board.path_target_ids``) —
-        its KO advances the match win, not just the board (REQ-OBJ-0005). Gated by
-        ``objectives_path``; False when the path is unknown (consumers stay silent)."""
+        """This snipe/damage target sits on MY cheapest Prize Path. Gated by ``objectives_path``;
+        False when the path is unknown, so consumers stay silent."""
         if not getattr(self, "objectives_path", False):
             return False
         poke = self._option_pokemon(obs, select, option)
@@ -625,9 +441,8 @@ class ObjectivesMixin:
         return cid is not None and cid in board.path_target_ids
 
     def _promote_target_on_their_path(self, obs, select, option, board) -> bool:
-        """At a promote/switch pick, THIS candidate body sits on the opponent's cheapest Prize Path
-        (``board.their_path_my_ids``) — bringing it to the Active Spot walks it into the KO they
-        most want (REQ-OBJ-0010, the promote half of Path Denial). Gated by ``objectives_path``."""
+        """At a promote/switch pick, THIS body sits on the opponent's cheapest Prize Path — promoting
+        it walks it into the KO they most want (Path Denial). Gated by ``objectives_path``."""
         if not getattr(self, "objectives_path", False) or not board.their_path_my_ids:
             return False
         poke = self._option_pokemon(obs, select, option)
@@ -635,38 +450,13 @@ class ObjectivesMixin:
         return cid is not None and cid in board.their_path_my_ids
 
     def _bench_shortens_their_path(self, obs, select, option, stat, board) -> bool:
-        """Playing THIS Pokémon to my Bench would strictly IMPROVE the opponent's cheapest Prize
-        Path — completing a previously-uncompletable route or shortening the existing one (the
-        'benching the second Mega hands them their exact 6' case — ADR-0040 Path Denial,
-        REQ-OBJ-0006). A soft per-option signal; gated by ``objectives_path``.
-
-        DERIVED from :meth:`_bench_path_delta` since ADR-0086: the sign of the magnitude, so the two
-        readings cannot drift apart."""
+        """Playing THIS Pokémon to my Bench would strictly IMPROVE the opponent's cheapest Prize Path.
+        DERIVED from :meth:`_bench_path_delta` — the sign of the magnitude, so the two cannot drift."""
         return self._bench_path_delta(obs, select, option, stat, board) > 0.0
 
     def _bench_path_delta(self, obs, select, option, stat, board) -> float:
-        """**How much** benching this body shortens the opponent's cheapest Prize Path, in turns.
-
-        The Deploy Marginal's exposure leg (ADR-0086 decision 5). This magnitude was already being
-        computed here and **thrown away** — the method returned `new_turns < old_turns`, a boolean,
-        to a flat −10 rung — so the change is to return the delta rather than its sign.
-
-        Grading: completing a previously-UNCOMPLETABLE route is the biggest case the doctrine names
-        ("the second Mega hands them their exact 6"), so `their_path_turns is None` cannot report as
-        a bare one-turn improvement. It grades against the shared `HORIZON` — `turns_to_ko_me`'s own
-        "survives the horizon" answer — rather than a constant invented for this leg.
-
-        Reachability is the SHARED derivation (:meth:`_their_path_items`), so a benched body is
-        reached the sooner of promoted-and-hit or harvested-where-it-stands — decision 5's
-        `bench_harvest` sharpening. That matters twice here: the hypothetical body itself may be
-        rider-reachable without ever being promoted, and adding it splits a shared rider budget the
-        per-body read could not see at all. The comparison is against `board.their_path_turns`, which
-        the same derivation produced, so the two sides of the subtraction cannot drift.
-
-        0 when the play gifts nothing: they cannot reach the body at all, the path is no shorter, the
-        option does not put a body on my Bench, they have no prizes left to take, or `objectives_path`
-        is off. That last one matters because the Deploy Marginal needs a DEFINED exposure when the
-        Prize-Path machinery is dark — fail-closed, never an estimate (ADR-0069 decision 5)."""
+        """**How much** benching this body shortens the opponent's cheapest Prize Path, in turns
+        (ADR-0086 decision 5). 0 when it gifts nothing or `objectives_path` is off — never an estimate."""
         if not getattr(self, "objectives_path", False):
             return 0.0
         if not _reaches_my_bench(select, option) or not stat or getattr(stat, "hp", 0) <= 0:
@@ -691,7 +481,7 @@ class ObjectivesMixin:
         if new_turns is None:
             return 0.0                       # still uncompletable even WITH the body — no gift
         if old_turns is None:
-            # Uncompletable -> completable: the doctrine's headline case. Graded against the shared
-            # horizon so it dominates a mere shortening without being unbounded.
+            # uncompletable -> completable, graded against the shared HORIZON so it dominates a
+            # mere shortening without being unbounded
             return float(max(0.0, _HORIZON - new_turns))
         return float(max(0.0, old_turns - new_turns))

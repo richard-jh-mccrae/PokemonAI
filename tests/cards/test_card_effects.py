@@ -13,53 +13,14 @@ from meta_tracker.card_effects import (
     _union_overrides, accumulate_effects, apply_overrides, build_effect_table,
     classify_effect_clauses, merge_clauses)
 
-#: The printed sentence that gates PLAYABILITY on paying a COST, in the two forms the pool prints it.
-#: Quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never recalled:
-#:
-#: * *"You can use this card only if you discard 2 other cards from your hand."* — 1121 Ultra Ball
-#: * *"…(If you can't put 2 cards from your hand on the bottom of your deck, you can't use this
-#:   card.)"* — 1200 Kofu, which states the same restriction the other way round
-#:
-#: **Both arms are narrow on purpose, and the narrowing is the whole design.** "Playability
-#: restriction" is far wider than "cost gate", and the wide reading has three separate ways to be
-#: wrong — each one a real card in this pool, not a hypothetical:
-#:
-#: * *"You can use this card only if you go second"* (1101 Call Bell), *"…only if your opponent has
-#:   exactly 2 Prize cards remaining"* (1201 Briar) and eight more are BOARD conditions. They pay no
-#:   cost, so they take a `condition`, not this flag — hence `only if you (discard|put)` rather than
-#:   a bare `only if`.
-#: * *"You can't use this card during your first turn"* — 1079 Rare Candy, 1230 Grimsley's Move. A
-#:   TURN restriction wearing the same words.
-#: * *"(If you can't DRAW any cards in this way, you can't use this card.)"* — 1239 Naveen. The
-#:   nastiest of the three, because it is Kofu's exact sentence shape: the inability that gates it is
-#:   about the EFFECT succeeding, and Naveen's discard is *"you MAY discard any number"*, optional.
-#:   So the inverse arm requires the inability to name a payment **from your hand**, which is what
-#:   separates Kofu's *"if you can't put 2 cards from your hand"* from Naveen's *"if you can't draw"*.
-#:
-#: None of those three carries a `cost` today, so a loose pattern would sit inert — but the guard
-#: below grades BOTH directions, and Issue #302 names Naveen's optional pre-discard as its one
-#: unmodelled leg. The day that leg is authored, a loose pattern would demand `cost_required` on a
-#: card whose gate is not about paying. The exclusions are asserted, not just described.
-#:
-#: The apostrophe is U+2019 in the dump, not the ASCII one it is tempting to type, so the pattern
-#: accepts both — worth spelling out because getting it wrong yields an instrument that matches
-#: NOTHING and a guard that passes vacuously.
-#:
-#: **This lives in the test, deliberately.** It is a rot-guard that grades the authored store against
-#: the printed card — the same job `tests/scouting/test_tool_holder_facts.py` does for holder facts —
-#: not a production parser: the COMPENDIUM is hand-authored and read back as data, never derived from
-#: card text (`effect_overrides.json`'s `_note_fetch`). That claim is about the compendium and must
-#: not be widened to the repo: `tools/parity/seed_chains.py`'s rule `R-T08` parses this very sentence
-#: at BUILD time for the cgpy twin. See the guard's docstring — that twin is also the corroboration.
+#: PLAYABILITY gated on paying a COST. Narrow on purpose: a bare `only if` would also catch BOARD
+#: conditions, TURN restrictions and Naveen's *"can't DRAW"*, none of which is a payment.
 _PRINTED_GATE = re.compile(r"only if you (?:discard|put)\b"
                            r"|if you can[’']t (?:discard|put) [^.]{0,60}from your hand", re.I)
 
 
 def _printed_text(card: dict) -> str:
-    """Every Ability line the engine prints for a card, joined — a Trainer's whole effect.
-
-    Two siblings read the same field the same way (`apply_seam_coverage._text`, `arena.decks`); they
-    are not shared because importing either here would drag a CLI module in by path for two lines."""
+    """Every Ability line the engine prints for a card, joined — a Trainer's whole effect."""
     return "\n".join(a.get("text") or "" for a in card.get("abilities") or [])
 
 
@@ -179,9 +140,7 @@ def test_multi_clause_override_of_one_kind_ships_whole():
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
-    """WP3: the 3 agents' draw-ENGINE abilities and Trainer/Supporter accel carry parametric clauses in
-    the shipped `card_effects.json` (verified against engine ability/attack text) — so the mechanic lives
-    in the representation, never a card-text parse. Pins the load-bearing amount/condition/rider per card."""
+    """The mechanic lives in the representation, never a card-text parse."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -197,26 +156,20 @@ def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
     # Trainer / Supporter accel: Rosa's discard→Stage-2 (prize-behind gate); Crispin's deck→attach.
     assert eff.clauses(1240)[0] == {"kind": "accel", "amount": 2, "source": "discard", "target": "stage2",
                                     "energy": "basic", "condition": "more_prizes_remaining_than_opp"}
-    # Crispin's FULL yield (issue #137 / ADR-0067): "up to 2 Basic Energy cards of different types …
-    # put 1 of them into your hand. Attach the other." — `amount` is the ATTACH half, `to_hand` the
-    # hand half the turn's one manual attach then plays, `distinct_types` the "different types" guard.
-    # The Attach Budget needs both halves to see the 2-cost typed reach that dp f70 turned on.
+    # Crispin (ADR-0067): `amount` is the ATTACH half, `to_hand` the hand half the turn's one manual
+    # attach then plays, `distinct_types` the "different types" guard. The Budget needs both halves.
     assert eff.clauses(1198)[0] == {"kind": "accel", "amount": 1, "source": "deck",
                                     "target": "any_pokemon", "energy": "basic",
                                     "to_hand": 1, "distinct_types": True}
-    # The hand half rides the ACCEL clause and is still NOT a fetch clause — a Supporter is slot-dead
-    # after a Supporter refresh, so the gamble energy-closure (which counts any `basic_energy` fetch
-    # clause) must not treat it as an out.
+    # The hand half rides the ACCEL clause and is NOT a fetch clause: a Supporter is slot-dead after
+    # a Supporter refresh, so the gamble energy-closure must not count it as an out.
     assert all(c["kind"] != "fetch" for c in eff.clauses(1198))
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
-    """WP3 tail: the 3 agents' Supporter/Trainer tutors, the coin denial, and Ignition's on-Evolution
-    energy provision carry parametric clauses (verified against engine card text). The Supporter/Trainer
-    fetch targets are OUTSIDE `_FETCH_POKEMON_TARGETS`, so the Pokémon-only `_search_deck_set` ignores
-    them — they never disturb the whiff/redundancy signals; they are foundation for the Supporter-tutor
-    closure branch. Ultra Ball's discard-2 cost rides its Pokémon fetch clause (still Pokémon-typed)."""
+    """The Supporter/Trainer fetch targets are OUTSIDE `_FETCH_POKEMON_TARGETS`, so the Pokémon-only
+    `_search_deck_set` ignores them and they never disturb the whiff/redundancy signals."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -233,17 +186,8 @@ def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
-    """Issue #303: the `gust` kind — *"Switch in 1 of your opponent's Benched Pokemon to the Active
-    Spot"* — the highest-exposure family the POC-A2 census refused. All 7 pool sites round-trip
-    override -> build -> `card_effects.json` with the fields the printed cards need, so the mechanic
-    lives in the representation rather than in a text parse or the 5-rung weight ladder it dissolves.
-
-    The load-bearing distinctions, each pinned because dropping one silently under-declares a card:
-    `target` tells Lisia's Appeal (Benched **Basic** only) from the other six; `trigger: on_evolve`
-    is what routes Hariyama's and Hop's Dubwool's clause onto the `_EVOLVE` site the engine actually
-    poses (Issue #305 measured that a triggered Ability rides that option and poses no `_ABILITY` of
-    its own); and a coin-gated gust composes as 1120 Crushing Hammer already does — a `coin` clause
-    whose `effect` NAMES the gust, never a `probability` field on `gust` itself."""
+    """Issue #303. `trigger: on_evolve` routes a clause onto the `_EVOLVE` site the engine poses;
+    a coin-gated gust composes as a `coin` clause whose `effect` NAMES the gust."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -260,9 +204,8 @@ def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
                                   "name_family": "Team Rocket's"},)              # TR Giovanni
     assert eff.clauses(1124) == ({"kind": "coin", "effect": "gust",
                                   "target": "any"},)                             # Pokemon Catcher
-    # The completeness verdicts ride with them. Five carry the whole printed card; the two that do
-    # not are RULED incomplete rather than left unruled — the undecided `Team Rocket's` name family
-    # (the 1115 / 1134 / 1215 / 1220 ruling) and the coin stating a 50/50 as a certainty (1120's).
+    # The two that do not carry the whole card are RULED incomplete rather than left unruled: the
+    # undecided `Team Rocket's` name family, and the coin stating a 50/50 as a certainty.
     assert [eff.covers(c) for c in (1182, 674, 310, 1088, 1204)] == ["full"] * 5
     assert eff.covers(1218) == "partial" and eff.clauses_cover(1218) is False
     assert eff.covers(1124) == "partial" and eff.clauses_cover(1124) is False
@@ -270,25 +213,8 @@ def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_shipped_stadium_clauses_carry_the_effect_the_magnitude_and_the_body_predicate():
-    """Issue #304: `stadium_static` and `stadium_trigger`. Six pool Stadiums round-trip override ->
-    build -> `card_effects.json`, each with the fields its printed text needs.
-
-    Two kinds rather than one, because the 22 Stadiums in the pool are five unrelated effect shapes
-    wearing a single card type — one `stadium` kind would be a union of everything or a lie. Neither
-    kind carries a write-set; the clause's `effect` does, which is 1120 Crushing Hammer's shape.
-
-    The load-bearing fields, each pinned because dropping one silently mis-states a card:
-
-    * `amount` is **SIGNED** — Gravity Mountain is −30 HP and Lively Stadium is +30, and an unsigned
-      read would turn the pool's one Stadium that *shrinks* Stage 2s into one that grows them.
-    * `symmetric` is on all six: every one prints *"both yours and your opponent's"*, so a Stadium I
-      play helps my opponent too, and pricing my own half alone would make every Stadium look free.
-    * `timing` carries the Weakness/Resistance ORDER the two damage modifiers print, which decides
-      whether the ×2 lands on the modified number or the printed one.
-    * `on: "bench_play"` is Risky Ruins' trigger EVENT, and it is deliberately **not** spelled
-      `trigger`: that key routes a clause to a SITE (`on_evolve` / `on_bench_play` / `on_attach`),
-      and using it here would file this clause on an option the engine never poses for a Stadium —
-      which would orphan it and silently un-cover the card."""
+    """Issue #304. `amount` is SIGNED, `symmetric` is on all six, `timing` carries the W/R ORDER,
+    and `on:` is the trigger EVENT — `trigger:` would file the clause on a SITE Stadiums never pose."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -313,55 +239,16 @@ def test_shipped_stadium_clauses_carry_the_effect_the_magnitude_and_the_body_pre
     assert eff.clauses(1260) == ({"kind": "stadium_trigger", "on": "bench_play",
                                   "effect": "damage_counters", "amount": 2,
                                   "applies_to": "basic_non_dark", "symmetric": True},)  # Risky Ruins
-    # All six carry their whole printed card. The two predicates that could have been ruled
-    # `partial` are not, and each defers to a verdict already shipped for the SAME predicate rather
-    # than being decided fresh here: 1247's `no_rule_box` is what 1152 Poke Pad is ruled `full` on,
-    # and its discard-pile sentence is 1096 Poke Vital A's *"a property of the card once it is in the
-    # discard"*. 1255's `Hop's` family is decided by `name_in_family`'s prefix test over a body
-    # ALREADY IN PLAY, which that function's own docstring separates from Issue #301's hidden-deck
-    # question — the reason 1115 / 1134 / 1215 / 1220 are `partial`.
+    # All six carry their whole printed card; the two predicates that could have been ruled `partial`
+    # each defer to a verdict already shipped for the SAME predicate rather than being decided here.
     assert [eff.covers(c) for c in (1244, 1247, 1251, 1252, 1255, 1260)] == ["full"] * 6
     assert all(eff.clauses_cover(c) is True for c in (1244, 1247, 1251, 1252, 1255, 1260))
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best_case():
-    """**Issue #302.** The 14 draw Supporters whose committed clause was a flat count where the
-    printed card is conditional — the worst-served family in the apply-seam census.
-
-    Every one of them was PROBE-MEASURED, never authored: `classify_effect_clauses` counts the
-    actor's DRAW logs and this module's header already says a conditional count *"resolves to the
-    best observed case"*, so a long game that organically hit Lacey's prize-bonus mode measured 8 and
-    shipped 8 as if it were the base. A measurement of ONE resolution cannot state a card whose count
-    depends on the board, which is why these are overrides now.
-
-    The three shapes, each pinned because dropping one restores a specific lie:
-
-    * `to_hand_size` — *"draw cards until you have N in your hand"* is a REFILL. It is mutually
-      exclusive with `amount`, asserted below, because the number of cards drawn is not knowable
-      until resolution and an `amount` beside it would invite a reader to take the wrong one.
-    * `amount_if` — the second magnitude REPLACES the first (*"draw 8 cards instead"*), and its
-      predicate is named rather than hard-coded, generalising 17 Ignition Energy's shipped
-      `amount` + `amount_on_evolution`. `hand_size_10_plus_after_draw` carries the *after* in its
-      name on purpose: Billy & O'Nare prints *"Draw 2 cards. Then, if you have 10 or more…"*, so a
-      reader testing the PRE-play hand fires the bonus two cards early.
-    * `cost_required` — that failing to pay makes the card UNPLAYABLE, which is a different fact from
-      the cost merely being expensive. 1192 Carmine's `discard_hand` is the expensive kind and
-      carries no such flag: *"Discard your hand and draw 5 cards."* is an instruction, always
-      payable, so a gate there would assert a restriction the card does not print.
-
-      **This bullet used to name 1121 Ultra Ball as the expensive kind, and that was wrong** —
-      Issue #372 corrected it. Ultra Ball prints *"You can use this card only if you discard 2 other
-      cards from your hand"*, the same restriction 1187 and 1208 carry, so it is a gate; it went
-      unflagged only because this issue's scope was the 14 partial DRAW clauses and Ultra Ball is a
-      `fetch`. The word *"deliberately"* stood in that sentence for a ruling nobody had made. The
-      biconditional that replaces it is graded against the engine's own card text in
-      `test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card`.
-
-    The two coin cards keep `kind: "draw"` rather than 1120 Crushing Hammer's `kind: "coin"`, for a
-    mechanical reason asserted below: `_union_overrides` replaces measured clauses BY KIND, so a
-    `coin`-kinded override would leave the probe's measured `draw` clause standing beside it and the
-    compendium would claim the card draws twice."""
+    """Issue #302. A probe measures ONE resolution, which cannot state a card whose count depends on
+    the board: `to_hand_size` excludes `amount`, `amount_if` REPLACES it, `cost_required` gates it."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -391,15 +278,12 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert eff.clauses(1200) == ({"kind": "draw", "amount": 4,                             # Kofu
                                   "cost": "bottom_2", "cost_required": True},)
     assert eff.clauses(1192) == ({"kind": "draw", "amount": 5, "cost": "discard_hand"},)   # Carmine
-    # 1121 Ultra Ball is a GATE too, since Issue #372 — it prints the same restriction 1208 does and
-    # was missed only because it is a `fetch` and this issue's 14 were all `draw`. The assertion here
-    # used to be `"cost_required" not in ...`, which recorded that omission rather than grading it.
+    # 1121 Ultra Ball is a GATE too (Issue #372): it prints the same restriction 1208 does, and was
+    # missed only because it is a `fetch` while that issue's 14 were all `draw`.
     assert eff.clauses(1121) == ({"kind": "fetch", "target": "pokemon", "zone": "deck",
                                   "cost": "discard_2", "cost_required": True},)     # Ultra Ball
-    # Morty's Conviction stated NO magnitude until Issue #349, because "one card per opponent BENCHED
-    # Pokemon" is a board-scaled count no clause field expressed. The fail-closed silence has been
-    # REPLACED by the fact it stood in for — never by the flat 3 the probe measured, a number the card
-    # never prints: `amount: 1` multiplied by the count `amount_per` names.
+    # "one card per opponent BENCHED Pokemon" is a board-scaled count: `amount: 1` multiplied by the
+    # count `amount_per` names, never the flat 3 the probe measured (a number the card never prints).
     assert eff.clauses(1187) == ({"kind": "draw", "amount": 1, "amount_per": "their_bench",
                                   "cost": "discard_1", "cost_required": True},)
     # The coin pair — `kind: "draw"`, so the override replaces the measured draw rather than
@@ -419,20 +303,15 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert eff.clauses(1080) == ({"kind": "draw", "amount": 5,                     # Unfair Stamp
                                   "condition": "pokemon_ko_last_turn",
                                   "rider": "shuffle_both_hands"},)
-    # NINE of the 14 now carry the whole printed card — Morty's Conviction joined the eight at Issue
-    # #349, when `amount_per` gave its board-scaled count a field. The five that remain are RULED
-    # incomplete with the leg named: four for the SYMMETRIC opponent redraw (a `state_value` term the
-    # POC does not have), and Naveen for its optional pre-discard.
+    # The five that remain are RULED incomplete with the leg named: four for the SYMMETRIC opponent
+    # redraw (a `state_value` term the POC does not have), and Naveen for its optional pre-discard.
     assert [eff.covers(c) for c in (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)] == \
         ["full"] * 9
     for still_partial in (1080, 1213, 1223, 1237, 1239):
         assert eff.covers(still_partial) == "partial", still_partial
         assert eff.clauses_cover(still_partial) is False, still_partial
-    # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts
-    # for one shape: 1214 Emcee's Hype is 1199 Lacey's predicate exactly, and 1206 Larry's Skill
-    # prints 1192 Carmine's *"Discard your hand"* sentence and was ruled partial for the lack of the
-    # very field this issue mints. Larry's repeats the cost on all three legs, which is 1092 Secret
-    # Box's shipped shape for one cost paid once across a multi-leg find.
+    # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts for
+    # one shape: 1214 is 1199's predicate exactly, and 1206 prints 1192's *"Discard your hand"*.
     assert eff.clauses(1214) == ({"kind": "draw", "amount": 2,
                                   "amount_if": {"condition": "opp_3_or_fewer_prizes", "amount": 4}},)
     assert [c["cost"] for c in eff.clauses(1206)] == ["discard_hand"] * 3
@@ -442,65 +321,16 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card():
-    """**Issue #372.** One store held two opposite readings of ONE sentence, and every existing check
-    was blind to it because every existing check is per-KEY or per-CARD.
-
-    `undeclared_clause_keys` asks *"is `cost_required` a declared key?"* (yes) and `covers_problems`
-    asks *"does this card have a verdict?"* (yes). Neither can ask *"do two cards printing the same
-    sentence read it the same way?"*, so 1233 Canari and 1187 Morty's Conviction carried the
-    character-for-character identical *"You can use this card only if you discard another card from
-    your hand."* and disagreed about whether that is a playability gate.
-
-    **The split was scope, not a ruling.** Issue #302 minted `cost_required` while rewriting *the 14
-    partial DRAW clauses*, and its §3 named exactly Morty's Conviction, Iris's Fighting Spirit, Kofu
-    and Carmine. The three FETCH cards printing the same gate — 1121 Ultra Ball, 1092 Secret Box,
-    1233 Canari — were never in that issue's 14, so they were never looked at. Issue #302 even quotes
-    *"Ultra Ball's `discard_2`"* as its example of the `cost` field that already existed. The store's
-    own prose had already reached the right reading and only the DATA lagged: this file's `_covers`
-    reason for 1233 says *"the `discard_1` cost the card is gated on"*, and `_note_fetch_family`
-    writes both Canari and Secret Box as *"gated on"* their discard.
-
-    **And a second subsystem had already ruled it, which is the strongest evidence there is** — it
-    was reached independently, by a different pipeline, and it disagreed with the compendium about
-    the same card. The cgpy twin encodes playability as a `legal` predicate, and
-    `src/cgpy/defs/generated_chains.json` gives **1233 Canari** `legal: [{"op": "handOthers",
-    "n": 1}]` (seeded by `tools/parity/seed_chains.py`'s `R-T08`, which regexes this exact sentence),
-    while `src/cgpy/defs/chain_overrides.json` gives **1121 Ultra Ball** a hand-authored
-    `legal: [{"op": "handOthers", "n": 2}]`. `cgpy/chain.py` checks it at runtime — *"discard-cost
-    needs n OTHER hand cards"*. So the twin refused an unpayable Ultra Ball while the compendium
-    priced it as merely expensive: one repo, two answers, and the compendium was the outlier.
-
-    So the invariant graded here is the one the printed card states, not the one Issue #302 happened
-    to author: **a `cost` carries `cost_required: true` if and only if the card prints a restriction
-    on PAYING THAT COST.** Not "prints a playability restriction", which is wider and would be false:
-    ten cards print *"You can use this card only if…"* about the BOARD (1101 Call Bell's *"only if
-    you go second"*, 1201 Briar's *"only if your opponent has exactly 2 Prize cards remaining"*, and
-    eight more), and those take a `condition`. `_PRINTED_GATE` carries that narrowing and its own
-    module comment carries the three ways the wide reading goes wrong.
-
-    It bites in both directions, which is what makes it a guard rather than a record — adding the
-    flag to a card that merely charges a price fails it exactly as omitting it from a gated one
-    does.
-
-    Two negatives are asserted rather than left implicit, because a sweep over *"every card with a
-    `cost`"* would wrongly catch them: 1192 Carmine's *"Discard your hand and draw 5 cards."* and
-    1206 Larry's Skill's *"Discard your hand and search your deck…"* are INSTRUCTIONS, always payable
-    — including on a hand holding nothing but the Supporter itself — so `cost_required` there would
-    assert a restriction the card does not print.
-
-    And the whole thing carries POSITIVE CONTROLS, because most of what it asserts is a negative: a
-    gate regex that matched nothing would make every clause "correctly ungated" and the guard would
-    pass while measuring air."""
+    """Issue #372: a `cost` carries `cost_required` IF AND ONLY IF the card prints a restriction on
+    PAYING THAT COST — not on playability, which is wider and would catch ten BOARD conditions."""
     from pathlib import Path
     from common.effects import CardEffects
     from meta_tracker.cards import load_cards
     cards = load_cards()
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
 
-    # (0) CONTROLS, before any conclusion is drawn from a silence. The instrument must FIRE on both
-    #     printed phrasings and stay QUIET on every near-miss the pool actually contains — the two
-    #     instructions, the two turn restrictions, the board conditions, and Naveen, whose sentence
-    #     is Kofu's shape but whose inability is about DRAWING rather than paying.
+    # (0) CONTROLS, before any conclusion is drawn from a silence: the instrument must FIRE on both
+    #     printed phrasings and stay QUIET on every near-miss the pool actually contains.
     assert _PRINTED_GATE.search(_printed_text(cards[1187]))          # "only if you discard another…"
     assert _PRINTED_GATE.search(_printed_text(cards[1200]))          # "If you can’t put 2 cards…"
     for ungated in (1192,   # Carmine — "Discard your hand and draw 5 cards.", an instruction
@@ -532,8 +362,7 @@ def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card()
                 f"cost_required={clause.get('cost_required')!r}")
 
     # (2) One card, one reading — a multi-leg find must not gate some legs and price the others.
-    #     1092 Secret Box repeats its cost on all four search legs and 1206 Larry's Skill on all
-    #     three, which is the shipped shape for one cost paid once across a multi-leg card.
+    #     Repeating the cost on every leg is the shipped shape for one cost paid once.
     for cid, clauses in costed.items():
         readings = {c.get("cost_required", False) for c in clauses if "cost" in c}
         assert len(readings) == 1, f"card {cid} reads its own cost two ways: {readings}"
@@ -548,24 +377,16 @@ def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card()
     assert all(c["cost_required"] is True
                for cid in same_sentence - {1148} for c in eff.clauses(cid))
 
-    # (4) 1148 Blowtorch is the DEFERRAL, made into a tripwire instead of a TODO. It prints the gate
-    #     — *"You can use this card only if you discard a Basic {R} Energy card from your hand."* —
-    #     but has no compendium entry at all, because the cost it needs is a TYPED single-card
-    #     discard and no `cost` value expresses that; minting one is a `CLAUSE_WRITES` decision, not
-    #     this issue's. 0 copies across our 6 decks, so nothing is mispriced meanwhile. The moment it
-    #     gains a `cost`, it joins `costed` above and (1) grades it.
+    # (4) 1148 Blowtorch is the DEFERRAL as a tripwire: it prints the gate but has no compendium
+    #     entry, because no `cost` value expresses a TYPED single-card discard.
     assert _PRINTED_GATE.search(_printed_text(cards[1148]))
     assert eff.clauses(1148) == ()
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
 def test_a_coin_kinded_override_would_leave_the_measured_draw_clause_standing():
-    """The measurement behind the ruling above, made executable rather than asserted in prose.
-
-    `_union_overrides` keeps every measured clause whose `kind` is not among the override's kinds. So
-    a `{"kind": "coin", "effect": "draw"}` override over Harlequin's probe-measured `{"kind": "draw",
-    "amount": 5}` ships BOTH — a compendium claiming the card draws twice. Keeping `kind: "draw"`
-    replaces it, which is why the coin rides as `amount_if` instead of as the clause kind."""
+    """`_union_overrides` keeps every measured clause whose `kind` is not among the override's, so a
+    `coin`-kinded override would ship BOTH and claim the card draws twice."""
     measured = [{"kind": "draw", "amount": 5}]
     as_coin = _union_overrides(measured, [{"kind": "coin", "effect": "draw", "amount": 5}])
     assert len(as_coin) == 2 and {c["kind"] for c in as_coin} == {"coin", "draw"}
@@ -607,9 +428,8 @@ def test_merge_keeps_distinct_condition_variants_separate():
 
 @pytest.mark.req("REQ-EFFECT-0012")
 def test_apply_overrides_stamps_kind_over_an_accumulated_table():
-    # Bianca's Devotion: prior run shipped capped ungated measurement (heal 250);
-    # accumulate keeps it (distinct key) — post-accumulate stamp must replace ALL
-    # heal clauses w/ the gated text-verified one, other kinds surviving
+    # Bianca's Devotion: accumulate keeps the prior capped ungated heal (distinct key), so the
+    # post-accumulate stamp must replace ALL heal clauses, with other kinds surviving.
     table = {1190: [{"kind": "heal", "amount": 250},
                     {"kind": "heal", "amount": "all",
                      "condition": "remaining_hp_30_or_less"},
@@ -721,11 +541,8 @@ def test_loader_fails_safe_to_empty_when_file_absent(tmp_path):
 # --- clause-set completeness: `_covers` (REQ-EFFECT-0018, Issue #300) ----------------
 
 def _covers_round_trip(tmp_path, overrides: dict):
-    """Run the real override -> build -> `card_effects.json` path over a two-card pool.
-
-    The builder is the thing under test, not a re-implementation of it: `covers` is a hand ruling
-    that must survive the same accumulate/re-stamp machinery the clauses do, and the way a data field
-    dies is by being added to the authored file and dropped somewhere in the pipe."""
+    """Run the REAL override -> build -> `card_effects.json` path over a two-card pool: the builder
+    is the thing under test, not a re-implementation of it."""
     import importlib.util
     from pathlib import Path
     ovr = tmp_path / "effect_overrides.json"
@@ -744,8 +561,7 @@ def _covers_round_trip(tmp_path, overrides: dict):
 
 @pytest.mark.req("REQ-EFFECT-0018")
 def test_covers_survives_the_override_to_build_to_compendium_round_trip(tmp_path):
-    """The verdict is authored beside the clauses and must arrive in the shipped artifact intact —
-    verdict AND reason, because a verdict nobody can re-check against the printed card is a bare
+    """Verdict AND reason: a verdict nobody can re-check against the printed card is a bare
     assertion."""
     from common.effects import CardEffects
     out = _covers_round_trip(tmp_path, {
@@ -762,9 +578,8 @@ def test_covers_survives_the_override_to_build_to_compendium_round_trip(tmp_path
     shipped = json.loads(out.read_text(encoding="utf-8"))["_covers"]
     assert fx.covers(1112) == "full" and fx.covers(1203) == "partial"
     assert "SWITCHES" in shipped["1203"]["reason"]
-    # The authored `_note` rides along: it is what tells a reader of the shipped artifact where the
-    # field is edited, and the numeric filter that keeps `_note` out of the card walk must not also
-    # strip it from the file.
+    # The numeric filter that keeps the authored `_note` out of the card walk must not also strip
+    # it from the file.
     assert shipped["_note"] == "fixture"
     # And an unruled card is UNKNOWN, not assumed complete.
     assert fx.covers(9999) is None
@@ -772,9 +587,8 @@ def test_covers_survives_the_override_to_build_to_compendium_round_trip(tmp_path
 
 @pytest.mark.req("REQ-EFFECT-0018")
 def test_a_partial_clause_set_fails_closed_at_the_seams_tri_state(tmp_path):
-    """What the round-trip is *for*: `clauses_cover` is the argument `apply_option.fate` takes, and a
-    partial set must answer `False` (refuse) rather than `True` (model three quarters of the card and
-    price the rest at exactly 0)."""
+    """`clauses_cover` is the argument `apply_option.fate` takes: a partial set must REFUSE rather
+    than model three quarters of the card and price the rest at exactly 0."""
     from common.effects import CardEffects
     fx = CardEffects.load(_covers_round_trip(tmp_path, {
         "1112": [{"kind": "heal", "amount": 60}],
@@ -789,9 +603,7 @@ def test_a_partial_clause_set_fails_closed_at_the_seams_tri_state(tmp_path):
 
 @pytest.mark.req("REQ-EFFECT-0018")
 def test_the_covers_block_is_not_mistaken_for_a_cards_clauses(tmp_path):
-    """`card_effects.json` is `{cardId: [clauses]}` plus one reserved key. The loader must skip it —
-    treating the verdict block as a 59th card's clause list would be a silent corruption of the
-    representation every fetch/heal/accel consumer reads."""
+    """`card_effects.json` is `{cardId: [clauses]}` plus one reserved key the loader must skip."""
     from common.effects import CardEffects
     out = _covers_round_trip(tmp_path, {
         "1112": [{"kind": "heal", "amount": 60}],
@@ -805,12 +617,7 @@ def test_the_covers_block_is_not_mistaken_for_a_cards_clauses(tmp_path):
 
 @pytest.mark.req("REQ-EFFECT-0018")
 def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
-    """The artifact itself, not a fixture. Every card with clauses carries a verdict.
-
-    Issue #300 was opened on two named holes, Surfer's switch and Crushing Hammer's coin. Issue #302
-    closed the first — the switch is now the `self_switch` rider — so the PARTIAL example here is
-    Judge, whose symmetric opponent redraw is a declared unknown rather than unfinished work. The
-    coin is unchanged and stays the standing precedent."""
+    """The artifact itself, not a fixture: every card with clauses carries a verdict."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
@@ -825,22 +632,8 @@ def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
 
 @pytest.mark.req("REQ-CARDS-0001")
 def test_every_multi_leg_relation_agrees_with_the_engine_chain_op():
-    """**The audit that would have caught 1097 and 1142, and did not exist when they were authored.**
-
-    A multi-leg reveal card's relation is declared by the per-leg `choice` flag, and the engine
-    settles the same three shapes with three STRUCTURALLY different ops. So the compendium's reading
-    is checkable against a second, independently-authored store:
-
-        one op over a UNION filter (`anyOf`, `pokemonOrBasicEnergy`)  -> union
-        `xDeckToHandBuckets` / `xDeckTakeSequenceAndShuffle`          -> conjunction
-        `xDeckToHandEitherOr`                                         -> exclusive either-or
-
-    Cards with no `chain_overrides.json` entry are skipped BY NAME rather than silently — a skip
-    that cannot be enumerated is indistinguishable from a pass.
-
-    This is a cross-STORE check, which is the only kind that can catch what happened here: 1097
-    Night Stretcher and 1142 Fighting Gong both print *"a X **or** a Y"*, both were declared as
-    conjunctions, and every audit that read only the compendium agreed with itself."""
+    """A cross-STORE check: the engine settles the three multi-leg shapes with three STRUCTURALLY
+    different ops, so the compendium's `choice` flags are checkable against the chain store."""
     from pathlib import Path
     from common.effects import CardEffects
     from common.fetch_closure import reveal_legs
@@ -858,10 +651,8 @@ def test_every_multi_leg_relation_agrees_with_the_engine_chain_op():
     _EITHER_OR_OPS = {"xDeckToHandEitherOr"}
 
     def declared_relation(clauses):
-        """The relation the COMPENDIUM declares, read straight off the flags.
-
-        Deliberately not `reveal_legs`: that layers this node's SCOPE refusals (a reach-gated leg)
-        on top of the relation, and a scope limit is not a disagreement about what the card does."""
+        """Deliberately not `reveal_legs`: that layers this node's SCOPE refusals on top of the
+        relation, and a scope limit is not a disagreement about what the card does."""
         legs = [c for c in clauses if c.get("kind") in REVEALING_CLAUSES]
         flags = [bool(c.get("choice")) for c in legs]
         if not any(flags):
@@ -897,9 +688,8 @@ def test_every_multi_leg_relation_agrees_with_the_engine_chain_op():
         assert declared_relation(clauses) == expected, (
             f"card {cid}: the compendium DECLARES {declared_relation(clauses)!r} and the engine "
             f"chain implies {expected!r}")
-        # ...and where the seam can also read it, the two must not disagree either. A seam refusal
-        # for a DIFFERENT reason (a reach-gated leg, which is a scope limit rather than a relation)
-        # is not a disagreement, so it is skipped here rather than counted as one.
+        # A seam refusal for a DIFFERENT reason (a reach-gated leg is a scope limit, not a
+        # relation) is not a disagreement, so it is skipped rather than counted as one.
         try:
             assert reveal_legs(eff.clauses(cid)).relation == expected, cid
         except ValueError as gap:

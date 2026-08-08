@@ -1,19 +1,8 @@
 """The leaf lab — offline leaf-quality measurement, and the Discrimination Gate's instrument.
 
-The agent is only as good as its end-of-turn LEAF. The lab re-scores a tagged correction's board
-offline — so ANY leaf version is measurable without a ladder run — and asks the one question that
-matters: **does the leaf rank the human's `correct` option highest?** These tracers pin the
-per-correction metrics with the scorer stubbed; the stub mirrors the real ep86090164 board
-(correct=[0] buried under a 4-way tie at 65).
-
-**The scorer moved at POC-T4/5 (Issue #386), the question did not.** The lab used to score through
-`planner._engine_leaf_value`, which simmed a candidate first action to its end-of-turn board through
-the native engine. That function is deleted with the develop rollout, so the lab now reads
-`ComposerResult.fanned` — the composer's own depth-0 1-ply differencing, taken off the shipped call
-rather than re-derived, because an instrument that scores its own reconstruction measures a board
-the agent never sees. Only `_stub_the_scoring_source` below changed; every verdict assertion in this
-module is byte-identical, which is the point.
-"""
+It re-scores a tagged correction's board offline and asks whether the leaf ranks the human's
+`correct` option highest. The scorer reads `ComposerResult.fanned` — the composer's own depth-0
+differencing, taken off the shipped call rather than re-derived. These tracers stub the scorer."""
 from types import SimpleNamespace
 
 import pytest
@@ -28,28 +17,21 @@ def _obs(n_options, context=0):
 
 def _frame(*, obs=None, turn_plan=None, correct=None, episode_id=1, seat=0, scope="decision",
            subject=7, agent="dragapult_ex"):
-    """A stand-in Correction. It carries the four `identity_key` fields (episode, seat, scope,
-    subject) because a lab row is keyed by them — `episode_id` alone is not unique, and keying on it
-    collapsed a real 276-row diff to 221 (ADR-0072)."""
+    """A stand-in Correction carrying the four `identity_key` fields, because a lab row is keyed by them."""
     return SimpleNamespace(obs=obs, turn_plan=turn_plan, correct=correct or [], agent=agent,
                            episode_id=episode_id, seat=seat, scope=scope, subject=subject)
 
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_is_leaf_frame_accepts_turn_plan_and_main_select_pick_corrections():
-    """The lab measures two correction shapes (`is_leaf_frame`): a turn-planner correction (carries a
-    `turn_plan` payload — kept even with an empty `correct`, so an unscored setup turn is still counted)
-    and any MAIN-select (context 0) pick correction that names a `correct` option — the second shape is
-    what lets the whole tagged setup corpus drive leaf enrichment, not only the prose turn_plan ones."""
+    """Two shapes: a `turn_plan` payload (kept even with an empty `correct`), and a MAIN-select pick."""
     assert is_leaf_frame(_frame(obs=_obs(4), turn_plan={"intended_line": "x"})) is True
     assert is_leaf_frame(_frame(obs=_obs(4, context=0), correct=[2])) is True
 
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_is_leaf_frame_rejects_unreseedable_and_targetless_frames():
-    """Excluded: a non-MAIN pick correction (context != 0 — the offline sim reseeds ONLY from a
-    MAIN-select board, so it could never be scored), a MAIN correction with no `correct` target, and an
-    obs-less record. A turn_plan record is exempt from the context gate (its own domain)."""
+    """The offline sim reseeds ONLY from a MAIN-select board; a turn_plan record is exempt from that."""
     assert is_leaf_frame(_frame(obs=_obs(4, context=7), correct=[2])) is False   # non-MAIN pick
     assert is_leaf_frame(_frame(obs=_obs(4, context=0), correct=[])) is False     # no target
     assert is_leaf_frame(_frame(obs=None, correct=[2])) is False                  # no obs
@@ -65,18 +47,8 @@ def test_is_leaf_frame_rejects_retired_match_scope_even_with_a_turn_plan():
 
 @pytest.fixture(autouse=True)
 def _stub_the_scoring_source(monkeypatch):
-    """Feed `evaluate_leaf_on_correction` per-option values without running the real scorer.
-
-    The SEAM moved at POC-T4/5 (Issue #386) and this is the whole of the change to this module.
-    `board_leaf_values` used to call `pilot._engine_leaf_value(obs, step)` — one engine sim per
-    candidate first step — so a fake pilot carrying that one method was enough to stub it. It now
-    builds a StateModel and runs `composer.compose`, so the stub has to sit at the module boundary
-    instead of on the pilot.
-
-    Every verdict assertion below is UNCHANGED, and deliberately so: these tests are about
-    `evaluate_leaf_on_correction`'s reporting — rank, top-tie, Option-Equivalence classing,
-    class asymmetry — not about what produced the numbers. A leaf lab whose verdict logic had to be
-    rewritten because its scorer changed would be a lab measuring itself."""
+    """Feed `evaluate_leaf_on_correction` per-option values without running the real scorer. The stub
+    sits at the module boundary because `board_leaf_values` now builds a StateModel and composes."""
     from train import leaf_lab
     real = leaf_lab.board_leaf_values
 
@@ -97,14 +69,8 @@ def _pilot(values):
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_a_decision_scope_DECLINE_has_no_rank_and_the_lab_invents_none():
-    """Issue #229 D3 — the behaviour the lab already had, asserted so admitting the shape cannot
-    silently change what gets scored.
-
-    A DECLINE (`correct: []`) names no option, so there is nothing to *rank*. Two independent layers
-    say so and both must keep saying it: the frame is not a leaf frame at all (no `correct`, no
-    `turn_plan`), and were it scored anyway there are no `correct_vals`, so every verdict is `None`
-    behind `unscorable: True` — which `gates._scorable` filters out of the diff. The lab needing no
-    change is the finding; a rank fabricated for a decline would be a phantom regression."""
+    """Issue #229 D3. A DECLINE (`correct: []`) names no option, so there is nothing to rank; two
+    layers say so — not a leaf frame at all, and `unscorable: True` if scored anyway."""
     decline = _frame(obs=_obs(3, context=0), correct=[], scope="decision")
     assert is_leaf_frame(decline) is False
     v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 40.0, 2: 55.0}), decline)
@@ -115,9 +81,7 @@ def test_a_decision_scope_DECLINE_has_no_rank_and_the_lab_invents_none():
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
-    """The ep86090164 shape: leaf scores the correct pick [0] at 60, but four options tie at 65 above
-    it. The lab must report `correct` is NOT top, its rank (5th — four strictly outscore it), and the
-    degenerate 4-way tie at the top (the leaf can't discriminate)."""
+    """correct [0] scores 60 under a 4-way tie at 65: not top, rank 5, and a degenerate top tie."""
     values = {0: 60.0, 1: 65.0, 2: 65.0, 3: 65.0, 4: 65.0, 5: 60.0, 6: 55.0, 7: 50.0}
     v = evaluate_leaf_on_correction(_pilot(values), _frame(correct=[0], obs=_obs(8),
                                                               episode_id=86090164))
@@ -145,10 +109,8 @@ def test_leaf_correct_when_the_human_pick_is_the_unique_top():
 
 @pytest.mark.req("REQ-TUNER-0019")
 def test_shared_top_is_lenient_hit_but_not_a_unique_top():
-    """The distinction the honest headline turns on: the correct pick TIES the max with another option.
-    `correct_is_top` is True (lenient — it holds the shared max) but `correct_is_unique_top` is False —
-    the argmax rung breaks the tie by option order, not by the human's intent, so it would only land on
-    `correct` by luck. This is why the lab reports SOLE-top, not just shared-top."""
+    """`correct_is_top` is lenient (it shares the max); `correct_is_unique_top` is not — the argmax
+    rung breaks a tie by option order, not by intent, so it lands on `correct` only by luck."""
     v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 90.0, 2: 55.0}),
                                     _frame(correct=[0], obs=_obs(3), episode_id=1))
     assert v["correct_is_top"] is True                  # shares the max → lenient hit
@@ -175,9 +137,7 @@ def _twin_obs(bodies, n_extra=0):
 
 
 def test_a_tie_WITHIN_one_class_reports_as_SOLE_top():
-    """The measure this fixes. Two options that are the same decision tying is correct behaviour, not
-    a leaf that cannot discriminate — scoring it as a discrimination failure aimed leaf-enrichment
-    work at a phantom."""
+    """Two options that are the same decision tying is correct behaviour, not a failure to discriminate."""
     obs = _twin_obs([_body(serial=1), _body(serial=2)])
     row = evaluate_leaf_on_correction(_pilot({0: 65.0, 1: 65.0}), _frame(obs=obs, correct=[0]))
     assert row["correct_is_top"] is True
@@ -204,9 +164,7 @@ def test_a_class_tying_with_an_unrelated_option_counts_both():
 
 
 def test_a_class_scored_TWO_WAYS_is_reported_as_CLASS_ASYMMETRY():
-    """`81903490|0|decision|49`'s shape, reduced: three byte-identical Riolu the leaf prices at
-    1167.0 / 95.4 / 95.4. Deterministic, and caused by an index-order-dependent greedy rollout
-    (Issue #254) rather than by the board — so the lab reports it."""
+    """An index-order-dependent greedy rollout (Issue #254) prices byte-identical bodies differently."""
     obs = _twin_obs([_body(serial=1), _body(serial=2), _body(serial=3)])
     row = evaluate_leaf_on_correction(_pilot({0: 1167.0, 1: 95.4, 2: 95.4}),
                                       _frame(obs=obs, correct=[0]))
@@ -220,10 +178,8 @@ def test_a_symmetric_class_reports_NO_asymmetry():
 
 
 def test_float_non_associativity_is_NOT_an_asymmetry():
-    """The one class surviving ADR-0103's canonical ordering reports 124.83000000000001 vs
-    124.82999999999998 — a 2.8e-14 spread from summing the same terms in a different order, not the
-    leaf pricing one decision two ways. An instrument that can never report clean is one readers
-    learn to skip, so the tolerance is what makes "zero" expressible."""
+    """A 2.8e-14 spread from summing the same terms in a different order, not two prices. An instrument
+    that can never report clean is one readers skip, so the tolerance makes "zero" expressible."""
     obs = _twin_obs([_body(serial=1), _body(serial=2)])
     row = evaluate_leaf_on_correction(
         _pilot({0: 124.83000000000001, 1: 124.82999999999998}), _frame(obs=obs, correct=[0]))

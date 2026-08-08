@@ -1,19 +1,8 @@
-"""``cg.api`` twin backed by cgpy (ADR-0059 M3): same enums, dataclasses and functions,
-no DLL.
+"""``cg.api`` twin backed by cgpy, no DLL (ADR-0059 M3). The dataclasses are VERBATIM copies of
+``src/cg/api.py``'s — the agent-facing wire contract — and error strings match the native shim.
 
-Enums re-export the cgpy schema (values copied verbatim from the native shim, M0); the
-dataclasses are verbatim copies of ``src/cg/api.py``'s (they are the agent-facing wire
-contract). ``all_card_data``/``all_attack`` read the committed engine-table snapshot —
-the DLL's own AllCard/AllAttack dump — so their output is byte-equivalent to native.
-
-The search functions mirror the native surface with the opaque blob replaced by structured
-seeding (`cgpy.search.state_from_obs`): ``search_begin`` accepts any observation whose
-``search_begin_input`` is set — a cgpy state token seeds exactly; anything else (e.g. a
-native blob on a recorded fixture) seeds from the observation's structured state, which
-requires a MAIN select. Validation order and error strings match the native shim.
-
-NOTE: no ``from __future__ import annotations`` here — ``to_dataclass`` walks real type
-objects on the dataclass fields, exactly like the native shim.
+NOTE: no ``from __future__ import annotations`` here — ``to_dataclass`` walks real type objects on
+the dataclass fields, exactly like the native shim.
 """
 import json
 from dataclasses import asdict, dataclass

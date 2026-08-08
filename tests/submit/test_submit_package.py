@@ -10,9 +10,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from submit.package import artifact_stem, package
 
-# Self-contained agent fixture (main.py + strategy.py + deck.csv + deck.txt) so these tests don't
-# depend on a deletable source agent under src/agents/ (shared common/ + cg/ still come
-# from there). Delete src/agents/mega_starmie and these stay green.
+# Self-contained agent fixture (main.py + strategy.py + deck.csv + deck.txt) so these tests do not
+# depend on a deletable source agent under src/agents/ (shared common/ + cg/ still come from there).
 FIXTURE_AGENTS = Path(__file__).resolve().parents[1] / "fixtures" / "agents"
 
 
@@ -45,10 +44,8 @@ def test_package_ships_sibling_py_modules_not_the_decklist_txt(tmp_path):
 
 
 def test_fixture_main_mirrors_the_real_agent_hook():
-    """REQ-SIM-0004: the packaging fixture's main.py stands in for the deployable agent hook —
-    keep them byte-identical so fixture-based tests can't drift from what actually ships (e.g. the
-    `overrides`/`functions` wiring). Skips if the real agent was deleted (the fixture is
-    deliberately self-contained)."""
+    """REQ-SIM-0004: the packaging fixture's main.py stands in for the deployable agent hook — keep them
+    byte-identical. Skips if the real agent was deleted (the fixture is deliberately standalone)."""
     real = Path(__file__).resolve().parents[2] / "src" / "agents" / "mega_starmie" / "main.py"
     if not real.exists():
         pytest.skip("real agent absent (fixture is intentionally standalone)")
@@ -66,15 +63,8 @@ def test_package_ships_tuned_json_when_present(tmp_path):
 
 @pytest.mark.req("REQ-PROV-0001")
 def test_package_ships_the_override_table_but_not_its_provenance_sidecar(tmp_path):
-    """ADR-0108 §1 rejected inline provenance *citing grader cost* — 24 KB of measurement rows
-    parsed and discarded on every provider build, inside a 10-minute-per-match budget. Shipping the
-    sidecar instead would pay that cost anyway, and `_IGNORE` prunes documentation by EXTENSION
-    (`*.md`, `docs`), which a `.json` evidence file sails straight through.
-
-    The runtime loads only `attack_overrides.json` (`load_attack_overrides`), so the table must be
-    in and the sidecar out. Asserted together, because an exclusion pattern that caught both would
-    silently un-price every override in the Bundle.
-    """
+    """ADR-0108 §1 rejected inline provenance citing grader cost, and `_IGNORE` prunes by EXTENSION,
+    which a `.json` evidence file sails through. The runtime loads only `attack_overrides.json`."""
     with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS)) as zf:
         names = set(zf.namelist())
     assert "common/attack_overrides.json" in names

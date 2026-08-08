@@ -1,24 +1,14 @@
-"""Attack-audit DIFF (ADR-0032 item 5, join half): measurements vs the damage oracle.
+"""Attack-audit DIFF (ADR-0032 item 5, join half): `audit_attacks.py`'s measurements against
+``compute_active_damage`` — the EXACT function the runtime routes through, so a match verifies the
+shipped closed form and a mismatch is a discovered gap. Report-only; fixes land by hand.
 
-Loads ``reports/attack_audit/measurements.json`` (from ``audit_attacks.py``) and diffs each panel
-measurement against ``compute_active_damage`` — the EXACT function the runtime routes through, so
-a match here is a verification of the shipped closed form, and every mismatch is a discovered gap
-(a mechanic the model doesn't capture yet). Report-only: confirmed fixes land as
-``build_attack_stats`` overrides (or oracle changes), by hand.
+A gap's class is coarse: ``scaler`` (printed 0, dealt >0), ``over_prediction`` (dealt 0, predicted
+>0), else ``modifier``. Error-ledger and live-coin records are SKIPS — counted, never dropped.
 
     python tools/sim/diff_attack_audit.py                    # diff the accumulated measurements
     python tools/sim/diff_attack_audit.py --json out.json    # machine-readable gap list
 
-Requirements:
-    REQ-AUDIT-0011  Each successful measurement diffs against the oracle — a coin-fork record
-                    against its own bound (min/max), a sweep/panel record with the attacker-side
-                    scaling context off the record; match iff equal.
-    REQ-AUDIT-0012  Error-ledger, live-coin (random outcome, no fork), and unknown-attack records
-                    are classified SKIPS — counted, never silently dropped.
-    REQ-AUDIT-0013  A gap carries ids, scenario, printed/dealt/predicted and a coarse class:
-                    ``scaler`` (printed 0, dealt >0 — the formula tier's queue),
-                    ``over_prediction`` (dealt 0, predicted >0 — conditional/does-nothing?),
-                    else ``modifier`` (a wrong/missing flag or an unmodeled rider).
+REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
 """
 from __future__ import annotations
 
@@ -36,17 +26,8 @@ _DEFAULT_IN = Path(__file__).resolve().parents[2] / "reports" / "attack_audit" /
 
 
 def diff_records(records, attack_stats, card_stats, functions) -> dict:
-    """Diff measurement records against the oracle (pure — REQ-AUDIT-0011..0013).
-
-    Args:
-        records: the measurement list (``audit_attacks.shape_record`` / ``error_record`` dicts).
-        attack_stats: ``{attackId: AttackStat}`` (the shipped table under test).
-        card_stats: ``{cardId: CardStat}`` or a provider with ``.get``.
-        functions: the ``CardFunctions`` table (defender tags — prevention).
-
-    Returns:
-        ``{"matched": [...], "gaps": [...], "skipped": [{record, reason}, ...]}``.
-    """
+    """Diff measurement records against the oracle (pure, REQ-AUDIT-0011..0013) ->
+    ``{"matched", "gaps", "skipped": [{record, reason}]}``."""
     get_stat = card_stats.get if hasattr(card_stats, "get") else (lambda cid: None)
     matched, gaps, skipped = [], [], []
     for rec in records:
@@ -54,9 +35,8 @@ def diff_records(records, attack_stats, card_stats, functions) -> dict:
             skipped.append({"record": rec, "reason": "error_ledger"})
             continue
         if rec.get("coinLogs") and not rec.get("coin"):
-            # LIVE battle flips coins randomly (no select) — outcome isn't deterministic, so
-            # record can't diff against a deterministic prediction; coin FORK records
-            # (min/max, below) are this attack's real measurement
+            # A live flip has no select, so the outcome is not deterministic and cannot be diffed.
+            # The coin FORK records below are this attack's real measurement.
             skipped.append({"record": rec, "reason": "coin_rng_live"})
             continue
         attack = attack_stats.get(rec.get("attackId"))
@@ -76,9 +56,8 @@ def diff_records(records, attack_stats, card_stats, functions) -> dict:
         if predicted == dealt:
             matched.append(rec)
             continue
-        # conditional attack whose live outcome landed WITHIN its modeled [min, max] is bounded-
-        # correct: exact branch is unknowable from one record, but Lethal (floor) and Incoming
-        # (ceiling) both read it soundly — a match of kind "bounded", not a gap
+        # A live outcome inside the modelled [min, max] is BOUNDED-correct, not a gap: Lethal
+        # reads the floor and Incoming the ceiling, so both stay sound.
         if not rec.get("coin") and attack.damageMin is not None:
             lo = compute_active_damage(attack, get_stat(rec.get("attackerCardId")),
                                        get_stat(d_id) if d_id is not None else None, tags,

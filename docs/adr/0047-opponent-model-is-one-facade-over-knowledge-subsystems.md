@@ -8,8 +8,8 @@ first live consumer of `hand_size_delta` (the hand-swing oracle's freshness term
 existing **Read** (ADR-0003/0026/0027) and **Dispositions** (opponent_properties) behind it. New
 glossary terms *Opponent Model*, *Resources*, *Dispositions* in
 [src/common/CONTEXT.md](../../src/common/CONTEXT.md). Unblocks the five deferred opponent-side proposals
-in [data/strategy/proposals/](../../data/strategy/proposals/). The plan the handoff
-[pokemonai-handoff-opponent-modeling-cluster.md](../../data/handoffs/pokemonai-handoff-opponent-modeling-cluster.md)
+in [data/strategy/proposals/](../../data/strategy/proposals). The plan the handoff
+`pokemonai-handoff-opponent-modeling-cluster.md` (since removed)
 called for.
 
 **Build (2026-07-09, `/tdd`, behavior-neutral).** Four seams, test-first, full suite green
@@ -132,7 +132,7 @@ Dispositions are re-homed behind the facade with no behavior change (fold, not r
 opponent-side proposals lose their capability-gap blocker and re-enter the `/update-strategy` queue. The
 three own-side/Lethal items are recorded as separate buildables, explicitly *not* Opponent Model, in their
 own handoff
-[pokemonai-handoff-ownside-sequencing-and-lethal-depth.md](../../data/handoffs/pokemonai-handoff-ownside-sequencing-and-lethal-depth.md).
+`pokemonai-handoff-ownside-sequencing-and-lethal-depth.md` (since removed).
 Snapshot
 opp reads currently taken at `objectives.py:304`, `planner.py:582/1451`, `pilot.py:1666` become the
 accumulation points for `opp_deckout_in_turns`. Sources of truth for Resources: `obs['logs']`, opp

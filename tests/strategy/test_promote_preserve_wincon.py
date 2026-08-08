@@ -1,31 +1,11 @@
-"""Prize-economy promote: the interpose doctrine, now EMERGENT (ADR-0100 §11, #141).
+"""Prize-economy promote: the interpose doctrine, now EMERGENT (ADR-0100 §11, Issue #141).
 
-When my Active is Knocked Out and both a cheap 1-prize attacker (Cinderace) and a higher-prize
-win-condition (Mega Starmie ex) sit on the Bench with Energy, the forced promote is a prize-race
-decision, not "promote the best attacker". Leading with the 3-prize Mega feeds the opponent the game
-if they can Knock it Out; interposing the 1-prize Cinderace soaks the hit for a single prize and
-keeps the fresh finisher on the Bench.
+The rung is DELETED; the doctrine emerges from prize Exposure (`prizes x 100 x halve(turns_to_ko-1)`)
+plus the fatal step, so every test asserts the DECISION and none asserts a rung firing. That makes it
+CONDITIONAL where the rung was categorical: it stands down when the wincon is the safer body.
 
-**The rung is gone.** `interpose-the-cheap-attacker-to-preserve-the-wincon` (+50) and its penalty
-complement `dont-promote-into-their-prize-reach` (−20) are DELETED; ADR-0100 §11 rules the doctrine
-EMERGENT from prize **Exposure** (`prizes x 100 x halve(turns_to_ko - 1)`) plus the fatal step. So
-these tests assert the DECISION, never a rung firing — ADR-0072's rewrite of f29 from a score claim
-to a decision claim is the prior art.
-
-That change makes the doctrine CONDITIONAL where the rung was categorical, and deliberately so. The
-rung fired on three board FLAGS (Weakness / an under-built finisher / a shown gust) without ever
-asking whether the opponent could actually punish the wincon — the boolean `opp_cannot_punish_wincon`
-was its only brake, and ADR-0100 §4 retires it as a 300-damage cliff read off the WRONG BODY. The
-equation asks the clock instead, per body. Two consequences are tested below: interpose FIRES hard
-when they can take the 3-prize Knock Out next turn (exposure 300 vs 100, the ADR's own arithmetic),
-and STANDS DOWN when the wincon is actually the safer body — a case the flag-driven rung got wrong.
-
-Fixtures carry real `AttackStat` records on BOTH sides. They have to: the decider reads damage and
-the threat clock through attack records, and ADR-0052 retired the card-level `minCostDamage` scalar
-fallback ("no record, no claim"), so a fixture without records prices every body at zero and asserts
-nothing about the decider. Card facts per `data/EN_Card_Data.csv`: Mega Starmie ex (1031) 330 HP,
-3 prizes; Cinderace (666) 160 HP, 1 prize, Turbo Flare ● 50 + "search your deck for up to 3 Basic
-Energy cards and attach them to your Benched Pokémon".
+Fixtures carry real `AttackStat` records on BOTH sides — ADR-0052 retired the card-level
+`minCostDamage` fallback, so without records every body prices at zero and nothing is asserted.
 """
 import pytest
 
@@ -103,9 +83,8 @@ def _terms(pilot, obs):
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_emerges_when_they_can_take_the_three_prize_knockout():
-    """ADR-0100 §11's emergence claim, in its own arithmetic: exposing the 3-prize finisher to a body
-    that Knocks it Out NEXT TURN costs 300 damage, while the 1-prize soaker costs 100 — a 200-damage
-    gap that swamps the finisher's 160-damage attack advantage. No rung required."""
+    """Exposing the 3-prize finisher to a body that Knocks it Out NEXT TURN costs 300, the 1-prize
+    soaker 100 — a gap that swamps the finisher's attack advantage. No rung required (ADR-0100 §11)."""
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": SLUGGER, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     cheap, wincon = _terms(p, obs)
@@ -116,12 +95,8 @@ def test_interpose_emerges_when_they_can_take_the_three_prize_knockout():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_stands_down_when_the_wincon_is_the_safer_body():
-    """The rung fired on board FLAGS and never asked whether the opponent could actually punish the
-    wincon. Here they cannot one-shot the 330 HP Mega but they DO one-shot the 160 HP Cinderace, so
-    the cheap body is the one that dies for nothing — and the equation leads with the finisher.
-
-    This is a deliberate BEHAVIOUR CHANGE, not a preserved rung: the flag-driven interpose got this
-    shape wrong, and the corpus sweep records zero regressions from the deletion."""
+    """They cannot one-shot the 330 HP Mega but they DO one-shot the 160 HP Cinderace, so the cheap
+    body dies for nothing. A deliberate BEHAVIOUR CHANGE: the flag-driven rung got this shape wrong."""
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": ARCHALUDON, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     cheap, wincon = _terms(p, obs)
@@ -131,9 +106,8 @@ def test_interpose_stands_down_when_the_wincon_is_the_safer_body():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_the_accelerator_is_promoted_when_its_rider_actually_lands():
-    """§3b: the dividend is MEASURED (`_recover_units`), not asserted from an `accel_source` role tag.
-    With an under-built finisher and Basic Energy still in the deck, Turbo Flare's real rider loads
-    the Bench and the accelerator out-yields promoting the 1-Energy finisher directly."""
+    """ADR-0100 §3b: the dividend is MEASURED (`_recover_units`), not asserted from an `accel_source`
+    role tag, so the real rider's Bench load out-yields promoting the 1-Energy finisher directly."""
     p = _pilot()
     obs = _obs(_bench(mega_energy=1), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     cheap, wincon = _terms(p, obs)
@@ -143,10 +117,8 @@ def test_the_accelerator_is_promoted_when_its_rider_actually_lands():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_no_accelerator_credit_when_the_rider_would_whiff():
-    """The same under-built finisher, but no Basic Energy left in the deck, so Turbo Flare's
-    deck-search rider finds nothing. `_recover_units` bounds the dividend by the FUEL in the rider's
-    source zone, so the credit is exactly zero and the finisher leads — the "firing blanks" gate,
-    now a measurement rather than a `basic_energy_in_deck` board flag."""
+    """`_recover_units` bounds the dividend by the FUEL in the rider's source zone, so with no Basic
+    Energy left the credit is exactly zero — a measurement, not a `basic_energy_in_deck` board flag."""
     p = _pilot(deck_has_basic=False)
     obs = _obs(_bench(mega_energy=1), {"id": NEUTRAL, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
     cheap, _wincon = _terms(p, obs)
@@ -156,9 +128,8 @@ def test_no_accelerator_credit_when_the_rider_would_whiff():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_a_promote_that_hands_them_the_match_is_dominated():
-    """§7a: when the body's own prize value covers the opponent's remaining count and the clock says
-    they can take it, Knocking it out ENDS the match — subtracted at `KO_SCORE`, a finite dominance
-    band rather than a veto. The 3-prize Mega into an opponent on 3 prizes is exactly that."""
+    """ADR-0100 §7a: when the body's prize value covers the opponent's remaining count and the clock
+    says they can take it, the Knock Out ENDS the match — subtracted at `KO_SCORE`, not a veto."""
     from common.strategy.context import KO_SCORE
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": SLUGGER, "hp": 300, "energies": [1, 1]}, opp_prizes=3)
@@ -169,12 +140,8 @@ def test_a_promote_that_hands_them_the_match_is_dominated():
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_lead_the_strongest_body_when_the_opponent_needs_one_prize():
-    """With the opponent on a single prize ANY Knock Out wins for them, so interposing a 1-prize body
-    just hands it over — lead with the strongest body, which might survive or Knock Out back.
-
-    Emergent from the fatal step's own condition (`prizes >= opp_prizes_remaining >= 2`): at one
-    prize remaining the step cannot fire on any body, so nothing suppresses the finisher and its
-    damage decides. §7b's argument that the near-goal escalation needs no second mechanism."""
+    """At one prize remaining the fatal step's condition (`prizes >= opp_prizes_remaining >= 2`)
+    cannot fire on any body, so nothing suppresses the finisher and its damage decides (§7b)."""
     p = _pilot()
     obs = _obs(_bench(mega_energy=3), {"id": ARCHALUDON, "hp": 300, "energies": [1, 1]}, opp_prizes=1)
     _cheap, wincon = _terms(p, obs)

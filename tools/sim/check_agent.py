@@ -145,14 +145,8 @@ def _suppressed_output():
 
 
 def _import_make():
-    """Import kaggle_environments.make, muting its noisy one-time env discovery.
-
-    Three noise sources: INFO logging (library resets its own logger to INFO on import,
-    so plain setLevel loses the race — `logging.disable` is a global override it can't
-    beat); a native (C++) open_spiel dump to stderr fd (needs fd-level redirect); and
-    pydantic Field-deprecation warnings from its werewolf env (Python `warnings`, so neither
-    of the above catches them — needs `catch_warnings`).
-    """
+    """Import kaggle_environments.make, muting its env discovery. THREE distinct noise sources, each
+    needing its own mechanism: INFO logging, a native stderr fd dump, and Python warnings."""
     prev_disable = logging.root.manager.disable
     logging.disable(logging.INFO)  # import-time INFO/DEBUG never emits (no text, no per-record errors)
     try:
@@ -199,10 +193,8 @@ def _save_replay(env, reports_dir: Path, label: str, stage: str) -> Path:
 def check_playability(
     agent_dir: Path, syspath_roots, matches: int = 5, reports_dir=None
 ) -> StageResult:
-    """Agent plays itself `matches` times; every seat must finish DONE.
-
-    On the first non-DONE seat, optionally save a replay to `reports_dir` for triage.
-    """
+    """Agent plays itself `matches` times; every seat must finish DONE. The first non-DONE seat
+    optionally saves a replay to `reports_dir` for triage."""
     agent_dir = Path(agent_dir)
     for i in range(matches):
         statuses, env = _run_match(agent_dir, syspath_roots)

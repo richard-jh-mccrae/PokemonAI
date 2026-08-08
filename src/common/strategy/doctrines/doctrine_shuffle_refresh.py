@@ -1,16 +1,9 @@
 """DOCTRINE: Shuffle-Refresh — ADR-0024. One file, end to end.
 
-A Shuffle-Refresh Supporter shuffles your whole hand into the deck then draws (Lillie's Determination,
-Judge, Harlequin, Lacey; Function Tag `shuffle_hand`). It presents NO select, so it is the Fetch
-comparator's decision (A) ONLY — *whether to play it* — and it REUSES Fetch's `_grab_value_of` for the
-gain side rather than restating a value model. Post-refutation (2026-06-30, ~3:1 mirror cost of
-hoarding) the refresh is ENDORSED by default (`dig-before-commit` +20, hand-blind — tier-3 sequencing
-means it only ever sees the residual dregs); the keep-value floors guard the narrow bad shuffles, and
-Layer B (ADR-0024 amendment, revised at the 2026-07-03 A/B) adds ONE deck-side suppressor: the
-post-anchor pull-EV `dont-refresh-into-a-probable-miss` over `_DRAW_COUNTS` (its K=0 case covers the
-spent deck; the broader pre-anchor sound veto regressed and was deleted). `ShuffleRefreshMixin` is
-the Pilot-side `_refresh_probable_miss`. See docs/general-strategy.md and
-docs/adr/0024-shuffle-refresh-is-fetch-decision-a-over-keep-value.md.
+A Shuffle-Refresh Supporter shuffles your whole hand into the deck then draws (Function Tag
+`shuffle_hand`). It presents NO select, so it is Fetch's whether-to-play decision only, and it REUSES
+Fetch's `_grab_value_of` for the gain side rather than restating a value model. The refresh is ENDORSED
+by default; the keep-value floors guard the narrow bad shuffles and Layer B adds one deck-side veto.
 """
 from __future__ import annotations
 
@@ -21,14 +14,8 @@ from common.strategy.refresh import refresh_branches
 from common.strategy.strategy import Hypothesis
 
 def _draw_branches(card_id, b):
-    """How many cards *I* draw, as the coin/condition BRANCHES (P averaged exactly over them).
-
-    ADR-0060: the draw-count facts now live ONCE, in `strategy/refresh.py`, keyed per branch as
-    (my_draw, opp_draw) — this reads MY half of them. The old id-keyed `_DRAW_COUNTS` dict here was
-    a second copy of the same card text and had silently drifted: it was **missing Unfair Stamp
-    (1080)** entirely, so `dont-refresh-into-a-probable-miss` could never fire on it.
-
-    A shuffle_hand card with no facts gets NO probabilistic claim (fail-silent, unchanged)."""
+    """How many cards *I* draw, as the coin/condition BRANCHES. A shuffle_hand card with no facts in
+    `strategy/refresh.py` gets NO probabilistic claim (fail-silent)."""
     branches = refresh_branches(card_id, b.my_prizes_remaining, b.opp_prizes_remaining)
     return None if branches is None else tuple(my_draw for my_draw, _opp in branches)
 
@@ -38,19 +25,13 @@ _MISS_PROB_THRESHOLD = 0.20
 
 
 class ShuffleRefreshMixin:
-    """The Pilot-side closed-form half of the Shuffle-Refresh doctrine (mixed into `Pilot`). No new
-    value model — `_refresh_probable_miss` reuses Fetch's `_grab_value_of`. Reads shared Pilot
-    helpers + the per-decision `Board`. (`_deck_holds_a_need`/`_has_shuffle_refresh` DELETED with the
-    `dont-refresh-for-nothing` rung at the 2026-07-03 A/B — see the HYPOTHESES note.)"""
+    """The Pilot-side closed-form half of the Shuffle-Refresh doctrine (mixed into `Pilot`). No new value
+    model — `_refresh_probable_miss` reuses Fetch's `_grab_value_of`."""
 
     def _refresh_probable_miss(self, option: dict, cid: int | None, tags: list, board, obs: dict,
                                plan) -> bool:
-        """POST-ANCHOR probabilistic pull-EV (ADR-0024 amendment): True iff this `shuffle_hand` PLAY's
-        N-card draw PROBABLY misses every needed card — hypergeometric P(≥1 need in N) below
-        `_MISS_PROB_THRESHOLD` over the shuffle-GROWN pool (deck + returned hand − the played card;
-        returned dregs dilute, they never add needs — a held card is by definition not lacking).
-        K = 0 (a provably-spent deck) gives P = 0 and fires. Requires the tracker anchor
-        (`deck_known_counts`) and a verified draw-count (`refresh.refresh_branches`); silent otherwise."""
+        """POST-ANCHOR probabilistic pull-EV (ADR-0024 amendment): True iff this PLAY's draw PROBABLY misses
+        every needed card, over the shuffle-GROWN pool. Silent without the tracker anchor or a draw-count."""
         if option.get("type") != _PLAY or "shuffle_hand" not in tags:
             return False
         counts = board.deck_known_counts
@@ -92,23 +73,8 @@ HYPOTHESES = [
         and c.board.reusable_energy_in_hand and not c.board.energy_attached
         and c.board.energy_placeable,
         weight=-60, status="testing"),
-    # `hold-wincon-dont-shuffle` (−25), `hold-line-piece-dont-shuffle` (−25) and
-    # `hold-wincon-with-base-dont-shuffle` (−15) RETIRED 2026-07-18 (ADR-0065): they were the flat
-    # SHED's hand-QUALITY proxy — a fixed penalty for holding a specific good card that the flat
-    # `_REFRESH_SHED × cards-lost` couldn't see. The SHED is GRADED (`pilot._refresh_shed_keepcost`;
-    # since ADR-0101 the v2 assignment SET marginal over the whole hand, not a per-copy sum), so a held
-    # wincon/line-piece is priced by what the board would actually lose — the guards fold into that one currency (the
-    # currency-zone rule: replace the family, never bolt on beside it). `hold-successor-when-doomed`
-    # (−35) RETIRED 2026-07-19 — the LAST flat refresh guard: its `active_doomed` premise is now the
-    # PRESSURE GATE (`gate_library.closing_gate_reaccess` via `planner._gate_closing`, the Round-8 §3
-    # closing-edge spike): under doom the held successor / clutch answers charge FULL role worth in
-    # the graded SHED (re-access is not bankable against the doom deadline), so the fold is a
-    # parameter of the one equation, not a rung. Anchor ep83037962 f49 re-audited (the substance pin
-    # + the synthetic pair in test_blunder_20260701.py).
-    # `dont-refresh-for-nothing` (−40, the sound deck_holds_a_need veto) was built THEN DELETED at the
-    # 2026-07-03 A/B (43%/47% regressions): grab-rung "needs" under-count refresh VALUE for a deck
-    # whose engine is the refresh itself, and the veto fired on that false premise all game. The
-    # post-anchor rung below owns the whole deck side instead (its K=0 case covers the spent deck).
+    # Four flat hold-guards RETIRED (ADR-0065, ADR-0101) — the GRADED SHED prices them. `dont-refresh-for-
+    # nothing` (−40) was built THEN DELETED at the 2026-07-03 A/B; the rung below owns the whole deck side.
     Hypothesis(
         id="dont-refresh-into-a-probable-miss",
         rationale="Layer B's deck-side veto (ADR-0024 amendment), POST-ANCHOR only: the N-card draw "
@@ -122,7 +88,6 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "shuffle_hand" in c.tags
         and c.refresh_probable_miss,
         weight=-25, status="testing"),
-    # `refresh-when-hand-is-dead` (+8) RETIRED 2026-07-03 (ADR-0024 amendment): post-refutation the
-    # +20 `dig-before-commit` endorsement plays a dead-hand refresh anyway (nothing else is endorsed),
-    # so the rung and its full-menu `hand_is_dead` scan added compute and test surface, no behavior.
+    # `refresh-when-hand-is-dead` (+8) RETIRED (ADR-0024 amendment): `dig-before-commit` plays a
+    # dead-hand refresh anyway, so the rung and its full-menu scan added compute, no behavior.
 ]

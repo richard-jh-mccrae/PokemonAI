@@ -1,49 +1,18 @@
 """Snipe Relevance sweep — the per-leg DIAGNOSTIC for Issue #188 (ADR-0085). **Not a gate.**
 
-Replays every committed `DAMAGE(15)` correction through a FRESH shipped Pilot per frame (the
-the `needs_sweep` / `threat_sweep` discipline — stateful pilots, one per frame; both probes are
-gone with the shadows they read (Issue #261 item 2h), the discipline is not) and reports, per frame,
-what the shipped agent picks, whether that satisfies the corpus ruling, and — under `--legs` — the
-`snipe_relevance` term breakdown that produced it. The breakdown is the reason this file still
-exists: it is the diagnosis `decider_lab.py` deliberately does not duplicate.
+Replays every committed `DAMAGE(15)` correction through a FRESH shipped Pilot per frame and reports
+what the agent picks, whether it satisfies the corpus ruling, and — under `--legs` — the
+`snipe_relevance` term breakdown. That breakdown is the diagnosis `decider_lab.py` does not
+duplicate, and the reason this probe outlived the gate it used to be (ADR-0085 Amendment J).
 
-Two frames are RECORDED MISSES and must stay missing (ADR-0085 decision 7): `81905522-75` (the
-two-identical-Riolu transposition the design doc's own risk R3 says not to chase) and `82749168-38`
-(a `refuted` label). A run that "fixes" either has almost certainly overfitted — the scorer's shape
-was selected against these same 19 frames.
-
-Both are now read from the **Ruling Index** (`gates.ruling_index`, ADR-0088 decision 5) rather
-than a private ``RECORDED_MISSES`` dict that lived here. That constant was a *fourth store* for
-rulings, sitting in a probe where no gate could see it, with free-text values and no disposition
-vocabulary — and it is exactly why `81905522-75` was triaged *"never reviewed"* while `82749168-38`,
-carrying the same ADR-0085 ruling, was triaged as ruled. The frames themselves now come through
-`gates.keyed_corrections`, THE Corpus Reader, so this probe no longer carries the raw-JSONL walk
-(and its silent 40-record loss) that ADR-0087 named.
+Recorded misses come from the **Ruling Index** (ADR-0088 decision 5), never a private dict here, and
+the frames from `gates.keyed_corrections` (ADR-0087). A run that "fixes" a recorded miss has almost
+certainly overfitted — the scorer's shape was selected against these same frames.
 
     python tools/train/probes/snipe_decider_sweep.py            # the per-frame reading
     python tools/train/probes/snipe_decider_sweep.py --legs     # ...plus the per-leg breakdown
 
 Offline and read-only. Always exits 0: it reports, it does not gate.
-
-## Why the OFF arm is GONE (ADR-0085 Amendment J, 2026-07-30)
-
-This file used to read every frame TWICE — once with `snipe_relevance` forced OFF, once ON — and
-classify the difference `FIX` / `REGRESSION` / `NEUTRAL`. ADR-0072 called that pairing the **Decision
-Gate**, and at the swap it was exactly right: OFF *was* the incumbent rung pile, so the diff measured
-the new equation against what it replaced.
-
-It stopped being right the moment that pile was DELETED, as tracker directive 1 requires. With the
-six additive target rungs gone, OFF is a near-empty scorer whose argmax falls to option index, so the
-comparison became "the equation versus nothing" and could only ever report FIX — measured at
-**12 FIX, 0 REGRESSION**. Amendment I replaced the gate (it is now
-`tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`, which diffs against a
-RECORDED capture) and left the arm here as a known-dead limb. Amendment J removes it, because a
-number that cannot come out any other way is not evidence, and leaving it printed invites someone to
-read `12 FIX` as merit.
-
-What is left is the ONE reading that means something: the shipped agent, against the human. The
-switch is no longer forced in either direction — `common/runtime.py` is the single deployment
-PROFILE (`snipe_relevance: True`, armed 2026-07-30), so this reads what actually ships.
 """
 from __future__ import annotations
 
@@ -55,8 +24,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-# One predicate and one corpus, shared with the gate — this probe and the Decision Gate must not form
-# two ideas of what a record is, which is the whole of ADR-0087.
+# One predicate and one corpus, shared with the gate: two ideas of what a record is is ADR-0087.
 from train.gates import (keyed_corrections, ruling_index,  # noqa: E402
                          satisfies_human, voided_frames)
 
@@ -64,11 +32,8 @@ DAMAGE = 15
 
 
 def _frames():
-    """Every replayable `DAMAGE(15)` Correction, paired with its **Frame Key**.
-
-    `gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1). This used to be a private
-    raw-JSONL glob with a hand-built ``<ep>-<frame>`` key, which is short the same 40 records every
-    other raw reader is and cannot join the **Ruling Index** at all."""
+    """Through `gates.keyed_corrections`, THE Corpus Reader (ADR-0087 decision 1): a private key
+    cannot join the Ruling Index at all."""
     def keep(c):
         return (bool(c.obs and c.agent)
                 and ((c.obs or {}).get("select") or {}).get("context") == DAMAGE)
@@ -85,9 +50,8 @@ def _tune():
 
 
 def _decide(tune, rec):
-    """A FRESH pilot per frame — the Pilot is stateful (deck tracker, per-decision caches), so a
-    reused one leaks a previous frame's board. The kill-switch is not touched: `common/runtime.py`
-    resolves the shipped PROFILE, and reading anything else would report an agent nobody runs."""
+    """A FRESH pilot per frame — the Pilot is stateful, so a reused one leaks the previous frame's
+    board. The kill-switch is untouched: anything but the shipped PROFILE reports an agent nobody runs."""
     pilot = tune._build_pilot(rec.agent)[0]
     try:
         return pilot.explain(rec.obs).chosen, None

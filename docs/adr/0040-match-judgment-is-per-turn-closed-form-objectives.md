@@ -6,13 +6,12 @@ hysteretic phases + the 24-site gate-ban migration (lint-guarded), and the γ-co
 attacker overlay; switches `objectives_race`/`objectives_path`/`objectives_phases` **default ON**
 (joint A/B 50%, CI 48–53, Battle #57; post-overlay consumer A/B 52%, CI 50–54, Battle #59; 0
 crashes throughout). Build
-record: [docs/architecture/tier-3-match-objectives.md](../architecture/tier-3-match-objectives.md)
-(~75%) and [tier-4-opponent-model.md](../architecture/tier-4-opponent-model.md) (the overlay).
+record: [docs/architecture/tiers.md](../architecture/tiers.md) (T3, and T4 for the overlay).
 Terms added to [src/common/CONTEXT.md](../../src/common/CONTEXT.md): *Prize Path*, *Path Denial*,
 *KO Race*. **Partially reverses** the prescription in
-[deferred-multi-turn-criticals.md](../todo/deferred-multi-turn-criticals.md) ("do not bolt
+a since-deleted deferred-criticals note ("do not bolt
 multi-turn onto the closed-form Planner; it belongs behind the engine-search escalation + the
-value-model leaf-eval") — that doc carries a correction note pointing here.
+value-model leaf-eval").
 
 **Context.** The Pilot had no model of the prize race: which KOs advance whose win, which of my
 bodies should absorb the next KO, whether to spend turns denying rather than racing. The fragments
@@ -62,7 +61,7 @@ re-derived every turn, never a lock:
    floor only → structurally no regression.
 6. **Scope boundary**: exact arithmetic under the standing-board assumption. Boards where opponent
    choice dominates (retreat/heal/gust webs) belong to the narrowly-triggered engine-tree
-   escalation ([tier-6](../architecture/tier-6-escalation-search.md)); the objectives themselves
+   escalation (Tier 6, deleted from the codebase 2026-07-17 (ADR-0064 decision 6)); the objectives themselves
    never lock a multi-turn claim.
 
 **Rejected.**
@@ -90,7 +89,7 @@ re-derived every turn, never a lock:
 **Consequences.** `choose_plan` is rewritten as a derived function (Score-Diff-gated where neutral).
 The value model's feature vector becomes these primitives (path feasibilities, race deltas, denial
 margin — ADR-0007's open "feature encoding" question resolved by architecture;
-[tier-5](../architecture/tier-5-value-model.md)). The trace prints both live cheapest paths + the
+[T5](../architecture/tiers.md)). The trace prints both live cheapest paths + the
 race delta every turn. `a21472`'s definition-of-done moves here (a REQ gate through the real
 Pilot); `b4649` stays the covered exemplar — mine a fresh failing example before building denial
 beyond the objective terms.

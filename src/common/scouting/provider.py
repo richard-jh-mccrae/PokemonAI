@@ -1,19 +1,12 @@
-"""Card-stat providers (see docs/scouting.md).
-
-The Scout resolves opponent card ids to stats through a provider, so recognition stays
-decoupled from the engine: runtime uses ``EngineCardStatProvider``; tests inject
-``DictCardStatProvider`` (lib-free). ``.get(card_id)`` returns a ``CardStat`` or None.
-
-This module owns the typed records (``CardStat`` / ``AttackStat``), their builders, and
-the two adapters. The text->facts layer lives in ``card_text``; the name-keyed indexes in
-``forward_index`` (ADR-0054). Every historical name stays importable from here.
-"""
+"""Card-stat providers (docs/scouting.md): the Scout resolves opponent card ids to stats through
+one, so recognition stays decoupled from the engine. Runtime uses ``EngineCardStatProvider``, tests
+inject ``DictCardStatProvider``. This module owns the typed records and the adapters; text->facts
+lives in ``card_text`` and the name-keyed indexes in ``forward_index`` (ADR-0054)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Re-exports (import stability, ADR-0054): tests and tools import the parser battery and
-# the private builders through this module — keep every name bound here.
+# Re-exports (ADR-0054): tests and tools import these through this module — keep every name bound.
 from .card_text import (  # noqa: F401
     _parse_tool_attack_cost_reduction,
     _parse_tool_holder_family,
@@ -48,22 +41,8 @@ _ITEM, _TOOL, _SUPPORTER, _STADIUM, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 4,
 
 
 def stage_from_card(c) -> str | None:
-    """The card's printed evolution stage as the CANONICAL string — the ONE derivation (Issue #408).
-
-    ``"basic"`` / ``"stage1"`` / ``"stage2"``, or None for a card that is not a Pokémon body. The
-    vocabulary is the ENGINE's own, because the answer is: ``CardData.basic`` / ``.stage1`` /
-    ``.stage2`` are three booleans the engine sets, and this is the only place that folds them into
-    the one field readers ask for. A second spelling of *"what stage is this?"* is the drift ADR-0087
-    charges for, so `tools/meta_tracker/dump_cards.stage_of` DELEGATES here rather than repeating it.
-
-    Not derived from ``evolvesFrom``: that is exact on today's pool but it is a second READING —
-    inferring a printed stage from an evolution name — where the booleans are the engine's answer.
-
-    The five Antique Fossils (1099/1136/1138/1150/1151) are ``cardType`` ITEM yet report
-    ``basic=True``, and correctly so — *"Play this card as if it were a 60-HP Basic {C} Pokémon."*
-    They are the reason the partition that holds is ``hp > 0`` (``CardStat.is_pokemon``) rather than
-    ``cardType == POKEMON``: over all 1267 cards, every body with HP has a stage and nothing else does.
-    """
+    """The card's printed evolution stage as the CANONICAL string — the ONE derivation (Issue #408),
+    folding the engine's three ``CardData`` booleans. None for a card that is not a Pokémon body."""
     if getattr(c, "basic", False):
         return "basic"
     if getattr(c, "stage1", False):
@@ -80,120 +59,45 @@ class CardStat:
     hp: int = 0
     ex: bool = False
     megaEx: bool = False
-    aceSpec: bool = False              # ACE SPEC — one/deck, irreplaceable; CardStat feeds
-                                       # 'protect the ACE SPEC' rules (e.g. Hero's Cape)
-    hasAbility: bool = False           # Pokémon w/ Ability (CardData.skills, hp>0). Salvatore's fetch
-                                       # clause excludes ability-bearing Evolutions (`no_ability`, card_effects.json)
-    hpBonus: int = 0                   # flat HP a Tool grants holder (e.g. Hero's Cape +100),
-                                       # parsed from skill text — engine has no structured field.
-                                       # Primitive behind the general +HP-tool breakpoint model.
-    retreatReduction: int = 0          # Energy a Tool shaves off its holder's Retreat Cost (Air Balloon:
-                                       # {C}{C} -> 2), parsed from skill text. The SECOND Tool class the
-                                       # ADR-0028 doctrine never modelled: worthless on a body that will
-                                       # never retreat, so it belongs on the Active (ml f87). 0 otherwise.
-                                       # SIGNED (Issue #306): NEGATIVE for a Tool that makes retreating
-                                       # DEARER (Gravity Gemstone "{C} more" -> -1). One quantity, one
-                                       # field — two fields for one quantity is how the sign gets
-                                       # dropped. Consumers must not assume non-negative.
-    attackCostReduction: int = 0       # Energy a Tool shaves off its holder's ATTACK costs (Hop's
-                                       # Choice Band "cost {C} less" -> 1) — the pool's only such
-                                       # grant, and the engine has no field for it at all. Gated by
-                                       # `holderNameFamily` like every other modifier this Tool grants.
-                                       # NO LIVE CONSUMER YET, deliberately (Issue #306): affordability
-                                       # is asked ~20 times as `_attack_cost(aid) <= energy`, all
-                                       # ATTACK-keyed, and a body-keyed discount cannot be threaded
-                                       # through them without a redesign this issue does not carry —
-                                       # nor safely, since a wrong credit manufactures a KO_SCORE-class
-                                       # phantom. It is a T4 `state_value` input (Issue #263), which
-                                       # is what the whole POC-A2.1 track produces; the census report
-                                       # names it as parsed-not-priced so it can't read as covered.
-    holderNameFamily: str | None = None  # the OWNER family the holder must belong to for this Tool's
-                                       # static modifiers (hpBonus / damageBoost / attackCostReduction)
-                                       # to apply — "Cynthia's" (Power Weight), "Hop's" (Choice Band).
-                                       # rules.md §9: the owner prefix IS part of the printed name, so
-                                       # this is an exact membership test over a KNOWN holder, not a
-                                       # guess. None = unconditional. Test it with `applies_to_holder`.
-    holderNoRuleBox: bool = False      # this Tool's static modifiers reach ONLY a holder with no
-                                       # Rule Box — Brave Bangle (1175), the pool's one such card
-                                       # (Issue #345). The SECOND holder gate, and unlike the family
-                                       # above it is a property of the holder's own rules text, not
-                                       # of its name, which is why it needed a field of its own. Over
-                                       # this pool the predicate is EXACT rather than approximate —
-                                       # "has a Rule Box" and `is_ex_body` are the same 151 bodies,
-                                       # swept in tests/scouting/test_tool_holder_facts.py, which
-                                       # fails the day a Radiant / V / VSTAR card arrives. Never read
-                                       # this field directly; ask `applies_to_holder`.
-    retreatFreeAtHp: int = 0           # remaining HP at or below which an attached Tool zeroes the
-                                       # holder's Retreat Cost outright (Rescue Board: 30) — the
-                                       # CONDITIONAL leg the flat read above could not carry
-                                       # (ADR-0100 §8). 0 = no such clause.
-    retreatFreeGrant: str | None = None  # a BOARD-LEVEL Ability granting no Retreat Cost, as the
-                                       # predicate it scopes to: "basic" (Latias ex's Skyliner —
-                                       # `slowking` runs it), "metal_attached" (Archaludon). The
-                                       # granting body is not the one retreating, so no per-card
-                                       # field could hold it and the engine supplies nothing
-                                       # (`retreatCost` is CardData-only and static). None = no
-                                       # readable grant, and the caller then charges the PRINTED
-                                       # cost — fail-CLOSED, erring toward not retreating.
-    recoil: int = 0                    # self-damage of card's HIGHEST-dmg attack (Hariyama Wild Press 210 -> 70),
-                                       # parsed from text (no engine field). Feeds "does my nuke leave a free KO?"
-    handSizeDamage: int = 0            # per-card dmg of "for each card in hand" atk (Powerful Hand: 2ctr=20);
-                                       # printed damage=0, only way forward-doom/Posture sees threat. ep82754875
-    benchSnipeDamage: int = 0          # unconditional bench-snipe dmg to ONE opp Benched (Jetting Blow->50);
-                                       # Tool survival-turns math reads for benched carrier (ADR-0028)
+    aceSpec: bool = False              # one per deck, irreplaceable
+    hasAbility: bool = False
+    hpBonus: int = 0                   # flat HP a Tool grants its holder (parsed; no engine field)
+    retreatReduction: int = 0          # SIGNED: NEGATIVE when a Tool makes retreating DEARER
+    attackCostReduction: int = 0       # NO LIVE CONSUMER YET, deliberately: affordability is
+                                       # ATTACK-keyed, and a wrong credit manufactures a phantom KO
+    holderNameFamily: str | None = None  # None = unconditional. Ask `applies_to_holder`, not this
+    holderNoRuleBox: bool = False      # Brave Bangle only. Ask `applies_to_holder`, not this
+    retreatFreeAtHp: int = 0           # the CONDITIONAL leg beside `retreatReduction` (ADR-0100 §8)
+    retreatFreeGrant: str | None = None  # a BOARD-LEVEL Ability, as the predicate it scopes to
+    recoil: int = 0                    # self-damage of the card's HIGHEST-damage attack
+    handSizeDamage: int = 0            # printed damage is 0, so this is the only view of the threat
+    benchSnipeDamage: int = 0
     maxDamage: int = 0
-    maxDamageCost: int | None = None   # energy count of HIGHEST-dmg attack (None if unknown); mirror of
-                                       # minAttackCost. "fully online" threshold behind `build-active-wincon`.
-    minAttackCost: int | None = None   # energy count of card's cheapest attack (None if unknown)
-    minCostDamage: int = 0             # damage of cheapest-cost attack (best damage among
-                                       # lowest-cost attacks) — for "does cheap attack KO" gating
-                                       # (e.g. Jetting Blow 120 at 1 energy, not Nebula Beam 210 at CCC)
-    attacks: tuple = ()                # (attackId, …) — lethal-attach lookahead reads cost/dmg to ask
-                                       # "would attaching this Energy unlock a KO?" (Ignition->CCC->Nebula Beam)
-    abilityEnergyTypes: tuple = ()     # EnergyType codes the card's Ability needs ATTACHED as fuel
-                                       # ("if this Pokémon has any {D} Energy attached" — Munkidori
-                                       # Adrena-Brain -> (7,)). The energy-routing complement to an
-                                       # attack cost: a colour a body needs solely for its Ability
+    maxDamageCost: int | None = None
+    minAttackCost: int | None = None
+    minCostDamage: int = 0             # best damage among the lowest-cost attacks
+    attacks: tuple = ()                # (attackId, …)
+    abilityEnergyTypes: tuple = ()     # a colour a body needs for its Ability, for no attack cost
     weakness: int | None = None
     resistance: int | None = None
     energyType: int | None = None
-    retreatCost: int = 0               # Energy to retreat (engine CardData.retreatCost) —
-                                       # defensive stall-gust strands an energyless high-retreat body
-    cardType: int | None = None        # CardType enum (ITEM=1, TOOL=2, SUPPORTER=3…) — distinguishes
-                                       # Supporter gust (costs the slot) from free Item gust. ADR-0022 #12
-    stage: str | None = None           # printed evolution stage, CANONICAL vocabulary (`stage_from_card`):
-                                       # "basic" | "stage1" | "stage2", None for a non-body. Folds the
-                                       # engine's three CardData booleans into the one field the FETCH
-                                       # closure's `stage1`/`stage2` classes and the Skyliner grant read.
-                                       # Written ONLY by `_build_cache` — a fixture spelling it any other
-                                       # way is claiming a value production cannot emit (Issue #408).
-    stage2: bool = False               # engine CardData.stage2 — a Stage 2 Pokémon (Gravity Mountain's
-                                       # −30 HP hits exactly these; the opp-board stadium-tech read)
+    retreatCost: int = 0
+    cardType: int | None = None        # CardType enum (ITEM=1, TOOL=2, SUPPORTER=3…)
+    stage: str | None = None           # CANONICAL vocabulary, written ONLY by `_build_cache`
+    stage2: bool = False
     evolvesFrom: str | None = None
-    tera: bool = False                 # engine CardData.tera: takes NO damage from attacks while
-                                       # BENCHED (32 in pool) — bench-snipe rider can never KO it
-    # Damage-boost Trainer facts (the OHKO-line model's card tier), parsed like hpBonus. Pool 4:
-    # Power Pro (Item {F}+30, stacks), Max Belt (Tool +50-vs-ex), Black Belt's (+40-vs-ex); Kieran
-    # ("Choose 1" multi-mode) fail-closed.
-    damageBoost: int = 0                    # flat "+N to opp Active" before W/R: Item/Supporter = the
-                                            # turn it's played; Tool = while attached to the attacker
-    damageBoostType: int | None = None      # attacker EnergyType gate ("your {F} Pokémon" -> 6); None=any
+    tera: bool = False                 # takes NO damage from attacks while BENCHED
+    # A multi-mode "Choose 1" boost card is fail-closed.
+    damageBoost: int = 0                    # flat "+N to opp Active" BEFORE W/R
+    damageBoostType: int | None = None      # attacker EnergyType gate; None = any
     damageBoostVsEx: bool = False           # defender "{ex}" gate — includes Mega ex (rulebook.txt:337)
-    # Defender-side dmg facts (ADR-0032 G1), from Ability text — parametric fields the boolean
-    # prevent_ex_damage tag can't carry (Sylveon 330 shows the tag can silently miss).
-    preventsDamageFrom: str | None = None   # "ex" (Crustle/Sylveon) | "basic_ex" (Farigiraf ex) —
-                                            # zeroes matching attacker's damage unless attack
-                                            # ignoresEffects (Nebula Beam)
-    preventsDamageAtLeast: int = 0          # threshold prevention (Drednaw: damage >=200 -> 0); 0=off
-    damageReduction: int = 0                # flat always-on "takes N less damage" AFTER W/R
-                                            # (Mudsdale/Bouffalant ex/Mega Diancie ex -30)
-    damageReductionTypes: tuple | None = None  # attacker EnergyTypes reduction scoped to
-                                            # (Dewgong: {R}/{W} -> (2, 3)); None = all attackers
-    synthetic: bool = False             # test-only marker: this row is an arbitrary body using a
-                                       # convenient real id, not a source claim about that card.
+    preventsDamageFrom: str | None = None   # "ex" | "basic_ex"; pierced by an ignoresEffects attack
+    preventsDamageAtLeast: int = 0          # threshold prevention (damage >= N -> 0); 0 = off
+    damageReduction: int = 0                # flat always-on, AFTER W/R
+    damageReductionTypes: tuple | None = None  # None = all attackers
+    synthetic: bool = False             # test-only: an arbitrary body on a convenient real id
 
-    # --- single-card interpretation (ADR-0056): the questions consumers used to re-derive
-    # from raw fields. Ports of the retired call-site idioms — byte-faithful, not redesigns.
+    # --- single-card interpretation (ADR-0056): byte-faithful ports of retired call-site idioms.
 
     @property
     def is_ex_body(self) -> bool:
@@ -226,9 +130,7 @@ class CardStat:
 
     @property
     def is_stadium(self) -> bool:
-        """A Stadium card. The last `CardType` with no predicate of its own — added for the FETCH
-        clause target class `stadium` (Secret Box, Colress's Tenacity), so the closure asks the
-        question through `CardStat` like every other class rather than re-spelling the enum code."""
+        """A Stadium card — so the FETCH closure asks through ``CardStat`` like every other class."""
         return self.cardType == _STADIUM
 
     @property
@@ -237,55 +139,28 @@ class CardStat:
 
     @property
     def is_special_energy(self) -> bool:
-        """A Special Energy — one whose PROVISION is card text rather than one unit of its own
-        colour (Ignition Energy provides {C}{C}{C} on an Evolution). The Attach Budget reads the
-        amount off the `provides:N` Function Tag; ``energyType`` still gives the colour."""
+        """PROVISION is card text, not one unit of its own colour: read the amount off `provides:N`."""
         return self.cardType == _SPECIAL_ENERGY
 
     @property
     def is_energy(self) -> bool:
-        """Any Energy card (Basic or Special)."""
         return self.cardType in (_BASIC_ENERGY, _SPECIAL_ENERGY)
 
     @property
     def is_typed_basic_energy(self) -> bool:
-        """A Basic Energy with a concrete type — the attach-type family's unit."""
         return self.cardType == _BASIC_ENERGY and self.energyType is not None
 
     def applies_to_holder(self, holder: "CardStat | None") -> bool:
-        """Do THIS Tool's static modifiers (``hpBonus`` / ``damageBoost`` / ``attackCostReduction``)
-        reach ``holder`` — the body it is (or would be) attached to?
-
-        The one place EVERY holder gate is evaluated, so a consumer that reads any gated amount
-        reads its conditions through the same test (Issue #306). True for every unrestricted Tool, so
-        an ungated consumer's behaviour is unchanged. An unknown holder against a real gate is
-        False: fail-CLOSED, never credit a body we cannot identify.
-
-        Two gates today, ANDed, and adding the second (Issue #345) is why they are evaluated here
-        rather than at the call sites. There are FOUR consumers — ``state_model._SideBase
-        .damage_boosts``, ``Pilot._boost_lethal_tactical``, ``doctrine_tool._tool_reaches`` (the
-        deploy picker) and ``planner._gamble_pump_ko_classes``'s ``_crosses`` — and none of them was
-        touched when the second gate landed. A gate added at three of them is a gate the fourth
-        silently ignores.
-
-        * ``holderNameFamily`` — the owner NAME family ("the Hop's Pokémon this card is attached to").
-        * ``holderNoRuleBox`` — the holder must have no Rule Box (Brave Bangle). Over this pool that
-          is exactly ``is_ex_body``: `docs/rulebook.txt` names Pokémon ex (L337, Mega ex included),
-          Radiant (L364) and V / V-UNION (L391-392) as the Rule-Box categories, and a sweep of all
-          1061 bodies finds only the first — pinned, so the day that stops being true the test fails
-          instead of the boost quietly over-crediting.
-        """
-        # `getattr` with a True default rather than `holder.is_ex_body`, to match the family leg's
-        # defensive read one line down: a holder we cannot interrogate must fail the SAME way on
-        # both gates, and for a benefit that way is "has a Rule Box" — refuse.
+        """Do THIS Tool's static modifiers reach ``holder``? The ONE place both holder gates are
+        evaluated, ANDed — a gate added at three of the four consumers is one the fourth ignores."""
+        # `getattr` with a True default rather than `holder.is_ex_body`: a holder we cannot
+        # interrogate must fail BOTH gates the same way, and for a benefit that way is refuse.
         if self.holderNoRuleBox and (holder is None or getattr(holder, "is_ex_body", True)):
             return False
         return name_in_family(getattr(holder, "name", None), self.holderNameFamily)
 
     def can_pay_cheapest(self, energy: int) -> bool:
-        """Attached-Energy count covers the cheapest attack — the fail-CLOSED affordability
-        idiom (``(minAttackCost or 99) <= energy``): unknown (and 0-cost, pinned quirk) costs
-        read unaffordable, so a my-side claim is never assumed."""
+        """fail-CLOSED (``(minAttackCost or 99) <= energy``): an unknown cost reads unaffordable."""
         return (self.minAttackCost or 99) <= energy
 
 
@@ -294,7 +169,7 @@ class DictCardStatProvider:
 
     def __init__(self, stats: dict[int, CardStat], attacks: dict[int, "AttackStat"] | None = None):
         self._stats = stats
-        self._attacks = attacks or {}       # attackId -> AttackStat (the attack-record half, ADR-0056)
+        self._attacks = attacks or {}       # attackId -> AttackStat
         self._forward: _ForwardIndex | None = None
         self._name_ids: dict[str, frozenset[int]] | None = None
 
@@ -302,29 +177,25 @@ class DictCardStatProvider:
         return self._stats.get(card_id)
 
     def attack(self, attack_id) -> "AttackStat | None":
-        """The per-attack effect record (ADR-0032 *Attack Effect*), or None for an unknown attack."""
         return self._attacks.get(attack_id)
 
     def warm(self) -> None:
-        """Interface parity with the engine adapter's pregame-window build hook — nothing to build."""
+        """Interface parity with the engine adapter's build hook — nothing to build."""
 
     def ids_for_name(self, name: str) -> frozenset[int]:
-        """Card ids printed under ``name`` — the reverse of ``CardStat.name`` (names aren't unique).
-        The Matchup Brief consumer's name->id bridge (ADR-0027, ``briefs.resolve_brief_cards``);
-        empty for an unknown name."""
+        """Card ids printed under ``name`` (names aren't unique); empty for an unknown name. The
+        Matchup Brief consumer's name->id bridge (ADR-0027)."""
         if self._name_ids is None:
             self._name_ids = _name_index(self._stats)
         return self._name_ids.get(name, frozenset())
 
     def forward_max_damage(self, card_id: int) -> int:
-        """Max damage the card's evolution line eventually reaches (see ``_ForwardIndex``)."""
         if self._forward is None:
             self._forward = _build_forward_index(self._stats)
         st = self._stats.get(card_id)
         return self._forward.max_forward_damage(st.name) if st else 0
 
     def forward_card_ids(self, card_id: int) -> frozenset[int]:
-        """Card ids the card's evolution line evolves INTO (see ``_ForwardIndex.forward_card_ids``)."""
         if self._forward is None:
             self._forward = _build_forward_index(self._stats)
         st = self._stats.get(card_id)
@@ -333,112 +204,59 @@ class DictCardStatProvider:
 
 @dataclass
 class AttackStat:
-    """Per-attack effect record (ADR-0032 *Attack Effect*): the attack-keyed tier beside the
-    card-keyed ``CardStat``. Folds the printed damage/cost with the rider parsers and the
-    ignore-family flags so the damage oracle reads ONE record per attack. Parsed fields are
-    seeds — the engine audit verifies and corrects them through ``build_attack_stats`` overrides."""
+    """Per-attack effect record (ADR-0032): the attack-keyed tier beside the card-keyed ``CardStat``.
+    Parsed fields are SEEDS — the engine audit corrects them through ``build_attack_stats``."""
     attackId: int
-    name: str = ""                     # the PRINTED attack name. Card knowledge like every other
-                                       # field here, and load-bearing for exactly one family: the
-                                       # filtered count "for each of your Pokémon in play that has
-                                       # the Round attack" (`atk_in_play_with_attack`) names an
-                                       # attack rather than a card, so the context cannot describe a
-                                       # body's attacks without it (Issue #361)
+    name: str = ""                     # PRINTED — the filtered count names an ATTACK, not a card
     damage: int = 0
-    cost: int = 0                      # energy count (efficiency tiebreaks, affordability)
-    energyTypes: tuple = ()            # the cost's per-slot Energy TYPE codes (EnergyType enum; 0 =
-                                       # colorless/any) — e.g. Phantom Dive [Fire, Psychic]. Backs the
-                                       # type-aware attach (attach the type the wincon still LACKS, not a redundant one)
+    cost: int = 0                      # energy count
+    energyTypes: tuple = ()            # per-slot EnergyType codes; 0 = colorless/any
     recoil: int = 0                    # unconditional self-damage (ADR-0022 #2)
     benchSnipe: int = 0                # unconditional opp-bench rider (ADR-0022 #14); ignores W/R
-    benchSpread: int = 0               # distributable opp-bench counter spread total (Phantom Dive
-                                       # "put N counters in any way you like" -> N*10); ignores W/R.
-                                       # The placement policy distributes it; count = benchSpread // 10
+    benchSpread: int = 0               # spread TOTAL, so the counter count is benchSpread // 10
     ignoresWeakness: bool = False
     ignoresResistance: bool = False
-    ignoresEffects: bool = False       # pierces defender-side effects incl. damage-prevention
-                                       # Abilities (Crustle) — Nebula-Beam-vs-Crustle fact
-    damageMin: int | None = None       # sound FLOOR of conditional/coin attack ("If tails, this
-                                       # attack does nothing" -> 0); None = deterministic.
-    damageMax: int | None = None       # Lethal Solver reads floor (never lock phantom win),
-                                       # Incoming reads ceiling (worst case). Text-seeded
-                                       # (parse_attack_damage_bounds), audit-corrected (coin fork).
-    scaleVar: str | None = None        # visible-state scaler (ADR-0032 Damage Formula): damage =
-                                       # printed + scalePerUnit x count(scaleVar), attacker-relative
-    scalePerUnit: int = 0              # vars: atk/def_hand, atk/def_active_energy, atk/def_bench,
-                                       # atk_discard_energy — EXACT (all visible incl. both discards)
-    scaleEnergyType: int | None = None  # atk_discard_energy's type filter (Riptide Basic {W} -> 3);
-                                       # None = count EVERY Energy card in attacker's discard
-    scaleFilter: tuple | None = None   # the FILTERED-COUNT family's predicate ARGUMENT (ADR-0115,
-                                       # Issue #361): the name substrings `both_in_play_named` looks
-                                       # for ("Koffing"/"Weezing"), the attack names
-                                       # `atk_in_play_with_attack` looks for ("Round"). The scaler
-                                       # names the FAMILY and this carries what it filters ON, so one
-                                       # context key serves every attack in the family — the same
-                                       # shape `scaleEnergyType` already gives `atk_discard_energy`.
-                                       # None/empty = no predicate, so the family claims NOTHING
-                                       # (counting every body would be a wild over-read)
-    hiddenPerUnit: int = 0             # HIDDEN-state scaler (deck-discard family: Hammer-lanche /
-                                       # Misty's Lapras / Ground Burn): damage += perUnit x units,
-    hiddenSample: int = 0              # units unknowable closed-form — "max" assumes every sampled card
-                                       # fuels (Incoming ceiling); "min"/"exact" 0 unless deck tracker has hidden_units
-    hiddenEnergyType: int | None = None  # deck facts + Basic-{X} filter -> oracle computes pigeonhole floor/EV
-    recoverN: int = 0                  # energy-accel rider ("Attach up to N Basic {X} from ZONE"):
-                                       # max cards attached (Aura Jab discard / Turbo Flare deck)
-    recoverEnergyType: int | None = None   # the rider's Basic-{X} filter (None = any Basic Energy)
-    recoverTarget: str | None = None   # scope "self"/"bench"/"any" — Tactical credits
-                                       # min(recoverN, matching zone fuel, recipient need) as development
-    recoverSource: str | None = None   # the rider's fuel zone: "discard" (visible pile — Aura Jab) or
-                                       # "deck" (whole-deck search — Turbo Flare); None = no rider.
-                                       # The fuel bound branches on this (`_recover_units`)
-    requiresBench: tuple | None = None  # attack does NOTHING unless ALL these names sit on attacker's
-                                       # Bench (Cosmic Beam/Lunatone, Guardian Burst/Uxie+Azelf;
-                                       # pool 2). Oracle zeroes exact/min on the live board; "max"
-                                       # keeps printed (Incoming: they can bench the partner first)
-    selfReturn: bool = False           # attack scoops its OWN Pokémon (+ attached) back to hand
-                                       # (Meowth ex Tuck Tail). The escape/KO-deny fact: a doomed
-                                       # multi-prize Active can bounce to deny the prize (Tactical _SELF_RETURN_ESCAPE)
-    # Transient next-turn grants (ADR-0033): what USING this attack grants for one turn — tracked
-    # match-scoped from ATTACK logs (common/transients.py), obs has no effect state.
-    nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn (Frost Barrier)
+    ignoresEffects: bool = False       # pierces defender-side effects incl. prevention Abilities
+    damageMin: int | None = None       # sound FLOOR; None = deterministic
+    damageMax: int | None = None       # the Lethal Solver reads the floor, Incoming the ceiling
+    scaleVar: str | None = None        # damage = printed + scalePerUnit x count(scaleVar),
+    scalePerUnit: int = 0              # attacker-relative and EXACT (every variable is visible)
+    scaleEnergyType: int | None = None  # None = count EVERY Energy card in the attacker's discard
+    scaleFilter: tuple | None = None   # the FILTERED-COUNT predicate ARGUMENT; None = the family
+                                       # claims NOTHING (ADR-0115)
+    hiddenPerUnit: int = 0             # HIDDEN-state deck-discard scaler: damage += perUnit x units
+    hiddenSample: int = 0              # units unknowable closed-form: "max" assumes every sampled
+                                       # card fuels, "min"/"exact" 0 without a deck-tracker read
+    hiddenEnergyType: int | None = None  # Basic-{X} filter
+    recoverN: int = 0                  # energy-accel rider: max cards attached
+    recoverEnergyType: int | None = None   # None = any Basic Energy
+    recoverTarget: str | None = None   # "self" / "bench" / "any"
+    recoverSource: str | None = None   # "discard" or "deck"; None = no rider
+    requiresBench: tuple | None = None  # ALL these names must be Benched; "max" keeps printed
+    selfReturn: bool = False           # scoops its OWN Pokémon back to hand, denying the prize
+    # Transient grants (ADR-0033), tracked match-scoped from ATTACK logs: an obs carries no effects.
+    nextTurnReduction: int = 0         # defender-side: "takes N less damage" next turn
     nextTurnPreventAll: bool = False   # defender-side: "prevent all damage done to this Pokémon"
     nextTurnSelfLock: bool = False     # attacker-side: "this Pokémon can't attack / use attacks"
     nextTurnSameAttackLock: bool = False   # attacker-side: "can't use <THIS attack>" next turn
     nextTurnSelfBonus: int = 0         # attacker-side: this Pokémon's attack does +N next turn
-    # NB the pool's 22 "Defending Pokémon can't retreat" attacks are deliberately NOT tracked: the
-    # engine ENFORCES the lock by omitting RETREAT from the locked side's menu (probed 2026-07-02,
-    # tests/sim/test_retreat_lock_engine.py), so a menu-driven this-turn Pilot gains nothing from a
-    # field — re-add a parse only alongside a real consumer (ADR-0033).
+    # NB "Defending Pokémon can't retreat" is deliberately NOT tracked: the engine ENFORCES the lock
+    # by omitting RETREAT from the menu, so re-add a parse only alongside a real consumer.
 
     @property
     def is_deterministic(self) -> bool:
-        """Damage is fixed once any ``requiresBench`` condition holds — no coin fork, no
-        visible/hidden scaling (``damageMax == damage`` with every scaling term zero). The
-        precondition for reading ``bound="exact"`` where ``bound="min"`` would be vacuously 0.
-        Port of ``Pilot._attack_is_deterministic`` (ADR-0056), comparison kept byte-faithful:
-        a record whose ``damageMax`` stays ``None`` does NOT read deterministic."""
+        """Byte-faithful: a record whose ``damageMax`` stays ``None`` does NOT read deterministic."""
         return bool(self.damageMax == self.damage and self.scaleVar is None
                     and not self.scalePerUnit and not self.hiddenPerUnit)
 
     @property
     def handSizeDamage(self) -> int:
-        """Per-card damage of a hand-size-scaling attack (Powerful Hand: 2 counters = 20), 0
-        otherwise — the threat the printed damage (0) hides.
-
-        DERIVED from the Damage Formula's scaling term rather than stored (Issue #213). It used
-        to be parsed by its own regex pair over the very sentence `_SCALE_FAMILIES` already
-        matches, so one card fact had two parsers that were free to disagree; and because a
-        stored field is fixed at parse time, an engine-fitted `atk_hand` override would have
-        moved the scaler while leaving this behind. As a property it cannot drift from the
-        scaler and it honours overrides for free.
-        """
+        """DERIVED from the scaling term, so it cannot drift from it and honours overrides free."""
         return self.scalePerUnit if self.scaleVar == "atk_hand" else 0
 
 
 def load_attack_overrides(path=None) -> dict:
-    """The engine-derived override table (``attack_overrides.json``, generated by the audit —
-    tools/sim/generate_attack_overrides.py) as ``{int attackId: {field: value}}`` for
-    ``build_attack_stats``. Fail-safe: missing/unreadable file -> {} (parsed seeds only)."""
+    """Fail-safe: a missing or unreadable file -> {}, i.e. parsed seeds only."""
     import json
     from pathlib import Path
     p = Path(path) if path is not None else Path(__file__).resolve().parents[1] / "attack_overrides.json"
@@ -450,16 +268,7 @@ def load_attack_overrides(path=None) -> dict:
 
 def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, AttackStat]:
     """Pure transform: engine ``Attack`` records → ``{attackId: AttackStat}`` (ADR-0032).
-
-    Args:
-        attacks: engine ``Attack`` records (``attackId``/``damage``/``energies``/``text``).
-        overrides: ``{attackId: {field: value}}`` hand-authored/audit-generated corrections,
-            applied AFTER parsing (an override always beats a parsed value). Unknown attack
-            ids are ignored — overrides never invent attacks.
-
-    Returns:
-        The attack-stat table. Lib-free (testable without the engine).
-    """
+    ``overrides`` apply AFTER parsing and always beat a parsed value; unknown ids are ignored."""
     table: dict[int, AttackStat] = {}
     for a in attacks:
         text = getattr(a, "text", "") or ""
@@ -477,9 +286,9 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
             if effect and effect[1]:    # counter-put: counters bypass W/R and prevention
                 printed = effect[0]
                 w = r = e = True
-            elif effect:                # free-target "does N damage to 1 of your opponent's Pokémon"
-                free_target_snipe = effect[0]   # (Cruel Arrow) — it can KO ANY opp Pokémon incl the Bench,
-                w = r = e = True                # so value it as a full-damage bench snipe (ignores W/R on bench)
+            elif effect:                # free-target: it can KO ANY opp Pokémon incl the Bench, so
+                free_target_snipe = effect[0]   # value it as a full-damage bench snipe
+                w = r = e = True
         if scaling and scaling[2]:      # counter-placer: counters aren't damage — no W/R, no
             w = r = e = True            # prevention (Powerful Hand lands through Crustle)
         table[a.attackId] = AttackStat(
@@ -521,10 +330,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
 
 
 def _build_cache(card_data, attacks) -> dict[int, CardStat]:
-    """Pure transform: engine card/attack records -> ``{cardId: CardStat}``.
-
-    Kept separate from the engine import so it is testable lib-free.
-    """
+    """Kept separate from the engine import so it is testable lib-free."""
     dmg: dict[int, int] = {}
     cost: dict[int, int] = {}
     recoil_by_aid: dict[int, int] = {}
@@ -534,8 +340,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         dmg.setdefault(a.attackId, a.damage)
         cost.setdefault(a.attackId, len(getattr(a, "energies", None) or []))
         recoil_by_aid.setdefault(a.attackId, parse_attack_recoil(getattr(a, "text", "") or ""))
-        # ONE parse of the sentence (Issue #213): the card-level roll-up reads the Damage
-        # Formula's scaling term, exactly as AttackStat.handSizeDamage does.
+        # ONE parse of the sentence (Issue #213): the roll-up reads the Damage Formula's own term.
         _scale = parse_attack_scaling(getattr(a, "text", "") or "")
         hand_size_by_aid.setdefault(a.attackId,
                                     _scale[1] if _scale and _scale[0] == "atk_hand" else 0)
@@ -547,12 +352,10 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         min_cost = min(costs) if costs else None
         cheap_dmg = (max((dmg.get(aid, 0) for aid in c.attacks if cost.get(aid) == min_cost),
                          default=0) if min_cost is not None else 0)
-        # cost of highest-damage attack (min cost among attacks tying for max damage —
-        # cheapest way to reach the big hit); None when no attack's cost known.
+        # the cheapest way to reach the big hit; None when no attack's cost is known.
         max_dmg_costs = [cost[aid] for aid in c.attacks if aid in cost and dmg.get(aid, 0) == max_dmg]
         max_dmg_cost = min(max_dmg_costs) if max_dmg_costs else None
-        # recoil of highest-damage attack (nuke most likely to self-KO): max over attacks
-        # tying for max damage. 0 when no attack has unconditional recoil.
+        # recoil of the highest-damage attack — the nuke most likely to self-KO.
         recoil = max((recoil_by_aid.get(aid, 0) for aid in c.attacks if dmg.get(aid, 0) == max_dmg),
                      default=0)
         prevents_from, prevents_at_least, dmg_reduction, reduction_types = parse_card_defense(c)
@@ -560,7 +363,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
             ex=bool(c.ex), megaEx=bool(c.megaEx), aceSpec=bool(getattr(c, "aceSpec", False)),
-            hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
+            hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),
             hpBonus=_parse_tool_hp_bonus(c),
             retreatReduction=_parse_tool_retreat_reduction(c),
             attackCostReduction=_parse_tool_attack_cost_reduction(c),
@@ -603,10 +406,7 @@ class EngineCardStatProvider:
         self._name_ids: dict[str, frozenset[int]] | None = None
 
     def _ensure_cache(self) -> None:
-        """Build the stat cache + attack-record table + forward index together, once. The single
-        build site so the three never diverge — ``get``, ``attack`` and ``forward_max_damage`` all
-        go through here. The attack table folds the shipped audit overrides (ADR-0032), so the
-        adapter — not each agent's main.py — owns the one attack-fact build (ADR-0056)."""
+        """The single build site for all three tables, so they never diverge (ADR-0056)."""
         if self._cache is None:
             from cg.api import all_attack, all_card_data  # runtime only
             attacks = all_attack()
@@ -615,8 +415,7 @@ class EngineCardStatProvider:
             self._forward = _build_forward_index(self._cache)
 
     def warm(self) -> None:
-        """Explicit pregame-window build (the agents call this at import, replacing their own
-        eager table builds) — just the lazy build, forced now. Idempotent."""
+        """Explicit pregame-window build — the lazy build, forced now. Idempotent."""
         self._ensure_cache()
 
     def get(self, card_id: int) -> CardStat | None:
@@ -624,25 +423,20 @@ class EngineCardStatProvider:
         return self._cache.get(card_id)
 
     def attack(self, attack_id) -> AttackStat | None:
-        """The per-attack effect record (ADR-0032 *Attack Effect*), audit-overridden; None for an
-        unknown attack id."""
         self._ensure_cache()
         return self._attack_stats.get(attack_id)
 
     def forward_max_damage(self, card_id: int) -> int:
-        """Max damage the card's evolution line eventually reaches (see ``_ForwardIndex``)."""
         self._ensure_cache()
         st = self._cache.get(card_id)
         return self._forward.max_forward_damage(st.name) if st else 0
 
     def forward_card_ids(self, card_id: int) -> frozenset[int]:
-        """Card ids the card's evolution line evolves INTO (see ``_ForwardIndex.forward_card_ids``)."""
         self._ensure_cache()
         st = self._cache.get(card_id)
         return self._forward.forward_card_ids(st.name) if st else frozenset()
 
     def ids_for_name(self, name: str) -> frozenset[int]:
-        """Card ids printed under ``name`` (see ``DictCardStatProvider.ids_for_name``)."""
         self._ensure_cache()
         if self._name_ids is None:
             self._name_ids = _name_index(self._cache)

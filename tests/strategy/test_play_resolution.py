@@ -2,7 +2,7 @@
 the win-condition development rule it unblocked (`prefer-rush-evolve-tutor`).
 
 `evolve-into-wincon` was the module's other subject and is DELETED with the evolve-decider swap
-(#140, ADR-0070 §10) — its referent is the decider's deploy term, pinned at
+(Issue #140, ADR-0070 §10) — its referent is the decider's deploy term, pinned at
 `test_evolve_decider.py` (the algebra) and `test_evolve_value.py` (real frames)."""
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, Context, Pilot
@@ -13,9 +13,8 @@ _rush = next(h for h in GENERAL_STRATEGY.hypotheses if h.id == "prefer-rush-evol
 
 
 def test_play_from_hand_option_resolves_its_card_id():
-    """REQ-PILOT-0022: a play option is a bare hand index with no `area` (`{"index":N,"type":7}`);
-    it must resolve to `hand[N]` — otherwise card_id is None and every roles/tags/stat Hypothesis is
-    silently dead on plays (why Salvatore was never played)."""
+    """REQ-PILOT-0022: a play option is a bare hand index with no `area` (`{"index":N,"type":7}`), so
+    it resolves to `hand[N]`; otherwise card_id is None and every rung is silently dead on plays."""
     p = Pilot(Strategy(), deck=[])
     obs = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 111}, {"id": 1189}]}]}}
     assert p._option_card_id(obs, {}, {"index": 1, "type": _PLAY}) == 1189

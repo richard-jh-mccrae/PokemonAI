@@ -1,20 +1,12 @@
 """`train.family_diag` — the columns that say WHOSE decision each one is (Issue #356).
 
-This instrument renders the **leaf's argmax**. Issues #330, #331 and #332 read that column as
-*what the agent played* and filed a claim off it that the corpus does not support: on the twelve
-frames Issue #330 quotes, the agent's committed pick differs from the leaf's argmax on **12 of 12**. The
-column header said `leaf` the whole time — the defect is that the honest word was one header while
-the surrounding prose, the issue titles and the frame-selection criterion all pointed at the agent.
+This instrument renders the **leaf's argmax**. Issues #330/#331/#332 read that column as *what the
+agent played*; on the twelve frames Issue #330 quotes the committed pick differs on 12 of 12.
 
-So these tests hold the output to stating the distinction rather than implying it:
-
-* the AGENT's committed pick is rendered **beside** the leaf's, and the two are explicitly compared,
-  so a reader never has to notice a difference to be told about one;
-* agreement with the ruling is `gates.satisfies_human` — ADR-0085 Amendment J's `correct ⊆ chosen` —
-  never argmax equality, which is the identical trap one instrument over (equality scored `DISCARD`
-  1/12 where satisfaction scores 10/12); and
-* a `--keys` list with no declared source is **refused**. An unlabelled key list is the exact input
-  that produced the false claim, so it fails closed rather than diagnosing a leaf on demand.
+So the output must STATE the distinction rather than imply it: the AGENT's committed pick is
+rendered beside the leaf's and the two are explicitly compared; agreement is `gates.satisfies_human`
+(ADR-0085 Amendment J's `correct ⊆ chosen`), never argmax equality; and a `--keys` list with no
+declared source is REFUSED, because an unlabelled key list is the input that produced the claim.
 """
 from __future__ import annotations
 
@@ -86,9 +78,8 @@ def test_leaf_is_chosen_is_reported_when_they_do_coincide():
 # ── agreement is `satisfies_human`, not equality (scope item 4) ────────────────────────────────────
 
 def test_agreement_uses_satisfies_human_not_argmax_equality():
-    """ADR-0085 Amendment J: `correct` is a CONSTRAINT, not the whole answer. A DISCARD ruled `[2]`
-    is satisfied by the engine-required pick `[2, 3]`; equality would call that a disagreement, and
-    that miscount is what scored `DISCARD` 1/12 where the honest number was 10/12."""
+    """ADR-0085 Amendment J: `correct` is a CONSTRAINT, not the whole answer. A DISCARD ruled `[2]` is
+    satisfied by the engine-required `[2, 3]`; equality scored that 1/12 where the honest number was 10/12."""
     cols = agent_columns(_correction([2, 3], [2]), 2, lambda i: f"opt{i}")
     assert cols["agent_satisfies_ruled"] is True
 

@@ -3,7 +3,7 @@
 **Status:** Accepted (built 2026-08-02, `/implement` on
 [Issue #288](https://github.com/richard-jh-mccrae/PokemonAI/issues/288), T3.5/10 of the Value System
 POC).
-**Implements** the term-sufficiency audit's finding **F12** (`docs/plans/term-sufficiency-audit.md`).
+**Implements** the term-sufficiency audit's finding **F12** (`ADR-0104`).
 **Applies [ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)** (the
 deadline gate is a factor of the one equation) and **[ADR-0006](0006-function-tags-single-source-of-structural-facts.md)**
 (a behavioural claim about a card is a Function Tag).

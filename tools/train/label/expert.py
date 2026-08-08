@@ -1,23 +1,10 @@
-"""The expert: one-step engine-fork value lookahead over the option menu (s3b design §D1).
+"""The expert: one-step engine-fork value lookahead over the option menu (s3b §D1).
 
-The expert is the shipped Pilot's value net used as an oracle. For a single-pick decision frame it
-scores each legal option ``i``:
-
-1. **Fork** the engine from the frame — ``search_begin`` with both-sides zones. The hidden-zone
-   predictions reuse the Pilot's own battle-tested ``_seed_zones`` (the exact anchored own-split when
-   the tracker has anchored, a sound decklist prefix otherwise — the same seeding the Lethal Solver
-   forks with). A fresh fork per option: ``search_step`` advances a search tree in place, so options
-   can't branch off one root.
-2. **Step** ``search_step([i])`` → the resulting observation.
-3. **Read** ``V_i`` = the value net's ``P(win)`` on that board, with a **terminal override**: if the
-   engine has already called the game (result 0/1/2), the sound 1.0 / 0.0 / 0.5 outranks the net —
-   the same invariant as the planner's win rung. Seat-consistent: a turn-ender that hands control to
-   the opponent yields an opponent-seat obs, read as ``1 − P(opponent wins)``.
-
-**v1 scope (design):** single-pick contexts only (MAIN + single selects). Multi-pick (discard-2,
-multi-grab) is deferred — the expert can't enumerate subsets yet, so ``is_single_pick`` gates them
-out rather than faking a partial pick. Stochastic effects take one engine sample (``manual_coin`` off);
-the θ threshold absorbs the noise (expectimax over coin outcomes is v2).
+Per legal option: fork the engine (`search_begin`, hidden zones from the Pilot's own `_seed_zones`),
+`search_step([i])`, then read ``V_i`` from the value net — with a **terminal override**, since an
+engine-called game scores the sound 1.0 / 0.0 / 0.5. Seat-consistent, so an opponent-seat obs reads
+as ``1 − P(opponent wins)``, and a fresh fork per option because `search_step` advances in place.
+**v1:** single-pick only — multi-pick is gated out by ``is_single_pick`` rather than faked.
 """
 from __future__ import annotations
 
@@ -27,15 +14,13 @@ from common.value.features import features_from_board
 
 
 def is_single_pick(select: dict) -> bool:
-    """True for a choose-exactly-one (or at-most-one) select — ``maxCount == 1``. Multi-pick selects
-    (``maxCount > 1``: discard-2, multi-grab) are v1-deferred and gated out here."""
+    """``maxCount == 1``. Multi-pick selects (discard-2, multi-grab) are v1-deferred and gated out."""
     return select.get("maxCount") == 1
 
 
 def _prune_none(v):
-    """``asdict``-ed engine Observation → the live-obs dict shape: drop None-VALUED dict keys (the
-    live JSON omits them; ``option.get('playerIndex', ...)`` would otherwise read None and crash), but
-    KEEP None list elements (a facedown Active carries the zone's count). Mirrors the planner helper."""
+    """``asdict``-ed Observation -> the live-obs shape: drop None-VALUED dict keys (the live JSON omits
+    them), but KEEP None list elements (a facedown Active carries the zone's count)."""
     if isinstance(v, dict):
         return {k: _prune_none(x) for k, x in v.items() if x is not None}
     if isinstance(v, list):
@@ -44,9 +29,8 @@ def _prune_none(v):
 
 
 def _read_v(pilot, obs_dict: dict, model, my_seat: int) -> float | None:
-    """``P(my win)`` on a forked resulting obs. Terminal override first (engine ``result``: 0/1 = that
-    seat wins, 2 = draw, -1 = ongoing). Otherwise the value net, flipped to my seat when the resulting
-    obs belongs to the opponent (features are seat-relative). None if the board can't be built."""
+    """``P(my win)`` on a forked obs. Terminal override first (``result``: 0/1 = that seat wins, 2 =
+    draw, -1 = ongoing), else the value net flipped to my seat — features are seat-relative."""
     cur = obs_dict.get("current") or {}
     result = cur.get("result", -1)
     if result == 2:
@@ -63,13 +47,7 @@ def _read_v(pilot, obs_dict: dict, model, my_seat: int) -> float | None:
 
 
 def evaluate_options(pilot, obs: dict, model, *, manual_coin: bool = False) -> dict | None:
-    """``{option_index: V_i}`` for a single-pick decision, or None when the frame isn't scorable
-    (no seed, multi-pick, opponent Active facedown, or the engine unavailable).
-
-    ``model`` must be present — a null model raises (offline tools fail loud, per vread). Each option
-    forks independently; an option whose fork/step raises (a seed-prefix mismatch on a fetch line) is
-    skipped, not fatal — the detector compares whatever options scored.
-    """
+    """``{option_index: V_i}``, or None when the frame is unscorable. A null ``model`` raises; a failed fork is skipped."""
     if not getattr(model, "present", False):
         raise ValueError("expert requires a present value model (a null model would score every "
                          "option 0.5). Pass a trained value_model.json via --model.")

@@ -1,18 +1,11 @@
-"""Dead-fetch corpus — the behavioural pin for **Fetch Deadness** (issue #164, ADR-0073).
+"""Dead-fetch corpus — the behavioural pin for **Fetch Deadness** (issue Issue #164, ADR-0073).
 
-A search whose entire target class is provably gone from the deck realises no role: playing it
-spends a card that had a live later use as discard fodder. `dont-search-an-empty-deck` is the
-play-side veto, and this file replays the anchor Correction through the REAL shipped Pilot (fresh
-per replay, no cross-fixture state) to pin that the veto holds.
-
-The pin exists because the anchor's fix landed as a SIDE-EFFECT of ADR-0029/0065 work rather than as
-a targeted change, and nothing guarded it — a regression would have been silent. Prior art for the
-replay style: `test_evolve_valuation_corpus.py`.
+A search whose entire target class is provably gone realises no role. `dont-search-an-empty-deck` is
+the play-side veto, and this file replays the anchor Correction through the REAL shipped Pilot.
 
 Asserted on BEHAVIOUR, never on a magnitude: the dead search is not endorsed (`score > 0` is the
-structural act/don't-act floor `_finish_turn_last` already gates on — the same boundary an
-Endorsement Claim uses) and is not chosen. Whole-decision equality with the fixture's `correct` is
-deliberately NOT asserted here — see the fixture's `note` (the evolve label is #140's question).
+structural act/don't-act floor) and is not chosen. Whole-decision equality with the fixture's
+`correct` is deliberately NOT asserted — see the fixture's `note`.
 """
 from __future__ import annotations
 
@@ -54,10 +47,8 @@ def _trace_of(decision, card_id):
 
 
 def test_the_whiff_veto_fires_on_the_target_exhausted_poffin(poffin_f78):
-    """The veto is named, not merely inferred from a low score: `dont-search-an-empty-deck` fires on
-    the Poffin, because Staryu is PROVABLY gone (3 of 3 visible — 2 bare on the Bench, 1 stacked under
-    the Active Mega Starmie ex) and it is the Poffin's only target. Without naming it, this pin would
-    pass if the option sank for some unrelated reason, which is not what #164 is about."""
+    """The veto is NAMED, not inferred from a low score — otherwise this passes when the option sinks
+    for an unrelated reason. Staryu is 3 of 3 visible, and it is the Poffin's only target."""
     _fx, _pilot, dec = poffin_f78
     poffin = _trace_of(dec, POFFIN)
     assert poffin is not None, "the Poffin is not on this menu — the fixture's premise changed"

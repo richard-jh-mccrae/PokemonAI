@@ -21,13 +21,14 @@ Decision: [ADR-0006](adr/0006-function-tags-single-source-of-structural-facts.md
 Function Tags are the **canonical universal *behavioral* signal**. When you add behavioral decision
 logic, read a tag — don't re-derive what a card does.
 
-- **Now (wired).** The Pilot loads the table once (`agents/<deck>/main.py` → `Pilot(functions=…)`)
+- **Now (wired).** The shared runtime loads the table once (`common/runtime.py`,
+  `functions=CardFunctions.load()`; no agent `main.py` takes a `functions=` argument since ADR-0055)
   and exposes it as `Context.tags`. Reading it today: `dig-before-commit` (`draw`/`search`),
   `use-acceleration` (`energy_accel`), and `keep-a-startable-hand` (`opener`, with a `starter`-Role
   fallback) — see [general-strategy.md](general-strategy.md).
-- **Planned (designed, not yet wired).** **Posture** (Read-conditioned play) and **Search-API
-  query gating** (`search_budget` / Tier-1 — deciding which cards are worth a per-move query). When
-  those land they **must** consult tags ([ADR-0008](adr/0008-pilot-is-a-layered-rules-pipeline.md)).
+- **Posture SHIPPED** (`runtime.PROFILE` `posture: True`, ADR-0026) and consults tags. **Search-API
+  query gating** did NOT land and is not pending — `search_budget` is inert since its only consumer
+  (Tier 6) was deleted 2026-07-17 ([ADR-0064](adr/0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md) decision 6).
 
 **Which signal to read** — the three sources never overlap:
 
@@ -113,10 +114,10 @@ function_overrides.json ─────────────────┘  
 - **`function_overrides.json`** *(as needed)* — hand-authored `{cardId: [tags]}` for what
   the probe can't reach; never clobbered by regeneration.
 
-> **Note — stale `cards.json`:** the shipped `cards.json` predates the `dump_cards.py` enrichment,
-> so it lacks `attacks`/`abilities`/`weakness`/`resistance`, and `dump_cards.py`'s `sys.path` still
-> points at the old `slowpoke_0/`. The probes work around it (engine-sourced attack data), but it
-> should be regenerated.
+> **Note (corrected 2026-08-07):** the earlier warning here — that `cards.json` lacked
+> `attacks`/`abilities`/`weakness`/`resistance` and that `dump_cards.py` pointed at `slowpoke_0/` —
+> was false in both halves. All four keys are present on all 1267 entries, and the `sys.path` insert
+> is `REPO / "src"`. Nothing needs regenerating.
 
 ## Tag vocabulary
 

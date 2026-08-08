@@ -202,9 +202,8 @@ def _c_turn(rationale="develop before attacking"):
 
 
 def test_a_still_open_turn_correction_is_not_reported_fixed(tmp_path):
-    """ADR-0049: the proposals snapshot keys its open blunders by the scope-aware `key`. If the
-    report matched on `<ep>-<frame>` it would miss the Turn Correction entirely and — because the
-    deck HAS a snapshot — silently badge an unresolved blunder as `fixed`."""
+    """ADR-0049: the proposals snapshot keys open blunders by the scope-aware `key`; matching on
+    `<ep>-<frame>` would badge an unresolved Turn Correction as `fixed`."""
     log = tmp_path / "c.jsonl"
     turn = _c_turn()
     append_correction(turn, log)

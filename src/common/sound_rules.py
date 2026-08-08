@@ -1,78 +1,24 @@
-"""**The sound-rule whitelist**, as data (POC-T0 / Issue #259, ADR-0099; ratified wave 1).
+"""The sound-rule whitelist, as data (ADR-0099, Issue #259).
 
-The rules that SURVIVE the POC's purge because they encode game structure or fail-direction policy
-rather than a strategy hypothesis. Every other tuned weight is deleted by its owning track.
-
-## Why this is data and not only prose
-
-ADR-0092 §6 drafted the whitelist as a flat prose list, and the flat shape failed its first real
-test. ONE board fact — an empty Bench under a knock-outable Active — reached that list through
-**three** mechanisms simultaneously:
-
-    _predicted_loss         -KO_SCORE terminal rung, CombatMath-gated   (planner.py, now state_value.py)
-    _empty_bench_forced     order filter, unconditional                 (pilot.py)
-    keep-a-bench            +60 tuned weight, unscoped when()           (baseline_bench.py)
-
-in direct violation of T0's own headline rule ("every board fact enters through exactly ONE term
-family"), and nothing about writing the line prompted the question. Six parallel tracks will each
-delete rungs against this list, so the discipline has to be enforced rather than remembered.
-
-The third mechanism is now GONE — `keep-a-bench` was deleted by T2 (Issue #261 item 2d) on ADR-0096
-decision 2, and `baseline_bench.py` with it, since that rung was the whole module. Two remain, by
-schedule rather than by exception: `empty-bench-filter` is typed `provisional` with a dated
-retirement test, after which `predicted-loss` is the sole guard.
-
-## The four types, and what each MUST carry
-
-* ``structural``        — permanent. Encodes a game rule or a fail-direction policy. Must name it.
-* ``provisional``       — a substrate-gap workaround, not a permanent truth. **Must carry a dated
-  retirement test.** Without one a workaround becomes permanent through inattention, which is the
-  whole failure mode the type exists to name.
-* ``authored-scaffold`` — a constant, not a rule. **Must carry a reconciliation note** stating what
-  it is checked against, and a fitting-queue entry.
-* ``composed-into-the-leaf`` — a per-seam equation that stops being a DECIDER when the composer
-  lands, but survives as `state_value` term-family internals. **Must name the term family that
-  absorbs it** (``composed_into``). Added 2026-08-01 by the Issue #263 ordering ruling.
-
-`validate()` rejects an entry missing its mandatory field, and every entry names the board fact it
-guards — which is what makes the double-counting rule checkable against the whitelist itself and not
-only against `state_value`'s term families.
-
-## Two populations: what DECIDES, and what is MATH
-
-The first three types are entries that still decide something at runtime. ``composed-into-the-leaf``
-is not: those equations lose decider status to the composer's uniform 1-ply differencing, and are
-neither deleted nor whitelisted-as-rules. They are on this list precisely so that "no longer a
-decider" is not read as "delete it" — Issue #262 composes readiness and development out of their
-math, and Issue #264's disposition table uses this same label, so the string has to match exactly.
-
-`undeclared_double_guarding()` runs over the DECIDERS only. A decider guarding a fact and an
-equation pricing it are different roles, so pairing them would be a false positive — and a detector
-that cries wolf is one nobody reads.
-
-The human-readable rendering is `docs/plans/value-system-poc-plan.md` §6. It carries the same ``id``
-column, and `test_sound_rules.py` cross-checks the two so the doc and the data cannot drift.
+The rules that survive the POC's purge because they encode game structure or fail-direction policy
+rather than a strategy hypothesis. `validate()` rejects an entry missing its type's mandatory field.
+`docs/plans/value-system-poc-plan.md` §6 renders the same ``id`` column and `test_sound_rules.py`
+cross-checks the two, so the doc and the data cannot drift.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Sequence
 
-#: Permanent — encodes a game rule or a fail-direction policy.
 STRUCTURAL = "structural"
-#: A substrate-gap workaround. Carries a dated retirement test.
 PROVISIONAL = "provisional"
-#: A constant, not a rule. Carries a reconciliation note and a fitting-queue entry.
 AUTHORED_SCAFFOLD = "authored-scaffold"
-#: A per-seam equation that stops DECIDING when the composer lands but survives as `state_value`
-#: term-family internals. Carries the term family that absorbs it. The exact string is shared with
-#: Issue #264's disposition table — do not reword it.
+#: The exact string is shared with Issue #264's disposition table — do not reword it.
 COMPOSED_INTO_THE_LEAF = "composed-into-the-leaf"
 
 TYPES = frozenset({STRUCTURAL, PROVISIONAL, AUTHORED_SCAFFOLD, COMPOSED_INTO_THE_LEAF})
 
-#: The types whose entries still DECIDE something at runtime — the population the one-guard-per-fact
-#: rule is about. :data:`COMPOSED_INTO_THE_LEAF` is deliberately absent: it is math, not a guard.
+#: :data:`COMPOSED_INTO_THE_LEAF` is deliberately absent: it is math, not a guard.
 DECIDER_TYPES = frozenset({STRUCTURAL, PROVISIONAL, AUTHORED_SCAFFOLD})
 
 
@@ -81,30 +27,18 @@ class SoundRule:
     """One whitelist entry. ``id`` is the stable slug a commit message or a track issue cites."""
 
     id: str
-    #: What survives — the rule, filter, rung or constant, named as it appears in the source.
+    #: The rule, filter, rung or constant, named as it appears in the source.
     entry: str
-    #: One of :data:`TYPES`.
     type: str
-    #: The board fact this guards, or the policy it encodes. Never blank — an entry that cannot say
-    #: what it guards cannot be checked against the double-counting rule.
+    #: The board fact this guards, or the policy it encodes.
     fact: str
-    #: Why it survives the purge. For ``structural``, the rule or policy it encodes.
     reason: str
-    #: ``provisional`` ONLY: the measurement that retires it, and who owns it.
     retirement_test: str = ""
-    #: ``authored-scaffold`` ONLY: what the number is reconciled against, and when it gets fitted.
     reconciliation: str = ""
-    #: ``composed-into-the-leaf`` ONLY: the `state_value` term family that absorbs this equation's
-    #: math once it stops deciding. Mandatory, because "survives as an internal" with no named
-    #: destination is indistinguishable from "kept out of sentiment", and the next track deletes it.
+    #: The `state_value` term family that absorbs this equation's math once it stops deciding.
     composed_into: str = ""
 
 
-#: The ratified whitelist (wave 1, 2026-08-01). Amended from ADR-0092 §6's draft by this grill:
-#: `keep-a-bench` DELETED, the empty-Bench filter re-typed provisional, Set-Up split onto its own
-#: line, `_finish_turn_last` narrowed to the named boundary, `POC_WORTH_PRIZE_RATE` bound, the
-#: apply-seam coverage floors added. Amended again the same day by the Issue #263 ordering ruling:
-#: the four per-seam equations added as ``composed-into-the-leaf``.
 WHITELIST: tuple[SoundRule, ...] = (
     SoundRule(
         id="ko-score-band",
@@ -452,11 +386,8 @@ WHITELIST: tuple[SoundRule, ...] = (
                        "reported by `tools/train/composer_lab.py`. Re-fit when both halves are "
                        "measured on the grader.",
     ),
-    # ── composed-into-the-leaf (added 2026-08-01 by the Issue #263 ordering ruling) ────────────────
-    # The composer's ordering heuristic became uniform 1-ply differencing, so these four stop being
-    # DECIDERS for any option the enumerator covers. They are listed here — not deleted, not
-    # whitelisted as rules — so that losing decider status cannot be read as licence to delete the
-    # math. Each names the term family that absorbs it (Issue #262 composes those families).
+    # ── composed-into-the-leaf ────────────────────────────────────────────────────────────────────
+    # Listed, not deleted: losing decider status is not licence to delete the math.
     SoundRule(
         id="attach-value-composed",
         entry="`attach_value` (ADR-0069)",
@@ -481,10 +412,7 @@ WHITELIST: tuple[SoundRule, ...] = (
     ),
     SoundRule(
         id="promote-retreat-value-composed",
-        # Cited by ISSUE as well as number on purpose: `docs/adr/README.md`'s numbering log says
-        # outright that "the number is not the identifier". This one proves it — ADR-0073 was
-        # claimed by TWO merged ADRs for five days, and PR #267 renumbered the promote/retreat
-        # half to 0100. Anything citing it as "ADR-0073" now points at the fetch ADR instead.
+        # "ADR-0073" now resolves to the fetch ADR — PR #267 renumbered this half to 0100.
         entry="`promote_retreat_value` (Issue #141; ADR-0100, was ADR-0073 before PR #267)",
         type=COMPOSED_INTO_THE_LEAF,
         fact="the marginal value of changing who is Active",
@@ -505,16 +433,11 @@ WHITELIST: tuple[SoundRule, ...] = (
     ),
 )
 
-#: id -> rule.
 BY_ID = {r.id: r for r in WHITELIST}
 
 
 def validate(rules: Sequence[SoundRule] = WHITELIST) -> list[str]:
-    """Every way an entry fails the typing discipline, as readable problems. Empty is the contract.
-
-    The T0 registry REJECTS an untyped entry (ADR-0099 decision 1) — this is that rejection,
-    executable. It is deliberately a list of problems rather than a raise: an author fixing a
-    whitelist wants every complaint at once, not the first one."""
+    """Every way an entry fails the typing discipline, as readable problems. Empty is the contract."""
     problems: list[str] = []
     seen: set[str] = set()
     for r in rules:
@@ -544,37 +467,25 @@ def validate(rules: Sequence[SoundRule] = WHITELIST) -> list[str]:
     return problems
 
 
-#: The ONE fact the whitelist deliberately guards twice, and the schedule that resolves it:
-#: `empty-bench-filter` (provisional) retires INTO `predicted-loss` (structural) once T1 proves the
-#: CombatMath read. Declared as data so `undeclared_double_guarding` can exempt exactly this pair and
-#: nothing else — an exemption written as a code comment would grow silently.
-#:
-#: Note the two entries share one ``fact`` string ON PURPOSE. Distinguishing them by tacking "(the
-#: CombatMath-gated reading)" onto one would make the coverage map read as two separate facts, and
-#: the double-guard detector would pass VACUOUSLY — which is what it did until this was fixed. The
-#: differing READING belongs in ``reason``; the fact is the same fact.
+#: The one fact guarded twice on purpose: `empty-bench-filter` retires INTO `predicted-loss`.
+#: Both share one ``fact`` string deliberately — differentiating them makes the detector vacuous.
 SCHEDULED_PAIRS: tuple[tuple[str, ...], ...] = (
     ("empty-bench-filter", "predicted-loss"),
 )
 
 
 def deciders(rules: Sequence[SoundRule] = WHITELIST) -> tuple[SoundRule, ...]:
-    """The entries that still DECIDE something at runtime — everything except
-    :data:`COMPOSED_INTO_THE_LEAF`. The population the one-guard-per-fact rule is about."""
+    """The entries that still DECIDE at runtime — the one-guard-per-fact rule's population."""
     return tuple(r for r in rules if r.type in DECIDER_TYPES)
 
 
 def composed(rules: Sequence[SoundRule] = WHITELIST) -> tuple[SoundRule, ...]:
-    """The per-seam equations that survive as `state_value` term-family math rather than as rules.
-    Issue #264's disposition table reads this population under the same label."""
+    """The per-seam equations that survive as `state_value` term-family math rather than as rules."""
     return tuple(r for r in rules if r.type == COMPOSED_INTO_THE_LEAF)
 
 
 def facts_guarded() -> dict:
-    """``{fact: [rule ids]}`` — the DECIDER half of the whitelist read as a coverage map.
-
-    Composed entries are excluded: they price a fact, they do not guard it, and folding the two roles
-    into one map would report a decider and an equation as a double guard on the same fact."""
+    """``{fact: [rule ids]}`` — the DECIDER half of the whitelist read as a coverage map."""
     out: dict = {}
     for r in deciders():
         out.setdefault(r.fact, []).append(r.id)
@@ -582,12 +493,8 @@ def facts_guarded() -> dict:
 
 
 def undeclared_double_guarding() -> dict:
-    """``{fact: [rule ids]}`` for every fact guarded by more than one DECIDER that is NOT a declared
-    :data:`SCHEDULED_PAIRS`. Empty is the contract.
-
-    A fact with two entries is not automatically wrong, but it must be DELIBERATE and said out loud.
-    What the flat prose list allowed — and this does not — is a second entry nobody noticed, which
-    is how one board fact came to carry three guards at once."""
+    """``{fact: [rule ids]}`` for every fact guarded by more than one DECIDER outside
+    :data:`SCHEDULED_PAIRS`. Empty is the contract."""
     declared = {frozenset(p) for p in SCHEDULED_PAIRS}
     return {fact: ids for fact, ids in facts_guarded().items()
             if len(ids) > 1 and frozenset(ids) not in declared}

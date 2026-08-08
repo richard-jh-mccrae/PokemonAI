@@ -72,12 +72,12 @@ selects with a facedown own active. The planner catches the ValueError → verdi
    - Clone-safety test: clone mid-cascade at every select of every fixture trace; both copies
      replay identically.
 5. **Unblock the lethal tool:** implement the harness from
-   [pokemonai-handoff-lethal-multistep-verification-tool.md](../pokemonai-handoff-lethal-multistep-verification-tool.md)
+   [pokemonai-handoff-lethal-multistep-verification-tool.md](../../../docs/adr/0050-multi-step-lethal-verification-tool.md)
    on cgpy — seed from a captured correction fixture (structured state, NO
    `search_begin_input` needed), drive a whole candidate turn through `decide()` to a win
    verdict, dump each reached select's option encodings. First real targets: the two deferred
    retreat-to-promote maneuvers
-   ([pokemonai-handoff-retreat-to-promote-maneuvers-grill.md](../pokemonai-handoff-retreat-to-promote-maneuvers-grill.md)).
+   ([pokemonai-handoff-retreat-to-promote-maneuvers-grill.md](../../../docs/adr/0100-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md)).
 
 ## Cautions
 

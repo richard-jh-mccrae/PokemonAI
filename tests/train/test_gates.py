@@ -1,6 +1,6 @@
 """The two deterministic merge gates for a mid-build decider swap (ADR-0072, #167).
 
-#136 directive 6 used to gate a swap on a paired A/B win-rate test. Phase 1b measured what that
+Issue #136 directive 6 used to gate a swap on a paired A/B win-rate test. Phase 1b measured what that
 costs: −1.17 pp, 95% CI [−4.59, +2.25] over 2400 games — a run that demonstrated neither a
 regression nor a non-regression, and which no affordable n could settle. Merit therefore moved to two
 instruments that answer EXACTLY rather than statistically, both per-frame, both pure:
@@ -20,9 +20,7 @@ from pathlib import Path
 import pytest
 
 # The corpus's on-disk shape lives in ONE place, because a second test file needed a `tmp_path`
-# corpus (Issue #250) and would otherwise re-encode it — the same second-idea-of-a-record defect
-# ADR-0087 is about, one layer down. Aliased to the original private names, so the 18 call sites
-# below read unchanged.
+# corpus (Issue #250) and would otherwise re-encode it. Aliased so the 18 call sites below read unchanged.
 from corrections_helpers import correction_record as _rec
 from corrections_helpers import corrections_store as _store
 
@@ -42,12 +40,8 @@ from train.gates import (EVOLVE_LANE, OWNER_RE, RULED_RE, AxisClaim, DecisionCla
 
 @pytest.mark.req("REQ-TRAIN-0040")
 def test_lane_constants_match_the_engine_enums():
-    """CLAUDE.md: engine vocabulary (option types, select contexts) comes from `src/cg/api.py`, never
-    from memory. But importing `cg.api` MAPS THE NATIVE LIBRARY (`libcg` shows up in /proc/self/maps
-    on a bare import), and `train.gates` must stay loadable with no DLL — the same reason
-    `planner.py` keeps its engine import lazy. So the lane constants are written literally there and
-    PINNED here: this test is what makes them sourced rather than remembered, and it fails the moment
-    one drifts."""
+    """Importing `cg.api` MAPS THE NATIVE LIBRARY and `train.gates` must stay loadable with no DLL, so
+    the lane constants are written literally there and PINNED here rather than remembered."""
     from cg.api import AreaType, OptionType, SelectContext
     assert gates.OPTION_TYPE_EVOLVE == int(OptionType.EVOLVE)
     assert gates.OPTION_TYPE_ATTACH == int(OptionType.ATTACH)
@@ -74,11 +68,8 @@ def test_lane_constants_match_the_engine_enums():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_resolves_a_hand_play_to_its_card_id():
-    """The case that forced the extension: a mid-game bench play is `OptionType.PLAY` with a BARE
-    hand index and NO `area` (`strategy/context.py`: "play card from hand (bare hand `index`, no
-    `area`)"), so the positional resolver returns None for exactly the options the Deploy Marginal
-    ranks. Given the frame it resolves to the CARD, because "play Solrock" is one decision however
-    the engine happens to order the menu."""
+    """A mid-game bench play is `OptionType.PLAY` with a BARE hand index and no `area`, so the
+    positional resolver returns None. Given the frame it resolves to the CARD instead."""
     frame = {"current": {"yourIndex": 0,
                          "players": [{"hand": [{"id": 1227}, {"id": 1121}, {"id": 676}]}, {}]}}
     assert option_slot({"type": 7, "index": 2}, frame) == ("card", 676)
@@ -87,18 +78,16 @@ def test_option_slot_resolves_a_hand_play_to_its_card_id():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_resolves_a_setup_bench_hand_card_to_the_same_identity():
-    """The pregame Bench places with `OptionType.CARD` + `area = HAND` rather than PLAY
-    (`setup_bench_decline_f3`), and `_TO_BENCH` fetches straight onto the Bench. All three deploy
-    entry points must resolve to the SAME identity or the lane compares apples to oranges."""
+    """The pregame Bench places with `OptionType.CARD` + `area = HAND`, and `_TO_BENCH` fetches straight
+    onto the Bench. All three deploy entry points must resolve to the SAME identity."""
     frame = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 1071}]}, {}]}}
     assert option_slot({"type": 3, "area": 2, "index": 0}, frame) == ("card", 1071)
 
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_is_byte_identical_without_a_frame():
-    """Back-compat is what lets the three existing sweeps keep their meaning with no edit: with no
-    frame the resolver is exactly the positional one it has always been, so a hand option falls back
-    to `(area, index)` and a bare PLAY stays None."""
+    """Back-compat: with no frame the resolver is exactly the positional one it has always been, so the
+    three existing sweeps keep their meaning with no edit."""
     assert option_slot({"type": 7, "index": 2}) is None
     assert option_slot({"type": 3, "area": 2, "index": 0}) == (2, 0)
     assert option_slot({"type": 14}) is None
@@ -106,10 +95,8 @@ def test_option_slot_is_byte_identical_without_a_frame():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_prefers_the_board_slot_over_card_identity():
-    """A BODY option keeps resolving to its board slot even when a frame is available — evolve,
-    attach-from and promote all compare bodies, and re-pointing them at a card id would silently
-    re-base three shipped sweeps and every committed Axis Claim (all of which name `(4, n)` /
-    `(5, n)` board slots)."""
+    """A BODY option keeps resolving to its board slot even when a frame is available — re-pointing it
+    at a card id would silently re-base three shipped sweeps and every committed Axis Claim."""
     frame = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 676}],
                                                       "bench": [{"id": 678}]}, {}]}}
     assert option_slot({"type": 9, "area": 5, "index": 0,
@@ -119,9 +106,8 @@ def test_option_slot_prefers_the_board_slot_over_card_identity():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_falls_back_when_the_frame_cannot_resolve_the_card():
-    """Fail-soft, never crash: an out-of-range index, a face-down (None) hand entry, or a frame
-    without the asked seat leaves the positional answer rather than raising — a probe reads whatever
-    the corpus recorded, including truncated frames."""
+    """Fail-soft, never crash: an out-of-range index, a face-down (None) hand entry or a missing seat
+    leaves the positional answer — a probe reads whatever the corpus recorded, truncations included."""
     frame = {"current": {"yourIndex": 0, "players": [{"hand": [None]}, {}]}}
     assert option_slot({"type": 7, "index": 9}, frame) is None       # out of range
     assert option_slot({"type": 7, "index": 0}, frame) is None       # face-down entry
@@ -131,9 +117,8 @@ def test_option_slot_falls_back_when_the_frame_cannot_resolve_the_card():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_option_slot_reads_the_option_owner_not_always_the_asked_seat():
-    """`playerIndex` names whose zone the option indexes. A deploy is always our own, but the
-    resolver must not hardcode the asked seat or it would mis-resolve an opponent-owned card option
-    the moment one enters a lane."""
+    """`playerIndex` names whose zone the option indexes, so the resolver must not hardcode the asked
+    seat or it mis-resolves an opponent-owned card option the moment one enters a lane."""
     frame = {"current": {"yourIndex": 0,
                          "players": [{"hand": [{"id": 1}]}, {"hand": [{"id": 2}]}]}}
     assert option_slot({"type": 3, "area": 2, "index": 0, "playerIndex": 1}, frame) == ("card", 2)
@@ -141,9 +126,8 @@ def test_option_slot_reads_the_option_owner_not_always_the_asked_seat():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_lane_slots_forwards_the_frame_so_a_deploy_lane_compares_cards():
-    """`lane_slots` is what the sweeps and Axis Claims actually call, so the frame has to reach the
-    resolver through it — otherwise the deploy lane would compare menu positions and two identical
-    Solrock plays at different indices would read as different decisions."""
+    """`lane_slots` is what the sweeps and Axis Claims call, so the frame has to reach the resolver
+    through it — otherwise two identical Solrock plays at different indices read as different decisions."""
     options = [{"type": 7, "index": 0},                       # play Lillie's
                {"type": 7, "index": 2},                       # play Solrock
                {"type": 14}]                                  # end
@@ -157,9 +141,8 @@ def test_lane_slots_forwards_the_frame_so_a_deploy_lane_compares_cards():
 
 @pytest.mark.req("REQ-TRAIN-0040")
 def test_option_slot_distinguishes_two_options_that_differ_only_by_body():
-    """The reason comparison is by resolved BODY SLOT and never by raw option index: two
-    Dreepy->Drakloak evolves differ ONLY in which body they evolve, and the index says nothing about
-    which. (`evolve_decider_sweep.py` header, ADR-0069 §8.)"""
+    """Comparison is by resolved BODY SLOT, never by raw option index: two Dreepy→Drakloak evolves
+    differ ONLY in which body they evolve, and the index says nothing about which."""
     bench_1 = {"type": 9, "area": 5, "index": 0, "inPlayArea": 2, "inPlayIndex": 1}
     bench_2 = {"type": 9, "area": 5, "index": 1, "inPlayArea": 2, "inPlayIndex": 2}
     assert option_slot(bench_1) == (2, 1)
@@ -177,9 +160,8 @@ def test_option_slot_falls_back_to_area_index_for_non_in_play_options():
 
 @pytest.mark.req("REQ-TRAIN-0040")
 def test_lane_slots_filters_to_the_lane_and_honours_a_context_qualified_member():
-    """A Lane is (option_type, required_select_context|None) members, so the attach sweep's rule —
-    ATTACH always, CARD only under the ATTACH_FROM context — is DATA, not a special case at a call
-    site. An evolve lane is the simple single-member case."""
+    """A Lane is (option_type, required_select_context|None) members, so the attach sweep's rule is DATA
+    rather than a special case at a call site. An evolve lane is the single-member case."""
     options = [{"type": 9, "inPlayArea": 2, "inPlayIndex": 0},    # 0 evolve
                {"type": 3, "area": 4, "index": 1},                 # 1 card
                {"type": 14}]                                       # 2 end
@@ -195,9 +177,8 @@ def test_lane_slots_filters_to_the_lane_and_honours_a_context_qualified_member()
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_a_fixture_with_no_claims_block_still_asserts_its_correct_option():
-    """Back-compat is the whole reason back-fill can be incremental: all ~130 existing fixtures carry
-    no `claims` block and must keep their present meaning with no edit — a Decision Claim over
-    `correct`."""
+    """Back-compat is why the back-fill can be incremental: ~130 existing fixtures carry no `claims`
+    block and must keep their present meaning with no edit — a Decision Claim over `correct`."""
     claims = parse_claims({"correct": [2], "chosen": [0]})
     assert claims.decision == DecisionClaim(correct=[2], owner=None)
     assert claims.axis == []
@@ -207,9 +188,8 @@ def test_a_fixture_with_no_claims_block_still_asserts_its_correct_option():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_an_axis_claim_asserts_ordering_within_one_lane_not_a_score():
-    """Ordering, never scores. 1a rewrote f29 FROM a score claim TO a decision claim because raw
-    scores are not comparable across a currency re-banding; an Axis Claim generalises that lesson —
-    ordering WITHIN a lane survives re-banding, cross-lane scores do not."""
+    """Ordering, never scores: raw scores are not comparable across a currency re-banding, while
+    ordering WITHIN a lane survives one."""
     claim = AxisClaim(lane=EVOLVE_LANE, prefer=(2, 1), over=[(2, 0)], owner=None)
     options = [{"type": 9, "inPlayArea": 2, "inPlayIndex": 0},
                {"type": 9, "inPlayArea": 2, "inPlayIndex": 1}]
@@ -236,14 +216,8 @@ def test_an_axis_claim_ignores_options_outside_its_lane():
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_an_endorsement_claim_asserts_a_lane_option_is_or_is_not_taken_at_all():
-    """The single-option-lane case, which ordering cannot reach. f35 has exactly ONE evolve option,
-    so "prefer X over Y" is inexpressible — yet the swap's real fix there is that the premature evolve
-    went 45.0 -> 0.0 with no rule firing. An Endorsement Claim states that: does the option clear the
-    endorsement floor (`score > 0`, `_finish_turn_last`'s gate) at all?
-
-    Zero is a STRUCTURAL boundary — where the agent decides whether to act — not a tuned magnitude,
-    so this survives a currency re-banding exactly as ordering does. It is NOT the score claim 1a's
-    f29 rewrite rejected: no magnitude is compared."""
+    """The single-option-lane case, which ordering cannot reach: does the option clear the endorsement
+    floor (`score > 0`) at all? Zero is a STRUCTURAL boundary, not a tuned magnitude."""
     options = [{"type": 9, "inPlayArea": 4, "inPlayIndex": 0}]
     declined = EndorsementClaim(lane=EVOLVE_LANE, slot=(4, 0), endorsed=False, owner=None)
 
@@ -268,9 +242,8 @@ def test_an_endorsement_claim_for_an_absent_slot_is_unprovable_not_vacuously_tru
 
 @pytest.mark.req("REQ-TRAIN-0041")
 def test_held_out_status_is_per_claim_not_per_fixture():
-    """f35's shape: its Decision Claim is owned by #165 (a non-evolve lane decides the frame) while
-    its Axis Claim still GATES. A per-fixture flag could not express that, and would either hide a
-    live claim or gate a deferred one."""
+    """f35's shape: its Decision Claim is owned by Issue #165 while its Axis Claim still GATES. A per-fixture
+    flag could not express that, and would either hide a live claim or gate a deferred one."""
     claims = parse_claims({
         "correct": [2],
         "claims": {"decision": {"correct": [2], "owner": "#165", "why": "cross-lane"},
@@ -311,9 +284,8 @@ def test_an_ok_to_miss_flip_is_reported_and_a_miss_to_ok_flip_is_reported_separa
 
 @pytest.mark.req("REQ-TRAIN-0042")
 def test_repeated_episodes_do_not_collapse_when_keyed_by_identity():
-    """The 276-vs-221 collapse, pinned. Keying rows by `episode_id` alone silently merged frames from
-    the same episode and UNDER-REPORTED the diff — the exact failure the gate exists to prevent. Rows
-    key on the Correction's `identity_key` (episode, seat, scope, subject) instead."""
+    """Keying rows by `episode_id` alone silently merged frames from one episode and UNDER-REPORTED the
+    diff. Rows key on the Correction's `identity_key` (episode, seat, scope, subject) instead."""
     before = _report([_row("81905522|0|decision|5", "OK"), _row("81905522|0|decision|9", "OK")])
     after = _report([_row("81905522|0|decision|5", "OK"), _row("81905522|0|decision|9", "MISS")])
     d = leaf_lab_diff(before, after)
@@ -350,9 +322,8 @@ def test_discrimination_gate_passes_on_improvements_alone():
 
 @pytest.mark.req("REQ-TRAIN-0044")
 def test_every_committed_fixture_parses_and_every_held_out_claim_names_an_issue():
-    """The Held-out Ledger's shape check, over the real corpus. A malformed ruling must be caught
-    offline — the suite has no network, so whether that issue is still OPEN is explicitly NOT checked
-    and belongs on the phase checklist (ADR-0072 decision 4)."""
+    """The Held-out Ledger's shape check over the real corpus. Whether that issue is still OPEN is
+    explicitly NOT checked — the suite has no network (ADR-0072 decision 4)."""
     import json
     from pathlib import Path
     fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
@@ -374,11 +345,8 @@ def test_every_committed_fixture_parses_and_every_held_out_claim_names_an_issue(
 
 @pytest.mark.req("REQ-TRAIN-0044")
 def test_the_held_out_ledger_is_populated_and_every_entry_names_a_live_owner():
-    """The Ledger must not be inert. #167's Problem Statement names the exact defect it fixes —
-    "nothing in code knows f32/f82 were re-ruled, and the sweep reads '0 REGRESSION' while the loss
-    goes uncharged" — so a ruling that exists in prose but produces no Ledger entry has not been
-    encoded. Each entry's frame_key was verified by an EXACT `select`-payload match to its source
-    Correction."""
+    """The Ledger must not be inert: a ruling that exists in prose but produces no entry has not been
+    encoded. Each entry's frame_key was verified by an EXACT `select`-payload match to its Correction."""
     ledger = gates.held_out_frames()
     assert ledger, "the Held-out Ledger is empty — re-rulings have not been encoded as data"
     assert "85046350|0|decision|32" in ledger and ledger["85046350|0|decision|32"] == "#165"   # f32
@@ -397,21 +365,11 @@ def test_decision_gate_fails_on_unruled_regression_frames_only():
     assert decision_gate_verdict([{"key": "a", "verdict": "REGRESSION"}],
                                  held_out={"a": "#165"}) is True
 
-# ── Claim Agreement — a fixture's ruling must match its Correction's (ADR-0082) ────────────────────
-#
-# ADR-0072 made a re-ruling a STATE the instruments read, but only for the fixtures that adopted its
-# `claims` block. The two generations were measured (ADR-0082) as perfectly disjoint: 34 fixtures
-# carried a loose `episode`+`frame` pair and ZERO `claims`; 8 carried a `frame_key` and ALL 8 had
-# `claims`. Every re-ruling captured in a `claims` block survived; the two that were lost were in the
-# generation with nowhere to record one. This gate is the invariant that makes losing one loud.
+# ── Claim Agreement — a fixture's ruling must match its Correction's (ADR-0082) ───────────────────
+# The two fixture generations measured perfectly disjoint; this gate makes losing a re-ruling loud.
 
-#: Fixtures that carry an ``episode``+``frame`` pair but deliberately assert **no pick**, so there is
-#: nothing for Claim Agreement to compare. Both are REFUTED Corrections (reviewed.json, human ack
-#: 2026-07-09): their `agent_choice`/`human_wanted` field names are not an older schema for
-#: `chosen`/`correct` — they INVERT it. `test_blunder_20260709` asserts the agent matches
-#: `agent_choice` and differs from `human_wanted`, so renaming the latter to `correct` would assert
-#: that a refuted pick is right. ADR-0082's build-shape note to normalise them was withdrawn on
-#: reading the consumer.
+#: Fixtures carrying an ``episode``+``frame`` pair that deliberately assert **no pick**. Both are
+#: REFUTED Corrections whose `agent_choice`/`human_wanted` fields INVERT `chosen`/`correct`.
 ASSERTS_NO_PICK = {"ms0705_bosss_over_harlequin_f78.json", "ms0705_gust_cinderace_only_ko_f79.json"}
 
 
@@ -473,9 +431,8 @@ def test_an_undeclared_disagreement_is_reported(tmp_path):
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_an_owner_declares_the_divergence_and_clears_it(tmp_path):
-    """Escape 1 — a **Held-out Frame**. `dragapult_hammer_over_develop_f32` is the live instance: its
-    Decision Claim is `[3]` against a recorded `[1]`, ruled onto Issue #165 on 2026-07-25. Deleting the
-    owner returns it to gating, exactly as ADR-0072 decision 4 specifies."""
+    """Escape 1 — a **Held-out Frame**, with `dragapult_hammer_over_develop_f32` the live instance.
+    Deleting the owner returns it to gating, exactly as ADR-0072 decision 4 specifies."""
     store = _corr(tmp_path, correct=(1,))
     payload = {"frame_key": "1|0|decision|5", "obs": {"current": {"turn": 3}},
                "claims": {"decision": {"correct": [3], "owner": "#165", "ruled": "2026-07-25",
@@ -506,14 +463,8 @@ def test_a_dated_why_declares_a_re_ruling_recorded_on_the_fixture(tmp_path):
 @pytest.mark.req("REQ-TRAIN-0045")
 @pytest.mark.parametrize("ruled", [None, "soon", "2026-7-26", "26-07-2026", "", True, 20260726])
 def test_an_undated_or_malformed_why_does_not_clear_a_disagreement(tmp_path, ruled):
-    """The escape must be auditable against the record ON A DATE, so `ruled` owes `RULED_RE`'s
-    ``YYYY-MM-DD`` — the same shape a held-out claim already owes. Without this, `"ruled": "soon"`
-    silently disarms the gate for that fixture forever, which is the failure mode the gate exists to
-    prevent wearing a different hat.
-
-    `True` and a bare number are in here because a hand-edited fixture is exactly where that typo
-    appears, and they must be REJECTED rather than raise — a gate that crashes on malformed input is a
-    gate that gets skipped rather than fixed."""
+    """The escape must be auditable against the record ON A DATE, so `ruled` owes ``YYYY-MM-DD``; without
+    it a value like "soon" disarms the gate forever. Malformed values are REJECTED rather than raise."""
     store = _corr(tmp_path, correct=(1,))
     dec = {"correct": [3], "why": "departs, but unauditably"}
     if ruled is not None:
@@ -538,10 +489,7 @@ def test_a_frame_key_naming_no_committed_correction_is_reported(tmp_path):
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_the_adr_0050_reseeding_keys_are_not_an_obs_mismatch(tmp_path):
     """Five committed fixtures carry `own_prizes` + `search_begin_input` their Correction's snapshot
-    does not — the ADR-0050 seeding that lets the offline sim replay them (reviewed.json's 2026-07-13
-    entry for 84071010-15 says why: "so the tracker anchors and deck_definitely_has(Air Balloon)=True").
-    That changes HOW a fixture replays, never WHAT the human ruled, so a byte-compare would report five
-    phantom divergences."""
+    does not — ADR-0050 seeding, which changes HOW a fixture replays and never WHAT the human ruled."""
     store = _corr(tmp_path, obs={"current": {"turn": 3}})
     fx = _fixture_file(tmp_path, "seeded", {"frame_key": "1|0|decision|5",
                                             "claims": {"decision": {"correct": [1]}},
@@ -553,9 +501,7 @@ def test_the_adr_0050_reseeding_keys_are_not_an_obs_mismatch(tmp_path):
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_an_obs_mismatch_beyond_the_seeding_keys_is_reported_because_indices_stop_comparing(tmp_path):
     """`correct` is a list of positional option indices, so comparing it across two different boards is
-    meaningless. A fixture whose board has moved must be reported rather than compared — and reported
-    even when it declares an escape, because a declared re-ruling excuses a different RULING, never an
-    unsound JOIN."""
+    meaningless — reported even when an escape is declared, since that excuses a ruling, not a JOIN."""
     store = _corr(tmp_path, obs={"current": {"turn": 3}})
     fx = _fixture_file(tmp_path, "drifted", {"frame_key": "1|0|decision|5",
                                              "claims": {"decision": {"correct": [1]}},
@@ -572,9 +518,8 @@ def test_an_obs_mismatch_beyond_the_seeding_keys_is_reported_because_indices_sto
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_two_fixtures_on_one_frame_key_are_judged_independently(tmp_path):
-    """Legal and load-bearing (ADR-0082): `86091435-35` and `85164605-41` each carry TWO fixtures —
-    a doom shadow beside a re-ruled pick, a planner commitment beside a held-out indifference. So the
-    gate must not assume one fixture per frame, and one bad sibling must not exonerate the other."""
+    """Legal and load-bearing (ADR-0082): two fixtures may share one frame key, so the gate must not
+    assume one per frame and one bad sibling must not exonerate the other."""
     store = _corr(tmp_path, correct=(1,))
     d = _fixture_file(tmp_path, "sibling_ok", {"frame_key": "1|0|decision|5",
                                                "claims": {"decision": {"correct": [1]}},
@@ -588,9 +533,8 @@ def test_two_fixtures_on_one_frame_key_are_judged_independently(tmp_path):
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_a_fixture_without_a_frame_key_is_skipped_so_the_back_fill_stays_incremental(tmp_path):
-    """`parse_claims`'s back-compat promise, upheld at the gate: declaring a `frame_key` is what opts a
-    fixture in. Without it there is no join, and inventing one from a loose `episode`+`frame` pair
-    would be guessing at ADR-0049's identity."""
+    """`parse_claims`'s back-compat promise upheld at the gate: declaring a `frame_key` is what opts a
+    fixture in. Inventing one from a loose `episode`+`frame` pair would be guessing at the identity."""
     store = _corr(tmp_path, correct=(1,))
     fx = _fixture_file(tmp_path, "unkeyed", {"episode": 1, "frame": 5, "correct": [2],
                                              "obs": {"current": {"turn": 3}}})
@@ -599,9 +543,8 @@ def test_a_fixture_without_a_frame_key_is_skipped_so_the_back_fill_stays_increme
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_both_corpus_readers_share_one_walk(tmp_path):
-    """`iter_keyed_fixtures` is THE corpus walk, for the reason `frame_key_of` is the single place the
-    key shape is built: a second glob that drifted by a field would silently stop seeing frames. Both
-    readers must go through it, so a fixture invisible to one is invisible to the other."""
+    """`iter_keyed_fixtures` is THE corpus walk: a second glob that drifted by a field would silently
+    stop seeing frames, so a fixture invisible to one reader must be invisible to the other."""
     d = _fixture_file(tmp_path, "keyed", {"frame_key": "1|0|decision|5",
                                           "claims": {"decision": {"correct": [1], "owner": "#165",
                                                                   "ruled": "2026-07-25", "why": "w"}},
@@ -624,11 +567,8 @@ def test_the_committed_corpus_has_no_undeclared_disagreement():
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_a_fixtures_top_level_correct_agrees_with_its_explicit_decision_claim():
-    """The loophole the ADR-0082 back-fill would otherwise open. `parse_claims` PREFERS an explicit
-    `claims` block, but 33 test modules still read `fx["correct"]` directly — so a fixture carrying
-    both must keep them identical, or the gate would check one value while the tests assert the other.
-    Keeping both in sync (rather than deleting `correct`) is what makes the back-fill non-breaking;
-    this is the invariant that makes it safe."""
+    """`parse_claims` PREFERS an explicit `claims` block while 33 test modules still read
+    `fx["correct"]` directly, so a fixture carrying both must keep them identical."""
     import json
     for p in sorted(_corpus_fixtures().glob("*.json")):
         fx = json.loads(p.read_text(encoding="utf-8"))
@@ -644,10 +584,8 @@ def test_a_fixtures_top_level_correct_agrees_with_its_explicit_decision_claim():
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_every_record_backed_fixture_declares_a_frame_key():
-    """ADR-0082 decision 1's completeness invariant. `claim_agreement` opts in on `frame_key`, so a
-    fixture that has a joinable identity and omits one is silently ungated — which is exactly how the
-    two lost re-rulings stayed lost. A NEW fixture added the old way fails here rather than quietly
-    reducing coverage."""
+    """ADR-0082 decision 1's completeness invariant: `claim_agreement` opts in on `frame_key`, so a
+    fixture that has a joinable identity and omits one is silently ungated."""
     import json
     loose = []
     for p in sorted(_corpus_fixtures().glob("*.json")):
@@ -663,9 +601,8 @@ def test_every_record_backed_fixture_declares_a_frame_key():
 
 @pytest.mark.req("REQ-TRAIN-0045")
 def test_the_two_pick_less_fixtures_really_do_assert_no_pick():
-    """The exclusion above must stay honest: if either fixture ever gains a `correct`, it becomes
-    gateable and the exemption is stale. Asserts the inversion too — `human_wanted` is the REFUTED
-    ask, never the ruling."""
+    """The exclusion above must stay honest: if either fixture ever gains a `correct` it becomes
+    gateable. Asserts the inversion too — `human_wanted` is the REFUTED ask, never the ruling."""
     import json
     for name in sorted(ASSERTS_NO_PICK):
         fx = json.loads((_corpus_fixtures() / name).read_text(encoding="utf-8"))
@@ -692,13 +629,8 @@ def test_decider_lab_diff_reports_nothing_when_the_build_is_unchanged():
 
 
 def test_decider_lab_diff_CAN_report_a_regression():
-    """**The property Amendment I exists to restore**, asserted directly.
-
-    The sweeps this replaces compared against a live kill-switch-OFF arm. Once each phase deleted its
-    rung pile, OFF became an empty scorer and the comparison could only ever produce FIX — measured
-    on the real corpus: `evolve_decider_sweep` reported `4 FIX, 0 REGRESSION` and
-    `snipe_decider_sweep` `12 FIX, 0 REGRESSION`, with no regression detectable by construction.
-    Asserting the four verdict directions here is what stops that from recurring silently."""
+    """The property Amendment I restores: the sweeps this replaces compared against a kill-switch-OFF
+    arm that became an empty scorer, so they could only ever produce FIX. All four directions here."""
     before = _dcap([_drow("regress", [0], [0]), _drow("fix", [9], [1]),
                     _drow("neutral", [7], [1]), _drow("unlabelled", [0], None)])
     after = _dcap([_drow("regress", [3], [0]), _drow("fix", [1], [1]),
@@ -726,18 +658,8 @@ def test_decider_lab_diff_surfaces_a_moved_corpus_rather_than_shrinking_the_gate
 
 
 def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
-    """A reordered multi-pick is NOT a regression.
-
-    `DISCARD` (SelectContext 8) asks for N cards and the agent returns all of them; the engine
-    applies the set, so their order carries no decision. Comparing sequences would report
-    `[0, 2] -> [2, 0]` as a REGRESSION — a false positive in the one direction a gate must never
-    produce, since it is the direction that blocks a merge.
-
-    Found while writing the hand-off, by reading the captured `DISCARD` rows rather than trusting
-    the aggregate: the agent picks `[2, 3]` where `correct` records `[2]`, because a Correction's
-    `correct` names the card the RULING was about, not the whole legal answer. Amendment J rules that
-    mismatch (`satisfies_human`, below); this test covers the movement half, which gates either way.
-    """
+    """A reordered multi-pick is NOT a regression: `DISCARD` asks for N cards and the engine applies the
+    SET, so comparing sequences would report a false REGRESSION — the direction that blocks a merge."""
     before = _dcap([_drow("k", [0, 2], [0, 2], context=8)])
     after = _dcap([_drow("k", [2, 0], [0, 2], context=8)])
     assert decider_lab_diff(before, after)["rows"] == [], "order is not a decision"
@@ -749,11 +671,8 @@ def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
 # ── `satisfies_human` — a Correction's `correct` is a CONSTRAINT, not the answer (ADR-0085 J) ─────
 
 def test_a_multi_pick_satisfies_a_ruling_it_is_a_superset_of():
-    """**The Amendment J ruling.** `correct` names the card the ruling was ABOUT; a multi-pick select
-    returns every index the engine demands. Equality across those two vocabularies mis-reports, and
-    measurably did: `DISCARD` read **1/12** on the capture purely because the agent picks `[2, 3]`
-    where the ruling says `[2]`. Under `⊆` the same corpus reads **10/12** — the ten were vocabulary
-    artifacts, not defects, and the gate was defending them as if they were losses."""
+    """**The Amendment J ruling.** `correct` names the card the ruling was ABOUT; a multi-pick returns
+    every index the engine demands. Under `⊆` the same corpus reads 10/12 where equality read 1/12."""
     assert satisfies_human([2, 3], [2]) is True
     assert satisfies_human([3, 4], [2]) is False, "the ruled card was NOT discarded"
     assert satisfies_human([2], [2, 3]) is False, "a partial answer does not satisfy a two-card ruling"
@@ -767,33 +686,23 @@ def test_satisfaction_degenerates_to_equality_on_a_single_pick():
 
 
 def test_an_empty_correct_is_a_DECLINE_ruling_and_needs_an_empty_pick():
-    """The guard that makes `⊆` safe to use at all.
-
-    The empty set is a subset of everything, so reading `correct: []` through `⊆` would make EVERY
-    frame vacuously agree — a gate-shaped hole rather than a rounding error. But `correct: []` is not
-    absent, it is a recorded **DECLINE** ("take none of these"), and eleven such frames sit in the
-    corpus today with `86088989|0|decision|3` genuinely satisfying one. So it is exact, not subset:
-    a DECLINE stays a labelled, gated ruling instead of being either discarded or auto-passed."""
+    """The guard that makes `⊆` safe: the empty set is a subset of everything, so `correct: []` is read
+    EXACTLY — it is a recorded DECLINE, not an absence, and eleven such frames sit in the corpus."""
     assert satisfies_human([], []) is True
     assert satisfies_human([0], []) is False, "picking something does not satisfy a DECLINE"
 
 
 def test_an_absent_ruling_and_an_unreplayable_frame_satisfy_nothing():
-    """`correct is None` claims no direction (callers report UNLABELLED); `chosen is None` is a frame
-    this build could not replay at all. Neither may read as agreement — an unreplayable frame
-    silently counting as agreement is how a shrinking gated set looks green."""
+    """`correct is None` claims no direction; `chosen is None` is a frame this build could not replay.
+    Neither may read as agreement — that is how a shrinking gated set looks green."""
     assert satisfies_human([0], None) is False
     assert satisfies_human(None, [0]) is False
     assert satisfies_human(None, None) is False
 
 
 def test_the_diff_judges_direction_through_the_same_predicate_as_the_agree_rate():
-    """The gate and the readout must not hold two ideas of "matches the human".
-
-    Under equality this frame is invisible: the baseline `[2, 3]` and the build `[3, 4]` both differ
-    from `correct: [2]`, so the move classifies NEUTRAL and passes. Under satisfaction the baseline
-    discarded the ruled card and the build stopped, which is precisely a REGRESSION — so the shared
-    predicate makes the gate STRICTLY more sensitive on multi-pick contexts, never less."""
+    """The gate and the readout must not hold two ideas of "matches the human". The shared predicate
+    makes the gate STRICTLY more sensitive on multi-pick contexts, never less."""
     before = _dcap([_drow("k", [2, 3], [2], context=8)])
     after = _dcap([_drow("k", [3, 4], [2], context=8)])
     assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["REGRESSION"]
@@ -802,28 +711,15 @@ def test_the_diff_judges_direction_through_the_same_predicate_as_the_agree_rate(
 
 
 def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
-    """NEUTRAL covers both-miss AND both-satisfy. `[2, 3] -> [2, 5]` against `correct: [2]` is a real
-    change the corpus simply does not adjudicate — the ruled card is discarded either way, and the
-    other slot is the engine's, never the human's. Calling that a REGRESSION would gate on a
-    preference no one recorded."""
+    """NEUTRAL covers both-miss AND both-satisfy: a real change the corpus simply does not adjudicate.
+    Calling it a REGRESSION would gate on a preference no one recorded."""
     before = _dcap([_drow("k", [2, 3], [2], context=8)])
     after = _dcap([_drow("k", [2, 5], [2], context=8)])
     assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["NEUTRAL"]
 
 
-# ── the Corpus Reader — ONE reader, ONE key (ADR-0087, Issue #241) ────────────────────────────
-#
-# The defect these tests assert against, measured 2026-07-31 on the committed corpus:
-#
-#     raw records                                   372
-#     the Decision Gate's private walk saw          332      (-40, every one recoverable)
-#     keys it named CORRECTLY                       169      (45% — `seat` was ALWAYS 0)
-#     Held-out Ledger rulings it could reach        7 of 11
-#
-# Two shortcuts caused all of it, and they are the same shortcut: a raw-JSONL walk is a second idea
-# of what a record IS, and a hand-built key is a second idea of what a frame is CALLED. The second
-# drifts undetectably, because both sides of a diff share the same wrong key — so a self-consistent
-# diff over a wrong keyspace still reports flips and nothing ever goes red.
+# ── the Corpus Reader — ONE reader, ONE key (ADR-0087, Issue #241) ────────────────────────────────
+# A hand-built key drifts on both sides of a diff at once, so a wrong keyspace never goes red.
 
 
 
@@ -831,11 +727,8 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_the_corpus_reader_returns_the_stores_replayable_set(tmp_path):
-    """`keyed_corrections` IS the corpus, and the expectation is derived independently — the raw file
-    walked in the test itself through `Correction.from_dict`, never by calling the thing under test.
-
-    Set equality, not a count. The issue's own acceptance proposed a count assertion; a count passes
-    happily on 332 mis-keyed rows, so it would have caught only the smaller half of this bug."""
+    """`keyed_corrections` IS the corpus, and the expectation is derived independently. Set equality,
+    not a count — a count passes happily on mis-keyed rows."""
     from train.blunder.correction import Correction, identity_key
     recs = [_rec(1, 3), _rec(1, 9, seat=1), _rec(2, 4, scope="turn", subject=2),
             _rec(3, 5, obs=False)]
@@ -850,12 +743,8 @@ def test_the_corpus_reader_returns_the_stores_replayable_set(tmp_path):
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_a_record_with_an_empty_agent_and_a_build_stem_is_recovered(tmp_path):
-    """**The reported bug, in one assertion.** 40 records carry ``agent: ""`` with a populated
-    ``agent_build``; ``Correction.from_dict`` backfills the deck from the stem, but only for a reader
-    that CONSTRUCTS a Correction. A raw walk sees a falsy ``agent`` and drops the record before a row
-    exists — so it lands in neither capture and ``added``/``removed`` can never surface it.
-
-    An empty ``agent`` is a RECOVERABLE field, not a missing one."""
+    """40 records carry an empty ``agent`` with a populated ``agent_build``, and only a reader that
+    CONSTRUCTS a Correction backfills the deck from the stem. Empty is RECOVERABLE, not missing."""
     root = _store(tmp_path, [_rec(1, 3, agent="", agent_build="mega_starmie_20260627_93a70be")],
                   build="mega_starmie_20260627_93a70be")
     got = gates.keyed_corrections(root, predicate=lambda c: c.obs and c.agent)
@@ -865,8 +754,7 @@ def test_a_record_with_an_empty_agent_and_a_build_stem_is_recovered(tmp_path):
 @pytest.mark.req("REQ-GATE-0007")
 def test_the_reader_keys_by_identity_not_by_the_anchor_frame(tmp_path):
     """``seat`` is top-level and the Scope's SUBJECT is the identity (ADR-0049) — not seat 0, and not
-    the Anchor frame. The Decision Gate read ``decision.get("seat", 0)`` against a snapshot with no
-    ``seat`` field, so every key it ever built said seat 0 over a corpus that is 201/171."""
+    the Anchor frame. Defaulting the seat made every key say 0 over a corpus that is 201/171."""
     root = _store(tmp_path, [_rec(7, 51, seat=1), _rec(8, 82, seat=0, scope="turn", subject=8)])
     keys = {k for k, _c in gates.keyed_corrections(root)}
     assert keys == {"7|1|decision|51", "8|0|turn|8"}
@@ -874,12 +762,8 @@ def test_the_reader_keys_by_identity_not_by_the_anchor_frame(tmp_path):
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_both_gates_key_a_frame_identically(tmp_path):
-    """ADR-0072 decision 4 — *one ruling holds a frame out of BOTH gates* — as an executable
-    assertion rather than a docstring claim.
-
-    It was FALSE for 4 of 11 committed rulings: three seat-1 keys against a keyspace that was
-    entirely seat-0, and one ``turn``-scope key the Decision Gate filed as ``decision``. A held-out
-    frame that regressed would have failed `main` against a standing human ruling."""
+    """ADR-0072 decision 4 — *one ruling holds a frame out of BOTH gates* — as an executable assertion.
+    It was FALSE for 4 of 11 committed rulings, so a held-out frame that regressed would fail `main`."""
     from train.leaf_lab import frame_key
     root = _store(tmp_path, [_rec(7, 51, seat=1), _rec(8, 82, seat=0, scope="turn", subject=8)])
     for key, c in gates.keyed_corrections(root):
@@ -888,12 +772,8 @@ def test_both_gates_key_a_frame_identically(tmp_path):
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_two_corrections_sharing_a_key_both_survive_the_reader(tmp_path):
-    """Pairs, not a dict — asserted against a future "simplification".
-
-    A dict silently collapses two Corrections on one key. Today that is measurably zero, but
-    ``load_corrections`` deliberately KEEPS conflicts (same identity, different ``correct``/
-    ``category`` — what ``find_conflicts`` exists to surface), and a reader that drops one is
-    committing this issue's own defect at the seam built to remove it."""
+    """Pairs, not a dict: ``load_corrections`` deliberately KEEPS conflicts, and a reader that dropped
+    one would commit this issue's own defect at the seam built to remove it."""
     root = _store(tmp_path, [_rec(1, 3, correct=[1], category="wasted_resource"),
                              _rec(1, 3, correct=[2], category="sequencing_error")])
     got = gates.keyed_corrections(root)
@@ -903,10 +783,8 @@ def test_two_corrections_sharing_a_key_both_survive_the_reader(tmp_path):
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_every_held_out_ruling_names_a_frame_the_committed_store_carries():
-    """The detachment guard, over the REAL corpus. Deliberately NOT ``baseline keys == store keys``:
-    corrections are tagged continuously and re-capture is a deliberate human act, so strict equality
-    would redden `main` on every new tag and apply exactly the pressure toward auto-recapture that
-    `decider-gate-main.yml` argues at length against."""
+    """The detachment guard over the REAL corpus. Deliberately NOT ``baseline keys == store keys``:
+    that would redden `main` on every new tag and apply exactly the pressure toward auto-recapture."""
     keys = {k for k, _c in gates.keyed_corrections()}
     missing = sorted(k for k in gates.held_out_frames() if k not in keys)
     assert missing == []
@@ -917,13 +795,8 @@ def test_every_held_out_ruling_names_a_frame_the_committed_store_carries():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_a_moved_ruling_is_reported_even_when_the_agents_pick_did_not_move():
-    """**The blindness, asserted directly.** Both diffs emit a row only when the agent's pick moves, so a frame
-    the agent plays identically whose ``correct`` was re-ruled produces NO row at all — while its
-    verdict silently flips from unsatisfied to satisfied.
-
-    Measured on the real corpus: ``85709280`` went ``[] -> [0]`` in ``b6d7483`` (ADR-0081 Amendment D)
-    and moved the agree rate 230 -> 231 with no decision changed. ``added``/``removed`` cannot see it
-    either, because the frame exists on both sides."""
+    """Both diffs emit a row only when the agent's pick MOVES, so a re-ruled frame the agent plays
+    identically produces no row while its verdict silently flips. ``added``/``removed`` cannot see it."""
     before = _dcap([_drow("k", [0], [])])
     after = _dcap([_drow("k", [0], [0])])
     d = decider_lab_diff(before, after)
@@ -955,9 +828,8 @@ def test_a_ruling_move_never_gates_either_gate():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_the_leaf_diff_reports_a_moved_ruling_too():
-    """``leaf_lab_diff`` compares ``correct_is_top``, which is computed FROM ``correct`` — so it
-    carries the identical blindness. Shared implementation for ``frame_key_of``'s reason: a second
-    one would drift."""
+    """``leaf_lab_diff`` compares ``correct_is_top``, computed FROM ``correct``, so it carries the
+    identical blindness. Shared implementation, because a second one would drift."""
     before = _report([{**_row("k", "OK"), "correct": [1]}])
     after = _report([{**_row("k", "OK"), "correct": [1, 2]}])
     assert leaf_lab_diff(before, after)["ruling_moves"] == [{"key": "k", "before": [1],
@@ -974,9 +846,8 @@ def test_a_ruling_move_is_pick_set_normalised_not_order_sensitive():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_a_frame_on_only_one_side_is_not_a_ruling_move():
-    """``added``/``removed`` already own that case. Reporting it twice would double-count a
-    corpus-shape change as a re-ruling — the widening this issue lands adds 40 frames, and every one
-    of them has no ``before`` ruling to have moved from."""
+    """``added``/``removed`` already own that case; reporting it twice would double-count a corpus-shape
+    change as a re-ruling."""
     before, after = _dcap([_drow("a", [0], [0])]), _dcap([_drow("b", [0], [1])])
     d = decider_lab_diff(before, after)
     assert d["ruling_moves"] == [] and d["added"] == ["b"] and d["removed"] == ["a"]
@@ -984,12 +855,8 @@ def test_a_frame_on_only_one_side_is_not_a_ruling_move():
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_gate_artifact_is_written_LF_framed_not_the_platforms_newline(tmp_path):
-    """Both committed baselines are LF, dev is Windows and the grader is Linux (CLAUDE.md).
-
-    ``Path.write_text`` rewrites every newline to CRLF on Windows, which is how a 40-row re-capture
-    became a 4835-line whole-file rewrite — burying the one thing a reviewer of a re-capture needs to
-    see. Both labs wrote their captures that way; `write_json_artifact` is the single writer, so the
-    framing is CHOSEN rather than inherited from whichever platform ran the capture."""
+    """Both committed baselines are LF, dev is Windows and the grader is Linux. `Path.write_text` turned
+    a 40-row re-capture into a 4835-line rewrite, so `write_json_artifact` is the single writer."""
     out = tmp_path / "nested" / "artifact.json"
     doc = {"rows": [{"key": "1|0|decision|3"}]}
     gates.write_json_artifact(out, doc)
@@ -1012,15 +879,8 @@ def test_the_committed_baselines_are_LF_framed():
 
 @pytest.mark.req("REQ-GATE-0011")
 def test_an_unreplayable_frames_error_carries_no_machine_specific_path():
-    """The baseline is a COMMITTED ruling record, so nothing it embeds may depend on who ran the
-    capture. It was embedding an absolute path — ``/home/user/PokemonAI/...`` from the Linux capture
-    and ``C:\\Users\\...`` from a Windows one — so the same build re-captured elsewhere produced a
-    different artifact for a frame whose verdict had not moved. Dev is Windows and the grader is
-    Linux (CLAUDE.md), so that is the normal case, not an edge one.
-
-    The slash normalisation has to happen BEFORE the root is stripped: an exception's ``str`` carries
-    the path already repr-escaped, so matching the raw root silently fails on Windows — the shape
-    that let this survive."""
+    """The baseline is a COMMITTED ruling record, so nothing it embeds may depend on who ran the capture.
+    Slash normalisation must precede stripping the root — an exception's ``str`` is already escaped."""
     from train.decider_lab import REPO, _portable_error
     try:
         raise FileNotFoundError(2, "No such file or directory",
@@ -1044,10 +904,8 @@ def test_the_committed_capture_embeds_no_absolute_path():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_a_frame_gaining_or_losing_a_ruling_counts_as_a_moved_ruling():
-    """``None -> [x]`` is a frame becoming gateable, and ``[x] -> None`` a frame ceasing to be. Both
-    change what the corpus can adjudicate there, so both are reported — an `UNLABELLED` frame turning
-    into a gated one is exactly as worth knowing as a ruling being rewritten, and neither shows up in
-    `added`/`removed` because the frame is on both sides throughout."""
+    """``None -> [x]`` is a frame becoming gateable and ``[x] -> None`` one ceasing to be; both change
+    what the corpus can adjudicate, and neither shows up in `added`/`removed`."""
     gained = decider_lab_diff(_dcap([_drow("k", [0], None)]), _dcap([_drow("k", [0], [1])]))
     assert gained["ruling_moves"] == [{"key": "k", "before": None, "after": [1]}]
     lost = decider_lab_diff(_dcap([_drow("k", [0], [1])]), _dcap([_drow("k", [0], None)]))
@@ -1059,11 +917,8 @@ def test_a_frame_gaining_or_losing_a_ruling_counts_as_a_moved_ruling():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_the_leaf_diffs_ruling_moves_and_compared_describe_ONE_population():
-    """`leaf_lab_diff` compares only SCORABLE rows, so its `ruling_moves` must use the same filter.
-
-    Drawn from all rows instead, it would name a frame the report's own `compared` count excludes —
-    two numbers printed side by side describing different populations, which is the confusion this
-    module keeps existing to remove. The Decision Gate has no such filter, so it passes none."""
+    """`leaf_lab_diff` compares only SCORABLE rows, so its `ruling_moves` must use the same filter — two
+    numbers printed side by side must describe one population. The Decision Gate has no such filter."""
     unscorable = {"key": "u", "correct_is_top": None, "unscorable": True, "correct": [1]}
     before = _report([_row("s", "OK"), {**unscorable, "correct": [1]}])
     after = _report([_row("s", "OK"), {**unscorable, "correct": [2]}])
@@ -1077,12 +932,8 @@ def test_the_leaf_diffs_ruling_moves_and_compared_describe_ONE_population():
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_a_flip_whose_ruling_moved_is_in_BOTH_ok_to_miss_and_stale_baseline():
-    """The defect, in one assertion. `correct_is_top` is FROZEN into each capture and computed under
-    that capture's own `correct`, so when a ruling moves the leaf diff grades its two halves under
-    two different oracles — and prints ``REGRESSED ... OK -> MISS`` about a build that did not move.
-
-    The frame stays in `ok_to_miss` (it still gates, ADR-0110 decision 1) and gains a LABEL
-    saying the reference, not the code, is what changed."""
+    """`correct_is_top` is FROZEN into each capture, so a moved ruling makes the leaf diff grade its two
+    halves under two oracles. The frame still gates and gains a LABEL saying the reference changed."""
     before = _report([{**_row("reruled", "OK"), "correct": [1]}])
     after = _report([{**_row("reruled", "MISS"), "correct": [2]}])
     d = leaf_lab_diff(before, after)
@@ -1113,13 +964,8 @@ def test_a_ruling_move_that_did_not_flip_the_verdict_is_not_a_stale_baseline():
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_stale_label_NEVER_changes_the_verdict():
-    """ADR-0110 decision 1, asserted structurally rather than by convention. A gate getting
-    quieter as a side effect is the one direction a gate must never move (ADR-0085 Amendment I):
-    excusing these would let a real regression hide behind a same-commit re-ruling.
-
-    `discrimination_gate_verdict` must return the IDENTICAL verdict for the labelled and unlabelled
-    shapes of the same diff — which is what makes this build verdict-neutral by construction, so
-    neither committed baseline is owed a re-capture."""
+    """ADR-0110 decision 1: `discrimination_gate_verdict` must return the IDENTICAL verdict for the
+    labelled and unlabelled shapes, so neither committed baseline is owed a re-capture."""
     stale = _report([{**_row("k", "MISS"), "correct": [2]}])
     plain = _report([{**_row("k", "MISS"), "correct": [1]}])
     base = _report([{**_row("k", "OK"), "correct": [1]}])
@@ -1147,14 +993,8 @@ def test_stale_baseline_is_drawn_from_the_same_scorable_population_as_ruling_mov
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_decision_gate_is_deliberately_NOT_given_a_stale_baseline_partition():
-    """The asymmetry, asserted rather than asserted-about (ADR-0110 decision 5).
-
-    `decider_lab_diff` resolves ``correct`` from the AFTER capture alone and grades BOTH sides
-    through it, so it never runs two oracles: a re-ruling with an unchanged pick emits no verdict row
-    at all, and a `REGRESSION` beside a ruling move is still the honest claim *"under today's ruling
-    this build is wrong here and the baseline was right"*. Labelling that `stale_baseline` would
-    print the actionable sentence *"re-capture, your reference cannot speak"* over a frame whose
-    reference speaks fine — the mirror image of the defect this issue fixes."""
+    """The asymmetry (ADR-0110 decision 5): `decider_lab_diff` resolves ``correct`` from the AFTER
+    capture alone and grades both sides through it, so it never runs two oracles and owes no label."""
     d = decider_lab_diff(_dcap([_drow("k", [0], [0])]), _dcap([_drow("k", [0], [1])]))
     assert d["rows"] == [] and d["ruling_moves"]          # a re-ruling alone produces no verdict row
     assert "stale_baseline" not in d
@@ -1166,9 +1006,8 @@ def test_the_decision_gate_is_deliberately_NOT_given_a_stale_baseline_partition(
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_stale_readout_names_the_capture_point_and_stays_silent_when_empty(capsys):
-    """A label with no instruction is scenery. The line must say WHERE to re-capture from, because
-    capturing at HEAD bakes the change under test into its own reference — the trap that makes this
-    class of red non-self-correcting."""
+    """A label with no instruction is scenery: the line must say WHERE to re-capture from, because
+    capturing at HEAD bakes the change under test into its own reference."""
     gates.print_stale_baseline([])
     assert capsys.readouterr().out == ""
 
@@ -1184,13 +1023,8 @@ def test_the_stale_readout_names_the_capture_point_and_stays_silent_when_empty(c
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_json_artifact_reports_stale_baseline_as_a_SUBSET_of_ok_to_miss():
-    """The machine-readable half of the same guarantee the readout gives a human.
-
-    `leaf_lab --diff --out` is consumed by `leaf-gate-main.yml`, so `stale_baseline` is a public
-    contract, not an internal field. The property that must hold is **subset**, never difference: a
-    consumer that saw a shrunken `ok_to_miss` would conclude the gate had excused these frames, which
-    is the precise misreading ADR-0110 decision 1 exists to prevent. Asserted on the artifact
-    dict rather than on `leaf_lab_diff`, because the artifact is what leaves the process."""
+    """`leaf_lab --diff --out` is consumed by `leaf-gate-main.yml`, so `stale_baseline` is a public
+    contract. The property is **subset**, never difference — asserted on the artifact that leaves."""
     before = _report([_row("clean", "OK"), {**_row("reruled", "OK"), "correct": [1]}])
     after = _report([_row("clean", "MISS"), {**_row("reruled", "MISS"), "correct": [2]}])
     d = leaf_lab_diff(before, after)
@@ -1205,14 +1039,8 @@ def test_the_json_artifact_reports_stale_baseline_as_a_SUBSET_of_ok_to_miss():
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
-    """The invariant over the real corpus, not a fixture: the Decision Gate replays exactly the
-    store's replayable set. A capture that shrinks — the 40-record drop this issue fixes — breaks
-    this, and it is the assertion the issue's own acceptance asked for.
-
-    Set equality, not a count: a count assertion passes on a mis-keyed corpus, which was the larger
-    half of the defect. Independent of `data/decider_lab/baseline.json` on purpose — corrections are
-    tagged continuously and re-capture is a deliberate human act, so asserting against the committed
-    capture would redden `main` on every new tag."""
+    """The invariant over the real corpus: the Decision Gate replays exactly the store's replayable set.
+    Set equality, not a count, and independent of the committed capture on purpose."""
     from train.blunder.store import DEFAULT_ROOT
     from train.decider_lab import _records
     want = {k for k, _c in gates.keyed_corrections(
@@ -1235,8 +1063,7 @@ def test_decider_lab_reader_ignores_retired_match_scope_records(tmp_path):
 
 def _reviewed(tmp_path, entries):
     """A `reviewed.json` ledger on disk, keyed the way that store keys — by ADR-0049's Scope subject
-    (`review_key`), NOT by Frame Key. The two keyspaces differing is the whole reason the index has to
-    derive its join inside the corpus walk."""
+    (`review_key`), NOT by Frame Key. The two keyspaces differing is why the join lives in the walk."""
     path = tmp_path / "reviewed.json"
     path.write_text(json.dumps({"_note": "a comment key, dropped by the loader", **entries}),
                     encoding="utf-8")
@@ -1255,10 +1082,8 @@ def _held_out_fixture(fixtures_dir, frame_key, owner="#165"):
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_refuted_ruling_voids_the_label_and_a_covered_one_does_not(tmp_path):
-    """**The issue, in one assertion.** A refutation says the ruling was wrong; ``covered`` says it
-    stands and is already handled. Only the first can stop grading — voiding is not "anything that
-    appears in the ledger", and reading the ledger as a skip-list would drop 112 ``covered`` frames
-    out of the corpus."""
+    """A refutation says the ruling was wrong; ``covered`` says it stands. Only the first can stop
+    grading — reading the ledger as a skip-list would drop 112 ``covered`` frames out of the corpus."""
     root = _store(tmp_path / "corpus", [_rec(1, 3), _rec(2, 4)])
     led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "forgoes a KO"},
                                "2-4": {"disposition": "covered", "reason": "already handled"}})
@@ -1270,9 +1095,7 @@ def test_a_refuted_ruling_voids_the_label_and_a_covered_one_does_not(tmp_path):
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_transposition_voids_for_a_DIFFERENT_reason_than_a_refutation(tmp_path):
     """Both void; the readout must still say WHICH. ADR-0085 decision 4 cites `81905522-75`'s human
-    pick to justify leg-scoped rather than whole-target guards, so recording that frame as ``refuted``
-    would write into the ledger an assertion a shipped ADR contradicts. The distinction is why
-    `voids_the_label` is derived instead of the disposition being compared at call sites."""
+    pick, so recording that frame as ``refuted`` would contradict a shipped ADR."""
     root = _store(tmp_path / "corpus", [_rec(1, 3)])
     led = _reviewed(tmp_path, {"1-3": {"disposition": "transposition",
                                        "reason": "two identical Riolu"}})
@@ -1285,11 +1108,8 @@ def test_a_transposition_voids_for_a_DIFFERENT_reason_than_a_refutation(tmp_path
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_the_index_derives_its_join_rather_than_assuming_the_decision_keyspace(tmp_path):
-    """The two stores key differently and NEITHER derives from the other: `reviewed.json` keys by
-    Scope subject (``<ep>-t<turn>s<seat>`` for a turn Correction), the gates by Frame Key
-    (``<ep>|<seat>|<scope>|<subject>``). A translation written anywhere but inside the corpus walk is
-    the hand-built key ADR-0087 decision 2 forbids — and the seat-0 / scope-``decision`` assumption is
-    exactly the one that cost the Decision Gate 203 of its 372 keys."""
+    """The two stores key differently and NEITHER derives from the other, so a translation written
+    anywhere but inside the corpus walk is the hand-built key ADR-0087 decision 2 forbids."""
     root = _store(tmp_path / "corpus", [_rec(7, 51, seat=1),
                                         _rec(8, 82, seat=1, scope="turn", subject=8)])
     led = _reviewed(tmp_path, {"7-51": {"disposition": "refuted", "reason": "x"},
@@ -1300,10 +1120,8 @@ def test_the_index_derives_its_join_rather_than_assuming_the_decision_keyspace(t
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_voiding_source_wins_over_a_non_voiding_one_and_both_are_retained(tmp_path):
-    """The precedence rule. A refutation is a strictly later, stronger act than a ``covered`` or a
-    hold-out, so a merge letting the weaker disposition win would re-open the hole. Every ruling is
-    kept regardless, so the readout can still name every store that ruled the frame — which is what
-    makes this an index rather than a skip-list."""
+    """A refutation is a strictly later, stronger act than a ``covered`` or a hold-out, so the weaker
+    disposition must not win. Every ruling is retained, which makes this an index, not a skip-list."""
     root = _store(tmp_path / "corpus", [_rec(1, 3)])
     led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "bad label"}})
     fixtures = _held_out_fixture(tmp_path / "fixtures", "1|0|decision|3")
@@ -1314,9 +1132,8 @@ def test_a_voiding_source_wins_over_a_non_voiding_one_and_both_are_retained(tmp_
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_held_out_ruling_alone_never_voids(tmp_path):
-    """Holding a frame out of a gate's SCOPE is not disowning the ruling. If it voided, the eleven
-    Held-out Ledger frames would silently leave the agree rate too — a denominator change nobody
-    ruled on."""
+    """Holding a frame out of a gate's SCOPE is not disowning the ruling: if it voided, the Held-out
+    Ledger frames would silently leave the agree rate too — a denominator change nobody ruled on."""
     root = _store(tmp_path / "corpus", [_rec(1, 3)])
     fixtures = _held_out_fixture(tmp_path / "fixtures", "1|0|decision|3")
     index = gates.ruling_index(root, reviewed_path=_reviewed(tmp_path, {}), fixtures_dir=fixtures)
@@ -1327,8 +1144,7 @@ def test_a_held_out_ruling_alone_never_voids(tmp_path):
 @pytest.mark.req("REQ-GATE-0010")
 def test_an_unrecognised_disposition_is_non_voiding_and_reported_not_swallowed(tmp_path):
     """The loud path. An unknown word keeps grading (the safe direction) but must not be silent: a
-    disposition nobody registered is a ruling nobody's grader is honouring, and the committed ledger
-    already demonstrated that drift running unnoticed with ``fixed`` and ``deferred-multi-turn``."""
+    disposition nobody registered is a ruling nobody's grader is honouring."""
     root = _store(tmp_path / "corpus", [_rec(1, 3)])
     led = _reviewed(tmp_path, {"1-3": {"disposition": "probably-fine", "reason": "?"}})
     index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
@@ -1346,10 +1162,8 @@ def test_the_writers_vocabulary_and_the_graders_vocabulary_are_the_same_words():
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_a_voided_regression_is_reported_and_does_NOT_fail_either_gate():
-    """**The live hazard, closed.** 18 of 101 recorded disagreements carried a refuted label, so a
-    build that corrected one of them failed `main` as a REGRESSION — a fix wearing a regression's
-    label. The row must still EXIST (a vanishing frame is the shrinking-gated-set failure
-    ``added``/``removed`` exist to prevent); only the verdict is excused."""
+    """18 of 101 recorded disagreements carried a refuted label, so a build correcting one failed `main`
+    as a REGRESSION. The row must still EXIST — only the verdict is excused."""
     before = _dcap([_drow("void", [0], [0]), _drow("real", [0], [0])])
     after = _dcap([_drow("void", [3], [0]), _drow("real", [3], [0])])
     rows = decider_lab_diff(before, after, voided={"void"})["rows"]
@@ -1371,10 +1185,8 @@ def test_a_voided_regression_is_reported_and_does_NOT_fail_either_gate():
 
 @pytest.mark.req("REQ-GATE-0011")
 def test_offsetting_moves_cannot_present_as_stillness():
-    """**The measured failure, asserted directly.** Re-capturing the baseline moved three rows and
-    printed ``230/331 -> 230/331``, because a re-ruling flipped one frame disagree->agree and exactly
-    cancelled a regression's agree->disagree. The rate legitimately does not move; what must not
-    happen is the report implying nothing did."""
+    """A re-ruling can flip one frame disagree→agree and exactly cancel a regression's agree→disagree.
+    The rate legitimately does not move; what must not happen is the report implying nothing did."""
     before = _dcap([_drow("regressed", [1], [1]), _drow("reruled", [0], [9])])
     after = _dcap([_drow("regressed", [4], [1]), _drow("reruled", [0], [0])])
     delta = decider_lab_diff(before, after)["agree_delta"]
@@ -1384,9 +1196,8 @@ def test_offsetting_moves_cannot_present_as_stillness():
 
 @pytest.mark.req("REQ-GATE-0011")
 def test_the_delta_restates_BOTH_sides_against_todays_voided_set():
-    """The rulings are one corpus, not a property of a capture. Restating the baseline is what makes
-    ``230/331 -> 231/313`` legible instead of an unexplained denominator jump — applying the voided
-    set to only the new side would print a rate change no agent caused."""
+    """The rulings are one corpus, not a property of a capture, so restating the baseline is what makes
+    the delta legible instead of an unexplained denominator jump."""
     rows = [_drow("kept", [1], [1]), _drow("void", [0], [1])]
     delta = decider_lab_diff(_dcap(rows), _dcap(rows), voided={"void"})["agree_delta"]
     assert delta["before"] == delta["after"] == (1, 1)     # 1/2 -> 1/1 on BOTH sides
@@ -1395,9 +1206,8 @@ def test_the_delta_restates_BOTH_sides_against_todays_voided_set():
 
 @pytest.mark.req("REQ-GATE-0011")
 def test_an_unlabelled_or_unreplayable_frame_is_outside_the_delta_entirely():
-    """Neither agreement nor disagreement, and neither is a void: ``correct is None`` was never ruled,
-    ``chosen is None`` could not be replayed. Counting either in the denominator would report the
-    agent as wrong about a frame nobody asked it about."""
+    """Neither agreement nor disagreement, and neither is a void: counting either in the denominator
+    would report the agent as wrong about a frame nobody asked it about."""
     rows = [_drow("ok", [1], [1]), _drow("unlabelled", [0], None), _drow("dead", None, [1])]
     delta = decider_lab_diff(_dcap(rows), _dcap(rows))["agree_delta"]
     assert delta["before"] == delta["after"] == (1, 1)
@@ -1405,9 +1215,8 @@ def test_an_unlabelled_or_unreplayable_frame_is_outside_the_delta_entirely():
 
 @pytest.mark.req("REQ-GATE-0011")
 def test_the_leaf_delta_is_drawn_from_the_SAME_population_as_its_compared_count():
-    """The trap `ruling_moves` already documents, re-checked one function along: a delta drawn from
-    all rows would report a rate over frames the diff's own ``compared`` excludes, and two numbers in
-    one report must describe one population."""
+    """The trap `ruling_moves` already documents, re-checked one function along: two numbers in one
+    report must describe one population."""
     unscorable = {"key": "u", "correct_is_top": None, "unscorable": True, "correct": [1]}
     rpt = _report([_row("s", "OK"), unscorable])
     d = leaf_lab_diff(rpt, rpt)
@@ -1420,22 +1229,15 @@ def test_the_leaf_delta_is_drawn_from_the_SAME_population_as_its_compared_count(
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_every_disposition_in_the_committed_ledger_is_recognised_vocabulary():
-    """Over the REAL ledger. This is the assertion whose absence let ``fixed`` and
-    ``deferred-multi-turn`` sit unregistered — the file and the vocabulary drifting apart in silence
-    is the defect, not either word."""
+    """Over the REAL ledger. Its absence is what let two dispositions sit unregistered — the file and
+    the vocabulary drifting apart in silence is the defect, not either word."""
     assert gates.unrecognised_rulings(gates.ruling_index()) == []
 
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_an_orphaned_ledger_entry_is_reported_rather_than_ruling_on_nothing(tmp_path):
-    """A ledger key matching no committed Correction voids NOTHING, silently — `ruling_index` walks
-    the CORPUS and looks each record up, so an unreachable entry never enters the index and nothing
-    reports that it rules on nothing.
-
-    Asserting it via the index is IMPOSSIBLE and the attempt is a trap: ``voided_frames(index)`` is a
-    subset of ``keyed_corrections`` **by construction**, so a test written that way can never fail.
-    The join has to be walked from the LEDGER's side, which is what `orphan_rulings` does — the same
-    detachment guard `claim_agreement`'s ``no_record`` finding is one store over."""
+    """A ledger key matching no committed Correction voids NOTHING, silently. Asserting it through the
+    index is impossible by construction, so the join has to be walked from the LEDGER's side."""
     root = _store(tmp_path / "corpus", [_rec(1, 3)])
     led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "real"},
                                "9-99": {"disposition": "refuted", "reason": "rules on nothing"}})
@@ -1446,28 +1248,15 @@ def test_an_orphaned_ledger_entry_is_reported_rather_than_ruling_on_nothing(tmp_
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_no_committed_ledger_entry_rules_on_nothing():
-    """Over the REAL ledger, and the strongest form: **zero** entries rule on no committed
-    Correction.
-
-    This asserted the two known orphans by name while fixing them was still the user's call. Both are
-    now repaired (Issue #250) — and neither was stale, which is why the assertion could be tightened
-    rather than merely re-measured: `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10, in the
-    same store file) and `86091435-119` the wrong key SHAPE (the record is turn-scoped, so its
-    `review_key` is `86091435-t14s0`; 119 is the Anchor frame the report used to print).
-
-    Asserting empty rather than a count also makes this the reachability guard for the WHOLE ledger:
-    it proves all ~145 committed entries resolve, including the ones nobody has re-checked. A new
-    orphan — the third, from any source — turns it red on the commit that introduces it. The writer
-    now refuses to create one (ADR-0090 decision 2), so this is the backstop for hand-edits."""
+    """Over the REAL ledger, in its strongest form: ZERO entries rule on no committed Correction, which
+    makes this the reachability guard for the whole ledger rather than a two-orphan assertion."""
     assert [k for k, _e in gates.orphan_rulings()] == []
 
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
-    """One precedence, shared by both gates. A HELD-OUT ruling STANDS and is merely out of this gate's
-    scope; a voided one cannot grade at all — so when a frame carries both, HELD OUT is the more
-    informative thing to print. Written once because both gates had the same three comprehensions,
-    which is how the two would eventually disagree about what excuses a frame."""
+    """One precedence, shared by both gates: a HELD-OUT ruling STANDS and is merely out of scope, while
+    a voided one cannot grade at all. Written once, because both gates had the same comprehensions."""
     rows = [{"key": "both"}, {"key": "held"}, {"key": "void"}, {"key": "bare"}]
     gating, ruled, void_hits = gates.split_excused(
         rows, {"both": "#1", "held": "#1"}, {"both": object(), "void": object()})
@@ -1478,18 +1267,8 @@ def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
 
 @pytest.mark.req("REQ-GATE-0010")
 def test_the_transposition_frame_is_now_GRADED_and_SATISFIED_not_voided():
-    """`81905522|0|decision|75` — the frame this whole vocabulary was invented for — is graded again
-    (ADR-0091 decision 3, Issue #247).
-
-    This test used to assert the frame was *recorded and voided*, i.e. it pinned the WORKAROUND. The
-    oracle makes the ruling satisfiable on purpose: the agent picks index 1, the human ruled index 3,
-    and the two are the same undamaged Riolu, so the pick agrees. Voiding it now would excuse a frame
-    the gate can adjudicate — verbatim the complaint Issue #247's title makes.
-
-    `82749168-38` still stands as the neighbouring `refuted`, and its SEAT is still the point: it is
-    seat **1**, while the retired probe constant keyed it ``"82749168-38"`` with no seat at all, which
-    is why that store could never join the gates' keyspace. The key here is derived by the index
-    rather than written by hand, which is the property that catches it."""
+    """`81905522|0|decision|75` is GRADED again (ADR-0091 decision 3): the agent's index 1 and the
+    human's index 3 are the same undamaged Riolu, so voiding would excuse a gradeable frame."""
     voided = gates.voided_frames(gates.ruling_index())
     assert "81905522|0|decision|75" not in voided, "the transposition entry is retired, not re-filed"
     assert voided["82749168|1|decision|38"].disposition == "refuted"
@@ -1501,20 +1280,15 @@ def test_the_transposition_frame_is_now_GRADED_and_SATISFIED_not_voided():
 
 
 def test_the_transposition_WORD_survives_with_no_corpus_entry_behind_it():
-    """Decision 3 deletes the ENTRY and keeps the VOCABULARY. The oracle is sound only over what the
-    snapshot reveals — a face-down DECK option can never be fingerprinted — so an equivalence turning
-    on information outside `obs` would otherwise be unrecordable by a human."""
+    """Decision 3 deletes the ENTRY and keeps the VOCABULARY: the oracle is sound only over what the
+    snapshot reveals, so an equivalence turning on information outside `obs` stays unrecordable."""
     assert "transposition" in gates.VOIDING_DISPOSITIONS
     assert "transposition" in gates.RECOGNISED_DISPOSITIONS
 
 
 def test_the_SECOND_instance_nobody_ruled_is_graded_correctly():
-    """`86091728|0|decision|19` sat in the corpus scored as a DISAGREEMENT the entire time — the same
-    Energy card onto either of two identical id-119 basics (70/70, empty, no tools), agent on bench 0
-    and the human on bench 1.
-
-    It is the evidence that the class needed fixing rather than the instance: nobody had ruled it, so
-    no ledger entry could ever have reached it, and only an oracle reading the board finds it."""
+    """`86091728|0|decision|19` sat scored as a DISAGREEMENT the whole time — the same Energy onto
+    either of two identical basics. Nobody ruled it, so only an oracle reading the board finds it."""
     equiv = gates.equivalence_index()["86091728|0|decision|19"]
     assert gates.satisfies_human([2], [3], equiv=equiv) is True
     assert gates.satisfies_human([2], [3]) is False
@@ -1530,16 +1304,8 @@ def test_a_ruling_is_NOT_satisfied_by_an_option_outside_its_class():
 # ── the no-DLL layering, asserted rather than asserted-in-prose ──────────────────────────────────
 
 def test_importing_gates_never_maps_the_native_engine():
-    """`train.gates` must stay loadable with **no DLL** — the offline cross-platform suite depends on
-    it, and `cg.api` maps the native library on a bare import (`libcg` in /proc/self/maps).
-
-    Until ADR-0091 that constraint was a COMMENT. Decision 7 has `gates` import shipped code
-    (`common.option_equivalence`), which is exactly the kind of edge that turns a documented
-    invariant into a broken one three refactors later — a shipped module gains an innocuous
-    convenience import and the gates stop loading on a machine with no engine. So it is a test now.
-
-    A subprocess, because this process has almost certainly imported `cg` already: the assertion is
-    about what a FRESH interpreter loads, which an in-process check cannot see."""
+    """`train.gates` must stay loadable with NO DLL, and ADR-0091 decision 7 has it importing shipped
+    code. A subprocess, because this process has almost certainly imported `cg` already."""
     import subprocess
     import sys
     from pathlib import Path
@@ -1608,15 +1374,8 @@ def test_a_capture_row_records_WHICH_options_were_one_decision():
 
 
 def test_ONE_pick_cannot_satisfy_TWO_ruled_cards_in_the_same_class():
-    """The regression guard for a real defect this build shipped and the review caught.
-
-    The first implementation asked only *"does some member of this card's class appear in the
-    pick?"*, so a ruling of ``[1, 3]`` over two indistinguishable options was satisfied by taking
-    ``[1]`` alone — one pick answering for two ruled cards. A class widens WHICH option satisfies a
-    ruled card; it must never let one pick satisfy two of them.
-
-    Zero committed frames hit this today (all 372 checked), so it was latent rather than a live
-    mis-grade — which is precisely why it needs a test rather than a corpus assertion."""
+    """A class widens WHICH option satisfies a ruled card; it must never let ONE pick satisfy two of
+    them. Zero committed frames hit this today, so it is latent — which is why it needs a test."""
     equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
     assert satisfies_human([1], [1, 3], equiv=equiv) is False, "half the ruling is not the ruling"
     assert satisfies_human([1, 3], [1, 3], equiv=equiv) is True
@@ -1626,11 +1385,8 @@ def test_ONE_pick_cannot_satisfy_TWO_ruled_cards_in_the_same_class():
 
 
 def test_the_diff_classifies_a_SIBLING_pick_as_neutral_not_a_regression():
-    """The gate half of the fix, and the one that decides whether `main` goes red.
-
-    A build whose agent moves from one member of a class to another has changed nothing the ruling
-    can see. Before the oracle that read as a REGRESSION and failed `main`; it must now be NEUTRAL —
-    a real change in what was played, but not one the corpus adjudicates."""
+    """A build moving from one member of a class to another has changed nothing the ruling can see:
+    before the oracle that read as a REGRESSION and failed `main`, and it must now be NEUTRAL."""
     before = _report([{"key": "e|0|decision|1", "chosen": [3], "correct": [3], "context": 0}])
     after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
     equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
@@ -1644,9 +1400,8 @@ def test_the_diff_classifies_a_SIBLING_pick_as_neutral_not_a_regression():
 
 
 def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
-    """The equivalence is a property of the CORPUS, not of a capture: an old baseline carries no
-    `equiv` field at all, so if the diff read the map off each side it would grade its two halves
-    under two different oracles. The agree delta must move on both sides at once."""
+    """The equivalence is a property of the CORPUS, not of a capture — an old baseline carries no
+    `equiv` field, so reading the map off each side would grade the two halves under two oracles."""
     before = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
     after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
     equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
@@ -1655,24 +1410,14 @@ def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
     assert aware["before"] == (1, 1) and aware["after"] == (1, 1)
 
 
-# ── a re-capture may not move a verdict without a ruling (ADR-0094) ───────────────────────────
-#
-# `CLAUDE.md` says a baseline is a ruling record and is never auto-recaptured. Nothing enforced it.
-#
-# Measured BEFORE building the guard, and the honest result is that the convention HELD: every
-# transition of `data/leaf_lab/baseline.json` across its whole history, replayed against the Ruling
-# Index (2026-08-01), shows three re-captures absorbing an `OK -> MISS` — five flips — and every one
-# carried a ruling. So these tests guard a rule that has never been broken, and the value is removing
-# the reliance on discipline across a six-track build where every track rebases, not repairing a
-# breach. Said plainly here because a test suite is where a false "this fixes X" claim would survive
-# longest.
+# ── a re-capture may not move a verdict without a ruling (ADR-0094) ───────────────────────────────
+# Measured before building: the convention had never been broken, so this removes the reliance on it.
 
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_a_recapture_moving_an_unruled_frame_in_the_fail_direction_is_refused():
-    """The frame is OK in the outgoing baseline and MISS in the fresh capture, and the Ruling Index
-    holds nothing for it — so the write is refused rather than silently making the MISS the new
-    reference."""
+    """The frame is OK in the outgoing baseline and MISS in the fresh capture with no ruling for it, so
+    the write is REFUSED rather than silently making the MISS the new reference."""
     outgoing = _report([_row("84071010|0|decision|15", "OK")])
     fresh = _report([_row("84071010|0|decision|15", "MISS")])
     fail = [f["key"] for f in leaf_lab_diff(outgoing, fresh)["ok_to_miss"]]
@@ -1694,9 +1439,8 @@ def test_a_recapture_moving_a_RULED_frame_is_allowed():
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_a_held_out_or_voided_frame_needs_no_second_excuse():
-    """`ruling_index` already folds the Held-out Ledger and the voiding dispositions in as rulings,
-    so "carries a ruling" is ONE predicate. A second special case here would be a second idea of
-    what it means for a frame to have been ruled — the defect ADR-0087 charges for."""
+    """`ruling_index` already folds the Held-out Ledger and the voiding dispositions in, so "carries a
+    ruling" is ONE predicate; a second special case would be a second idea of what ruled means."""
     fail = ["a", "b"]
     index = {"a": (gates.Ruling(disposition="held_out", source="held_out", owner="#165"),),
              "b": (gates.Ruling(disposition="refuted", source="reviewed"),)}
@@ -1727,9 +1471,8 @@ def test_the_refusal_names_EVERY_offending_key_not_just_the_first():
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_the_decider_fail_direction_is_REGRESSION_not_any_movement():
-    """The Decision Gate's fail direction is `satisfies_human` True -> False, which is exactly the
-    verdict `decider_lab_diff` already computes. Reusing it is what stops the guard and the gate
-    drifting into two ideas of "worse"."""
+    """The Decision Gate's fail direction is `satisfies_human` True → False, exactly the verdict
+    `decider_lab_diff` already computes — reusing it stops two ideas of "worse" drifting apart."""
     before = _report([{"key": "e|0|decision|1", "chosen": [0], "correct": [0], "context": 0},
                       {"key": "e|0|decision|2", "chosen": [1], "correct": [0], "context": 0}])
     after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [0], "context": 0},
@@ -1740,9 +1483,8 @@ def test_the_decider_fail_direction_is_REGRESSION_not_any_movement():
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_both_labs_read_their_fail_direction_through_a_NAMED_reader():
-    """The two labs must be actually symmetric, not merely described as such. The first build gave
-    the decider `decision_fail_keys` and left the leaf inlining its `ok_to_miss` comprehension at the
-    call site — the shape where one lab quietly grows a filter the other lacks."""
+    """The two labs must be actually symmetric, not merely described as such: the first build left the
+    leaf inlining its `ok_to_miss` comprehension at the call site."""
     leaf = leaf_lab_diff(_report([_row("a", "OK")]), _report([_row("a", "MISS")]))
     assert gates.discrimination_fail_keys(leaf) == ["a"]
     assert gates.discrimination_fail_keys({}) == []          # absent key, not a crash
@@ -1751,9 +1493,8 @@ def test_both_labs_read_their_fail_direction_through_a_NAMED_reader():
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_the_shared_guarded_capture_writes_refuses_and_never_half_writes(tmp_path):
-    """The whole ruling-gated write, shared by both labs. Three behaviours in one seam: a FIRST
-    capture writes freely (no prior ruling record to protect); a clean re-capture writes; a
-    fail-direction move with no ruling returns 1 and leaves the artifact byte-identical."""
+    """Three behaviours in one shared seam: a FIRST capture writes freely, a clean re-capture writes,
+    and a fail-direction move with no ruling returns 1 and leaves the artifact byte-identical."""
     out = tmp_path / "baseline.json"
     fresh_ok = _report([_row("a", "OK")])
     wrote = []
@@ -1783,10 +1524,8 @@ def test_the_shared_guarded_capture_writes_refuses_and_never_half_writes(tmp_pat
 
 @pytest.mark.req("REQ-GATE-0012")
 def test_a_restamp_changes_the_recorded_revision_and_NOTHING_else(tmp_path):
-    """Four of the twelve committed re-captures moved NOTHING but the recorded revision — a rebase
-    had orphaned the SHA. Serving that through `capture` means re-reading the build (the
-    ruling-bearing operation) to achieve a metadata edit. Separating them is the decision: `capture`
-    carries rulings, `restamp` carries metadata, and they stop being one command that does both."""
+    """Four of the twelve committed re-captures moved NOTHING but the recorded revision, and serving
+    that through `capture` means re-reading the build to achieve a metadata edit — so they split."""
     art = tmp_path / "baseline.json"
     doc = {"git_rev": "e4c46ca", "agent": None, "n": 2,
            "rows": [_row("a", "OK"), _row("b", "MISS")]}

@@ -14,9 +14,7 @@ from train.tune import _build_pilot
 
 @pytest.mark.req("REQ-TUNER-0012")
 def test_tune_pilot_decides_with_the_deployed_profile():
-    """REQ-TUNER-0012: for every profile flag, the engine-backed tune Pilot reads
-    ``strategy.params.get(flag, PROFILE[flag])`` — identical to the deployed agent's
-    resolution, so a retest can never again run a shipped layer dark."""
+    """The tune Pilot resolves every profile flag as the deployed agent does, so no layer runs dark."""
     pilot, seeds = _build_pilot("mega_starmie")
     for flag, shipped in PROFILE.items():
         expected = pilot.strategy.params.get(flag, shipped)

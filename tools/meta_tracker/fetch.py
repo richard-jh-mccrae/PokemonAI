@@ -124,9 +124,8 @@ def download_replay(episode_id: int, dest_dir: str | Path) -> Path:
 # --- Daily top-episode datasets (the official export) --------------------
 
 def _manifest_slug(row: dict) -> str | None:
-    """Owner-qualified dataset slug for a manifest row. The `daily_dataset_slug`
-    column omits the owner, which the CLI rejects with 403 — so prefer the
-    owner/name parsed from the URL, falling back to the `kaggle/` owner."""
+    """Owner-qualified dataset slug for a manifest row. The `daily_dataset_slug` column omits the owner,
+    which the CLI rejects with 403, so prefer the owner/name parsed from the URL."""
     name = row.get("daily_dataset_slug")
     if not name:
         return None
@@ -151,11 +150,8 @@ def episodes_index() -> list[dict]:
 
 def dataset_episode_page(slug: str, page_token: str | None = None,
                          page_size: int = 200) -> tuple[list[int], str | None]:
-    """One page of a daily dataset's files -> (episode_ids, next_page_token).
-
-    `ListDatasetFiles` is rate-limited, so callers page incrementally (a few pages
-    per run, resuming from the saved token) rather than listing all ~5k at once.
-    """
+    """One page of a daily dataset's files -> (episode_ids, next_page_token). `ListDatasetFiles` is
+    rate-limited, so callers page incrementally rather than listing all ~5k at once."""
     args = ["datasets", "files", slug, "-v", "--page-size", str(page_size)]  # no -q here
     if page_token:
         args += ["--page-token", page_token]

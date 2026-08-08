@@ -1,5 +1,5 @@
 """Threat-Clock unification S1 — the ``incoming(t, policy)`` curve (design:
-docs/plans/opponent-value-equation-unification.md).
+docs/plans/ADR-0078).
 
 ``CombatMath.incoming`` generalises ``reachable_incoming`` (the ADR-0064 t=1 read) to an N-turn
 ENERGY clock: at future turn t the opponent has had t attach-turns, so a form is affordable under

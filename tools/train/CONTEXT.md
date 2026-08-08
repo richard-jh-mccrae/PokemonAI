@@ -251,7 +251,7 @@ report and exit 0.
 
 **A green Decision Gate means nothing REGRESSED. It does not mean the agent is right** — the baseline
 records every frame it captured as the reference, including the 101 where the agent contradicts a
-human ruling (`docs/plans/decider-disagreement-triage.md` tiers them).
+human ruling (``python -m tools.train.decider_lab diff`` tiers them).
 
 ⚠️ Its corpus is **372** frames, not the 332 the pre-ADR-0087 capture reported, and the 101/331
 figures are readings of that reduced, mis-keyed set. It is a **Corpus Reader** and bound by that

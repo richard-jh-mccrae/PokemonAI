@@ -1,12 +1,7 @@
 """Guards on the POC-T4/5 flip table (`poc_t4_flips.py`) — so an xfail list cannot rot into cover.
 
-A table of `xfail(strict=True)` frames is a promise that someone will come back. `strict` keeps the
-promise in ONE direction: a frame that starts agreeing again turns red. Nothing in pytest keeps it in
-the other — a fixture that gets renamed, a row whose recorded indices drift, or a diagnosis that
-silently stops being true would all leave the table looking like a considered ruling when it had
-become a list of names.
-
-These are cheap, and each one is here because the alternative is a specific way of being wrong.
+`strict` only catches a frame that starts agreeing again. A renamed fixture, a drifted index or a
+diagnosis that stopped being true would all leave the table looking like a considered ruling.
 """
 import json
 from pathlib import Path
@@ -29,9 +24,8 @@ def test_every_flip_names_a_fixture_that_exists():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_every_flip_records_the_ruling_the_fixture_actually_carries():
-    """The `ruled` column must match the fixture's own `correct`. If a frame is re-ruled upstream,
-    this table's row becomes a claim about a decision nobody made — and the xfail would then be
-    excusing the agent from a ruling that no longer exists."""
+    """If a frame is re-ruled upstream the row becomes a claim about a decision nobody made, and the
+    xfail excuses the agent from a ruling that no longer exists."""
     wrong = []
     for name, (_kind, ruled, _got, _note) in FLIPS.items():
         fx = json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
@@ -42,10 +36,8 @@ def test_every_flip_records_the_ruling_the_fixture_actually_carries():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_two_diagnoses_partition_the_table_and_both_are_populated():
-    """A REFUSAL and a VALUATION need different work — one is seam coverage, the other is a human
-    ruling — so collapsing to one bucket would send every frame to the wrong queue. Both populated,
-    because a table that had drifted to all-of-one-kind would mean the diagnosis stopped being
-    measured and started being assumed."""
+    """A REFUSAL is seam coverage and a VALUATION is a human ruling, so collapsing to one bucket
+    sends every frame to the wrong queue; all-of-one-kind means the diagnosis stopped being measured."""
     assert REFUSALS | VALUATIONS == set(FLIPS)
     assert not (REFUSALS & VALUATIONS)
     assert REFUSALS and VALUATIONS
@@ -53,11 +45,8 @@ def test_the_two_diagnoses_partition_the_table_and_both_are_populated():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_a_row_the_tie_defer_retired_never_quietly_returns():
-    """`RETIRED_BY_THE_TIE_DEFER` names three frames that stopped flipping. Re-listing one in `FLIPS`
-    would xfail a frame the agent now gets RIGHT — the exact inversion `strict` exists to prevent,
-    except that `strict` cannot see it: an xfail on a passing test is an XPASS only if someone runs
-    it, and a row can be added at the same moment the behaviour regresses, in which case both are
-    consistent and nobody looks. Cheaper to forbid the overlap outright."""
+    """Re-listing a retired frame in `FLIPS` would xfail one the agent now gets RIGHT, and `strict`
+    cannot see it if the row lands at the same moment the behaviour regresses."""
     overlap = sorted(set(RETIRED_BY_THE_TIE_DEFER) & set(FLIPS))
     assert overlap == [], (
         f"{overlap} were retired from the flip table by the tie-defer and are listed again. If the "
@@ -90,12 +79,8 @@ def test_marks_are_strict_and_only_apply_to_listed_frames():
 
 # ── the diagnosis itself, re-measured rather than trusted ────────────────────────────────────────
 def _isolated_verdict(pilot, model, option):
-    """REFUSED or PRICED for ONE option, composed ALONE.
-
-    A refusal is a per-option property — it does not depend on what else is on the menu — so a menu
-    of exactly one option answers the question with nothing to key and nothing to match. Three
-    earlier spellings of this check each returned a clean wrong answer instead (see
-    `poc_t4_flips`' module docstring); this is the one that discriminates."""
+    """REFUSED or PRICED for ONE option, composed ALONE: a refusal is a per-option property, so a
+    one-option menu answers it with nothing to key and nothing to match."""
     from common import composer as cp
     res = cp.compose(model, [option], shed=pilot.cost_shed_indices)
     return "REFUSED" if list(res.gaps) else "PRICED"
@@ -104,12 +89,8 @@ def _isolated_verdict(pilot, model, option):
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.parametrize("name", sorted(FLIPS))
 def test_the_recorded_diagnosis_is_what_the_seam_still_says(name):
-    """Each row's REFUSAL/VALUATION is a claim about the composer's seam, and the whole point of the
-    split is that the two go to different queues: a REFUSAL is coverage work (Issue #383/#300), a
-    VALUATION is a human ruling. A row that drifts sends its frame to the wrong one, silently.
-
-    This is the guard the first version of the table did not have, and its absence is exactly how
-    three rows sat mis-classified: nothing re-asked the seam after the note was written."""
+    """Each row's REFUSAL/VALUATION is a claim about the composer's seam, re-asked rather than
+    trusted: a drifted row sends its frame to the wrong queue, silently."""
     import sys
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
@@ -133,13 +114,8 @@ def test_the_recorded_diagnosis_is_what_the_seam_still_says(name):
 # ── the CORPUS RECORD half of the table ──────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_two_tables_do_not_overlap_and_the_record_one_is_populated():
-    """`FLIPS` is keyed by fixture FILE, `CORPUS_RECORD_FLIPS` by (episode, frame). The split is
-    deliberate — a record frame has no `.json` for the fixture guards to resolve — but two tables
-    are two places a frame can be recorded, so assert they cannot both claim one.
-
-    Cross-key comparison is by the frame's episode, which is the only thing the two spellings share:
-    a fixture named `..._8322_f31` and a record row `("8322", 31)` would be the same decision filed
-    twice, and the strict xfails would then both fire on whichever test ran."""
+    """`FLIPS` is keyed by fixture FILE, `CORPUS_RECORD_FLIPS` by (episode, frame) — two places one
+    frame could be recorded. Compared by episode, the only thing the two spellings share."""
     assert CORPUS_RECORD_FLIPS, "the record table is empty — it is either unused or stopped loading"
     eps = {ep for ep, _fr in CORPUS_RECORD_FLIPS}
     clashes = sorted(n for n in FLIPS if any(ep in n for ep in eps))

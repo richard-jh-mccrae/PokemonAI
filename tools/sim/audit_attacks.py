@@ -1,62 +1,15 @@
-"""Attack-audit MEASUREMENT harness (ADR-0032 item 5, measurement half).
-
-For a target attack, drives the native engine (like ``probe_resistance.py``) and records what
-the attack ACTUALLY dealt under a fixed defender panel — vanilla / weak / resist / prevent_ex
-(Crustle 345, ex attackers only) — plus optional single-variable sweeps and a coin fork
-(``search_begin(manual_coin=True)``) that measures min/max dealt over both coin outcomes.
-Measures only; the prediction diff (the oracle join) is a later step. Records accumulate in
-``reports/attack_audit/measurements.json`` (gitignored).
+"""Attack-audit MEASUREMENT harness (ADR-0032 item 5, ADR-0083): drives the native engine and
+records what an attack ACTUALLY dealt under a fixed defender panel, plus single-variable sweeps
+and a coin fork. Records accumulate in ``reports/attack_audit/measurements.json`` (gitignored).
 
     python tools/sim/audit_attacks.py --attack 1488          # one attack, whole panel
     python tools/sim/audit_attacks.py --all --limit 50       # batch, resumable
     python tools/sim/audit_attacks.py --attack 300 --sweep   # + energy/hand sweep points
 
-Two layers, split like ``probe_cards.py``: **pure helpers** (panel selection, chains, decks,
-scenario planning, log-window damage extraction, record shaping, merge) are lib-free and
-unit-tested (``tests/test_audit_attacks.py``); the **drive shell** lazily imports ``cg`` and is
-covered by engine smokes (``tests/test_audit_attacks_engine.py``).
+Two layers: the **pure helpers** above the fold are lib-free; the **drive shell** below lazily
+imports ``cg``. The REQ-AUDIT ids the tests mark against are reasoned in ADR-0032 and ADR-0083.
 
-Requirements:
-    REQ-AUDIT-0001  Panel selection from card data: vanilla/weak/resist by the attacker's type
-                    (basic, no ability, non-Tera, highest HP); prevent_ex = Crustle 345 for
-                    ex/megaEx attackers only; an unmatchable scenario yields None, not a guess.
-    REQ-AUDIT-0002  Side decks are legal 60-card: 4x each chain card + basic-Energy fill mapped
-                    from the attack's cost (colorless -> a real Energy card).
-    REQ-AUDIT-0003  Evolution chains resolve basic-first by walking evolvesFrom names.
-    REQ-AUDIT-0004  Dealt damage extracted from the attack log window (ATTACK -> turn boundary):
-                    split active/bench/self by serial, KO censoring flagged, coins counted,
-                    heals never counted as damage.
-    REQ-AUDIT-0005  Records carry attackId/attackerCardId/scenario/printed/dealtActive/
-                    dealtBench/defenderCardId/attackerEnergies/myHandSize/coin (+ hp/koed/self).
-    REQ-AUDIT-0006  An unmeasurable attack x scenario is an explicit {"error": ...} ledger
-                    entry — never a silent skip.
-    REQ-AUDIT-0007  Re-runs merge by record key: a new measurement wins, but an error never
-                    clobbers an existing success (accumulative, like card_functions).
-    REQ-AUDIT-0008  Sweep planning varies exactly ONE state variable (attached energy, my hand
-                    size via delayed attack, or one seat's bench) across 2-3 points, only when
-                    requested.
-    REQ-AUDIT-0018  Per-seat bench counts are CONTROLLED (a target both seats are driven to,
-                    within bench patience) and RECORDED on every measurement. Bench population
-                    was previously uncontrolled and unrecorded, so it was free to co-vary with
-                    the swept variable — which is how a combined-bench scaler came to ship an
-                    exact-looking `atk_hand` fit (274 Torcherto).
-    REQ-AUDIT-0009  Coin fork: fork the pre-attack position via search_begin(manual_coin=True),
-                    walk both outcomes of every coin select, record min and max dealt.
-    REQ-AUDIT-0010  Engine smokes reproduce the known goldens: Resistance -30, Weakness x2,
-                    Nebula Beam 1488 = 210 vs Crustle, Jetting Blow 1487 = 0 active + 50 bench.
-    REQ-AUDIT-0020  The DEFENDER's attached Energy is a swept axis: the defender attaches up to a
-                    per-plan target while the attacker's own count stays pinned, and every record
-                    carries `defenderEnergies`. Without it `atk_active_energy` and
-                    `both_active_energy` are numerically identical at every point the harness can
-                    produce, because the defender never attached anything (Issue #275).
-    REQ-AUDIT-0021  The defender seat's RULE-BOX composition is controlled and recorded: each
-                    defender-bench sweep is PAIRED with a matched non-{ex} control at the same
-                    bench count, and every record carries `defenderExInPlay` /
-                    `attackerBenchStage2`. The default panel is {ex}-SATURATED — the eight
-                    highest-HP eligible basics are all Mega Pokemon ex, and a Mega Evolution
-                    Pokemon ex IS a Pokemon ex (`docs/rulebook.txt` Appendix 1) — so without the
-                    control `def_ex_in_play` is perfectly collinear with `def_bench` and a fit
-                    names the wrong variable with full confidence (Issue #275).
+REQ-AUDIT ids this module is graded against are tabled in `docs/attack-effects.md`.
 """
 from __future__ import annotations
 
@@ -68,15 +21,13 @@ _DECK_SIZE = 60
 CRUSTLE = 345          # prevent_ex panel body: ability zeroes damage from opponent {ex} Pokémon
 _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyType -> card id
 _BENCH_REF = 1         # both seats pinned here unless a bench sweep moves one (REQ-AUDIT-0018)
-# Two budgets, because the two retry causes cost wildly different amounts. A setup miss aborts
-# before the drive plays a turn, so re-dealing is nearly free and can afford a deep budget; a
-# bench miss or a timeout has already paid for a whole drive, so those stay at the historical 6.
+# A setup miss aborts before the drive plays a turn, so re-dealing is nearly free; a bench miss or
+# a timeout has already paid for a whole drive. Hence two very different budgets.
 _SETUP_DEALS = 24
 _DRIVE_ATTEMPTS = 6
 _BENCH_STEPS = (0, 1, 2)
 #: Extra DEFENDER attachments (REQ-AUDIT-0020). Step 0 is the panel point itself — the defender
-#: never attaches unless a plan asks it to — so only the non-zero steps need their own drive, which
-#: is the same economy the attacker's `energy` axis already uses.
+#: never attaches unless a plan asks it to — so only the non-zero steps need their own drive.
 _DEF_ENERGY_STEPS = (1, 2)
 _SWEEP_POINTS = ({"var": "energy", "step": 1}, {"var": "energy", "step": 2},
                  {"var": "hand", "step": 2}, {"var": "hand", "step": 4},
@@ -84,12 +35,11 @@ _SWEEP_POINTS = ({"var": "energy", "step": 1}, {"var": "energy", "step": 2},
                  *({"var": "def_bench", "step": n} for n in _BENCH_STEPS),
                  *({"var": "def_energy", "step": n} for n in _DEF_ENERGY_STEPS))
 
-#: The matched non-{ex} control scenario (REQ-AUDIT-0021). Its plans are the `def_bench` sweep run
-#: again with every defender body chosen to be NOT a Pokemon ex — same bench counts, different
-#: rule-box count — which is the only pairing that can separate `def_ex_in_play` from `def_bench`.
+#: The matched non-{ex} control scenario (REQ-AUDIT-0021): the `def_bench` sweep again with every
+#: defender body NOT a Pokemon ex — the only pairing separating `def_ex_in_play` from `def_bench`.
 PLAIN_SCENARIO = "vanilla_plain"
-#: The defender-composition classes a plan may ask for: today's {ex}-saturated default, and the
-#: control. Stated as data so `plan_scenarios` and the drive cannot disagree about the vocabulary.
+#: Defender-composition classes a plan may ask for, as data so `plan_scenarios` and the drive
+#: cannot disagree about the vocabulary.
 RULE_BOX_EX, RULE_BOX_PLAIN = "ex", "plain"
 
 # Engine vocab (mirrors cg/api.py enums; kept as ints so unit tests stay lib-free).
@@ -105,14 +55,7 @@ _LOG_TURN_START, _LOG_TURN_END, _LOG_ATTACK, _LOG_HP_CHANGE, _LOG_COIN = 2, 3, 1
 
 def evolution_chain(target_id: int, cards: dict[int, dict]) -> list[int]:
     """Basic-first line ending at ``target_id``, walking ``evolvesFrom`` names (lowest id wins).
-
-    Args:
-        target_id: Card id of the line's tip.
-        cards: ``{cardId: {"name", "evolvesFrom", ...}}`` plain dicts.
-
-    Returns:
-        e.g. ``[Staryu, Mega Starmie ex]``; a Basic returns ``[target_id]``.
-    """
+    A Basic returns ``[target_id]``."""
     by_name: dict[str, list[int]] = {}
     for cid, c in cards.items():
         by_name.setdefault(c.get("name"), []).append(cid)
@@ -131,17 +74,8 @@ def evolution_chain(target_id: int, cards: dict[int, dict]) -> list[int]:
 
 def build_side_deck(chain: list[int], energy_types: list[int],
                     fodder: list[int] = (), fodder_copies: int = 4) -> list[int]:
-    """Legal 60-card deck: 4x each chain card (+ ``fodder_copies`` of each fodder body) +
-    Energy fill.
-
-    Args:
-        chain: Basic-first evolution line (>= 1 card).
-        energy_types: The attack's ``energies`` (EnergyType ints; colorless maps to Water).
-        fodder: Extra distinct basics (:func:`bench_fodder`) so a bench reliably exists.
-        fodder_copies: Copies of each fodder body (:func:`_fodder_copies` sizes it). Kept
-            separate from the chain's flat 4x because every off-chain Basic is a setup
-            hazard, not just a bench body — see :func:`_fodder_copies`.
-    """
+    """Legal 60-card deck: 4x each chain card + ``fodder_copies`` of each fodder body + Energy
+    fill. Colorless in ``energy_types`` maps to Water."""
     fill = sorted({_ENERGY_CARD.get(int(e), 3) for e in (energy_types or [0])}) or [3]
     deck: list[int] = []
     for cid in chain:
@@ -164,28 +98,14 @@ def _panel_body(cards: dict[int, dict], pred) -> int | None:
 
 
 def not_rule_box(card: dict) -> bool:
-    """True for a body that is NOT a Pokemon ex — the matched control's predicate (REQ-AUDIT-0021).
-
-    A **Mega Evolution Pokemon ex counts as a Pokemon ex** (`docs/rulebook.txt` Appendix 1: "Mega
-    Evolution Pokemon ex are considered to be Pokemon ex, so any card effects that affect Pokemon ex
-    also affect Mega Evolution Pokemon ex"), which is why the repo's own oracle counts
-    ``stat.ex or stat.megaEx`` for `def_ex_in_play` (`src/cgpy/damage.py`). Testing only ``ex`` here
-    would hand the control a bench of Mega ex bodies and re-create the exact confound it exists to
-    break — the harness's default fodder is Mega ex precisely because they top the HP ranking.
-    """
+    """NOT a Pokemon ex — the matched control's predicate (REQ-AUDIT-0021). A Mega Evolution
+    Pokemon ex IS a Pokemon ex (`docs/rulebook.txt` Appendix 1), so ``megaEx`` must be tested too."""
     return not card.get("ex") and not card.get("megaEx")
 
 
 def bench_fodder(cards: dict[int, dict], exclude: set[int], n: int = 2, pred=None) -> list[int]:
-    """``n`` distinct sturdy bench bodies (basic, no ability, non-Tera, top HP) so snipe/spread
-    riders have targets; ``exclude`` keeps the defender's own line out (4-copy legality).
-
-    ``pred`` filters the class of body benched (REQ-AUDIT-0021) and defaults to today's behaviour,
-    so no existing plan moves. Ranking by HP alone is what made the defender's bench
-    {ex}-SATURATED: of 510 panel-eligible basics the eight highest-HP are all Mega Pokemon ex, so
-    `def_ex_in_play` moved in lockstep with `def_bench` on every measurement the harness could take.
-    The best non-{ex} eligible basic is 251 Regigigas at 160 HP.
-    """
+    """``n`` distinct sturdy bench bodies (basic, no ability, non-Tera, top HP); ``exclude`` keeps
+    the defender's own line out. Ranking by HP alone makes this bench {ex}-SATURATED — hence ``pred``."""
     pool = sorted((c for c in cards
                    if cards[c].get("pokemon") and cards[c].get("basic")
                    and not cards[c].get("hasAbility") and not cards[c].get("tera")
@@ -195,36 +115,15 @@ def bench_fodder(cards: dict[int, dict], exclude: set[int], n: int = 2, pred=Non
 
 
 def _fodder_copies(need: int, bodies: int = 2) -> int:
-    """Copies of EACH fodder body: the fewest that can still fill a bench target of ``need``.
-
-    Off-chain Basics are not free. The engine only offers the setup redraw (``MULLIGAN``,
-    "Would you like to redraw the cards?") when the opening hand holds NO Basic at all, so a
-    deck whose only Basics are its chain basic is *guaranteed* to open on that basic — it
-    redraws until it does. Every fodder copy buys a bench body at the price of a hand that
-    satisfies the engine with an off-chain Basic instead, stranding an unevolvable Active that
-    can never fire the attack. A flat 4x of two bodies dropped that guarantee to ~40%; one copy
-    each keeps it near 75% per seat, and :func:`_drive_to_attack` re-deals on the rest.
-    """
+    """Copies of EACH fodder body: the fewest that can fill a bench target of ``need``. Off-chain
+    Basics are not free — each one can satisfy setup instead, stranding an unevolvable Active."""
     return max(1, min(4, -(-need // max(1, bodies))))
 
 
 def pick_panel(attacker: dict, cards: dict[int, dict],
                extra: dict[str, object] | None = None) -> dict[str, int | None]:
-    """The fixed defender panel for one attacker card (REQ-AUDIT-0001).
-
-    Args:
-        attacker: Plain card dict (``energyType``, ``ex``, ``megaEx``).
-        cards: Plain card pool.
-        extra: Optional ``{scenario: predicate}`` — extra panel bodies chosen by filter rather
-            than by the four fixed matchups (REQ-AUDIT-0021). The filter seam was already
-            half-built: :func:`_panel_body` has always taken a predicate; what was hardcoded is
-            this scenario LIST, which is why the panel could not express "same matchup, different
-            rule-box class". A predicate that matches nothing yields None, like any other
-            unmatchable scenario — never a guess.
-
-    Returns:
-        ``{scenario: defenderCardId | None}`` — None marks a could-not-measure scenario.
-    """
+    """The fixed defender panel (REQ-AUDIT-0001) -> ``{scenario: defenderCardId | None}``; None
+    marks a could-not-measure scenario. ``extra`` adds ``{scenario: predicate}`` bodies."""
     t = attacker.get("energyType")
     panel = {
         "vanilla": _panel_body(cards, lambda c: c.get("weakness") != t and c.get("resistance") != t),
@@ -238,44 +137,15 @@ def pick_panel(attacker: dict, cards: dict[int, dict],
 
 
 def plain_vanilla_pred(attacker: dict):
-    """The matched control's panel predicate: a vanilla matchup body that is NOT a Pokemon ex.
-
-    Identical to the `vanilla` filter in every respect except the rule box, so the control differs
-    from the measurement it is paired with in exactly ONE variable — which is what ADR-0083 §3's
-    provably-constant rule asks for.
-    """
+    """The matched control's panel predicate: the `vanilla` filter plus NOT a Pokemon ex, so the
+    control differs from its pair in exactly ONE variable (ADR-0083 §3)."""
     t = attacker.get("energyType")
     return lambda c: (c.get("weakness") != t and c.get("resistance") != t and not_rule_box(c))
 
 
 def plan_scenarios(attacker: dict, cards: dict[int, dict], sweep: bool = False) -> list[dict]:
-    """Ordered scenario specs for one attacker: the panel, plus sweep points on vanilla.
-
-    Args:
-        attacker: Plain card dict.
-        cards: Plain card pool.
-        sweep: Add single-variable sweep points (REQ-AUDIT-0008) when True.
-
-    Returns:
-        ``[{"scenario", "defender", "extra_energy", "def_extra_energy", "delay_turns",
-        "atk_bench", "def_bench", "rule_box", "sweep"}, ...]`` — a None ``defender`` stays in the
-        plan so the drive emits an error-ledger entry.
-
-    Every plan PINS both seats' bench counts (REQ-AUDIT-0018). Bench population used to be
-    uncontrolled — both seats benched every drawn basic — which left it free to co-vary with the
-    swept variable and let a bench scaler fit hand size (the spurious 274 override). A bench
-    sweep moves exactly one seat and pins the other, so the fit stays single-variable.
-
-    Two axes join that discipline (Issue #275):
-
-    * ``def_energy`` moves the DEFENDER's attached Energy with the attacker's pinned
-      (REQ-AUDIT-0020). Every other plan pins ``def_extra_energy`` at 0 — the historical value,
-      since the defender never attached at all.
-    * the ``vanilla_plain`` plans are a MATCHED non-{ex} control (REQ-AUDIT-0021): the same
-      ``def_bench`` steps against a defender whose Active and bench are all non-{ex}. Bench count
-      constant, rule-box count varying, everything else identical — which is what breaks the
-      collinearity that let `def_bench` and `def_ex_in_play` name the same measurement.
-    """
+    """Ordered scenario specs: the panel, plus sweep points on vanilla. Every plan PINS both seats'
+    bench counts; a None ``defender`` stays in so the drive emits an error-ledger entry."""
     panel = pick_panel(attacker, cards, extra={PLAIN_SCENARIO: plain_vanilla_pred(attacker)})
     order = ["vanilla", "weak", "resist"] + (["prevent_ex"] if panel["prevent_ex"] else [])
     plans = [{"scenario": s, "defender": panel[s], "extra_energy": 0, "def_extra_energy": 0,
@@ -313,22 +183,16 @@ def _seat(obs: dict, seat: int) -> dict:
 
 
 def in_play_ids(obs: dict, seat: int) -> list[int]:
-    """Top-card ids of every body IN PLAY for one seat — Active first, then Bench.
-
-    "In play" is the whole board, Active included: `def_ex_in_play` counts ``gs.in_play(1 - seat)``
-    (`src/cgpy/damage.py`), which is why a defender whose bench is empty still contributes 1 when
-    its Active carries a rule box. Reading the bench alone would under-count by exactly one and
-    make the control look like it separated a variable it did not.
-    """
+    """Top-card ids of every body IN PLAY for one seat — Active FIRST, then Bench. Active is
+    included because `def_ex_in_play` counts ``gs.in_play()``; bench-only under-counts by one."""
     p = _seat(obs, seat)
     act = next((a for a in (p.get("active") or []) if a), None)
     return ([act.get("id")] if act else []) + [b.get("id") for b in (p.get("bench") or []) if b]
 
 
 def rule_box_count(obs: dict, seat: int, cards: dict[int, dict]) -> int:
-    """``{ex}`` bodies in play for one seat (REQ-AUDIT-0021) — Mega Evolution Pokemon ex included,
-    per `docs/rulebook.txt` Appendix 1 and the oracle that mirrors it. An unknown card id counts
-    as NOT a rule box: over-counting here would inflate the control's own separating variable."""
+    """``{ex}`` bodies in play for one seat (REQ-AUDIT-0021), Mega Evolution Pokemon ex included.
+    An unknown card id counts as NOT a rule box."""
     return sum(1 for cid in in_play_ids(obs, seat)
                if (cards.get(cid) or {}).get("ex") or (cards.get(cid) or {}).get("megaEx"))
 
@@ -341,12 +205,8 @@ def bench_stage2_count(obs: dict, seat: int, cards: dict[int, dict]) -> int:
 
 
 def attack_window(logs: list[dict], attack_id: int) -> list[dict]:
-    """Slice ``logs`` to the target attack's resolution: its ATTACK log up to the next turn
-    boundary — excludes pre-attack draws and the between-turns checkup (poison ticks).
-
-    From the LAST matching ATTACK log: engine logs are per-viewing-player (each observation
-    replays everything since THAT seat's last select), so accumulated chunks overlap — the
-    final chunk holds the complete window, and last-occurrence slicing also de-duplicates."""
+    """The target attack's ATTACK log up to the next turn boundary. From the LAST matching log:
+    engine log chunks are per-viewing-player and OVERLAP, so only the final chunk is complete."""
     s = max((i for i, l in enumerate(logs)
              if l.get("type") == _LOG_ATTACK and l.get("attackId") == attack_id), default=None)
     if s is None:
@@ -357,17 +217,8 @@ def attack_window(logs: list[dict], attack_id: int) -> list[dict]:
 
 
 def damage_from_window(window: list[dict], defender_snap: dict, attacker_snap: dict) -> dict:
-    """Dealt damage by slot from an attack window (REQ-AUDIT-0004).
-
-    Args:
-        window: Logs from :func:`attack_window` (may span several selects, pre-sliced).
-        defender_snap: :func:`board_snapshot` of the defender taken *before* the attack.
-        attacker_snap: Same for the attacker (recoil riders).
-
-    Returns:
-        ``{"dealtActive", "dealtBench" (bench-order list, zeros dropped), "dealtSelf",
-        "coinLogs", "koed"}``. Negative ``HP_CHANGE`` only — heals never count.
-    """
+    """Dealt damage by slot (REQ-AUDIT-0004) -> ``{dealtActive, dealtBench, dealtSelf, coinLogs,
+    koed}``. Snapshots are taken BEFORE the attack. Negative ``HP_CHANGE`` only — heals never count."""
     dmg: dict[int, int] = {}
     coins = 0
     for l in window:
@@ -391,21 +242,8 @@ def shape_record(*, attack_id: int, attacker_id: int, scenario: str, printed: in
                  defender_bench: int = 0, attacker_bench: int = 0,
                  defender_energies: int = 0, defender_ex_in_play: int = 0,
                  attacker_bench_stage2: int = 0) -> dict:
-    """One measurement record (REQ-AUDIT-0005). ``koed`` marks a right-censored dealtActive;
-    ``defenderBench`` = live snipe targets at fire time (a rider that whiffed vs bench=0 is
-    distinguishable from a rider that dealt 0).
-
-    BOTH seats' bench counts are recorded (REQ-AUDIT-0018): the combined-bench scaler family
-    reads their sum, and recording them unconditionally makes the historical confound — bench
-    population co-varying with the swept variable — visible in retrospect rather than silent.
-
-    ``defenderEnergies`` (REQ-AUDIT-0020) and ``defenderExInPlay`` / ``attackerBenchStage2``
-    (REQ-AUDIT-0021) are recorded on EVERY record for the same reason, and it is load-bearing
-    rather than bookkeeping: ADR-0083 §2 lets a fit claim only a variable the sweep CONTROLS **and
-    RECORDS**, so a drive that composes the defender's board correctly but never writes the
-    composition down still violates it — the join has nothing to read, and a later reader cannot
-    tell which of two collinear variables the number belongs to.
-    """
+    """One measurement record (REQ-AUDIT-0005). ``koed`` marks a right-censored dealtActive. Every
+    controlled variable is recorded on EVERY record: ADR-0083 §2 fits only what a sweep RECORDS."""
     return {"attackId": attack_id, "attackerCardId": attacker_id, "scenario": scenario,
             "printed": printed, "dealtActive": damage["dealtActive"],
             "dealtBench": damage["dealtBench"], "dealtSelf": damage["dealtSelf"],
@@ -421,13 +259,8 @@ def shape_record(*, attack_id: int, attacker_id: int, scenario: str, printed: in
 
 def error_record(attack_id: int, attacker_id: int | None, scenario: str, msg: str,
                  sweep: dict | None = None) -> dict:
-    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006).
-
-    Carries the SWEEP point it failed on. Without it every failed sweep on a given scenario
-    shares one :func:`record_key` with the plain panel record, and since an error never clobbers
-    a success, the failure is silently dropped — a silent skip, which is the one thing this
-    ledger exists to prevent.
-    """
+    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006). Carries the SWEEP point it failed
+    on, else every failed sweep shares one :func:`record_key` with the panel record and is lost."""
     return {"attackId": attack_id, "attackerCardId": attacker_id, "scenario": scenario,
             "coin": None, "sweep": sweep, "error": msg}
 
@@ -601,12 +434,8 @@ def _generic_advance(sel):
 
 
 def _sub_select(obs, cap: int | None = None):
-    """Selection for a non-MAIN context: YES on activate-style prompts, else generic.
-
-    ``cap`` bounds the SETUP bench (REQ-AUDIT-0018) — setup is the second place a seat benches,
-    so a cap applied only in the main phase would leak an uncontrolled count past it. None keeps
-    the historical behaviour (bench every spare, so snipe/spread riders have targets).
-    """
+    """Selection for a non-MAIN context: YES on activate-style prompts, else generic. ``cap`` bounds
+    the SETUP bench too (REQ-AUDIT-0018) — main-phase-only would leak an uncontrolled count."""
     sel = obs.get("select") or {}
     ctx = sel.get("context")
     if ctx in (_CTX_ACTIVATE, _CTX_FIRST_EFFECT):
@@ -625,13 +454,8 @@ def _end_turn(obs):
 
 
 def _bench_target(seat: int, cap: int | None) -> int:
-    """How many bodies ``seat`` must have benched before the attack may fire (REQ-AUDIT-0018).
-
-    An explicit cap is a TARGET, not merely a ceiling: a ceiling alone would let the attack fire
-    at whatever the shuffle happened to bench, which is the uncontrolled confound the cap exists
-    to remove. ``None`` reproduces the historical wait exactly — the defender must field a bench
-    so snipe/spread riders have a target, and the attacker is unconstrained.
-    """
+    """How many bodies ``seat`` must have benched before the attack may fire (REQ-AUDIT-0018). A cap
+    is a TARGET, not a ceiling: a ceiling fires at whatever the shuffle benched."""
     return (1 if seat == 1 else 0) if cap is None else cap
 
 
@@ -646,28 +470,13 @@ class _Timeout(Exception):
 
 
 class _SetupMiss(Exception):
-    """EITHER seat's setup Active is off-chain (a fodder basic won the slot) — the chain tip
-    can never come online, so abort fast and retry on a fresh shuffle.
-
-    Both seats, not just the defender: nothing promotes a benched body here (the drive never
-    retreats), so an attacker that opens on fodder is just as stuck — it sits unevolvable until
-    the match deck-outs at the turn limit. That was the whole of this harness's flakiness: the
-    attacker seat only started carrying fodder with the bench caps (REQ-AUDIT-0018), and the
-    miss went undetected until ~95 turns of driving had already been spent.
-    """
+    """EITHER seat's setup Active is off-chain, so the chain tip can never come online — abort fast
+    and retry. Both seats: nothing promotes a benched body here, so a fodder Active is stuck."""
 
 
 class _BenchMiss(Exception):
-    """A seat never reached its requested bench COUNT or the defender never reached its requested
-    Energy count within bench patience, so this shuffle cannot produce a CONTROLLED point — retry.
-    The last attempt accepts what it got and records the actual counts: an uncontrolled point is
-    dropped by the axis rules, never trusted.
-
-    The defender-Energy target is the same class of failure and shares the exception deliberately
-    (REQ-AUDIT-0020): a drive that fires with the defender holding fewer Energy than the plan asked
-    for is a point on somebody else's axis, and silently keeping it is exactly the uncontrolled
-    co-variation the bench caps were introduced to remove.
-    """
+    """A bench COUNT or defender-Energy target was not reached within patience, so this shuffle
+    cannot produce a CONTROLLED point. The last attempt records the ACTUAL counts instead."""
 
 
 def _def_energy_ready(obs, target: int) -> bool:
@@ -681,22 +490,8 @@ def _def_energy_ready(obs, target: int) -> bool:
 def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cost,
                      extra_energy, delay_turns, cards, max_steps, bench_patience=10,
                      atk_bench=None, def_bench=None, def_extra_energy=0):
-    """Advance the battle until the attacker (seat 0) is ready to fire ``attack_id``.
-
-    The attacker climbs its chain on the Active, banks Energy to ``need + extra``, then waits
-    for the defender's Active to be its chain tip (Crustle must be evolved before the hit),
-    for the defender to field a bench (up to ``bench_patience`` extra turns, so snipe riders
-    have targets), and for ``delay_turns`` hand-growing waits.
-
-    ``atk_bench`` / ``def_bench`` set each seat's bench count (REQ-AUDIT-0018); None keeps the
-    historical behaviour. Each is both a ceiling (the seat stops benching once reached) and a
-    TARGET (the attack waits, within ``bench_patience``, until both seats reach theirs) — a
-    ceiling alone would fire at whatever the shuffle benched, which is the confound the caps
-    exist to remove. When patience runs out the attack fires anyway and the record carries the
-    ACTUAL counts, so a missed target degrades to a duplicate fit point, never a wrong one.
-
-    Returns the pre-attack observation.
-    """
+    """Advance the battle until seat 0 is ready to fire ``attack_id``; returns the pre-attack obs.
+    When ``bench_patience`` runs out it fires anyway, and the record carries the ACTUAL counts."""
     delay_left, bench_wait = delay_turns, bench_patience
     caps = {0: atk_bench, 1: def_bench}
     for _ in range(max_steps):
@@ -738,11 +533,8 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
                     obs = battle_select([bo])
                     continue
             if seat != 0:
-                # The defender ATTACHES when its plan asks it to (REQ-AUDIT-0020). It never did
-                # before, which is why `atk_active_energy` and `both_active_energy` were the same
-                # number at every point the harness could produce. Its deck is Water fill
-                # (`build_side_deck(def_chain, [0], ...)`), so a basic-Energy attach is available;
-                # one per turn, so a target of 2 costs the attacker two extra waits.
+                # The defender ATTACHES when its plan asks it to (REQ-AUDIT-0020). One per turn,
+                # so a target of 2 costs the attacker two extra waits.
                 if not cur.get("energyAttached") and not _def_energy_ready(obs, def_extra_energy):
                     ao = _find_attach(obs, seat)
                     if ao is not None:
@@ -800,9 +592,8 @@ def _fire_and_measure(battle_select, obs, attack_id, max_resolve=24):
 
 
 def _coin_fork(obs, attack_id, atk_deck, def_deck, max_depth=24, max_leaves=64):
-    """Fork the pre-attack position with ``manual_coin=True``; walk BOTH outcomes of every coin
-    select (REQ-AUDIT-0009). Returns ``(min_damage, max_damage)`` dicts ranked by dealt, or
-    None when the fork saw no coin (deterministic) or the search errored (never fatal)."""
+    """Fork the pre-attack position with ``manual_coin=True``, walking BOTH outcomes of every coin
+    select (REQ-AUDIT-0009) -> ``(min, max)``, or None when no coin surfaced or the search errored."""
     if not obs.get("search_begin_input"):
         return None
     _cg_on_path()
@@ -863,19 +654,8 @@ def _coin_fork(obs, attack_id, atk_deck, def_deck, max_depth=24, max_leaves=64):
 
 def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None = None,
                    coin_fork: bool = True, max_steps: int = 700) -> list[dict]:
-    """Measure one attack under one scenario plan; always returns >= 1 record.
-
-    Args:
-        attack_id: Target attack.
-        plan: One :func:`plan_scenarios` entry.
-        cards: Plain card pool (defaults to the engine's).
-        coin_fork: Fork the pre-attack position for coin min/max when the attack flips.
-        max_steps: Drive budget before an explicit timeout error entry.
-
-    Returns:
-        ``[record]``, plus ``coin: "min"/"max"`` variants when a coin select surfaced,
-        or ``[error_record]`` when the scenario could not be driven (REQ-AUDIT-0006).
-    """
+    """Measure one attack under one :func:`plan_scenarios` entry; always returns >= 1 record, plus
+    ``coin: "min"/"max"`` variants when a coin surfaced, or ``[error_record]`` (REQ-AUDIT-0006)."""
     cards = cards or card_pool()
     info = attack_index().get(attack_id)
 
@@ -891,16 +671,13 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
     fill = [e or own for e in info["energies"]] or [own]    # colorless cost -> own type effect
-    # Each seat carries bench fodder ONLY when its plan asks it to bench (REQ-AUDIT-0018), and
-    # only at :func:`_fodder_copies` copies: its own chain basic is otherwise the sole benchable
-    # body, so a bench target would depend on drawing a spare copy — but every extra off-chain
-    # Basic is also a setup hazard, so the count is the fewest that can reach the target.
+    # Fodder only when a plan asks the seat to bench (REQ-AUDIT-0018), at the fewest copies that
+    # can reach the target: every extra off-chain Basic is also a setup hazard.
     atk_need = _bench_target(0, plan.get("atk_bench"))
     def_need = _bench_target(1, plan.get("def_bench"))
     def_energy_need = int(plan.get("def_extra_energy") or 0)
-    # The defender's bodies are chosen by the plan's rule-box class (REQ-AUDIT-0021). Only the
-    # DEFENDER's fodder is filtered: the attacker's bench is not the variable under test, and
-    # narrowing its pool would change the setup-miss rate on an axis nobody is measuring.
+    # Only the DEFENDER's fodder is filtered by rule-box class (REQ-AUDIT-0021): narrowing the
+    # attacker's pool would change the setup-miss rate on an axis nobody is measuring.
     def_fodder_pred = not_rule_box if plan.get("rule_box") == RULE_BOX_PLAIN else None
     battle_start, battle_select, battle_finish = _engine()
     drives, last_error = 0, "the attack never became measurable"

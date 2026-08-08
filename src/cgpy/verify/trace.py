@@ -1,22 +1,10 @@
 """Parity-trace format: a recorded native game as an executable specification (ADR-0059).
 
-A Trace stores, per select the native engine posed: the mover's full observation (verbatim
-live-obs dict, int enums), the choice answered, and — when minted natively — the god-view frame
-(`visualize_data` style, revealing decks/hands) aligned to the same select. The trace *is* the
-native side of every differential replay, which is what makes the CI parity gate DLL-free.
+Per select the engine posed, a Trace stores the mover's verbatim live obs, the choice answered, and
+— when minted natively — the aligned god-view frame. Being the native side of every differential
+replay is what makes the CI parity gate DLL-free.
 
-Schema `parity-trace/1`:
-{
-  "schema": "parity-trace/1",
-  "meta": {"created", "engine_sha", "decks": [[60 ids],[60 ids]], "policy", "purpose",
-            "result": {"winner": int|-1|2, "steps": int}},
-  "frames": [{"obs": {...live obs, search_begin_input stripped...},
-              "choice": [int, ...] | null,          # null on the terminal frame
-              "god": {...visualize frame current...} | null}],
-}
-
-Frame k's `choice` answers frame k's `obs.select` (no +1 offset; the visualize `selected`
-convention is realigned at capture).
+Frame k's `choice` answers frame k's `obs.select` — NO +1 offset. It is null on the terminal frame.
 """
 from __future__ import annotations
 

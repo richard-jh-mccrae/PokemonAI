@@ -1,12 +1,8 @@
-"""Attack-audit engine smokes (REQ-AUDIT-0010): the harness on the committed native engine,
-offline on Windows + Linux like ``test_lethal_engine.py``.
+"""Attack-audit engine smokes (REQ-AUDIT-0010): the harness on the committed native engine, offline
+on Windows + Linux, reproducing the ADR-0032 goldens as MEASUREMENTS.
 
-Reproduces the ADR-0032 goldens as MEASUREMENTS: Resistance -30 (rules.md §5, project-verified),
-Weakness x2, Nebula Beam 1488 = 210 through Crustle's prevent-ex ability, Jetting Blow 1487 =
-0 to the Crustle Active while its 50 bench-snipe still lands, and the coin fork's min/max.
-
-Defenders are pinned by cardId (engine-verified facts in comments) so the assertions are exact;
-the only stochastic knob is bench arrival, guarded by a bounded retry.
+Defenders are pinned by cardId so the assertions are exact; the only stochastic knob is bench
+arrival, guarded by a bounded retry.
 """
 import pytest
 
@@ -28,18 +24,8 @@ def _plan(scenario, defender, **kw):
 
 
 def _measure(attack_id, plan, attempts=3, need_bench=False, want_bench=None, **kw):
-    """Bounded retry: bench arrival is the one stochastic knob (drawn spares get benched).
-
-    ``want_bench=(atk, dfn)`` retries until both seats actually reached those counts. The harness
-    fires anyway when bench patience runs out — deliberately, so a missed target degrades to a
-    duplicate fit point rather than a wrong one — but a test asserting exact counts has to wait
-    for the draw that makes them reachable.
-
-    An unbroken streak of ERROR records is a different animal from a missed bench target: it is a
-    harness fault, not a shuffle, so it fails here NAMING the underlying message. Falling through
-    to ``return recs`` surfaced it downstream as a bare ``'error' not in {...}``, which hid the
-    one string that says what actually went wrong.
-    """
+    """Bounded retry on bench arrival, the one stochastic knob. An unbroken ERROR streak is a harness
+    fault rather than a shuffle, so it raises NAMING the message instead of returning `recs`."""
     errors = []
     for _ in range(attempts):
         recs = measure_attack(attack_id, plan, **kw)
@@ -107,10 +93,7 @@ def test_coin_fork_measures_min_and_max_over_both_outcomes():
 
 
 # --- per-seat bench control (REQ-AUDIT-0018) ---------------------------------------------
-# The cap is what turns bench population from an uncontrolled confound into a swept variable.
-# Skeledirge's Torcherto is the family the cap exists for: printed 60, "+20 more damage for
-# each Benched Pokemon (both yours and your opponent's)" — so a verified cap doubles as a
-# verification of the combined-bench model itself.
+# Torcherto scales +20 per Benched Pokémon on BOTH seats, so the cap verifies that model too.
 
 SKELEDIRGE, TORCHERTO = 203, 274
 
@@ -124,7 +107,7 @@ def _vanilla_plan(owner_card_id, **caps):
 
 @pytest.mark.req("REQ-AUDIT-0018")
 def test_a_zero_bench_cap_empties_both_seats_and_the_scaler_contributes_nothing():
-    # A cap of 0 is the one target always reachable in a single draw, so this case is exact.
+    # 0 is the one cap always reachable in a single draw, so this case can be exact.
     r = _measure(TORCHERTO, _vanilla_plan(SKELEDIRGE, atk_bench=0, def_bench=0),
                  coin_fork=False)[0]
     assert "error" not in r, r
@@ -136,12 +119,8 @@ def test_a_zero_bench_cap_empties_both_seats_and_the_scaler_contributes_nothing(
 @pytest.mark.req("REQ-AUDIT-0018")
 @pytest.mark.parametrize("atk,dfn", [(1, 2), (2, 1)])
 def test_bench_caps_bound_both_seats_and_the_combined_scaler_tracks_the_actual_counts(atk, dfn):
-    # Two invariants, both deterministic. The CEILING: neither seat may exceed its cap. The
-    # MODEL: dealt damage tracks the counts actually reached. Asserting the exact target instead
-    # would be asserting the shuffle — the harness deliberately fires when bench patience runs
-    # out, recording what it got, so a missed target is a duplicate fit point and not an error.
-    # `want_bench` still steers the retry at the target, so the wait path is exercised in
-    # practice; the assertions just don't depend on it landing.
+    # Asserting the exact target would be asserting the shuffle: the harness fires when bench
+    # patience runs out, so `want_bench` steers the retry but the assertions never depend on it.
     plan = _vanilla_plan(SKELEDIRGE, atk_bench=atk, def_bench=dfn)
     r = _measure(TORCHERTO, plan, attempts=6, want_bench=(atk, dfn), coin_fork=False)[0]
     assert "error" not in r, r

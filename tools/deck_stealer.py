@@ -30,12 +30,8 @@ class StealError(RuntimeError):
 
 def steal(replay: str | Path, team: str, name: str, *,
           force: bool = False, dest_root: Path = AGENTS) -> dict:
-    """Write ``team``'s exact deck from ``replay`` to ``dest_root/name/deck.csv``.
-
-    Returns a provenance dict (dest, archetype, opponent, episode_id, result). The
-    deck is sorted by card id so re-stealing the same list from any replay is
-    byte-identical. Raises ``StealError`` on any precondition failure.
-    """
+    """Write ``team``'s exact deck from ``replay`` to ``dest_root/name/deck.csv``, returning a
+    provenance dict. Sorted by card id, so re-stealing the same list from any replay is identical."""
     path = Path(replay)
     if not path.exists():
         raise StealError(f"replay not found: {path}")

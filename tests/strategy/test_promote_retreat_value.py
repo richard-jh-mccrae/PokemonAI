@@ -1,14 +1,7 @@
-"""Promote/retreat DECIDER, PURE seam (common/promote_retreat_value.py) — ADR-0100, issue #141.
+"""Promote/retreat DECIDER, PURE seam (common/promote_retreat_value.py) — ADR-0100, Issue #141.
 
-The design proof for the Sub-lethal Residual. Each test pins one of ADR-0100's twelve decisions as
-an executable assertion, plus the two worked frames the user's counter-frames forced. This is seam
-1 of the phase's three (pure function · live Pilot · gates): the equation is pure over MEASUREMENTS,
-so every ruling is assertable here without constructing a board.
-
-Deliberately NO test pins a raw score. 1c is a ~10x re-banding of the whole family, and ADR-0072's
-rewrite of f29 from a score claim to a decision claim is the prior art for why: a magnitude target
-would have to be re-tuned by the next phase and would say nothing about correctness. Every
-assertion below is a RELATION — this beats that, this is bounded by that, this is zero.
+Each test pins one of ADR-0100's twelve decisions as an executable assertion. Deliberately NO test
+pins a raw score: every assertion is a RELATION, so a re-banding cannot invalidate it.
 """
 from __future__ import annotations
 
@@ -35,9 +28,8 @@ def pv(body: PromoteBody, retreat: RetreatSide | None = None):
 # ---- decision 1: the layers SUM, and nothing recuses --------------------------------------------
 
 def test_no_ko_or_win_magnitude_is_representable():
-    """§1/§4/§5: the residual is STRICTLY sub-lethal, which is what makes summing it with the
-    tactical KO layer honest rather than double-paying. There is no win, lethal or KO-value field to
-    pass, so a KO magnitude is structurally unrepresentable here — not merely unused."""
+    """§1/§4/§5: the residual is STRICTLY sub-lethal, so summing it with the tactical KO layer cannot
+    double-pay — a KO magnitude is structurally unrepresentable here, not merely unused."""
     fields = set(PromoteBody().__dataclass_fields__)
     assert not fields & {"win", "win_payoff", "lethal", "ko_value", "provable_win", "ko_score"}
 
@@ -52,9 +44,8 @@ def test_there_is_no_recusal_input():
 # ---- decision 2: `stay_forgone` is deleted — the option ranking IS the differential --------------
 
 def test_stay_forgone_is_gone():
-    """§2: subtracting the Active's forgone attack double-charged it, because at a MAIN menu that
-    attack is its OWN option scoring `dmg - eff`. The subtraction relocates from a term into the
-    comparison, which is strictly more accurate — so no field survives to re-introduce it."""
+    """§2: at a MAIN menu the Active's attack is its OWN option, so subtracting it double-charged.
+    The subtraction relocates from a term into the comparison; no field survives to re-introduce it."""
     fields = set(PromoteBody().__dataclass_fields__) | set(RetreatSide().__dataclass_fields__)
     assert not fields & {"stay_yield", "stay_forgone"}
 
@@ -62,15 +53,8 @@ def test_stay_forgone_is_gone():
 # ---- decision 3: ONE currency, at a DERIVED rate -------------------------------------------------
 
 def test_energy_recover_recomputes_from_the_card_set():
-    """§3 again, for the OTHER exchange rate. `ENERGY_RECOVER` shipped as a tuned band constant (75,
-    chosen so fueled Aura Jab would beat bare Mega Brave) — tuned-by-another-name, the exact thing
-    the Prize Damage Rate exists to refuse. It is now DERIVED the same way: the median
-    damage-per-Energy over the attacks an accel rider actually funds.
-
-    Cost >= 2 is the population, not every attack: a rider dumping 3 Energy exists to pay for
-    multi-Energy attackers, and `_recover_recipient_need` already measures need against a
-    recipient's FORWARD form (a Riolu counts the {F}{F} its Mega Brave costs, not the {F} of Quick
-    Attack). The 634 cost-1 chip attacks are not what accel buys."""
+    """`ENERGY_RECOVER` is DERIVED, not tuned (§3): the median damage-per-Energy over attacks costing
+    >= 2, the population an accel rider actually funds — a cost-1 chip is not what accel buys."""
     rates = []
     with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -87,39 +71,26 @@ def test_energy_recover_recomputes_from_the_card_set():
 
 
 def test_energy_recover_sits_inside_the_bracket_two_rulings_impose():
-    """What makes the rate FALSIFIABLE rather than merely derived: two independent human rulings
-    bound it from opposite sides, and the shipped 75 sat outside the top.
-
-    * LOWER — ADR-0061 (mega_lucario): fueled Aura Jab (130, `{F}`) + 3 accel must out-score bare
-      Mega Brave (270, `{F}{F}`). Card facts from `data/EN_Card_Data.csv`.
-    * UPPER — ep81904064 f44 (mega_starmie, ruled 2026-07-29): after Lillie's Determination, Nebula
-      Beam (210) must out-score retreating into Cinderace for Turbo Flare (50 + 3 accel). Measured
-      on that board the retreat option scores `3 x ENERGY_RECOVER - 37.84` against the attack's
-      174.70, so the ruling holds iff the rate is below 70.85.
-
-    75 broke the upper bound by ~6%, and that overshoot alone made the agent trade a 210-damage
-    attack for a 50-damage one."""
+    """Two rulings bracket the rate: ADR-0061's fueled-Aura-Jab-over-bare-Mega-Brave line from below,
+    and ep81904064 f44 from above, where the retreat scores `3 x rate - 37.84` against 174.70."""
     lower = ((270 - _EFFICIENCY * 2) - (130 - _EFFICIENCY * 1)) / 3
     assert lower == pytest.approx(46.633, abs=0.001)
     assert ENERGY_RECOVER > lower                          # ADR-0061's Aura Jab line survives
     assert ENERGY_RECOVER < (174.70 + 37.84) / 3           # ep81904064 f44's attack-over-accel line
 
 
-# NOTE: the Prize Damage Rate's RECOMPUTATION moved to tests/strategy/test_currency.py when
-# ADR-0078 hoisted the constant into `common/currency.py` — the recompute belongs beside the
-# constant, not beside its first consumer. What stays here is the promote-side CONSEQUENCE.
+# The Prize Damage Rate's RECOMPUTATION lives in tests/strategy/test_currency.py (ADR-0078 hoisted
+# the constant into `common/currency.py`); what stays here is the promote-side CONSEQUENCE.
 def test_a_prize_is_worth_a_hundred_damage_not_twelve():
-    """§3's whole point: exposing a 3-prize Mega Evolution Pokémon *ex* costs 300 damage, not the
-    36 the superseded `_PRIZE_UNIT = 12` charged — which is why the shipped equation would feed the
-    win condition to the opponent to gain a body that could attack."""
+    """§3: exposing a 3-prize Mega ex costs 300 damage, not the 36 the superseded `_PRIZE_UNIT = 12`
+    charged — which is why the shipped equation fed the win condition away for a body that attacks."""
     mega = PromoteBody(prizes=3, ko_active=1)
     assert mega.exposure() == pytest.approx(300.0)
 
 
 def test_the_attack_leg_is_race_discounted_against_a_standing_wall():
-    """§3a: vs a standing wall the single hit is fake value — price the SEQUENCE. Drakloak's 70 into
-    a 320 HP wall is a five-turn race, and crediting face-value chip would lose the retreat-to-Budew
-    frame. When no wall reading applies, the reachable damage stands unchanged."""
+    """§3a: vs a standing wall the single hit is fake value — price the SEQUENCE. With no wall
+    reading the reachable damage stands unchanged."""
     printed = PromoteBody(reach=70.0)
     racing = replace(printed, wall_progress=320.0 / 5)
     assert printed.my_yield() == pytest.approx(70.0)
@@ -128,9 +99,8 @@ def test_the_attack_leg_is_race_discounted_against_a_standing_wall():
 
 
 def test_the_accel_dividend_pays_what_the_attack_option_pays():
-    """§3b: retreating INTO Cinderace must credit what attacking WITH Cinderace credits. The shipped
-    `_DIVIDEND = 5` was ~45x short of the per-Energy value the SAME rider earns on the attack
-    option, so the dividend re-anchors on `ENERGY_RECOVER` and is need-gated by the unit count."""
+    """§3b: retreating INTO an accelerator must credit what attacking WITH it credits, so the
+    dividend anchors on `ENERGY_RECOVER` and is need-gated by the unit count."""
     bare = PromoteBody(reach=100.0)
     accel = replace(bare, accel_units=3)
     assert accel.my_yield() - bare.my_yield() == pytest.approx(3 * ENERGY_RECOVER)
@@ -143,13 +113,8 @@ def test_the_accel_dividend_is_zero_when_no_recipient_can_use_it():
 
 
 def test_a_FRACTIONAL_accel_dividend_is_paid_in_full_not_truncated():
-    """ADR-0077 decision 3: the deck-fuel leg is now `CountTriple.expected`, so `accel_units` is an
-    EXPECTED count and arrives fractional. `my_yield` used to coerce it with `int(...)`, which floored
-    2.5 to 2 and silently binned 0.5 x ENERGY_RECOVER = 37.5 points — a whole half-Energy of
-    development, on the very frames the expectation exists to serve.
-
-    The dividend must be linear in the units across the fractional range: an eighth of an Energy more
-    fuel is an eighth of ENERGY_RECOVER more yield, with no step at the integer boundaries."""
+    """ADR-0077 decision 3: `accel_units` is an EXPECTED count and arrives fractional, so the
+    dividend must be linear across the range with no step at the integer boundaries."""
     bare = PromoteBody(reach=100.0)
     assert replace(bare, accel_units=2.5).my_yield() - bare.my_yield() \
         == pytest.approx(2.5 * ENERGY_RECOVER)
@@ -159,9 +124,8 @@ def test_a_FRACTIONAL_accel_dividend_is_paid_in_full_not_truncated():
 
 
 def test_a_fractional_dividend_below_one_unit_still_pays():
-    """The truncation's worst case: `int()` turned every sub-unit expectation into exactly zero, so a
-    deck 0.8 of an Energy deep read identically to one provably empty. The floor stays at zero for a
-    genuinely absent rider (the test above), but a real fraction is real value."""
+    """Truncation's worst case: a deck 0.8 of an Energy deep must not read identically to one
+    provably empty. Zero stays zero only for a genuinely absent rider."""
     bare = PromoteBody(reach=100.0)
     assert replace(bare, accel_units=0.8).my_yield() > bare.my_yield()
 
@@ -169,17 +133,15 @@ def test_a_fractional_dividend_below_one_unit_still_pays():
 # ---- decision 4: exposure is PER-BODY, CLOCK-GRADED and AREA-CORRECT ------------------------------
 
 def test_exposure_is_continuous_in_the_clock_not_a_cliff():
-    """§4: the retired `opp_can_punish` was BOOLEAN — a 300-damage cliff. A body one point short of
-    being killable must not price identically to one that dies next turn, so exposure is graded by
-    the clock and strictly decreasing in it."""
+    """§4: the retired `opp_can_punish` was BOOLEAN — a 300-damage cliff. Exposure is graded by the
+    clock and strictly decreasing in it."""
     grades = [PromoteBody(prizes=2, ko_active=t).exposure() for t in (1, 2, 3, 4)]
     assert grades == sorted(grades, reverse=True)
     assert len(set(grades)) == len(grades)                # strictly, not a plateau
 
 
 def test_exposure_is_read_per_body():
-    """§4: the retired read resolved MY best benched win-condition and applied that verdict to every
-    candidate — the survival-read transposition of #137's "a Budget is PER-TARGET-BODY" hazard. Two
+    """§4: the retired read resolved ONE body and applied that verdict to every candidate. Two
     candidates on one board with different prize values must price differently."""
     on_the_same_board = dict(ko_active=1, opp_prizes_remaining=6)
     mega = PromoteBody(prizes=3, **on_the_same_board)
@@ -188,27 +150,24 @@ def test_exposure_is_read_per_body():
 
 
 def test_preservation_is_the_clock_difference_between_the_areas():
-    """§4: what retreating BUYS is the body's exposure standing minus its exposure benched. B
-    arrives in the ACTIVE area; A departs to the BENCH, whose leg is the Bench Harvest at the
-    unavoidable (RESCUE) reading."""
+    """§4: what retreating BUYS is exposure standing minus exposure benched — B arrives ACTIVE, A
+    departs to the BENCH, whose leg is the Bench Harvest at the RESCUE reading."""
     doomed = PromoteBody(prizes=3, ko_active=1, ko_bench=5)
     assert doomed.preservation() == pytest.approx(
         3 * PRIZE_DAMAGE_RATE * (1.0 - 0.5 ** 4))
 
 
 def test_a_bench_immune_tera_body_earns_full_preservation_credit():
-    """§4: card text, not tuning — "as long as this Pokémon is on your Bench, prevent all damage
-    done to this Pokémon by attacks" (35 bodies in this set, including two in our own decks). Its
-    bench clock is the full HORIZON, because benched it can only be reached by a gust."""
+    """§4: card text, not tuning — a benched Tera can only be reached by a gust, so its bench clock
+    is the full HORIZON."""
     tera = PromoteBody(prizes=2, ko_active=1, ko_bench=HORIZON)
     assert tera.preservation() == pytest.approx(2 * PRIZE_DAMAGE_RATE * (1.0 - 0.5 ** (HORIZON - 1)))
     assert tera.preservation() == pytest.approx(2 * PRIZE_DAMAGE_RATE, abs=1.0)
 
 
 def test_preservation_is_zero_for_a_body_no_safer_on_the_bench():
-    """A body the opponent reaches just as fast benched is not RESCUED by retreating, so retreating
-    it banks nothing — and a bench clock reading shorter than the Active one is a redirect artefact,
-    never a cost of retreating."""
+    """A body reached just as fast benched is not RESCUED, and a bench clock SHORTER than the Active
+    one is a redirect artefact, never a cost of retreating."""
     assert PromoteBody(prizes=3, ko_active=2, ko_bench=2).preservation() == 0.0
     assert PromoteBody(prizes=3, ko_active=4, ko_bench=1).preservation() == 0.0
 
@@ -216,9 +175,8 @@ def test_preservation_is_zero_for_a_body_no_safer_on_the_bench():
 # ---- decision 5: closure is a Δ`readiness_p` term, bounded by construction -------------------------
 
 def test_closure_can_never_beat_actually_being_ready():
-    """§5: `Δ <= 1` bounds the term below `damage(a)` by construction, so the shipped interim
-    `min(1.0, p) x _READY` clamp disappears — the property becomes structural rather than clamped.
-    A body already reachable has Δ = 0 and earns no double credit."""
+    """§5: `Δ <= 1` bounds the term below `damage(a)` by construction, so the property is structural
+    rather than clamped; a body already reachable has Δ = 0 and earns no double credit."""
     ready = PromoteBody(reach=200.0, closure=0.0)
     one_card_short = PromoteBody(reach=0.0, closure=0.6 * 200.0)
     assert one_card_short.reach == 0.0
@@ -235,9 +193,8 @@ def test_closure_is_monotonic_and_never_negative():
 # ---- decision 6: tempo_denied is derived from the Threat Clock, gated on live Items ---------------
 
 def test_tempo_denied_is_the_threat_clock_step_gated_on_live_items():
-    """§6: `_STALL` + `_ITEM_LOCK_TEMPO` paid 32 points for ONE card feature through ONE gate. The
-    honest version is one development step's threat growth off the live curve, credited only when
-    the opponent PROVABLY still holds Items — fail-CLOSED, because the term endorses a play."""
+    """§6: one development step's threat growth off the live curve, credited only when the opponent
+    PROVABLY still holds Items — fail-CLOSED, because the term endorses a play."""
     locking = PromoteBody(reach=10.0, tempo_step=100.0, denies_items=True)
     unrecognised = replace(locking, denies_items=False)
     assert locking.tempo_denied() == pytest.approx(100.0)
@@ -245,8 +202,7 @@ def test_tempo_denied_is_the_threat_clock_step_gated_on_live_items():
 
 
 def test_tempo_denied_fades_on_its_own_once_they_are_built():
-    """The credit is how much their threat WOULD have grown, so it decays without a turn gate — the
-    `turn <= 3` proxy the shipped `_item_lock_live` needed dies with it."""
+    """The credit is how much their threat WOULD have grown, so it decays with no turn gate at all."""
     early = PromoteBody(tempo_step=120.0, denies_items=True)
     built = replace(early, tempo_step=0.0)
     assert built.tempo_denied() < early.tempo_denied()
@@ -256,9 +212,8 @@ def test_tempo_denied_fades_on_its_own_once_they_are_built():
 # ---- decision 7: the endgame collapses to one dominance band ---------------------------------------
 
 def test_a_fatal_promote_is_dominated_but_still_ordered():
-    """§7a: subtracted at `KO_SCORE` — the constant that already means "dominates any sub-lethal
-    quantity" — and a finite BAND, not a veto. When EVERY option is fatal the residual must still
-    order them, which a veto cannot."""
+    """§7a: subtracted at `KO_SCORE` as a finite BAND, not a veto — when EVERY option is fatal the
+    residual must still order them, which a veto cannot."""
     fatal_weak = PromoteBody(reach=20.0, prizes=3, ko_active=1, opp_prizes_remaining=3)
     fatal_strong = replace(fatal_weak, reach=180.0)
     assert fatal_weak.fatal() == KO_SCORE
@@ -267,19 +222,16 @@ def test_a_fatal_promote_is_dominated_but_still_ordered():
 
 
 def test_the_fatal_step_needs_the_clock_and_stands_down_on_a_trade():
-    """Gated on decision 4's clock rather than the retired boolean: they must actually be able to
-    take it next turn. And it stands down on a Knock-Out trade — trading while ahead is fine
-    (ruling 5)."""
+    """Gated on §4's clock rather than the retired boolean, and stood down on a Knock-Out trade —
+    trading while ahead is fine."""
     fatal = PromoteBody(prizes=3, ko_active=1, opp_prizes_remaining=3)
     assert replace(fatal, ko_active=2).fatal() == 0.0     # they cannot take it yet
     assert replace(fatal, takes_ko=True).fatal() == 0.0   # we are trading, not feeding
 
 
 def test_near_goal_escalation_is_emergent_not_a_second_mechanism():
-    """§7b: `_NEAR_GOAL`/`_GOAL_BAND` DELETE. The fatal condition is `prizes >= opp_prizes_remaining`,
-    so as their count falls progressively more of our bodies become fatal automatically — the
-    escalation is a consequence of the condition, and modelling it twice would be two mechanisms for
-    one effect."""
+    """§7b: the fatal condition is `prizes >= opp_prizes_remaining`, so as their count falls more of
+    our bodies become fatal automatically — modelling it twice would be two mechanisms for one effect."""
     two_prize = dict(prizes=2, ko_active=1)
     assert PromoteBody(**two_prize, opp_prizes_remaining=6).fatal() == 0.0
     assert PromoteBody(**two_prize, opp_prizes_remaining=3).fatal() == 0.0
@@ -287,10 +239,8 @@ def test_near_goal_escalation_is_emergent_not_a_second_mechanism():
 
 
 def test_walking_onto_their_path_is_not_taxed_separately():
-    """§7c: `_PATH_TAX` DELETES as subsumed, on a card-mechanics argument — the promoted body
-    becomes the ACTIVE, and they attack the Active BECAUSE it is the Active. Path membership does
-    not change whether it is hit, and what the flag really encoded is now `prizes x 100` plus the
-    fatal step."""
+    """§7c: they attack the Active BECAUSE it is the Active, so path membership does not change
+    whether it is hit — the flag is subsumed by `prizes x 100` plus the fatal step."""
     fields = set(PromoteBody().__dataclass_fields__)
     assert "on_their_path" not in fields
 
@@ -298,10 +248,8 @@ def test_walking_onto_their_path_is_not_taxed_separately():
 # ---- decision 8: retreat cost is the BUILD it destroys ---------------------------------------------
 
 def test_retreat_costs_the_build_the_discard_destroys():
-    """§8: the exact mirror of the attach decider (1a prices an attach as `+build`; a retreat pays
-    `-build`), so the two cannot disagree about what an Energy is worth. Worked: Mega Starmie ex at
-    3/3 of Nebula Beam stands at 210; after paying retreat 2 it stands at (1/3)^2 x 210 = 23, so the
-    retreat costs 187 damage of build — two turns of attaching thrown away."""
+    """§8: the exact mirror of the attach decider (an attach is `+build`, a retreat `-build`), so the
+    two cannot disagree about what an Energy is worth."""
     built = RetreatSide(build_before=210.0, build_after=(1 / 3) ** 2 * 210.0)
     assert built.retreat_cost() == pytest.approx(187.0, abs=0.5)
 
@@ -331,18 +279,15 @@ def test_the_resource_premium_rides_on_top_of_the_build_loss():
 
 def test_the_pick_site_carries_no_a_side_terms():
     """§9: `preservation(A)` and `retreat_cost(A)` are CONSTANT across destinations, so they belong
-    only on the whether-site's retreat option and are correctly absent from the pick site, where
-    they could change no ordering. The forced promote likewise has no A-side terms at all."""
+    only on the whether-site's retreat option and could change no ordering at the pick site."""
     b = PromoteBody(reach=120.0, prizes=1, ko_active=2)
     pick = pv(b)
     assert pick.preservation == 0.0 and pick.retreat_cost == 0.0
 
 
 def test_the_same_evaluator_answers_both_questions():
-    """§9: the whether-site priced the retreat off its own best-destination loop while a SEPARATE
-    path picked the body at the follow-up SWITCH — so the agent could retreat BECAUSE one body was
-    worth promoting and then promote a different one. One evaluator makes the A-side terms a
-    constant OFFSET, which cannot reorder the destinations."""
+    """§9: with two paths the agent could retreat BECAUSE one body was worth promoting and then
+    promote a different one. One evaluator makes the A-side terms a constant OFFSET, so no reorder."""
     a = RetreatSide(body=PromoteBody(prizes=3, ko_active=1, ko_bench=HORIZON),
                     build_before=90.0, build_after=10.0)
     bodies = [PromoteBody(reach=r, prizes=1, ko_active=2) for r in (40.0, 130.0, 75.0)]
@@ -354,10 +299,8 @@ def test_the_same_evaluator_answers_both_questions():
 # ---- the two worked frames the user's counter-frames forced ----------------------------------------
 
 def test_frame_mega_starmie_into_cinderace_retreats():
-    """ADR-0100's first worked frame. Mega Starmie ex (3 prizes, doomed in the Active Spot) retreats
-    into Cinderace (1 prize, 50 x2 Weakness, 3 accel). In rung currency it came out WRONG — the 3
-    prizes preserved scored ZERO, so `their_yield` 12 vs `my_yield` 20 said stay. In damage the 300
-    preserved prizes dominate and the retreat is right."""
+    """ADR-0100's first worked frame: in rung currency the 3 prizes preserved scored ZERO, so it said
+    stay; in damage the 300 preserved prizes dominate and the retreat is right."""
     cinderace = PromoteBody(reach=100.0, accel_units=3, prizes=1, ko_active=2)
     starmie = PromoteBody(prizes=3, ko_active=1, ko_bench=HORIZON)
     retreat = pv(cinderace, RetreatSide(body=starmie))
@@ -368,10 +311,8 @@ def test_frame_mega_starmie_into_cinderace_retreats():
 
 
 def test_frame_drakloak_into_budew_retreats():
-    """ADR-0100's second worked frame. Drakloak (70 damage into a 320 HP wall — a five-turn race)
-    retreats into Budew (10 damage + an Item lock). In rung currency `10 + 12` lost to a face-value
-    70; at the Threat-Clock tempo credit the lock is worth a development step and the race discount
-    prices the chip honestly, so the retreat wins."""
+    """ADR-0100's second worked frame: in rung currency `10 + 12` lost to a face-value 70; the tempo
+    credit and the race discount price both honestly, so the retreat wins."""
     budew = PromoteBody(reach=10.0, prizes=1, ko_active=1, tempo_step=100.0, denies_items=True)
     drakloak_stays = PromoteBody(reach=70.0, wall_progress=320.0 / 5, prizes=1, ko_active=1)
     # Exposures cancel (both 1-prize bodies on the same clock), so the comparison is the yields.
@@ -380,9 +321,8 @@ def test_frame_drakloak_into_budew_retreats():
 
 
 def test_frame_doomed_body_swapped_for_a_fresh_copy_of_itself():
-    """§4's consequence: the identical Knock Out cancels and the clock DIFFERENCE decides. Retreating
-    a doomed 3-prize attacker into a fresh copy of the same attacker takes the same KO either way —
-    so the three prizes SAVED are the whole decision, and no new term is needed to see it."""
+    """§4's consequence: the identical Knock Out cancels and the clock DIFFERENCE decides, so the
+    three prizes SAVED are the whole decision and no new term is needed to see it."""
     fresh = PromoteBody(reach=170.0, prizes=3, ko_active=2)
     doomed = PromoteBody(reach=170.0, prizes=3, ko_active=1, ko_bench=HORIZON)
     assert pv(fresh, RetreatSide(body=doomed)).total > pv(fresh).total

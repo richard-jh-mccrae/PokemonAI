@@ -58,16 +58,8 @@ def _film(replay: dict) -> list[dict]:
 
 def frames_payload(replay: dict, our_team: str | None = None,
                    live_records: list[dict] | None = None, live_seat: int | None = None) -> dict:
-    """Every film frame, numbered like HEROZ's stepper (1-based ``step`` of ``total``).
-
-    Each frame carries its 0-based ``frame`` (used when POSTing a tag), ``turn``,
-    ``context``, a ``selected_label`` (mirrors the viewer's "Selected Action"), and --
-    for taggable frames (those that are real Decisions) -- the labeled ``options``.
-
-    When ``live_records`` (the parsed agent telemetry log, ADR-0019) is supplied, each taggable
-    frame for ``live_seat`` also carries ``live`` -- the @T record the SHIPPED agent emitted at
-    that decision (per-option score / fired hypotheses / margin): *how the agent actually decided*.
-    """
+    """``step`` is 1-based like HEROZ's stepper; ``frame`` is the 0-based id a tag POSTs. ``live`` is
+    the @T record the SHIPPED agent emitted at that decision (ADR-0019)."""
     info = replay.get("info") or {}
     film = _film(replay)
     by_frame: dict[int, Decision] = {d.frame: d for d in iter_decisions(replay)}
@@ -92,10 +84,8 @@ def frames_payload(replay: dict, our_team: str | None = None,
             "context": select.get("context"), "type": select.get("type"),
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
-            # Whether "take none" is a legal answer here, so the pane can offer a DECLINE at
-            # decision scope (Issue #229). Read through `select_min_count` -- the SAME derivation
-            # `build_correction` validates with, so the pane and the validator cannot disagree, and
-            # `None` (unknown) keeps the pane refusing exactly where the validator would.
+            # Read through the SAME derivation `build_correction` validates with, so the pane and
+            # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
             "live": live,
         })
@@ -112,9 +102,8 @@ def _live_for(replay, live_records, *, seat, frame):
 
 
 def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict]:
-    """The Turn's Decisions, in film order, each re-drivable: the agent ``obs`` + the live ``@T``
-    record it produced. No per-Decision ``current`` — the Anchor carries the one board a human reads,
-    and a full-info snapshot per Decision would cost ~10 KB each (ADR-0049)."""
+    """No per-Decision ``current``: the Anchor carries the one board a human reads, and a full-info
+    snapshot per Decision would cost ~10 KB each (ADR-0049)."""
     return [
         {"frame": d.frame, "select_context": d.select_context, "select_type": d.select_type,
          "chosen": list(d.chosen), "chosen_label": _labels_for(d, d.chosen), "obs": d.obs,
@@ -165,24 +154,8 @@ def record_correction(
     scope: str = "decision",
     **identity,
 ) -> Correction:
-    """Build, validate (ADR-0015 / ADR-0049) and append a Correction anchored at ``frame``.
-
-    ``chosen``/``correct`` are auto-labeled via the decoder. ``identity`` forwards optional keys
-    (submission_id, agent_version, episode_time, tagged_at, attribution, ``posture_mismatch``).
-    When ``live_records`` is supplied, the live @T Decision Telemetry record for this frame
-    (ADR-0019) is joined and embedded as ``live_trace`` -- ground truth for how the agent decided
-    (incl. its ``posture``: who it thought it faced, ADR-0041); ``posture_mismatch`` records the
-    human's verdict that that opponent Read was wrong.
-
-    ``scope`` says what the Correction is *about* (ADR-0049). The ``frame`` is always the **Anchor**
-    -- a real Decision -- but off ``decision`` scope the record is keyed by the Scope's subject and
-    embeds the ``span`` of Decisions it covers (assembled here from the replay).
-
-    **One Correction per subject:** raises ``ValueError`` if a Correction of the same Scope already
-    exists for this subject -- to change it, edit/remove the existing one (the inspector's edit flow
-    passes ``replace_id`` so refining its own tag is allowed). A Turn Correction and the Decision
-    Corrections inside that Turn are different subjects, so they coexist.
-    """
+    """``frame`` is always the Anchor (a real Decision), but off ``decision`` scope the record is
+    keyed by the Scope subject; ONE Correction per subject, else ``ValueError`` (ADR-0015/ADR-0049)."""
     decision = next((d for d in iter_decisions(replay) if d.frame == frame), None)
     if decision is None:
         raise ValueError(f"no Decision at frame {frame}")

@@ -1,32 +1,12 @@
-"""Doom-shadow grill pins (2026-07-23) — the `active_doomed` matched-Read-gated swap.
+"""The `active_doomed` matched-Read-gated swap (`doom_matched_relax`).
 
-The S1b doom shadow's 15-frame disagreement corpus was ruled frame-by-frame (docs/plans/
-doom-shadow-grill-handoff.md, RULED appendix); the swap decision was (b): worst-case stays the
-default, and behind a γ-matched Brief with no discard-recur fuel the CHARGED Threat-Clock curve
-(`Pilot._DOOM_CHARGED` — manual + one generic supporter-accel attach, Ignition burst on
-Evolutions) confirms-or-clears a worst-case doom cry, RELAX-ONLY (it never manufactures doom the
-incumbent didn't cry — the 82525101-14 lesson), kill-switched via `doom_matched_relax`.
+Worst-case stays the default. Behind a γ-matched Brief with no discard-recur fuel, the CHARGED
+Threat-Clock curve (`Pilot._DOOM_CHARGED`) confirms-or-clears a worst-case doom cry — RELAX-ONLY, so
+it never manufactures doom the incumbent did not cry. Unmatched stays byte-identical worst-case: the
+ADR-0064 §4 asymmetry is never relax on a guess.
 
-These pins replay the RULED frames through each agent's real shipped Pilot (fresh per frame):
-
-  - B-frames (relaxation aligns with the human) must RELAX: a bare 0-Energy Terapagos ex
-    (Unified Beatdown needs ●●, visible bench caps 30×3=90 < 160) and a 0-Energy Archaludon ex
-    (Metal Defender {M}{M}{M} unreachable at 0+2, empty opponent discard) no longer cry doom.
-  - C-frames (hidden reach the visible read can't clear) must STAY doomed even matched: Mega
-    Abomasnow ex's Hammer-lanche deck-density nuke (600 ceiling ≥ 330 once {W}{W} is budget-
-    affordable), Munkidori's Mind Bend into a ×2 Psychic-weak Riolu (60×2=120 ≥ 70 — that
-    opponent's discard visibly held a Crispin), and a 1-Energy Archaludon ex (1+2 reaches
-    {M}{M}{M} Metal Defender 220).
-  - Unmatched (no Brief for the Ho-Oh chaos deck) must stay BYTE-IDENTICAL worst-case doomed —
-    the ADR-0064 §4 asymmetry: never relax on a guess.
-  - Kill-switch OFF must reproduce the incumbent worst-case on a would-relax frame.
-  - The recur-fuel guard: injecting Basic {M} Energy into the Archaludon opponent's discard
-    (Assemble Alloy's `discard_energy_recur` reservoir) stands the relax down to worst-case.
-
-Card facts verified at source for the rulings: `data/EN_Card_Data.csv` (Terapagos ex 176,
-Mega Abomasnow ex 723, Munkidori 112, Archaludon ex 190, Riolu 677 weak {P}, Crispin 1198,
-Waitress 1235, Ignition Energy 17), `docs/rules.md` §3 (1 manual attach + 1 Supporter/turn) and
-§5 (weakness ×2).
+Every pin replays a RULED frame through the agent's real shipped Pilot, fresh per frame. Card facts
+for the rulings are verified at `data/EN_Card_Data.csv` and `docs/rules.md` §3/§5.
 """
 import copy
 import json
@@ -50,16 +30,8 @@ def _fixture(name):
 
 
 def _doom(fx, deck, *, relax=None, recur=None):
-    """Replay the fixture through a FRESH shipped Pilot (optionally forcing either kill-switch) and
-    read the doom DECISION plus the two facts it turns on.
-
-    These pins used to read `Decision.threat_shadow`, a diagnostic Issue #261 item 2h deleted along
-    with the other three shadows. They lose nothing by it, because every field they asserted is now
-    read off the live decider rather than off a second computation of it: `doom_final` IS
-    `Board.active_doomed`, `matched`/`fueled` come from `_doom_relax_inputs`, and `decided` is
-    `_doom_relax_consulted` — the predicate `_active_doomed` itself branches on, extracted for exactly
-    this reason. Re-deriving that conjunction here would have left these pins asserting against the
-    test's own arithmetic."""
+    """Replay through a FRESH shipped Pilot and read the doom DECISION off the LIVE decider —
+    `doom_final` IS `Board.active_doomed`, and `decided` is the predicate `_active_doomed` branches on."""
     pilot = _pilot(deck)
     if relax is not None:
         pilot.doom_matched_relax = relax
@@ -118,9 +90,8 @@ def test_ruled_c_frames_stay_doomed_even_matched(name, deck):
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_unmatched_read_stays_byte_identical_worst_case():
-    """No Brief covers the Ho-Oh chaos deck → the γ-gate never opens: the worst-case oracle
-    decides unchanged (ADR-0064 §4 — never relax on a guess), even though the charged arithmetic
-    would say safe (Flap 50 < 60; Shining Blaze needs 3 attached)."""
+    """No Brief covers this deck, so the γ-gate never opens and the worst-case oracle decides
+    unchanged — even though the charged arithmetic would say safe (ADR-0064 §4)."""
     s = _doom(_fixture("ms_doom_unmatched_hooh_f17"), "mega_starmie")
     assert not s["matched"] and not s["decided"]
     assert s["doom_charged"] is None
@@ -137,13 +108,8 @@ def test_kill_switch_off_reproduces_the_incumbent():
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_recur_fuel_stands_the_relax_down():
-    """The Assemble-Alloy hole, `recur_fuel_relax` OFF (ADR-0076's pre-quantification guard,
-    `_doom_recur_fueled`, still a real code path even though the flag now ships ON by default):
-    the 0-Energy Archaludon ex frame relaxes on an EMPTY opponent discard, but with Basic {M}
-    Energy visibly in that discard the `discard_energy_recur` guard refuses the relax entirely
-    (evolving re-attaches fuel the charged budget can't see) and the worst-case oracle decides
-    again. The ARMED behavior (the SAME fuel, quantified rather than blocked outright) is pinned
-    separately in `test_recur_fuel_relax.py`."""
+    """`recur_fuel_relax` OFF — ADR-0076's pre-quantification guard, still a real code path though the
+    flag now ships ON: visible {M} in their discard is fuel the charged budget cannot see."""
     fx = copy.deepcopy(_fixture("dp_doom_relax_archaludon_0e_f30"))
     state = fx["obs"]["current"]
     opp = state["players"][1 - state["yourIndex"]]
@@ -156,13 +122,8 @@ def test_recur_fuel_stands_the_relax_down():
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_recur_fuel_still_stays_doomed_under_the_armed_default():
-    """The SAME Assemble-Alloy frame under the SHIPPED default (`recur_fuel_relax` ON, ADR-0076
-    Amendment D) — the coverage the sibling above stopped providing when it pinned itself to the
-    legacy path. Armed, the relax is no longer blocked outright: it IS consulted (`decided`), the
-    charged curve now counts the real {M} reload, and it reaches 220 >= my 90 HP — so the frame
-    still ends DOOMED. The safety property the boolean guard bought crudely survives the
-    quantification; arming narrowed WHEN the relax is allowed to run, never what it concludes on
-    this frame. Without this test the shipped path on the Assemble-Alloy hole is untested."""
+    """The SAME frame under the SHIPPED default (ADR-0076 Amendment D): armed, the relax IS consulted
+    and the quantified curve still refuses. Arming narrowed WHEN it runs, never what it concludes."""
     fx = copy.deepcopy(_fixture("dp_doom_relax_archaludon_0e_f30"))
     state = fx["obs"]["current"]
     opp = state["players"][1 - state["yourIndex"]]

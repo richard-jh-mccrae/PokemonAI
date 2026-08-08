@@ -5,7 +5,7 @@ ON — it replaces an already-live pull rather than adding a new one, so there i
 Suite 2872 green.
 
 > **Numbering note.** 0057–0059 are reserved for the ADR-renumber sweep (the 0022/0033/0050
-> collisions, `docs/plans/audit-remediation.md` WP6). This ADR took the next free slot above them.
+> collisions, `ADR-0060` WP6). This ADR took the next free slot above them.
 
 ## Context
 

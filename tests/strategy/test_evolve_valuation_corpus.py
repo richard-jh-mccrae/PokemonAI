@@ -1,16 +1,6 @@
-"""Evolve-valuation corpus — the Round-0 safety net for the evolve-value equation
-(docs/plans/evolve-valuation-grill-spec.md).
+"""Evolve-valuation corpus: the anchors the rung→equation fold must not regress.
 
-The evolve decision is being converged from a pile of rungs
-(baseline_evolution.py + the dragapult `hold-evolution` deck rung) onto ONE equation: the marginal
-change in board need-coverage an evolve produces, priced in the one currency (Needs). This file is the
-pre-build baseline measured 2026-07-15 through the real engine-backed Pilot:
-
-  * PINS — the covered anchors the equation must NOT regress when the rungs fold.
-  * TARGETS — currently-failing corrections the equation must fix, marked ``xfail(strict)`` so each
-    flips to a hard failure (XPASS) the moment the equation lands, forcing the mark's removal.
-
-FRESH Pilot per replay (no cross-fixture state). Card facts verified at source (grill spec §Machinery).
+ADR-0070.
 """
 from __future__ import annotations
 
@@ -37,43 +27,30 @@ def _fixture(name: str) -> dict:
     return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
-# ── PINS: covered today; must survive the rung→equation fold ─────────────────────────────────────
 @pytest.mark.parametrize("agent,fixture,leg", [
     ("dragapult_ex", "dragapult_promote_over_fragile_base_f31", "promote-preserve-the-line"),
     ("dragapult_ex", "dp_charge_the_line_f29", "line-progress (advance over spread)"),
     param_for("dragapult_concentrate_line_preevo_f85",
               "dragapult_ex", "dragapult_concentrate_line_preevo_f85", "concentrate on the started line",
               id="dragapult_ex-dragapult_concentrate_line_preevo_f85"),
-    # Promoted from TARGET on the swap (#140): the income-ON one-shot burst the equation was built
-    # to fix. Its `xfail(strict)` XPASSed the moment the decider landed, which is what forced this move.
     param_for("dp_evolve_the_draw_engine_f40",
               "dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)",
               id="dragapult_ex-dp_evolve_the_draw_engine_f40"),
 ])
 def test_evolve_corpus_pin(agent, fixture, leg):
-    """A covered evolve/line decision the equation must keep correct after the fold."""
     fx = _fixture(fixture)
     chosen = _pilot(agent).explain(fx["obs"]).chosen
     assert chosen == fx["correct"], (
         f"[{leg}] regression: {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
 
 
-# ── CLAIMS: what a fixture asserts, declared in its own `claims` block (ADR-0072 decision 3) ──────
 @pytest.mark.parametrize("agent,fixture", [
     param_for("dp_hold_evolve_until_typed_ready_f35",
               "dragapult_ex", "dp_hold_evolve_until_typed_ready_f35",
               id="dragapult_ex-dp_hold_evolve_until_typed_ready_f35"),
 ])
 def test_evolve_corpus_claims(agent, fixture):
-    """Assert exactly what the fixture declares, rather than only whole-decision equality.
-
-    f35 is the worked case. Its Decision Claim was RE-RULED 2026-07-26 (user, #167 decision-5
-    sitting) from `[2]` (Recon first) to `[1]` (Poké Pad first): the Poké Pad's job in this deck is
-    fetching the 2nd Drakloak so a bench Dreepy becomes a 2nd Recon Directive body — two digs instead
-    of one — and resolving the deterministic tutor first also thins the deck by a known non-{P} card,
-    improving both digs. Its **Endorsement Claim** is what credits the 1b swap: the sole evolve on the
-    menu went 45.0 -> 0.0 with no rule firing, and a single-option lane cannot express that as an
-    ordering (ADR-0072 amendment A)."""
+    """Assert what the fixture's own `claims` block declares (ADR-0072 decision 3)."""
     from train.gates import (evaluate_axis_claim, evaluate_decision_claim,
                              evaluate_endorsement_claim, parse_claims)
     fx = _fixture(fixture)
@@ -96,34 +73,12 @@ def test_evolve_corpus_claims(agent, fixture):
             f"{fixture} endorsement claim slot={c.slot} endorsed={c.endorsed}: scores={scores}")
 
 
-# ── TARGETS: none. ───────────────────────────────────────────────────────────────────────────────
-# `f40` (income-ON one-shot burst) was PROMOTED to a regression test when the decider landed
-# (Issue #140) — its xfail(strict) XPASSed, which is what forced the move.
-#
-# `dp_open_utility_over_fragile_line_base_f2` LEFT this file 2026-07-28 (ADR-0079, Issue #161). It was
-# never an evolve target: it is a `_SETUP_ACTIVE` placement decision, so this equation never runs on
-# it, and a strict tripwire aimed at the wrong code path made this file dishonest about what it
-# covers. ADR-0070 §4 re-ruled it out of scope; it now lives — PASSING, not xfail — in
-# `tests/strategy/test_setup_active_placement.py`, fixed by a deck `starter_priority` declaration.
-#
-# This file therefore holds 4 regression tests + 1 claims case and no targets.
+# `dp_open_utility_over_fragile_line_base_f2` is out of scope here (ADR-0079): it is a `_SETUP_ACTIVE`
+# placement, covered by tests/strategy/test_setup_active_placement.py.
 
 
-# ── f82: a PIN since ADR-0071 removed the shared-budget inflation (was PLANNER SCOPE) ─────────────
 @pytest.mark.xfail(strict=True, reason=marks("dp_evolve_energized_line_body_first_f82")[0].kwargs["reason"])
 def test_evolve_corpus_planner_scope_f82():
-    """f82: the Pilot picks the human's body through the real decision path.
-
-    PROMOTED from strict-xfail to PIN by ADR-0071 (#163). The xfail's premise was that *"the evolve
-    equation's standalone read is CORRECT (it prefers the benched body, whose clocks genuinely
-    move)"* — but those clocks did NOT genuinely move. The bench held two more bodies at 50 against
-    a single 60 spread, so evolving one Dreepy out of range only chose which body died; the 37.5 it
-    scored was the per-body reading of a shared budget. Read as a Harvest at UNAVOIDABLE both bodies
-    read `ko = 2` — evolving buys zero survival — the benched option falls to 25.0 against the
-    Active's 30.0, and the Pilot reaches `correct` without any lethal tier having landed.
-
-    The five-step maneuver is still the better play and still belongs to #165. This pin no longer
-    waits on it."""
     fx = _fixture("dp_evolve_energized_line_body_first_f82")
     chosen = _pilot("dragapult_ex").explain(fx["obs"]).chosen
     assert chosen == fx["correct"], (

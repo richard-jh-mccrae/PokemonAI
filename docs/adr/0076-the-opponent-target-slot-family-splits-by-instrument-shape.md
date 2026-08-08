@@ -9,7 +9,7 @@ first-merged keeps the number (the 0071/#163 precedent), so #175 KEEPS 0074, #17
 one took 0076. Every in-repo reference was moved with it; main's #175 references were left alone.
 
 **Context issues:** #186 (this grill), #143 (the un-split original, closed), #136 (the Value System
-build tracker), `docs/plans/opponent-value-equation-unification.md` (the design this ADR turns into a
+build tracker), `ADR-0078` (the design this ADR turns into a
 build ruling), ADR-0065 (the Needs / `keep_v2` precedent this extends).
 
 ## Context

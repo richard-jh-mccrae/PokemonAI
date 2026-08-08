@@ -3,7 +3,7 @@
 **Status:** Accepted (built 2026-08-02, `/implement` on
 [Issue #287](https://github.com/richard-jh-mccrae/PokemonAI/issues/287), T3.5/9 of the Value System
 POC).
-**Implements** the term-sufficiency audit's finding **F11** (`docs/plans/term-sufficiency-audit.md`).
+**Implements** the term-sufficiency audit's finding **F11** (`ADR-0104`).
 **Applies [ADR-0032](0032-card-knowledge-is-an-engine-audited-effect-compendium.md)** (per-attack effect facts live on
 `AttackStat` and every closed-form damage estimate routes through the ONE oracle) and
 **[ADR-0068](0068-the-statemodel-is-a-lazy-pure-snapshot-shared-by-side.md)** (a board fact is answered off the

@@ -1,17 +1,7 @@
-"""Blunder round 2026-07-05 (mega_lucario, ep83661652 replays) — the develop-tiebreak fix.
+"""Blunder round 2026-07-05 (mega_lucario) — the develop-tiebreak fix.
 
-The whole turn 5-7 cascade of ep83661652 has ONE root: `develop-a-basic-in-setup` (+12) is
-INDIFFERENT among Basics, so which Basic got benched fell to `_finish_turn_last`'s option-index
-tiebreak — the Pilot benched whichever Basic sat lowest in the menu (Solrock / Makuhita ahead of
-Riolu by pure array position). The wincon Line base (Riolu → Mega Lucario ex) never got down, so the
-deck 'played terribly' (feeding Meowth / just attacking / shuffling Riolu away).
-
-`develop-the-wincon-base-first` (+6) gives the win-condition Line pre-evolution (`card_is_line_preevo`
-— Riolu here, Staryu on Starmie, Dreepy on Dragapult; NEVER an off-line support Basic) a faint edge
-so it leads the develop tiebreak (18 vs the other Basics' 12). Like the two 20260705 siblings this is
-a `_finish_turn_last` sequencing THRESHOLD, not a ranking margin — the wincon base still scores BELOW
-the turn-ending attack (tier 4), but rides tier 0, so it gates here on the real `explain()` rather
-than via the W-route weight fit (which compares raw scores across tiers and is blind to it).
+A develop rung indifferent among Basics left the pick to menu order, so the wincon Line base never
+got benched. Since ADR-0086 the Deploy Marginal prices it, and these gate on the real `explain()`.
 """
 import json
 import sys
@@ -45,17 +35,8 @@ def _fired_ids(option):
     "ml0703_develop_riolu_over_makuhita_f44",    # CRITICAL: stop resisting basics — bench the wincon base
 ])
 def test_critical_develops_the_wincon_base_over_an_offline_basic(name):
-    """REQ-GEN-0072: on each captured ep83661652 state the shipped Pilot develops the board rather
-    than feeding Meowth / attacking / shuffling Riolu away.
-
-    Since ADR-0086 the pick is the Deploy Marginal's, not `develop-the-wincon-base-first` (+6,
-    deleted), so the assertion moved from "which rung fired" to "which option was chosen" plus the
-    priced leg behind it. Two rulings are honoured rather than re-litigated:
-
-    * an ACCEPTED SET (`correct_alternatives`) — f33's rationale names both basics and bench drops
-      COMMUTE (rulebook L120-122), so Solrock and Riolu are equally correct there;
-    * a HELD-OUT frame (`claims.decision.owner`) — f44 is #165's, the Turn Planner's: the attach and
-      the Supporter were already spent before this decision, so no per-option price can fix it."""
+    """Two rulings are honoured rather than re-litigated: an ACCEPTED SET (`correct_alternatives`),
+    because bench drops COMMUTE (rulebook L120-122); and a HELD-OUT frame (`claims.decision.owner`)."""
     fx = _fixture(name)
     held = ((fx.get("claims") or {}).get("decision") or {}).get("owner")
     if held:
@@ -67,12 +48,8 @@ def test_critical_develops_the_wincon_base_over_an_offline_basic(name):
 
 
 def test_offline_basic_does_not_get_the_wincon_edge():
-    """REQ-GEN-0072: the wincon base's edge over an off-line Basic is REAL, not a tie broken by menu
-    position — the failure mode this round was built to kill.
-
-    `develop-the-wincon-base-first` (+6) is deleted, so the assertion is now on the equation: at f40
-    Riolu (the Riolu → Mega Lucario ex pre-evolution) must out-price Solrock (an off-line engine base)
-    on the Deploy Marginal itself. Asserting the deleted rung no longer fires would pass vacuously."""
+    """Asserted on the Deploy Marginal: `develop-the-wincon-base-first` is deleted, so asserting the
+    rung no longer fires would pass vacuously."""
     fx = _fixture("ml0703_develop_riolu_not_shuffle_f40")
     dec = _shipped_pilot().explain(fx["obs"])
     riolu, solrock = 3, 2                       # opt[3] = Play Riolu, opt[2] = Play Solrock
