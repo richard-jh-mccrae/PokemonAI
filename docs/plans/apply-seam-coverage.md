@@ -424,12 +424,12 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 - `undeclared_selector_values()`: `[]`
 - selector keys / values in the compendium: **17** / **74**
-- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **32**
+- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **31**
 
 | selector key in the compendium | distinct values | unconsumed | declared |
 |---|---|---|---|
 | target | 24 | 3 | yes |
-| condition | 13 | 9 | yes |
+| condition | 13 | 8 | yes |
 | applies_to | 6 | 1 | yes |
 | restriction | 5 | 2 | yes |
 | name_family | 4 | 4 | yes |
