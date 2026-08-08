@@ -605,8 +605,9 @@ graph; it **rejects `dig` / `trigger` clauses**, because a 7-card dig is no guar
 is the pessimistic one — *"is anything left in my deck for this card to find?"* — consumed by the
 play-side whiff veto (`dont-search-an-empty-deck`) and the fetcher deadline gate
 (`fetch_deploy_odds`); it **accepts** those clauses, because zero targets in deck means a dig
-provably whiffs. Both read the same clause row and the same sound deck facts; they differ only in
-which direction over-inclusion is safe. `fetch_target_matches(..., deadness=True)` is the single
+provably whiffs. Reach also narrows a fetched body to the clause's `energy_type` colour where deadness
+does not, for the same reason. Both read the same clause row and the same sound deck facts; they differ
+only in which direction over-inclusion is safe. `fetch_target_matches(..., deadness=True)` is the single
 opt-out, and each reading carries its own memoised target set: `_search_deck_set` (reach) and
 `_fetch_deadness_set` (deadness, a **superset**). The two cannot be merged, because the reading is
 only safe under the consumer's quantifier — deadness asks `all(gone)`, where a wider set can only

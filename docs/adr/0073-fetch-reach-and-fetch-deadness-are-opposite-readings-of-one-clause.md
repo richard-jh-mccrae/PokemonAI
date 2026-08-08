@@ -67,8 +67,8 @@ implied.**
 3. **Over-inclusion is sound in the deadness direction, and that is why it is permitted.** Deadness
    is `all(t in deck_empty_ids for t in fetch_set)`. Widening `fetch_set` makes that `all()` *harder*
    to satisfy, so an over-broad target class can only **suppress** a whiff claim, never fabricate
-   one. The documented over-inclusion of `energy_type` on a Pokémon target (unresolvable from
-   `CardStat`) is therefore safe here for the same reason it is flagged as a caveat for reach.
+   one. `energy_type` on a Pokémon target is the worked example, and it stays deliberately unread
+   here — but its *reach* caveat is *retired* by the 2026-08-08 amendment below.
 4. **One deadness fact, two consumers — carried by a SEPARATE set from the reach one.** A single
    `_fetch_deadness_set` feeds both the play-side `dont-search-an-empty-deck` rung and the keep-side
    `_deploy_odds` fetcher gate. This closes issue #164's "widen the predicate **or** price by deploy
@@ -123,3 +123,59 @@ anchor frame — shipping.
   exhausted, a late-game condition the corpus does not contain. Reachability is carried instead by
   behavioural tests — a dig-class fetcher vetoed once its Supporters are provably gone, left alone
   while one remains, and never claiming to fill a need in either case.
+
+## Amendment (2026-08-08, split out of issue #440): body COLOUR narrows REACH, and only reach
+
+Decision 3 waved `energy_type` on a Pokémon target through as an accepted over-inclusion because it
+was **"unresolvable from `CardStat`"**. That premise was already false when it was written.
+`provider._build_cache` writes `energyType=int(c.energyType)` for every card, and across the five
+shipped decks all **41** Pokémon rows carry a non-`None` colour. So reach now takes the narrowing.
+
+**It binds reach and NOT deadness, and the asymmetry is the whole point.** Reach's consumers are
+ENDORSERS asking `any(reachable)`, so a *narrower* set can only withdraw an endorsement — the safe
+direction. Deadness asks `all(gone)`, where narrowing makes the conjunction go True *earlier* and
+**fabricates** a whiff: precisely the unsoundness this ADR was written to fix. Reach therefore stays
+a **subset** of deadness by construction here, since this change can only ever shrink it.
+
+**Read `energyType == 0` with care.** Trainers report `0` as well (Pokégear 3.0), so the field alone
+cannot tell {C} from "not a Pokémon". The filter is applied inside `_pokemon_body_matches`, reachable
+only past `stat.is_pokemon`, so `0` unambiguously means Colorless there — a *structural* guard rather
+than an `is_pokemon` check each future caller must remember. Its home with the shared per-body
+predicates also means all **eight** Pokémon classes take it, not just the two with carriers today.
+
+**The clause population is five, and only one is both reach-live and shipped.** `19` Telepath Psychic
+Energy and `1094` Bug Catching Set pair `energy_type` with a Pokémon target but carry `trigger` /
+`dig`, so reach already rejected them. Reach-live: `1142` Fighting Gong (`basic_pokemon`, {F}, deck),
+`1233` Canari (`pokemon`, {L}, deck) and `1238` Tarragon (`pokemon`, {F}, **discard**). Only Fighting
+Gong sits in a shipped decklist (mega_lucario); the other two are prospective.
+
+**Measured before landing** — Score-Diff Gate, corrections corpus, 375 frames × three shipped agents,
+`scores` mode:
+
+- **mega_lucario — the only deck that runs Fighting Gong — is 0 divergent.** Its four {F} Basics
+  (Makuhita, Lunatone, Solrock, Riolu) keep the endorsement; the single leg dropped is the {C} Meowth
+  ex, which Gong could never legally fetch.
+- **mega_starmie and dragapult_ex report the same 4 divergent frames**, and all four are
+  *mega_lucario-recorded* observations replayed through a foreign decklist. Neither deck holds an {F}
+  Pokémon, so Gong's reach set correctly collapses to empty and `fetch-when-it-fills-a-need`'s `+8`
+  withdraws (one frame also flips the choice, `[11] -> [12]`). That configuration is **off-policy** —
+  neither Pilot can hold Fighting Gong in a real game — and the movement is a fabricated endorsement
+  being withdrawn, which is the direction this change exists to produce.
+- **Attribution control:** with `fetch_closure.py` alone reverted and the same baselines, all three
+  agents report 0 divergent. The four flips are this change, and the harness is deterministic.
+- The two main-watchdog gates are **unmoved**: the Discrimination and Decision reports are identical
+  to a clean `HEAD` checkout's (60 / 41 unruled respectively). Both were **already red on `main` at
+  `a5f25cd2`** — pre-existing and out of scope here, but they do not gate this change either way.
+
+**The five reach call sites this ADR named are now seven.** `board_expectation.outcome_pool` and
+`board_choice._discard_matches` arrived after ADR-0073 and share the default parameter, so they take
+the narrowing too — `outcome_pool` for Fighting Gong and Canari, `_discard_matches` for Tarragon.
+
+**This does NOT close issue #440, and the distinction matters.** #440's subjects are Pokégear 3.0 and
+Bug Catching Set, whose clauses carry `dig: 7`. `fetch_is_unconditional` rejects those under the
+default reading, so they never reach the body branch this amendment changes — `outcome_pool` refuses
+them outright today. #440 has to introduce a *third* reading that ADMITS a dig as a window over the
+unseen pool. What this amendment buys that work is placement, not the fix: the colour filter sits with
+the shared per-body predicates, so a dig-window reading inherits it automatically so long as it does
+not pass `deadness=True`. Bug Catching Set's `{"target": "pokemon", "energy_type": 1}` is exactly the
+clause that would otherwise over-count a window class, and it is still over-counting after this change.

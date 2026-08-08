@@ -463,6 +463,77 @@ def test_deadness_widening_never_leaks_into_the_endorser_set():
     assert ms._fetch_deadness_set(1122)                 # ...but it CAN now be read as dead
 
 
+# ── Body COLOUR on a Pokémon target: a REACH narrowing only (ADR-0073, Issue #440's reach half) ───
+
+#: Fighting Gong (mega_lucario) fetches a Basic **{F}** Pokémon. Meowth ex is the control: a Basic in
+#: the same deck whose colour is {C} (`energyType` 0), so a colour-blind predicate keeps reaching it.
+FIGHTING_GONG, MEOWTH_EX, GONG_FIGHTING_BASICS = 1142, 1071, {673, 675, 676, 677}
+
+
+def _gong_pokemon_clause():
+    from common.effects import CardEffects
+    return next(cl for cl in CardEffects.load().clauses(FIGHTING_GONG)
+                if cl.get("kind") == "fetch" and cl.get("target") == "basic_pokemon")
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_energy_type_narrows_reach_on_a_pokemon_target(real_stats):
+    """Colour-blind, Gong claimed it could tutor a {C} Basic — a FABRICATED endorsement, since every
+    reach consumer asks `any(reachable)`. Both sides come off shipped artefacts, not a fixture."""
+    from common import fetch_closure
+    clause = _gong_pokemon_clause()
+    assert clause["energy_type"] == 6 and fetch_closure.fetch_is_unconditional(clause)
+    meowth = real_stats.get(MEOWTH_EX)
+    assert (meowth.energyType, meowth.is_pokemon, meowth.evolvesFrom) == (0, True, None)
+    assert fetch_closure.fetch_target_matches(clause, meowth) is False
+    for cid in sorted(GONG_FIGHTING_BASICS):
+        assert fetch_closure.fetch_target_matches(clause, real_stats.get(cid)) is True, cid
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_deadness_refuses_the_colour_narrowing_so_no_whiff_is_fabricated(real_stats):
+    """Deadness is `all(gone)`: dropping Meowth ex would let the whiff veto fire while Gong can still
+    find it. Suppressing a claim is this module's safe direction; inventing one never is."""
+    from common import fetch_closure
+    assert fetch_closure.fetch_target_matches(_gong_pokemon_clause(), real_stats.get(MEOWTH_EX),
+                                              deadness=True) is True
+    ml = _shipped_pilot("mega_lucario")
+    reach, dead = ml._search_deck_set(FIGHTING_GONG), ml._fetch_deadness_set(FIGHTING_GONG)
+    assert MEOWTH_EX not in reach and MEOWTH_EX in dead
+    assert GONG_FIGHTING_BASICS <= reach < dead
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_colour_narrowing_binds_every_pokemon_class_and_reads_a_populated_field():
+    """It sits with the shared per-BODY predicates, so a future clause pairing `energy_type` with
+    `stage2` narrows rather than failing OPEN. The `is not None` leg retires ADR-0073's caveat."""
+    from common import fetch_closure as fc
+    ml = _shipped_pilot("mega_lucario")
+    for target in sorted(fc.FETCH_POKEMON_TARGETS):
+        for cid in sorted(set(ml.deck)):
+            st = ml.stats.get(cid)
+            if st is None or not fc.fetch_target_matches({"target": target}, st):
+                continue
+            assert st.energyType is not None, (target, cid)
+            wrong = (st.energyType + 1) % 10
+            assert fc.fetch_target_matches({"target": target, "energy_type": st.energyType}, st)
+            assert fc.fetch_target_matches({"target": target, "energy_type": wrong}, st) is False
+            assert fc.fetch_target_matches({"target": target, "energy_type": wrong}, st,
+                                           deadness=True) is True
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_a_trainer_never_reaches_the_colour_predicate(real_stats):
+    """Trainers report `energyType` 0 as well, so {C} and "not a Pokémon" are indistinguishable in the
+    field. The narrowing is confined to the Pokémon branch structurally, not by a repeated guard."""
+    from common import fetch_closure
+    gear = real_stats.get(1122)
+    assert (gear.energyType, gear.is_pokemon) == (0, False)
+    assert fetch_closure.fetch_target_matches({"target": "pokemon", "energy_type": 0}, gear) is False
+    assert fetch_closure.fetch_target_matches({"target": "supporter", "energy_type": 0},
+                                              real_stats.get(1225), deadness=True) is True
+
+
 # `reveal_legs` is the ONE reader of the multi-leg reveal RELATION, for both `board_expectation` and
 # `board_choice`, so it cannot be spelled twice and drift.
 
