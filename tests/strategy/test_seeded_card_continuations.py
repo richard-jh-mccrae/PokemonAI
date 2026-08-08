@@ -120,6 +120,84 @@ def test_composer_prices_only_the_eight_seeded_card_continuations(pilot):
     assert search.begun == 0
 
 
+def test_planner_arms_the_composer_for_only_the_eight_seeded_card_contexts(pilot):
+    """The planner reaches the single composer route for every reconstructible continuation."""
+
+    records = {record["context"]: record for record in load_records()}
+    for context in sorted(_NATIVE_CONTEXTS):
+        record = records[context]
+        binding = bind_record(record, trace_root=FIXTURES)
+        assert binding.reason is None
+        obs = copy.deepcopy(record["seed_observation"])
+        select = obs["select"]
+        option = select["option"][record["selected"][0]]
+        pilot._turn_plan = None
+        pilot._composer_trace = None
+        pilot._search_api = _FreshSearch(binding.successor["obs"], record["selected"][0])
+        board = pilot._board(obs, select)
+        traces = [pilot._option_trace(obs, select, board, option, record["selected"][0])]
+
+        pilot.plan_turn(obs, select, board, [option], traces)
+
+        assert pilot._composer_trace is not None, context
+        assert not pilot._composer_trace["gaps"], context
+        assert pilot._search_api.begun == pilot._search_api.ended == 1
+
+    record = records[2]
+    obs = copy.deepcopy(record["seed_observation"])
+    select = obs["select"]
+    option = select["option"][record["selected"][0]]
+    pilot._turn_plan = None
+    pilot._composer_trace = None
+    pilot._search_api = _FreshSearch({}, record["selected"][0])
+    board = pilot._board(obs, select)
+    traces = [pilot._option_trace(obs, select, board, option, record["selected"][0])]
+
+    assert pilot.plan_turn(obs, select, board, [option], traces) is None
+    assert pilot._composer_trace is None
+    assert pilot._search_api.begun == 0
+
+
+@pytest.mark.parametrize(("minimum", "maximum"), ((2, 2), (0, 0), (-1, 1)))
+def test_planner_leaves_non_single_pick_seeded_continuations_out_of_scope(pilot, minimum, maximum):
+    """Issue #387, not the follow-up composer route, owns invalid or required multi-picks."""
+
+    record = next(record for record in load_records() if record["context"] == 7)
+    binding = bind_record(record, trace_root=FIXTURES)
+    assert binding.reason is None
+    obs = copy.deepcopy(record["seed_observation"])
+    select = obs["select"]
+    select["minCount"] = minimum
+    select["maxCount"] = maximum
+    option = select["option"][record["selected"][0]]
+    pilot._turn_plan = None
+    pilot._composer_trace = None
+    pilot._search_api = _FreshSearch(binding.successor["obs"], record["selected"][0])
+    board = pilot._board(obs, select)
+    traces = [pilot._option_trace(obs, select, board, option, record["selected"][0])]
+
+    assert pilot.plan_turn(obs, select, board, [option], traces) is None
+    assert pilot._search_api.begun == 0
+
+
+def test_planner_does_not_silence_unexpected_composer_errors(pilot, monkeypatch):
+    """A programming error must surface; only explicit model refusals may defer."""
+
+    record = next(record for record in load_records() if record["context"] == 7)
+    obs = copy.deepcopy(record["seed_observation"])
+    select = obs["select"]
+    option = select["option"][record["selected"][0]]
+    board = pilot._board(obs, select)
+    traces = [pilot._option_trace(obs, select, board, option, record["selected"][0])]
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("unexpected composer fault")
+
+    monkeypatch.setattr(cp, "compose", broken)
+    with pytest.raises(RuntimeError, match="unexpected composer fault"):
+        pilot._composer_line(obs, select, board, [option], traces)
+
+
 def test_seeded_engine_menu_match_ignores_only_the_composer_origin_stamp():
     """A private field is still exact input unless it is the composer's known provenance stamp."""
 

@@ -973,6 +973,8 @@ One depth-0, exact-menu `OptionType.CARD` answer replayed through **Engine Searc
 the SelectContext or target card.  The allowed contexts are `SETUP_ACTIVE_POKEMON`,
 `SWITCH`, `TO_ACTIVE`, `TO_HAND`, `DAMAGE`, `HEAL`, `ATTACH_FROM`, and `ATTACH_TO`.  No token,
 off-menu option, two-or-more-required answer, synthesized depth, or other context qualifies.
+`PlannerMixin.plan_turn` reaches that same composer route at those contexts; an optional repeated
+select replans per answer, while a select requiring two answers remains Issue #387's work.
 `SETUP_BENCH_POKEMON` is an explicit engine-refused diagnostic rather than a route: native replay
 cannot preserve the opponent Active's `appearThisTurn`, so it remains on its safe decision path and
 is never normalised, composer-priced, or replaced by a context/card rule.  `KIND_COVERAGE[_CARD]`

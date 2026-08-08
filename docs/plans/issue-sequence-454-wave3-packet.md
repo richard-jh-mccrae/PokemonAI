@@ -205,3 +205,36 @@ The diagnostic gate outputs exactly match the existing Issue #465 records above:
 `OK -> MISS` flips and the Decision Gate has 33 unruled regressions.  No baseline was captured or
 restamped and no new flips were appended.  `composer_lab` reports 374 frames, 278 composed, zero
 failures, median 82.97 ms, P95 785.31 ms, and max 2484.23 ms — below the 1-second warning threshold.
+
+## Issue #458 — composer entry at eight exact CARD continuations
+
+`PlannerMixin.plan_turn` now reaches the existing Engine-Search composer route at the eight
+provenance-backed contexts: `SETUP_ACTIVE_POKEMON`, `SWITCH`, `TO_ACTIVE`, `TO_HAND`, `DAMAGE`,
+`HEAL`, `ATTACH_FROM`, and `ATTACH_TO`. This is not a CARD/context transition: each answer remains
+the exact offered option and native Engine Search produces its successor. A select requiring two
+answers remains out of scope. `ATTACH_TO` is optional (the recorded frame is `minCount=0`,
+`maxCount=3`), so it replans after each answer rather than becoming a mandatory multi-pick route.
+
+The native provenance sweep verifies **8/8** reconstructible contexts. `SETUP_BENCH_POKEMON` remains
+the one explicit `engine-refused` record because native replay cannot restore the opponent Active's
+`appearThisTurn`; it keeps the safe scored path. No normalization, synthetic successor, or
+card-specific fallback was added. A non-`Unmodellable` composer exception now surfaces instead of
+quietly disabling the route.
+
+### F1–F5 target-runtime verdict
+
+This ruling is scoped to the shipped Mega Starmie runtime. Hydrapple has deck data but no runtime
+entrypoint or corpus population, so it contributes no executable frame to this issue.
+
+| item | verdict | target-runtime evidence |
+|---|---|---|
+| F1, per-copy line bases | INHERITS | Mega Starmie's Staryu → Mega Starmie ex line still reads the unchanged hand/needs model. |
+| F2, full-Bench capacity | RESOLVES | Mega Starmie's eight `_TO_HAND` corpus frames have 0–3 of 5 Bench slots occupied; no target runtime path reaches this condition. |
+| F3, typed Energy / ability fuel | RESOLVES | Mega Starmie has one Basic Energy type; Hydrapple's declared deck likewise has one. No target runtime menu asks the colour-conflict question. |
+| F4, tutor reach factor | INHERITS | Native successor replay prices the real hand but adds no per-row reach factor. |
+| F5, surviving deck-rung calibration | RESOLVES | Mega Starmie declares `hypotheses=[]`; Hydrapple has no runtime strategy. No target deck rung competes with the composer at `_TO_HAND`. |
+
+Two target-runtime items inherit, below the three-item stop rule. No hand/needs model, card effect,
+or corpus interpretation changed. The Mega Starmie composer lab is diagnostic only: 250 frames, 199
+composed, 0 failures, median 62.95 ms, P95 458.70 ms, max 1554.88 ms. No gate baseline was captured
+or restamped.

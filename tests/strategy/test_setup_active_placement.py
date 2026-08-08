@@ -27,7 +27,7 @@ from common.cards import CardFunctions  # noqa: E402
 from common.pilot import Pilot  # noqa: E402
 from common.scouting.provider import CardStat, DictCardStatProvider  # noqa: E402
 from common.strategy import Strategy  # noqa: E402
-from common.strategy.context import _SETUP_ACTIVE  # noqa: E402
+from common.strategy.context import _CARD, _SETUP_ACTIVE  # noqa: E402
 from common.strategy.general_strategy import GENERAL_STRATEGY  # noqa: E402
 
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
@@ -79,7 +79,7 @@ def _setup_active_obs(hand_ids, offer_ids=None):
     (ADR-0081) turns on an EVOLUTION in hand, which is never a startable body and so never on offer."""
     hand_ids = list(hand_ids)
     idxs = range(len(hand_ids)) if offer_ids is None else [hand_ids.index(c) for c in offer_ids]
-    opts = [{"type": "Card", "area": 2, "index": i, "playerIndex": 0} for i in idxs]
+    opts = [{"type": _CARD, "area": 2, "index": i, "playerIndex": 0} for i in idxs]
     return {"current": {"players": [{"active": [None], "bench": [], "hand": [{"id": c} for c in hand_ids]},
                                     {"active": [None], "bench": []}], "yourIndex": 0, "turn": 0},
             "select": {"context": _SETUP_ACTIVE, "minCount": 1, "maxCount": 1, "option": opts}}
