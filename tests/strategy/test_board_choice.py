@@ -426,9 +426,9 @@ def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it()
         assert entry.apply is not None or entry.no_applier.strip(), key
 
 
-def test_the_seam_returns_the_POINT_transition_until_expansion_is_ARMED():
-    """`runtime.PROFILE["deferred_target_expansion"]` ships False. Armed, the SHAPE changes and the
-    fate does not — `apply_option` already declares an `Expectation` among its return shapes."""
+def test_the_seam_returns_the_POINT_transition_until_the_CALLER_opts_in():
+    """Expansion is opt-in per call, never a deployment flag. Opting in changes the SHAPE and not the
+    fate — `apply_option` already declares an `Expectation` among its return shapes."""
     model = _board()
     off = ao.apply_option(model, RETREAT)
     assert isinstance(off, StateModel)

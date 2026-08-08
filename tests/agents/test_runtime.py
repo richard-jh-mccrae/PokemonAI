@@ -89,9 +89,6 @@ EXPECTED_SHIPPED = {
     "snipe_relevance": True,        # ADR-0083: the Snipe Relevance scalar decides the DAMAGE
                                     # bench-target select; the additive target rungs stand down
     "deny_relevance": True,         # ADR-0080 / ADR-0093. Arm TOGETHER with `deny_strip_delta`
-    "deferred_target_expansion": False,  # ADR-0121 armed-OFF: the CHOICE node's consumer — the
-                                    # composer taking the `max` over the target classes — is Issue
-                                    # Issue #385 and does not exist yet
 }
 
 

@@ -79,10 +79,9 @@ PROFILE = {
     "deny_relevance": True,         # ADR-0080/0093: all three deny surfaces score off the relevance
                                     # read. ⚠️ OFF is DEGRADED MODE, never a rollback — Issue #228
                                     # DELETED the ADR-0062 magnitude oracle this replaced.
-    "deferred_target_expansion": False,  # ADR-0121 armed-OFF: `apply_option` returns a `board_choice`
-                                    # Expectation instead of the point transition. Nothing consumes it
-                                    # until Issue #385, so OFF is byte-identical.
 }
+# `deferred_target_expansion` RETIRED (Issue #446): ADR-0121 armed it off until a consumer existed;
+# Issue #386's composer opts in per call, so the flag gated nothing and read as a live kill-switch.
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
 

@@ -456,12 +456,14 @@ def test_the_replan_evaluator_is_ONE_function_shared_by_BOTH_sites():
 @pytest.mark.req("REQ-COMPOSER-0009")
 def test_expansion_is_UNCONDITIONAL_here_and_still_DEFAULT_OFF_at_the_seam():
     """§S7.4. The composer is *written against* expansion, so it is not switchable here; every OTHER
-    caller keeps the default False and `runtime.PROFILE["deferred_target_expansion"]` stays False."""
+    caller keeps the seam default. The `PROFILE` flag is RETIRED — see the final assertion."""
     import inspect
 
     from common import runtime
 
-    assert runtime.PROFILE["deferred_target_expansion"] is False
+    assert "deferred_target_expansion" not in runtime.PROFILE, (
+        "the flag was an orphan declared to expire with Issue #386, which has landed — a knob the "
+        "composer never reads reads as a kill-switch for a capability that is always on")
     assert inspect.signature(ao.apply_option).parameters[
         "expand_deferred_targets"].default is False
     source = inspect.getsource(cp._one_ply)
@@ -478,7 +480,7 @@ def test_expansion_is_UNCONDITIONAL_here_and_still_DEFAULT_OFF_at_the_seam():
                 for alias in node.names}
     assert not {"runtime", "common.runtime"} & imports, (
         "the composer reads no deployment flag — expansion is intrinsic to its correctness, so it "
-        "is unconditional here and `deferred_target_expansion` stays an orphan for Issue #386")
+        "is unconditional here and may never be gated by one")
     assert "PROFILE" not in {getattr(n, "attr", None) for n in ast.walk(tree)
                              if isinstance(n, ast.Attribute)}
 
