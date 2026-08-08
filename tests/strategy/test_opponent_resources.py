@@ -9,7 +9,9 @@ Key opponent-side asymmetry vs the own side: the opponent's HAND is hidden (only
 known), so an unseen copy may sit in their deck, prizes, OR hand — hand joins prizes in the
 hidden non-deck pool.
 """
+import json
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +21,9 @@ from common.opponent_resources import (
     copies_left_odds,
     opp_visible_counts,
 )
+
+
+REPO = Path(__file__).resolve().parents[2]
 
 
 def _poke(cid, *, energies=(), tools=(), pre=()):
@@ -91,6 +96,14 @@ def _obs(opp, *, turn=2, has_select=True, my_prizes=6, logs=()):
           "handCount": 7, "deckCount": 40}
     return {"current": {"turn": turn, "yourIndex": 0, "players": [me, opp]},
             "select": {} if has_select else None, "logs": list(logs)}
+
+
+def _turn_start(player):
+    return {"type": 2, "playerIndex": player}
+
+
+def _discard_from_board(player, area=5):
+    return {"type": 6, "playerIndex": player, "fromArea": area, "toArea": 3}
 
 
 @pytest.mark.req("REQ-OPP-0003")
@@ -174,15 +187,48 @@ def test_deckout_is_silent_when_the_deck_is_not_declining():
 
 
 @pytest.mark.req("REQ-OPP-0007")
-def test_my_pokemon_koed_last_turn_reads_the_opp_prize_drop_across_turns():
-    """The attacker prizes from their OWN pile (rules.md §6), so an opponent prize drop across two
-    of MY turn starts means one of MY Pokémon was Knocked Out during their last turn."""
+def test_my_pokemon_koed_last_turn_reads_the_real_mega_starmie_ko_log():
+    obs = json.loads((REPO / "tests" / "fixtures" / "corrections" /
+                      "ms_t3holdout_82227388_0_decision_50.json").read_text(encoding="utf-8"))["obs"]
     m = OpponentResourceModel()
-    m.observe(_obs(_opp(prizes_hidden=6), turn=5))
-    assert m.my_pokemon_koed_last_turn is False          # no previous turn to compare against
-    m.observe(_obs(_opp(prizes_hidden=6), turn=7))       # their turn passed with no KO on me
-    assert m.my_pokemon_koed_last_turn is False
-    m.observe(_obs(_opp(prizes_hidden=5), turn=9))       # they took a prize during their turn
+    m.observe(obs)
     assert m.my_pokemon_koed_last_turn is True
-    m.observe(_obs(_opp(prizes_hidden=5), turn=11))      # a quiet turn -> the flag clears
+
+
+@pytest.mark.req("REQ-OPP-0007")
+def test_my_pokemon_koed_last_turn_is_false_for_a_quiet_mega_starmie_turn():
+    obs = json.loads((REPO / "tests" / "fixtures" / "corrections" /
+                      "ms_doom_relax_bare_terapagos_f21.json").read_text(encoding="utf-8"))["obs"]
+    m = OpponentResourceModel()
+    m.observe(obs)
     assert m.my_pokemon_koed_last_turn is False
+
+
+@pytest.mark.req("REQ-OPP-0007")
+def test_my_pokemon_koed_last_turn_requires_my_board_discard_in_their_turn():
+    m = OpponentResourceModel()
+    m.observe(_obs(_opp(), turn=9, logs=[_turn_start(1), _discard_from_board(0), _turn_start(0)]))
+    assert m.my_pokemon_koed_last_turn is True           # no HP_CHANGE: effect KOs still count
+
+    theirs_koed = [_turn_start(0), _discard_from_board(1),
+                    {"type": 7, "playerIndex": 0, "fromArea": 6, "toArea": 2},
+                    _turn_start(1), _turn_start(0)]
+    m.observe(_obs(_opp(), turn=11, logs=theirs_koed))
+    assert m.my_pokemon_koed_last_turn is False          # our KO / prize does not qualify
+
+
+@pytest.mark.req("REQ-OPP-0007")
+def test_my_pokemon_koed_last_turn_persists_then_fails_closed_on_quiet_or_bad_logs():
+    m = OpponentResourceModel()
+    m.observe(_obs(_opp(), turn=9, logs=[_turn_start(1), _discard_from_board(0), _turn_start(0)]))
+    m.observe(_obs(_opp(), turn=9))                       # same own turn, later decision
+    assert m.my_pokemon_koed_last_turn is True
+    m.observe(_obs(_opp(), turn=11, logs=[_turn_start(1), _turn_start(0)]))
+    assert m.my_pokemon_koed_last_turn is False
+
+    missing = OpponentResourceModel()
+    missing.observe(_obs(_opp(), turn=9))
+    assert missing.my_pokemon_koed_last_turn is False
+    malformed = [_turn_start(1), {"type": "bad"}, _discard_from_board(0), _turn_start(0)]
+    missing.observe(_obs(_opp(), turn=11, logs=malformed))
+    assert missing.my_pokemon_koed_last_turn is False

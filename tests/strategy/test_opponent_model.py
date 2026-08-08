@@ -138,12 +138,20 @@ def test_real_pilot_board_exposes_the_facade_and_resources_via_the_fan_out():
     opp = {"active": [], "bench": [], "hand": None, "handCount": 4, "discard": [],
            "prize": [None] * 6, "deckCount": 37}
     obs = make_select([opt()], current={"turn": 2, "yourIndex": 0, "players": [me, opp]})
+    obs["logs"] = [
+        {"type": 2, "playerIndex": 1},
+        {"type": 6, "playerIndex": 0, "fromArea": 5, "toArea": 3},
+        {"type": 2, "playerIndex": 0},
+    ]
     board = pilot._board(obs, obs["select"])
     assert board.opponent is pilot.opponent                 # the single facade rides on the Board
     assert board.opponent.deck_count == 37                  # Resources tracked via _board's fan-out
     # Dispositions delegate: no Scout wired -> no Brief -> opp_property returns the caller default,
     # now routed through the facade (behavior-neutral with the pre-facade direct-Brief read).
     assert board.opp_property("opp_is_engine_dependent", False) is False
+    assert pilot.opponent.my_pokemon_koed_last_turn is True
+    assert pilot._state_model.my_pokemon_koed_last_turn is True
+    assert board.my_pokemon_koed_last_turn is True
 
 
 @pytest.mark.req("REQ-OPP-0014")

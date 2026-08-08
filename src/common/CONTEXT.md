@@ -23,10 +23,12 @@ _Avoid_: "the opponent model" for the Read alone; naming any single subsystem "m
 
 **Resources** (ADR-0047):
 The Opponent-Model subsystem for the opponent's *remaining outs* — `copies_left(card)`,
-`deckout_in_turns`, `hand_size_delta`, `last_turn_dumped`, `took_ko_this_turn`. Match-scoped
+`deckout_in_turns`, `hand_size_delta`, `last_turn_dumped`, `took_ko_this_turn`,
+`my_pokemon_koed_last_turn`. Match-scoped
 (`opponent_resources.py`, like `deck_tracker.py`); the opponent-side mirror of `deck_odds`/`deck_tracker`.
 Mostly *probabilistic* (hypergeometric over unseen copies across hidden prizes) with a few *sound* anchors
-(visible board/discard, exact `deckCount`).
+(visible board/discard, exact `deckCount`, and the log-derived KO fact, which fails closed without
+a complete turn segment).
 _Avoid_: `opponent_model.py` (renamed to free the umbrella term); "opponent deck odds" (that's the own-side module).
 
 **Dispositions** (ADR-0047):

@@ -1226,6 +1226,11 @@ class StateModel(_Lazily):
         ``()`` when none was threaded; the emptiness question is :attr:`MySide.deck_count`'s."""
         return self.mine._deck
 
+    @property
+    def my_pokemon_koed_last_turn(self) -> bool:
+        """The exact log-derived Resource fact, or False without the opponent-model seam."""
+        return bool(getattr(getattr(self.theirs, "opponent", None), "my_pokemon_koed_last_turn", False))
+
     def card_stat(self, card_id):
         """This card's `CardStat`, or None — the model's own door onto the Stat Provider, so the
         seam's telemetry can name a card without reaching into another object's privates."""

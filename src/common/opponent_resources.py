@@ -2,15 +2,21 @@
 ``copies_left_odds`` (mirrors ``deck_odds``) plus the match-scoped ``OpponentResourceModel`` (mirrors
 ``deck_tracker``). The asymmetry: their HAND is hidden, so it joins prizes in the non-deck pool.
 
-Pure / lib-free; **never raises** and every estimate **fails OPEN**.
+Pure / lib-free; **never raises**. Estimates fail OPEN; exact log facts fail CLOSED.
 """
 from __future__ import annotations
 
 from collections import Counter
 from math import ceil
 
+from cg.api import AreaType, LogType
+
 from . import deck_odds
 from .board_cards import body_card_ids, card_id as _card_id
+
+
+_TURN_START, _MOVE_CARD = int(LogType.TURN_START), int(LogType.MOVE_CARD)
+_DISCARD, _ACTIVE, _BENCH = int(AreaType.DISCARD), int(AreaType.ACTIVE), int(AreaType.BENCH)
 
 
 def opp_visible_counts(opp: dict) -> Counter:
@@ -51,6 +57,27 @@ def copies_left_odds(rep_build, opp: dict) -> dict[int, float]:
         return {}
 
 
+def _my_body_koed_in_previous_turn(logs, my_index: int) -> bool:
+    """Exact recent-log fact; missing or malformed history makes no claim."""
+    if (not isinstance(logs, (list, tuple))
+            or any(not isinstance(event, dict) or not isinstance(event.get("type"), int)
+                   for event in logs)):
+        return False
+    starts = [i for i, event in enumerate(logs)
+              if isinstance(event, dict) and event.get("type") == _TURN_START]
+    if len(starts) < 2:
+        return False
+    previous, current = starts[-2:]
+    current_start, previous_start = logs[current], logs[previous]
+    if (current_start.get("playerIndex") != my_index
+            or previous_start.get("playerIndex") != 1 - my_index):
+        return False
+    return any(event.get("type") == _MOVE_CARD and event.get("playerIndex") == my_index
+               and event.get("fromArea") in (_ACTIVE, _BENCH)
+               and event.get("toArea") == _DISCARD
+               for event in logs[previous + 1:current])
+
+
 class OpponentResourceModel:
     """The opponent-side cross-turn tracker. ``observe`` is called once per *decision*, so the deltas
     are against the previous **distinct turn**. Unknown is ``None``, never a fabricated number."""
@@ -67,8 +94,7 @@ class OpponentResourceModel:
         self._prev_discard: int | None = None   # opp discard size at the previous distinct turn
         self._my_prizes: int | None = None
         self._turn_start_my_prizes: int | None = None
-        self._turn_start_opp_prizes: int | None = None       # opp prize count at the current turn's start
-        self._prev_turn_start_opp_prizes: int | None = None  # … and at the previous distinct turn's start
+        self._my_pokemon_koed_last_turn = False
         self._deck_samples: dict[int, int] = {}  # turn -> opp deckCount (latest that turn)
 
     def observe(self, obs: dict) -> None:
@@ -110,8 +136,7 @@ class OpponentResourceModel:
         my_prizes = len(me.get("prize") or []) if me else None
         if new_turn:
             self._turn_start_my_prizes = my_prizes
-            self._prev_turn_start_opp_prizes = self._turn_start_opp_prizes
-            self._turn_start_opp_prizes = len(opp.get("prize") or [])
+            self._my_pokemon_koed_last_turn = _my_body_koed_in_previous_turn(obs.get("logs"), yi)
         self._my_prizes = my_prizes
         self._last_turn = turn
 
@@ -152,11 +177,8 @@ class OpponentResourceModel:
 
     @property
     def my_pokemon_koed_last_turn(self) -> bool:
-        """The attacker takes prizes from their OWN pile on a KO (rules.md §6), so their pile
-        shrinking means one of MINE was KO'd. Edge: my own self-recoil KO lands here too."""
-        return bool(self._prev_turn_start_opp_prizes is not None
-                    and self._turn_start_opp_prizes is not None
-                    and self._turn_start_opp_prizes < self._prev_turn_start_opp_prizes)
+        """Exact opponent-turn own-body KO history; False without a complete readable log segment."""
+        return self._my_pokemon_koed_last_turn
 
     @property
     def deckout_in_turns(self) -> int | None:

@@ -55,9 +55,11 @@ class GoalLadderMixin:
         """A clause's dynamic ``condition`` gate against the Board — TRUE only when absent or PROVABLY
         satisfied now; anything else fails closed. Active-spot :meth:`_condition_holds_for`."""
         return self._condition_holds_for(condition, cur_hp=board.my_active_hp,
-                                         attached=board.my_active_energy)
+                                         attached=board.my_active_energy,
+                                         my_pokemon_koed_last_turn=board.my_pokemon_koed_last_turn)
 
-    def _condition_holds_for(self, condition, *, cur_hp: int, attached: int) -> bool:
+    def _condition_holds_for(self, condition, *, cur_hp: int, attached: int,
+                             my_pokemon_koed_last_turn: bool = False) -> bool:
         """:meth:`_condition_holds` asked of ONE body (Issue #409). Both gates are per-TARGET at the
         card text, so reading them off the Active would answer about the wrong Pokémon."""
         if not condition:
@@ -66,6 +68,8 @@ class GoalLadderMixin:
             return bool(cur_hp) and cur_hp <= 30
         if condition == "energy_3_plus":
             return attached >= 3
+        if condition == "pokemon_ko_last_turn":
+            return my_pokemon_koed_last_turn
         return False
 
     def _heal_candidate(self, cid: int, board, active_stat) -> tuple[int, int] | None:
