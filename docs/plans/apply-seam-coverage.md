@@ -131,23 +131,23 @@ Pool: **383 distinct cards** — 5 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 5 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 316 | 76.7% | 271 | 90.3% | 51.5 |
-| **engine-resolved** | 46 | 11.2% | 18 | 6.0% | 5.8 |
+| **modelled** | 319 | 77.4% | 278 | 92.7% | 52.9 |
+| **engine-resolved** | 43 | 10.4% | 11 | 3.7% | 4.4 |
 | **refused** | 50 | 12.1% | 32 | 10.7% | 5.1 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 316 | 76.7% | modelled 316 |
+| **modelled-full** | 319 | 77.4% | modelled 319 |
 | **modelled-partial** | 13 | 3.2% | engine-resolved 3, refused 10 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 5 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 287 | 74.9% | 250 | 83.3% | 49.1 | 81.8% |
-| **engine-resolved** | 43 | 11.2% | 18 | 6.0% | 5.8 | 9.7% |
+| **modelled-full** | 290 | 75.7% | 257 | 85.7% | 50.5 | 84.2% |
+| **engine-resolved** | 40 | 10.4% | 11 | 3.7% | 4.4 | 7.3% |
 | **modelled-partial** | 13 | 3.4% | 16 | 5.3% | 1.9 | 3.1% |
 | **refused** | 40 | 10.4% | 16 | 5.3% | 3.2 | 5.4% |
 
@@ -157,13 +157,13 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 72 | 42.9% |
-| **engine-resolved** | 46 | 27.4% |
+| **modelled** | 75 | 44.6% |
+| **engine-resolved** | 43 | 25.6% |
 | **refused** | 50 | 29.8% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 72 | 42.9% |
+| **modelled-full** | 75 | 44.6% |
 | **modelled-partial** | 13 | 7.7% |
 
 ### REFUSED, grouped by cause and ranked by exposure
@@ -274,27 +274,21 @@ A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship n
 | id | card | site | class | named by | our copies |
 |---|---|---|---|---|---|
 | 1120 | Crushing Hammer | play | modelled-partial | dragapult_ex, mega_starmie | 8 |
-| 1141 | Premium Power Pro | play | engine-resolved | mega_lucario | 4 |
 | 1080 | Unfair Stamp | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 1213 | Judge | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 112 | Munkidori | ability: Adrena-Brain | engine-resolved | dragapult_ex | 2 |
-| 1123 | Switch | play | engine-resolved | mega_lucario | 2 |
 | 1223 | Harlequin | play | modelled-partial | mega_starmie | 2 |
-| 1211 | Black Belt’s Training | play | engine-resolved | mega_lucario | 1 |
 
 ### ENGINE-RESOLVED — the modelling backlog
 
-46 sites, 18 copies across our 5 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
+43 sites, 11 copies across our 5 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
 
 | id | card | site | our copies | meta copies |
 |---|---|---|---|---|
-| 1141 | Premium Power Pro | play | 4 | 0.88 |
 | 1261 | Forest of Vitality | play | 4 | 0.02 |
 | 9 | Boomerang Energy | attach | 3 | 0.00 |
-| 1123 | Switch | play | 2 | 0.55 |
 | 112 | Munkidori | ability: Adrena-Brain | 2 | 0.01 |
 | 150 | Hydrapple ex | ability: Ripening Charge | 2 | 0.00 |
-| 1211 | Black Belt’s Training | play | 1 | 0.04 |
 | 1079 | Rare Candy | play | 0 | 1.08 |
 | 11 | Mist Energy | attach | 0 | 1.02 |
 | 1081 | Enhanced Hammer | play | 0 | 0.89 |
@@ -390,9 +384,9 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 |---|---|---|---|---|---|
 | dragapult_ex | 52 | 6 | 2 | 0 | 10.0% |
 | hydrapple | 48 | 1 | 6 | 5 | 10.0% |
-| mega_lucario | 51 | 3 | 6 | 0 | 5.0% |
+| mega_lucario | 57 | 3 | 0 | 0 | 5.0% |
 | mega_starmie | 54 | 6 | 0 | 0 | 10.0% |
-| slowking | 45 | 0 | 4 | 11 | 18.3% |
+| slowking | 46 | 0 | 3 | 11 | 18.3% |
 
 ### Clause write-set health (`snapshot_coverage`)
 
@@ -411,8 +405,9 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | stadium_static | 5 | declared EMPTY |
 | discard_3 | 4 | yes |
 | discard_hand | 4 | yes |
+| self_switch | 4 | yes |
+| damage_boost | 3 | declared EMPTY |
 | discard_1 | 3 | yes |
-| self_switch | 3 | yes |
 | shuffle_both_hands | 3 | yes |
 | coin | 2 | declared EMPTY |
 | energy_provide | 2 | yes |
@@ -422,7 +417,6 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | bottom_2 | 1 | yes |
 | bounce_energy_to_hand | 1 | yes |
 | confuse_target | 1 | yes |
-| damage_boost | 1 | declared EMPTY |
 | damage_counters | 1 | yes |
 | damage_reduction | 1 | declared EMPTY |
 | discard_2 | 1 | yes |

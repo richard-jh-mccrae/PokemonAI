@@ -26,29 +26,23 @@ FLIPS = {
         "REFUSAL", [0], [2],
         "RNG — 1227 Lillie's Determination, same clause and same cause as f27"),
     "dragapult_poffin_whiff_take_gust_ko_f79": (
-        "REFUSAL", [4], [6],
-        "MULTI-WRITE — choice key 'gust': `CLAUSE_WRITES['gust']` is non-empty ({bodies_in_play, "
-        "special_conditions, transient_grants}), so the structural floor is not the whole play "
-        "(Issue #300 `_covers`). **This and f81 are the decision-level successors named in "
-        "`test_gust.py`'s deletion note, and they do NOT carry the gust fact** — the seam cannot "
-        "model a gust, so gusting has no working assertion at decision level. Recorded plainly "
-        "rather than left implied by that note."),
+        "VALUATION", [4], [6],
+        "gust is now a closed choice transition (Issue #455), so this remains a decision-level "
+        "valuation disagreement rather than a coverage ceiling"),
     "dragapult_gust_ko_over_accel_f81": (
-        "REFUSAL", [2], [4],
-        "MULTI-WRITE — choice key 'gust', as f79. Composer takes a 2.25-prize line instead."),
+        "VALUATION", [2], [4],
+        "gust is now a closed choice transition (Issue #455); composer still takes its 2.25-prize line"),
     "pilot_cd91": (
-        "REFUSAL", [3], [4],
-        "MULTI-WRITE — choice key 'gust', a THIRD gust frame with no working assertion"),
+        "VALUATION", [3], [4],
+        "gust is now a closed choice transition (Issue #455), so this is no longer a seam refusal"),
     "pilot_6f14": (
         "REFUSAL", [4], [5],
         "RNG — 1223 Harlequin: clause 'shuffle_both_hands' consults RNG, the same cause as Lillie's "
         "Determination above. Two RNG cards account for three rows in this table"),
     "pilot_e1db": (
-        "REFUSAL", [1], [4],
-        "a FOURTH refusal cause: choice key 'heal' — *no board synthesis is registered for it*, so "
-        "the resulting board cannot be written at all. Distinct from the other three — not RNG, not "
-        "an over-broad `_covers`, not an unproven determinism gate, just an unimplemented "
-        "transition. The composer takes a 3.107-prize line instead"),
+        "VALUATION", [1], [4],
+        "Wally's heal/bounce is now a closed choice transition (Issue #455); this is a valuation "
+        "disagreement, not an unavailable board"),
 
     # ══ VALUATION — the seam priced the human's option and ranked another above it ════════════════
     # ``d(...)`` in each note is a 1-ply delta, in prizes.
@@ -146,24 +140,22 @@ CORPUS_RECORD_FLIPS = {
         "holds; only the decision moved"),
     ("83457493", 31): (
         "REFUSAL", 4, [5],
-        "ep83457493 f31: the Harlequin play. The ruled option REFUSES at the seam, so no scoring "
-        "change reaches this frame; both it and the composer's pick price at 0.0"),
+        "ep83457493 f31: the Harlequin play remains unavailable at the one-option seam because its "
+        "multi-leg card shape is outside Issue #455's Boss-only gust synthesis"),
     ("85163079", 30): (
         "REFUSAL", 1, [2],
         "MULTI-WRITE — Boss's Orders again (choice key 'gust'). The loaded-equal-KO gust, the pin "
         "the `gust-for-the-loaded-equal-ko` swing gate was sized on"),
     ("86091435", 119): (
         "REFUSAL", 1, [0],
-        "MULTI-WRITE — Boss's Orders again. This one is a HUMAN-ADJUDICATED agent line, not a "
-        "correction: the 2-prize drag-and-spread was ruled BETTER than the correction's 1-prize "
-        "development line on 2026-07-19. So the composer is not disagreeing with a blunder report, "
-        "it is unable to see a line a human explicitly endorsed"),
+        "the human-adjudicated 2-prize drag-and-spread remains outside Issue #455's Boss-only gust "
+        "synthesis, so this card shape still refuses at the one-option seam"),
 }
 
-#: Every gust frame in both tables: ONE cause (`CLAUSE_WRITES['gust']` is non-empty, so Issue #300's
-#: `_covers` refuses the transition) and between them the ONLY decision-level gust coverage there is.
-GUST_REFUSALS = ("dragapult_poffin_whiff_take_gust_ko_f79", "dragapult_gust_ko_over_accel_f81",
-                 "pilot_cd91", ("85163079", 30), ("86091435", 119))
+#: Decision-level gust records reclassified by Issue #455. They are valuation work, never evidence
+#: that the structural play can be safely treated as an identity transition.
+GUST_RECLASSIFIED = ("dragapult_poffin_whiff_take_gust_ko_f79", "dragapult_gust_ko_over_accel_f81",
+                     "pilot_cd91")
 
 REFUSALS = {k for k, v in FLIPS.items() if v[0] == "REFUSAL"}
 VALUATIONS = {k for k, v in FLIPS.items() if v[0] == "VALUATION"}

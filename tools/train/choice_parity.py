@@ -32,9 +32,10 @@ from train.apply_parity import (TRACES, chosen_option, load,               # noq
 from common import board_choice, board_delta                               # noqa: E402
 from common.state_model import StateModel                                  # noqa: E402
 
-#: The kinds this lane walks. `board_choice.CHOICE_KINDS` is the source, so a kind promoted there
-#: without a lane entry cannot go silently unverified.
-KINDS = frozenset(board_choice.CHOICE_KINDS)
+#: The deferred-target members this lane can read from a settled native board. Visible-discard fetch
+#: predates this lane and has no new applier in this issue, so it remains outside this resolution set.
+PARITY_KEYS = frozenset(set(board_choice.CHOICE_KINDS) | {
+    "gust", "heal", "accel", "self_switch", board_choice.FETCH_IN_PLAY})
 
 #: Compared as a MULTISET: nothing in `docs/rulebook.txt` orders a simultaneous discard, so the
 #: engine's order is the recording policy's artifact. A WRONG card still fails; the multiset changes.
@@ -54,7 +55,7 @@ class Divergence:
     trace: str
     frame: int
     settled: int
-    kind: int
+    kind: object
     zone: str
     node_value: object
     engine_value: object
@@ -83,6 +84,7 @@ class Report:
     unenumerated: list = field(default_factory=list)
     divergences: list = field(default_factory=list)
     refusal_reasons: dict = field(default_factory=dict)
+    by_key: dict = field(default_factory=dict)
 
     @property
     def clean(self) -> bool:
@@ -94,6 +96,10 @@ class Report:
                 f"{self.refused} refused · {self.unsettled} unsettled · "
                 f"{len(self.unenumerated)} NOT ENUMERATED · {len(self.divergences)} DIVERGED")
         lines = [head]
+        if self.by_key:
+            lines.append("  per member: " + ", ".join(
+                f"{key}: {row['verified']}v/{row['refused']}r/{row['unsettled']}u"
+                for key, row in sorted(self.by_key.items(), key=lambda kv: str(kv[0]))))
         for miss in self.unenumerated[:10]:
             lines.append(f"  taken target not in the enumerated space: {miss}")
         for d in self.divergences[:20]:
@@ -146,8 +152,105 @@ def taken_retreat(before: dict, after: dict, seat: int):
     return (discarded, index)
 
 
-#: Keyed like `board_choice`'s registries, so a kind gains a lane entry as it gains a target space.
-TAKEN = {12: taken_retreat}          # `strategy.context._RETREAT`
+def _side(obs: dict, seat: int):
+    players = ((obs.get("current") or {}).get("players")) or []
+    return players[seat] if 0 <= seat < len(players) else None
+
+
+def _locate_serial(side: dict, serial):
+    for area, zone in ((4, "active"), (5, "bench")):
+        for index, body in enumerate((side or {}).get(zone) or ()):
+            if body and body.get("serial") == serial:
+                return area, index
+    return None
+
+
+def _taken_switch(before: dict, after: dict, seat: int, *, opponent: bool):
+    target = 1 - seat if opponent else seat
+    pre, post = _side(before, target), _side(after, target)
+    active = next((b for b in (post or {}).get("active") or () if b), None)
+    if not active:
+        return None
+    where = _locate_serial(pre, active.get("serial"))
+    return where[1] if where and where[0] == 5 else None
+
+
+def taken_gust(before: dict, after: dict, seat: int):
+    return _taken_switch(before, after, seat, opponent=True)
+
+
+def taken_self_switch(before: dict, after: dict, seat: int):
+    return _taken_switch(before, after, seat, opponent=False)
+
+
+def taken_heal(before: dict, after: dict, seat: int):
+    pre, post = _side(before, seat), _side(after, seat)
+    for area, zone in ((4, "active"), (5, "bench")):
+        for index, body in enumerate((pre or {}).get(zone) or ()):
+            if not body:
+                continue
+            later = next((b for b in (post or {}).get(zone) or ()
+                          if b and b.get("serial") == body.get("serial")), None)
+            if later and int(later.get("hp") or 0) > int(body.get("hp") or 0):
+                return area, index
+    return None
+
+
+def _ids(cards):
+    return [c.get("id") for c in cards or () if c and c.get("id") is not None]
+
+
+def _new_ids(before, after):
+    old = list(_ids(before))
+    out = []
+    for cid in _ids(after):
+        if cid in old:
+            old.remove(cid)
+        else:
+            out.append(cid)
+    return out
+
+
+def taken_accel(before: dict, after: dict, seat: int):
+    pre, post = _side(before, seat), _side(after, seat)
+    delivered = _new_ids((pre or {}).get("hand"), (post or {}).get("hand"))
+    for area, zone in ((4, "active"), (5, "bench")):
+        for index, body in enumerate((post or {}).get(zone) or ()):
+            if not body:
+                continue
+            prior = _locate_serial(pre, body.get("serial"))
+            if not prior:
+                continue
+            pre_zone = "active" if prior[0] == 4 else "bench"
+            previous = ((pre or {}).get(pre_zone) or ())[prior[1]]
+            attached = _new_ids(previous.get("energyCards"), body.get("energyCards"))
+            if prior and len(attached) == 1 and len(delivered) == 1:
+                return attached[0], delivered[0], prior[0], prior[1]
+    return None
+
+
+def taken_in_play_fetch(before: dict, after: dict, seat: int):
+    pre, post = _side(before, seat), _side(after, seat)
+    for area, zone in ((4, "active"), (5, "bench")):
+        for index, body in enumerate((post or {}).get(zone) or ()):
+            stack = body.get("preEvolution") or () if body else ()
+            old = stack[-1] if stack else None
+            where = _locate_serial(pre, (old or {}).get("serial"))
+            if where:
+                return body.get("id"), where[0], where[1]
+    return None
+
+
+#: Keyed like `board_choice`'s registry. A promoted member needs a settled-frame reader before it
+#: can enter :data:`PARITY_KEYS`; no zero-population resolver can become a green gate silently.
+TAKEN = {
+    12: taken_retreat,
+    "gust": taken_gust,
+    "heal": taken_heal,
+    "accel": taken_accel,
+    "self_switch": taken_self_switch,
+    board_choice.FETCH_IN_PLAY: taken_in_play_fetch,
+}
 
 
 def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> Report:
@@ -161,21 +264,28 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
         option = chosen_option(frames[k])
         if not option:
             continue
-        kind = int(option.get("type", -1))
-        if kind not in KINDS or (kinds and kind not in kinds):
-            continue
         obs = frames[k]["obs"]
         seat = (obs.get("current") or {}).get("yourIndex", 0)
         if ((obs.get("select") or {}).get("context")) != board_delta.CONTEXT_MAIN:
             continue                          # not the MAIN menu — the node refuses it by contract
+        deck = decks[seat] if seat < len(decks) else []
+        pre = StateModel.build(obs, combat=combat, my_index=seat, deck=deck)
+        try:
+            key = board_choice.choice_key(pre, option, seat_index=seat)
+        except board_delta.Unmodellable:
+            continue
+        if key not in PARITY_KEYS or (kinds and int(option.get("type", -1)) not in kinds):
+            continue
         report.choice_steps += 1
+        row = report.by_key.setdefault(key, {"population": 0, "verified": 0, "refused": 0,
+                                             "unsettled": 0})
+        row["population"] += 1
         j = settled_frame(frames, k, seat)
         if j is None:
             report.unsettled += 1
+            row["unsettled"] += 1
             continue
-        deck = decks[seat] if seat < len(decks) else []
-        pre = StateModel.build(obs, combat=combat, my_index=seat, deck=deck)
-        candidate = TAKEN[kind](obs, frames[j]["obs"], seat)
+        candidate = TAKEN[key](obs, frames[j]["obs"], seat)
         # ONE try around the whole synthesis: every refusal raised here is one
         # `board_choice.deferred_target` would raise for the same option, so none is a lane crash.
         try:
@@ -193,15 +303,17 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
             after_obs, _fingerprint = board_choice.realise(pre, option, candidate, seat_index=seat)
         except board_delta.Unmodellable as gap:
             report.refused += 1
+            row["refused"] += 1
             reason = str(gap).split(" — ")[0]
             report.refusal_reasons[reason] = report.refusal_reasons.get(reason, 0) + 1
             continue
         if taken_class not in reachable:
             report.unenumerated.append(
-                f"{path.name} f{k}->f{j} kind={kind} taken={candidate!r} class={taken_class!r} "
+                f"{path.name} f{k}->f{j} kind={key} taken={candidate!r} class={taken_class!r} "
                 f"space={len(space)}")
             continue
-        ours = zone_facts(pre.rebuilt(after_obs, reuse_their_side=True))
+        ours = zone_facts(pre.rebuilt(
+            after_obs, reuse_their_side=board_choice.CHOICE_REGISTRY[key].shares_opponent))
         theirs = zone_facts(StateModel.build(frames[j]["obs"], combat=combat, my_index=seat,
                                              deck=deck))
         bad, relaxed = [], False
@@ -213,10 +325,11 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
                 continue
             bad.append(zone)
         for zone in bad:
-            report.divergences.append(Divergence(path.name, k, j, kind, zone,
+            report.divergences.append(Divergence(path.name, k, j, key, zone,
                                                  ours.get(zone), theirs[zone]))
         if not bad:
             report.verified += 1
+            row["verified"] += 1
             report.order_only += int(relaxed)
     return report
 

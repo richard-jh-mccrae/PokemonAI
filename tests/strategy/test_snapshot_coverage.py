@@ -596,12 +596,12 @@ def test_element_zones_are_real_zones_and_the_required_rejections_stay_whole_zon
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")
-def test_the_unhomed_guard_cannot_see_a_card_with_no_clauses_at_all():
-    """Both `unhomed` guards work off DECLARED write-sets, and a card with NO clauses unions to the
-    empty set — so neither can ever report it, however much state it writes."""
+def test_the_unhomed_guard_distinguishes_declared_empty_writes_from_no_clauses():
+    """A declared damage boost writes no snapshot zone; an actually clause-less card remains unseen."""
     compendium = _compendium()
-    for cid in ("1141", "1211", "1175"):             # Power Pro, Black Belt's Training, Brave Bangle
-        assert compendium.get(cid) is None, cid
+    for cid in ("1141", "1211"):                     # Power Pro, Black Belt's Training
+        assert compendium.get(cid) == [{"kind": "damage_boost"}], cid
+    assert compendium.get("1175") is None, "Brave Bangle"
     assert compendium.get("1086"), "the positive control — this card DOES carry clauses"
 
     play = ao.FOOTPRINTS[_PLAY_KIND]

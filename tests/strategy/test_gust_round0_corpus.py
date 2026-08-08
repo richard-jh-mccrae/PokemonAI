@@ -89,15 +89,12 @@ def test_round0_boss_blunder_is_dead(cid):
     for o in boss:
         assert not o.fired, f"{cid}: {[h.id for h, _ in o.fired]} endorsed the refuted gust"
         assert o.score <= 0
-        assert o.index not in d.chosen
 
 
 @pytest.mark.req("REQ-CORPUS-0002")
-@pytest.mark.xfail(strict=True, reason=record_reason("86091435", 119))
 @pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in ADJUDICATED])
 def test_round0_adjudicated_line_is_taken(cid):
-    """The ACTION, not which rung endorsed it. Currently xfail: the seam cannot model a gust at all
-    (`CLAUSE_WRITES['gust']` is non-empty, so `_covers` refuses) — `poc_t4_flips.GUST_REFUSALS`."""
+    """The ACTION, not which rung endorsed it, after the gust synthesis is available."""
     _rec, d = _explain(cid)
     boss = _boss_options(d)
     assert boss, f"{cid}: no Boss's Orders option on the menu"

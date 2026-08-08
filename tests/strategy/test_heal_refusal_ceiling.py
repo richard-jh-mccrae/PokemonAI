@@ -1,13 +1,7 @@
-"""The clutch-heal REFUSAL CEILING — three CRITICAL corpus frames the composer cannot reach.
+"""The clutch-heal corpus after Wally's full choice synthesis (Issue #455).
 
-All three are the same card, refused for the same registered reason: `apply_option` declines to
-model Wally's Compassion, whose clauses write attached_energy + damage_counters + my_hand_ids
-(Issue #300 `_covers`). So this is a COVERAGE ceiling, not a valuation miss — no scoring change
-reaches these frames, and "fixing" them by tuning would be conforming.
-
-The tests come in pairs: a refusal assertion with teeth today, and the human's ruled ACTION kept
-verbatim under `xfail(strict=True)` so the day the seam widens, the build fails until they are
-promoted.
+The seam now reaches all three boards. Two human actions become ordinary regression pins; the
+remaining 0cbc disagreement is explicitly a valuation question, not a hidden coverage ceiling.
 """
 import json
 import sys
@@ -46,32 +40,35 @@ def _refusal_for(pilot, obs, index):
     my_index = int((obs.get("current") or {}).get("yourIndex") or 0)
     model = pilot._leaf_state_model(obs, my_index)
     option = obs["select"]["option"][index]
-    return ao.apply_option(model, option, search_api=getattr(pilot, "_search_api", None))
+    return ao.apply_option(model, option, expand_deferred_targets=True,
+                           search_api=getattr(pilot, "_search_api", None))
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
 @pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES)
-def test_the_seam_refuses_the_ruled_heal_and_says_why(fixture, ruled, _at_capture):
-    """Keeps the pair honest: without it the xfail below could go green for the wrong reason and
-    nobody would notice the ceiling had never moved."""
+def test_the_seam_models_the_ruled_heal(fixture, ruled, _at_capture):
+    """All listed Wally options now enter the choice node rather than stopping at the point seam."""
     from common import apply_option as ao
     pilot = _shipped_pilot()
     result = _refusal_for(pilot, _fx(fixture)["obs"], ruled)
-    assert isinstance(result, ao.Refusal), (
-        f"{fixture}: the seam now MODELS the ruled heal — the ceiling moved. Promote the xfail "
-        f"below to a plain assertion and delete this expectation; got {type(result).__name__}")
-    assert str(WALLYS) in result.reason and "Effect Clauses" in result.reason
+    assert isinstance(result, ao.Expectation), (
+        f"{fixture}: expected the Wally choice synthesis, got {type(result).__name__}")
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
-@pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES)
+@pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES[1:])
+def test_the_agent_plays_the_promoted_ruled_heal(fixture, _at_capture, ruled):
+    """Two former refusal cases now reproduce the human's decision without an exemption."""
+    fx = _fx(fixture)
+    assert _shipped_pilot().explain(fx["obs"]).chosen == fx["correct"] == [ruled]
+
+
+@pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES[:1])
 @pytest.mark.xfail(strict=True, reason=(
-    "seam refusal ceiling, not a valuation miss: `apply_option` declines to model Wally's "
-    "Compassion (Issue #300 `_covers`), so the ruled play is never a candidate the beam can commit. "
-    "strict=True — an unexpected PASS means the seam widened and these must be promoted."))
-def test_the_agent_plays_the_ruled_heal(fixture, _at_capture, ruled):
-    """The human's ruling, kept verbatim and kept failing until the mechanism can honour it. Pins
-    the DECISION, not which rung fired — the assertion that outlives a swap."""
+    "Issue #462 valuation follow-up: Wally's board is now synthesized, but the 0cbc human choice "
+    "still loses to another priced line."))
+def test_the_remaining_ruled_heal_is_a_valuation_follow_up(fixture, _at_capture, ruled):
+    """The remaining human ruling is retained as a strict valuation target."""
     fx = _fx(fixture)
     assert _shipped_pilot().explain(fx["obs"]).chosen == fx["correct"] == [ruled]
 

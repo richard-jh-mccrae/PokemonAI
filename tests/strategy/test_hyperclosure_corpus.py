@@ -49,10 +49,7 @@ PINS = {
     "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
-    # 83967841-17 and 85163634-17 MOVED to `POC_T4_FLIPS` on 2026-08-07 (the `shed` wiring gave the
-    # composer its first opinion about a costed search, and it plays the Ultra Ball on both).
-    "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
-                   "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
+    # Costed-search POC: 83967841-17/85163634-17 moved; composer plays Ultra Ball on both.
     # shuffle timing & keep-value (the refresh side)
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
@@ -62,13 +59,16 @@ PINS = {
     # scoring the whole TURN.
     "82525741-78": "poffin: don't play a fetch whose target class is exhausted",
     "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
-                    "Ultra Ball fodder",
+                   "Ultra Ball fodder",
+    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle (promoted by Issue #455)",
 }
 TARGETS = {
     # `86091435-68` was REFUTED-AS-LABELED (reviewed.json); its surviving substance rides as
     # `test_deploy_now_drakloak_is_not_pitched` below.
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
+    "85164605-64": "Issue #462 valuation follow-up: once deferred board choices are reachable, the "
+                   "human Jetting Blow KO loses to a newly-priced support line",
 }
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
@@ -79,7 +79,6 @@ POC_T4_FLIPS = {
                    "covering an irreplaceable Active takes an insurance slot at its full tier "
                    "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
                    "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
-    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle",
     "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
     "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
     # Filed by the `shed` WIRING, not the swap: before it, every costed search REFUSED unpriced and

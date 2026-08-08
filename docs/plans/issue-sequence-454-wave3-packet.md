@@ -82,3 +82,13 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `85786096|0|turn|2` | decider | #454 | agree [0] | disagree [4] | Rerule; baseline unchanged |
 | `86090164|1|decision|40` | decider | #454 | agree [0] | disagree [1] | Rerule; baseline unchanged |
 | `86091435|0|decision|30` | decider | #454 | agree [0] | disagree [1] | Rerule; baseline unchanged |
+| `81906755|1|decision|77` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `83116081|0|decision|76` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `83456015|0|decision|35` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `84889539|1|decision|30` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `85045840|0|decision|6` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `85045840|0|decision|8` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `85163079|0|decision|30` | leaf | #455 | OK (rank 1) | MISS (rank 3) | Rerule; baseline unchanged |
+| `85785067|0|decision|14` | leaf | #455 | OK (rank 1) | MISS (rank 2) | Rerule; baseline unchanged |
+| `81904451|0|decision|15` | decider | #455 | agree [2] | disagree [0] | Rerule; baseline unchanged |
+| `84889539|1|decision|30` | decider | #455 | agree [2] | disagree [1] | Rerule; baseline unchanged |

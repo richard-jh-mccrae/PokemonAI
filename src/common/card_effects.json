@@ -149,6 +149,10 @@
 "covers": "full",
 "reason": "fetch a Supporter with `dig: 7`"
 },
+"1123": {
+"covers": "full",
+"reason": "switches my Active with one Benched Pokemon (`self_switch`), without a retreat allowance"
+},
 "1124": {
 "covers": "partial",
 "reason": "the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts)"
@@ -176,6 +180,10 @@
 "1134": {
 "covers": "partial",
 "reason": "the \"Team Rocket\" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed"
+},
+"1141": {
+"covers": "full",
+"reason": "this-turn Premium Power Pro damage boost is carried by the card's parsed Fighting attacker gate"
 },
 "1142": {
 "covers": "full",
@@ -280,6 +288,10 @@
 "1210": {
 "covers": "full",
 "reason": "both modes (up to 2 Basics OR 1 Evolution) as `choice` clauses, so the two caps are alternatives rather than a sum"
+},
+"1211": {
+"covers": "full",
+"reason": "this-turn Black Belt's Training damage boost is carried by the card's parsed opponent-Active {ex} gate"
 },
 "1212": {
 "covers": "full",
@@ -758,6 +770,11 @@
 "dig": 7
 }
 ],
+"1123": [
+{
+"kind": "self_switch"
+}
+],
 "1124": [
 {
 "kind": "coin",
@@ -813,6 +830,11 @@
 "target": "supporter",
 "zone": "deck",
 "name_family": "Team Rocket"
+}
+],
+"1141": [
+{
+"kind": "damage_boost"
 }
 ],
 "1142": [
@@ -1069,6 +1091,11 @@
 "zone": "deck",
 "amount": 1,
 "choice": true
+}
+],
+"1211": [
+{
+"kind": "damage_boost"
 }
 ],
 "1212": [

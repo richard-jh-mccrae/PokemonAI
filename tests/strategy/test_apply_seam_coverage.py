@@ -242,7 +242,7 @@ def test_the_deferred_target_vocabulary_is_closed_over_the_SHIPPED_compendium():
         bc.CHOICE_CLAUSES - set(sc.CLAUSE_WRITES))
 
     shipped = set()
-    for card_id in (1182, 1198, 1229, 1240):                 # the census, by card
+    for card_id in (1123, 1182, 1198, 1229, 1240):           # the census, by card
         shipped |= kinds_of(card_id)
     assert shipped == set(bc.CHOICE_CLAUSES), sorted(shipped ^ set(bc.CHOICE_CLAUSES))
 

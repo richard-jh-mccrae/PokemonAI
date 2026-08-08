@@ -176,7 +176,6 @@ def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
 
 
 # ── apply pass 2 (2026-07-10): the dragapult round's remaining general rules ────────────────────
-@pytest.mark.xfail(strict=True, reason=marks("dragapult_hammer_no_threat_f6")[0].kwargs["reason"])
 def test_dont_strip_energy_from_a_harmless_active_f6(dragapult):
     """`incoming_active_damage` is no help here: it is affordability-blind and reads an unaffordable
     attack, so the discard-scaling attack that computes to 0 has to be read separately."""

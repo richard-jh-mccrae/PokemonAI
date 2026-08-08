@@ -29,7 +29,6 @@ def _fired_ids(option):
 
 
 @pytest.mark.req("REQ-GEN-0031")
-@pytest.mark.xfail(strict=True, reason=marks("dragapult_hammer_no_threat_f6")[0].kwargs["reason"])
 def test_f6_hold_the_hammer_vs_a_harmless_conditional_attacker():
     """The opponent's only affordable attack scales off an EMPTY discard, so it computes to 0 damage
     and `opp_active_can_damage_us` is False."""

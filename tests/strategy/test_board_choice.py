@@ -30,8 +30,8 @@ FIGHTING, PSYCHIC, DARKNESS = 6, 5, 7
 # ── the pool, every row quoted from `data/EN_Card_Data.csv` ───────────────────────────────────────
 # 677 Riolu Basic | 678 Mega Lucario ex Stage 1 from **Riolu** (NOT Lucario) | 112 Munkidori Basic
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
-#   1182 Boss's Orders  Supporter, clause `gust` | 1229 Wally's Compassion  Supporter, clause `heal`
-BOSS, WALLY = 1182, 1229
+#   1182 Boss's Orders | 1189 Salvatore | 1198 Crispin | 1229 Wally's Compassion
+BOSS, SALVATORE, CRISPIN, WALLY, SWITCH = 1182, 1189, 1198, 1229, 1123
 #   1097 Night Stretcher  *"a Pokemon **or** a Basic Energy card"* from discard — a UNION, cap 1
 #   1118 Energy Retrieval  *"up to 2 Basic Energy"* from discard | 1125 Master Ball  a DECK search
 NIGHT_STRETCHER, ENERGY_RETRIEVAL, MASTER_BALL = 1097, 1118, 1125
@@ -50,7 +50,10 @@ _STATS = {
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=_BASIC_ENERGY, energyType=DARKNESS),
     BOSS: CardStat(BOSS, name="Boss’s Orders", cardType=_SUPPORTER),   # U+2019 in the CSV
+    SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=_SUPPORTER),
+    CRISPIN: CardStat(CRISPIN, name="Crispin", cardType=_SUPPORTER),
     WALLY: CardStat(WALLY, name="Wally's Compassion", cardType=_SUPPORTER),
+    SWITCH: CardStat(SWITCH, name="Switch", cardType=_ITEM),
     NIGHT_STRETCHER: CardStat(NIGHT_STRETCHER, name="Night Stretcher", cardType=_ITEM),
     ENERGY_RETRIEVAL: CardStat(ENERGY_RETRIEVAL, name="Energy Retrieval", cardType=_ITEM),
     MASTER_BALL: CardStat(MASTER_BALL, name="Master Ball", cardType=_ITEM),
@@ -59,8 +62,13 @@ _STATS = {
 #: The committed `card_effects.json` rows for the two Trainers, copied verbatim.
 _CLAUSES = {
     BOSS: [{"kind": "gust", "target": "any"}],
+    SALVATORE: [{"kind": "fetch", "target": "evolution", "zone": "deck",
+                 "no_ability": True, "dest": "in_play"}],
+    CRISPIN: [{"kind": "accel", "amount": 1, "source": "deck", "target": "any_pokemon",
+               "energy": "basic", "to_hand": 1, "distinct_types": True}],
     WALLY: [{"kind": "heal", "amount": "all", "restriction": "mega_only",
              "rider": "bounce_energy_to_hand"}],
+    SWITCH: [{"kind": "self_switch"}],
     NIGHT_STRETCHER: [{"kind": "fetch", "target": "basic_energy", "zone": "discard",
                        "choice": True},
                       {"kind": "fetch", "target": "pokemon", "zone": "discard", "choice": True}],
@@ -381,27 +389,83 @@ def test_an_unreadable_body_matches_NO_class_rather_than_every_class():
     assert match(None, bc._BodyPlace(active=False, mine=False)) is False
 
 
-def test_the_gust_entry_is_currently_UNREACHABLE_and_the_test_names_why():
-    """`gust` has a target space and a Target Ranker and NO board synthesis, so `deferred_target`
-    refuses it. **No issue currently owns landing it** — the gap is real and unfiled."""
-    assert sc.CLAUSE_WRITES["gust"]                        # non-empty: `_play` refuses the card
-    assert "gust" not in sc.REVEALING_CLAUSES              # so `board_expectation` never sees it
+def test_a_gust_promotes_the_chosen_opponent_body_and_rebuilds_their_side():
+    """Boss's Orders is a full table-side swap, not an own-side-only choice node."""
     opp = _player(active=_body(MUNKIDORI, serial=50, seat=1),
                   bench=[_body(RIOLU, serial=51, seat=1)], seat=1)
     me = _player(active=_body(MEGA_LUC, serial=1, energies=(E_F, E_F)), hand=(BOSS,),
                  bench=[_body(RIOLU, serial=2)])
     model = _model(_obs(me, opp=opp))
-    with pytest.raises(bd.Unmodellable, match="NO ISSUE CURRENTLY OWNS IT"):
-        bc.deferred_target(model, {"type": _PLAY, "index": 0})
+    after, _fingerprint = bc.realise(model, {"type": _PLAY, "index": 0}, 0, seat_index=0)
+    _same, writes = bc.CHOICE_REGISTRY["gust"].apply(
+        model, 0, seat_index=0, option={"type": _PLAY, "index": 0})
+    them = after["current"]["players"][1]
+    assert them["active"][0]["id"] == RIOLU
+    assert them["bench"][0]["id"] == MUNKIDORI
+    assert {"my_hand_ids", "my_discard_contents", "bodies_in_play"} <= writes
+    assert bc.deferred_target(model, {"type": _PLAY, "index": 0}).classes[0].model.theirs.active.card_id == RIOLU
 
 
-def test_a_declared_census_member_with_no_resolver_says_so_rather_than_going_quiet():
-    """`heal` is in `CHOICE_CLAUSES` with no target-space resolver; the refusal names the boundary."""
-    me = _player(active=_body(MEGA_LUC, serial=1, energies=(E_F, E_F)), hand=(WALLY,),
+def test_wally_heals_a_mega_and_bounces_its_energy_only_when_the_heal_lands():
+    """The printed rider is conditional on healing, so a full-health Mega keeps its Energy."""
+    me = _player(active=_body(MEGA_LUC, serial=1, energies=(E_F, E_F), hp=280), hand=(WALLY,),
                  bench=[_body(RIOLU, serial=2)])
     model = _model(_obs(me))
-    with pytest.raises(bd.Unmodellable, match="no target SPACE resolver is built"):
-        bc.target_space(model, {"type": _PLAY, "index": 0}, seat_index=0)
+    option = {"type": _PLAY, "index": 0}
+    assert bc.target_space(model, option, seat_index=0) == ((4, 0),)
+    after, _fingerprint = bc.realise(model, option, (4, 0), seat_index=0)
+    _same, writes = bc.CHOICE_REGISTRY["heal"].apply(model, (4, 0), seat_index=0, option=option)
+    body = after["current"]["players"][0]["active"][0]
+    assert body["hp"] == body["maxHp"] and not body["energyCards"]
+    assert [c["id"] for c in after["current"]["players"][0]["hand"]] == [E_F, E_F]
+    assert {"damage_counters", "attached_energy", "my_hand_ids"} <= writes
+
+
+def test_crispin_takes_two_distinct_basic_energy_types_from_deck_to_hand_and_a_body():
+    """Crispin's one attach plus one hand delivery is one product choice over distinct types."""
+    me = _player(active=_body(RIOLU, serial=1), hand=(CRISPIN,), bench=[_body(MUNKIDORI, serial=2)])
+    model = _model(_obs(me), deck=(E_F, E_P, E_D))
+    option = {"type": _PLAY, "index": 0}
+    space = bc.target_space(model, option, seat_index=0)
+    assert (E_F, E_P, 4, 0) in space
+    after, _fingerprint = bc.realise(model, option, (E_F, E_P, 4, 0), seat_index=0)
+    _same, writes = bc.CHOICE_REGISTRY["accel"].apply(
+        model, (E_F, E_P, 4, 0), seat_index=0, option=option)
+    side = after["current"]["players"][0]
+    assert [c["id"] for c in side["hand"]] == [E_P]
+    assert [c["id"] for c in side["active"][0]["energyCards"]] == [E_F]
+    assert side["deckCount"] == 28
+    assert {"attached_energy", "my_hand_ids", "my_deck_count", "deck_odds"} <= writes
+
+
+def test_salvatore_evolves_a_matching_own_body_directly_from_deck():
+    """Salvatore's destination is in-play, so the deck card replaces the matching body."""
+    me = _player(active=_body(RIOLU, serial=1), hand=(SALVATORE,), bench=[_body(MUNKIDORI, serial=2)])
+    model = _model(_obs(me), deck=(MEGA_LUC,))
+    option = {"type": _PLAY, "index": 0}
+    assert bc.target_space(model, option, seat_index=0) == ((MEGA_LUC, 4, 0),)
+    after, _fingerprint = bc.realise(model, option, (MEGA_LUC, 4, 0), seat_index=0)
+    _same, writes = bc.CHOICE_REGISTRY[bc.FETCH_IN_PLAY].apply(
+        model, (MEGA_LUC, 4, 0), seat_index=0, option=option)
+    body = after["current"]["players"][0]["active"][0]
+    assert body["id"] == MEGA_LUC and body["preEvolution"][0]["id"] == RIOLU
+    assert after["current"]["players"][0]["deckCount"] == 29
+    assert {"bodies_in_play", "my_deck_count", "deck_odds", "new_in_play"} <= writes
+
+
+def test_switch_promotes_my_bench_without_spending_the_retreat_allowance():
+    """Switch's card effect is a self switch, never a manual retreat."""
+    me = _player(active=_body(RIOLU, serial=1), hand=(SWITCH,), bench=[_body(MUNKIDORI, serial=2)],
+                 poisoned=True)
+    model = _model(_obs(me))
+    option = {"type": _PLAY, "index": 0}
+    after, _fingerprint = bc.realise(model, option, 0, seat_index=0)
+    _same, writes = bc.CHOICE_REGISTRY["self_switch"].apply(
+        model, 0, seat_index=0, option=option)
+    current = after["current"]
+    assert current["players"][0]["active"][0]["id"] == MUNKIDORI
+    assert current["retreated"] is False and not current["players"][0]["poisoned"]
+    assert "allowance_retreat_used" not in writes
 
 
 def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it():
@@ -409,7 +473,8 @@ def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it()
     an absent one. The `CLAUSE_WRITES` assertion is the positive control on the same walk."""
     declared = set(bc.CHOICE_KEYS)
     assert declared, "vacuity guard: an empty vocabulary would pass every assertion below"
-    assert declared == set(bc.CHOICE_KINDS) | set(bc.CHOICE_CLAUSES) | {bc.FETCH_DISCARD}
+    assert declared == set(bc.CHOICE_KINDS) | set(bc.CHOICE_CLAUSES) | {
+        bc.FETCH_DISCARD, bc.FETCH_IN_PLAY}
     assert set(bc.CHOICE_REGISTRY) <= declared, sorted(set(bc.CHOICE_REGISTRY) - declared)
     assert set(bc.TARGET_RANKERS) <= set(bc.CHOICE_REGISTRY)
     assert set(bc.CHOICE_CLAUSES) <= set(sc.CLAUSE_WRITES)          # the positive control
@@ -417,6 +482,8 @@ def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it()
     # `CLAUSE_WRITES` — the clause kind is `fetch`, and only the ZONE says which node resolves it.
     assert bc.FETCH_DISCARD not in sc.CLAUSE_WRITES
     assert bc.FETCH_DISCARD not in bc.CHOICE_CLAUSES
+    assert bc.FETCH_IN_PLAY not in sc.CLAUSE_WRITES
+    assert bc.FETCH_IN_PLAY not in bc.CHOICE_CLAUSES
     assert "fetch" in sc.REVEALING_CLAUSES and "fetch" not in bc.CHOICE_CLAUSES
     # ONE record per key, asserted here as well as in `ChoiceKind.__post_init__` so a half-filled
     # record fails a reading and not only a construction.
@@ -520,16 +587,19 @@ def test_the_composer_reaches_a_discard_choice_before_the_reveal_node_can_refuse
     assert any(c.steps and c.steps[0].index == 0 and not c.coverage_gap for c in result.candidates)
 
 
-def test_an_unapplied_gust_still_refuses_at_the_apply_and_composer_seams():
-    """Boss's Orders remains a gap until its target application exists; discard routing must not price it."""
+def test_a_gust_is_expanded_and_priced_at_the_apply_and_composer_seams():
+    """Boss's Orders reaches its choice synthesis before the structural play can refuse it."""
     from common import composer as cp
 
-    model = _discard_board((BOSS,), (RIOLU,))
+    opp = _player(active=_body(MUNKIDORI, serial=50, seat=1),
+                  bench=[_body(RIOLU, serial=51, seat=1)], seat=1)
+    model = _model(_obs(_player(active=_body(MEGA_LUC, serial=1), hand=(BOSS,), discard=(RIOLU,)),
+                        opp=opp))
     play = {"type": _PLAY, "index": 0}
-    assert ao.must_expand(ao.apply_option(model, play, expand_deferred_targets=True))
+    assert isinstance(ao.apply_option(model, play, expand_deferred_targets=True), ao.Expectation)
     result = cp.compose(model, [play, {"type": _END}])
-    assert result.fanned[0] is None
-    assert any(c.coverage_gap and c.steps and c.steps[0].index == 0 for c in result.candidates)
+    assert result.fanned[0] is not None
+    assert any(c.steps and c.steps[0].index == 0 and not c.coverage_gap for c in result.candidates)
 
 
 def test_a_discard_UNION_enumerates_one_card_over_both_legs():
