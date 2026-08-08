@@ -33,8 +33,9 @@ def anchor():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_the_composer_ties_the_scored_options_without_pricing_the_unknown_one(anchor):
-    """The scored options tie; the ruled unknown remains a sentinel, never a numeric zero."""
+def test_the_scored_options_tie_and_the_ruled_dig_now_prices_BELOW_them(anchor):
+    """Re-ruled by ADR-0133: the ruled dig was an unpriced sentinel here and now prices NEGATIVE — a
+    1-for-1 Item→Supporter swap barely moves the end board. ADR-0095, not a defect, hence the tie."""
     fx, pilot, _dec = anchor
     from common import composer as cp
     obs, sel = fx["obs"], fx["obs"]["select"]
@@ -43,8 +44,10 @@ def test_the_composer_ties_the_scored_options_without_pricing_the_unknown_one(an
     result = cp.compose(model, sel["option"], shed=pilot.cost_shed_indices)
     order = dict(result.order)
     ruled = fx["correct"][0]
-    assert result.fanned[ruled] is None and ruled not in order
+    assert order.get(ruled) is not None, "the dig is an unpriced sentinel again — ADR-0133 regressed"
+    assert order[ruled] < 0.0
     top = max(order.values())
+    assert order[ruled] < top, "the composer now claims a view it does not have on this frame"
     tied = [i for i, d in order.items() if d == top]
     assert len(tied) > 1, f"nothing ties here, so this frame does not exercise the defer: {order}"
 

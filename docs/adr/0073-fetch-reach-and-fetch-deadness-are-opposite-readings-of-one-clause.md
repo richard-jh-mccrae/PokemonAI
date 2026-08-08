@@ -99,6 +99,17 @@ anchor frame — shipping.
 
 ## Consequences
 
+**Amended 2026-08-08 (ADR-0133, Issue #440).** Two claims below are superseded, both in the direction
+this ADR anticipated. (1) The predicate now carries **three** readings, not two — `reading=REACH |
+DEADNESS | WINDOW`, replacing the `deadness: bool` opt-out — because `board_expectation` is a third
+quantifier: it neither endorses `any(reachable)` nor vetoes `all(gone)`, it enumerates and weights.
+The `supporter` un-gating called *"a deliberate, measured change"* below happened for that reading
+alone; REACH is unchanged and pinned as such. (2) Decision 3 calls `energy_type` on a Pokémon target
+*"unresolvable from `CardStat`"*. **It is resolvable** — `CardStat.energyType` is populated for
+Pokémon through the shipped `_build_cache`. WINDOW applies it (a narrowing, hence safe for an
+enumerator); DEADNESS still must not, for exactly the reason given below; REACH's own narrowing is
+filed separately because it moves three cards in decks Issue #440 does not scope.
+
 - Six Trainers newly become readable as dead. They gain the `-60` play-side veto **and** a 0.0
   fetcher gate in the graded refresh SHED / gamble keep-floor, so this is a behavioural change on
   two surfaces and needs a **score-diff run**, not only a unit pin, before it lands.

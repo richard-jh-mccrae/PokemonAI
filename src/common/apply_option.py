@@ -39,6 +39,10 @@ REFUSED = "refused"
 #: Not in the table. The engine enum grows during the competition — a live case, not a theoretical one.
 UNDECLARED = "undeclared"
 
+#: Places any ORDERING over scores compares at — **a float-noise floor, NOT a band** (ADR-0128): one
+#: ULP decided a corpus frame before it existed. One home, so two orderings cannot drift apart.
+SCORE_PLACES = 12
+
 #: The player picks a CHOSEN class; a DEALT class is resolved by chance before play continues.
 CHOSEN = "chosen"
 DEALT = "dealt"
@@ -644,7 +648,7 @@ def quarantined_kinds() -> frozenset[int]:
 # longer GATES the engine route, and `KIND_SCOPE` is no longer EMITTED by `apply_option`.
 __all__: Sequence[str] = (
     "MODELLED", "ENGINE_RESOLVED", "TERMINAL", "REFUSED", "UNDECLARED", "FATES",
-    "CHOSEN", "DEALT",
+    "CHOSEN", "DEALT", "SCORE_PLACES",
     "KIND_SCOPE", "OPTION_SCOPE", "UNDECLARED_SCOPE", "QUARANTINE_SCOPE", "DEPTH_SCOPE",
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",

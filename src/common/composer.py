@@ -493,9 +493,9 @@ def choose_target(model, option: Mapping, *, seat_index=None, cap=None, ranker=N
     return rank_targets(model, expectation)
 
 
-#: Places :func:`selection_key`'s score leg is compared at — **a float-noise floor, NOT a band, and
-#: deliberately not :data:`EPSILON`** (ADR-0128): one ULP decided a corpus frame before it existed.
-_SCORE_PLACES = 12
+#: :data:`apply_option.SCORE_PLACES` under this module's name — deliberately NOT :data:`EPSILON`,
+#: which is a beam BAND (ADR-0128). Aliased so the two orderings cannot be given different floors.
+_SCORE_PLACES = ao.SCORE_PLACES
 
 
 def selection_key(model, candidate: Candidate) -> tuple:
@@ -810,7 +810,7 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                 "DROPPING the reveal — an under-reported delta, which at ordering time is a pruned "
                 "option rather than an undervalued one")
         try:
-            result = bx.expectation(node.model, option, shed=state.shed)
+            result = bx.expectation(node.model, option, shed=state.shed, score=state_value)
         except Unmodellable as gap:
             return _refuse(str(gap))
         state.leaf_evals += len(result.classes)

@@ -9,6 +9,16 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 
+sys.path.insert(0, str(REPO / "src"))
+from common.effects import CardEffects  # noqa: E402
+from common.fetch_closure import DEADNESS as _DEADNESS, WINDOW as _WINDOW  # noqa: E402
+
+
+def _deck_ids(agent) -> set:
+    """The agent's decklist straight off `deck.csv` — for a deck that ships no Pilot to ask."""
+    text = (REPO / "src" / "agents" / agent / "deck.csv").read_text(encoding="utf-8-sig")
+    return {int(line) for line in text.split() if line.strip()}
+
 
 def _shipped_pilot(agent):
     sys.path.insert(0, str(REPO / "tools"))
@@ -165,9 +175,9 @@ def test_the_deadness_only_classes_resolve_for_deadness_and_refuse_for_reach():
         reach = {n for n, s in _ROWS.items() if fc.fetch_target_matches({"target": target}, s)}
         assert reach == set(), f"{target} resolved for REACH"
     assert {n for n, s in _ROWS.items()
-            if fc.fetch_target_matches({"target": "any"}, s, deadness=True)} == set(_ROWS)
+            if fc.fetch_target_matches({"target": "any"}, s, reading=_DEADNESS)} == set(_ROWS)
     assert {n for n, s in _ROWS.items()
-            if fc.fetch_target_matches({"target": "supporter"}, s, deadness=True)} == {"supporter"}
+            if fc.fetch_target_matches({"target": "supporter"}, s, reading=_DEADNESS)} == {"supporter"}
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -177,7 +187,7 @@ def test_a_conditioned_fetch_is_never_a_reach_edge():
     from common import fetch_closure
     clause = {"target": "pokemon", "condition": "going_second_first_turn"}
     assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"]) is False
-    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], deadness=True) is True
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], reading=_DEADNESS) is True
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -187,7 +197,7 @@ def test_a_name_family_fetch_reaches_nothing_until_a_family_oracle_exists():
     from common import fetch_closure
     clause = {"target": "basic_pokemon", "name_family": "Hop's"}
     assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"]) is False
-    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], deadness=True) is True
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], reading=_DEADNESS) is True
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -340,12 +350,12 @@ def test_deadness_accepts_the_dig_and_trigger_clauses_reach_rejects():
                          ({"target": "mega", "trigger": "on_bench_play"}, ml_ex),
                          ({"target": "basic_energy", "dig": 7}, energy)):
         assert fetch_closure.fetch_target_matches(clause, stat) is False           # reach (default)
-        assert fetch_closure.fetch_target_matches(clause, stat, deadness=True) is True
+        assert fetch_closure.fetch_target_matches(clause, stat, reading=_DEADNESS) is True
     # the flag changes ONLY the trigger/dig gate — a non-matching target stays non-matching
     assert fetch_closure.fetch_target_matches({"target": "basic_pokemon", "dig": 7}, ml_ex,
-                                              deadness=True) is False
+                                              reading=_DEADNESS) is False
     assert fetch_closure.fetch_target_matches({"target": "mega", "dig": 7}, None,
-                                              deadness=True) is False
+                                              reading=_DEADNESS) is False
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -360,7 +370,7 @@ def test_deadness_flag_is_a_no_op_on_a_plain_clause():
                              - fetch_closure.FETCH_DEADNESS_ONLY_TARGETS):
             clause = {"target": target}
             assert (fetch_closure.fetch_target_matches(clause, st)
-                    == fetch_closure.fetch_target_matches(clause, st, deadness=True)), (cid, target)
+                    == fetch_closure.fetch_target_matches(clause, st, reading=_DEADNESS)), (cid, target)
 
 
 @pytest.mark.req("REQ-WORTH-0002")
@@ -372,7 +382,42 @@ def test_the_supporter_branch_is_deadness_only_so_reach_is_provably_unchanged():
     assert getattr(supporter, "is_supporter", False) is True
     assert fetch_closure.fetch_target_matches({"target": "supporter"}, supporter) is False
     assert fetch_closure.fetch_target_matches({"target": "supporter"}, supporter,
-                                              deadness=True) is True
+                                              reading=_DEADNESS) is True
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_window_reading_resolves_supporter_and_the_dig_that_reach_still_refuses():
+    """ADR-0133: an ENUMERATOR makes no claim to reach a Supporter — it prices the miss — so the class
+    resolves for it. REACH is the reading that must stay shut, and this is the canary that it did."""
+    from common import fetch_closure
+    ms = _shipped_pilot("mega_starmie")
+    supporter, gear = ms.stats.get(1225), next(iter(ms.effects.clauses(1122)))   # Hilda, Pokégear 3.0
+    assert gear == {"kind": "fetch", "target": "supporter", "zone": "deck", "dig": 7}
+    assert fetch_closure.fetch_target_matches(gear, supporter, reading=_WINDOW) is True
+    assert fetch_closure.fetch_target_matches(gear, supporter) is False
+    # `any` names no class at all, so it stays DEADNESS-only under every reading (nothing in scope).
+    assert fetch_closure.fetch_target_matches({"target": "any"}, supporter, reading=_WINDOW) is False
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_window_reading_applies_energy_type_to_a_POKEMON_target_and_the_others_do_not():
+    """Bug Catching Set is *"{G} Pokémon"*, and the predicate read `energy_type` for Energy only —
+    so over hydrapple its Pokémon leg claimed two bodies it cannot take. A NARROWING, hence WINDOW."""
+    from common import fetch_closure
+    stats = _shipped_pilot("mega_starmie").stats               # card facts are global, not deck-scoped
+    deck = _deck_ids("hydrapple")                              # hydrapple ships a decklist and no Pilot
+    leg = next(c for c in CardEffects.load().clauses(1094) if c.get("target") == "pokemon")
+    assert leg.get("energy_type") == 1                          # {G}, per `src/cg/api.py`'s EnergyType
+    reached = {cid for cid in deck
+               if fetch_closure.fetch_target_matches(leg, stats.get(cid), reading=_WINDOW)}
+    illegal = {140: 7, 1071: 0}                                 # Fezandipiti ex {D}, Meowth ex {C}
+    for cid, etype in illegal.items():
+        assert stats.get(cid).energyType == etype and stats.get(cid).is_pokemon
+    assert not (reached & set(illegal)), f"a non-{{G}} body is still reachable: {reached & set(illegal)}"
+    assert len(reached) == 10, reached                          # every {G} body in the deck, and only those
+    # DEADNESS must stay WIDE: narrowing an `all(gone)` conjunction FABRICATES a whiff claim (ADR-0073).
+    assert all(fetch_closure.fetch_target_matches(leg, stats.get(cid), reading=_DEADNESS)
+               for cid in illegal)
 
 
 @pytest.mark.req("REQ-WORTH-0002")

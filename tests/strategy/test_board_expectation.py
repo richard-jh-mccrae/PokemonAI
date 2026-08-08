@@ -355,6 +355,16 @@ def test_a_union_enumerates_ONE_card_over_the_pooled_legs():
     assert all(len(c.fingerprint) == 1 for c in exp.classes)
 
 
+def test_a_union_leg_honours_the_energy_type_gate_on_its_POKEMON_target():
+    """The one EXISTING enumeration ADR-0133 changed, and it is a fix. Fighting Gong is *"a Basic {F}
+    Energy card or a Basic {F} Pokémon"*, and Meowth ex is {C} — so it was enumerating an impossibility."""
+    deck = [RIOLU] * 2 + [MEOWTH_EX, GONG] + [E_F] * 6      # one Riolu is the Active, so unseen is 1
+    exp = be.expectation(_search_board(hand=(GONG,), deck=deck), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(E_F,), (RIOLU,)], "a {C} Basic is still reachable through an {F} leg"
+    assert _STATS[MEOWTH_EX].energyType == COLORLESS and _STATS[RIOLU].energyType == FIGHTING
+
+
 def test_a_multi_card_delivery_to_HAND_enumerates_multisets_not_subsets():
     """The classes are MULTISETS, not subsets: a pool may hold several copies and taking two is a
     legal, distinct outcome. The delivery CLAMPS to the pool (`min(max, matches)`), never padded."""
@@ -526,10 +536,115 @@ def test_a_costed_search_refuses_because_the_cost_names_no_target():
         be.expectation(_search_board(hand=(ULTRA_BALL,)), _play_option())
 
 
-def test_a_dig_refuses_through_the_shipped_reach_predicate():
-    """A `dig` looks at the top N rather than the whole deck, so it may MISS a card still in there."""
-    with pytest.raises(bd.Unmodellable, match="unconditional"):
-        be.expectation(_search_board(hand=(GEAR,)), _play_option())
+#: A Pokégear board whose window math is checkable by hand: 9 unseen cards (5 deck + 4 hidden prizes)
+#: of which 1 Hilda and 2 Dawn are Supporters, and a look 5 deep because the deck is only 5.
+_DIG_DECK = [RIOLU, GEAR, DAWN, DAWN, HILDA] + [E_F] * 6
+
+
+def _hand_score(marker=HILDA):
+    """A score that ranks ``marker`` above every other delivery, so the greedy order is the test's."""
+    def score(model):
+        hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[0].get("hand") or ()
+        return sum(10.0 if c.get("id") == marker else 1.0 for c in hand)
+    return score
+
+
+def test_a_dig_enumerates_its_window_and_the_whiff_is_one_of_the_classes():
+    """1 − C(8,5)/C(9,5) for the best Supporter, the bracket below it for the next, and C(6,5)/C(9,5)
+    left over for finding neither — the telescoping closed form, so the mass is exactly 1.0."""
+    exp = be.expectation(_search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option(),
+                         score=_hand_score())
+    assert [_ids_in_hand(c) for c in exp.classes] == [[HILDA], [DAWN], []]
+    assert [round(c.probability, 12) for c in exp.classes] == [
+        round(1 - 56 / 126, 12), round(50 / 126, 12), round(6 / 126, 12)]
+    assert round(exp.total_probability, 12) == 1.0 and exp.truncated == 0
+
+
+def test_a_dig_resolves_DEALT_so_the_ordering_averages_rather_than_taking_the_best_branch():
+    """The window DEALS. Under CHOSEN this priced Pokégear at *"I always find my best Supporter"* —
+    the gamble the resolution split exists to stop — and no test would have failed."""
+    exp = be.expectation(_search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option(),
+                         score=_hand_score())
+    assert exp.resolution == ao.DEALT
+    leaf = lambda model: float(len(((model.source_obs["current"]["players"])[0].get("hand") or ())))
+    assert exp.ordering(leaf) == exp.expected(leaf) < exp.best(leaf)
+
+
+def test_a_dig_with_no_score_oracle_refuses_rather_than_inventing_its_own_ranking():
+    """The probabilities are exact only under the take-the-best policy, so the value that ranks the
+    window is the caller's to supply — `_cost_indices` makes the same demand of `shed`."""
+    with pytest.raises(bd.Unmodellable, match="`score` oracle"):
+        be.expectation(_search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option())
+
+
+def test_the_dig_ranking_is_the_policy_priced_so_reversing_the_value_reverses_the_classes():
+    """Positive control on the ranking: the same board with Dawn valued highest moves the whole
+    distribution, because which card the window hands over IS what the brackets are taken over."""
+    board, option = _search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option()
+    hilda = be.expectation(board, option, score=_hand_score(HILDA))
+    dawn = be.expectation(board, option, score=_hand_score(DAWN))
+    assert [_ids_in_hand(c) for c in dawn.classes] == [[DAWN], [HILDA], []]
+    assert dawn.classes[0].probability > hilda.classes[0].probability     # 2 copies beat 1
+    assert round(dawn.classes[-1].probability, 12) == round(hilda.classes[-1].probability, 12)
+
+
+def test_the_whiff_class_is_pinned_past_the_branching_cap():
+    """A greedy ranking makes the dropped classes the WORST ones, so on a DEALT node truncation
+    biases `expected()` UP. The whiff is the one class this node exists to price, so it keeps a slot."""
+    exp = be.expectation(_search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option(),
+                         score=_hand_score(), cap=2)
+    assert [_ids_in_hand(c) for c in exp.classes] == [[HILDA], []]
+    assert exp.truncated == 1 and exp.total_probability < 1.0
+
+
+def test_the_whiff_never_takes_the_only_slot_and_is_counted_as_truncated_when_it_cannot_fit():
+    """The pin is not unconditional: at a cap of one, pricing a live dig as a certain whiff would be
+    a worse lie than dropping it, so the class is dropped and REPORTED rather than silently gone."""
+    exp = be.expectation(_search_board(hand=(GEAR,), deck=_DIG_DECK), _play_option(),
+                         score=_hand_score(), cap=1)
+    assert [_ids_in_hand(c) for c in exp.classes] == [[HILDA]]
+    assert exp.truncated == 2                          # the Dawn class AND the unpinnable whiff
+
+
+def test_the_window_is_the_deck_but_the_pool_it_is_drawn_from_is_deck_plus_hidden_prizes():
+    """ADR-0133's identity: deck-then-window composes to ONE uniform subset of the unseen, so the
+    prize split needs no mixture. Checked against that mixture, which is what `gamble` spells out."""
+    from math import comb
+    unseen, deck, hidden, window = 3, 5, 4, 5
+    mixture = sum(comb(deck, j) * comb(hidden, unseen - j) / comb(deck + hidden, unseen)
+                  * (1.0 - (comb(deck - j, window) / comb(deck, window) if deck - j >= window else 0))
+                  for j in range(max(0, unseen - hidden), min(unseen, deck) + 1))
+    assert round(mixture, 12) == round(
+        1.0 - deck_odds.window_miss_probability(unseen, deck + hidden, window), 12)
+
+
+@pytest.mark.parametrize("groups, pool, window, take", [
+    (((1, 2), (2, 3), (3, 1)), 10, 4, 2),          # a same-group PAIR is reachable
+    (((1, 4), (2, 2), (3, 3), (4, 1)), 14, 5, 2),
+    (((1, 1), (2, 1)), 6, 3, 2),
+    (((1, 3), (2, 2)), 9, 4, 1),
+    (((1, 2), (2, 1), (3, 2)), 8, 3, 3),           # `take` above what the window can hold
+    (((1, 2),), 4, 1, 2),
+    ((), 7, 3, 2),                                 # nothing matches: the whiff is the only class
+])
+def test_the_window_closed_form_is_exact_against_enumerating_every_subset(groups, pool, window, take):
+    """The only part of this node that cannot be read off the board. Brute force is the oracle: every
+    `window`-subset of `pool`, greedy-picked in rank order, tallied — no formula on either side."""
+    from itertools import combinations
+    order = tuple(g for g, _ in groups)
+    copies = {g: n for g, n in groups}
+    marked = [g for g, n in groups for _ in range(n)]
+    rank = {g: i for i, g in enumerate(order)}
+    seen: dict = {}
+    subsets = list(combinations(range(pool), window))
+    for sub in subsets:
+        held = sorted((marked[i] for i in sub if i < len(marked)), key=rank.__getitem__)
+        klass = tuple(sorted(held[:take]))
+        seen[klass] = seen.get(klass, 0) + 1
+    exact = be.window_classes(order, copies, pool, window, take)
+    assert {k: round(v / len(subsets), 12) for k, v in seen.items()} == {
+        k: round(v, 12) for k, v in exact.items()}
+    assert round(sum(exact.values()), 12) == 1.0
 
 
 def test_a_draw_refuses_rather_than_projecting_an_n_card_window_onto_one_card():
@@ -653,8 +768,35 @@ def test_a_reveal_declared_on_a_BODY_is_an_ability_and_refuses_as_one():
 def test_an_on_bench_play_trigger_passes_the_ability_gate_and_refuses_on_its_CLAUSE():
     """`trigger: on_bench_play` DOES ride the `_PLAY`, so it passes the ability gate and refuses on
     what is actually wrong with it — the gate discriminates rather than catching a whole side."""
-    with pytest.raises(bd.Unmodellable, match="not the unconditional"):
-        be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option())
+    with pytest.raises(bd.Unmodellable, match=r"carries \['trigger'\]"):
+        be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option(), score=state_value)
+
+
+#: Every dig-family card OUTSIDE Issue #440's two-deck scope, with the field that must still refuse it.
+#: Rows are `card_effects.json` verbatim; the point is that admitting `dig` admitted nothing else.
+_OUT_OF_SCOPE_DIGS = [
+    (1077, "Roto-Stick", "amount"), (1102, "Dusk Ball", "dig_from"),
+    (1185, "Explorer’s Guidance", "rider"), (1193, "Hassel", "condition"),
+    (1115, "Hop’s Bag", "name_family"),
+    # Issue #469's card. Its `window` rides a `draw`, but the RNG gate is MORE specific and runs
+    # first: `other_to_bottom` returns cards to a deck this node has already enumerated over.
+    (120, "Drakloak", "other_to_bottom"),
+]
+
+
+@pytest.mark.parametrize("card_id, name, field", _OUT_OF_SCOPE_DIGS)
+def test_admitting_the_dig_field_admitted_nothing_else_in_the_family(card_id, name, field):
+    """The regression an over-broad gate would cause. Each row still refuses, and the refusal NAMES
+    its own field — a shared message would hide which of them the seam actually cannot decide."""
+    from common.effects import CardEffects
+    clauses = list(CardEffects.load().clauses(card_id))
+    assert clauses, f"{card_id} {name}: no compendium row, so this test is grading nothing"
+    refusals = []
+    for clause in clauses:
+        with pytest.raises(bd.Unmodellable) as caught:
+            be._check_clause(clause, card_id, name)
+        refusals.append(str(caught.value))
+    assert any(field in message for message in refusals), refusals
 
 
 def test_the_card_type_floor_is_now_UNREACHABLE_for_the_shipped_pool():

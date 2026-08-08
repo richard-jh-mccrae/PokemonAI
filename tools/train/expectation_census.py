@@ -31,8 +31,9 @@ from common import apply_option as seam  # noqa: E402
 from common import board_choice as bc  # noqa: E402
 from common import board_delta, board_expectation as be  # noqa: E402
 from common import snapshot_coverage as sc  # noqa: E402
-from common.fetch_closure import fetch_target_matches  # noqa: E402
+from common.fetch_closure import WINDOW, fetch_target_matches  # noqa: E402
 from common.state_model import StateModel  # noqa: E402
+from common.state_value import state_value  # noqa: E402
 from common.strategy.context import _PLAY  # noqa: E402
 from train.apply_parity import TRACES, _card_of, chosen_option, load, offline_combat  # noqa: E402
 
@@ -40,7 +41,8 @@ from train.apply_parity import TRACES, _card_of, chosen_option, load, offline_co
 #: and ordered MOST-SPECIFIC-FIRST.
 _BUCKETS = (
     "more than one revealing clause", "no `draw`/`fetch` clause", "consults RNG",
-    "its `cost` names no target", "`amount`", "not the unconditional",
+    "its `cost` names no target", "`amount`", "which this seam cannot decide",
+    "DIFFERENT dig depths", "a dig on CONJUNCTION legs", "`score` oracle",
     "only an Item or a Supporter", "`dest`", "no target it can reach is still unseen",
     "a `draw` is an n-card window", "-zone search carries NO chance", "clause key(s)",
     "it carries a non-revealing clause", "no target it can reach has any availability",
@@ -56,12 +58,11 @@ def bucket_of(message: str) -> str:
 
 
 def leg_pool(model, clause: dict) -> dict:
-    """The four reach fields are STRIPPED, making this a sizing instrument and not a second reach
-    predicate: a leg blocked by a `dig` still has a pool, and its size is what is being reported."""
-    probe = {k: v for k, v in clause.items()
-             if k not in ("dig", "trigger", "condition", "name_family")}
+    """A SIZING instrument, not a second predicate: the WINDOW reading prices a `dig`, so only the three
+    still-undecidable fields are stripped — a leg blocked by one has a pool, and its size is the report."""
+    probe = {k: v for k, v in clause.items() if k not in ("trigger", "condition", "name_family")}
     return {cid: n for cid, n in (model.mine.unseen_counts or {}).items()
-            if n > 0 and fetch_target_matches(probe, model.card_stat(cid))}
+            if n > 0 and fetch_target_matches(probe, model.card_stat(cid), reading=WINDOW)}
 
 
 def _census_shed(model, option, picks):
@@ -102,8 +103,8 @@ def walk(paths, *, combat):
                 continue                        # the deterministic seam handled it
             refused += 1
             try:
-                enumerated[len(be.expectation(pre, option, seat_index=seat,
-                                              shed=_census_shed).classes)] += 1
+                enumerated[len(be.expectation(pre, option, seat_index=seat, shed=_census_shed,
+                                              score=state_value).classes)] += 1
                 continue
             except Exception as exc:
                 message = str(exc)

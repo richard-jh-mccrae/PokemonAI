@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import NamedTuple
 
-from common.fetch_closure import (FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
+from common.fetch_closure import (DEADNESS as _DEADNESS_READING, REACH as _REACH_READING,
+                                  FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
                                   FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
 from common.option_equivalence import canonical_keys   # ADR-0103: the grab's tie-break is a board
                                                        # fact (the fingerprint), never the menu index
@@ -24,17 +25,17 @@ from common.strategy.strategy import Hypothesis
 # scope, `_FETCH_DEADNESS_TARGETS` the wider DEADNESS scope. The per-card PREDICATE lives in the card.
 
 class _Reading(NamedTuple):
-    """One of the TWO readings of a fetch clause (ADR-0073): target scope, predicate mode, memo cache.
-    Bundled because they are co-determined — a deadness answer in the reach memo is the unsoundness."""
+    """The two readings this doctrine asks for (ADR-0073; ADR-0133 adds a third, for the reveal node):
+    target scope, predicate mode, memo cache — a deadness answer in the reach memo is the unsoundness."""
     targets: frozenset
-    deadness: bool
+    mode: str
     cache_attr: str
 
 
 #: The optimistic reading: what a search can be RELIED ON to pull. Feeds the endorsers.
-_REACH = _Reading(_FETCH_POKEMON_TARGETS, False, "_fetch_cache")
+_REACH = _Reading(_FETCH_POKEMON_TARGETS, _REACH_READING, "_fetch_cache")
 #: The pessimistic reading: what a search could find AT ALL. Feeds the whiff veto and deadline gate.
-_DEADNESS = _Reading(_FETCH_DEADNESS_TARGETS, True, "_deadness_cache")
+_DEADNESS = _Reading(_FETCH_DEADNESS_TARGETS, _DEADNESS_READING, "_deadness_cache")
 
 # PROBABLE-WHIFF threshold (ADR-0029): `dont-search-a-probable-whiff` fires when the best reachable
 # target's hypergeometric P(still in deck) is below this. A SOUND whiff (P=0) is separate.
@@ -128,11 +129,11 @@ class FetchMixin:
         return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan) > 0
                    for c in fetch_set)
 
-    def _fetch_target_matches(self, clause: dict, stat, *, deadness: bool = False) -> bool:
+    def _fetch_target_matches(self, clause: dict, stat, *, reading: str = _REACH_READING) -> bool:
         """True iff a card with ``stat`` matches a FETCH clause's target class. Delegates to
-        `common.fetch_closure` (ADR-0065); ``deadness`` selects the pessimistic reading (ADR-0073)."""
+        `common.fetch_closure` (ADR-0065); ``reading`` picks which question is asked (ADR-0073)."""
         from common import fetch_closure
-        return fetch_closure.fetch_target_matches(clause, stat, deadness=deadness)
+        return fetch_closure.fetch_target_matches(clause, stat, reading=reading)
 
     def _deck_fetch_set(self, cid, reading: _Reading) -> set:
         """The deck card ids ``cid``'s ``zone: deck`` FETCH clauses reach under ONE ``reading`` (ADR-0073).
@@ -148,7 +149,7 @@ class FetchMixin:
             if clauses:
                 for tid in set(self.deck):
                     stat = self.stats.get(tid) if self.stats else None
-                    if any(self._fetch_target_matches(cl, stat, deadness=reading.deadness)
+                    if any(self._fetch_target_matches(cl, stat, reading=reading.mode)
                            for cl in clauses):
                         ids.add(tid)
             cache[cid] = ids
