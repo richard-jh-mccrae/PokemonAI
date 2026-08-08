@@ -7,7 +7,9 @@ from dataclasses import dataclass
 import pytest
 
 from conftest import needs_live_board_search
+from common import apply_engine
 from common import apply_option as ao
+from common import composer as cp
 from common.strategy.context import _CARD
 from train.continuation_parity import FIXTURES, bind_record, load_records, observable_writes
 from train.tune import _build_pilot
@@ -87,6 +89,46 @@ def test_seeded_card_continuations_route_eight_exact_successors_without_reusing_
             assert isinstance(result, ao.EngineResolved)
             assert observable_writes(ao.require_model(result).source_obs, record["writes"]) == expected
         assert (search.begun, search.ended, search.open) == (2, 2, False)
+
+
+def test_composer_prices_only_the_eight_seeded_card_continuations(pilot):
+    """Composer-owned provenance must survive its origin stamp; setup-bench stays a refusal."""
+
+    records = {record["context"]: record for record in load_records()}
+    for context in sorted(_NATIVE_CONTEXTS):
+        record = records[context]
+        binding = bind_record(record, trace_root=FIXTURES)
+        assert binding.reason is None
+        search = _FreshSearch(binding.successor["obs"], record["selected"][0])
+        model, option = _model_and_option(pilot, record)
+
+        result = cp.compose(model, [option], search_api=search)
+
+        assert result.order, context
+        assert result.fanned[0] is not None
+        assert search.begun == search.ended == 1
+
+    record = records[2]
+    binding = bind_record(record, trace_root=FIXTURES)
+    assert binding.reason is None
+    search = _FreshSearch(binding.successor["obs"], record["selected"][0])
+    model, option = _model_and_option(pilot, record)
+    result = cp.compose(model, [option], search_api=search)
+
+    assert not result.order
+    assert any("engine-refused" in gap for gap in result.gaps)
+    assert search.begun == 0
+
+
+def test_seeded_engine_menu_match_ignores_only_the_composer_origin_stamp():
+    """A private field is still exact input unless it is the composer's known provenance stamp."""
+
+    record = next(record for record in load_records() if record["context"] == 7)
+    obs = copy.deepcopy(record["seed_observation"])
+    option = obs["select"]["option"][record["selected"][0]]
+
+    assert apply_engine.option_index(obs, {**option, "_composer_origin": (None, None)}) == record["selected"][0]
+    assert apply_engine.option_index(obs, {**option, "_unrelated": "must-refuse"}) is None
 
 
 @needs_live_board_search

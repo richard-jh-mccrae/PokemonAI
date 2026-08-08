@@ -507,6 +507,13 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
                     "was synthesized, and no context/card fallback was used",
                     scope=NO_ENGINE_SCOPE)
             return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+        if apply_engine.engine_refused_context(model, option, card_kind=_CARD, depth=depth) is not None:
+            return refuse(
+                option,
+                "seeded SETUP_BENCH_POKEMON continuation engine-refused — native replay cannot restore "
+                "the opponent Active's `appearThisTurn`; no composer route, state normalisation, "
+                "synthetic semantics, or context/card fallback was used",
+                scope=NO_ENGINE_SCOPE)
         return refuse(
             option,
             "unowned CARD select — only exact, depth-0 seeded continuations in Issue #464's context "

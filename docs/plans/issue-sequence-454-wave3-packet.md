@@ -187,3 +187,21 @@ was captured or restamped, and no causal claim is made from corpus disagreement.
   `85786096|0|decision|38 [0]->[4]`, `85786096|0|decision|70 [2]->[0]`,
   `85786096|0|turn|2 [0]->[4]`, `86090164|1|decision|40 [0]->[1]`,
   `86091435|0|decision|30 [0]->[1]`.
+
+## Issue #463 — exact seeded CARD continuations reach the composer
+
+The S3 route admits exactly eight seed-paired, depth-0, single-pick CARD contexts:
+`SETUP_ACTIVE_POKEMON`, `SWITCH`, `TO_ACTIVE`, `TO_HAND`, `DAMAGE`, `HEAL`, `ATTACH_FROM`, and
+`ATTACH_TO`.  The composer adds a private origin stamp while it preserves card identity across its
+beam; Engine Search matching discards that stamp and still requires one unique offered menu option.
+It never turns a CARD context into a hand-written transition.
+
+`SETUP_BENCH_POKEMON` is deliberately outside that route.  Native replay cannot restore the opponent
+Active's `appearThisTurn`, so the exact seeded frame emits `engine-refused` before Engine Search
+starts; it remains on its existing safe decision path.  No state normalisation, synthetic semantics,
+or generic CARD fallback was added.  Issue #470 remains closed not planned.
+
+The diagnostic gate outputs exactly match the existing Issue #465 records above: leaf has 57 unruled
+`OK -> MISS` flips and the Decision Gate has 33 unruled regressions.  No baseline was captured or
+restamped and no new flips were appended.  `composer_lab` reports 374 frames, 278 composed, zero
+failures, median 82.97 ms, P95 785.31 ms, and max 2484.23 ms — below the 1-second warning threshold.
