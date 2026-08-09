@@ -25,15 +25,16 @@ lets the human commit. The apply half split out of the producers (ADR-0018 gener
 _Avoid_: compiler (evocative but implies determinism; authoring is LLM-behind-a-gate).
 
 **Target layer**:
-Where a proposal is applied: `general-hypothesis` (a `when()`+weight in `baseline_*.py`), `deck-strategy`
-(`src/agents/<deck>/strategy.py`), `matchup-brief` (a Brief JSON), or `planner-code` (Turn-Planner /
-Lethal-Solver code).
+Where a proposal is applied: `composer-differencer` (transition modelling and sequence scoring),
+`turn-sequencer` (Composer search and planner hand-off), `value-equation` (a proven `state_value` term),
+`lethal-solver` (sound win detection), or `matchup-brief` (a Brief JSON). `update-strategy` never adds
+a Hypothesis, rung, or `when()` predicate.
 _Avoid_: destination.
 
 **Verification contract**:
-The gate a proposal declares for `update-strategy` to pass: `verifier` (re-measure over Corrections),
-`score-diff` (neutrality gate), `brief-validator` (Brief schema/covers/card checks), or `seed-ladder`
-(ship as `assumed` seed, kill-switched + telemetry, ladder-validated — for doctrine with no state fixture).
+The gate a proposal declares for `update-strategy` to pass: `composer-retest` (fixture re-drive plus
+emitted Composer working), `engine-cascade` (native multi-step proof), or `brief-validator` (Brief
+schema/covers/card checks).
 _Avoid_: gate (fine informally; the field name is verification_contract).
 
 **Capability-gap**:

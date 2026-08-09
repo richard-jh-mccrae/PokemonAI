@@ -4,33 +4,33 @@ The apply mechanics for each `verification_contract`, relocated here from blunde
 (that skill now only *analyses + proposes*). update-strategy authors the change from the proposal's thin
 `spec`, then runs the declared gate. **No commit without the gate passing; the human commits.**
 
-## `verifier` — general-hypothesis / (from blunder-buster corrections)
+## `composer-retest` — Composer/differencer, turn sequencer, and value equation
 
-The proposal's `provenance` names the correction ids + a state fixture. Author the candidate `when()` from
-the `spec` (the correction rationale is the authoring spec):
-- Prefer universal features (`tags`, `roles`, `board`, `stat`) over hard-coded `card_id`s; pure + total
-  predicate; seed `weight` in-band ([../../../docs/weights.md](../../../docs/weights.md)); `status="assumed"`.
-- **Missing signal → build the infra now** (never defer): a derived decision signal → `Context`/`Board`
-  in `src/common/pilot.py`; a card-behavioral property → a tag in `card_functions.json` (+ `src/common/cards.py`);
-  engine vocabulary → `src/cg/api.py`. Compute pure + total; mirror an existing signal; verify every fact
-  at source (`docs/rules.md`, `docs/rulebook.txt`, `data/EN_Card_Data.csv`); add a focused unit test.
-- **Verify** (`train.tuner.verify`): build `pilot_with(extra)`, load the cluster's Corrections, require
-  `result.passed` (cluster satisfied + empty `regressed`). Too narrow → broaden; too broad → tighten.
-- **Retest** (`train.tuner.retest`, ADR-0019): re-derive the decision in `@T` format, diff vs the embedded
-  `live_trace`; require `fixed` (the `correct` option now chosen). Show `chosen/margin before→after`.
-- **Suite-green** — `python -m pytest tests/ -q` (incl. any new signal's test).
-- **Place** — universal trigger → the matching `src/common/strategy/baseline/baseline_<context>.py`
-  `HYPOTHESES` (ADR-0025); a card-archetype rule → `src/common/strategy/doctrines/doctrine_*.py`;
-  deck-specific → `src/agents/<deck>/strategy.py`. Commit prefix `Blunder Bustin':` for correction-sourced.
+The proposal's `provenance` names correction ids, a state fixture, and the emitted Composer working.
+Do not add a `when()`, Hypothesis, rung, score weight, or deck-local priority. Diagnose from the replay:
 
-## `planner-code` — Lethal Solver / Turn Planner (ADR-0030/0031)
+- **`composer-differencer`:** fix a missing/refused transition, expectation handling, option-equivalence
+  collapse, beam admission, terminal EV, or 1-ply/end-state difference in `common/composer.py` and the
+  apply/expectation seam it calls. The test must assert the corrected transition's difference and the
+  resulting first action.
+- **`turn-sequencer`:** fix sequence expansion, commutativity, continuation handling, or the Composer ↔
+  `planner.py` commit hand-off. The test must assert the intended ordered steps and reject the old order.
+- **`value-equation`:** alter `state_value.py` only when the proposal names one family and the telemetry
+  proves both alternatives were modelled but that family supplied the wrong order. Assert the before/after
+  family terms and the decision. Never compensate for an absent transition or an unsearched sequence with
+  a value term.
 
-A layer-driven blunder (proposal from a `live_trace.lethal`/`planned` routing) is **never** a weight or
-`when()`. Edit `src/common/strategy/lethal.py` (win detection / `_attack_wins` soundness) or
-`src/common/strategy/planner.py` (goal line-generators / leaf-eval / commit gate), **plus** a focused test
-(`tests/strategy/test_lethal.py` / `test_planner*.py`) gating the correction's state as a fixture
-(`tests/fixtures/corrections/`). The Verifier does **not** gate code fixes — the fixtured retest
-(surfacing `lethal/planned before→after`) + suite-green are the gate.
+Gate every change by re-driving the correction through the real Pilot and serialising it with
+`telemetry.to_record`. Require: corrected `chosen`; a changed relevant `composer.differencing` or
+sequence/candidate; unchanged unrelated value families; and no regression in the cluster's other fixtures.
+Add focused `tests/strategy/test_composer.py`, `test_planner*.py`, or `test_value*.py` coverage, then run
+the suite.
+
+## `lethal-solver` — sound win detection
+
+A verified or missed win is never a heuristic policy adjustment. Edit `common/strategy/lethal.py` only,
+with a focused fixture regression in `tests/strategy/test_lethal.py`; retain the engine-cascade proof below
+for multi-step wins.
 
 **Multi-step lethal proposals** (retreat/tutor/fetch/attach compositions — a first step whose win
 depends on `decide()` driving 2–5 follow-up selects) get the stronger **engine-cascade** gate, not a
@@ -49,23 +49,8 @@ Author `src/common/scouting/briefs/<slug>.json` from the doctrine `spec` (schema
 `opponent_properties` key. Gate: `python .claude/skills/matchup-genie/scripts/validate_brief.py <slug>`.
 Commit prefix `matchup:`.
 
-## `score-diff` — deck-strategy / folds (ADR-0034)
-
-Author into `src/agents/<deck>/strategy.py` (or fold into `baseline_*`), author-time authoring rules per
-[../../deck-genie/references/authoring.md](../../deck-genie/references/authoring.md). Gate:
-`python tools/sim/score_diff.py diff --agent <deck> --baseline <the proposal's captured baseline>` in
-`scores` (folds — score-equality, ADR-0034) or `choice` (vocabulary) mode; a shared-general-rule change
-runs it for every corpus agent. Then suite-green + Playability (`tools/sim/check_agent.py <deck>`) + A/B
-mirrors when behavior changes. Never hand-edit `tuned.json` (weight_overrides, ADR-0035). Advance the deck
-`aligned.json` ledger on a deck-align-sourced commit.
-
-## `seed-ladder` — doctrine with no state fixture (strategy-ingest / doctrine seeds)
-
-No correction to re-measure. Author the `when()`+weight (or code) as an `assumed` seed, **default-on,
-kill-switched, with blunder-buster telemetry**; the ladder validates (the cross-deck gauntlet is
-invalid-for-gain — see [[gauntlet-invalid-ladder-only]]). The Verifier still checks well-formedness +
-suite-green. A seed whose sound form needs new infra is a **capability-gap** (defer with a
-definition-of-done), same as the correction path.
+Legacy `verifier`, `score-diff`, and `seed-ladder` proposals that would add or tune a rule are returned to
+their producer for Composer/differencer routing. Rule-retirement remains removal-only.
 
 ## The conveyor — fan-out for a multi-proposal drain
 
@@ -77,18 +62,12 @@ never waits on authoring** — that idle time is where the wall-clock is won. Th
    `candidate_signal` maps to a real signal, return a grill brief. No merge surface — always safe, always
    worth it.
 2. **Author + pre-verify (Phase 2, the conveyor)** — the instant a grill locks, spawn a background Agent to
-   author the change and run *that proposal's own* gate (`verifier` verify+retest / `score-diff` /
-   `brief-validator` / the `planner-code` engine-cascade). File- AND behavior-disjoint proposals
-   (append-only into different `baseline_<context>.py` `HYPOTHESES`) run in parallel **worktree** Agents; a
-   shared **serial-only surface** — same `card_functions.json` card, same `ROLES`/ctor, or any new
-   `Context`/`Board` signal — serializes on the belt. An unbuilt-infra proposal drops off as a
-   capability-gap.
-3. **End-join (Phase 3, the one barrier)** — when the conveyor drains, a **serial join** union-verifies the
-   merged tree (`train.tuner` `union_verify` — injects each authored Hypothesis once against a seeds-only
-   baseline; raises on duplicate ids / contaminated baseline; require `passed` + empty `regressed` over the
-   corpus **including** previously-`covered` corrections) + union-retest + **one whole-suite `pytest`** (run
-   once here, not per proposal — the biggest raw saving). A regressing pair is behavior-dependent → merge
-   into one cluster, triggers mutually exclusive, re-enter the join. Merges are one-way (terminates).
+   author the change and run its Composer retest / `brief-validator` / engine-cascade gate. File- AND
+   behavior-disjoint Composer changes run in parallel **worktree** Agents; shared transition and
+   `state_value` surfaces serialize. An unbuilt-infra proposal drops off as a capability-gap.
+3. **End-join (Phase 3, the one barrier)** — when the conveyor drains, serially re-drive the union of
+   correction fixtures and compare `@T` Composer working + **one whole-suite `pytest`**. A regressing pair
+   is behavior-dependent → merge into one sequence/differencing cluster and re-enter the join.
 
 **When it pays:** worktree setup is ~200–500ms + disk per Agent, so a 2-append queue may not clear the
 overhead — fan out the enrich always; fan out authoring when the queue is large or the gates are heavy

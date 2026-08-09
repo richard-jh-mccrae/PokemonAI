@@ -50,7 +50,8 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
                    if lethal else None),
         # Turn Planner's committed heuristic line rides alongside — always present (None when the
         # Planner didn't commit), so a Correction can filter on it the same way (ADR-0031).
-        "planned": ({"step": list(planned.next_step), "goal": planned.goal, "why": planned.rationale}
+        "planned": ({"step": list(planned.next_step), "goal": planned.goal, "why": planned.rationale,
+                     "value": round(planned.value, 3), "kind": planned.kind}
                     if planned else None),
         "margin": margin,
     }
@@ -59,9 +60,6 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
         rec["planned"]["ranked"] = ranked         # ("composer" since POC-T4/5; the retired runtime
         rec["planned"]["diverged"] = bool(getattr(planned, "diverged", False))   # rollout's "engine" is
                                                   # gone). `diverged` is now always False for pool lines.
-    if planned is not None and planned.goal == "compose":     # the composer's pick turns on this end-state
-        rec["planned"]["value"] = round(planned.value, 3)     # score — a correction that disagrees is a
-                                                  # claim about the LEAF, unreadable without it
     composer = getattr(decision, "composer", None)
     if composer is not None:                      # sparse: margin telemetry, run stats and coverage-gap
         rec["composer"] = composer                # reasons — emitted whenever the composer RAN, INCLUDING

@@ -7,10 +7,10 @@ Contract: .claude/skills/update-strategy/references/strategy_proposal_contract.m
 ## <short-proposal-title>
 - id: <stable-slug>
 - source: <strategy-ingest | blunder-buster | deck-genie | matchup-genie | deck-align>
-- target_layer: <general-hypothesis | deck-strategy | matchup-brief | planner-code>
+- target_layer: <composer-differencer | turn-sequencer | value-equation | lethal-solver | matchup-brief>
 - for: <general | deck:<deck> | opponent:<archetype>>
 - candidate_signal: <Function Tag / CardStat / board-or-Context field / "needs a new signal">
-- verification_contract: <verifier | score-diff | brief-validator | seed-ladder>
+- verification_contract: <composer-retest | engine-cascade | brief-validator>
 - provenance: <link to source doc + locator>
 - status: open
 

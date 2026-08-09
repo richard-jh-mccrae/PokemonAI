@@ -6,6 +6,7 @@ assertion through `rung()` below: it strips a `goal="compose"` line, which is wh
 by "the planner did not commit".
 """
 from dataclasses import dataclass, field
+import json
 
 import pytest
 
@@ -15,6 +16,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
+from common import telemetry
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
 
@@ -174,7 +176,7 @@ def test_no_planned_line_when_the_enabling_attach_is_not_available():
 
 
 @pytest.mark.req("REQ-PLANNER-0007")
-def test_planned_line_is_emitted_in_decision_telemetry():
+def test_planned_line_is_emitted_in_decision_telemetry(capsys):
     """One `to_record` feeds the stderr line, a Correction's `live_trace` and the tuner retest
     (ADR-0019); the `planned` key is always present so corrections can filter on it."""
     pilot = _pilot()
@@ -182,18 +184,33 @@ def test_planned_line_is_emitted_in_decision_telemetry():
                 opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
                 hand=[WATER], prizes=2, opp_prizes=2)
     rec = to_record(pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=won)))
-    assert rec["planned"] == {"step": [0], "goal": "ko_for_prizes",
-                              "why": "plan (ko_for_prizes): retreat unlocks a 1-prize KO"}
+    assert rec["planned"]["step"] == [0]
+    assert rec["planned"]["goal"] == "ko_for_prizes"
+    assert rec["planned"]["why"] == "plan (ko_for_prizes): retreat unlocks a 1-prize KO"
+    assert rec["planned"]["kind"] == ""
+    assert isinstance(rec["planned"]["value"], float)
 
     # No rung reaches a KO here, so the COMPOSER commits and the record says so, with the margin
     # telemetry Issue #263 requires beside it.
     safe = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                  opp_active=poke(OPP, hp=330), opp_bench=[poke(BENCHIE, hp=100)], hand=[WATER],
                  prizes=2, opp_prizes=2)
-    rec_c = to_record(pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=safe)))
+    decision_c = pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=safe))
+    rec_c = to_record(decision_c)
     assert "planned" in rec_c and rec_c["planned"]["goal"] == "compose"
     assert rec_c["planned"]["ranked"] == "composer"
     assert set(rec_c["composer"]["margin"]) >= {"rank", "k", "in_beam", "margin_to_kth"}
+    # The stderr record must carry the calculation, not merely a winning label: downloaded Kaggle
+    # replays need the value equation and every depth-0 difference to audit the Composer's choice.
+    comp = rec_c["composer"]
+    assert {"root", "differencing", "ranked", "candidates", "selection_candidates", "bounds"} <= set(comp)
+    assert {"value", "terms"} <= set(comp["root"])
+    assert set(comp["root"]["terms"]) == {"prize_race", "survival", "threat", "readiness", "hand", "development"}
+    assert len(comp["differencing"]) == len(rec_c["opts"])
+    telemetry.emit(decision_c)
+    line = capsys.readouterr().err.strip()
+    assert line.startswith("@T ")
+    assert json.loads(line[3:])["composer"] == comp
 
 
 # ------------------------------------------------------------------ P2: survival + threat leaf terms

@@ -156,11 +156,42 @@ class ComposerResult:
     #: Both bounds of every expectation node this run met, newest last; the gap is its exposure.
     bounds: tuple = ()
     stats: dict = field(default_factory=dict)
+    #: The root-board value equation.  This deliberately rides with the result rather than being
+    #: re-derived by telemetry: downloaded replay analysis must inspect the exact calculation that
+    #: ranked this menu.
+    root_value: float = 0.0
+    root_terms: dict = field(default_factory=dict)
 
     def margin_for(self, index: int) -> Margin:
         """The margin telemetry for ANY depth-0 option — the acceptance claim is about the option the
         HUMAN ruled, and measuring the composer's own pick would pass by construction."""
         return _margin_at(self.order, self.always_expanded, self.admitted, self.margin.k, index)
+
+    def working(self) -> dict:
+        """Complete JSON-safe Composer working for decision telemetry.
+
+        Keep the original result fields intact for callers, but make every input to the sequence
+        comparison observable in a Kaggle stderr replay: the root value equation, 1-ply deltas,
+        ranked/admitted candidates, expectation bounds, and every generated sequence.
+        """
+        def candidate(c):
+            return {**c.working(), "first_index": c.first_index,
+                    "step_indices": [s.index for s in c.steps],
+                    "terminal_index": c.terminal_index}
+
+        return {
+            "root": {"value": self.root_value, "terms": self.root_terms},
+            "differencing": [[i, delta] for i, delta in enumerate(self.fanned)],
+            "ranked": [[i, delta] for i, delta in self.order],
+            "admitted": sorted(self.admitted),
+            "always_expanded": sorted(self.always_expanded),
+            "blocks": [list(block) for block in self.blocks],
+            "bounds": [bound.working() for bound in self.bounds],
+            "candidates": [candidate(c) for c in self.candidates],
+            "selection_candidates": [candidate(c) for c in self.selection_candidates],
+            "gaps": list(self.gaps),
+            "stats": self.stats,
+        }
 
 
 def resolve_against(model, option: Mapping) -> dict | None:
@@ -641,7 +672,8 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
                  continuation_boundary=bool(continuation_boundary),
                  required_pick=bool(required_pick))
 
-    root = _Node(model=model, leaf=float(state_value(model)))
+    root_terms = {}
+    root = _Node(model=model, leaf=float(state_value(model, working=root_terms)))
     frontier, root_ranked = [root], None
     for ply in range(depth + 1):
         expanded = []
@@ -678,7 +710,8 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
                "expectation_nodes": len(state.bounds),
                "expanded_families": state.expanded_families,
                "expansion_children": state.expansion_children,
-               "ms": (time.perf_counter() - t0) * 1000.0})
+               "ms": (time.perf_counter() - t0) * 1000.0},
+        root_value=root.leaf, root_terms=root_terms)
 
 
 @dataclass
