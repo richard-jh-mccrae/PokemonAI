@@ -27,7 +27,6 @@ PINS = {
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
-    "82228640-9": "recovered from the 40 dropped records — the agent already makes the human pick",
     # discard-pair valuation (sets, not sums; role floors)
     "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
     # These five record a SINGLE flagged discard for a 2-card forced pitch, so they are `correct ⊆
@@ -46,7 +45,6 @@ PINS = {
                    "TARGET by the tutor-chain grab-value build)",
     "83686860-33": "ft: fetch Munkidori over a redundant Drakloak",
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
-    "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
     # Costed-search POC: 83967841-17/85163634-17 moved; composer plays Ultra Ball on both.
@@ -90,6 +88,12 @@ POC_T4_FLIPS = {
                    "search is priced for the first time",
     "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
                    "same cause as 83967841-17",
+}
+# Issue #459 leaves Mega Starmie's old shared valuations out of the packaged target runtime.
+# Strict xfail preserves the immutable corpus label and makes composer recovery reviewable.
+ISSUE_459_TARGET_RUNTIME_FLIPS = {
+    "82228640-9": "recovered from the 40 dropped records — target S4 defers its shared setup valuation",
+    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex — target S4 defers fetch valuation to composer",
 }
 # The tagged blunder is DEAD but strict `correct`-equality cannot hold: the residue is a DIFFERENT,
 # separately adjudicated line. Assert only the substance.
@@ -202,7 +206,8 @@ def _param(cid, reason, *, xfail):
 
 _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
           + [_param(c, r, xfail=True) for c, r in TARGETS.items()]
-          + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()])
+          + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()]
+          + [_param(c, r, xfail=True) for c, r in ISSUE_459_TARGET_RUNTIME_FLIPS.items()])
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

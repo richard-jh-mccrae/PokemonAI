@@ -238,3 +238,20 @@ Two target-runtime items inherit, below the three-item stop rule. No hand/needs 
 or corpus interpretation changed. The Mega Starmie composer lab is diagnostic only: 250 frames, 199
 composed, 0 failures, median 62.95 ms, P95 458.70 ms, max 1554.88 ms. No gate baseline was captured
 or restamped.
+
+## Issue #459 — target-runtime S4 retirement boundary
+
+The packaged competition runtime selects a three-guard general roster for Mega Starmie and the future
+Hydrapple entrypoint. Its other shared valuations are excluded from that package and recorded in
+`TARGET_RUNTIME_RETIRED`; they are not global `FOLDED` records. Mega Lucario and Dragapult continue
+to select the unchanged legacy general roster. `LEGACY_DECK_RUNTIME_RUNG_IDS` records their retained
+deck-local rung inventories; their strategy modules, tuned assets, tests, and documentation are
+intentionally out of competition scope. No watchdog workflow, benchmark baseline, or capture/restamp changed.
+
+The leaf diff remains at the existing 57 unruled `OK -> MISS` records. The decision diff adds these
+eight target-runtime regressions to the pre-existing 33 (the baseline is deliberately unchanged):
+`81903490|0|decision|8 [1]->[0]`, `81903490|0|decision|93 [2]->[1]`,
+`82228640|0|decision|9 [1]->[0]`, `82749168|1|decision|21 [7]->[5]`,
+`82749656|0|decision|21 [2]->[0]`, `82752604|0|decision|14 [0]->[4]`,
+`82753102|1|decision|17 [3]->[0]`, and `83038055|0|decision|40 [0]->[3]`. These are reported,
+not re-ruled; the decision gate therefore remains failing at 41 unruled regressions.

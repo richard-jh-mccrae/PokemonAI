@@ -13,7 +13,8 @@ from common.config import load_overrides_and_params
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.pilot import Pilot
-from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.strategy.general_strategy import (COMPETITION_GENERAL_STRATEGY, COMPETITION_RUNTIME_NAMES,
+                                              GENERAL_STRATEGY)
 from common.value import ValueModel
 
 # The validated-best deployment config every shipped agent runs: {Pilot ctor flag: value}. Every
@@ -86,6 +87,11 @@ PROFILE = {
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
 
 
+def _general_strategy_for(strategy):
+    """Choose the packaged competition roster without mutating legacy deck runtime behaviour."""
+    return COMPETITION_GENERAL_STRATEGY if strategy.name in COMPETITION_RUNTIME_NAMES else GENERAL_STRATEGY
+
+
 def build_pilot(strategy, deck, *, params=None, overrides=None,
                 stats=_ENGINE, scout=_ENGINE, briefs=_ENGINE) -> Pilot:
     """The one deployed-Pilot build. Each PROFILE flag reads ``params.get(flag, PROFILE[flag])``,
@@ -105,7 +111,7 @@ def build_pilot(strategy, deck, *, params=None, overrides=None,
     if briefs is _ENGINE:
         from common.scouting.briefs import load_briefs
         briefs = load_briefs()
-    return Pilot(strategy, deck, general_strategy=GENERAL_STRATEGY, overrides=overrides,
+    return Pilot(strategy, deck, general_strategy=_general_strategy_for(strategy), overrides=overrides,
                  stats=stats, functions=CardFunctions.load(), effects=CardEffects.load(),
                  scout=scout, briefs=briefs, **flags)
 

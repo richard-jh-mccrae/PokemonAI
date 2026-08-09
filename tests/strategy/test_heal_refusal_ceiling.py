@@ -79,16 +79,13 @@ def test_the_agent_plays_the_promoted_ruled_heal(fixture, _at_capture, ruled):
 
 @pytest.mark.req("REQ-PLANNER-0036")
 @pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES[:1])
-def test_the_remaining_ruled_heal_is_re_adjudicated_to_the_positive_composer_line(
+def test_target_runtime_defers_the_remaining_heal_valuation(
         fixture, _at_capture, ruled):
-    """0cbc's legal Wally board loses to a strictly valued composed retreat line."""
+    """Issue #459 leaves 0cbc's immutable ruling intact while composer valuation is deferred."""
     fx = _fx(fixture)
     d = _shipped_pilot().explain(fx["obs"])
     assert fx["correct"] == [ruled] and d.options[ruled].card_id == WALLYS
-    assert d.options[ruled].score > 0.0, "Wally must be valued, not silently refused"
-    assert d.chosen == [9], "the documented re-adjudication is the composed retreat line"
-    assert d.composer and d.composer["first_index"] == 9
-    assert d.composer["margin"]["chosen_delta"] > 0.0, "not a positional zero-score tie"
+    assert d.options[ruled].score == 0.0
 
 
 @pytest.mark.req("REQ-PLANNER-0036")

@@ -152,14 +152,6 @@ def test_dragapult_ranks_the_line_base_below_the_bodies_it_can_spare():
     assert pilot.decide(_setup_active_obs([DREEPY, MEOWTH_EX])) == [0], "but still above Meowth ex"
 
 
-def test_mega_starmie_opens_cinderace_over_the_wincon_base():
-    """Cinderace opens; Staryu is the Line base and wants the Bench — the outcome the retired
-    `open-the-accelerator` bought."""
-    pilot = _pilot("mega_starmie")
-    assert pilot.decide(_setup_active_obs([STARYU, CINDERACE])) == [1]
-    assert pilot.decide(_setup_active_obs([CINDERACE, STARYU])) == [0]
-
-
 def test_an_undeclared_deck_is_untouched():
     """Deck-keyed opt-in (ADR-0034): with no declaration the rule scores nothing at all, which is
     what makes the completeness invariant below load-bearing rather than decorative."""
@@ -227,14 +219,6 @@ def test_a_secondary_attacker_line_payoff_does_not_promote_its_base():
     pilot = _pilot("mega_lucario")
     obs = _setup_active_obs([SOLROCK, MAKUHITA, HARIYAMA], offer_ids=[SOLROCK, MAKUHITA])
     assert pilot.decide(obs) == [0], "Solrock's rank 1 holds — Hariyama is not the Line payoff"
-
-
-def test_the_setup_only_body_still_opens_against_a_large_in_line_payoff():
-    """SILENCE 4/4, the one the derived PIN exists for: Staryu's Marginal is a genuine +190, but the
-    Set-Up pick is Cinderace's only route into play (no Raboot in the deck) so skipping it forfeits it."""
-    pilot = _pilot("mega_starmie")
-    obs = _setup_active_obs([STARYU, CINDERACE, MEGA_STARMIE_EX], offer_ids=[STARYU, CINDERACE])
-    assert pilot.decide(obs) == [1], "Cinderace opens — a +190 Marginal must not cost us the card"
 
 
 # ── The derived pin tracks DECK COMPOSITION, not the card ────────────────────────────────────────

@@ -17,6 +17,25 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
+@pytest.mark.req("REQ-GEN-0063")
+def test_target_runtime_retires_value_rungs_without_pruning_third_deck_strategies():
+    """Issue #459 keeps only rule guards in the target package; third-deck rungs stay out of scope."""
+    from common.runtime import _general_strategy_for
+    from agents.dragapult_ex.strategy import STRATEGY as dragapult
+    from agents.mega_lucario.strategy import STRATEGY as lucario
+    from agents.mega_starmie.strategy import STRATEGY as mega_starmie
+
+    target_ids = {hypothesis.id for hypothesis in _general_strategy_for(mega_starmie).hypotheses}
+    assert target_ids == {
+        "dont-search-an-empty-deck",
+        "keep-a-startable-hand",
+        "honor-preferred-start",
+    }
+    assert {hypothesis.id for hypothesis in _general_strategy_for(Strategy(name="hydrapple")).hypotheses} == target_ids
+    assert _general_strategy_for(lucario) is GENERAL_STRATEGY
+    assert _general_strategy_for(dragapult) is GENERAL_STRATEGY
+
+
 # REQ-GEN-0001's `dig-before-commit` test went with the rung (Issue #386). Successors:
 # `tests/cards/test_card_functions_oracle.py` and `tests/strategy/test_fetch_doctrine.py`.
 
@@ -235,5 +254,3 @@ def _attach_hp_tool():
 
 # REQ-GEN-0024's two `deploy-hp-tool` silence tests went with the rung (Issue #386). The DECISION it
 # made — "this Tool would not save the body, so don't spend it" — has NO successor today.
-
-

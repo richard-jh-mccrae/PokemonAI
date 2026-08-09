@@ -20,10 +20,8 @@ sys.path.insert(0, str(REPO / "tools"))
 from submit.package import package  # noqa: E402
 
 AGENT = "mega_starmie"
-TARGET = "use-acceleration"    # real General Strategy Hypothesis id (general_strategy.py). NB it must
-                               # be a rung that still EXISTS: this asserts the tuned.json plumbing, and
-                               # `power-up-attacker` — the old choice — was deleted with the attach swap.
-AUTHORED = 25.0               # authored seed weight
+TARGET = "dont-search-an-empty-deck"  # one of the three target-runtime rule guards (Issue #459).
+AUTHORED = -60.0              # authored guard weight
 
 pytestmark = pytest.mark.skipif(
     not (REPO / "src" / "agents" / AGENT / "main.py").exists(),

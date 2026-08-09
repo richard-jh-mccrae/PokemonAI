@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from tools.rung_registry import (DECIDERS, EMERGENT, FOLDED, MAX_MENTIONS, NOT_A_RUNG, REVERTED, SUBSUMED,
-                                 UNRECORDED, UNREPLACED)
+                                 LEGACY_DECK_RUNTIME_RUNG_IDS, TARGET_RUNTIME_RETIRED, UNRECORDED, UNREPLACED)
 
 REPO = Path(__file__).resolve().parents[1]
 GIT = shutil.which("git")
@@ -291,6 +291,24 @@ def test_no_id_is_both_folded_and_not_a_rung() -> None:
     """The two dicts answer contradictory questions, so an id in both makes the registry say both."""
     overlap = sorted(set(FOLDED) & set(NOT_A_RUNG))
     assert not overlap, f"registered as both a retired rung and never-a-rung: {overlap}"
+
+
+def test_target_runtime_retirements_are_the_legacy_roster_delta() -> None:
+    """Issue #459 narrows Kaggle competition without claiming Lucario/Dragapult rungs were deleted."""
+    from common.strategy.general_strategy import COMPETITION_GENERAL_STRATEGY, GENERAL_STRATEGY
+
+    legacy = {hypothesis.id for hypothesis in GENERAL_STRATEGY.hypotheses}
+    competition = {hypothesis.id for hypothesis in COMPETITION_GENERAL_STRATEGY.hypotheses}
+    assert legacy - competition == TARGET_RUNTIME_RETIRED
+    assert not competition & TARGET_RUNTIME_RETIRED
+
+
+def test_retained_third_deck_rungs_match_the_declared_out_of_competition_scope() -> None:
+    from agents.dragapult_ex.strategy import STRATEGY as dragapult
+    from agents.mega_lucario.strategy import STRATEGY as lucario
+
+    assert {hypothesis.id for hypothesis in lucario.hypotheses} == LEGACY_DECK_RUNTIME_RUNG_IDS["mega_lucario"]
+    assert {hypothesis.id for hypothesis in dragapult.hypotheses} == LEGACY_DECK_RUNTIME_RUNG_IDS["dragapult_ex"]
 
 
 def test_notes_stay_one_readable_line() -> None:

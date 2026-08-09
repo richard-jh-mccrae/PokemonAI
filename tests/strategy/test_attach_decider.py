@@ -554,9 +554,8 @@ def test_turbo_flare_takes_min_three_and_remaining_at_the_energy_select(offered,
     assert _tune()._build_pilot(_agent(rec))[0].explain(obs).chosen == expected
 
 
-def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_when_it_should():
-    """mega_starmie's only Basic Energy is Water, so `attach-off-color-at-fixed-recipient` can never fire
-    here. The Fighting arm is the positive control: silence alone would also pass on a deleted rung."""
+def test_target_runtime_keeps_no_off_colour_attach_valuation():
+    """Issue #459 excludes fixed-recipient colour valuations from Mega Starmie's packaged runtime."""
     rec = _frame("83007714", 22)
     pilot = _tune()._build_pilot(_agent(rec))[0]
 
@@ -569,7 +568,7 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
     on_colour, on_score = _fired(W_ENERGY)
     off_colour, off_score = _fired(F_ENERGY)
     assert "attach-off-color-at-fixed-recipient" not in on_colour and on_score == 0.0
-    assert "attach-off-color-at-fixed-recipient" in off_colour and off_score == -8.0
+    assert "attach-off-color-at-fixed-recipient" not in off_colour and off_score == 0.0
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0001")

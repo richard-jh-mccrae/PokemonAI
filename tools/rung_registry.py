@@ -18,6 +18,76 @@ UNREPLACED = "UNREPLACED"    # deleted, and the note says OUTRIGHT that nothing 
                              # yet. Distinct from UNRECORDED (nobody wrote it down) and from SUBSUMED
                              # (something already covered it): here the gap is the recorded finding.
 
+# The Kaggle competition package deliberately excludes these shared valuations (Issue #459).  They are
+# NOT `FOLDED`: Mega Lucario and Dragapult retain the legacy general strategy, outside competition scope.
+TARGET_RUNTIME_RETIRED = frozenset({
+    "use-acceleration",
+    "prefer-active-attach-in-setup",
+    "feed-the-line-for-disruptor-lock",
+    "place-counter-to-convert",
+    "move-counters-off-the-damaged",
+    "move-max-counters",
+    "prefer-rush-evolve-tutor",
+    "dont-rush-evolve-without-target",
+    "open-the-declared-starter",
+    "phase-stabilize-prefer-heal",
+    "phase-close-stop-developing",
+    "play-safe-when-ahead-on-prizes",
+    "fetch-the-wincon",
+    "prefer-payoff-over-preevo",
+    "fetch-base-before-stranded-payoff",
+    "fetch-energy-when-starved",
+    "fetch-the-attack-color",
+    "fetch-the-ability-fuel-color",
+    "attach-off-color-at-fixed-recipient",
+    "prefer-bench-fill-first",
+    "dont-recycle-the-dead",
+    "recover-to-refill-bench",
+    "dont-search-a-probable-whiff",
+    "search-the-confirmed-hit",
+    "dont-tutor-the-held-wincon",
+    "dont-tutor-the-baseless-wincon-turn-one",
+    "prefer-wincon-line-piece",
+    "develop-the-cheap-prize-wall-line",
+    "fetch-a-starter",
+    "develop-the-item-lock-opener",
+    "dont-fetch-the-setup-only-opener",
+    "fetch-the-support",
+    "fetch-when-it-fills-a-need",
+    "play-a-tutor-for-the-unfound-wincon",
+    "costly-fetch-sheds-junk",
+    "dont-shed-a-live-card",
+    "dont-shed-a-key-card",
+    "grab-a-gust-supporter-for-the-ko",
+    "grab-the-chain-opener",
+    "demote-the-costly-chain-opener",
+    "dont-spend-the-last-route-to-a-wanted-evolution",
+    "dont-grab-a-card-already-in-hand",
+    "grab-what-i-can-play-this-turn",
+    "dont-strand-the-evolving-engine",
+    "dont-fetch-an-unplayable-evolution-payoff",
+    "dont-grab-a-baseless-mid-evolution",
+    "hold-costly-fetch-when-line-assembled",
+    "dont-costly-tutor-when-starved-and-developed",
+    "dont-fetch-before-the-deadline",
+    "dont-shuffle-away-the-deferred-fetch",
+    "demote-needless-search-supporter-in-setup",
+    "fetch-deck-priority",
+    "attach-before-hand-shuffle",
+    "dont-refresh-into-a-probable-miss",
+})
+
+# Deck-local third-runtime rungs intentionally retained outside the Kaggle competition package (Issue #459).
+LEGACY_DECK_RUNTIME_RUNG_IDS = {
+    "mega_lucario": frozenset({
+        "attach-solrock-over-line-base", "fetch-the-missing-engine-half", "dont-fetch-the-redundant-piece",
+        "dont-fetch-the-inert-engine-piece", "dont-bench-a-redundant-engine-piece", "spring-heave-ho-when-it-pays",
+        "heave-ho-decline-without-payoff", "heave-ho-gust-when-it-pays", "fire-lunar-cycle",
+        "grab-lunar-cycle-fuel", "dont-lunar-cycle-away-the-last-attachable-f", "lunar-cycle-the-weak-preevo-last-f",
+    }),
+    "dragapult_ex": frozenset({"bench-the-comeback-drawer"}),
+}
+
 
 class Fold(NamedTuple):
     """One retired rung. `into` is a `module:Qual.name` symbol, a LIVE rung id, or a sentinel above."""
