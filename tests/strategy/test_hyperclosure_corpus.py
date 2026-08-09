@@ -63,9 +63,9 @@ TARGETS = {
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
 }
-READJUDICATED = {
-    "85164605-64": (1, 1182, {742, 65, 741}, "Boss's Orders: deferred board synthesis outranks the "
-                                          "former Jetting Blow correction by a positive composer delta"),
+S5_REJECTED_GUSTS = {
+    "85164605-64": (1, 1182, {742, 65, 741}, 5, "Boss's Orders trades away the energized active "
+                                              "Kadabra; Jetting Blow takes its active KO instead"),
 }
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
@@ -219,25 +219,25 @@ def test_correction_ranks_the_human_pick_top(cid):
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
-@pytest.mark.parametrize("cid,expected_index,expected_card,expected_targets,_why", [
-    pytest.param(cid, index, card, targets, why, id=cid)
-    for cid, (index, card, targets, why) in READJUDICATED.items()
+@pytest.mark.parametrize("cid,gust_index,gust_card,expected_targets,direct_index,_why", [
+    pytest.param(cid, index, card, targets, direct, why, id=cid)
+    for cid, (index, card, targets, direct, why) in S5_REJECTED_GUSTS.items()
 ])
-def test_re_adjudicated_deferred_choice_has_a_positive_composer_reason(
-        cid, expected_index, expected_card, expected_targets, _why):
-    """A legal deferred Supporter replaces the old correction only through positive leaf value."""
+def test_s5_rejected_gust_keeps_its_target_coverage_but_not_the_turn(
+        cid, gust_index, gust_card, expected_targets, direct_index, _why):
+    """The legal gust remains expanded; it cannot displace the approved direct terminal attack."""
     rec = _record(cid)
     d = _pilot(rec.agent).explain(rec.obs)
     assert rec.correct == [5], "the original Jetting Blow correction is retained as audit history"
-    choice = _expanded_deferred(rec, expected_index)
+    choice = _expanded_deferred(rec, gust_index)
     from common import apply_option as ao
     from corpus_helpers import opponent_active_ids
     assert isinstance(choice, ao.Expectation)
     assert len(choice.classes) == len(expected_targets)
     assert opponent_active_ids(choice) == expected_targets
-    assert d.chosen == [expected_index]
-    assert d.options[expected_index].card_id == expected_card
-    assert d.composer and d.composer["first_index"] == expected_index
+    assert d.chosen == [direct_index]
+    assert d.options[gust_index].card_id == gust_card
+    assert d.composer and d.composer["first_index"] == direct_index
     assert d.composer["margin"]["chosen_delta"] > 0.0
 
 

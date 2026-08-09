@@ -144,6 +144,8 @@ class ComposerResult:
 
     chosen: Candidate | None = None
     candidates: tuple = ()
+    #: The candidates that remain after sound terminal dominance. `candidates` stays complete audit data.
+    selection_candidates: tuple = ()
     margin: Margin = field(default_factory=Margin)
     fanned: tuple = ()
     order: tuple = ()
@@ -512,6 +514,100 @@ def selection_key(model, candidate: Candidate) -> tuple:
             index if index is not None else 1 << 30)
 
 
+def _attack_leg(model, candidate: Candidate):
+    """The active-target terminal leg for this candidate, or None outside the attack seam."""
+    terminal = candidate.terminal or {}
+    if ao.transition_kind(terminal) != _ATTACK:
+        return None
+    attack_id = terminal.get("attackId")
+    return next((leg for leg in attack_ev_legs(model) if leg.attack_id == attack_id), None)
+
+
+def _direct_active_ko(model, candidate: Candidate) -> bool:
+    """A direct, deterministic Knock Out of the current Active from the terminal extractor."""
+    leg = _attack_leg(model, candidate)
+    if candidate.steps or candidate.coverage_gap or leg is None:
+        return False
+    values = leg.kwargs
+    hp = float(values.get("target_hp") or 0.0)
+    return bool(hp > 0.0 and float(values.get("ko_probability") or 0.0) >= 1.0
+                and float(values.get("damage") or 0.0) >= hp)
+
+
+def _survives_recoil(model, candidate: Candidate) -> bool:
+    """A recoil Knock Out is a draw, so it cannot establish a direct match win."""
+    active = getattr(getattr(model, "mine", None), "active", None)
+    leg = _attack_leg(model, candidate)
+    recoil = getattr(getattr(model, "combat", None), "rider_recoil", None)
+    if active is None or leg is None or not callable(recoil):
+        return False
+    return float(recoil(leg.attack_id)) < float(getattr(active, "hp_remaining", 0) or 0)
+
+
+def _direct_prize_win(model, candidate: Candidate) -> bool:
+    """A sound terminal winner: deterministic active KO, last prizes, and no recoil draw."""
+    leg = _attack_leg(model, candidate)
+    if not (_direct_active_ko(model, candidate) and leg is not None and _survives_recoil(model, candidate)):
+        return False
+    need = int(getattr(getattr(model, "prize_race", None), "my_prizes_remaining", 0) or 0)
+    return bool(need > 0 and float(leg.kwargs.get("target_prizes") or 0.0) >= need)
+
+
+def _direct_terminal_attack(candidate: Candidate) -> bool:
+    """A root-menu attack, so terminal dominance does not overrule a setup line."""
+    return bool(not candidate.steps and not candidate.coverage_gap
+                and ao.transition_kind(candidate.terminal or {}) == _ATTACK)
+
+
+def _one_prize_active_ko(model, candidate: Candidate) -> bool:
+    """A direct active Knock Out whose own prize leg is one; rider prizes remain terminal payoff."""
+    leg = _attack_leg(model, candidate)
+    return bool(_direct_active_ko(model, candidate) and leg is not None
+                and float(leg.kwargs.get("target_prizes") or 0.0) == 1.0)
+
+
+def _active_has_energy(model) -> bool:
+    """The current Active holds a real attached Energy that a same-payoff gust would preserve."""
+    active = getattr(getattr(model, "theirs", None), "active", None)
+    body = getattr(active, "body", None) or {}
+    return bool(body.get("energyCards") or body.get("energies"))
+
+
+def _starts_with_gust(model, candidate: Candidate) -> bool:
+    """Whether the line opens with a semantically tagged gust, not a card-id exception."""
+    if not candidate.steps:
+        return False
+    try:
+        return board_choice.choice_key(
+            model, dict(candidate.steps[0].option), seat_index=int(getattr(model, "my_index", 0))) == "gust"
+    except Unmodellable:
+        return False
+
+
+def _same_terminal_payoff(candidate: Candidate, direct: Candidate) -> bool:
+    """The gust line takes the same prizes as an available direct active Knock Out."""
+    return (round(float(candidate.terminal_ev), _SCORE_PLACES)
+            == round(float(direct.terminal_ev), _SCORE_PLACES))
+
+
+def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:
+    """Apply only sound terminal dominance before the ordinary candidate ordering."""
+    if not candidates:
+        return ()
+    ordinary = min(candidates, key=lambda c: selection_key(model, c))
+    direct_wins = tuple(c for c in candidates if _direct_prize_win(model, c))
+    if direct_wins and _direct_terminal_attack(ordinary):
+        return direct_wins
+    direct_kos = tuple(c for c in candidates if _one_prize_active_ko(model, c))
+    if not direct_kos or not _active_has_energy(model):
+        return tuple(candidates)
+    return tuple(
+        candidate for candidate in candidates
+        if not (_starts_with_gust(model, candidate)
+                and any(_same_terminal_payoff(candidate, direct) for direct in direct_kos))
+    )
+
+
 @dataclass(frozen=True)
 class _Node:
     model: object
@@ -564,11 +660,13 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
         frontier = _prune_nodes(state, expanded)
 
     ranked0 = root_ranked or []
-    chosen = min(state.candidates, key=lambda c: selection_key(model, c)) \
-        if state.candidates else None
+    selection_candidates = _selection_candidates(model, state.candidates)
+    chosen = min(selection_candidates, key=lambda c: selection_key(model, c)) \
+        if selection_candidates else None
     return ComposerResult(
         chosen=chosen,
         candidates=tuple(sorted(state.candidates, key=lambda c: selection_key(model, c))),
+        selection_candidates=tuple(sorted(selection_candidates, key=lambda c: selection_key(model, c))),
         margin=_margin(state, ranked0, chosen),
         fanned=tuple(fan_out([state.one_ply.get(i) for i in range(len(options))], equiv)),
         order=tuple((e.index, e.delta) for e in ranked0 if not e.refused),
