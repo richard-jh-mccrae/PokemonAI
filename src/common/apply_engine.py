@@ -16,6 +16,20 @@ silently-unchanged board prices the option at exactly 0.0 delta, which reads as 
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+
+# These are the only CARD SelectContext values whose continuation is replayed from a seed-paired
+# native frame (Issues #463 and #464).  They name an engine route, never a hand-written card transition.
+CARD_CONTINUATION_CONTEXTS = frozenset({1, 3, 4, 7, 15, 17, 21, 22})
+
+# Native cannot restore setup-bench's opponent Active ``appearThisTurn``; record the explicit failure,
+# never a composer route (Issue #470 closed not planned).
+ENGINE_REFUSED_CARD_CONTEXTS = frozenset({2})
+
+
+_COMPOSER_ORIGIN = "_composer_origin"
+
 
 def _seed_zones(me: dict, opp: dict, deck) -> tuple:
     """``(your_deck, your_prize, opp_deck, opp_prize, opp_hand)`` for `search_begin`: a decklist
@@ -40,17 +54,63 @@ def _prune_none(value):
     return value
 
 
+def _engine_fields(option: Mapping) -> dict:
+    """Drop only the composer's provenance stamp before exact live-menu matching."""
+    return {key: value for key, value in option.items() if key != _COMPOSER_ORIGIN}
+
+
 def option_index(obs: dict, option) -> int | None:
-    """Where ``option`` sits on this observation's select menu, or None. Identity first, equality
-    second. None REFUSES rather than guess — a wrong index is a different legal play priced as this."""
+    """Where ``option`` sits on this menu: identity first, then equality without the composer stamp.
+    None REFUSES rather than guess — a wrong index prices a different legal play."""
     menu = ((obs or {}).get("select") or {}).get("option") or ()
     for i, candidate in enumerate(menu):
         if candidate is option:
             return i
-    for i, candidate in enumerate(menu):
-        if candidate == option:
-            return i
-    return None
+    public_option = _engine_fields(option) if isinstance(option, Mapping) else option
+    equal = [i for i, candidate in enumerate(menu)
+             if isinstance(candidate, Mapping) and _engine_fields(candidate) == public_option]
+    # A copied option is admissible only when equality identifies ONE offered option.  Two equal
+    # candidates still name distinct engine indices; choosing the first would be context fallback.
+    return equal[0] if len(equal) == 1 else None
+
+
+def _seeded_card_selection(model, option, *, card_kind: int, depth: int) -> tuple[int, int] | None:
+    """``(SelectContext, exact menu index)`` for one seeded depth-0 CARD answer, else ``None``."""
+    if depth != 0 or not isinstance(option, Mapping) or option.get("type") != card_kind:
+        return None
+    obs = getattr(model, "source_obs", None) or {}
+    if not obs.get("search_begin_input"):
+        return None
+    select = obs.get("select") or {}
+    try:
+        context = int(select.get("context"))
+        minimum = int(select.get("minCount", 0))
+        maximum = int(select.get("maxCount", 1))
+    except (TypeError, ValueError):
+        return None
+    # A menu can offer several cards, but an answer requiring two or more selections is multi-pick.
+    if not (0 <= minimum <= 1 <= maximum):
+        return None
+    index = option_index(obs, option)
+    return None if index is None else (context, index)
+
+
+def continuation_index(model, option, *, card_kind: int, depth: int) -> int | None:
+    """The exact selected index for an engine-routable seeded CARD continuation, else ``None``."""
+    selection = _seeded_card_selection(model, option, card_kind=card_kind, depth=depth)
+    if selection is None:
+        return None
+    context, index = selection
+    return index if context in CARD_CONTINUATION_CONTEXTS else None
+
+
+def engine_refused_context(model, option, *, card_kind: int, depth: int) -> int | None:
+    """An exact seeded CARD context whose native successor is documented as unavailable."""
+    selection = _seeded_card_selection(model, option, card_kind=card_kind, depth=depth)
+    if selection is None:
+        return None
+    context, _index = selection
+    return context if context in ENGINE_REFUSED_CARD_CONTEXTS else None
 
 
 def resolve(model, option, *, search_api):
@@ -87,4 +147,5 @@ def resolve(model, option, *, search_api):
     return model.rebuilt(after)
 
 
-__all__ = ("option_index", "resolve")
+__all__ = ("CARD_CONTINUATION_CONTEXTS", "ENGINE_REFUSED_CARD_CONTEXTS", "continuation_index",
+           "engine_refused_context", "option_index", "resolve")

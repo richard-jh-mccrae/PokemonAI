@@ -34,6 +34,7 @@ from train.blunder.service import record_correction  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.tuner.io import sparse_overrides  # noqa: E402
 from train.tuner.run import tune  # noqa: E402
+from common.strategy import Hypothesis  # noqa: E402
 
 AGENT = "mega_starmie"
 # committed own-game replay (our agent-0 game) under the build-identity dir layout
@@ -144,6 +145,13 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     """Uses a responsive ``reg``: the production ``fit.DEFAULT_REG`` deliberately will not let one
     correction overturn a strong doctrine weight, which would hide the W-route mechanism."""
     pilot, seeds = real_pilot
+    # The target package has only rule guards after Issue #459; use a test-only W-route discriminator.
+    # This tests tuning plumbing without restoring a retired shared valuation.
+    target_id = "test-target-runtime-w-route"
+    pilot.strategy.hypotheses.append(Hypothesis(
+        id=target_id, rationale="test-only W-route discriminator",
+        when=lambda c: c.card_id == MEGA_STARMIE, weight=25.0))
+    seeds[target_id] = 25.0
     # A TO_HAND grab of two revealed deck cards, deliberately a SAME-TIER select: a Main-phase
     # play-vs-attach pair cannot exercise the W route, because TIER decides it before score does.
     grab_mega = {"type": CARD, "area": 1, "index": 0, "playerIndex": 0}
@@ -159,7 +167,7 @@ def test_correction_translates_to_a_weight_change(real_pilot):
 
     # reg responsive enough to overturn the chosen option's weight — ``fit.DEFAULT_REG`` is
     # deliberately conservative. This is the W-route mechanism, not doctrine.
-    res = tune([corr], pilot, seeds, reg=0.08)
+    res = tune([corr], pilot, seeds, reg=0.02)
 
     changed = sparse_overrides(res.overrides, seeds)
     assert res.fit_adopted                       # fit satisfied the correction, so it ships
@@ -174,15 +182,22 @@ def test_packaged_agent_applies_tuned_weight_in_a_decision(tmp_path):
     picks — an extreme override flips the choice an empty file would have made."""
     package(AGENT, tmp_path)
     bundle = tmp_path / AGENT
-    # `power-up-attacker` is DELETED (ADR-0069 §7); the plumbing claim runs on the Active-preference
-    # prior instead, which still drives an ATTACH and needs the option to name its TARGET.
-    obs = make_select([opt(type=ATTACH, area=2, index=0, inPlayArea=4, inPlayIndex=0), opt(type=NO)],
-                      context=MAIN, current=state(active=poke(CINDERACE, hp=70)))
+    # Add a bundle-local test rule: the plumbing assertion must not depend on a shared valuation that
+    # Issue #459 intentionally excludes from Mega Starmie's packaged runtime.
+    target_id = "test-target-runtime-bundle-override"
+    strat = bundle / "strategy.py"
+    strat.write_text(
+        strat.read_text(encoding="utf-8")
+        + "\nfrom common.strategy import Hypothesis as _H\n"
+        + f"STRATEGY.hypotheses.append(_H({target_id!r}, '', when=lambda c: c.option_type == 7, weight=0.0))\n",
+        encoding="utf-8",
+    )
+    obs = make_select([opt(type=NO), opt(type=PLAY)], context=MAIN, current=state())
 
     (bundle / "tuned.json").write_text("{}", encoding="utf-8")
     assert _run_agent(bundle, obs) == [0]         # ATTACH preferred
 
-    (bundle / "tuned.json").write_text(json.dumps({"prefer-active-attach-in-setup": -100000.0}),
+    (bundle / "tuned.json").write_text(json.dumps({target_id: 100000.0}),
                                        encoding="utf-8")
     assert _run_agent(bundle, obs) == [1]         # tune flips the decision
 

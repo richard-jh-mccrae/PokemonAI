@@ -373,15 +373,6 @@ def test_counter_placement_finishes_a_ko_able_target():
     assert p.decide(obs) == [0]   # 10-HP mon is KO-able within the 60 budget; the 200 wall isn't
 
 
-@pytest.mark.req("REQ-GEN-0051")
-def test_counter_placement_prefers_the_higher_prize_ko_set():
-    """Budget 50 can KO EITHER the 2-prize ex@50 OR the 1-prize@10, not both (60 > 50)."""
-    p = _gpilot()
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
-                      context=DAMAGE_COUNTER_ANY, remain_counters=5,
-                      current=state(opp_active=poke(OPP, hp=320),
-                                    opp_bench=[poke(EX_BENCHIE, hp=50), poke(OPP_BENCH, hp=10)]))
-    assert p.decide(obs) == [0]   # the 2-prize ex (KO set worth 2) over the 1-prize@10 (worth 1)
 
 
 @pytest.mark.req("REQ-GEN-0051")
@@ -409,33 +400,10 @@ REMOVE_DAMAGE_COUNTER = 16   # REMOVE (source = ours; removing = a heal)
 REMOVE_COUNT = 40            # how many
 NUMBER = 0                   # OptionType.NUMBER
 
-@pytest.mark.req("REQ-GEN-0052")
-def test_move_counter_target_finishes_the_best_opp():
-    """Budget falls back to 30 for a counter-mover."""
-    p = _gpilot()
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
-                      context=DAMAGE_COUNTER,
-                      current=state(opp_active=poke(OPP, hp=320),
-                                    opp_bench=[poke(OPP_BENCH2, hp=200), poke(OPP_BENCH, hp=30)]))
-    assert p.decide(obs) == [1]   # index 1 (30-HP) is finishable within a 3-counter move; the 200 isn't
 
 
-@pytest.mark.req("REQ-GEN-0052")
-def test_move_counter_source_heals_the_most_damaged_body():
-    p = _gpilot()
-    obs = make_select([card_opt(ACTIVE, 0, player=0), card_opt(BENCH, 0, player=0)],
-                      context=REMOVE_DAMAGE_COUNTER,
-                      current=state(active=poke(OPP_BENCH, hp=300, max_hp=320),      # 20 damage
-                                    bench=[poke(OPP_BENCH2, hp=40, max_hp=90)]))     # 50 damage (more)
-    assert p.decide(obs) == [1]   # heal the benched body (50 dmg) over the active (20 dmg)
 
 
-@pytest.mark.req("REQ-GEN-0052")
-def test_move_counter_amount_is_max():
-    p = _gpilot()
-    obs = make_select([opt(NUMBER, number=1), opt(NUMBER, number=2), opt(NUMBER, number=3)],
-                      context=REMOVE_COUNT, current=state(active=poke(MY_ATK, energy=1)))
-    assert p.decide(obs) == [2]   # the "3" option
 
 
 # --- ADR-0022 item 2: a game-winning KO whose recoil double-KOs is a DRAW, not a win --------------

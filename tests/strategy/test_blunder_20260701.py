@@ -231,35 +231,3 @@ def test_energy_placeable_is_false_when_every_body_is_maxed():
     assert not maxed.energy_placeable
     building = pilot._board(make_select([opt(14)], current=state(active=poke(WINCON, energy=1, hp=170))))
     assert building.energy_placeable                            # 1 E < Nebula's 3
-
-
-@pytest.mark.req("REQ-GEN-0038")
-def test_benchless_agent_refreshes_over_a_redundant_wincon_tutor():
-    """Benchless with the Active fully powered: the held Water has no home, so
-    `attach-before-hand-shuffle` must not veto the bench-finding refresh."""
-    pilot = _pilot(deck=[WINCON] * 2 + [PREEVO] * 4 + [1] * 54)
-    play_lillies = opt(PLAY, area=HAND, index=0)
-    attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    play_signal = opt(PLAY, area=HAND, index=2)
-    # The opponent keeps a benched body so KO'ing their Active is NOT lethal, and prizes are not last.
-    benchless = state(active=poke(WINCON, energy=3, hp=170), bench=[], opp_bench=[poke(678, hp=330)],
-                      opp_active=poke(678, hp=180), hand=[LILLIES, WATER, MEGA_SIGNAL], prizes=5)
-    obs = make_select([play_lillies, attach_water, play_signal, attack_opt(NEBULA), opt(14)],
-                      current=benchless)
-    b = pilot._board(obs)
-    assert not b.energy_placeable and not b.wincon_base_deployable and b.wincon_in_play
-    traces = pilot.explain(obs).options
-    assert "attach-before-hand-shuffle" not in _fired(traces[0])   # held Water has no home -> no veto
-    assert "dont-tutor-the-held-wincon" in _fired(traces[2])       # Mega Signal digs a dead 2nd Mega
-    # A SEQUENCING claim: a lethal-class attack tops the RANKING, yet development still goes first.
-    assert _sequenced(pilot, obs)[0] == 0
-
-    # Control — a benched Staryu: the tutor is not redundant and the Energy IS placeable.
-    with_base = state(active=poke(WINCON, energy=3, hp=170), bench=[poke(PREEVO, energy=0, hp=70)],
-                      opp_active=poke(678, hp=180), hand=[LILLIES, WATER, MEGA_SIGNAL], prizes=5)
-    obs_b = make_select([play_lillies, attach_water, play_signal, attack_opt(NEBULA), opt(14)],
-                        current=with_base)
-    bb = pilot._board(obs_b)
-    assert bb.energy_placeable and bb.wincon_base_deployable
-    assert "dont-tutor-the-held-wincon" not in _fired(pilot.explain(obs_b).options[2])
-

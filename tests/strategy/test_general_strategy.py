@@ -17,6 +17,25 @@ def _fired(option_trace):
     return {h.id for h, _ in option_trace.fired}
 
 
+@pytest.mark.req("REQ-GEN-0063")
+def test_global_retirement_keeps_only_c10_guards_and_deck_local_rungs():
+    """Issue #459 globally keeps only C10 guards while deck-local third-deck rungs remain."""
+    # Do not import `agents.<deck>.strategy` directly: kaggle_environments exposes a conflicting
+    # top-level `agents` module in CI. The shipped builder is also the runtime wiring under test.
+    from train.tune import _build_pilot
+
+    lucario = _build_pilot("mega_lucario")[0].strategy
+    dragapult = _build_pilot("dragapult_ex")[0].strategy
+
+    assert {hypothesis.id for hypothesis in GENERAL_STRATEGY.hypotheses} == {
+        "dont-search-an-empty-deck",
+        "keep-a-startable-hand",
+        "honor-preferred-start",
+    }
+    assert lucario.hypotheses
+    assert dragapult.hypotheses
+
+
 # REQ-GEN-0001's `dig-before-commit` test went with the rung (Issue #386). Successors:
 # `tests/cards/test_card_functions_oracle.py` and `tests/strategy/test_fetch_doctrine.py`.
 
@@ -40,17 +59,6 @@ def test_the_empty_bench_guard_is_the_filter_and_no_longer_also_a_rung():
     assert pilot.decide(empty) == [1]        # the FILTER forces the body ahead of ending the turn
 
 
-@pytest.mark.req("REQ-GEN-0004")
-def test_attach_energy_last_defers_attachments_during_setup():
-    """`attach-energy-last` is a decide()-only ORDERING deferral, not a weight: the attach keeps its
-    full marginal and simply happens after the development that might reveal a better target."""
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  functions=CardFunctions({222: ["energy_accel"]}))
-    obs = make_select([opt(ATTACH), opt(PLAY, area=HAND, index=0)],
-                      current=state(hand=[222]))   # state() -> SETUP
-    obs["select"]["maxCount"] = 2
-    order = pilot.decide(obs)
-    assert order == [1, 0], "the free development no longer sequences ahead of the blind attach"
 
 
 # REQ-GEN-0005's `pre-position-attacker` test went with the rung (ADR-0086). Keeping the next
@@ -83,16 +91,6 @@ def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     assert pilot.decide(obs) == [1]   # attach to Bench successor, not doomed Active
 
 
-@pytest.mark.req("REQ-GEN-0010")
-def test_use_acceleration_prioritizes_an_energy_accel_card():
-    # Card tagged `energy_accel` multiplies your one manual attach — tempo-positive for any deck.
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                  functions=CardFunctions({222: ["energy_accel"]}))
-    # opt0 -> card 111 (untagged), opt1 -> card 222 (energy_accel): use-acceleration lifts opt1.
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                      current=state(hand=[111, 222]))
-    assert pilot.decide(obs) == [1]
-    assert "use-acceleration" in _fired(pilot.explain(obs).options[1])
 
 
 @pytest.mark.req("REQ-GEN-0008")
@@ -114,42 +112,8 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
     assert baseline.decide(mull) == [0]
 
 
-@pytest.mark.req("REQ-GEN-0056")
-def test_open_the_declared_starter_prefers_the_decks_ranked_opener_at_setup_active():
-    # Card-name-free: the ids live in Strategy.starter_priority and the trigger reads only the
-    # resolved board.top_starter_id. Shipped-agent behaviour: test_setup_active_placement.py.
-    ACCEL, PLAIN = 666, 700
-    pilot = Pilot(Strategy(starter_priority=[ACCEL, PLAIN]), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY)
-    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=SETUP_ACTIVE,
-                      current=state(hand=[PLAIN, ACCEL]))
-    assert pilot.decide(obs) == [1]                       # rank 1 beats rank 2
-    ranked, lower = pilot.explain(obs).options[1], pilot.explain(obs).options[0]
-    assert "open-the-declared-starter" in _fired(ranked)
-    assert "open-the-declared-starter" not in _fired(lower)   # only the top body PRESENT scores
-
-    # Reversing the DECLARATION reverses the pick; reversing the option order does not.
-    flipped = Pilot(Strategy(starter_priority=[PLAIN, ACCEL]), deck=[1] * 60,
-                    general_strategy=GENERAL_STRATEGY)
-    assert flipped.decide(obs) == [0]
-
-    # An undeclared deck is untouched — nothing fires, nothing scores.
-    bare = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    assert all(not _fired(o) for o in bare.explain(obs).options)
 
 
-@pytest.mark.req("REQ-GEN-0057")
-def test_use_acceleration_is_the_one_home_for_advancing_an_accel_piece():
-    """`use-acceleration` keys on the `energy_accel` FUNCTION TAG, not an `accel_source` ROLE — one
-    card fact, one home. A ROLE alone lifting a PLAY is the ruled disposition, not an oversight."""
-    pilot = Pilot(Strategy(roles={17: ["accel_source"]}), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY,
-                  functions=CardFunctions({17: ["energy_accel"]}))
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                      current=state(hand=[111, 17]))
-    assert pilot.decide(obs) == [1]
-    assert "use-acceleration" in _fired(pilot.explain(obs).options[1])
-    assert "advance-the-accel-pieces" not in _fired(pilot.explain(obs).options[0])  # role-keyed
 
 
 @pytest.mark.req("REQ-GEN-0062")
@@ -235,5 +199,3 @@ def _attach_hp_tool():
 
 # REQ-GEN-0024's two `deploy-hp-tool` silence tests went with the rung (Issue #386). The DECISION it
 # made — "this Tool would not save the body, so don't spend it" — has NO successor today.
-
-

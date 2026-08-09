@@ -34,14 +34,6 @@ def _fired_ids(option):
     return {h.id for h, _w in option.fired}
 
 
-@pytest.mark.req("REQ-GEN-0074")
-def test_f14_grabs_the_item_lock_opener_over_evolution_and_redundant_base():
-    """With an EMPTY Bench, a mid-Line evolution only stacks on the Active — the breadth stand-downs
-    collapse those grabs so the item-lock opener wins."""
-    fx = _fixture("dragapult_fetch_stranded_payoff_f14")
-    dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # [1] Budew
-    assert "develop-the-item-lock-opener" in _fired_ids(dec.options[fx["correct"][0]])
 
 
 @pytest.mark.req("REQ-GEN-0075")
@@ -63,16 +55,6 @@ def test_f32_retreats_to_wall_the_line_with_the_item_lock_disruptor():
     # SECOND cause, and the recorded reason is a seam-coverage gap. One xfail, one cause.
 
 
-@pytest.mark.req("REQ-GEN-0075")
-def test_f20_feeds_the_active_for_the_offensive_item_lock_maneuver():
-    """The opponent CANNOT damage us here, so this is OFFENSIVE disruption, not defensive walling: the
-    Energy goes to the Active so it can retreat into the item-lock body."""
-    fx = _fixture("dragapult_retreat_to_item_lock_f20")
-    pilot = _pilot("dragapult_ex")
-    pilot.disruptor_lock_maneuver = True
-    dec = pilot.explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # [0] active Dreepy (step 1 of the maneuver)
-    assert "feed-the-line-for-disruptor-lock" in _fired_ids(dec.options[fx["correct"][0]])
 
 
 def test_f20_inert_with_the_maneuver_flag_off():

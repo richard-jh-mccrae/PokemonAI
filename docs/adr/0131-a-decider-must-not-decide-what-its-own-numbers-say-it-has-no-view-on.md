@@ -164,3 +164,15 @@ gate — it fires on a measured tie, not on a threshold someone chose.
   falsifiable links.
 - Both ADR-0072 gates re-measured; **neither baseline re-captured**. Full record and every flip row:
   `docs/plans/issue-386-poc-t45-wave3-packet.md`.
+
+## Amendment — terminal outcomes (Issue #460)
+
+Terminal attack EV prices damage and riders; it is not a match-result oracle. A direct root attack
+that deterministically takes the last prizes without a recoil draw constrains candidate selection
+before scalar ordering, so chip or a bench rider cannot displace the game-winning attack.
+
+The same pre-selection boundary holds a gust that takes the same terminal payoff as a direct KO of
+an energized one-prize Active. It preserves the opponent's attached Energy while spending the
+Supporter, so it does not outrank the direct attack. The guard is deliberately narrow: it is not a
+general gust ranking. `tests/strategy/test_composer_s5_replays.py` replays both adjudicated states;
+the Mega Starmie corpus moved only those two selections.

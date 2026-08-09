@@ -53,16 +53,6 @@ def test_lillies_outranks_judge_by_the_swing_not_by_a_tiebreak():
     assert lillies.score - judge.score == pytest.approx(16.0)
 
 
-@pytest.mark.req("REQ-DISRUPT-0001")
-def test_the_swing_takes_the_frame_back_from_the_chain_opener():
-    """Petrel's `grab-the-chain-opener` (+15) still fires; what changed is that a refresh is no
-    longer capped beneath it by construction."""
-    dec = _pilot().explain(_record("86088989", 29).obs)
-    by_card = _by_card(dec)
-    petrel, lillies = by_card[PETREL], by_card[LILLIES]
-    assert lillies.score > petrel.score
-    assert any(h.id == "grab-the-chain-opener" for h, _ in petrel.fired)
-    assert dec.chosen and dec.options[dec.chosen[0]].card_id == LILLIES
 
 
 @pytest.mark.req("REQ-DISRUPT-0001")
@@ -71,15 +61,3 @@ def test_the_category_rung_is_retired_so_the_swing_cannot_double_count():
     underneath, or the two stack into an exact tie the option index then breaks."""
     from common.strategy.general_strategy import GENERAL_STRATEGY
     assert not any(h.id == "grab-a-draw-supporter-in-setup" for h in GENERAL_STRATEGY.hypotheses)
-
-
-@pytest.mark.req("REQ-DISRUPT-0001")
-def test_a_refresh_that_cannot_be_played_this_turn_is_halved_not_ignored():
-    """The grab adds only WHEN it can be cashed, through the shared `grading.halve(1)` convention
-    (ADR-0070 §6) rather than a rate invented here."""
-    rec = _record("85058574", 71)
-    dec = _pilot().explain(rec.obs)
-    by_card = _by_card(dec)
-    assert LILLIES in by_card, "f71 offers a Lillie's — the fixture changed"
-    assert by_card[LILLIES].score < 0.0        # −12 unplayable + halved swing, no flat band under it
-    assert dec.chosen and dec.options[dec.chosen[0]].card_id == 1142   # Fighting Gong

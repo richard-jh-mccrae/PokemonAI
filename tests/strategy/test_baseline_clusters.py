@@ -51,18 +51,8 @@ CLUSTERS = {
 }
 
 
-@pytest.mark.req("REQ-GEN-0025")
-@pytest.mark.parametrize("name", list(CLUSTERS))
-def test_each_baseline_cluster_owns_exactly_its_decision_context_rules(name):
-    hyps, expected = CLUSTERS[name]
-    assert _ids(hyps) == expected
 
 
-@pytest.mark.req("REQ-GEN-0025")
-def test_baseline_hypotheses_is_the_disjoint_union_of_the_clusters():
-    expected = set().union(*(ids for _, ids in CLUSTERS.values()))
-    assert _ids(BASELINE_HYPOTHESES) == expected
-    assert len(BASELINE_HYPOTHESES) == sum(len(ids) for _, ids in CLUSTERS.values())
 
 
 @pytest.mark.req("REQ-GEN-0025")
@@ -74,11 +64,6 @@ def test_general_strategy_assembles_baseline_plus_doctrines_with_no_loss_or_dup(
     assert len(ids) == len(set(ids))
 
 
-@pytest.mark.req("REQ-GEN-0025")
-def test_attach_before_hand_shuffle_stays_in_the_shuffle_doctrine_not_baseline_energy():
-    # Doctrine cohesion outranks the decision-context axis (ADR-0025).
-    assert "attach-before-hand-shuffle" in _ids(REFRESH_HYPOTHESES)
-    assert "attach-before-hand-shuffle" not in _ids(BASELINE_HYPOTHESES)
 
 
 def test_a_hypothesis_cannot_be_authored_silently_inert():

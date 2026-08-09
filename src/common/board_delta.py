@@ -102,6 +102,35 @@ def _replace_body(seat: dict, area: int, index: int, body: dict) -> None:
     seat[zone] = bodies
 
 
+def replace_body(seat: dict, area: int, index: int, body: dict) -> None:
+    """Public body replacement primitive for effect resolvers sharing this seam's shape checks."""
+    _replace_body(seat, area, index, body)
+
+
+def switch_active_with_bench(seat: dict, bench_index: int) -> None:
+    """Swap my Active with one occupied Bench slot; callers own allowance and condition writes."""
+    active = list(seat.get("active") or ())
+    bench = list(seat.get("bench") or ())
+    if not active or not active[0] or not isinstance(bench_index, int) \
+            or not 0 <= bench_index < len(bench) or not bench[bench_index]:
+        raise Unmodellable(f"switch names bench index {bench_index!r}, which is not an occupied slot")
+    active[0], bench[bench_index] = bench[bench_index], active[0]
+    seat["active"], seat["bench"] = active, bench
+
+
+def attach_energy_card(seat: dict, card: dict, *, area: int, index: int, combat) -> None:
+    """Attach one already-sourced Energy card without consuming the manual attachment allowance."""
+    target = _body_at(seat, area, index)
+    stat = _stat(combat, (card or {}).get("id"))
+    if target is None or stat is None or not stat.is_energy:
+        raise Unmodellable("an effect Energy attachment needs a readable Energy card and own body")
+    body = dict(target)
+    body["energyCards"] = list(body.get("energyCards") or ()) + [card]
+    body["energies"] = list(body_unit_codes(body)) + list(
+        _provided_units(combat, card.get("id"), holder_stat=_stat(combat, target.get("id"))))
+    _replace_body(seat, area, index, body)
+
+
 def take_from_hand(seat: dict, index, what: str) -> dict:
     """Remove and return my hand card at ``index``, resyncing ``handCount``. Raises
     :class:`Unmodellable` rather than `IndexError`, which would forfeit the grader match."""
@@ -419,19 +448,15 @@ def _attach(obs, option, *, seat_index, combat) -> Delta:
     return Delta(obs=new_obs, writes=frozenset(writes))
 
 
-def _evolve(obs, option, *, seat_index, combat) -> Delta:
-    """The Evolution card from hand REPLACES the body in play, keeping attached cards and damage and
-    clearing conditions (`docs/rules.md` §4). Damage carries as a DELTA — the maximum changed."""
-    new_obs, current, players = fork(obs)
-    me = fork_player(players, seat_index)
-    card = take_from_hand(me, option.get("index"), "evolve")
+def evolve_body(current: dict, seat: dict, card: dict, *, area: int, index: int, seat_index: int,
+                combat) -> frozenset[str]:
+    """Replace an own body with an already-sourced Evolution card, returning exact writes."""
     stat = _stat(combat, card.get("id"))
     if stat is None or not stat.hp:
         raise Unmodellable(f"{card.get('id')}: no `CardStat` HP for the Evolution card, so the "
                            f"evolved body's maximum is unknown")
 
-    area, index = option.get("inPlayArea"), option.get("inPlayIndex")
-    target = _body_at(me, area, index)
+    target = _body_at(seat, area, index)
     if target is None:
         raise Unmodellable(f"evolve names ({area!r}, {index!r}), which is not a body on my board")
 
@@ -473,16 +498,27 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         "tools": tools,
         "preEvolution": list(target.get("preEvolution") or ()) + [_card_ref(target, seat_index)],
     }
-    _replace_body(me, area, index, body)
+    _replace_body(seat, area, index, body)
     # `new_in_play` unconditionally: §4 forbids evolving a body the turn it was played, so the bit
     # necessarily flips.
     writes = {"my_hand_ids", "bodies_in_play", "new_in_play"}
     if stadium_delta:
         # `damage_counters` homes the HP read. NON-ZERO only: a clause priced at 0 assigned nothing.
         writes.add("damage_counters")
-    if area == AREA_ACTIVE and clear_conditions(me):
+    if area == AREA_ACTIVE and clear_conditions(seat):
         writes.add("special_conditions")
-    return Delta(obs=new_obs, writes=frozenset(writes))
+    return frozenset(writes)
+
+
+def _evolve(obs, option, *, seat_index, combat) -> Delta:
+    """The Evolution card from hand REPLACES the body in play, keeping attached cards and damage and
+    clearing conditions (`docs/rules.md` §4). Damage carries as a DELTA — the maximum changed."""
+    new_obs, current, players = fork(obs)
+    me = fork_player(players, seat_index)
+    card = take_from_hand(me, option.get("index"), "evolve")
+    writes = evolve_body(current, me, card, area=option.get("inPlayArea"),
+                          index=option.get("inPlayIndex"), seat_index=seat_index, combat=combat)
+    return Delta(obs=new_obs, writes=writes)
 
 
 def _retreat(obs, option, *, seat_index, combat) -> Delta:
@@ -597,4 +633,5 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
 
 __all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition",
            "fork", "fork_player", "take_from_hand", "card_clauses",
-           "clear_conditions", "units_for_cards")
+           "clear_conditions", "units_for_cards", "replace_body", "switch_active_with_bench", "attach_energy_card",
+           "evolve_body")

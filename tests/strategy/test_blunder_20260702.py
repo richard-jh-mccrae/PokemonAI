@@ -100,20 +100,6 @@ def test_salvatore_stands_down_when_its_evolution_is_gone_from_the_deck():
     assert pilot.decide(obs) == [1]                       # End beats guaranteed-whiff Salvatore
 
 
-@pytest.mark.req("REQ-GEN-0032")
-def test_salvatore_is_endorsed_while_a_copy_could_still_be_in_the_deck():
-    # Only 2 of 3 Mega ex accounted; 3rd could sit in the 6 hidden prizes -> NOT a certain whiff.
-    # Rush-evolve tutor keeps its endorsement (sound: never suppress a plausibly-present target).
-    pilot = _pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
-    play_salv = opt(PLAY, area=HAND, index=0)
-    maybe = state(active=poke(PREEVO, hp=70), bench=[poke(PREEVO, hp=70)],
-                  discard=[WINCON, WINCON], hand=[SALVATORE], prizes=6)
-    obs = make_select([play_salv, opt(END)], current=maybe)
-    c = _ctx(pilot, obs, 0)
-    assert not c.search_targets_exhausted
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "dont-search-an-empty-deck" not in fired
-    assert "prefer-rush-evolve-tutor" in fired            # reachable target -> still preferred
 
 
 # ---------------------------------------------------------------- own_prizes str-key coercion (JSON obs)
@@ -142,4 +128,3 @@ def test_cardstat_has_ability_is_set_from_engine_skills():
     assert cinderace is not None and cinderace.hasAbility is True    # Cinderace — Explosiveness
     assert stats.get(1031).hasAbility is False                       # Mega Starmie ex — no Ability
     assert stats.get(1030).hasAbility is False                       # Staryu — a Basic, no Ability
-

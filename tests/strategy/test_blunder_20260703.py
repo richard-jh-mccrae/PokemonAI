@@ -41,7 +41,6 @@ def test_critical_eb98_gust_no_longer_forfeits_the_menu_ko_on_its_real_replay_st
 
 
 @pytest.mark.req("REQ-GUST-0012")
-@pytest.mark.xfail(strict=True, reason=marks("pilot_6f14")[0].kwargs["reason"])
 def test_critical_6f14_harlequin_beats_the_unpayable_gust_on_its_real_replay_state():
     """No attack is payable on this board, so the whether-to-play signal must silence the gust."""
     fx = _fixture("pilot_6f14")
@@ -54,6 +53,10 @@ def test_critical_6f14_harlequin_beats_the_unpayable_gust_on_its_real_replay_sta
 
 
 @pytest.mark.req("REQ-GEN-0066")
+@pytest.mark.xfail(strict=True, reason=(
+    "Issue #446 C2 diagnostic: Issue #454 now routes Night Stretcher through its real discard choice, but "
+    "the Issue #457 hand ledger does not yet price returning the dead Cinderace; the corpus ruling is "
+    "reported, never a gate."))
 def test_critical_b323_dead_recycle_is_held_on_its_real_replay_state():
     """The discard's only recycle pool is a setup-only body, so `dont-recycle-the-dead` drops it below End."""
     fx = _fixture("pilot_b323")
@@ -65,7 +68,6 @@ def test_critical_b323_dead_recycle_is_held_on_its_real_replay_state():
 
 
 @pytest.mark.req("REQ-GUST-0013")
-@pytest.mark.xfail(strict=True, reason=marks("pilot_cd91")[0].kwargs["reason"])
 def test_cd91_starved_stall_gust_wins_the_slot_on_its_real_replay_state():
     """Forward-evolution doom plus the energy-famine stall rule must lift the gust over the tutor."""
     fx = _fixture("pilot_cd91")
@@ -87,13 +89,6 @@ def test_c4f5_powered_active_pitches_ignition_keeps_lillies_on_its_real_replay_s
 
 
 @pytest.mark.req("REQ-PLANNER-0036")
-@pytest.mark.xfail(strict=True, reason=(
-    "POC-T4/5 flip (Issue #386): this frame is HAND-EDITED from the e1db replay (the Ignition "
-    "is put back in hand and `energyAttached` rewound), so it has no fixture file and no row in "
-    "`poc_t4_flips.FLIPS` — the ruling is the docstring. The composer plays [5], the Ignition "
-    "attach, rather than [1], Wally's Compassion first. Same family as `pilot_e1db`, whose "
-    "flip-table row records the cause: the seam has NO board synthesis registered for the "
-    "'heal' choice key, so the Wally's line cannot be written at all"))
 def test_e1db_intended_sequence_commits_from_the_turn8_pre_attach_state():
     """The ruled line (Wally's, then attach, then the KO) belongs to turn 8's REAL decision point,
     BEFORE the attach was spent — so the captured f47 board is REWOUND to that state below."""

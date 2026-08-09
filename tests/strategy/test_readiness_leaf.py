@@ -99,16 +99,14 @@ def test_the_active_slot_worth_gap_is_still_DECLARED_by_the_successor_family():
 
 
 # --- the line account (spend / ability-fire), reusing the live tuned weights ----------------------
+
 @pytest.mark.req("REQ-PLANNER-0011")
-def test_line_account_credits_ability_fire_and_subtracts_spend():
-    """A fired ability-USE rule adds its positive weight, a fired spend rule subtracts its magnitude,
-    a rule in neither set is ignored. Every id here must be a LIVE member — `_Hyp` accepts any string."""
+def test_line_account_credits_retained_ability_fire_and_c10_spend():
+    """A retained Lunar Cycle fire is positive; the surviving impossible-search guard is negative."""
     p = _pilot()
-    traces = [
-        _Trace([(_Hyp("fire-lunar-cycle"), 15.0)]),                 # ability fire → +15
-        _Trace([(_Hyp("dont-rush-evolve-without-target"), -60.0)]),  # spend → -60
-        _Trace([(_Hyp("attach-before-hand-shuffle"), 15.0)]),       # LIVE, in neither set → 0
-    ]
+    traces = [_Trace([(_Hyp("fire-lunar-cycle"), 15.0)]),
+              _Trace([(_Hyp("dont-search-an-empty-deck"), -60.0)]),
+              _Trace([(_Hyp("grab-lunar-cycle-fuel"), 8.0)])]
     assert p._line_account(traces, [0]) == 15.0
     assert p._line_account(traces, [1]) == -60.0
     assert p._line_account(traces, [2]) == 0.0
@@ -125,16 +123,3 @@ def test_line_account_subtracts_the_attach_deciders_evaporation_spend():
     assert p._line_account(traces, [0]) == 0.0
     assert p._line_account(traces, [1]) == -30.0
     assert p._line_account(traces, [0, 1]) == -30.0
-
-
-@pytest.mark.req("REQ-PLANNER-0011")
-def test_line_account_ignores_wrong_sign():
-    """Only NEGATIVE spend weights and POSITIVE ability-fire weights count. Both legs must name ids
-    that ARE members, or the zero is attributable to the SET rather than to the sign (ADR-0132)."""
-    p = _pilot()
-    from common.strategy.planner import _ABILITY_FIRE_IDS, _CLASS_B_SPEND_IDS
-    assert "dont-search-a-probable-whiff" in _CLASS_B_SPEND_IDS      # the premise, not decoration
-    assert "fire-lunar-cycle" in _ABILITY_FIRE_IDS
-    traces = [_Trace([(_Hyp("dont-search-a-probable-whiff"), 5.0),   # positive spend-id → ignored
-                      (_Hyp("fire-lunar-cycle"), -3.0)])]            # negative ability-id → ignored
-    assert p._line_account(traces, [0]) == 0.0

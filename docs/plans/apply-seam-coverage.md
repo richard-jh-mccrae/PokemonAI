@@ -131,24 +131,24 @@ Pool: **383 distinct cards** — 5 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 5 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 316 | 76.7% | 271 | 90.3% | 51.5 |
-| **engine-resolved** | 46 | 11.2% | 18 | 6.0% | 5.8 |
-| **refused** | 50 | 12.1% | 32 | 10.7% | 5.1 |
+| **modelled** | 322 | 78.2% | 291 | 97.0% | 53.6 |
+| **engine-resolved** | 43 | 10.4% | 11 | 3.7% | 4.4 |
+| **refused** | 47 | 11.4% | 19 | 6.3% | 4.4 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 316 | 76.7% | modelled 316 |
-| **modelled-partial** | 13 | 3.2% | engine-resolved 3, refused 10 |
+| **modelled-full** | 322 | 78.2% | modelled 322 |
+| **modelled-partial** | 10 | 2.4% | engine-resolved 3, refused 7 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 5 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 287 | 74.9% | 250 | 83.3% | 49.1 | 81.8% |
-| **engine-resolved** | 43 | 11.2% | 18 | 6.0% | 5.8 | 9.7% |
-| **modelled-partial** | 13 | 3.4% | 16 | 5.3% | 1.9 | 3.1% |
+| **modelled-full** | 293 | 76.5% | 270 | 90.0% | 51.2 | 85.4% |
+| **engine-resolved** | 40 | 10.4% | 11 | 3.7% | 4.4 | 7.3% |
+| **modelled-partial** | 10 | 2.6% | 3 | 1.0% | 1.2 | 2.0% |
 | **refused** | 40 | 10.4% | 16 | 5.3% | 3.2 | 5.4% |
 
 ### Headline — effect-bearing sites only
@@ -157,27 +157,24 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 72 | 42.9% |
-| **engine-resolved** | 46 | 27.4% |
-| **refused** | 50 | 29.8% |
+| **modelled** | 78 | 46.4% |
+| **engine-resolved** | 43 | 25.6% |
+| **refused** | 47 | 28.0% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 72 | 42.9% |
-| **modelled-partial** | 13 | 7.7% |
+| **modelled-full** | 78 | 46.4% |
+| **modelled-partial** | 10 | 6.0% |
 
 ### REFUSED, grouped by cause and ranked by exposure
 
-#### clause-vocabulary gap — 28 sites, 25 copies across our 5 decks
+#### clause-vocabulary gap — 25 sites, 12 copies across our 5 decks
 
 | id | card | site | our copies | meta copies | effect family | deterministic-shaped | note |
 |---|---|---|---|---|---|---|---|
-| 1120 | Crushing Hammer | play | 8 | 0.54 | energy denial — remove Energy from their body |  | the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition |
 | 1188 | Ciphermaniac’s Codebreaking | play | 4 | 0.00 | fetch / search / recover |  |  |
 | 1248 | Academy at Night | play | 4 | 0.00 | hand disruption — their hand |  |  |
 | 1080 | Unfair Stamp | play | 3 | 0.11 | hand disruption — their hand |  | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
-| 1213 | Judge | play | 3 | 0.06 | hand disruption — their hand |  | the OWN leg is now exact — shuffle my hand in, draw 4 — but the card is SYMMETRIC, and the opponent's identical shuffle-and-redraw-4 is the entire reason to play it. Pricing their hand needs a `state_value` term the POC does not have |
-| 1223 | Harlequin | play | 2 | 0.09 | hand disruption — their hand |  | the own leg now carries both coin branches (5 heads / 3 tails) and the both-hands shuffle, but a coin stated as two certainties is still not an `Expectation` (1120 Crushing Hammer's ruling), and the opponent's mirrored 3/5 redraw is unmodelled |
 | 1201 | Briar | play | 1 | 0.00 | prize manipulation |  |  |
 | 742 | Kadabra | evolve | 0 | 0.86 | draw |  |  |
 | 743 | Alakazam | evolve | 0 | 0.86 | draw |  |  |
@@ -246,8 +243,7 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 
 | effect family | clause vocabulary | sites | our copies | meta copies |
 |---|---|---|---|---|
-| hand disruption — their hand | **NEW** | 8 | 12 | 0.34 |
-| energy denial — remove Energy from their body | **NEW** | 1 | 8 | 0.54 |
+| hand disruption — their hand | **NEW** | 6 | 7 | 0.20 |
 | fetch / search / recover | existing | 6 | 4 | 1.05 |
 | prize manipulation | **NEW** | 4 | 1 | 0.18 |
 | draw | existing | 3 | 0 | 1.93 |
@@ -261,11 +257,11 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | gap shape | sites | our copies | meta copies | what it needs |
 |---|---|---|---|---|
 | deterministic-shaped (no RNG / hidden-zone marker) | 0 | 0 | 0.0 | **emptied by Issue #299** — a deterministic-shaped option on any declared non-terminal kind now reaches the engine route, so it is an ENGINE-RESOLVED candidate above rather than a refusal here |
-| RNG-shaped (shuffle / deck read / coin) | 28 | 25 | 4.6 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
+| RNG-shaped (shuffle / deck read / coin) | 25 | 12 | 3.9 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
 
 The first row is **expected to be empty** and its emptiness is the measurement, not an omission: it is the exact set Issue #299's ruling moved. A non-zero count here would mean a deterministic-shaped option is still being refused on a MODELLED kind, which the ruling says cannot happen — so read it as a live check on the routing rather than as a backlog.
 
-**18 of 28** gap sites need vocabulary that does not exist yet; 10 need only a compendium entry in an existing kind.
+**15 of 25** gap sites need vocabulary that does not exist yet; 10 need only a compendium entry in an existing kind.
 
 ### Win-plan critical path
 
@@ -273,28 +269,19 @@ A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship n
 
 | id | card | site | class | named by | our copies |
 |---|---|---|---|---|---|
-| 1120 | Crushing Hammer | play | modelled-partial | dragapult_ex, mega_starmie | 8 |
-| 1141 | Premium Power Pro | play | engine-resolved | mega_lucario | 4 |
 | 1080 | Unfair Stamp | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
-| 1213 | Judge | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 112 | Munkidori | ability: Adrena-Brain | engine-resolved | dragapult_ex | 2 |
-| 1123 | Switch | play | engine-resolved | mega_lucario | 2 |
-| 1223 | Harlequin | play | modelled-partial | mega_starmie | 2 |
-| 1211 | Black Belt’s Training | play | engine-resolved | mega_lucario | 1 |
 
 ### ENGINE-RESOLVED — the modelling backlog
 
-46 sites, 18 copies across our 5 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
+43 sites, 11 copies across our 5 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
 
 | id | card | site | our copies | meta copies |
 |---|---|---|---|---|
-| 1141 | Premium Power Pro | play | 4 | 0.88 |
 | 1261 | Forest of Vitality | play | 4 | 0.02 |
 | 9 | Boomerang Energy | attach | 3 | 0.00 |
-| 1123 | Switch | play | 2 | 0.55 |
 | 112 | Munkidori | ability: Adrena-Brain | 2 | 0.01 |
 | 150 | Hydrapple ex | ability: Ripening Charge | 2 | 0.00 |
-| 1211 | Black Belt’s Training | play | 1 | 0.04 |
 | 1079 | Rare Candy | play | 0 | 1.08 |
 | 11 | Mist Energy | attach | 0 | 1.02 |
 | 1081 | Enhanced Hammer | play | 0 | 0.89 |
@@ -337,14 +324,11 @@ A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship n
 
 ### MODELLED-PARTIAL — clause sets that cover only part of the card
 
-13 sites, 16 copies across our 5 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (3), **refused** (10). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
+10 sites, 3 copies across our 5 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (3), **refused** (7). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
 
 | id | card | fate now | our copies | meta copies | what the clauses miss |
 |---|---|---|---|---|---|
-| 1120 | Crushing Hammer | refused | 8 | 0.54 | the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition |
 | 1080 | Unfair Stamp | refused | 3 | 0.11 | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
-| 1213 | Judge | refused | 3 | 0.06 | the OWN leg is now exact — shuffle my hand in, draw 4 — but the card is SYMMETRIC, and the opponent's identical shuffle-and-redraw-4 is the entire reason to play it. Pricing their hand needs a `state_value` term the POC does not have |
-| 1223 | Harlequin | refused | 2 | 0.09 | the own leg now carries both coin branches (5 heads / 3 tails) and the both-hands shuffle, but a coin stated as two certainties is still not an `Expectation` (1120 Crushing Hammer's ruling), and the opponent's mirrored 3/5 redraw is unmodelled |
 | 1115 | Hop’s Bag | refused | 0 | 0.66 | the Hop's NAME family is recorded and UNDECIDED — no build-time family index exists, so the clause deliberately reaches nothing rather than over-claiming every Basic |
 | 1134 | Team Rocket's Transceiver | refused | 0 | 0.28 | the "Team Rocket" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed |
 | 1220 | Team Rocket's Proton | refused | 0 | 0.06 | the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry |
@@ -388,11 +372,11 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 52 | 6 | 2 | 0 | 10.0% |
+| dragapult_ex | 57 | 1 | 2 | 0 | 1.7% |
 | hydrapple | 48 | 1 | 6 | 5 | 10.0% |
-| mega_lucario | 51 | 3 | 6 | 0 | 5.0% |
-| mega_starmie | 54 | 6 | 0 | 0 | 10.0% |
-| slowking | 45 | 0 | 4 | 11 | 18.3% |
+| mega_lucario | 59 | 1 | 0 | 0 | 1.7% |
+| mega_starmie | 60 | 0 | 0 | 0 | 0.0% |
+| slowking | 46 | 0 | 3 | 11 | 18.3% |
 
 ### Clause write-set health (`snapshot_coverage`)
 
@@ -411,8 +395,9 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | stadium_static | 5 | declared EMPTY |
 | discard_3 | 4 | yes |
 | discard_hand | 4 | yes |
+| self_switch | 4 | yes |
+| damage_boost | 3 | declared EMPTY |
 | discard_1 | 3 | yes |
-| self_switch | 3 | yes |
 | shuffle_both_hands | 3 | yes |
 | coin | 2 | declared EMPTY |
 | energy_provide | 2 | yes |
@@ -422,7 +407,6 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | bottom_2 | 1 | yes |
 | bounce_energy_to_hand | 1 | yes |
 | confuse_target | 1 | yes |
-| damage_boost | 1 | declared EMPTY |
 | damage_counters | 1 | yes |
 | damage_reduction | 1 | declared EMPTY |
 | discard_2 | 1 | yes |

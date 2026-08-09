@@ -597,3 +597,12 @@ are rounded to, so nothing the leaf can express is swallowed.
 Lab calls `_engine_leaf_value` per option rather than through the rung. A green Decision Gate is
 therefore silent about the rung's canonicalisation — that rests on unit coverage in
 `tests/strategy/test_develop_rollout_rung.py`, not on either gate.
+
+**Seeded Continuation**:
+A recorded native select paired with its seed-bearing observation and immediate recorded successor.
+`tools/train/continuation_parity.py` resolves the pair by replay digest + step + observation digest,
+then a trace digest, exact frame digest, and next-frame digest — never a trace ordinal, neighbouring
+frame, or option shape. Native reconstruction seeds hidden zones from the paired native god frame;
+broken provenance and unavailable engine reconstruction remain diagnostic refusals, never invented
+effect transitions or corpus gates. The nine committed contexts live in
+`tests/fixtures/continuation_parity/` (Issue #465).

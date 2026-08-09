@@ -27,11 +27,8 @@ PINS = {
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
-    "82228640-9": "recovered from the 40 dropped records — the agent already makes the human pick",
     # discard-pair valuation (sets, not sums; role floors)
-    "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
-    # These five record a SINGLE flagged discard for a 2-card forced pitch, so they are `correct ⊆
-    # chosen` cases — a 1-index `correct` can never equal a 2-index pick.
+    # Five cases flag one card in a forced two-card pitch, so their one-index `correct` is a subset of `chosen`.
     "82525101-14": "dp: never Ultra-Ball away the Ignition burst — pitch the duplicate Wally's (⊆)",
     "82749656-20": "dp: keep the ACE SPEC Hero's Cape — give back the redundant Salvatore (⊆)",
     "83686860-18": "dp: don't pitch BOTH Dreepy — one line survives; Judge goes instead (⊆)",
@@ -46,23 +43,19 @@ PINS = {
                    "TARGET by the tutor-chain grab-value build)",
     "83686860-33": "ft: fetch Munkidori over a redundant Drakloak",
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
-    "81903490-8":  "ft: Ultra Ball hunts the Mega Starmie ex wincon",
     # whether-to-play / hold the fetch (deadline + whiff)
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
-    # 83967841-17 and 85163634-17 MOVED to `POC_T4_FLIPS` on 2026-08-07 (the `shed` wiring gave the
-    # composer its first opinion about a costed search, and it plays the Ultra Ball on both).
-    "85164605-64": "hold: attack (Jetting Blow KO) — the graded refresh shed drops the costly-hand "
-                   "Lillie's below tier-0, freeing the lethal (promoted from a TARGET by ADR-0065)",
+    # Costed-search POC: 83967841-17/85163634-17 moved; composer plays Ultra Ball on both.
     # shuffle timing & keep-value (the refresh side)
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
-    "83686860-13": "keep: don't refresh a live hand — end the turn",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
     # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
     # scoring the whole TURN.
     "82525741-78": "poffin: don't play a fetch whose target class is exhausted",
     "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
-                    "Ultra Ball fodder",
+                   "Ultra Ball fodder",
+    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle (promoted by Issue #455)",
 }
 TARGETS = {
     # `86091435-68` was REFUTED-AS-LABELED (reviewed.json); its surviving substance rides as
@@ -70,16 +63,21 @@ TARGETS = {
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
 }
+S5_REJECTED_GUSTS = {
+    "85164605-64": (1, 1182, {742, 65, 741}, 5, "Boss's Orders trades away the energized active "
+                                              "Kadabra; Jetting Blow takes its active KO instead"),
+}
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
 POC_T4_FLIPS = {
+    "83686860-13": "keep: don't refresh a live hand — end the turn (moved by Issue #456's scalar "
+                   "refresh valuation; pending human re-adjudication)",
     "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
     "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
                    "covering an irreplaceable Active takes an insurance slot at its full tier "
                    "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
                    "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
-    "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle",
     "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
     "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
     # Filed by the `shed` WIRING, not the swap: before it, every costed search REFUSED unpriced and
@@ -88,6 +86,13 @@ POC_T4_FLIPS = {
                    "search is priced for the first time",
     "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
                    "same cause as 83967841-17",
+}
+# Issue #459 retires shared valuations from every runtime.
+# Strict xfail preserves the immutable corpus label and makes composer recovery reviewable.
+ISSUE_459_GLOBAL_RUNTIME_FLIPS = {
+    "82228640-9": "recovered from the 40 dropped records — global shared setup valuation retired",
+    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex — global shared fetch valuation retired",
+    "85045840-14": "dp: keep Dragapult ex — global shared discard valuation retired",
 }
 # The tagged blunder is DEAD but strict `correct`-equality cannot hold: the residue is a DIFFERENT,
 # separately adjudicated line. Assert only the substance.
@@ -183,6 +188,16 @@ def _replay_picks_correct(cid: str) -> bool:
     return _matches_up_to_interchangeability(rec.obs, chosen, correct)
 
 
+def _expanded_deferred(rec, index):
+    from common import apply_option as ao
+    pilot = _pilot(rec.agent)
+    my_index = int((rec.obs.get("current") or {}).get("yourIndex") or 0)
+    model = pilot._leaf_state_model(rec.obs, my_index)
+    return ao.apply_option(model, rec.obs["select"]["option"][index],
+                           expand_deferred_targets=True,
+                           search_api=getattr(pilot, "_search_api", None))
+
+
 def _param(cid, reason, *, xfail):
     marks = (pytest.mark.xfail(reason=reason, strict=True),) if xfail else ()
     return pytest.param(cid, id=cid, marks=marks)
@@ -190,7 +205,8 @@ def _param(cid, reason, *, xfail):
 
 _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
           + [_param(c, r, xfail=True) for c, r in TARGETS.items()]
-          + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()])
+          + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()]
+          + [_param(c, r, xfail=True) for c, r in ISSUE_459_GLOBAL_RUNTIME_FLIPS.items()])
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
@@ -200,6 +216,29 @@ def test_correction_ranks_the_human_pick_top(cid):
     assert _replay_picks_correct(cid), (
         f"{cid}: expected {_record(cid).correct_label!r}, "
         f"got {_record(cid).chosen_label!r}")
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
+@pytest.mark.parametrize("cid,gust_index,gust_card,expected_targets,direct_index,_why", [
+    pytest.param(cid, index, card, targets, direct, why, id=cid)
+    for cid, (index, card, targets, direct, why) in S5_REJECTED_GUSTS.items()
+])
+def test_s5_rejected_gust_keeps_its_target_coverage_but_not_the_turn(
+        cid, gust_index, gust_card, expected_targets, direct_index, _why):
+    """The legal gust remains expanded; it cannot displace the approved direct terminal attack."""
+    rec = _record(cid)
+    d = _pilot(rec.agent).explain(rec.obs)
+    assert rec.correct == [5], "the original Jetting Blow correction is retained as audit history"
+    choice = _expanded_deferred(rec, gust_index)
+    from common import apply_option as ao
+    from corpus_helpers import opponent_active_ids
+    assert isinstance(choice, ao.Expectation)
+    assert len(choice.classes) == len(expected_targets)
+    assert opponent_active_ids(choice) == expected_targets
+    assert d.chosen == [direct_index]
+    assert d.options[gust_index].card_id == gust_card
+    assert d.composer and d.composer["first_index"] == direct_index
+    assert d.composer["margin"]["chosen_delta"] > 0.0
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

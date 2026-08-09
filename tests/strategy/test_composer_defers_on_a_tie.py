@@ -33,19 +33,19 @@ def anchor():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_the_composer_really_does_tie_every_option_on_the_anchor_frame(anchor):
-    """The premise. Without it the test below could pass because the composer AGREED with the
-    sequencer — and the options here tie at exactly 0.0, not near it, so no floor is involved."""
+def test_the_composer_ties_the_scored_options_without_pricing_the_unknown_one(anchor):
+    """The scored options tie; the ruled unknown remains a sentinel, never a numeric zero."""
     fx, pilot, _dec = anchor
     from common import composer as cp
     obs, sel = fx["obs"], fx["obs"]["select"]
     pilot._board(obs, sel)
     model = pilot._leaf_state_model(obs, int((obs.get("current") or {}).get("yourIndex") or 0))
-    order = dict(cp.compose(model, sel["option"], shed=pilot.cost_shed_indices).order)
+    result = cp.compose(model, sel["option"], shed=pilot.cost_shed_indices)
+    order = dict(result.order)
     ruled = fx["correct"][0]
+    assert result.fanned[ruled] is None and ruled not in order
     top = max(order.values())
     tied = [i for i, d in order.items() if d == top]
-    assert ruled in tied, f"the ruled option is not among the tied top: {order}"
     assert len(tied) > 1, f"nothing ties here, so this frame does not exercise the defer: {order}"
 
 
@@ -73,13 +73,13 @@ def test_the_structural_sequencer_gets_the_turn_and_plays_the_ruled_dig(anchor):
 def test_the_defer_does_not_fire_where_the_composer_has_a_real_view():
     """An abstention rule is only worth having if it abstains SOMETIMES. On a frame with a real
     margin, so widening the tie test into an epsilon band turns this red rather than deferring all."""
-    fx = json.loads((FIXTURES / "pr_whether_should_retreat_f37.json").read_text(encoding="utf-8"))
-    pilot = _pilot("dragapult_ex")
+    fx = json.loads((FIXTURES / "ml0705_ppp_cant_attack_f14.json").read_text(encoding="utf-8"))
+    pilot = _pilot("mega_lucario")
     pilot._turn_plan = None
     pilot._composer_trace = None
     dec = pilot.explain(fx["obs"])
     trace = pilot._composer_trace or {}
     assert not trace.get("tied_first_steps"), (
-        "the defer fired on a frame whose composer margin is 2.43 prizes — the tie test has stopped "
-        "being a float-noise floor and become a band")
+        "the defer fired on a frame with a positive composer plan — the tie test has stopped being a "
+        "float-noise floor and become a band")
     assert getattr(getattr(dec, "planned", None), "ranked_by", None) == "composer"

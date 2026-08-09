@@ -68,77 +68,11 @@ def test_a_dead_hand_refresh_is_still_played_over_end():
 
 
 # --- a live tutor is sequenced before the refresh (tier 2 vs tier 3) --------------------------------
-@pytest.mark.req("REQ-GEN-0044")
-def test_a_playable_tutor_is_played_before_the_refresh():
-    """`_finish_turn_last` tiers the costly search (tier 2) before the hand-nuking shuffle (tier 3),
-    so the tutor plays first regardless of raw scores."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), ULTRA: CardStat(ULTRA, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, synthetic=True, hp=70), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
-    _fm = {LILLIES: ["draw", "shuffle_hand"], ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
-    funcs = CardFunctions(_fm)
-    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
-                  stats=stats, functions=funcs, effects=fetch_effects(_fm))
-    obs = make_select([opt(PLAY, index=0), opt(PLAY, index=1), opt(END)], context=MAIN,
-                      current=state(active=poke(PLAINMON, energy=1), bench=[poke(701)],
-                                    hand=[LILLIES, ULTRA]))
-    assert "fetch-when-it-fills-a-need" in _fired(pilot.explain(obs).options[1])
-    # A SEQUENCING claim, so it is asserted at the sequencer: the ladder's RANKING no longer puts
-    # the tutor top, and the tiering is what "regardless of raw scores" means.
-    assert _sequenced(pilot, obs)[0] == 1                                # play the tutor, not the refresh
 
 
 # --- dont-refresh-into-a-probable-miss also owns K=0: a provably-spent deck, post-anchor -----------
-@pytest.mark.req("REQ-GEN-0066")
-def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
-    """The K=0 case (ADR-0024 amendment): post-anchor the deck provably holds NOTHING I lack, so the
-    refresh is churn. The broader PRE-anchor veto was A/B-refuted and deleted."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
-    funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
-    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    deck = [WINC, PLAINMON, LILLIES] + [FILLER2] * 27
-    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    # wincon Active (need met), anchor -> deck = pure statless FILLER: K=0, P(hit)=0.
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
-                      current=state(active=poke(WINC, energy=3),
-                                    bench=[poke(PLAINMON), poke(FILLER2)], hand=[LILLIES],
-                                    prizes=6, deck_count=20))
-    obs["own_prizes"] = {FILLER2: 6}
-    trace = pilot.explain(obs).options[0]
-    assert "dont-refresh-into-a-probable-miss" in _fired(trace)
-    assert trace.score < 0
-    assert pilot.decide(obs) == [1]                                   # End — don't churn a spent deck
 
 
-@pytest.mark.req("REQ-GEN-0066")
-def test_disruption_value_survives_the_probable_miss_veto():
-    """The veto is deliberately CLEARABLE. The stand-in attacker must carry a real `handSizeDamage`
-    and the opponent a hand worth shrinking, or there is no disruption value to survive it."""
-    HSATK = 640
-    stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90),
-                                  HSATK: CardStat(HSATK, synthetic=True, hp=90, handSizeDamage=20)})
-    funcs = CardFunctions({JUDGE: ["draw", "hand_disruption", "shuffle_hand"],
-                           HSATK: ["hand_size_attacker"]})
-    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
-    deck = [WINC, PLAINMON, JUDGE] + [FILLER2] * 27
-    pilot = Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([opt(PLAY, index=0), opt(END)], context=MAIN,
-                      current=state(active=poke(WINC, energy=3),
-                                    bench=[poke(PLAINMON), poke(FILLER2)], hand=[JUDGE],
-                                    prizes=6, deck_count=20, opp_active=poke(HSATK),
-                                    opp_hand_count=8))   # a hand worth shrinking (see docstring)
-    obs["own_prizes"] = {FILLER2: 6}
-    trace = pilot.explain(obs).options[0]
-    assert "dont-refresh-into-a-probable-miss" in _fired(trace)       # my pull IS dead
-    assert "play-harlequin-vs-hand-size" not in _fired(trace)         # RETIRED (ADR-0102) — the
-    assert trace.score > 0                                            # disruption value is now the
-    #                                                                   priced survival, in `tactical`
-    assert _ranked(pilot, obs)[0][0] == 0                                   # played as disruption
 
 
 # --- dont-refresh-into-a-probable-miss (Layer B, post-anchor): the N-card draw likely whiffs -------
@@ -164,28 +98,8 @@ def _anchored_refresh_pilot(refresh_id, refresh_tags, *, opp_prizes=0):
     return pilot, obs
 
 
-@pytest.mark.req("REQ-GEN-0067")
-def test_dont_refresh_into_a_probable_miss_vetoes_a_diluted_draw():
-    """POST-ANCHOR probabilistic veto (ADR-0024 amendment): one needed card among 30 is below the
-    0.20 bar, so the refresh is a probable re-roll of dregs."""
-    pilot, obs = _anchored_refresh_pilot(JUDGE, ["draw", "shuffle_hand"])
-    trace = pilot.explain(obs).options[0]
-    assert "dont-refresh-into-a-probable-miss" in _fired(trace)
-    assert trace.score < 0
-    assert pilot.decide(obs) == [1]                                   # End
 
 
-@pytest.mark.req("REQ-GEN-0067")
-def test_laceys_8_draw_window_lifts_the_probable_miss():
-    """The conditional draw windows fold into N: Lacey draws 4, or 8 at opp prizes ≤ 3, which crosses
-    the 0.20 bar and stands the veto down."""
-    LACEY = 1199
-    pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=6)
-    assert "dont-refresh-into-a-probable-miss" in _fired(pilot.explain(obs).options[0])
-    pilot, obs = _anchored_refresh_pilot(LACEY, ["draw", "shuffle_hand"], opp_prizes=3)
-    trace = pilot.explain(obs).options[0]
-    assert "dont-refresh-into-a-probable-miss" not in _fired(trace)   # the 8-draw window opens
-    assert _ranked(pilot, obs)[0][0] == 0                                   # refresh plays again
 
 
 # --- Shuffle-Refresh IS still a hand-cycling draw -- but the SWING ORACLE owns it (ADR-0060) --------

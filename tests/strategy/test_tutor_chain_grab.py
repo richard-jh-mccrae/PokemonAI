@@ -61,20 +61,6 @@ def board(pilot, rec):
     return pilot._board(rec.obs, rec.obs.get("select"))
 
 
-@pytest.mark.req("REQ-GEN-0077")
-def test_petrel_outranks_the_draw_supporter_at_the_grab(pilot, rec):
-    """Petrel (the chain opener) is chosen over Judge (+10): the chain rung fires on Petrel and stays
-    silent on the draw Supporters — one currency zone, draw band OR chain band, never both."""
-    dec = pilot.explain(rec.obs)
-    assert dec.chosen == rec.correct, (
-        f"expected {rec.correct_label!r}, got {rec.chosen_label if dec.chosen == rec.chosen else dec.chosen!r}")
-    by_card = {}
-    for t in dec.options:
-        by_card.setdefault(t.card_id, t)
-    petrel, judge = by_card[PETREL], by_card[JUDGE]
-    assert any(h.id == "grab-the-chain-opener" for h, _ in petrel.fired)
-    assert not any(h.id == "grab-the-chain-opener" for h, _ in judge.fired)
-    assert petrel.score > judge.score
 
 
 @pytest.mark.req("REQ-GEN-0077")
@@ -131,22 +117,6 @@ def _hop_obs(base: dict, pulled: tuple, option_pred, pilot) -> dict:
     return obs
 
 
-@pytest.mark.req("REQ-GEN-0077")
-def test_hop_two_petrel_select_takes_a_free_item_tutor(pilot, rec):
-    """Hop 2: the chain rung recurses and the pick is a FREE Item tutor, with the discard-2 Ultra Ball
-    demoted below them (`demote-the-costly-chain-opener` −2 — the flat band is cost-blind)."""
-    is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
-    obs = _hop_obs(rec.obs, (PETREL, 55), is_trainer, pilot)
-    dec = pilot.explain(obs)
-    assert len(dec.chosen) == 1
-    picked = dec.options[dec.chosen[0]]
-    assert picked.card_id in (FIGHTING_GONG, POKE_PAD)
-    assert any(h.id == "grab-the-chain-opener" for h, _ in picked.fired)
-    by_card = {}
-    for t in dec.options:
-        by_card.setdefault(t.card_id, t)
-    assert by_card[ULTRA_BALL].score < by_card[FIGHTING_GONG].score
-    assert any(h.id == "demote-the-costly-chain-opener" for h, _ in by_card[ULTRA_BALL].fired)
 
 
 @pytest.mark.req("REQ-GEN-0077")
@@ -197,32 +167,8 @@ def _petrel_select(rec, pilot, *, makuhita_in_hand=False, poke_pads_in_pool=None
     return obs
 
 
-@pytest.mark.req("REQ-GEN-0077")
-def test_dont_spend_the_last_route_to_a_wanted_evolution(pilot, rec):
-    """Scarcity-gated: spending the pool's LAST Poké Pad would close the only FREE route to the wanted
-    Hariyama, so the −2 rung breaks the +15 tie toward Gong (Gong cannot reach a Stage 1)."""
-    obs = _petrel_select(rec, pilot, makuhita_in_hand=True, poke_pads_in_pool=1)
-    dec = pilot.explain(obs)
-    picked = dec.options[dec.chosen[0]]
-    assert picked.card_id == FIGHTING_GONG
-    by_card = {}
-    for t in dec.options:
-        by_card.setdefault(t.card_id, t)
-    pad = by_card[POKE_PAD]
-    assert any(h.id == "dont-spend-the-last-route-to-a-wanted-evolution" for h, _ in pad.fired)
-    assert pad.score < by_card[FIGHTING_GONG].score
 
 
-@pytest.mark.req("REQ-GEN-0077")
-def test_abundant_copies_keep_the_hop_tie(pilot, rec):
-    """With ALL FOUR Poké Pad copies still in the pool, spending one closes nothing — the rung stays
-    silent and the free hops keep their +15 tie."""
-    obs = _petrel_select(rec, pilot, makuhita_in_hand=True)
-    dec = pilot.explain(obs)
-    for t in dec.options:
-        assert not any(h.id == "dont-spend-the-last-route-to-a-wanted-evolution"
-                       for h, _ in t.fired)
-    assert dec.options[dec.chosen[0]].card_id in (FIGHTING_GONG, POKE_PAD)
 
 
 @pytest.mark.req("REQ-GEN-0077")

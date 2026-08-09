@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from common import apply_option as ao
+from common import board_choice
 from common import board_expectation as bx
 from common import snapshot_coverage
 from common.board_delta import Unmodellable
@@ -143,6 +144,8 @@ class ComposerResult:
 
     chosen: Candidate | None = None
     candidates: tuple = ()
+    #: The candidates that remain after sound terminal dominance. `candidates` stays complete audit data.
+    selection_candidates: tuple = ()
     margin: Margin = field(default_factory=Margin)
     fanned: tuple = ()
     order: tuple = ()
@@ -150,8 +153,7 @@ class ComposerResult:
     always_expanded: frozenset = frozenset()
     blocks: tuple = ()
     gaps: tuple = ()
-    #: Both bounds of every expectation node this run met, newest last. `best` ordered; `expected` is
-    #: the reported lower bound; the gap is the exposure.
+    #: Both bounds of every expectation node this run met, newest last; the gap is its exposure.
     bounds: tuple = ()
     stats: dict = field(default_factory=dict)
 
@@ -196,9 +198,10 @@ _ORIGIN = "_composer_origin"
 
 
 def stamp_origin(model, option: Mapping) -> dict:
-    """Called ONCE at depth 0, where the indices are still valid; later hops read the stamp."""
+    """Stamp serial plus card id: fixture serial reuse must not re-point an option to another card."""
     hand_serial, body_serial = ao.option_serials(model, option)
-    return {**option, _ORIGIN: (hand_serial, body_serial)}
+    return {**option, _ORIGIN: (_origin_key(model, option, hand_serial, hand=True),
+                                _origin_key(model, option, body_serial, hand=False))}
 
 
 def _origin_serials(option: Mapping):
@@ -210,9 +213,28 @@ def _origin_serials(option: Mapping):
     return origin[0], origin[1]
 
 
-def _index_of(cards, serial):
+def _origin_key(model, option: Mapping, serial, *, hand: bool):
+    """``(serial, card id)`` where both facts exist; a bare serial preserves unknown-card handling."""
+    if serial is None:
+        return None
+    obs = getattr(model, "source_obs", None) or {}
+    seat = int(getattr(model, "my_index", 0))
+    players = ((obs.get("current") or {}).get("players")) or []
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+    if hand:
+        cards, index = me.get("hand") or (), option.get("index")
+    else:
+        area = "active" if option.get("inPlayArea") == AREA_ACTIVE else "bench"
+        cards, index = me.get(area) or (), option.get("inPlayIndex")
+    card = cards[index] if isinstance(index, int) and 0 <= index < len(cards) else None
+    card_id = card.get("id") if isinstance(card, Mapping) else None
+    return (serial, card_id) if card_id is not None else serial
+
+
+def _index_of(cards, key):
+    serial, card_id = key if isinstance(key, tuple) else (key, None)
     for i, card in enumerate(cards or ()):
-        if card and card.get("serial") == serial:
+        if card and card.get("serial") == serial and (card_id is None or card.get("id") == card_id):
             return i
     return None
 
@@ -313,17 +335,22 @@ def canonical_tier(model, option: Mapping, footprint=None) -> int:
     kind = ao.transition_kind(option)
     if kind in (_ATTACK, _END, _RETREAT):
         return TIER_ENDER
+    card = _option_card_stat(model, option)
+    # A hand shuffle hides the resulting cards rather than revealing a usable choice.  It therefore
+    # must retain the post-attach tier even though its draw clause is marked as a potential revealer.
+    if kind == _PLAY and card is not None and getattr(card, "is_supporter", False) \
+            and _shuffles_hand(model, card):
+        return TIER_SHUFFLE
     fp = footprint if footprint is not None else ao.option_footprint(model, option)
     if fp.reveals_information:
         return TIER_INFORMATIVE
-    card = _option_card_stat(model, option)
     if kind == _EVOLVE:
         return TIER_INFORMATIVE                  # "evolve a benched Pokemon" rides the free band
     if kind == _ATTACH:
         return TIER_COMMITMENT                   # Energy AND Tool: a Tool is an `_ATTACH` (tier 3)
     if kind == _PLAY and card is not None:
         if getattr(card, "is_supporter", False):
-            return TIER_SHUFFLE if _shuffles_hand(model, card) else TIER_SUPPORTER
+            return TIER_SUPPORTER
         if getattr(card, "is_pokemon", False):
             return TIER_INFORMATIVE              # a Bench fill is free and reveals a better target
         return TIER_COMMIT_FREE                  # an Item / a Stadium: free but committing
@@ -487,6 +514,100 @@ def selection_key(model, candidate: Candidate) -> tuple:
             index if index is not None else 1 << 30)
 
 
+def _attack_leg(model, candidate: Candidate):
+    """The active-target terminal leg for this candidate, or None outside the attack seam."""
+    terminal = candidate.terminal or {}
+    if ao.transition_kind(terminal) != _ATTACK:
+        return None
+    attack_id = terminal.get("attackId")
+    return next((leg for leg in attack_ev_legs(model) if leg.attack_id == attack_id), None)
+
+
+def _direct_active_ko(model, candidate: Candidate) -> bool:
+    """A direct, deterministic Knock Out of the current Active from the terminal extractor."""
+    leg = _attack_leg(model, candidate)
+    if candidate.steps or candidate.coverage_gap or leg is None:
+        return False
+    values = leg.kwargs
+    hp = float(values.get("target_hp") or 0.0)
+    return bool(hp > 0.0 and float(values.get("ko_probability") or 0.0) >= 1.0
+                and float(values.get("damage") or 0.0) >= hp)
+
+
+def _survives_recoil(model, candidate: Candidate) -> bool:
+    """A recoil Knock Out is a draw, so it cannot establish a direct match win."""
+    active = getattr(getattr(model, "mine", None), "active", None)
+    leg = _attack_leg(model, candidate)
+    recoil = getattr(getattr(model, "combat", None), "rider_recoil", None)
+    if active is None or leg is None or not callable(recoil):
+        return False
+    return float(recoil(leg.attack_id)) < float(getattr(active, "hp_remaining", 0) or 0)
+
+
+def _direct_prize_win(model, candidate: Candidate) -> bool:
+    """A sound terminal winner: deterministic active KO, last prizes, and no recoil draw."""
+    leg = _attack_leg(model, candidate)
+    if not (_direct_active_ko(model, candidate) and leg is not None and _survives_recoil(model, candidate)):
+        return False
+    need = int(getattr(getattr(model, "prize_race", None), "my_prizes_remaining", 0) or 0)
+    return bool(need > 0 and float(leg.kwargs.get("target_prizes") or 0.0) >= need)
+
+
+def _direct_terminal_attack(candidate: Candidate) -> bool:
+    """A root-menu attack, so terminal dominance does not overrule a setup line."""
+    return bool(not candidate.steps and not candidate.coverage_gap
+                and ao.transition_kind(candidate.terminal or {}) == _ATTACK)
+
+
+def _one_prize_active_ko(model, candidate: Candidate) -> bool:
+    """A direct active Knock Out whose own prize leg is one; rider prizes remain terminal payoff."""
+    leg = _attack_leg(model, candidate)
+    return bool(_direct_active_ko(model, candidate) and leg is not None
+                and float(leg.kwargs.get("target_prizes") or 0.0) == 1.0)
+
+
+def _active_has_energy(model) -> bool:
+    """The current Active holds a real attached Energy that a same-payoff gust would preserve."""
+    active = getattr(getattr(model, "theirs", None), "active", None)
+    body = getattr(active, "body", None) or {}
+    return bool(body.get("energyCards") or body.get("energies"))
+
+
+def _starts_with_gust(model, candidate: Candidate) -> bool:
+    """Whether the line opens with a semantically tagged gust, not a card-id exception."""
+    if not candidate.steps:
+        return False
+    try:
+        return board_choice.choice_key(
+            model, dict(candidate.steps[0].option), seat_index=int(getattr(model, "my_index", 0))) == "gust"
+    except Unmodellable:
+        return False
+
+
+def _same_terminal_payoff(candidate: Candidate, direct: Candidate) -> bool:
+    """The gust line takes the same prizes as an available direct active Knock Out."""
+    return (round(float(candidate.terminal_ev), _SCORE_PLACES)
+            == round(float(direct.terminal_ev), _SCORE_PLACES))
+
+
+def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:
+    """Apply only sound terminal dominance before the ordinary candidate ordering."""
+    if not candidates:
+        return ()
+    ordinary = min(candidates, key=lambda c: selection_key(model, c))
+    direct_wins = tuple(c for c in candidates if _direct_prize_win(model, c))
+    if direct_wins and _direct_terminal_attack(ordinary):
+        return direct_wins
+    direct_kos = tuple(c for c in candidates if _one_prize_active_ko(model, c))
+    if not direct_kos or not _active_has_energy(model):
+        return tuple(candidates)
+    return tuple(
+        candidate for candidate in candidates
+        if not (_starts_with_gust(model, candidate)
+                and any(_same_terminal_payoff(candidate, direct) for direct in direct_kos))
+    )
+
+
 @dataclass(frozen=True)
 class _Node:
     model: object
@@ -539,14 +660,16 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
         frontier = _prune_nodes(state, expanded)
 
     ranked0 = root_ranked or []
-    chosen = min(state.candidates, key=lambda c: selection_key(model, c)) \
-        if state.candidates else None
+    selection_candidates = _selection_candidates(model, state.candidates)
+    chosen = min(selection_candidates, key=lambda c: selection_key(model, c)) \
+        if selection_candidates else None
     return ComposerResult(
         chosen=chosen,
         candidates=tuple(sorted(state.candidates, key=lambda c: selection_key(model, c))),
+        selection_candidates=tuple(sorted(selection_candidates, key=lambda c: selection_key(model, c))),
         margin=_margin(state, ranked0, chosen),
         fanned=tuple(fan_out([state.one_ply.get(i) for i in range(len(options))], equiv)),
-        order=tuple((e.index, e.delta) for e in ranked0),
+        order=tuple((e.index, e.delta) for e in ranked0 if not e.refused),
         admitted=_admitted_indices(state, ranked0), always_expanded=_free_indices(ranked0),
         blocks=commutative_blocks(model, stamped, reps),
         gaps=tuple(state.gaps),
@@ -609,7 +732,7 @@ def _rank(state: _Run, node: _Node) -> list:
             # offered — a None must never mean "pruned" where the caller reads "unfingerprintable".
             state.one_ply[i] = entry.delta
         out.append(entry)
-    out.sort(key=lambda e: (-e.delta, e.key))
+    out.sort(key=lambda e: (e.refused, -float(e.delta or 0.0), e.key))
     return out
 
 
@@ -618,7 +741,7 @@ class _Ranked:
     index: int
     option: dict
     key: tuple
-    delta: float
+    delta: float | None
     after: object            # the model to continue from, or None (terminal / refused / reveal)
     fate: str
     footprint: object
@@ -633,8 +756,7 @@ class _Ranked:
 
 
 def _one_ply(state: _Run, node: _Node, option: dict, index: int):
-    """Apply ONE option and price it. An Expectation ranks by ``best()`` — the MAX over classes, never
-    ``expected()``; a REVEAL is a block boundary and a REPLAN point, a deferred TARGET is not."""
+    """Apply and price one option. CHOSEN outcomes take max; DEALT outcomes take expectation."""
     if ao.is_terminal(option):
         ev, _detail, gap = terminal_ev(node.model, option)
         if gap:
@@ -649,10 +771,36 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
 
     def _refuse(reason: str) -> _Ranked:
         state.gaps.append(f"{_frame_of(option)}: {reason}")
-        return _Ranked(index=index, option=option, key=key, delta=0.0, after=None,
+        return _Ranked(index=index, option=option, key=key, delta=None, after=None,
                        fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason)
 
-    if footprint.reveals_information and _reveal_rides(node.model, option):
+    try:
+        coin = bx.coin_expectation(node.model, option, score=state_value)
+    except Unmodellable as gap:
+        return _refuse(str(gap))
+    if coin is not None:
+        state.leaf_evals += len(coin.classes)
+        leaf = float(coin.ordering(state_value))
+        state.bounds.append(Bounds(index=index, best=float(coin.best(state_value)),
+                                   expected=float(coin.expected(state_value)),
+                                   classes=len(coin.classes), truncated=0,
+                                   total_probability=float(coin.total_probability)))
+        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+
+    try:
+        scalar = bx.refresh_transition(node.model, option)
+    except Unmodellable as gap:
+        return _refuse(str(gap))
+    if scalar is not None:
+        state.leaf_evals += 1
+        leaf = float(state_value(scalar.model)) + scalar.scalar
+        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+
+    deferred = board_choice.has_deferred_target(
+        node.model, option, seat_index=int(getattr(node.model, "my_index", 0)))
+    if footprint.reveals_information and _reveal_rides(node.model, option) and not deferred:
         if ao.transition_kind(option) != _PLAY:
             return _refuse(
                 "a revealing clause RIDES this option and it is not a `_PLAY`, so neither seam can "
@@ -667,12 +815,13 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
             return _refuse(str(gap))
         state.leaf_evals += len(result.classes)
         try:
-            leaf = float(result.best(state_value))          # §S3: MAX over classes, never expected()
-            lower = float(result.expected(state_value))      # §S3.5: the other bound, REPORTED
+            best = float(result.best(state_value))
+            lower = float(result.expected(state_value))
+            leaf = float(result.ordering(state_value))
         except ValueError as gap:                # an un-enumerated effect: an unknown, not a zero
             return _refuse(str(gap))
         state.truncated += result.truncated
-        state.bounds.append(Bounds(index=index, best=leaf, expected=lower,
+        state.bounds.append(Bounds(index=index, best=best, expected=lower,
                                     classes=len(result.classes), truncated=result.truncated,
                                     total_probability=float(result.total_probability)))
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
@@ -827,7 +976,9 @@ def _admitted_indices(state: _Run, ranked0: list) -> frozenset:
 def _margin(state: _Run, ranked0: list, chosen: Candidate | None) -> Margin:
     """The chosen line's first step against the beam cutoff. THREE survival fields: *"did it survive"*
     (``admitted`` / ``always_expand``) and *"did it earn its place by score"* (``in_beam``) differ."""
-    return _margin_at(tuple((e.index, e.delta) for e in ranked0), _free_indices(ranked0),
+    # Refusals are retained as free diagnostics, but are unscored unknowns rather than one-ply ranks.
+    scored = tuple((e.index, e.delta) for e in ranked0 if not e.refused)
+    return _margin_at(scored, _free_indices(ranked0),
                       _admitted_indices(state, ranked0), state.k,
                       None if chosen is None else chosen.first_index)
 

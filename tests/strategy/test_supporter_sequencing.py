@@ -12,7 +12,7 @@ from common.strategy import Hypothesis, Line, Strategy
 from pilot_helpers import ACTIVE, HAND, PLAY, make_select, opt, poke, state
 
 ATTACH = 8
-ITEM, SUPPORTER = 1, 3        # CardType (cg/api.py)
+ITEM, SUPPORTER, BASIC_ENERGY = 1, 3, 5        # CardType (cg/api.py)
 POKEGEAR = 1122
 SALVATORE = 1189
 DRAWSUP = 1224
@@ -29,7 +29,7 @@ def _stats():
                          evolvesFrom="Staryu", energyType=3),
         PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(12,), evolvesFrom=None),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3, cardType=BASIC_ENERGY),
         POKEGEAR: CardStat(POKEGEAR, synthetic=True, name="Pokegear 3.0", hp=0, cardType=ITEM),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", hp=0, cardType=SUPPORTER),
         DRAWSUP: CardStat(DRAWSUP, name="Cheren", hp=0, cardType=SUPPORTER),
@@ -51,21 +51,11 @@ def _pilot(strat=None, **kw):
                  functions=_funcs(), **kw)
 
 
-@pytest.mark.req("REQ-PILOT-0023")
-def test_a_free_item_dig_is_sequenced_before_the_one_per_turn_supporter():
-    pilot = _pilot()
-    play_salvatore = opt(PLAY, area=HAND, index=0)
-    play_pokegear = opt(PLAY, area=HAND, index=1)
-    obs = make_select([play_salvatore, play_pokegear],
-                      current=state(active=poke(PREEVO, hp=70), hand=[SALVATORE, POKEGEAR]))
-    traces = pilot.explain(obs).options
-    assert traces[0].score > traces[1].score        # Salvatore outscores Pokegear
-    assert pilot.decide(obs) == [1]                 # ... yet the free Item dig goes first
 
 
 @pytest.mark.req("REQ-PILOT-0024")
-def test_a_supporter_is_sequenced_before_a_non_ko_energy_attach():
-    """A Supporter is informative, so it is spent before the blind Energy attach it may re-target."""
+def test_an_unmodelled_draw_supporter_does_not_preempt_a_closed_energy_attach():
+    """A generic draw has no joint distribution, so it cannot claim a sequencing slot (Issue #456)."""
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)],
                      hypotheses=[Hypothesis(id="t-endorse-attach", rationale="test", weight=100,
@@ -77,7 +67,7 @@ def test_a_supporter_is_sequenced_before_a_non_ko_energy_attach():
                       current=state(active=poke(PREEVO, energy=0, hp=70), hand=[DRAWSUP, WATER]))
     traces = pilot.explain(obs).options
     assert traces[1].score > traces[0].score        # attach outscores the Supporter ...
-    assert pilot.decide(obs) == [0]                 # ... yet the Supporter goes first
+    assert pilot.decide(obs) == [1]                 # ... and the closed attachment remains selectable
 
 
 @pytest.mark.req("REQ-PILOT-0025")

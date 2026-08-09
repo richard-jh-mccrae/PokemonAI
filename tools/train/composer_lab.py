@@ -276,8 +276,8 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
         "comparable_ruled": sum(1 for r in ran if _agrees(r, "ruled") is not None),
         "in_beam": sum(1 for r in ran if r["margin"] and r["margin"]["in_beam"]),
         "ruled_in_beam": sum(1 for r in rows if r["ruled_margin"] and r["ruled_margin"]["in_beam"]),
-        # ADMITTED is the weaker reading: a terminal/refused option survives pruning unconditionally
-        # at delta 0.0, so counting it `in_beam` would report a tie at zero as a preference.
+        # ADMITTED is the weaker reading: terminal options and unknown refusals survive pruning
+        # unconditionally, so counting them `in_beam` would report reachability as a preference.
         "ruled_admitted": sum(1 for r in rows if r["ruled_margin"] and r["ruled_margin"]["admitted"]),
         "ruled_comparable": sum(1 for r in rows if r["ruled_margin"]),
         # Neither a failure nor a pass: at a non-MAIN select the seam refuses every option, so the
@@ -360,7 +360,7 @@ def _print_report(rpt, *, frame=None, index=None, verbatim=None) -> None:
     print(f"  RULED 1st admitted  : {rpt['ruled_admitted']}/{rpt['ruled_comparable']}"
           "    <- the property Issue #385/#392 ask about: would a beam have REACHED the human's line")
     print(f"     ... of which EARNED a scored top-k slot: {rpt['ruled_in_beam']}"
-          "    (the rest are terminals/refusals, admitted unconditionally at delta 0.0)")
+          "    (the rest are terminals or unknown refusals, admitted unconditionally)")
     print(f"  no scorable option  : {rpt['no_scorable']}"
           "    (every option refused — a non-MAIN select; a REPORT, not a failure)")
     print(f"  multi-step lines   : {rpt['multi_step']}    commutative blocks found: "
@@ -461,7 +461,7 @@ def _print_acceptance(rpt) -> None:
         print(f"  {label:<5} {row['key']:<26} {verdict:<9} ruled first step: rank "
               f"{margin.get('rank')} of k={margin.get('k')} over {margin.get('ranked')} ranked   "
               f"margin {margin.get('margin_to_kth')}"
-              + ("   (always-expand: a terminal/refusal, delta 0.0 by construction)"
+              + ("   (always-expand: terminal or unknown refusal, unconditionally admitted)"
                  if margin.get("always_expand") else ""))
         print(f"        ruled {row['ruled']} (from the {row['ruled_from']})   "
               f"composer {row['composer']} (sequence {row['steps']})")

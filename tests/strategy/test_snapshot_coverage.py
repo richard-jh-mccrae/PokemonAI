@@ -596,12 +596,12 @@ def test_element_zones_are_real_zones_and_the_required_rejections_stay_whole_zon
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")
-def test_the_unhomed_guard_cannot_see_a_card_with_no_clauses_at_all():
-    """Both `unhomed` guards work off DECLARED write-sets, and a card with NO clauses unions to the
-    empty set — so neither can ever report it, however much state it writes."""
+def test_the_unhomed_guard_distinguishes_declared_empty_writes_from_no_clauses():
+    """A declared damage boost writes no snapshot zone; an actually clause-less card remains unseen."""
     compendium = _compendium()
-    for cid in ("1141", "1211", "1175"):             # Power Pro, Black Belt's Training, Brave Bangle
-        assert compendium.get(cid) is None, cid
+    for cid in ("1141", "1211"):                     # Power Pro, Black Belt's Training
+        assert compendium.get(cid) == [{"kind": "damage_boost"}], cid
+    assert compendium.get("1175") is None, "Brave Bangle"
     assert compendium.get("1086"), "the positive control — this card DOES carry clauses"
 
     play = ao.FOOTPRINTS[_PLAY_KIND]
@@ -646,11 +646,11 @@ def test_the_completeness_audit_bites():
 
 @pytest.mark.req("REQ-SNAPSHOT-0004")
 def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
-    """The owed list, generated off the artifact rather than re-derived. Judge's leg is a declared
-    UNKNOWN, not unfinished work: pricing a symmetric hand-shuffle needs a term the POC lacks."""
+    """The owed list is generated from the artifact; every listed verdict names its missing leg."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert 1213 in partial and "symmetric" in partial[1213].lower()
+    assert len(partial) == 14
+    assert 1237 in partial and "coin" in partial[1237].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
     clauses = sc.clause_lists(_compendium())

@@ -28,13 +28,6 @@ def _fired_ids(option):
     return {h.id for h, _w in option.fired}
 
 
-@pytest.mark.req("REQ-GEN-0074")
-def test_f18_fetch_an_on_attack_color_energy_not_the_off_color_utility():
-    """Every type ties at `fetch-energy-when-starved`, so the attack-colour rung is what breaks it."""
-    fx = _fixture("dragapult_fetch_attack_color_f18")
-    dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                         # [1] Basic {R} Fire, not [0] Basic {D}
-    assert "fetch-the-attack-color" in _fired_ids(dec.options[fx["correct"][0]])
 
 
 @pytest.mark.req("REQ-GEN-0074")

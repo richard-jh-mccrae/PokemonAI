@@ -27,9 +27,9 @@ from train.blunder.reviewed import load_reviewed  # noqa: E402
 #: issue rests on these being gone; if any comes back this file should say so, loudly.
 THE_VANISHED = ("dont-waste-discard-energy", "concentrate-energy-on-wincon", "build-active-wincon",
                 "power-up-attacker", "conserve-burst-when-no-ko", "attach-energy-last")
-#: The POSITIVE CONTROLS: both are authored in `baseline/baseline_energy.py` and named there as
-#: SURVIVING the swap that deleted the six above, so a zero here is a broken sweep.
-THE_SURVIVORS = ("prefer-active-attach-in-setup", "use-acceleration")
+#: Issue #459 globally retired the former energy controls too. They now exercise the post-capture
+#: retirement path rather than pretending a shared valuation survived.
+THE_GLOBAL_RETIREMENTS = ("prefer-active-attach-in-setup", "use-acceleration")
 
 
 @pytest.fixture(scope="module")
@@ -45,13 +45,12 @@ def reviewed():
 # The claim the whole issue rests on, with its controls.
 
 @pytest.mark.req("REQ-LEDGER-0001")
-def test_the_survivors_are_live_exactly_once_each():
-    """THE POSITIVE CONTROL. Run first, because every zero below is worthless without it."""
+def test_global_shared_retirements_have_no_live_definition(vocab):
+    """Issue #459 did not leave the old shared energy controls live by accident."""
     live = harvest_ids(DEFAULT_SRC, "Hypothesis")
-    for rung in THE_SURVIVORS:
-        assert rung in live, f"{rung} should be a live Hypothesis — the harvest is broken"
-        assert len(live[rung]) == 1, f"{rung} has {len(live[rung])} definition sites: {live[rung]}"
-    assert "baseline_energy" in live["use-acceleration"][0]
+    for rung in THE_GLOBAL_RETIREMENTS:
+        assert rung not in live
+        assert vocab.resolve(rung) == "retired"
 
 
 @pytest.mark.req("REQ-LEDGER-0001")
@@ -60,8 +59,8 @@ def test_the_vanished_rungs_have_no_live_definition(vocab):
     for rung in THE_VANISHED:
         assert rung not in vocab.live, f"{rung} is live again — Issue #238's premise no longer holds"
         assert vocab.resolve(rung) == "retired"
-    for rung in THE_SURVIVORS:
-        assert vocab.resolve(rung) == "live"
+    for rung in THE_GLOBAL_RETIREMENTS:
+        assert vocab.resolve(rung) == "retired"
 
 
 @pytest.mark.req("REQ-LEDGER-0002")
@@ -79,7 +78,7 @@ def test_a_sound_rule_id_is_a_live_namespace_not_a_retired_rung(vocab):
 @pytest.mark.req("REQ-LEDGER-0003")
 def test_a_note_naming_a_live_rung_is_not_flagged(vocab):
     ledger = {"99999999-1": {"disposition": "covered",
-                             "reason": "covered by prefer-active-attach-in-setup (+8)"}}
+                             "reason": "covered by keep-a-startable-hand (+8)"}}
     assert stale_entries(ledger, vocab) == []
 
 
@@ -262,9 +261,9 @@ def test_a_rung_deleted_since_the_capture_is_retired_without_git(tmp_path):
     snapshot = tmp_path / "vocab.json"
     snapshot.write_bytes(json.dumps({
         "head": "deadbeef", "retired": [], "sweep_retired": [],
-        "live_at_capture": ["use-acceleration", "a-rung-deleted-yesterday"],
+        "live_at_capture": ["keep-a-startable-hand", "a-rung-deleted-yesterday"],
         "sound_rules_at_capture": [],
     }).encode("utf-8"))
     v = load_vocabulary(snapshot, DEFAULT_SRC)
     assert v.resolve("a-rung-deleted-yesterday") == "retired"
-    assert v.resolve("use-acceleration") == "live"           # control: still live, still not retired
+    assert v.resolve("keep-a-startable-hand") == "live"       # control: still live, still not retired

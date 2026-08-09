@@ -236,30 +236,6 @@ def _whiff_stats():
     })
 
 
-@pytest.mark.req("REQ-GEN-0055")
-def test_probable_whiff_stands_down_a_search_whose_sole_target_is_probably_prized():
-    """PROBABLY, not provably, prized: the sole driver is dig-before-commit and the probable-whiff
-    penalty drops it below End. NOT the sound guard — the target is still reachable."""
-    _fm = {SIGNAL: ["search", "tutor_mega"]}
-    funcs = CardFunctions(_fm)
-    pilot = Pilot(Strategy(), deck=[MEGA] + [FILLER] * 40, general_strategy=GENERAL_STRATEGY,
-                  stats=_whiff_stats(), functions=funcs, effects=fetch_effects(_fm))
-    play_signal = opt(PLAY, area=HAND, index=0)
-    # MEGA nowhere visible; 1 in deck, 5 hidden prizes -> P(in deck) = 1/6 < threshold.
-    cur = state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5, deck_count=1)
-    obs = make_select([play_signal, opt(END)], current=cur)
-    assert pilot._context(obs, obs["select"], pilot._board(obs, obs["select"]),
-                          obs["select"]["option"][0]).search_targets_unlikely
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "dont-search-a-probable-whiff" in fired
-    assert "dont-search-an-empty-deck" not in fired         # NOT sound guard — still reachable
-    assert _ranked(pilot, obs)[0][0] == 1                          # End beats probable-whiff dig
-
-    # Control: same board, no deckCount -> estimate silent -> dig is played.
-    obs2 = make_select([play_signal, opt(END)],
-                       current=state(active=poke(OTHER, energy=1), hand=[SIGNAL], prizes=5))
-    assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs2).options[0])
-    assert _ranked(pilot, obs2)[0][0] == 0
 
 
 @pytest.mark.req("REQ-GEN-0055")

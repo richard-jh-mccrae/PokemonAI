@@ -99,7 +99,6 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
     assert len([s for s in slots if s.key == "general:1229"]) == 1
 
 
-@pytest.mark.xfail(strict=True, reason=record_reason("83457493", 31))
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     """A held gust card's slot is the per-body removal marginal (prize-equivalents), NEVER the

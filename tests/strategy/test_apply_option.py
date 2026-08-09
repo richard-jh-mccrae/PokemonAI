@@ -191,8 +191,7 @@ def test_terminal_and_undeclared_are_not_rescued_by_a_complete_clause_set():
 
 @pytest.mark.req("REQ-APPLY-0008")
 def test_apply_option_resolves_the_same_way_fate_does():
-    """`apply_option` adds only the refusal SCOPES: a disagreement about the FATE would let the
-    census and the composer price the same option differently, with nothing to say so."""
+    """`apply_option` agrees with `fate`, except CARD's exact seeded-continuation proof it owns."""
     api = object()
     for kind in sorted(set(ao.KIND_COVERAGE) - ao.TERMINAL_KINDS) + [999]:
         for cover in (True, False, None):
@@ -203,6 +202,9 @@ def test_apply_option_resolves_the_same_way_fate_does():
                     r = ao.apply_option(object(), {"type": kind}, **kw)
                     assert isinstance(r, ao.Refusal), (kind, kw)
                     assert r.scope and r.reason.strip(), (kind, kw)
+                    if kind == _CARD:
+                        assert r.scope == ao.OPTION_SCOPE, (kind, kw)
+                        continue
                     # Collapsing kind-scope into option-scope would let a coverage report blame
                     # the KIND for what the OPTION could not do (Issue #382).
                     if want == ao.REFUSED:
@@ -759,13 +761,23 @@ def test_an_expectation_yields_one_comparable_number_at_1_ply():
 
 
 @pytest.mark.req("REQ-APPLY-0006")
-def test_the_number_that_ORDERS_is_the_MAX_and_expected_is_the_reported_lower_bound():
-    """Both producers emit a CHOICE node, and the value of a choice is the value of the BEST branch
-    (Issue #385 §S3). The fixture makes the max the UNLIKELIEST branch, so a modal read shows."""
+def test_a_CHOSEN_expectation_orders_by_its_best_branch():
+    """A player picks the branch. The fixture makes the max the unlikely branch."""
     e = ao.Expectation(classes=(ao.OutcomeClass(0.75, model="a"), ao.OutcomeClass(0.25, model="b")))
     score = {"a": 4.0, "b": 8.0}.__getitem__
     assert e.best(score) == pytest.approx(8.0)
     assert e.expected(score) == pytest.approx(5.0)
+    assert e.ordering(score) == pytest.approx(8.0)
+
+
+@pytest.mark.req("REQ-APPLY-0006")
+def test_a_DEALT_expectation_orders_by_its_probability_weighted_value():
+    """A coin's branch is dealt, so its ordering value is its expectation, never its heads branch."""
+    e = ao.Expectation(classes=(ao.OutcomeClass(0.75, model="a"), ao.OutcomeClass(0.25, model="b")),
+                       resolution=ao.DEALT)
+    score = {"a": 4.0, "b": 8.0}.__getitem__
+    assert e.ordering(score) == pytest.approx(5.0)
+    assert e.ordering(score) != pytest.approx(e.best(score))
     assert e.best(score) > e.expected(score)
 
 

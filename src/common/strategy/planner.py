@@ -2,14 +2,16 @@
 Ladder — locked-line replay -> win rung -> closed-form KO pool -> gamble rung -> the composer.
 
 The win rung (Lethal Solver, ADR-0030) is SOUND and preempts every heuristic rung below it; a scored
-line may never override a verified one. The composer (`common.composer`, ADR-0092 §4-T4) is the MAIN
-decider for every frame the rungs above decline — deliberately unflagged and ungated.
+line may never override a verified one. The composer (`common.composer`, ADR-0092 §4-T4) decides MAIN
+and provenance-backed CARD continuations when the earlier rungs decline.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
 from common import composer, needs, playability
+from common.apply_engine import CARD_CONTINUATION_CONTEXTS
+from common.board_delta import Unmodellable
 from common.state_model import StateModel
 from common.state_value import WIN_PRIZES, state_value
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
@@ -41,11 +43,12 @@ def _tied_first_steps(result, chosen) -> list:
     """Menu indices whose best sequence ties ``chosen``'s score at `composer._SCORE_PLACES` — the
     composer having NO OPINION about which action to take first, so the caller defers (ADR-0131)."""
     from common.composer import _SCORE_PLACES
-    if not getattr(result, "candidates", ()):
+    candidates = getattr(result, "selection_candidates", ()) or getattr(result, "candidates", ())
+    if not candidates:
         return []
     key = round(chosen.score, _SCORE_PLACES)
     mine = chosen.first_index
-    tied = {c.first_index for c in result.candidates
+    tied = {c.first_index for c in candidates
             if c.first_index is not None and c.first_index != mine
             and not c.coverage_gap and round(c.score, _SCORE_PLACES) == key}
     return sorted(tied)
@@ -60,11 +63,17 @@ class PlannerMixin(
     to the tuned scoring. Depends on Pilot internals, so it is mixed into the Pilot."""
 
     def plan_turn(self, obs, select, board, options, traces) -> TurnLine | None:
-        """The best committed Turn Line this turn, or None — only at the single-pick MAIN menu. Plan
-        once, cache on a board fingerprint, re-plan on any reveal (ADR-0031 decision 5)."""
+        """The best committed Turn Line at MAIN or a replayable single-pick CARD continuation."""
         if not self._planning:                        # never wipe the OUTER decision's refute count when
             self._lethal_refutes = 0                  # a verify cascade re-enters here under _planning
-        if select.get("context") != _MAIN or select.get("maxCount", 0) != 1:
+        context = select.get("context")
+        if context == _MAIN:
+            eligible = select.get("maxCount", 0) == 1
+        else:
+            minimum = select.get("minCount", 0)
+            maximum = select.get("maxCount", 0)
+            eligible = context in CARD_CONTINUATION_CONTEXTS and 0 <= minimum <= 1 <= maximum
+        if not eligible:
             return None
         if self._planning:                            # mid engine-sim: closed-form only, never nest search
             win = self._win_line(obs, select, board, options, traces)
@@ -119,8 +128,7 @@ class PlannerMixin(
             return None                                  # loses to the alternative — defer
         return best
 
-    # ═══ THE COMPOSER RUNG (POC-T4/5, Issue #386) — the MAIN decider. Deliberately unflagged and
-    # ungated: firing only where a heuristic says greedy is unsure leaves greedy deciding elsewhere.
+    # ═══ THE COMPOSER RUNG (POC-T4/5, Issue #386) — the MAIN / seeded-continuation decider.
 
     def _composer_line(self, obs, select, board, options, traces) -> TurnLine | None:
         """The composer's committed first action as a ``goal="compose"`` Turn Line, or None. ``shed``
@@ -131,8 +139,8 @@ class PlannerMixin(
             result = composer.compose(model, options,
                                       search_api=getattr(self, "_search_api", None),
                                       shed=self.cost_shed_indices)
-        except Exception:
-            return None                                  # a modelling slip never crashes the decision
+        except Unmodellable:
+            return None
         chosen = result.chosen
         self._composer_trace = {"margin": result.margin.working(), "stats": result.stats,
                                 "gaps": list(result.gaps)[:_COMPOSER_GAP_K]}

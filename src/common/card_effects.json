@@ -138,8 +138,8 @@
 "reason": "fetch a Basic Energy from deck"
 },
 "1120": {
-"covers": "partial",
-"reason": "the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition"
+"covers": "full",
+"reason": "two closed-form DEALT branches at p=0.5; heads chooses and discards one opponent Energy"
 },
 "1121": {
 "covers": "full",
@@ -148,6 +148,10 @@
 "1122": {
 "covers": "full",
 "reason": "fetch a Supporter with `dig: 7`"
+},
+"1123": {
+"covers": "full",
+"reason": "switches my Active with one Benched Pokemon (`self_switch`), without a retreat allowance"
 },
 "1124": {
 "covers": "partial",
@@ -176,6 +180,10 @@
 "1134": {
 "covers": "partial",
 "reason": "the \"Team Rocket\" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed"
+},
+"1141": {
+"covers": "full",
+"reason": "this-turn Premium Power Pro damage boost is carried by the card's parsed Fighting attacker gate"
 },
 "1142": {
 "covers": "full",
@@ -281,13 +289,17 @@
 "covers": "full",
 "reason": "both modes (up to 2 Basics OR 1 Evolution) as `choice` clauses, so the two caps are alternatives rather than a sum"
 },
+"1211": {
+"covers": "full",
+"reason": "this-turn Black Belt's Training damage boost is carried by the card's parsed opponent-Active {ex} gate"
+},
 "1212": {
 "covers": "full",
 "reason": "heal 70, active-only"
 },
 "1213": {
-"covers": "partial",
-"reason": "the OWN leg is now exact — shuffle my hand in, draw 4 — but the card is SYMMETRIC, and the opponent's identical shuffle-and-redraw-4 is the entire reason to play it. Pricing their hand needs a `state_value` term the POC does not have"
+"covers": "full",
+"reason": "closed-form scalar refresh: both hands reshuffle and redraw 4, with the opponent hand resource priced by threat"
 },
 "1214": {
 "covers": "full",
@@ -318,8 +330,8 @@
 "reason": "heal 40 from EACH of my Pokemon — the whole card. `each_of: true` over `target: any_pokemon` carries the distribution the bare per-target amount could not (Issue #349); `damage_counters` is homed on my Active AND my Bench, so the set it ranges over is fully represented"
 },
 "1223": {
-"covers": "partial",
-"reason": "the own leg now carries both coin branches (5 heads / 3 tails) and the both-hands shuffle, but a coin stated as two certainties is still not an `Expectation` (1120 Crushing Hammer's ruling), and the opponent's mirrored 3/5 redraw is unmodelled"
+"covers": "full",
+"reason": "closed-form scalar refresh: coin-averaged 5/3 and 3/5 redraws, with the opponent hand resource priced by threat"
 },
 "1224": {
 "covers": "full",
@@ -758,6 +770,11 @@
 "dig": 7
 }
 ],
+"1123": [
+{
+"kind": "self_switch"
+}
+],
 "1124": [
 {
 "kind": "coin",
@@ -813,6 +830,11 @@
 "target": "supporter",
 "zone": "deck",
 "name_family": "Team Rocket"
+}
+],
+"1141": [
+{
+"kind": "damage_boost"
 }
 ],
 "1142": [
@@ -1069,6 +1091,11 @@
 "zone": "deck",
 "amount": 1,
 "choice": true
+}
+],
+"1211": [
+{
+"kind": "damage_boost"
 }
 ],
 "1212": [

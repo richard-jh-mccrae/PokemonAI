@@ -39,6 +39,11 @@ REFUSED = "refused"
 #: Not in the table. The engine enum grows during the competition — a live case, not a theoretical one.
 UNDECLARED = "undeclared"
 
+#: The player picks a CHOSEN class; a DEALT class is resolved by chance before play continues.
+CHOSEN = "chosen"
+DEALT = "dealt"
+_EXPECTATION_RESOLUTIONS = frozenset({CHOSEN, DEALT})
+
 #: TERMINAL is not among them (a turn-ender has no transition); UNDECLARED is a refusal reason.
 FATES = (MODELLED, ENGINE_RESOLVED, REFUSED)
 
@@ -350,12 +355,16 @@ class OutcomeClass:
 
 @dataclass(frozen=True)
 class Expectation:
-    """A probability-weighted set of outcome classes — the return of a STOCHASTIC transition.
-    :meth:`best` ORDERS (both producers are choice nodes); :meth:`expected` is a lower-bound diagnostic."""
+    """Outcome classes whose resolution says whether the player chooses or chance deals one."""
 
     classes: Sequence[OutcomeClass] = field(default_factory=tuple)
     #: Classes dropped by the branching cap; non-zero ⇒ the enumeration is INCOMPLETE.
     truncated: int = 0
+    resolution: str = CHOSEN
+
+    def __post_init__(self):
+        if self.resolution not in _EXPECTATION_RESOLUTIONS:
+            raise ValueError(f"unknown Expectation resolution {self.resolution!r}")
 
     @property
     def total_probability(self) -> float:
@@ -363,8 +372,7 @@ class Expectation:
         return float(sum(c.probability for c in self.classes))
 
     def best(self, score: Callable[[object], float]) -> float:
-        """The MAXIMUM of ``score`` over the classes — **the 1-ply ordering number**, because both
-        producers emit CHOICE nodes. Ignores ``probability``: averaging prices a choice made for you."""
+        """The maximum class score. It orders CHOSEN outcomes, ignoring their probabilities."""
         if not self.classes:
             raise ValueError(
                 "cannot order an Expectation with no enumerated classes — that is an un-enumerated "
@@ -372,14 +380,25 @@ class Expectation:
         return max(float(score(c.model)) for c in self.classes)
 
     def expected(self, score: Callable[[object], float]) -> float:
-        """``score`` averaged over the classes — a reported lower-bound diagnostic, NOT the ordering
-        number. Renormalised over the ENUMERATED mass, so a cap does not bias against wide branches."""
+        """The probability-weighted class score, renormalised over the enumerated mass."""
         mass = self.total_probability
         if mass <= 0.0:
             raise ValueError(
                 "cannot order an Expectation with no enumerated mass — that is an un-enumerated "
                 "effect, and returning 0.0 would price it as a worthless one")
         return float(sum(c.probability * float(score(c.model)) for c in self.classes) / mass)
+
+    def ordering(self, score: Callable[[object], float]) -> float:
+        """The value that orders this resolution: max for CHOSEN, expectation for DEALT."""
+        return self.best(score) if self.resolution == CHOSEN else self.expected(score)
+
+
+@dataclass(frozen=True)
+class ScalarTransition:
+    """Known board writes plus a closed-form value for information the snapshot cannot hold."""
+
+    model: object
+    scalar: float
 
 
 class UnsupportedTransition(NotImplementedError):
@@ -472,6 +491,34 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
+    # The native seed retains effect-frame state a CARD target cannot identify, so this preempts
+    # generic CARD refusal; all other contexts follow `fate` and `_CARD` coverage stays REFUSED.
+    if kind == _CARD:
+        from common import apply_engine
+        if apply_engine.continuation_index(model, option, card_kind=_CARD, depth=depth) is not None:
+            if search_api is None:
+                return refuse(option, "seeded CARD continuation has no `_search_api` seam to replay its "
+                                      "live engine frame through", scope=NO_ENGINE_SCOPE)
+            after = apply_engine.resolve(model, option, search_api=search_api)
+            if after is None:
+                return refuse(
+                    option,
+                    "seeded CARD continuation engine-refused — no state was normalised, no success "
+                    "was synthesized, and no context/card fallback was used",
+                    scope=NO_ENGINE_SCOPE)
+            return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+        if apply_engine.engine_refused_context(model, option, card_kind=_CARD, depth=depth) is not None:
+            return refuse(
+                option,
+                "seeded SETUP_BENCH_POKEMON continuation engine-refused — native replay cannot restore "
+                "the opponent Active's `appearThisTurn`; no composer route, state normalisation, "
+                "synthetic semantics, or context/card fallback was used",
+                scope=NO_ENGINE_SCOPE)
+        return refuse(
+            option,
+            "unowned CARD select — only exact, depth-0 seeded continuations in Issue #464's context "
+            "allowlist may use the engine; this call has no context/card fallback",
+            scope=OPTION_SCOPE)
     # Asked once, here, and threaded into `fate` so the two cannot disagree about the same option.
     deferred = False
     if expand_deferred_targets:
@@ -597,12 +644,13 @@ def quarantined_kinds() -> frozenset[int]:
 # longer GATES the engine route, and `KIND_SCOPE` is no longer EMITTED by `apply_option`.
 __all__: Sequence[str] = (
     "MODELLED", "ENGINE_RESOLVED", "TERMINAL", "REFUSED", "UNDECLARED", "FATES",
+    "CHOSEN", "DEALT",
     "KIND_SCOPE", "OPTION_SCOPE", "UNDECLARED_SCOPE", "QUARANTINE_SCOPE", "DEPTH_SCOPE",
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",
     "Footprint", "FOOTPRINTS", "footprint", "commutes", "footprints_commute", "option_footprint",
     "option_serials",
-    "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
+    "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "ScalarTransition", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
     "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",
 )

@@ -101,10 +101,10 @@ def test_every_rung_id_a_named_registry_gates_on_is_still_shipped():
     # above cannot tell a cleaned account from a deleted one.
     for name, ids in registries.items():
         assert ids, f"{name} is EMPTY — the account was deleted, not cleaned"
-    assert "dont-rush-evolve-without-target" in registries["planner._CLASS_B_SPEND_IDS"], (
-        "the evolve-without-target GATE lost its spend membership; `baseline_evolution.py` requires "
-        "it, because the rung is a gate rather than a valuation")
-    assert "fire-lunar-cycle" in registries["planner._ABILITY_FIRE_IDS"]
+    assert registries["planner._CLASS_B_SPEND_IDS"] == {
+        "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck"}
+    assert registries["planner._ABILITY_FIRE_IDS"] == {
+        "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "bench-the-comeback-drawer"}
 
 
 @pytest.mark.req("REQ-STRATEGY-0001")
@@ -161,6 +161,6 @@ def test_the_roster_is_not_empty_and_names_a_rung_from_each_layer():
 
     live = _live_rung_ids()
     general = {h.id for h in GENERAL_STRATEGY.hypotheses}
-    assert len(general) > 20, f"the general roster did not load: {len(general)}"
+    assert general == {"dont-search-an-empty-deck", "keep-a-startable-hand", "honor-preferred-start"}
     assert "attach-solrock-over-line-base" in live, "mega_lucario's deck rungs are missing"
     assert live > general, "no deck contributed a rung of its own — a deck strategy failed to load"

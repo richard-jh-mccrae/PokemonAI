@@ -358,22 +358,6 @@ def test_a_benched_burst_evaporates_and_banks_no_channel():
     assert p is not None
 
 
-@pytest.mark.req("REQ-ATTACH-DECIDER-0017")
-def test_development_sequences_before_the_attach_and_the_attach_before_a_hand_shuffle():
-    """`attach-energy-last` is a decide()-only ORDERING deferral (ADR-0069 §7), SCORE-INVISIBLE: the
-    attach keeps its full marginal and the tiers order, they do not suppress."""
-    active = {"id": MEGA, "energies": [W_ENERGY, W_ENERGY], "hp": 330}
-    shuffle_obs = _obs([], [{"id": W_ENERGY}, {"id": SHUFFLE}],
-                       [_attach(0, ACTIVE, 0), {"type": PLAY, "area": HAND, "index": 1}],
-                       active=active)
-    assert _pilot().explain(shuffle_obs).chosen == [0]
-    accel_obs = _obs([], [{"id": W_ENERGY}, {"id": BALL}],
-                     [_attach(0, ACTIVE, 0), {"type": PLAY, "area": HAND, "index": 1}],
-                     active=active)
-    p = _pilot(functions=CardFunctions({IGNITION: ignition_tags(), SHUFFLE: ["shuffle_hand"],
-                                        BALL: ["energy_accel"]}))
-    dec = p.explain(accel_obs)
-    assert dec.options[0].score > dec.options[1].score > 0
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0018")
@@ -554,9 +538,8 @@ def test_turbo_flare_takes_min_three_and_remaining_at_the_energy_select(offered,
     assert _tune()._build_pilot(_agent(rec))[0].explain(obs).chosen == expected
 
 
-def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_when_it_should():
-    """mega_starmie's only Basic Energy is Water, so `attach-off-color-at-fixed-recipient` can never fire
-    here. The Fighting arm is the positive control: silence alone would also pass on a deleted rung."""
+def test_global_retirement_keeps_no_off_colour_attach_valuation():
+    """Issue #459 globally retires fixed-recipient colour valuations."""
     rec = _frame("83007714", 22)
     pilot = _tune()._build_pilot(_agent(rec))[0]
 
@@ -569,7 +552,7 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
     on_colour, on_score = _fired(W_ENERGY)
     off_colour, off_score = _fired(F_ENERGY)
     assert "attach-off-color-at-fixed-recipient" not in on_colour and on_score == 0.0
-    assert "attach-off-color-at-fixed-recipient" in off_colour and off_score == -8.0
+    assert "attach-off-color-at-fixed-recipient" not in off_colour and off_score == 0.0
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0001")

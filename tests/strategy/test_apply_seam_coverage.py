@@ -124,9 +124,8 @@ def test_six_stadiums_reach_the_seam_closed_form_and_the_rest_stay_honestly_miss
     assert set(minted) | set(unmodelled) | {1242} == set(stadium)
 
 
-def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do_not(census):
-    """The four SYMMETRIC refreshes must NOT become MODELLED — each stays `partial` on the opponent's
-    shuffle-and-redraw — and are the positive control for the nine that moved. 1239 left the POOL."""
+def test_the_conditional_draw_supporters_and_closed_form_refreshes_resolve(census):
+    """Only Unfair Stamp and Lucian remain partial; the scalar route closes the other refreshes."""
     mod, cards, effects, covers, pool = census
     from common.strategy.context import _PLAY
     sites, _aside = mod.census(pool, cards, effects, covers)
@@ -139,16 +138,15 @@ def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do
     assert 1239 not in pool, "Naveen is back in the pool — restore it to the conditional-draw walk"
     assert covers[1239]["covers"] == "partial", "Naveen's declared error is still the ruling"
 
-    fixed = (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)
+    fixed = (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1213, 1216, 1223, 1227)
     for cid in fixed:
         assert draw[cid].fate == seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].report_class == mod.FULL, (cid, draw[cid].report_class)
-    # The symmetric four: still PARTIAL, each with the leg it misses quoted in its verdict.
-    for cid in (1213, 1080, 1223, 1237):
+    for cid in (1080, 1237):
         assert draw[cid].report_class == mod.PARTIAL, (cid, draw[cid].report_class)
         assert draw[cid].fate != seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].note.strip(), cid
-    assert set(fixed) | {1213, 1080, 1223, 1237} == set(the_13)
+    assert set(fixed) | {1080, 1237} == set(the_13)
 
     # Lillie's alone outweighs the whole residual partial table. Read off the census's own deck
     # load rather than restated, so a deck edit moves it.
@@ -242,7 +240,7 @@ def test_the_deferred_target_vocabulary_is_closed_over_the_SHIPPED_compendium():
         bc.CHOICE_CLAUSES - set(sc.CLAUSE_WRITES))
 
     shipped = set()
-    for card_id in (1182, 1198, 1229, 1240):                 # the census, by card
+    for card_id in (1123, 1182, 1198, 1229, 1240):           # the census, by card
         shipped |= kinds_of(card_id)
     assert shipped == set(bc.CHOICE_CLAUSES), sorted(shipped ^ set(bc.CHOICE_CLAUSES))
 

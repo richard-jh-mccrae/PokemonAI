@@ -71,39 +71,6 @@ def _fired(pilot, obs):
     return {h.id for o in pilot.explain(obs).options for h, _ in o.fired}
 
 
-@pytest.mark.req("REQ-SYS-0001")
-def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
-    # Deck ships ZERO Hypotheses; its Roles/params opt in to role-keyed General Strategy.
-    p = _pilot()
-    fired = set().union(*(_fired(p, o) for o in (_open_active(), _play_search(), _attack())))
-    # `open-the-declared-starter` is DECLARATION-keyed (ADR-0079), but belongs in this set for the
-    # same reason: it fires only because THIS deck opted in, via `Strategy.starter_priority`.
-    role_keyed = {"open-the-declared-starter", "advance-the-accel-pieces",
-                  "play-a-tutor-for-the-unfound-wincon"}       # fire only via this deck's declarations
-    general = {h.id for h in GENERAL_STRATEGY.hypotheses}
-    assert fired & role_keyed, f"no role-keyed rule fired off the declarations: {fired}"
-    assert fired & (general - role_keyed), f"no other General Strategy rule fired: {fired}"
-
-
-@pytest.mark.req("REQ-SYS-0002")
-def test_a_role_keyed_and_a_tag_keyed_general_rule_fire_on_the_same_card():
-    # Buddy Poffin (opt0): deck Role 'tutor' AND Function Tag 'bench_fill' -> two independently-keyed
-    # layers meeting on one option.
-    fired0 = {h.id for h, _ in _pilot().explain(_play_search()).options[0].fired}
-    assert "play-a-tutor-for-the-unfound-wincon" in fired0   # role-keyed (deck's declaration)
-    assert "prefer-bench-fill-first" in fired0               # tag-keyed (Function Tag on the card)
-
-
-@pytest.mark.req("REQ-SYS-0003")
-def test_function_tags_have_an_effect():
-    obs = _play_search()
-    with_tags = {h.id for h, _ in _pilot().explain(obs).options[0].fired}
-    without = {h.id for h, _ in _pilot(functions=None).explain(obs).options[0].fired}
-    assert "prefer-bench-fill-first" in with_tags     # tag drives the tag-keyed rule
-    assert "prefer-bench-fill-first" not in without   # remove card_functions -> rule can't fire
-    assert "play-a-tutor-for-the-unfound-wincon" in without  # role-keyed rule unaffected
-
-
 @pytest.mark.req("REQ-SYS-0004")
 def test_weakness_has_an_effect_on_the_knockout():
     p = _pilot()

@@ -36,11 +36,11 @@ def test_every_flip_records_the_ruling_the_fixture_actually_carries():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_two_diagnoses_partition_the_table_and_both_are_populated():
-    """A REFUSAL is seam coverage and a VALUATION is a human ruling, so collapsing to one bucket
-    sends every frame to the wrong queue; all-of-one-kind means the diagnosis stopped being measured."""
+    """Issue #456 deliberately closes this table's final seam refusals; any future one must be named
+    rather than silently changing a valued human ruling back into a coverage claim."""
     assert REFUSALS | VALUATIONS == set(FLIPS)
     assert not (REFUSALS & VALUATIONS)
-    assert REFUSALS and VALUATIONS
+    assert VALUATIONS and not REFUSALS
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
