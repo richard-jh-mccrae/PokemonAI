@@ -16,6 +16,8 @@ _AREAS = {1: "deck", 2: "hand", 3: "discard", 4: "active", 5: "bench",
           6: "prize", 7: "stadium", 12: "looking"}
 _PLAY = 7
 _MAIN = 0
+_OPTION_TYPE = {"Play": 7, "Attach": 8, "Evolve": 9, "Ability": 10,
+                "Discard": 11, "Retreat": 12, "Attack": 13, "End": 14}
 
 
 class ChoiceUnavailable(ValueError):
@@ -81,6 +83,24 @@ def choice_reference(option: dict, obs: dict, *, position: int) -> dict:
             "selector": _selector(option, obs)}
 
 
+def _migrated_selector_match(wanted: dict, offered: dict) -> bool:
+    """Accept one unambiguous legacy replay identity after enum/card-id migration."""
+    left, right = wanted["selector"]["exact"], offered["selector"]["exact"]
+    left_literal, right_literal = dict(left["literal"]), dict(right["literal"])
+    left_literal["type"] = _OPTION_TYPE.get(left_literal.get("type"), left_literal.get("type"))
+    if left_literal != right_literal or len(left["refs"]) != len(right["refs"]):
+        return False
+    for before, after in zip(left["refs"], right["refs"]):
+        if any(before.get(key) != after.get(key) for key in ("role", "area", "seat")):
+            return False
+        if before.get("role") == "source" and before.get("card_id") != after.get("card_id"):
+            return False
+        if (before.get("role") != "source" and before.get("card_id") != after.get("card_id")
+                and before.get("serial") != after.get("serial")):
+            return False
+    return True
+
+
 def resolve_choice(obs: dict, references: list[dict]) -> list[int]:
     """Resolve saved semantic choices against a new menu; refuse missing or ambiguous identities."""
     options = (obs.get("select") or {}).get("option") or []
@@ -97,7 +117,12 @@ def resolve_choice(obs: dict, references: list[dict]) -> list[int]:
                       if row["selector"]["equivalent"] == wanted["selector"]["equivalent"]
                       and row["position"] not in chosen]
         if not equivalent:
-            raise ChoiceUnavailable(f"{wanted.get('label') or 'choice'} is not offered")
+            migrated = [row["position"] for row in live
+                        if _migrated_selector_match(wanted, row) and row["position"] not in chosen]
+            if len(migrated) != 1:
+                raise ChoiceUnavailable(f"{wanted.get('label') or 'choice'} is not offered uniquely")
+            chosen.append(migrated[0])
+            continue
         chosen.append(min(equivalent))
     return chosen
 

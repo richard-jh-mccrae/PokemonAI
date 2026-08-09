@@ -131,6 +131,19 @@ def test_choice_resolution_follows_card_identity_when_hand_positions_move():
     assert resolve_choice(after, [ref]) == [0]
 
 
+def test_choice_resolution_handles_a_unique_legacy_enum_and_card_id_migration():
+    before = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 3, "serial": 5}],
+                                                               "active": [{"id": 1031, "serial": 23}]}, {}]},
+              "select": {"option": [{"type": "Attach", "area": 2, "index": 0,
+                                        "inPlayArea": 4, "inPlayIndex": 0}]}}
+    after = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 3, "serial": 7}],
+                                                              "active": [{"id": 1145, "serial": 23}]}, {}]},
+             "select": {"option": [{"type": 8, "area": 2, "index": 0,
+                                       "inPlayArea": 4, "inPlayIndex": 0}]}}
+    ref = choice_reference(before["select"]["option"][0], before, position=0)
+    assert resolve_choice(after, [ref]) == [0]
+
+
 def test_deck_search_choice_uses_the_selected_card_name():
     obs = {"current": {"yourIndex": 0, "players": [{}, {}]},
            "select": {"deck": [{"id": 1122, "serial": 8}],
