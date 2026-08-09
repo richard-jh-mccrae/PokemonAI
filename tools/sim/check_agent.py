@@ -146,9 +146,12 @@ def _suppressed_output():
 
 def _import_make():
     """Import kaggle_environments.make, muting its env discovery. THREE distinct noise sources, each
-    needing its own mechanism: INFO logging, a native stderr fd dump, and Python warnings."""
+    needing its own mechanism: third-party logging, a native stderr fd dump, and Python warnings."""
     prev_disable = logging.root.manager.disable
-    logging.disable(logging.INFO)  # import-time INFO/DEBUG never emits (no text, no per-record errors)
+    # LiteLLM registers models during this import.  Some upstream model IDs are absent from its
+    # cost table, producing harmless WARNING records and then handler errors on some installs.
+    # Suppress only import-time logging; restore the caller's setting immediately afterwards.
+    logging.disable(logging.WARNING)
     try:
         with _suppressed_output(), warnings.catch_warnings():  # fd-level: native open_spiel stderr dump
             warnings.simplefilter("ignore")  # + ke's import-time warnings (pydantic Field deprecations, …)
