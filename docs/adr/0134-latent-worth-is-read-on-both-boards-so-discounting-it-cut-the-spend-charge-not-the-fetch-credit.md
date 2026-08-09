@@ -1,7 +1,7 @@
-# ADR-0133 - `latent_worth` is read on BOTH boards of a play, so discounting it cut the SPEND CHARGE, not the fetch credit
+# ADR-0134 - `latent_worth` is read on BOTH boards of a play, so discounting it cut the SPEND CHARGE, not the fetch credit
 
 **Status:** **Rejected as specified** (Issue #444, built and measured 2026-08-09; build preserved at
-`3989f99b`, reverted at `97cd2569`). Nothing ships. **Amends nothing.** Issue #444 returns to
+`74115fa0`, reverted at `d6add0d7`). Nothing ships. **Amends nothing.** Issue #444 returns to
 `status:1-grilling` with its W1 direction refuted and question 3 — *does a search owe a charge at
 all* — promoted from an open question to the only remaining one.
 
@@ -19,7 +19,7 @@ that produced them is more useful than the corrections.
 Issue #444's premise was verified at `HEAD` before any code, by the `/implement` step-0 protocol, and
 it reproduced exactly:
 
-| the issue claims | measured on `7b507263` |
+| the issue claims | measured on `afe81905` |
 |---|---|
 | `latent_worth` has three sites and no demand counterpart | `needs.py:320` (field), `state_value.py:829` (reader), `planning/leaf.py:137` (producer) |
 | *positive control* | the same grep for `slot_demand` returns **7** sites incl. a live registry `reads=(...)` entry, so the instrument finds a wired demand leg where one exists |
@@ -39,7 +39,7 @@ A slot any copy can supply is one slot, so the Pilot de-duplicates per card id; 
 supply TOTAL, where a second copy is a second card.
 
 Issue #444 specified per-cid dedup on the leaf as part of the fix. Built that way it measures
-`composer == ruled` **98/270 → 87/270**. It is rejected on the reasoning above rather than on that
+`composer == ruled` **98/270 → 87/270** (taken at `7b507263`, this ADR's first base). It is rejected on the reasoning above rather than on that
 number — but the number agrees, and for a legible reason: `mega_starmie` holds four Basic `{W}`
 Energy, and collapsing them to one class deletes three cards' worth of hand.
 
@@ -51,7 +51,7 @@ fetching it). One `state_value` scores both boards, so a change to the term pert
 **by amounts set by what is in each hand, and those amounts are not equal.** The first draft of this
 ADR claimed they were, and that was wrong:
 
-| | root `latent_worth` at `7b507263` | with `3989f99b` |
+| | root `latent_worth` at base | with the build |
 |---|---:|---:|
 | `82752045-18` — the CHARGE side | 40.5 | **31.5** |
 | `85163634-17` — the CREDIT side | 0.0 | **0.0** (composer score bit-identical, `2.345638641`) |
@@ -66,9 +66,9 @@ is uniform, and a uniform lever cannot cut a credit that is already zero.
 
 Measured, both instruments, full corpus, deterministic:
 
-| instrument | `7b507263` | `3989f99b` |
+| instrument | `afe81905` (base) | the build |
 |---|---:|---:|
-| `composer_lab`, `composer == ruled` | 98/270 | **93/270** |
+| `composer_lab`, `composer == ruled` | 99/270 | **94/270** |
 | ADR-0072 Decision Gate, **unruled** `REGRESSION` (the gated metric) | 52 | **50** |
 | — the same gate's TOTAL regressed rows, incl. held-out + voided | 82 | 81 |
 
@@ -144,6 +144,22 @@ The review also disputed Decision 4's `9.9` as `15.3` over three `deploy 0.0` ro
 source: `82522698|62` carries **two** such rows (Poffin 10.0, Cinderace 12.0) and books 9.9. Decision
 4 stands as written.
 
+## Re-measured after a rebase, and the conclusion did not move
+
+This ADR was first measured at `7b507263`. `main` then took PR #473 (Issue #440 — *a dig is a
+WINDOW over the unseen pool*), which adds 154 lines to `board_expectation.py` and touches
+`composer.py` — the very seam that prices a search. Every number was therefore re-taken on the
+rebased base `afe81905` before this merged.
+
+| | `7b507263` | `afe81905` |
+|---|---|---|
+| `composer == ruled`, base → build | 98 → 93 | **99 → 94** |
+| Decision Gate, unruled | 52 → 50 | **52 → 50** |
+| the four Issue #444 frames | — | **bit-identical**: same picks, same 1-ply deltas, same `latent_worth`, same tie-defer on `82228640-7` |
+
+Issue #440 made `dig` enumerable; these four frames are `fetch`, so it does not reach them. The
+corpus-wide baseline moved by one frame in each column and the −5 is unchanged.
+
 ## Consequences
 
 - **Issue #444's remaining direction is question 3, and it is a new term, not a patch.** A search that
@@ -151,11 +167,10 @@ source: `82522698|62` carries **two** such rows (Poffin 10.0, Cinderace 12.0) an
   ruled frames on that side. So the term has to read demand and charge the ACTION, and no edit to
   `latent_worth` can express that.
 - `tests/strategy/test_state_value.py`'s live-board positive control is UNIVERSAL (`hand > 0.0` on
-  every live board) where `hand` is a SIGNED family that can honestly net 0.0. It is **green at
-  `7b507263`** and only the rejected build tripped it, so nothing is owed. Recorded as an observation
+  every live board) where `hand` is a SIGNED family that can honestly net 0.0. It is **green on `main`** and only the rejected build tripped it, so nothing is owed. Recorded as an observation
   about the control, **not** as licence to weaken it: a future change that trips it must be ruled on
   its own evidence, and this ADR pre-authorises nothing.
-- **The ADR-0072 Decision Gate is red on `main`** at `7b507263` — 52 unruled `REGRESSION`s with no
+- **The ADR-0072 Decision Gate is red on `main`** at `afe81905` — 52 unruled `REGRESSION`s with no
   change applied. `docs/ci.md` describes a gate that fails on exactly this, so either it is not
   running or its reds are going unruled. Not this issue's to fix; recorded because it makes the gate
   weak as an acceptance instrument until someone owns it.
