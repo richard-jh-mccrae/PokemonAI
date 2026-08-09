@@ -228,8 +228,8 @@ def off_policy_control(corrections) -> dict:
 # ── one frame ────────────────────────────────────────────────────────────────────────────────────
 
 
-def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilon=None,
-                  depth=None) -> dict:
+def compose_frame(pilot, correction, *, live_pilot=None, rulings=None, by_ep=None, k=None,
+                  epsilon=None, depth=None) -> dict:
     """Builds through `pilot._leaf_state_model`, the SAME seam the planner leaf uses; a harness with
     its own model measures a board the agent never scores. A failure is CAPTURED, never raised."""
     from train.gates import correction_frame_key
@@ -250,6 +250,7 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
            # grades on; at a follow-up select Issue #412's doctrine is already RULED.
            "context": ((obs.get("select") or {}).get("context")),
            "composer": None, "steps": None, "score": None, "margin": None, "ruled_margin": None,
+           "live": None, "live_goal": None, "live_error": None,
            "step_labels": [],
            "gaps": [], "bounds": [], "ms": None, "leaf_evals": None, "blocks": None,
            "coverage_gap": "", "expanded_families": None, "expansion_children": None,
@@ -257,6 +258,13 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
     if not options:
         row["error"] = "frame carries no select menu"
         return row
+    if live_pilot is not None:
+        try:
+            live = live_pilot.explain(obs)
+            row["live"] = list(live.chosen or [])
+            row["live_goal"] = getattr(getattr(live, "planned", None), "goal", None)
+        except Exception as exc:                 # noqa: BLE001 — an offline exposure, never a lab crash
+            row["live_error"] = f"{type(exc).__name__}: {exc}"
     kwargs = {kw: v for kw, v in (("k", k), ("epsilon", epsilon), ("depth", depth))
               if v is not None}
     try:
@@ -309,18 +317,21 @@ def _agrees(row, column: str) -> bool | None:
 # ── the corpus ───────────────────────────────────────────────────────────────────────────────────
 
 
-def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
+def composer_lab_report(pilot_for, corrections, *, live_pilot_for=None, **kwargs) -> dict:
     rows, skipped = [], 0
     rulings = fixture_rulings()
     by_ep = off_policy_index(corrections)
     for c in corrections:
         if not (getattr(c, "obs", None) or {}):
             continue
-        pilot = pilot_for(getattr(c, "agent", None))
+        agent = getattr(c, "agent", None)
+        pilot = pilot_for(agent)
         if pilot is None:
             skipped += 1
             continue
-        rows.append(compose_frame(pilot, c, rulings=rulings, by_ep=by_ep, **kwargs))
+        live_pilot = live_pilot_for(agent) if live_pilot_for else None
+        rows.append(compose_frame(pilot, c, live_pilot=live_pilot, rulings=rulings, by_ep=by_ep,
+                                  **kwargs))
     ran = [r for r in rows if r["error"] is None and r["composer"] is not None]
     times = sorted(r["ms"] for r in ran)
     bounds = [b for r in rows for b in r["bounds"]]
@@ -341,6 +352,9 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
         "agree_ruled": sum(1 for r in ran if _agrees(r, "ruled")),
         "comparable_chosen": sum(1 for r in ran if _agrees(r, "chosen") is not None),
         "comparable_ruled": sum(1 for r in ran if _agrees(r, "ruled") is not None),
+        "live_enabled": live_pilot_for is not None,
+        "live_agree_ruled": sum(1 for r in rows if r["live"] and any(i in r["ruled"] for i in r["live"])),
+        "live_comparable_ruled": sum(1 for r in rows if r["live"] and r["ruled"]),
         "in_beam": sum(1 for r in ran if r["margin"] and r["margin"]["in_beam"]),
         "ruled_in_beam": sum(1 for r in rows if r["ruled_margin"] and r["ruled_margin"]["in_beam"]),
         # ADMITTED is the weaker reading: terminal options and unknown refusals survive pruning
@@ -436,6 +450,9 @@ def _print_report(rpt, *, frame=None, index=None, verbatim=None) -> None:
           "    (reproduces today's agent)")
     print(f"  composer == ruled  : {rpt['agree_ruled']}/{rpt['comparable_ruled']}"
           "    (plays what the human ruled)")
+    if rpt["live_enabled"]:
+        print(f"  live planner == ruled: {rpt['live_agree_ruled']}/{rpt['live_comparable_ruled']}"
+              "    (current production path; win/KO rungs may bypass Composer)")
     print(f"  composer 1st in beam: {rpt['in_beam']}/{rpt['ran']}"
           "    (hard top-k; the rest survived on the epsilon band or not at all)")
     print(f"  RULED 1st admitted  : {rpt['ruled_admitted']}/{rpt['ruled_comparable']}"
@@ -591,6 +608,8 @@ def main(argv=None) -> int:
                     help="a composer-correction-queue/v1 JSON artifact")
     ap.add_argument("--chunk", type=int, default=None,
                     help="run exactly this chunk from --chunk-file")
+    ap.add_argument("--live-decision", action="store_true",
+                    help="also grade the current full planner decision; win/KO rungs can bypass Composer")
     ap.add_argument("--frame", default=None,
                     help="print ONE frame: the composer's sequence, the committed decision, the "
                          "ruling, and the developer's verbatim ideal line if there is one")
@@ -629,6 +648,7 @@ def main(argv=None) -> int:
         if len(corrs) != len(ids):
             ap.error(f"chunk {args.chunk} resolved {len(corrs)}/{len(ids)} correction ids")
     builder = _cgpy_pilot_builder()
+    live_builder = _cgpy_pilot_builder(memoize=False) if args.live_decision else None
 
     if args.epsilon_sweep:
         sweep = epsilon_sweep(builder, corrs, [0.0, 0.001, 0.005, 0.01, 0.05, 0.1])
@@ -644,8 +664,8 @@ def main(argv=None) -> int:
             print(f"-> {args.out}")
         return 0
 
-    rpt = composer_lab_report(builder, corrs, k=args.beam_width, epsilon=args.epsilon,
-                              depth=args.depth)
+    rpt = composer_lab_report(builder, corrs, live_pilot_for=live_builder, k=args.beam_width,
+                              epsilon=args.epsilon, depth=args.depth)
     _print_report(rpt, frame=args.frame, index=ideal_index(), verbatim=ideal_sequences())
     if args.acceptance:
         _print_acceptance(rpt)

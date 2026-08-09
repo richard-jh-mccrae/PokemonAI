@@ -149,19 +149,22 @@ def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
             "rows": rows}
 
 
-def _cgpy_pilot_builder():
-    """A memoised `pilot_for(agent)` wiring cgpy as the offline search backend; None if unbuildable."""
+def _cgpy_pilot_builder(*, memoize=True):
+    """A cgpy-wired `pilot_for(agent)`; callers can request fresh Pilots for live-path checks."""
     import importlib
     from cgpy.compat import api as cgpy_api
     tune = importlib.import_module("train.tune")
     cache: dict = {}
 
     def build(agent):
-        if agent not in cache:
+        if not memoize or agent not in cache:
             try:
                 pilot, _ = tune._build_pilot(agent)
                 pilot._search_api = cgpy_api      # the seam: re-score offline via cgpy, not native
-                cache[agent] = pilot
+                if memoize:
+                    cache[agent] = pilot
+                else:
+                    return pilot
             except Exception as exc:              # noqa: BLE001 — an unbuildable agent is skipped, reported
                 print(f"  (could not build {agent}: {type(exc).__name__}: {exc})")
                 cache[agent] = None
