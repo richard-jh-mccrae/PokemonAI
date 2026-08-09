@@ -19,15 +19,6 @@ _GENERAL_ILLIQUID_FLOOR = 0.15  # a general-worth card whose value needs board s
                            # keeps it above outright-dead cards in pitch order. Derived, never a card list.
 
 
-def _rows_by_cid(rows: list) -> dict:
-    """``{cid: [row index, ...]}`` in first-appearance order — the grouping BOTH the line slots and the
-    latent-worth classes key on, so a spare copy is one class to both."""
-    by_cid: dict = {}
-    for k, r in enumerate(rows):
-        by_cid.setdefault(r["cid"], []).append(k)
-    return by_cid
-
-
 class NeedsMixin:
     """The needs assignment: demand, coverage, and what a held card is worth."""
 
@@ -73,7 +64,9 @@ class NeedsMixin:
         def _tags(cid) -> set:
             return set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
 
-        by_cid = _rows_by_cid(rows)
+        by_cid: dict = {}
+        for k, r in enumerate(rows):
+            by_cid.setdefault(r["cid"], []).append(k)
         for cid, members in by_cid.items():
             st = self.stats.get(cid) if self.stats else None
             roles = self._roles_of(cid)
@@ -200,49 +193,28 @@ class NeedsMixin:
         # GENERAL-WORTH slots: LATENT value, discounted and DE-DUPLICATED per cid. A class eligible for the
         # SATURATING draw-engine slot gets none — the spare copy covers nothing.
         engine_cids = {rows[k]["cid"] for k in engines}
-        classes = (self._general_worth_classes(rows, board, me, skip_cids=engine_cids)
-                   if include_general else ())
-        for cid, live, base, latent in classes:
-            # INSURANCE, not latent worth (ADR-0101 amendment): a `clutch_heal` covering an IRREPLACEABLE
-            # Active is the survival plan, not one deploy away, so it takes full tier at deadline 1.
-            if self._heal_insures_the_last_wincon(cid, me):
-                _emit(needs.insure_wincon_slot(f"insure:{cid}", value=base), live)
+        seen_general: set = set()
+        for cid, members in (by_cid.items() if include_general else ()):
+            if cid in seen_general or cid in engine_cids:
                 continue
-            _emit(needs.general_worth_slot(f"general:{cid}", value=latent), live)
-        return slots, elig
-
-    def _latent_row_worth(self, rows: list, k: int, board: Board, me: dict) -> tuple:
-        """``(worth x deploy, that discounted by `_GENERAL_WORTH_W` and liquidity)`` for row ``k``, or
-        ``(0.0, 0.0)`` where it carries none — the ONE latent formula (ADR-0133)."""
-        # A row the PITCH term flags as dead-weight is fodder NOW — no latent worth, else general worth
-        # RESURRECTS a spent burst. Refresh rows carry no pitch flag (a SHUFFLED burst IS a future attach).
-        row = rows[k]
-        if row.get("pitch", 0):
-            return 0.0, 0.0
-        base = self._role_value(row["cid"]) * row.get("deploy", 1.0)
-        if base <= 0:
-            return 0.0, 0.0
-        return base, base * _GENERAL_WORTH_W * self._general_liquidity(row["cid"], board, me)
-
-    def _general_worth_classes(self, rows: list, board: Board, me: dict, *, skip_cids=frozenset()):
-        """Per held card CLASS carrying LATENT worth, ``(cid, live rows, worth x deploy, that discounted)``.
-        De-duplicated: a SLOT any copy can supply is one slot (`_latent_holdings` is the supply TOTAL)."""
-        for cid, members in _rows_by_cid(rows).items():
-            if cid in skip_cids:
-                continue
-            live = [m for m in members if not rows[m].get("pitch", 0)]
+            seen_general.add(cid)
+            # A row the PITCH term flags as dead-weight is fodder NOW — no latent worth, else general worth
+            # RESURRECTS a spent burst. Refresh rows carry no pitch flag (a SHUFFLED burst IS a future attach).
+            live = [m for m in members if rows[m].get("pitch", 0) == 0]
             if not live:
                 continue
-            base, latent = self._latent_row_worth(rows, live[0], board, me)
-            if base <= 0:
-                continue
-            yield cid, live, base, latent
-
-    def _latent_holdings(self, rows: list, board: Board, me: dict, *, skip_cids=frozenset()) -> float:
-        """The latent worth my hand is HOLDING, per ROW — a second spare copy is a second card, which is
-        why this is not `_general_worth_classes`' de-duplicated slot view (ADR-0133)."""
-        return sum(self._latent_row_worth(rows, k, board, me)[1]
-                   for k, row in enumerate(rows) if row["cid"] not in skip_cids)
+            worth = self._role_value(cid)
+            deploy = rows[live[0]].get("deploy", 1.0)
+            if worth * deploy > 0:
+                liq = self._general_liquidity(cid, board, me)   # illiquid latent worth discounts
+                # INSURANCE, not latent worth (ADR-0101 amendment): a `clutch_heal` covering an IRREPLACEABLE
+                # Active is the survival plan, not one deploy away, so it takes full tier at deadline 1.
+                if self._heal_insures_the_last_wincon(cid, me):
+                    _emit(needs.insure_wincon_slot(f"insure:{cid}", value=worth * deploy), live)
+                    continue
+                _emit(needs.general_worth_slot(f"general:{cid}",
+                                               value=worth * deploy * _GENERAL_WORTH_W * liq), live)
+        return slots, elig
 
     def _rare_candy_reachable(self, ids) -> bool | None:
         """Does any card in ``ids`` carry the `rare_candy` Function Tag? ``None`` when there is no tag table —

@@ -2513,9 +2513,6 @@ def test_the_leaf_paths_hand_zero_is_the_RULED_one_and_says_so_when_it_stops_bei
             f"{key}: the leaf priced `hand` at {working['hand']}, not the structural 0.0 that "
             f"`hand.blind_to` records and Issue #331 ruled")
 
-    # The witness is EXISTENTIAL over `live`: `hand` is SIGNED, and a hand whose every deployable card
-    # already covers a slot nets exactly 0.0 honestly (ADR-0133). Resolving is the per-board control.
-    priced = {}
     for key, pilot, my_index, end in live:
         me = _my_side(end, my_index)
         assert me.get("hand"), f"{key}: a game-ending line's board should still be my perspective"
@@ -2523,10 +2520,9 @@ def test_the_leaf_paths_hand_zero_is_the_RULED_one_and_says_so_when_it_stops_bei
             f"{key}: a board WITH my hand resolved no Needs — the instrument is broken, not the leaf")
         working = {}
         sv.state_value(pilot._leaf_state_model(end, my_index), working=working)
-        priced[key] = working["hand"]
-    assert any(v != 0.0 for v in priced.values()), (
-        f"positive control FAILED — `hand` read 0.0 on EVERY board that carries my hand ({priced}), "
-        f"so the zeros above prove nothing about the ruling")
+        assert working["hand"] > 0.0, (
+            f"{key}: positive control FAILED — `hand` read {working['hand']} on a board that DOES "
+            f"carry my hand, so the zeros above prove nothing about the ruling")
 
 
 # ── a companion-GATED payoff (Issue #287) ─────────────────────────────────────────────────────────
