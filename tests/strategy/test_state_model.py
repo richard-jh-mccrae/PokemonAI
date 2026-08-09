@@ -542,6 +542,29 @@ def test_unseen_counts_is_one_derivation_over_every_visible_zone():
     assert DRAGAPULT not in unseen                            # the only copy is in play
 
 
+def test_unknown_own_hand_cards_are_hidden_outside_the_deck_and_energy_denominator():
+    """Unknown own-hand identities are not deck cards. They join hidden prizes in the split."""
+    me = _player(active=_pult(), hand=[CRISPIN], hand_count=3, prize=2)
+    model = _model(me, _player(active=_poke(RIOLU, hp=80)))
+    mine = model.mine
+    assert mine.unknown_hand_count == 2
+    assert mine.hidden_outside_deck == 4
+    assert mine.deck_count == sum(mine.unseen_counts.values()) - 4
+    energy_unseen = sum(n for cid, n in mine.unseen_counts.items()
+                        if _STATS[cid].is_typed_basic_energy)
+    aggregate = count_triple(energy_unseen, mine.hidden_outside_deck, mine.deck_count)
+    assert sum(c.expected for c in mine.deck_energy_counts.values()) == pytest.approx(
+        aggregate.expected)
+
+
+def test_fully_identified_own_hand_keeps_the_existing_deck_accounting():
+    model = _model(_player(active=_pult(), hand=[CRISPIN, E_R], prize=2),
+                   _player(active=_poke(RIOLU, hp=80)))
+    assert model.mine.unknown_hand_count == 0
+    assert model.mine.hidden_outside_deck == model.mine.prizes_hidden
+    assert model.mine.deck_count == sum(model.mine.unseen_counts.values()) - 2
+
+
 # ── the affordability family, read through the model ───────────────────────────────────────────
 
 def test_f70_is_not_a_famine_when_read_off_the_model():

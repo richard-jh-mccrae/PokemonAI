@@ -462,11 +462,18 @@ a board set whose COUNT multiplies `amount`, all of it landing in the clause's s
 DISTRIBUTES (a boolean: the FULL `amount` to EVERY body the clause's own `target` names — 1222 Fennel
 heals 40 from each of mine). They are two keys rather than one on purpose; `snapshot_coverage`'s
 module docstring carries that ruling and its grounds, as it does for `cost`.
+Issue #468 added `opponent_amount` and `opponent_amount_if`: explicit redraw counts for the opponent
+on a symmetric draw clause. A conditional opponent amount requires the own-side condition map and
+shares its branch name, so Harlequin carries
+5/3 on heads and 3/5 on tails without a card-ID oracle. The closed-form draw route admits only full,
+decidable clauses; unknown conditions, counts, costs, windows, and riders refuse by name.
 A THIRD axis was added by Issue #374 (`snapshot_coverage.CLAUSE_SELECTORS`): the VALUES of the
 string-valued keys that do the SELECTING — `target`, `condition`, `applies_to`, `restriction`,
-`name_family`, `trigger` and eleven more, 17 keys carrying 74 values. `CLAUSE_WRITES` audits the
-values of the four VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a
-selector's value, so a mistyped `target` passed both audits and every consumer of it fails CLOSED
+`name_family`, `trigger` and twelve more, 18 keys carrying 76 values. Issue #469 added `allowance`:
+`body` spends one in-play serial, while `card` shares one global card-id allowance across copies.
+`CLAUSE_WRITES` audits the values of the four VOCABULARY keys and `CLAUSE_PARAMETERS` audits the
+key NAMES; nothing walked a selector's value, so a mistyped `target` passed both audits and every
+consumer of it fails CLOSED
 (`combat._accel_target_ok`, `planner._heal_restriction_targets`, `planner._condition_holds_for` all
 `return False` on a string they do not know) — the clause funds nothing, reaches nothing, or never
 counts toward survival. `undeclared_selector_values` is its teeth. The two heal readers named there
@@ -489,10 +496,10 @@ a Clause is the measured, structured fact), effect (unqualified — say which ti
 **Clause-Set Completeness** (`covers`):
 The per-CARD verdict on whether that card's whole list of **Effect Clauses** carries its whole
 printed effect — `full` or `partial` — each verdict quoting the leg the clauses carry or miss. A
-property of the SET, never of one clause: *Judge* carries `draw 4`, which is exactly what it draws
-for me, and the printed card also shuffles the OPPONENT's hand away and redraws it — so no single
-clause is wrong and the set is still incomplete. (*Surfer* was this entry's example until Issue #302
-closed it, which is what a shrink-only owed list looks like from the inside.) It is a hand
+property of the SET, never of one clause: before Issue #468, *Unfair Stamp* carried its own draw 5
+and both-hand shuffle but omitted the opponent's draw 2, so no carried field was wrong and the set
+was still incomplete. Adding the explicit opponent amount made the same set full and shrank the owed
+list. It is a hand
 ruling, not a measurement (no parser reads "and then switch"), authored in
 `tools/meta_tracker/effect_overrides.json` under `_covers` and re-stamped verbatim into
 `card_effects.json`. Read two ways: `snapshot_coverage.partial_clause_cards()` reports the owed list
@@ -737,10 +744,12 @@ seam this composes), combat module (bare)
 
 **Card-Worth Oracle** (ADR-0065):
 The ONE closed-form home for card keep/shed valuation — every equation is `value = Worth × Odds`.
-Six modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
-for the five; the sixth, **Playability**, is ADR-0104's and has no glossary term of its own):
+Seven modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
+for the five; **Playability** and the blind-draw composition helper add no glossary term):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
-probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
+probability; [deck_value.py](deck_value.py) gives one blind draw the copy-weighted mean Worth of the
+unseen deck-plus-prizes pool, capped by live deck size for multiple draws), **Odds**
+([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
 factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
@@ -1047,8 +1056,9 @@ _Avoid_: Lethal Line (the win-goal special case), Plan (the mode), plan / sequen
 
 **Chance Node**:
 The single point in a candidate Turn Line where the action's outcome is stochastic at plan time — a
-Hand Refresh's draw, a fetch against uncertain deck contents, a coin-flip attack. Own-side only (the
-opponent's hidden zones are Posture/Read territory, not a Chance Node).
+Hand Refresh's draw, a fetch against uncertain deck contents, a coin-flip attack. Opponent hand
+identities remain Posture/Read territory; an explicit symmetric redraw may update only the opponent's
+observable hand/deck counts.
 _Avoid_: randomness/RNG (vague), determinization (a sampled resolution — the rejected Monte-Carlo
 mechanism), hidden information (the opponent's zones — explicitly out of scope)
 
@@ -1343,7 +1353,7 @@ already shipped — but it does carry `DEPLOY_BAND`'s reconciliation debt, and t
 it: composing the two shipped legs (`PRIZE_DAMAGE_RATE` 100 ÷ `ITEM_HOLD_WORTH_RATE` 1.0) says ~100
 worth per prize, a ~39× disagreement. That is evidence about the WORTH scale (range 0–30 by
 construction, so a 100-point slot would erase every other card's contribution rather than price one),
-and `state_value.POC_WORTH_PRIZE_RATE` is what settles it.
+and `state_value.worth_to_prizes` is what settles it; the authored rate stays private.
 _Avoid_: Worth Damage Rate (a different scale PAIR, and still absent by design), prize_to_worth (the
 GENERAL rate this is not — `test_currency.py` fails the moment that name appears), "conversion factor"
 for the ratio itself (the ratio is dimensionless; only the band carries units)
@@ -1868,7 +1878,8 @@ safe for `>=` checks), **expected** (the hypergeometric prize-split average — 
 of a card, never comparable to a cost), **ceiling** (provably at most; the fail-open "could it be
 there" leg — 0a's sound type-set gate is exactly `ceiling > 0`), and **`p_any`** — the **Probability
 Leg**: P(at least one copy is still in the deck), `deck_odds.p_contains` over the same `(unseen,
-prizes_hidden, deck_count)` the other legs read (#175). It is the honest middle the two boolean legs
+hidden_outside_deck, deck_count)` the other legs read (#175). `hidden_outside_deck` is hidden prizes
+plus unknown own-hand identities (Issue #468). It is the honest middle the two boolean legs
 collapse: ≈0.06% wrong at 3 unseen copies where `ceiling > 0` is nearly free, ≈13% wrong at 1 where
 `floor` is still zero. A RANKED consumer weights by it *when its question is presence* ("is there at
 least one?"); a ranked consumer asking a COUNT ("how many?") reads `expected` instead (ADR-0077); a
@@ -2056,7 +2067,7 @@ element-level granularity is what separates two writes to distinct instances)
 **Hand Ledger**:
 `state_value.hand` reads ONE `needs.Resolution` and prices both sides of it: what my hand and deck
 COVER (`assignment_coverage` + `re_access` + `hand_worth`) MINUS what the position DEMANDS
-(`slot_demand`), crossed once at `POC_WORTH_PRIZE_RATE`. Ruled by **ADR-0130** (Issue #400). Before
+(`slot_demand`), crossed once at `state_value.worth_to_prizes`. Ruled by **ADR-0130** (Issue #400). Before
 the demand leg it priced supply alone, which under differencing inverts every card play — spending a
 card moved supply down and demand not at all, so the human-ruled Energy attach priced **negative on
 31 of 31** corpus frames. One Energy retires two `fund_attack` slots (16 Worth of demand) for 8 of

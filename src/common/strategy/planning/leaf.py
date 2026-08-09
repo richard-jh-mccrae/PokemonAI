@@ -35,12 +35,12 @@ _LINE_CAP = 100.0             # the line account's POSITIVE contribution is capp
 _CLASS_B_SPEND_IDS = frozenset({   # spend account: NEGATIVE weights for spending a scarce resource
     # ⚠️ a member no Strategy ships can never reach `OptionTrace.fired`, so the set silently reads
     # bigger than it is. Interlock: `tests/strategy/test_rung_id_literals_are_live.py`.
-    "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck",
+    "dont-search-an-empty-deck",
 })
 
 _ABILITY_FIRE_IDS = frozenset({    # POSITIVE weights for USING a beneficial setup Ability: the cards
     # drawn are a future resource the end board cannot show. Same shipped-roster interlock as above.
-    "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "bench-the-comeback-drawer",
+    "bench-the-comeback-drawer",
 })
 
 

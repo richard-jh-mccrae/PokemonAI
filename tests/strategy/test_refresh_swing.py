@@ -149,6 +149,7 @@ def test_own_draw_count_reads_the_prize_conditional_windows():
 
 def test_own_draw_count_is_none_for_a_non_refresh():
     assert own_draw_count(9999, my_prizes_remaining=6, opp_prizes_remaining=6) is None
+    assert own_draw_count(None, my_prizes_remaining=6, opp_prizes_remaining=6) is None
 
 
 def test_lillies_out_draws_judge_at_the_grab():

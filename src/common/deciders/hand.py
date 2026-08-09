@@ -283,7 +283,8 @@ class HandMixin:
         return {"deadness": [r.get("deadness", 0) for r in rows],
                 "tiebreak": [r.get("worth", 0.0) * r.get("deploy", 1.0) for r in rows]}
 
-    def _cost_shed(self, obs: dict, board: Board = None, *, exclude_cid=None, picks: int):
+    def _cost_shed(self, obs: dict, board: Board = None, *, exclude_cid=None, picks: int,
+                   eligible_hand_indices=None):
         """**The ONE answer to "which cards does a `picks`-card cost actually take?"** — `needs.cheapest_removal`,
         the equation that already DECIDES the forced discard. NOT `keep_v2`: measured worse, reverted (ADR-0121)."""
         from common import needs
@@ -295,24 +296,31 @@ class HandMixin:
         slots, elig = self._resolve_needs(obs, board, rows)
         resupply = [0.0] * len(slots)            # a forced discard has no redraw window (as `_needs_v2`)
         intrinsics = [0.0] * len(rows)           # no v1 post-gate hedge exists over the HAND rows
+        candidates = None if eligible_hand_indices is None else tuple(
+            i for i, row in enumerate(rows) if row["hand_i"] in eligible_hand_indices)
         pick = needs.cheapest_removal(slots, elig, resupply, intrinsics, int(picks),
-                                      **self._removal_ranking_legs(rows))
+                                      candidates=candidates, **self._removal_ranking_legs(rows))
+        if len(pick) != int(picks):
+            return None
         cost = needs.removal_score(slots, elig, resupply, intrinsics, pick)
         # `hand_i`, NOT `i`. The rows drop one copy of `exclude_cid`, so a row ordinal is short of the true
         # hand position for every card after it — reading `i` collides the picks with the played card's index.
         return ShedPlan(hand_indices=tuple(sorted(rows[k]["hand_i"] for k in pick)),
                         row_indices=tuple(pick), rows=rows, cost=float(cost))
 
-    def cost_shed_indices(self, model, option: dict, picks: int) -> tuple:
+    def cost_shed_indices(self, model, option: dict, picks: int,
+                          eligible_hand_indices=None) -> tuple:
         """The `shed` seam `board_expectation.expectation` takes. Model-shaped because the apply seam has no
         Pilot; its CALLER passes this in. ``()`` when the hand cannot pay — the seam reads that as a refusal."""
         obs = getattr(model, "source_obs", None) or {}
         seat = int(getattr(model, "my_index", 0))
         hand = ((obs.get("current") or {}).get("players") or [{}])[seat].get("hand") or ()
         index = (option or {}).get("index")
-        played = (hand[index] or {}).get("id") if isinstance(index, int) and 0 <= index < len(hand) \
-            else None
-        plan = self._cost_shed(obs, exclude_cid=played, picks=picks)
+        played = ((hand[index] or {}).get("id")
+                  if (option or {}).get("type") == _PLAY and isinstance(index, int)
+                  and 0 <= index < len(hand) else None)
+        plan = self._cost_shed(obs, exclude_cid=played, picks=picks,
+                               eligible_hand_indices=eligible_hand_indices)
         return plan.hand_indices if plan is not None else ()
 
     def _as_discard_rows(self, rows: list, obs: dict, board: Board) -> list:

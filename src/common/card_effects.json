@@ -11,15 +11,15 @@
 },
 "66": {
 "covers": "full",
-"reason": "draw 3 + `shuffle_self_in`; the self-shuffle IS the rest of the card"
+"reason": "draw 3 + `shuffle_self_in` + the per-body Ability allowance; the self-shuffle IS the rest of the card"
 },
 "120": {
 "covers": "full",
-"reason": "`draw amount 1 window 2` + `other_to_bottom` is the whole dig"
+"reason": "`draw amount 1 window 2` + `other_to_bottom` + the per-body Ability allowance is the whole dig"
 },
 "140": {
 "covers": "full",
-"reason": "draw 3 under `pokemon_ko_last_turn`; the once-per-turn cap is a condition, not a leg"
+"reason": "draw 3 under `pokemon_ko_last_turn` + the once-per-card/global Ability allowance"
 },
 "190": {
 "covers": "full",
@@ -39,7 +39,7 @@
 },
 "675": {
 "covers": "full",
-"reason": "draw 3 + the discard-a-Basic-{F} cost + the Solrock condition"
+"reason": "draw 3 + the discard-a-Basic-{F} cost + the Solrock condition + the once-per-card/global Ability allowance"
 },
 "678": {
 "covers": "full",
@@ -54,8 +54,8 @@
 "reason": "a top-4 dig taking any number of Supporters (`dig: 4`, `amount: all`); shuffling the rest back is the dig's own convention"
 },
 "1080": {
-"covers": "partial",
-"reason": "clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled"
+"covers": "full",
+"reason": "draws 5 after our previous-turn KO, shuffles both hands, and explicitly redraws the opponent to 2"
 },
 "1082": {
 "covers": "full",
@@ -440,7 +440,7 @@
 {
 "kind": "draw",
 "amount": 3,
-"condition": "once_per_turn_ability",
+"allowance": "body",
 "rider": "shuffle_self_in"
 }
 ],
@@ -449,7 +449,7 @@
 "kind": "draw",
 "amount": 1,
 "window": 2,
-"condition": "once_per_turn_ability",
+"allowance": "body",
 "rider": "other_to_bottom"
 }
 ],
@@ -457,7 +457,8 @@
 {
 "kind": "draw",
 "amount": 3,
-"condition": "pokemon_ko_last_turn"
+"condition": "pokemon_ko_last_turn",
+"allowance": "card"
 }
 ],
 "190": [
@@ -501,6 +502,7 @@
 "kind": "draw",
 "amount": 3,
 "condition": "solrock_in_play",
+"allowance": "card",
 "rider": "discard_basic_f_energy"
 }
 ],
@@ -536,6 +538,7 @@
 "kind": "draw",
 "amount": 5,
 "condition": "pokemon_ko_last_turn",
+"opponent_amount": 2,
 "rider": "shuffle_both_hands"
 }
 ],
@@ -1109,6 +1112,7 @@
 {
 "kind": "draw",
 "amount": 4,
+"opponent_amount": 4,
 "rider": "shuffle_both_hands"
 }
 ],
@@ -1189,6 +1193,11 @@
 "amount_if": {
 "condition": "coin_tails",
 "amount": 3
+},
+"opponent_amount": 3,
+"opponent_amount_if": {
+"condition": "coin_tails",
+"amount": 5
 },
 "rider": "shuffle_both_hands"
 }

@@ -56,6 +56,15 @@ def test_the_coverage_registry_is_valid():
     assert sc.validate() == []
 
 
+def test_ability_allowances_are_authored_and_homed_as_one_whole_zone():
+    """Body and global usage are different currencies, but both are turn-wide allowance state."""
+    assert sc.CLAUSE_SELECTORS["allowance"] == {"body", "card"}
+    zone = sc.BY_ID["allowance_ability_used"]
+    assert zone.status == sc.HOMED
+    assert sc.homes()[zone.id] == ["ability_used_bodies", "ability_used_cards"]
+    assert zone.id not in sc.ELEMENT_ZONES
+
+
 @pytest.mark.req("REQ-SNAPSHOT-0001")
 def test_an_owed_zone_without_an_owner_is_rejected():
     """Without the mandatory field, marking something owed would be a comment."""
@@ -227,6 +236,11 @@ def test_the_two_refresh_riders_declare_exactly_the_hands_they_move():
     assert not (own & {"their_hand_size", "their_deck_count"})
     assert both == sc.CLAUSE_WRITES["shuffle_both_hands"]
     assert both == own | {"their_hand_size", "their_deck_count"}
+
+
+def test_draw_clauses_declare_both_opponent_magnitude_parameters():
+    assert "opponent_amount" in sc.CLAUSE_PARAMETERS
+    assert "opponent_amount_if" in sc.CLAUSE_PARAMETERS
     assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= sc.NONDETERMINISTIC_CLAUSES
     # Declared, and actually USED — a write-set for a rider no card carries would be untested prose.
     assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= set(sc.clause_vocabulary(_compendium()))
@@ -347,7 +361,7 @@ def test_every_clause_SELECTOR_value_in_the_compendium_is_declared():
         % sc.undeclared_selector_values(pairs))
     # The walk actually reached the artifact, rather than passing by finding nothing.
     keys = {k for k, _ in pairs}
-    assert (len(pairs), len(keys)) == (74, 17), (len(pairs), len(keys))
+    assert (len(pairs), len(keys)) == (76, 18), (len(pairs), len(keys))
     # Every selector key is a declared PARAMETER and none is VOCABULARY: the discriminator is
     # *names a WRITE*, not *is a string*, and a selector narrows reach rather than writing.
     assert set(sc.CLAUSE_SELECTORS) <= set(sc.CLAUSE_PARAMETERS)
@@ -522,7 +536,7 @@ def test_the_issue_minimum_zone_list_is_all_enumerated():
                  "my_deck_count", "their_deck_count", "deck_odds", "my_prizes", "their_prizes",
                  "stadium", "attached_tools", "damage_counters", "special_conditions",
                  "allowance_energy_attached", "allowance_supporter_played",
-                 "allowance_retreat_used", "transient_grants"):
+                 "allowance_retreat_used", "allowance_ability_used", "transient_grants"):
         assert zone in sc.BY_ID, zone
 
 
@@ -589,8 +603,8 @@ def test_element_zones_are_real_zones_and_the_required_rejections_stay_whole_zon
     whole-zone, because each is what refuses a case the spec requires refused."""
     assert sc.ELEMENT_ZONES <= set(sc.BY_ID), sorted(sc.ELEMENT_ZONES - set(sc.BY_ID))
     must_stay_whole = {"bench_occupancy", "allowance_energy_attached", "allowance_supporter_played",
-                       "allowance_stadium_played", "allowance_retreat_used", "special_conditions",
-                       "stadium"}
+                       "allowance_stadium_played", "allowance_retreat_used",
+                       "allowance_ability_used", "special_conditions", "stadium"}
     assert must_stay_whole <= set(sc.BY_ID)              # positive control: they are real zones
     assert sc.ELEMENT_ZONES & must_stay_whole == set()
 
@@ -649,7 +663,7 @@ def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
     """The owed list is generated from the artifact; every listed verdict names its missing leg."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert len(partial) == 14
+    assert len(partial) == 13
     assert 1237 in partial and "coin" in partial[1237].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.

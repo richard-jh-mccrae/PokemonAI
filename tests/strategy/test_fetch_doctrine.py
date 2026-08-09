@@ -481,4 +481,21 @@ def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
     assert plan.hand_indices == taken
 
 
+@pytest.mark.req("REQ-GEN-0065")
+def test_cost_shed_indices_can_restrict_an_ability_cost_to_legal_hand_positions():
+    """A card-specific Ability cost still uses the shared removal equation, but may only choose
+    among positions its printed cost permits. Too few eligible cards is an explicit refusal."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    obs = make_select([opt(6, area=1, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[JUNKMON, ULTRA, JUNKMON]))
+    model = pilot._leaf_state_model(obs, 0)
+    ability = {"type": 6, "area": 1, "index": 0}
+
+    assert pilot.cost_shed_indices(model, ability, 1, eligible_hand_indices=(0, 2)) == (0,)
+    assert pilot.cost_shed_indices(model, ability, 1, eligible_hand_indices=(2,)) == (2,)
+    assert pilot.cost_shed_indices(model, ability, 2, eligible_hand_indices=(2,)) == ()
+
+
 # --- the doctrine's ROLE after POC-T4/5 (Issue #386) ---------------------------------------------

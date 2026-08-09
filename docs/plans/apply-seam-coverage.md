@@ -131,24 +131,24 @@ Pool: **383 distinct cards** — 5 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 5 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 322 | 78.2% | 291 | 97.0% | 53.6 |
+| **modelled** | 323 | 78.4% | 294 | 98.0% | 53.7 |
 | **engine-resolved** | 43 | 10.4% | 11 | 3.7% | 4.4 |
-| **refused** | 47 | 11.4% | 19 | 6.3% | 4.4 |
+| **refused** | 46 | 11.2% | 16 | 5.3% | 4.3 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 322 | 78.2% | modelled 322 |
-| **modelled-partial** | 10 | 2.4% | engine-resolved 3, refused 7 |
+| **modelled-full** | 323 | 78.4% | modelled 323 |
+| **modelled-partial** | 9 | 2.2% | engine-resolved 3, refused 6 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 5 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 293 | 76.5% | 270 | 90.0% | 51.2 | 85.4% |
+| **modelled-full** | 294 | 76.8% | 273 | 91.0% | 51.3 | 85.5% |
 | **engine-resolved** | 40 | 10.4% | 11 | 3.7% | 4.4 | 7.3% |
-| **modelled-partial** | 10 | 2.6% | 3 | 1.0% | 1.2 | 2.0% |
+| **modelled-partial** | 9 | 2.3% | 0 | 0.0% | 1.1 | 1.8% |
 | **refused** | 40 | 10.4% | 16 | 5.3% | 3.2 | 5.4% |
 
 ### Headline — effect-bearing sites only
@@ -157,24 +157,23 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 78 | 46.4% |
+| **modelled** | 79 | 47.0% |
 | **engine-resolved** | 43 | 25.6% |
-| **refused** | 47 | 28.0% |
+| **refused** | 46 | 27.4% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 78 | 46.4% |
-| **modelled-partial** | 10 | 6.0% |
+| **modelled-full** | 79 | 47.0% |
+| **modelled-partial** | 9 | 5.4% |
 
 ### REFUSED, grouped by cause and ranked by exposure
 
-#### clause-vocabulary gap — 25 sites, 12 copies across our 5 decks
+#### clause-vocabulary gap — 24 sites, 9 copies across our 5 decks
 
 | id | card | site | our copies | meta copies | effect family | deterministic-shaped | note |
 |---|---|---|---|---|---|---|---|
 | 1188 | Ciphermaniac’s Codebreaking | play | 4 | 0.00 | fetch / search / recover |  |  |
 | 1248 | Academy at Night | play | 4 | 0.00 | hand disruption — their hand |  |  |
-| 1080 | Unfair Stamp | play | 3 | 0.11 | hand disruption — their hand |  | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
 | 1201 | Briar | play | 1 | 0.00 | prize manipulation |  |  |
 | 742 | Kadabra | evolve | 0 | 0.86 | draw |  |  |
 | 743 | Alakazam | evolve | 0 | 0.86 | draw |  |  |
@@ -243,8 +242,8 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 
 | effect family | clause vocabulary | sites | our copies | meta copies |
 |---|---|---|---|---|
-| hand disruption — their hand | **NEW** | 6 | 7 | 0.20 |
 | fetch / search / recover | existing | 6 | 4 | 1.05 |
+| hand disruption — their hand | **NEW** | 5 | 4 | 0.09 |
 | prize manipulation | **NEW** | 4 | 1 | 0.18 |
 | draw | existing | 3 | 0 | 1.93 |
 | energy attach / acceleration | existing | 1 | 0 | 0.29 |
@@ -257,11 +256,11 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | gap shape | sites | our copies | meta copies | what it needs |
 |---|---|---|---|---|
 | deterministic-shaped (no RNG / hidden-zone marker) | 0 | 0 | 0.0 | **emptied by Issue #299** — a deterministic-shaped option on any declared non-terminal kind now reaches the engine route, so it is an ENGINE-RESOLVED candidate above rather than a refusal here |
-| RNG-shaped (shuffle / deck read / coin) | 25 | 12 | 3.9 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
+| RNG-shaped (shuffle / deck read / coin) | 24 | 9 | 3.8 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
 
 The first row is **expected to be empty** and its emptiness is the measurement, not an omission: it is the exact set Issue #299's ruling moved. A non-zero count here would mean a deterministic-shaped option is still being refused on a MODELLED kind, which the ruling says cannot happen — so read it as a live check on the routing rather than as a backlog.
 
-**15 of 25** gap sites need vocabulary that does not exist yet; 10 need only a compendium entry in an existing kind.
+**14 of 24** gap sites need vocabulary that does not exist yet; 10 need only a compendium entry in an existing kind.
 
 ### Win-plan critical path
 
@@ -269,7 +268,6 @@ A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship n
 
 | id | card | site | class | named by | our copies |
 |---|---|---|---|---|---|
-| 1080 | Unfair Stamp | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 112 | Munkidori | ability: Adrena-Brain | engine-resolved | dragapult_ex | 2 |
 
 ### ENGINE-RESOLVED — the modelling backlog
@@ -324,11 +322,10 @@ A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship n
 
 ### MODELLED-PARTIAL — clause sets that cover only part of the card
 
-10 sites, 3 copies across our 5 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (3), **refused** (7). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
+9 sites, 0 copies across our 5 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (3), **refused** (6). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
 
 | id | card | fate now | our copies | meta copies | what the clauses miss |
 |---|---|---|---|---|---|
-| 1080 | Unfair Stamp | refused | 3 | 0.11 | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
 | 1115 | Hop’s Bag | refused | 0 | 0.66 | the Hop's NAME family is recorded and UNDECIDED — no build-time family index exists, so the clause deliberately reaches nothing rather than over-claiming every Basic |
 | 1134 | Team Rocket's Transceiver | refused | 0 | 0.28 | the "Team Rocket" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed |
 | 1220 | Team Rocket's Proton | refused | 0 | 0.06 | the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry |
@@ -372,9 +369,9 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 57 | 1 | 2 | 0 | 1.7% |
-| hydrapple | 48 | 1 | 6 | 5 | 10.0% |
-| mega_lucario | 59 | 1 | 0 | 0 | 1.7% |
+| dragapult_ex | 58 | 0 | 2 | 0 | 0.0% |
+| hydrapple | 49 | 0 | 6 | 5 | 8.3% |
+| mega_lucario | 60 | 0 | 0 | 0 | 0.0% |
 | mega_starmie | 60 | 0 | 0 | 0 | 0.0% |
 | slowking | 46 | 0 | 3 | 11 | 18.3% |
 
@@ -423,18 +420,19 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 ### Clause selector-value health (`snapshot_coverage`, Issue #374)
 
 - `undeclared_selector_values()`: `[]`
-- selector keys / values in the compendium: **17** / **74**
-- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **31**
+- selector keys / values in the compendium: **18** / **76**
+- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **30**
 
 | selector key in the compendium | distinct values | unconsumed | declared |
 |---|---|---|---|
 | target | 24 | 3 | yes |
-| condition | 13 | 8 | yes |
+| condition | 13 | 7 | yes |
 | applies_to | 6 | 1 | yes |
 | restriction | 5 | 2 | yes |
 | name_family | 4 | 4 | yes |
 | trigger | 4 | 3 | yes |
 | source | 3 | 1 | yes |
+| allowance | 2 | 0 | yes |
 | amount_per | 2 | 2 | yes |
 | dest | 2 | 0 | yes |
 | timing | 2 | 2 | yes |
@@ -509,14 +507,11 @@ predicate — Lillie's Determination, Lacey, Billy & O'Nare, Ariana; Ignition En
 cost being expensive — Morty's Conviction, Iris's, Kofu, Carmine). Two riders were minted with them:
 `shuffle_own_hand_in` for the ONE-SIDED refresh, and `both_hands_to_bottom` for Lucian.
 
-**Nine of the 14 now resolve MODELLED-FULL and five are declared-partial**, which is the deliverable
-in both directions. *Lillie's Determination* — 24 copies, named by all three authored doctrines —
-now carries base 6 with the 8 gated on exactly 6 Prizes. *Surfer* carries the switch as the
-`self_switch` rider Issue #303 minted, and refills to five. The four SYMMETRIC refreshes (*Judge*,
-*Unfair Stamp*, *Harlequin*, *Lucian*) carry their OWN leg exactly and stay `partial` on the
-opponent's shuffle-and-redraw, which needs a `state_value` term that prices their hand and which
-this seam already refuses as an accepted POC unknown; *Naveen* stays partial on its optional
-pre-discard. Four silent errors became four declared ones, which is the whole point.
+**Issue #468 closes the symmetric shuffle redraws that fit the scalar seam.** *Judge*, *Unfair
+Stamp*, and *Harlequin* now carry explicit opponent amounts; Harlequin carries both coin branches.
+Their full clauses route through the same opponent-hand resource already priced by `state_value`.
+*Lucian* remains `partial`: putting both hands on the deck bottom plus independent per-player coin
+flips is not the supported shuffle route. *Naveen* remains partial on its optional pre-discard.
 
 The ninth arrived later. *Morty's Conviction* was declared-partial here on *"a magnitude that scales
 with the opponent's Bench and which no clause field expresses"* — it stated NO amount rather than the

@@ -34,6 +34,28 @@ from common.strategy.damage_context import damage_context as _assemble_damage_co
 _THREADED = object()
 _REBUILD_UNCHANGED = object()
 
+_ABILITY_ALLOWANCE_STATE = {
+    "body": "abilityUsedBodies",
+    "card": "abilityUsedCards",
+}
+
+
+def ability_allowance_marker(allowance, *, card_id, body_serial):
+    """Authored metadata owns copy-local versus card-global identity; conditions never infer it."""
+    state_key = _ABILITY_ALLOWANCE_STATE.get(allowance)
+    if state_key is None:
+        return None
+    value = body_serial if allowance == "body" else int(card_id)
+    return None if value is None else (state_key, value)
+
+
+def ability_allowance_spent(model, marker) -> bool:
+    if marker is None:
+        return False
+    state_key, value = marker
+    used = model.ability_used_bodies if state_key == "abilityUsedBodies" else model.ability_used_cards
+    return value in used
+
 #: Fallback Bench cap when an observation omits the engine's own ``benchMax`` (rulebook L75).
 _BENCH_MAX = 5
 
@@ -578,6 +600,11 @@ class MySide(_SideBase):
         return int(count) if count is not None else len(self.player.get("hand") or [])
 
     @lazy
+    def unknown_hand_count(self) -> int:
+        """Own hand cards whose identities the hypothetical snapshot no longer carries."""
+        return max(0, self.hand_size - len(self.hand_ids))
+
+    @lazy
     def hand_energy_counts(self) -> dict:
         """``{EnergyType: count}`` of Basic Energy in my hand — the manual attach's immediately
         playable supply, as a COUNT because "one {R} left" and "three" are different decisions."""
@@ -648,10 +675,14 @@ class MySide(_SideBase):
                    if not (isinstance(p, dict) and p.get("id") is not None))
 
     @lazy
+    def hidden_outside_deck(self) -> int:
+        """Uniformly unknown cards known not to be in deck: face-down prizes plus own hidden hand."""
+        return self.prizes_hidden + self.unknown_hand_count
+
+    @lazy
     def deck_count(self) -> int:
-        """Cards left in my deck. Pre-anchor this is the unseen pool minus the hidden prize slots;
-        anchored it is the unseen pool itself."""
-        return max(0, sum(self.unseen_counts.values()) - self.prizes_hidden)
+        """Cards left in my deck: unseen identities minus every hidden slot outside the deck."""
+        return max(0, sum(self.unseen_counts.values()) - self.hidden_outside_deck)
 
     @lazy
     def deck_energy_counts(self) -> dict:
@@ -662,7 +693,7 @@ class MySide(_SideBase):
             stat = self._combat._card_stat(cid)
             if stat is not None and stat.is_typed_basic_energy:
                 per_type[stat.energyType] += n
-        hidden, deck = self.prizes_hidden, self.deck_count
+        hidden, deck = self.hidden_outside_deck, self.deck_count
         return {t: count_triple(n, hidden, deck) for t, n in per_type.items()}
 
     @lazy
@@ -1251,6 +1282,14 @@ class StateModel(_Lazily):
     @property
     def supporter_played(self) -> bool:
         return bool(self.state.get("supporterPlayed"))
+
+    @property
+    def ability_used_bodies(self) -> frozenset:
+        return frozenset(self.state.get("abilityUsedBodies") or ())
+
+    @property
+    def ability_used_cards(self) -> frozenset[int]:
+        return frozenset(int(cid) for cid in (self.state.get("abilityUsedCards") or ()))
 
     @property
     def retreated(self) -> bool:

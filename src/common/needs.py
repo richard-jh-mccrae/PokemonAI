@@ -347,16 +347,18 @@ def pitch_gain(slots, eligibility, index: int) -> float:
 
 
 def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
-                     deadness=None, tiebreak=None) -> list:
+                     deadness=None, tiebreak=None, candidates=None) -> list:
     """The ``picks``-subset minimising :func:`removal_score`, ranked ``(score, −Σ deadness, Σ tiebreak,
     indices)``; ``deadness`` (0/1, ADR-0106) outranks ``tiebreak``, else a corpse's catalog tier wins."""
     from itertools import combinations
     n = len(eligibility)
-    k = max(0, min(int(picks), n))
+    allowed = tuple(range(n)) if candidates is None else tuple(
+        i for i in dict.fromkeys(int(i) for i in candidates) if 0 <= i < n)
+    k = max(0, min(int(picks), len(allowed)))
     tb = list(tiebreak) if tiebreak is not None else [0.0] * n
     dead = list(deadness) if deadness is not None else [0.0] * n
     best_set, best_key = None, None
-    for combo in combinations(range(n), k):
+    for combo in combinations(allowed, k):
         score = removal_score(slots, eligibility, resupply, intrinsics, combo)
         key = (score,
                -sum(dead[i] for i in combo if i < len(dead)),

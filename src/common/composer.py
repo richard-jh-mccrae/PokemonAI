@@ -13,6 +13,7 @@ from typing import Mapping, Sequence
 
 from common import apply_option as ao
 from common import board_choice
+from common import board_delta
 from common import board_expectation as bx
 from common import snapshot_coverage
 from common.board_delta import Unmodellable
@@ -20,8 +21,9 @@ from common.option_equivalence import (
     AREA_ACTIVE, AREA_BENCH, AREA_HAND, canonical_keys, class_representatives, fan_out,
     option_equivalence,
 )
+from common.state_model import ability_allowance_marker, ability_allowance_spent
 from common.state_value import attack_ev, attack_ev_legs, state_value
-from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RETREAT
+from common.strategy.context import _ABILITY, _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RETREAT
 
 
 #: How many candidate sequences survive each pruning step. **Derived from a TIME budget, not tuned and
@@ -279,6 +281,18 @@ def _still_legal(model, option: Mapping) -> bool:
     """Would the engine still offer this option on ``model``'s board? Only the limits an EARLIER STEP
     of this sequence can spend; a first-turn evolve is safe by construction (`docs/rules.md` §3/§4)."""
     kind = ao.transition_kind(option)
+    if kind == _ABILITY:
+        body = _ability_body(model, option)
+        if body is None:
+            return False
+        clauses = board_delta.card_clauses(model.combat, body.card_id)
+        allowances = {clause.get("allowance") for clause in clauses
+                      if clause.get("allowance") is not None}
+        if len(allowances) == 1:
+            marker = ability_allowance_marker(
+                allowances.pop(), card_id=body.card_id, body_serial=body.body.get("serial"))
+            return not ability_allowance_spent(model, marker)
+        return True
     if kind == _RETREAT:
         return not model.retreated
     card = _option_card_stat(model, option)
@@ -330,6 +344,17 @@ def _target_body(model, option: Mapping):
     if area == AREA_BENCH:
         bench = model.mine.bench
         return bench[index] if index < len(bench) else None
+    return None
+
+
+def _ability_body(model, option: Mapping):
+    area, index = option.get("area"), option.get("index")
+    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+        return None
+    if area == AREA_ACTIVE:
+        return model.mine.active if index == 0 else None
+    if area == AREA_BENCH:
+        return model.mine.bench[index] if index < len(model.mine.bench) else None
     return None
 
 
@@ -810,28 +835,29 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                        fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason)
 
     try:
-        coin = bx.coin_expectation(node.model, option, score=state_value)
+        closed = bx.closed_form_transition(node.model, option, score=state_value,
+                                           clauses_cover=cover, shed=state.shed)
     except Unmodellable as gap:
         return _refuse(str(gap))
-    if coin is not None:
-        state.leaf_evals += len(coin.classes)
-        leaf = float(coin.ordering(state_value))
-        state.bounds.append(Bounds(index=index, best=float(coin.best(state_value)),
-                                   expected=float(coin.expected(state_value)),
-                                   classes=len(coin.classes), truncated=0,
-                                   total_probability=float(coin.total_probability)))
+    if isinstance(closed, ao.Expectation):
+        state.leaf_evals += len(closed.classes)
+        leaf = float(closed.ordering(state_value))
+        state.bounds.append(Bounds(index=index, best=float(closed.best(state_value)),
+                                   expected=float(closed.expected(state_value)),
+                                   classes=len(closed.classes), truncated=closed.truncated,
+                                   total_probability=float(closed.total_probability)))
+        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+    if isinstance(closed, ao.ScalarTransition):
+        state.leaf_evals += 1
+        leaf = float(state_value(closed.model)) + closed.scalar
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
                        fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
 
-    try:
-        scalar = bx.refresh_transition(node.model, option)
-    except Unmodellable as gap:
-        return _refuse(str(gap))
-    if scalar is not None:
-        state.leaf_evals += 1
-        leaf = float(state_value(scalar.model)) + scalar.scalar
-        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
-                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+    if footprint.reveals_information and ao.transition_kind(option) == _ABILITY:
+        return _refuse(
+            "a revealing `_ABILITY` is an in-play source, not a malformed hand `_PLAY`; "
+            "closed-form Ability sources are deliberately deferred to Issue #469")
 
     deferred = board_choice.has_deferred_target(
         node.model, option, seat_index=int(getattr(node.model, "my_index", 0)))

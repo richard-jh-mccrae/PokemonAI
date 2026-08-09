@@ -25,8 +25,9 @@ from pathlib import Path
 
 import pytest
 
-from tools.rung_registry import (DECIDERS, EMERGENT, FOLDED, MAX_MENTIONS, NOT_A_RUNG, REVERTED, SUBSUMED,
-                                 LEGACY_DECK_RUNTIME_RUNG_IDS, SHARED_RUNTIME_RETIRED, UNRECORDED, UNREPLACED)
+from tools.rung_registry import (CORRECTED, DECIDERS, EMERGENT, FOLDED, MAX_MENTIONS, NOT_A_RUNG,
+                                 REVERTED, SUBSUMED, LEGACY_DECK_RUNTIME_RUNG_IDS,
+                                 SHARED_RUNTIME_RETIRED, UNRECORDED, UNREPLACED)
 
 REPO = Path(__file__).resolve().parents[1]
 GIT = shutil.which("git")
@@ -35,10 +36,10 @@ GIT = shutil.which("git")
 #: cannot trip the scan. Two-segment ids do not exist in the shipped set.
 _KEBAB = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+){2,})`")
 
-_SENTINELS = {EMERGENT, SUBSUMED, REVERTED, UNRECORDED, UNREPLACED}
+_SENTINELS = {CORRECTED, EMERGENT, SUBSUMED, REVERTED, UNRECORDED, UNREPLACED}
 #: One live id from each of three DIFFERENT modules, so deleting any one cluster cannot silently
 #: retire the whole control.
-_CONTROLS_LIVE = ("dont-search-an-empty-deck", "fire-lunar-cycle", "bench-the-comeback-drawer")
+_CONTROLS_LIVE = ("dont-search-an-empty-deck", "grab-lunar-cycle-fuel", "bench-the-comeback-drawer")
 _CONTROL_DEAD = "this-rung-was-never-real"
 _CONTROL_SYMBOL_ABSENT = "common.pilot:Pilot._this_method_was_never_written"
 _MAX_NOTE = 120

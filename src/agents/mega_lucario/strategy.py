@@ -191,20 +191,6 @@ HYPOTHESES = [
         and (c.board.gust_best_ko_prizes > 0 or c.board.stall_target_exists),
         weight=15, status="assumed"),
     Hypothesis(
-        id="fire-lunar-cycle",
-        rationale="Lunar Cycle (Lunatone's Ability at the MAIN menu: with Solrock in play, discard a "
-                  "Basic {F} from hand → draw 3) is the deck's native draw engine — fire it "
-                  "AGGRESSIVELY: the discarded F is Aura Jab fuel, not waste, and a free +3 cards "
-                  "beats almost any other use of the pre-attack window. Nothing endorses an ABILITY "
-                  "option generically (it ties with END at 0 and loses to any attack), so the deck "
-                  "says it out loud; the positive score also sequences it TIER-0 (free informative "
-                  "development, before the Supporter / the attach / the attack). Stands down exactly "
-                  "where the last-F guard below fires, so the pair never double-counts.",
-        when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
-        and not (c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
-                 and not c.board.energy_attached and c.board.energy_placeable),
-        weight=15, status="assumed"),
-    Hypothesis(
         id="grab-lunar-cycle-fuel",
         rationale="At a search, take FIGHTING GONG when the Solrock↔Lunatone engine is online but has no "
                   "fuel — Lunar Cycle costs a Basic {F} DISCARDED FROM HAND, and with the hand empty the "
@@ -220,52 +206,6 @@ HYPOTHESES = [
         and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
         and not c.board.hand_basic_energy.get(_FIGHTING, 0),
         weight=8, status="assumed"),
-    Hypothesis(
-        id="dont-lunar-cycle-away-the-last-attachable-f",
-        rationale="The Lunar Cycle discipline (Phase-A §3 Lunatone): the turn's manual attach to the "
-                  "wincon line comes FIRST — never pay the Ability's F-discard with the ONLY Basic "
-                  "{F} in hand while this turn's attach is still pending and a body can absorb it "
-                  "(`energy_placeable`). Self-sequencing: the attach (tier 2) resolves first, "
-                  "`energy_attached` flips, this guard stands down, and Lunar Cycle still fires the "
-                  "same turn on the surplus — the doctrine's 'hold that F back', not a blanket "
-                  "decline. Surfaced by the T6' probe (the always-YES default would have paid the "
-                  "stranding discard). STANDS DOWN when the single {F} IS the whole attach (no surplus "
-                  "to cycle) AND the engine is online AND the Active is a weak pre-evo: then attaching "
-                  "the lone {F} kills the cycle rather than deferring it, and its 30 chip doesn't change "
-                  "tempo — the discarded {F} is Aura-Jab-recoverable, so draw-3 acceleration wins (ml "
-                  "85058574 f16). Still fires for a real-attacker Active or an offline engine.",
-        when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
-        and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
-        and not c.board.energy_attached and c.board.energy_placeable
-        and not (LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
-                 and (c.board.active_is_weak_preevo
-                      or (c.board.my_hand_size <= 1
-                      and (not c.board.active_attack_provable or c.board.active_doomed)
-                      and not c.board.active_arm_available))),
-        # ^ also stands down on a DEAD-HAND famine (engine online, hand <= 1, lone {F} cannot arm a
-        #   this-turn attack): the discarded {F} is Aura-Jab-recoverable, so draw 3 wins.
-        weight=-30, status="assumed"),
-    Hypothesis(
-        id="lunar-cycle-the-weak-preevo-last-f",
-        rationale="The other side of the last-{F} coin (ml 85058574 f16): when the Solrock↔Lunatone engine "
-                  "is ONLINE and the Active is a weak pre-evo (Riolu's 30 chip vs Mega Lucario ex 130/270), "
-                  "spend the lone Basic {F} on Lunar Cycle (draw 3) rather than an attach that only powers a "
-                  "tempo-neutral chip. Standing the −30 guard down is necessary but not sufficient — Lunar "
-                  "Cycle at 0 still sits below the attaches (`power-up-attacker` +15). This positive rung "
-                  "carries it past them; the discarded {F} is Aura-Jab-recoverable and the deck is {F}-rich, "
-                  "so the acceleration is not a stranded loss. Fires on the EXACT complement of the guard's "
-                  "stand-down, so the two are mutually exclusive by construction. SEED; ladder-tuned.",
-        when=lambda c: c.option_type == _ABILITY and c.card_id == LUNATONE
-        and c.board.hand_basic_energy.get(_FIGHTING, 0) == 1
-        and not c.board.energy_attached
-        and LUNATONE in c.board.in_play_ids and SOLROCK in c.board.in_play_ids
-        and (c.board.active_is_weak_preevo
-             or (c.board.my_hand_size <= 1
-                      and (not c.board.active_attack_provable or c.board.active_doomed)
-                      and not c.board.active_arm_available)),
-        # ^ the EXACT complement of the guard's stand-down, so the two are mutually exclusive by
-        #   construction. +30 clears `concentrate-energy-on-wincon` (+25) in the famine case.
-        weight=30, status="assumed"),
     # RETIRED 2026-08-06, Issue #424: `gravity-mountain-vs-stage2` — `_boost_lethal_tactical` COMPUTES
     # the breakpoint crossing the flat +15 could only gesture at, differenced vs the Stadium in play.
 

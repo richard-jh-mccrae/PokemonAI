@@ -336,7 +336,8 @@ class GambleMixin:
             if not base or not bases.get(base):
                 continue
             for cl in (self.effects.clauses(eid) if self.effects else ()):
-                if cl.get("kind") == "draw" and cl.get("condition") == "once_per_turn_ability":
+                if (cl.get("kind") == "draw" and cl.get("allowance") in {"body", "card"}
+                        and cl.get("condition") is None):
                     window = int(cl.get("window") or cl.get("amount") or 0)
                     if window <= 0:
                         break

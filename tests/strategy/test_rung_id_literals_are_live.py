@@ -101,10 +101,9 @@ def test_every_rung_id_a_named_registry_gates_on_is_still_shipped():
     # above cannot tell a cleaned account from a deleted one.
     for name, ids in registries.items():
         assert ids, f"{name} is EMPTY — the account was deleted, not cleaned"
-    assert registries["planner._CLASS_B_SPEND_IDS"] == {
-        "dont-lunar-cycle-away-the-last-attachable-f", "dont-search-an-empty-deck"}
+    assert registries["planner._CLASS_B_SPEND_IDS"] == {"dont-search-an-empty-deck"}
     assert registries["planner._ABILITY_FIRE_IDS"] == {
-        "fire-lunar-cycle", "lunar-cycle-the-weak-preevo-last-f", "bench-the-comeback-drawer"}
+        "bench-the-comeback-drawer"}
 
 
 @pytest.mark.req("REQ-STRATEGY-0001")

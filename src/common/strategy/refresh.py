@@ -1,4 +1,4 @@
-"""ORACLE: Hand-refresh swing — ADR-0060. The closed-form value of a shuffle-refresh.
+"""ORACLE: clause-driven hand-refresh swing — ADR-0060, Issue #468.
 
 Judge / Harlequin / Unfair Stamp are symmetric REFILLS, not strips: both players shuffle and redraw,
 so the whole value is one quantity, the net card swing
@@ -9,40 +9,116 @@ Sign convention: a POSITIVE `opp_hand_size_delta` means they GREW their hand, i.
 """
 from __future__ import annotations
 
-# DRAW-COUNT facts, verified at data/EN_Card_Data.csv:
-#   {id: (opp_shuffles, branches(my_prizes, opp_prizes) -> ((my_draw, opp_draw), ...))}, coin-equal.
-_REFRESH = {
-    # "Each player shuffles their hand into their deck and draws 4 cards."
-    1213: (True, lambda mp, op: ((4, 4),)),                                     # Judge
-    # "...flip a coin. If heads, you draw 5 cards, and your opponent draws 3 cards.
-    #  If tails, you draw 3 cards, and your opponent draws 5 cards."
-    1223: (True, lambda mp, op: ((5, 3), (3, 5))),                              # Harlequin
-    # "...you draw 5 cards, and your opponent draws 2 cards."  (ACE SPEC Item; the engine gates its
-    # play-legality on a KO against us last turn, so we never need to test that here.)
-    1080: (True, lambda mp, op: ((5, 2),)),                                     # Unfair Stamp
-    # "Shuffle your hand into your deck. Then, draw 6 cards. If you have exactly 6 Prize cards
-    #  remaining, draw 8 cards instead."
-    1227: (False, lambda mp, op: (((8, 0),) if mp == 6 else ((6, 0),))),        # Lillie's Determination
-    # "Shuffle your hand into your deck. Then, draw 4 cards. If your opponent has 3 or fewer Prize
-    #  cards remaining, draw 8 cards instead."
-    1199: (False, lambda mp, op: (((8, 0),) if 0 < op <= 3 else ((4, 0),))),    # Lacey
-}
+from collections.abc import Mapping
+
+from common.effects import CardEffects
+
+
+_EFFECTS = CardEffects.load()
+_RIDERS = frozenset({"shuffle_own_hand_in", "shuffle_both_hands"})
+_AMOUNT_CONDITIONS = frozenset({
+    "coin_tails", "exactly_6_prizes_remaining", "opp_3_or_fewer_prizes",
+    "hand_size_10_plus_after_draw",
+})
+
+
+def _positive_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def draw_shape_problem(clause: Mapping) -> str | None:
+    """Why a scalar draw clause is unsupported, or ``None`` when its shape is decidable."""
+    if clause.get("kind") != "draw":
+        return "kind is not `draw`"
+    if not _positive_int(clause.get("amount")):
+        return "`amount` must be a positive integer"
+    if clause.get("rider") not in (None, *_RIDERS):
+        return f"rider {clause.get('rider')!r} is not a supported scalar draw rider"
+    if clause.get("condition") not in (None, "pokemon_ko_last_turn"):
+        return f"condition {clause.get('condition')!r} has no scalar draw reader"
+    own_if = clause.get("amount_if")
+    opp_if = clause.get("opponent_amount_if")
+    for label, branch in (("amount_if", own_if), ("opponent_amount_if", opp_if)):
+        if branch is None:
+            continue
+        if not isinstance(branch, Mapping):
+            return f"`{label}` must be a condition map"
+        if branch.get("condition") not in _AMOUNT_CONDITIONS:
+            return f"`{label}` condition {branch.get('condition')!r} has no scalar draw reader"
+        if set(branch) != {"condition", "amount"} or not _positive_int(branch.get("amount")):
+            return f"`{label}` must contain one condition and one positive integer amount"
+    opponent = clause.get("opponent_amount")
+    if opponent is not None and not _positive_int(opponent):
+        return "`opponent_amount` must be a positive integer"
+    if opp_if is not None and opponent is None:
+        return "`opponent_amount_if` requires `opponent_amount`"
+    if opp_if is not None and own_if is None:
+        return "`opponent_amount_if` requires `amount_if` for the shared branch"
+    if own_if is not None and opp_if is not None and own_if["condition"] != opp_if["condition"]:
+        return "own and opponent conditional amounts must use the same condition"
+    both = clause.get("rider") == "shuffle_both_hands"
+    if both != (opponent is not None):
+        return "`shuffle_both_hands` and an explicit opponent amount must occur together"
+    return None
+
+
+def _condition_holds(condition: str, my_prizes: int, opp_prizes: int, *,
+                     my_hand_size: int | None = None, base_amount: int = 0) -> bool:
+    if condition == "exactly_6_prizes_remaining":
+        return my_prizes == 6
+    if condition == "opp_3_or_fewer_prizes":
+        return 0 < opp_prizes <= 3
+    if condition == "hand_size_10_plus_after_draw":
+        # The Supporter itself leaves the hand before the printed base draw resolves.
+        return my_hand_size is not None and max(0, my_hand_size - 1) + base_amount >= 10
+    return False
+
+
+def draw_branches(clause: Mapping, my_prizes_remaining: int,
+                  opp_prizes_remaining: int, *,
+                  my_hand_size: int | None = None) -> tuple[tuple[int, int], ...] | None:
+    """Equally likely ``(mine, theirs)`` draw counts from one supported clause."""
+    if draw_shape_problem(clause) is not None:
+        return None
+    base = (int(clause["amount"]), int(clause.get("opponent_amount") or 0))
+    own_if = clause.get("amount_if")
+    opp_if = clause.get("opponent_amount_if")
+    condition = ((own_if or opp_if) or {}).get("condition")
+    if condition is None:
+        return (base,)
+    alternate = (int((own_if or {}).get("amount", base[0])),
+                 int((opp_if or {}).get("amount", base[1])))
+    if condition == "coin_tails":
+        return (base, alternate)
+    return (alternate,) if _condition_holds(
+        condition, my_prizes_remaining, opp_prizes_remaining,
+        my_hand_size=my_hand_size, base_amount=base[0]) else (base,)
+
+
+def _refresh_clause(card_id: int) -> Mapping | None:
+    if card_id is None:
+        return None
+    clauses = _EFFECTS.clauses(card_id)
+    if _EFFECTS.clauses_cover(card_id) is not True or len(clauses) != 1:
+        return None
+    clause = clauses[0]
+    return clause if clause.get("rider") in _RIDERS and draw_shape_problem(clause) is None else None
 
 
 def refresh_branches(card_id, my_prizes_remaining: int, opp_prizes_remaining: int):
     """The card's equally-likely ``((my_draw, opp_draw), ...)`` branches on this board, or ``None``
     when the card is not a known shuffle-refresh (fail-silent: an unknown card makes no claim)."""
-    rec = _REFRESH.get(card_id)
-    if rec is None:
+    clause = _refresh_clause(card_id)
+    if clause is None:
         return None
-    return rec[1](my_prizes_remaining, opp_prizes_remaining)
+    return draw_branches(clause, my_prizes_remaining, opp_prizes_remaining)
 
 
 def opponent_shuffles(card_id) -> bool:
     """True when the card shuffles the OPPONENT's hand away too (Judge/Harlequin/Unfair Stamp) —
     the discriminator between a symmetric refill and a self-only refresh (Lillie's/Lacey)."""
-    rec = _REFRESH.get(card_id)
-    return bool(rec and rec[0])
+    clause = _refresh_clause(card_id)
+    return bool(clause and clause.get("rider") == "shuffle_both_hands")
 
 
 def hand_swing(card_id, my_hand: int, opp_hand: int,

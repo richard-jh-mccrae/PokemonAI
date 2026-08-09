@@ -149,8 +149,12 @@ def main() -> None:
     # artifact meets rather than something buried past 58 clause lists.
     payload: dict = {snapshot_coverage.COVERS_KEY: _load_covers(args.overrides)}
     payload.update({str(cid): cls for cid, cls in sorted(table.items())})
-    for problem in snapshot_coverage.covers_problems(payload):
+    problems = snapshot_coverage.covers_problems(payload)
+    problems += snapshot_coverage.opponent_draw_problems(payload)
+    for problem in problems:
         print(f"  !! COVERS: {problem}")
+    if problems:
+        raise SystemExit("refusing to write invalid effect clauses")
     # Binary write: `Path.write_text` rewrites LF to CRLF on Windows, which would turn every rebuild
     # into a whole-file diff on a committed store (ADR-0116).
     out.write_bytes(json.dumps(payload, ensure_ascii=False, indent=0).encode("utf-8"))
