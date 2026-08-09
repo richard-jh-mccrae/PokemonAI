@@ -126,11 +126,9 @@ class LeafValueMixin:
             if not rows:
                 return None
             slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
-            # deferred import: `common.pilot` imports THIS module, so a top-level import is a cycle
-            from common.pilot import _GENERAL_WORTH_W
-            covered = {i for i, e in enumerate(elig) if e}
-            latent = sum(_GENERAL_WORTH_W * self._role_value(r["cid"])
-                         for i, r in enumerate(rows) if i not in covered)
+            # a supply TOTAL, so per ROW; the class-keyed skip stops coverage and latent pricing one card twice
+            covered = {rows[i]["cid"] for i, e in enumerate(elig) if e}
+            latent = self._latent_holdings(rows, board, me, skip_cids=covered)
             return needs.Resolution(slots=tuple(slots), eligibility=tuple(elig),
                                     resupply=tuple([0.0] * len(slots)),
                                     hand_ids=tuple(r["cid"] for r in rows),
