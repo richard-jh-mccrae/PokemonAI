@@ -206,4 +206,4 @@ def test_the_flat_gravity_mountain_rung_is_retired():
     ids = {h.id for h in _real_pilot().strategy.hypotheses}
     assert "gravity-mountain-vs-stage2" not in ids
     assert len(ids) >= 5, "the deck Strategy did not load — the absence above proves nothing"
-    assert "fire-lunar-cycle" in ids, "a surviving sibling rung: the instrument sees real ids"
+    assert "grab-lunar-cycle-fuel" in ids, "a surviving sibling rung: the instrument sees real ids"

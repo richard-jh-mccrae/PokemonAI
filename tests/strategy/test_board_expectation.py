@@ -21,15 +21,15 @@ from common.state_value import state_value
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.fetch_closure import multiset_classes
-from common.option_equivalence import AREA_DECK, AREA_HAND, option_fingerprint
+from common.option_equivalence import AREA_ACTIVE, AREA_DECK, AREA_HAND, option_fingerprint
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.state_model import StateModel
 from common.strategy.combat import CombatMath
-from common.strategy.context import _ATTACH, _PLAY
+from common.strategy.context import _ABILITY, _ATTACH, _PLAY
 
 MAIN = bd.CONTEXT_MAIN
 HAND = AREA_HAND
-FIGHTING, PSYCHIC, COLORLESS, WATER = 6, 5, 0, 3
+FIGHTING, PSYCHIC, COLORLESS, WATER, DARKNESS, DRAGON = 6, 5, 0, 3, 7, 9
 
 # The pool, quoted from `data/EN_Card_Data.csv`. 1152 Poke Pad "…doesn't have a Rule Box" | 1121
 # Ultra Ball "discard 2 other cards" | 1231 Dawn: an AND | 1141 Power Pro: NO clauses | 1122: a `dig`
@@ -44,6 +44,7 @@ LARRY, BOGUS_COST = 1206, 1194
 # 675 Lunatone: its draw is an ABILITY, so PLAYING the body reveals nothing | 1071 Meowth ex: a real
 # on-bench-play trigger, but a `supporter` target `fetch_is_unconditional` rejects
 LUNATONE, MEOWTH_EX = 675, 1071
+DUDUNSPARCE, DRAKLOAK, FEZANDIPITI, SOLROCK = 66, 120, 140, 676
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112     # Mega Lucario ex evolves from Riolu ALONE
 # 1030 Staryu: Basic, HP **70**, {W} — the only fixture body Poffin's `hp_max: 70` admits (Riolu is 80)
 STARYU = 1030
@@ -75,6 +76,11 @@ _STATS = {
     LARRY: CardStat(LARRY, name="Larry’s Skill", cardType=_SUPPORTER),
     BOGUS_COST: CardStat(BOGUS_COST, name="Colress’s Tenacity", cardType=_SUPPORTER),
     LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING),
+    DUDUNSPARCE: CardStat(DUDUNSPARCE, name="Dudunsparce", hp=140, energyType=COLORLESS),
+    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON),
+    FEZANDIPITI: CardStat(FEZANDIPITI, name="Fezandipiti ex", hp=210, ex=True,
+                          energyType=DARKNESS),
+    SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, energyType=FIGHTING),
     MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", hp=170, ex=True, energyType=COLORLESS),
 }
 
@@ -107,7 +113,13 @@ _CLAUSES = {
     # A cost value `COST_CARDS` has never heard of — the drift case; no real card provides it.
     BOGUS_COST: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_9"}],
     LUNATONE: [{"kind": "draw", "amount": 3, "condition": "solrock_in_play",
-                "rider": "discard_basic_f_energy"}],
+                "allowance": "card", "rider": "discard_basic_f_energy"}],
+    DUDUNSPARCE: [{"kind": "draw", "amount": 3, "allowance": "body",
+                   "rider": "shuffle_self_in"}],
+    DRAKLOAK: [{"kind": "draw", "amount": 1, "window": 2, "allowance": "body",
+                "rider": "other_to_bottom"}],
+    FEZANDIPITI: [{"kind": "draw", "amount": 3, "condition": "pokemon_ko_last_turn",
+                   "allowance": "card"}],
     MEOWTH_EX: [{"kind": "fetch", "target": "supporter", "zone": "deck",
                  "trigger": "on_bench_play"}],
 }
@@ -165,6 +177,19 @@ def _search_board(hand=(MASTER_BALL,), *, deck=None, prize=4):
 
 def _play_option(index=0):
     return {"type": _PLAY, "index": index}
+
+
+def _ability_option(area=AREA_ACTIVE, index=0):
+    return {"type": _ABILITY, "area": area, "index": index}
+
+
+def _ability_board(card_id, *, bench=(), hand=(), remaining=(), ko=False):
+    from types import SimpleNamespace
+    me = _player(active=_body(card_id), bench=bench, hand=hand, prize=0)
+    obs = _obs(me)
+    deck = [card_id, *[b["id"] for b in bench], *hand, *remaining]
+    return StateModel.build(obs, combat=_combat(), deck=deck,
+                            opponent=SimpleNamespace(my_pokemon_koed_last_turn=ko))
 
 
 def test_a_deck_search_enumerates_one_class_per_distinct_unseen_target():
@@ -805,6 +830,103 @@ def test_an_on_bench_play_trigger_passes_the_ability_gate_and_refuses_on_its_CLA
     what is actually wrong with it — the gate discriminates rather than catching a whole side."""
     with pytest.raises(bd.Unmodellable, match=r"cannot decide `trigger`"):
         be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option(), score=state_value)
+
+
+def test_MAIN_ability_source_resolves_body_without_touching_hand():
+    model = _ability_board(FEZANDIPITI, ko=True, remaining=(RIOLU,) * 4)
+    result = be.closed_form_transition(model, _ability_option(), score=state_value,
+                                       clauses_cover=True)
+    assert isinstance(result, ao.ScalarTransition)
+    assert result.model.mine.hand_size == 3
+    assert result.model.ability_used_cards == {FEZANDIPITI}
+    assert result.model.mine.active.card_id == FEZANDIPITI
+
+
+@pytest.mark.parametrize("option", [
+    {"type": _ABILITY, "area": AREA_HAND, "index": 0},
+    {"type": _ABILITY, "area": AREA_ACTIVE, "index": 9},
+])
+def test_malformed_MAIN_ability_source_refuses_as_an_in_play_reference(option):
+    model = _ability_board(FEZANDIPITI, ko=True, hand=(RIOLU,), remaining=(RIOLU,) * 4)
+    with pytest.raises(bd.Unmodellable, match="_ABILITY.*source area/index"):
+        be.closed_form_transition(model, option, score=state_value, clauses_cover=True)
+
+
+def test_Fezandipiti_requires_the_KO_condition_before_spending_global_allowance():
+    model = _ability_board(FEZANDIPITI, remaining=(RIOLU,) * 4)
+    with pytest.raises(bd.Unmodellable, match="pokemon_ko_last_turn.*does not hold"):
+        be.closed_form_transition(model, _ability_option(), score=state_value,
+                                  clauses_cover=True)
+    assert model.ability_used_cards == frozenset()
+
+
+def test_Lunatone_discards_only_legal_basic_F_fuel_using_the_shed_order():
+    solrock = _body(SOLROCK, serial=22)
+    model = _ability_board(LUNATONE, bench=(solrock,), hand=(E_F, RIOLU, E_F),
+                           remaining=(RIOLU,) * 5)
+    seen = {}
+
+    def shed(_model, option, picks, eligible):
+        seen.update(option=option, picks=picks, eligible=tuple(eligible))
+        return (eligible[-1],)
+
+    result = be.closed_form_transition(model, _ability_option(), score=state_value,
+                                       clauses_cover=True, shed=shed)
+    assert seen == {"option": _ability_option(), "picks": 1, "eligible": (0, 2)}
+    assert isinstance(result, ao.ScalarTransition)
+    assert result.model.mine.hand_ids == (E_F, RIOLU)
+    assert result.model.mine.discard_ids == (E_F,)
+    assert result.model.ability_used_cards == {LUNATONE}
+
+
+@pytest.mark.parametrize("bench,hand,reason", [
+    ((), (E_F,), "solrock_in_play"),
+    ((_body(SOLROCK, serial=22),), (RIOLU,), "Basic.*Energy"),
+])
+def test_Lunatone_refuses_when_partner_or_fuel_is_missing(bench, hand, reason):
+    model = _ability_board(LUNATONE, bench=bench, hand=hand, remaining=(RIOLU,) * 5)
+    with pytest.raises(bd.Unmodellable, match=reason):
+        be.closed_form_transition(model, _ability_option(), score=state_value,
+                                  clauses_cover=True, shed=lambda *_args: ())
+
+
+def _drak_score(model):
+    return 10.0 if MEGA_LUC in model.mine.hand_ids else 1.0 if RIOLU in model.mine.hand_ids else 0.0
+
+
+def test_Drakloak_look_two_takes_the_best_card_with_exact_probabilities():
+    model = _ability_board(DRAKLOAK, remaining=(RIOLU, RIOLU, RIOLU, MEGA_LUC))
+    result = be.closed_form_transition(model, _ability_option(), score=_drak_score,
+                                       clauses_cover=True)
+    assert isinstance(result, ao.Expectation) and result.resolution == ao.DEALT
+    by_card = {cls.model.mine.hand_ids[-1]: cls for cls in result.classes}
+    assert by_card[MEGA_LUC].probability == pytest.approx(0.5)
+    assert by_card[RIOLU].probability == pytest.approx(0.5)
+    assert all(cls.model.mine.deck_count == 3 for cls in result.classes)
+    assert all(cls.model.ability_used_bodies == {1} for cls in result.classes)
+
+
+@pytest.mark.parametrize("remaining,expected", [
+    ((), {()}),
+    ((RIOLU,), {(RIOLU,)}),
+    ((RIOLU, RIOLU), {(RIOLU,)}),
+    ((RIOLU, MEGA_LUC), {(MEGA_LUC,)}),
+])
+def test_Drakloak_handles_deck_sizes_and_duplicates(remaining, expected):
+    model = _ability_board(DRAKLOAK, remaining=remaining)
+    result = be.closed_form_transition(model, _ability_option(), score=_drak_score,
+                                       clauses_cover=True)
+    delivered = {tuple(cls.model.mine.hand_ids) for cls in result.classes}
+    assert delivered == expected
+    assert result.total_probability == pytest.approx(1.0)
+    assert {cls.model.mine.deck_count for cls in result.classes} == {max(0, len(remaining) - 1)}
+
+
+def test_Dudunsparce_refuses_the_unmodelled_body_shuffle_by_name():
+    model = _ability_board(DUDUNSPARCE, remaining=(RIOLU,) * 4)
+    with pytest.raises(bd.Unmodellable, match="shuffle_self_in.*body"):
+        be.closed_form_transition(model, _ability_option(), score=state_value,
+                                  clauses_cover=True)
 
 
 #: Every dig-family card OUTSIDE Issue #440's two-deck scope, with the field that must still refuse it.

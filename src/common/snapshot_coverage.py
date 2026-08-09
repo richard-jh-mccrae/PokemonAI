@@ -73,6 +73,9 @@ WRITABLE: tuple[Zone, ...] = (
          home="energy_attached"),
     Zone("allowance_supporter_played", "the one-Supporter-per-turn allowance", HOMED,
          home="supporter_played"),
+    Zone("allowance_ability_used",
+         "activated-Ability use this turn: per-body serials and once-per-card/global card ids",
+         HOMED, home="ability_used_bodies,ability_used_cards"),
 
     # ── homed by T1 (Issue #260). Each was `owed` at T0 with this track named as its owner. ───────
     Zone("attached_tools", "Pokémon Tools attached to a body", HOMED,
@@ -287,6 +290,7 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "to_hand": "how many of an accel's units go to HAND instead of being attached",
     # ── gates ─────────────────────────────────────────────────────────────────────────────────────
     "condition": "a DYNAMIC board-state gate — the clause whiffs unless it holds",
+    "allowance": "how an activated Ability's once-per-turn use is keyed: body instance or card id",
     "restriction": "a STATIC target-class gate — which cards are eligible at all",
     "trigger": "which OPTION the clause rides (on_evolve / on_bench_play / on_attach / on_attack)",
     "on": "a Stadium trigger's EVENT — deliberately not `trigger`, which routes to a site",
@@ -343,6 +347,7 @@ CLAUSE_SELECTORS: dict[str, frozenset[str]] = {
         "once_per_turn_ability", "opp_3_or_fewer_prizes", "played_supporter_this_turn",
         "pokemon_ko_last_turn", "remaining_hp_30_or_less", "solrock_in_play",
     }),
+    "allowance": frozenset({"body", "card"}),
     "restriction": frozenset({"active_dragon_only", "active_only", "arvens_pokemon", "mega_only",
                               "psychic_only"}),
     "trigger": frozenset({"on_attach", "on_attack", "on_bench_play", "on_evolve"}),
@@ -388,9 +393,6 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
     "condition=played_supporter_this_turn": "1242 Community Center. The allowance IS homed "
                                             "(`supporter_played`); the alternating per-player "
                                             "availability is what stays unmodelled",
-    "condition=solrock_in_play": "675 Lunatone. A named-partner board check; "
-                                 "`parse_attack_bench_requirement` answers the attack-side twin, not "
-                                 "this clause gate",
     "dig_from=bottom": "1102 Dusk Ball. Which END of the deck a dig reads — `deck_order` is the "
                        "registry's one HIDDEN zone, so the distinction has nowhere to land",
     # `fetch_closure` refuses for reach, reading the key's PRESENCE and never the value.

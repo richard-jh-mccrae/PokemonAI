@@ -145,13 +145,14 @@ def test_shipped_draw_engine_and_accel_clauses_are_in_the_representation():
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
     # Draw engines (abilities): amount + the gating condition / self-effect rider.
-    assert eff.clauses(66) == ({"kind": "draw", "amount": 3, "condition": "once_per_turn_ability",
+    assert eff.clauses(66) == ({"kind": "draw", "amount": 3, "allowance": "body",
                                 "rider": "shuffle_self_in"},)                       # Dudunsparce
     assert eff.clauses(120)[0] == {"kind": "draw", "amount": 1, "window": 2,        # Drakloak: look 2, take 1
-                                   "condition": "once_per_turn_ability", "rider": "other_to_bottom"}
-    assert eff.clauses(140)[0]["condition"] == "pokemon_ko_last_turn"               # Fezandipiti ex
+                                        "allowance": "body", "rider": "other_to_bottom"}
+    assert eff.clauses(140)[0] == {"kind": "draw", "amount": 3,                    # Fezandipiti ex
+                                   "condition": "pokemon_ko_last_turn", "allowance": "card"}
     assert eff.clauses(675)[0] == {"kind": "draw", "amount": 3, "condition": "solrock_in_play",
-                                   "rider": "discard_basic_f_energy"}               # Lunatone
+                                   "allowance": "card", "rider": "discard_basic_f_energy"}  # Lunatone
     assert eff.clauses(1080)[0]["amount"] == 5 and eff.clauses(1080)[0]["condition"] == "pokemon_ko_last_turn"
     # Trainer / Supporter accel: Rosa's discard→Stage-2 (prize-behind gate); Crispin's deck→attach.
     assert eff.clauses(1240)[0] == {"kind": "accel", "amount": 2, "source": "discard", "target": "stage2",

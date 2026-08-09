@@ -5,7 +5,8 @@ frozen `OutcomeClass` / `Expectation` shapes; this only fills them. Never a samp
 and class identity is taken AFTER the reveal (ADR-0091).
 
 **LIVE at runtime** — `composer._one_ply` first calls :func:`closed_form_transition` for the ordered
-coin/refresh registry, then :func:`expectation` for an enumerated revealing `_PLAY`."""
+coin/refresh registry, then :func:`expectation` for an enumerated revealing `_PLAY`. The same
+closed-form registry owns supported `_ABILITY` draw routes without pretending the source is in hand."""
 from __future__ import annotations
 
 from typing import Callable, Mapping, NoReturn
@@ -18,8 +19,9 @@ from math import comb
 from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
 from common.fetch_closure import WINDOW, fetch_target_matches, multiset_classes, reveal_legs
-from common.option_equivalence import AREA_BENCH, AREA_HAND, option_fingerprint
-from common.strategy.context import _PLAY
+from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND, option_fingerprint
+from common.state_model import ability_allowance_marker, ability_allowance_spent
+from common.strategy.context import _ABILITY, _PLAY
 
 #: `dest` values this seam can PLACE. `in_play` is deliberately ABSENT: it puts an EVOLUTION onto a
 #: body the effect CHOOSES, which is `board_choice`'s node rather than a deploy.
@@ -56,7 +58,9 @@ _HAMMER_COIN = {"kind": "coin", "effect": "discard_opp_energy", "amount": 1}
 
 _SCALAR_DRAW_KEYS = frozenset({
     "kind", "amount", "amount_if", "condition", "opponent_amount", "opponent_amount_if", "rider",
+    "allowance",
 })
+_ABILITY_DRAW_KEYS = _SCALAR_DRAW_KEYS | {"window"}
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,8 @@ class _Source:
     index: int
     card_id: int
     stat: object
+    body_serial: object | None = None
+    area: int | None = None
 
 
 def revealing_clauses(combat, card_id) -> tuple:
@@ -164,13 +170,9 @@ def _check_clause(clause: dict, card_id, name) -> None:
 
 
 def _source(model, option) -> _Source | None:
-    """Resolve the only source currently owned: a Trainer in hand selected by MAIN ``_PLAY``.
-
-    Kind and context are checked before the hand is touched. Other kinds/contexts belong to other
-    transition nodes; malformed options inside this owned source refuse rather than becoming a
-    misleading Ability-as-hand diagnostic.
-    """
-    if (option or {}).get("type") != _PLAY:
+    """Kind/context gates precede every source-zone read; malformed owned sources refuse."""
+    kind = (option or {}).get("type")
+    if kind not in (_PLAY, _ABILITY):
         return None
     obs = getattr(model, "source_obs", None) or {}
     if (obs.get("select") or {}).get("context") != board_delta.CONTEXT_MAIN:
@@ -178,6 +180,26 @@ def _source(model, option) -> _Source | None:
     seat = int(getattr(model, "my_index", 0))
     players = (obs.get("current") or {}).get("players") or ()
     me = players[seat] if 0 <= seat < len(players) else {}
+    if kind == _ABILITY:
+        area, index = (option or {}).get("area"), (option or {}).get("index")
+        zone = "active" if area == AREA_ACTIVE else "bench" if area == AREA_BENCH else None
+        cards = me.get(zone) or () if zone is not None else ()
+        if (zone is None or not isinstance(index, int) or isinstance(index, bool)
+                or not 0 <= index < len(cards) or not cards[index]):
+            raise Unmodellable(
+                f"closed-form MAIN `_ABILITY` source area/index {area!r}/{index!r} "
+                "does not name an occupied in-play body")
+        body = cards[index]
+        card_id = body.get("id")
+        stat = model.card_stat(card_id)
+        if stat is None or not getattr(stat, "is_pokemon", False):
+            return None
+        serial = body.get("serial")
+        if serial is None:
+            raise Unmodellable(
+                f"closed-form MAIN `_ABILITY` source {card_id} has no body serial for its allowance")
+        return _Source(kind=_ABILITY, seat=seat, index=index, card_id=int(card_id), stat=stat,
+                       body_serial=serial, area=area)
     hand = me.get("hand") or ()
     index = (option or {}).get("index")
     if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(hand):
@@ -233,7 +255,8 @@ def _discarded_energy_models(model, spent_obs: dict, *, seat: int) -> tuple:
     return tuple(out)
 
 
-def _coin_expectation(model, source: _Source, _clause, *, score: Callable[[object], float]):
+def _coin_expectation(model, source: _Source, _clause, *, score: Callable[[object], float],
+                      shed=None):
     """Crushing Hammer's two DEALT outcomes, with the heads target chosen after the flip."""
     spent_obs, _players = _spent_trainer(model, source)
     seat = source.seat
@@ -251,7 +274,40 @@ def _coin_expectation(model, source: _Source, _clause, *, score: Callable[[objec
                                 OutcomeClass(0.5, head, fingerprint)), resolution=DEALT)
 
 
-def _draw_transition(model, source: _Source, clause, *, score=None):
+def _ability_allowance(model, source: _Source, clause):
+    """Metadata, not a generic condition, decides whether same-name copies share currency."""
+    allowance = clause.get("allowance")
+    if source.kind != _ABILITY:
+        if allowance is not None:
+            _no(source.card_id, getattr(source.stat, "name", "?"),
+                "an Ability allowance appeared on a played Trainer")
+        return None
+    marker = ability_allowance_marker(
+        allowance, card_id=source.card_id, body_serial=source.body_serial)
+    if marker is None:
+        _no(source.card_id, getattr(source.stat, "name", "?"),
+            f"activated Ability allowance {allowance!r} is not `body` or `card`")
+    if ability_allowance_spent(model, marker):
+        scope = "per-body" if allowance == "body" else "once-per-card/global"
+        _no(source.card_id, getattr(source.stat, "name", "?"),
+            f"{scope} Ability allowance for {marker[1]!r} is already spent")
+    return marker
+
+
+def _spent_source(model, source: _Source, clause):
+    """Spend the source without conflating a hand Trainer with an in-play Ability body."""
+    if source.kind == _PLAY:
+        return _spent_trainer(model, source)
+    key, value = _ability_allowance(model, source, clause)
+    new_obs, current, players = board_delta.fork(model.source_obs)
+    used = list(current.get(key) or ())
+    if value not in used:
+        used.append(value)
+    current[key] = used
+    return new_obs, players
+
+
+def _draw_transition(model, source: _Source, clause, *, score=None, shed=None):
     """Known scalar draw writes plus composition Worth; never sample a shuffled deck."""
     from common.apply_option import DEALT, Expectation, OutcomeClass, ScalarTransition
     from common.deck_value import deck_draw_worth
@@ -272,7 +328,7 @@ def _draw_transition(model, source: _Source, clause, *, score=None):
     if branches is None:
         _no(card_id, getattr(source.stat, "name", "?"),
             "draw route has no decidable count branches")
-    spent_obs, _players = _spent_trainer(model, source)
+    spent_obs, _players = _spent_source(model, source, clause)
     seat = source.seat
     rider = clause.get("rider")
     shuffled_own = rider in {"shuffle_own_hand_in", "shuffle_both_hands"}
@@ -313,6 +369,95 @@ def _draw_transition(model, source: _Source, clause, *, score=None):
         resolution=DEALT)
 
 
+def _ability_draw_transition(model, source: _Source, clause, *, score=None, shed=None):
+    """The three supported activated draws; Dudunsparce's body mutation stays an explicit gap."""
+    name = getattr(source.stat, "name", "?")
+    rider = clause.get("rider")
+    if rider == "shuffle_self_in":
+        _no(source.card_id, name,
+            "draw route refuses `shuffle_self_in`: shuffling the source body/stack may require "
+            "promotion, and no body transition models that write")
+    if clause.get("window") is not None:
+        return _draw_window_expectation(model, source, clause, score=score)
+    if rider != "discard_basic_f_energy":
+        return _draw_transition(model, source, clause, score=score)
+
+    _ability_allowance(model, source, clause)
+    if clause.get("condition") != "solrock_in_play" or "Solrock" not in model.mine.in_play_names:
+        _no(source.card_id, name, "draw route condition `solrock_in_play` does not hold")
+    mine_obs = ((model.source_obs.get("current") or {}).get("players") or [])[source.seat]
+    candidates = []
+    for i, card in enumerate(mine_obs.get("hand") or ()):
+        cid = (card or {}).get("id")
+        stat = model.card_stat(cid) if cid is not None else None
+        if (stat is not None and getattr(stat, "is_typed_basic_energy", False)
+                and int(getattr(stat, "energyType", -1)) == 6):
+            candidates.append(i)
+    candidates = tuple(candidates)
+    if not candidates:
+        _no(source.card_id, name,
+            "Lunar Cycle needs one Basic {F} Energy in hand; the offered Ability has no legal fuel")
+    if shed is None:
+        _no(source.card_id, name,
+            "Lunar Cycle needs the caller's `shed` oracle to rank its legal Basic {F} Energy fuel")
+    paid_option = {"type": _ABILITY, "area": source.area, "index": source.index}
+    picked = tuple(dict.fromkeys(int(i) for i in (shed(model, paid_option, 1, candidates) or ())))
+    if len(picked) != 1 or picked[0] not in candidates:
+        _no(source.card_id, name,
+            "Lunar Cycle's `shed` oracle did not name exactly one legal Basic {F} Energy")
+    paid_obs, _current, players = board_delta.fork(model.source_obs)
+    mine = board_delta.fork_player(players, source.seat)
+    hand = list(mine.get("hand") or ())
+    fuel = hand.pop(picked[0])
+    mine["hand"] = hand
+    if mine.get("handCount") is not None:
+        mine["handCount"] = max(0, int(mine["handCount"]) - 1)
+    mine["discard"] = list(mine.get("discard") or ()) + [fuel]
+    paid_model = model.rebuilt(paid_obs, reuse_their_side=True)
+    scalar_clause = {k: v for k, v in clause.items()
+                     if k not in {"condition", "rider"}}
+    return _draw_transition(paid_model, source, scalar_clause, score=score)
+
+
+def _draw_window_expectation(model, source: _Source, clause, *, score=None):
+    """Drakloak's top-two/take-one distribution under Issue #440's best-shown-card policy."""
+    from common.apply_option import DEALT, SCORE_PLACES, Expectation, OutcomeClass
+    name = getattr(source.stat, "name", "?")
+    if (source.kind != _ABILITY or clause.get("amount") != 1 or clause.get("window") != 2
+            or clause.get("rider") != "other_to_bottom"):
+        _no(source.card_id, name, f"unsupported draw-window shape {dict(clause)!r}")
+    if score is None:
+        _no(source.card_id, name, "a draw-window needs the value oracle that chooses its best card")
+    spent_obs, _players = _spent_source(model, source, clause)
+
+    def delivered(card_id=None):
+        after_obs, _current, players = board_delta.fork(spent_obs)
+        mine = board_delta.fork_player(players, source.seat)
+        if card_id is not None:
+            hand = list(mine.get("hand") or ())
+            hand.append({"id": card_id, "serial": _found_serial(card_id, 0),
+                         "playerIndex": source.seat})
+            mine["hand"] = hand
+            if mine.get("handCount") is not None:
+                mine["handCount"] = int(mine["handCount"]) + 1
+            if mine.get("deckCount") is not None:
+                mine["deckCount"] = max(0, int(mine["deckCount"]) - 1)
+        return model.rebuilt(after_obs, reuse_their_side=True)
+
+    copies = dict(model.mine.unseen_counts)
+    singles = {cid: delivered(cid) for cid in copies}
+    order = tuple(sorted(singles, key=lambda cid: (-round(float(score(singles[cid])),
+                                                          SCORE_PLACES), cid)))
+    left, hidden = int(model.mine.deck_count), int(model.mine.hidden_outside_deck)
+    weights = window_classes(order, copies, left + hidden, min(2, left), 1)
+    ranked = sorted(weights, key=lambda klass: (-weights[klass], klass))
+    kept, dropped = ranked[:BRANCH_CAP], ranked[BRANCH_CAP:]
+    classes = tuple(OutcomeClass(weights[klass],
+                                 delivered(None) if not klass else singles[klass[0]],
+                                 ("draw-window", *klass)) for klass in kept)
+    return Expectation(classes=classes, resolution=DEALT, truncated=len(dropped))
+
+
 # Ordered for deterministic diagnostics only. Acceptance still requires exactly one match.
 CLOSED_FORM_ROUTES = (
     ClosedFormRoute(
@@ -323,16 +468,16 @@ CLOSED_FORM_ROUTES = (
         name="draw", option_kinds=frozenset({_PLAY}), clause_kind="draw",
         handled_keys=_SCALAR_DRAW_KEYS,
         accepts=lambda clause: clause.get("kind") == "draw", build=_draw_transition),
+    ClosedFormRoute(
+        name="ability-draw", option_kinds=frozenset({_ABILITY}), clause_kind="draw",
+        handled_keys=_ABILITY_DRAW_KEYS,
+        accepts=lambda clause: clause.get("kind") == "draw", build=_ability_draw_transition),
 )
 
 
 def closed_form_transition(model, option, *, score: Callable[[object], float],
-                           clauses_cover: bool | None = None):
-    """Dispatch one fully-covered closed-form clause, or return ``None`` when this is not our source.
-
-    Once a clause kind is owned, every uncertainty refuses: incomplete coverage, siblings, unknown
-    keys, unsupported values, and ambiguous registry matches. No builder runs before all gates pass.
-    """
+                           clauses_cover: bool | None = None, shed=None):
+    """An owned clause fails closed before its unique registered builder can run."""
     source = _source(model, option)
     if source is None:
         return None
@@ -374,7 +519,7 @@ def closed_form_transition(model, option, *, score: Callable[[object], float],
     if len(matches) != 1:
         route_names = [route.name for route in matches]
         _no(source.card_id, name, f"ambiguous closed-form routes {route_names}")
-    return matches[0].build(model, source, clause, score=score)
+    return matches[0].build(model, source, clause, score=score, shed=shed)
 
 
 def outcome_pool(model, clause: dict) -> dict:

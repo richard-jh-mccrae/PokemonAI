@@ -56,6 +56,15 @@ def test_the_coverage_registry_is_valid():
     assert sc.validate() == []
 
 
+def test_ability_allowances_are_authored_and_homed_as_one_whole_zone():
+    """Body and global usage are different currencies, but both are turn-wide allowance state."""
+    assert sc.CLAUSE_SELECTORS["allowance"] == {"body", "card"}
+    zone = sc.BY_ID["allowance_ability_used"]
+    assert zone.status == sc.HOMED
+    assert sc.homes()[zone.id] == ["ability_used_bodies", "ability_used_cards"]
+    assert zone.id not in sc.ELEMENT_ZONES
+
+
 @pytest.mark.req("REQ-SNAPSHOT-0001")
 def test_an_owed_zone_without_an_owner_is_rejected():
     """Without the mandatory field, marking something owed would be a comment."""
@@ -352,7 +361,7 @@ def test_every_clause_SELECTOR_value_in_the_compendium_is_declared():
         % sc.undeclared_selector_values(pairs))
     # The walk actually reached the artifact, rather than passing by finding nothing.
     keys = {k for k, _ in pairs}
-    assert (len(pairs), len(keys)) == (74, 17), (len(pairs), len(keys))
+    assert (len(pairs), len(keys)) == (76, 18), (len(pairs), len(keys))
     # Every selector key is a declared PARAMETER and none is VOCABULARY: the discriminator is
     # *names a WRITE*, not *is a string*, and a selector narrows reach rather than writing.
     assert set(sc.CLAUSE_SELECTORS) <= set(sc.CLAUSE_PARAMETERS)
@@ -527,7 +536,7 @@ def test_the_issue_minimum_zone_list_is_all_enumerated():
                  "my_deck_count", "their_deck_count", "deck_odds", "my_prizes", "their_prizes",
                  "stadium", "attached_tools", "damage_counters", "special_conditions",
                  "allowance_energy_attached", "allowance_supporter_played",
-                 "allowance_retreat_used", "transient_grants"):
+                 "allowance_retreat_used", "allowance_ability_used", "transient_grants"):
         assert zone in sc.BY_ID, zone
 
 
@@ -594,8 +603,8 @@ def test_element_zones_are_real_zones_and_the_required_rejections_stay_whole_zon
     whole-zone, because each is what refuses a case the spec requires refused."""
     assert sc.ELEMENT_ZONES <= set(sc.BY_ID), sorted(sc.ELEMENT_ZONES - set(sc.BY_ID))
     must_stay_whole = {"bench_occupancy", "allowance_energy_attached", "allowance_supporter_played",
-                       "allowance_stadium_played", "allowance_retreat_used", "special_conditions",
-                       "stadium"}
+                       "allowance_stadium_played", "allowance_retreat_used",
+                       "allowance_ability_used", "special_conditions", "stadium"}
     assert must_stay_whole <= set(sc.BY_ID)              # positive control: they are real zones
     assert sc.ELEMENT_ZONES & must_stay_whole == set()
 

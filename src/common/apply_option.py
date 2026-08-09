@@ -248,6 +248,8 @@ def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = Non
                 continue
             clause_zones |= zones
             reveals = reveals or value in snapshot_coverage.REVEALING_CLAUSES
+        if kind == _ABILITY and clause.get("allowance") in {"body", "card"}:
+            clause_zones.add("allowance_ability_used")
     # Rule 1: `clauses_cover is True` completes the floor only when there ARE clauses it covered.
     complete = ((base.complete or (clauses_cover is True and bool(clauses)))
                 and clauses_cover is not False
@@ -304,10 +306,13 @@ def option_serials(model, option: Mapping):
             return None
         return (cards[index] or {}).get("serial")
 
-    # A `_PLAY` names its hand index bare, with no `area` — so this cannot filter on AREA_HAND.
-    hand = serial_at(me.get("hand") or (), option.get("index")) \
-        if option.get("area") in (None, AREA_HAND) else None
-    area, index = option.get("inPlayArea"), option.get("inPlayIndex")
+    kind = transition_kind(option)
+    # `_ABILITY` uses `(area,index)` for its BODY. `_PLAY` uses bare `index` for HAND.
+    hand = (None if kind == _ABILITY else
+            serial_at(me.get("hand") or (), option.get("index"))
+            if option.get("area") in (None, AREA_HAND) else None)
+    area, index = ((option.get("area"), option.get("index")) if kind == _ABILITY else
+                   (option.get("inPlayArea"), option.get("inPlayIndex")))
     if area == AREA_ACTIVE:
         body = serial_at(me.get("active") or (), index)
     elif area == AREA_BENCH:

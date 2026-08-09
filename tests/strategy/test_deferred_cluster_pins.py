@@ -49,11 +49,8 @@ def test_dont_tutor_the_baseless_wincon_turn_one_f6(starmie):
     assert d.options[fx["chosen"][0]].score <= 0, "the baseless tutor must be driven <=0 (tier 4)"
 
 
-# The seam cannot prove Lunar Cycle deterministic, so this is a REFUSAL row — and it resolved with no
-# widening at all: the composer committing a line it had no view on was the defect (ADR-0131).
 def test_lunar_cycle_beats_the_inert_bench_attach_f16(lucario):
-    """The lone {F} was spent on a benched Solrock that will not attack this turn, while the weak
-    pre-evo Active makes Lunar Cycle the better spend. Covered by `lunar-cycle-the-weak-preevo-last-f`."""
+    """Immutable human ruling retained for adjudication: the closed-form route is now scored, but
+    the composer still prefers the attach. This is inherited from Issue #468, not a direct rung test."""
     fx = _fixture("ml_lunar_cycle_over_inert_bench_attach_f16")
-    d = lucario.explain(fx["obs"])
-    assert d.chosen == fx["correct"]
+    assert lucario.explain(fx["obs"]).chosen == fx["correct"]

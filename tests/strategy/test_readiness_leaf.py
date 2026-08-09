@@ -102,9 +102,9 @@ def test_the_active_slot_worth_gap_is_still_DECLARED_by_the_successor_family():
 
 @pytest.mark.req("REQ-PLANNER-0011")
 def test_line_account_credits_retained_ability_fire_and_c10_spend():
-    """A retained Lunar Cycle fire is positive; the surviving impossible-search guard is negative."""
+    """A retained comeback-drawer fire is positive; the impossible-search guard is negative."""
     p = _pilot()
-    traces = [_Trace([(_Hyp("fire-lunar-cycle"), 15.0)]),
+    traces = [_Trace([(_Hyp("bench-the-comeback-drawer"), 15.0)]),
               _Trace([(_Hyp("dont-search-an-empty-deck"), -60.0)]),
               _Trace([(_Hyp("grab-lunar-cycle-fuel"), 8.0)])]
     assert p._line_account(traces, [0]) == 15.0

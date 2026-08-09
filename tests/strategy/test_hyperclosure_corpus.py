@@ -63,6 +63,10 @@ TARGETS = {
     "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
                    "the blunder, reopened by Issue #347 ruling",
 }
+ISSUE_469_RECOVERED_RULINGS = {
+    "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
+    "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
+}
 S5_REJECTED_GUSTS = {
     "85164605-64": (1, 1182, {742, 65, 741}, 5, "Boss's Orders trades away the energized active "
                                               "Kadabra; Jetting Blow takes its active KO instead"),
@@ -78,8 +82,6 @@ POC_T4_FLIPS = {
                    "covering an irreplaceable Active takes an insurance slot at its full tier "
                    "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
                    "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
-    "85785067-42": "res: discard the {F} as Lunar Cycle FUEL, don't attach it",
-    "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
     # Filed by the `shed` WIRING, not the swap: before it, every costed search REFUSED unpriced and
     # the composer had no opinion about an Ultra Ball.
     "83967841-17": "the composer plays Ultra Ball where the human ruled End turn; the costed "
@@ -204,6 +206,7 @@ def _param(cid, reason, *, xfail):
 
 
 _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
+          + [_param(c, r, xfail=False) for c, r in ISSUE_469_RECOVERED_RULINGS.items()]
           + [_param(c, r, xfail=True) for c, r in TARGETS.items()]
           + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()]
           + [_param(c, r, xfail=True) for c, r in ISSUE_459_GLOBAL_RUNTIME_FLIPS.items()])
@@ -285,7 +288,8 @@ def test_excluded_ids_are_provably_out(cid, why):
 
 def test_corpus_families_are_disjoint_and_ided():
     """No id is double-listed across categories — the audit surface stays clean."""
-    cats = [set(PINS), set(TARGETS), set(POC_T4_FLIPS), set(SUBSTANCE_PINS), set(EXCLUDED)]
+    cats = [set(PINS), set(ISSUE_469_RECOVERED_RULINGS), set(TARGETS), set(POC_T4_FLIPS),
+            set(SUBSTANCE_PINS), set(EXCLUDED)]
     for i, a in enumerate(cats):
         for b in cats[i + 1:]:
             assert not (a & b), f"an id is listed in two categories: {sorted(a & b)}"

@@ -34,6 +34,28 @@ from common.strategy.damage_context import damage_context as _assemble_damage_co
 _THREADED = object()
 _REBUILD_UNCHANGED = object()
 
+_ABILITY_ALLOWANCE_STATE = {
+    "body": "abilityUsedBodies",
+    "card": "abilityUsedCards",
+}
+
+
+def ability_allowance_marker(allowance, *, card_id, body_serial):
+    """Authored metadata owns copy-local versus card-global identity; conditions never infer it."""
+    state_key = _ABILITY_ALLOWANCE_STATE.get(allowance)
+    if state_key is None:
+        return None
+    value = body_serial if allowance == "body" else int(card_id)
+    return None if value is None else (state_key, value)
+
+
+def ability_allowance_spent(model, marker) -> bool:
+    if marker is None:
+        return False
+    state_key, value = marker
+    used = model.ability_used_bodies if state_key == "abilityUsedBodies" else model.ability_used_cards
+    return value in used
+
 #: Fallback Bench cap when an observation omits the engine's own ``benchMax`` (rulebook L75).
 _BENCH_MAX = 5
 
@@ -1260,6 +1282,14 @@ class StateModel(_Lazily):
     @property
     def supporter_played(self) -> bool:
         return bool(self.state.get("supporterPlayed"))
+
+    @property
+    def ability_used_bodies(self) -> frozenset:
+        return frozenset(self.state.get("abilityUsedBodies") or ())
+
+    @property
+    def ability_used_cards(self) -> frozenset[int]:
+        return frozenset(int(cid) for cid in (self.state.get("abilityUsedCards") or ()))
 
     @property
     def retreated(self) -> bool:

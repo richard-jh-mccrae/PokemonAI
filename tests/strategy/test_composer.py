@@ -25,7 +25,7 @@ from common.strategy.context import _ABILITY, _ATTACH, _ATTACK, _END, _EVOLVE, _
 
 MAIN = bd.CONTEXT_MAIN
 ACTIVE, BENCH, HAND = AREA_ACTIVE, AREA_BENCH, AREA_HAND
-COLORLESS, FIGHTING, PSYCHIC, DRAGON = 0, 6, 5, 9
+COLORLESS, FIGHTING, PSYCHIC, DRAGON, DARKNESS = 0, 6, 5, 9, 7
 
 # ── the pool — every row quoted from `data/EN_Card_Data.csv`; 1159 is a synthetic flat-HP Tool ────
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
@@ -956,7 +956,7 @@ _RIDE_STATS = {
 }
 _RIDE_CLAUSES = {
     DRAKLOAK: [{"kind": "draw", "amount": 1, "window": 2,
-                "condition": "once_per_turn_ability", "rider": "other_to_bottom"}],
+                "allowance": "body", "rider": "other_to_bottom"}],
     TELEPATH: [{"kind": "energy_provide", "amount": 1, "type": "psychic"},
                {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": 2,
                 "energy_type": 5, "target_type": 5, "dest": "bench", "trigger": "on_attach"}],
@@ -973,7 +973,7 @@ def _ride_model(hand):
 
 @pytest.mark.req("REQ-COMPOSER-0011")
 def test_an_ability_reveal_does_NOT_ride_the_evolve_that_puts_its_body_in_play():
-    """Drakloak's clause carries ``condition: once_per_turn_ability`` and NO ``trigger``: the Ability
+    """Drakloak's clause carries a body allowance and NO ``trigger``: the Ability
     is its own `_ABILITY` option, so evolving into Drakloak reveals nothing (Issue #263)."""
     model = _ride_model([DRAKLOAK])
     evolve = {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0}
@@ -982,7 +982,7 @@ def test_an_ability_reveal_does_NOT_ride_the_evolve_that_puts_its_body_in_play()
 
 
 @pytest.mark.req("REQ-COMPOSER-0011")
-def test_an_ability_reveal_is_not_misread_as_the_same_index_in_hand():
+def test_an_ability_reveal_routes_its_body_not_the_same_index_in_hand():
     """The closed-form dispatcher checks kind first: hand[0]=Judge cannot hijack Drakloak's option."""
     drakloak = {**_body(RIOLU), "id": DRAKLOAK, "hp": 90, "maxHp": 90}
     obs = _obs(_player(active=drakloak, hand=[JUDGE]))
@@ -1000,9 +1000,46 @@ def test_an_ability_reveal_is_not_misread_as_the_same_index_in_hand():
                         effects=CardEffects(effects))
     model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
     result = cp.compose(model, [{"type": _ABILITY, "area": ACTIVE, "index": 0}])
-    assert result.fanned == (None,)
-    assert any("revealing `_ABILITY` is an in-play source" in gap for gap in result.gaps), result.gaps
+    assert result.fanned[0] is not None
+    assert not any("revealing `_ABILITY` is an in-play source" in gap for gap in result.gaps)
     assert not any("source index" in gap or "occupied hand" in gap for gap in result.gaps)
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_ability_legality_reads_per_body_and_global_usage_markers():
+    fez = 140
+    stats = {**_RIDE_STATS,
+             fez: CardStat(fez, name="Fezandipiti ex", hp=210, ex=True, energyType=DARKNESS,
+                           hasAbility=True)}
+    clauses = {
+        **_RIDE_CLAUSES,
+        fez: [{"kind": "draw", "amount": 3, "condition": "pokemon_ko_last_turn",
+               "allowance": "card"}],
+    }
+    drak = {**_body(RIOLU, serial=11), "id": DRAKLOAK, "hp": 90, "maxHp": 90}
+    fez_a = {**_body(RIOLU, serial=21), "id": fez, "hp": 210, "maxHp": 210}
+    fez_b = {**fez_a, "serial": 22}
+    obs = _obs(_player(active=drak, bench=(fez_a, fez_b)),
+               abilityUsedBodies=[11], abilityUsedCards=[fez])
+    combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
+                        functions=CardFunctions({}), transients=None, effects=CardEffects(clauses))
+    model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+    assert cp._still_legal(model, {"type": _ABILITY, "area": ACTIVE, "index": 0}) is False
+    assert cp._still_legal(model, {"type": _ABILITY, "area": BENCH, "index": 0}) is False
+    assert cp._still_legal(model, {"type": _ABILITY, "area": BENCH, "index": 1}) is False
+
+
+def test_ability_footprint_carries_the_whole_usage_allowance_zone():
+    drakloak = {**_body(RIOLU), "id": DRAKLOAK, "hp": 90, "maxHp": 90}
+    obs = _obs(_player(active=drakloak))
+    combat = CombatMath(DictCardStatProvider(_RIDE_STATS, attacks=_ATTACKS),
+                        functions=CardFunctions({}), transients=None,
+                        effects=CardEffects(_RIDE_CLAUSES))
+    model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+    fp = ao.option_footprint(model, {"type": _ABILITY, "area": ACTIVE, "index": 0},
+                             clauses_cover=True)
+    assert "allowance_ability_used" in fp.reads == fp.writes
+    assert not [key for key in fp.write_elements if key[0] == "allowance_ability_used"]
 
 
 @pytest.mark.req("REQ-COMPOSER-0011")

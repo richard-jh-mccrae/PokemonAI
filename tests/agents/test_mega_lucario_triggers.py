@@ -563,38 +563,3 @@ def test_no_flat_rung_decides_the_stadium_any_more():
 
 # (test_watchtower_* REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the deck and the
 # `watchtower-vs-colorless-abilities` rule retired. Gravity Mountain is now the sole Stadium.)
-
-
-# --- deck: the Lunar Cycle pair (fire it aggressively; never strand the last F) ----------------
-
-def _lunar_menu(hand, energy_attached=False):
-    cur = state(active=poke(SOLROCK, energy=0, hp=110), bench=[poke(LUNATONE, hp=110)],
-                hand=hand, opp_active=poke(WALL, hp=400))
-    cur["energyAttached"] = energy_attached
-    return make_select([opt(ABILITY, area=BENCH, index=0), opt(END)], context=MAIN, current=cur)
-
-
-@pytest.mark.req("REQ-ML-0015")
-def test_fire_lunar_cycle_with_surplus_f_in_hand():
-    """Two F in hand: the draw-3 fires (and outranks passing)."""
-    p = _pilot()
-    obs = _lunar_menu([F_ENERGY, F_ENERGY])
-    assert "fire-lunar-cycle" in _fired(p.explain(obs).options[0])
-    assert _ranked(p, obs)[0][0] == 0
-
-
-@pytest.mark.req("REQ-ML-0015")
-def test_lunar_cycle_guard_holds_the_last_attachable_f():
-    """ONE F in hand, attach still pending, a body can absorb it: the guard fires and the fire-rule
-    stands down — hold the F for the attach (the ability re-fires after it)."""
-    opts = _pilot().explain(_lunar_menu([F_ENERGY])).options
-    assert "dont-lunar-cycle-away-the-last-attachable-f" in _fired(opts[0])
-    assert "fire-lunar-cycle" not in _fired(opts[0])
-
-
-@pytest.mark.req("REQ-ML-0015")
-def test_lunar_cycle_fires_once_the_turns_attach_is_done():
-    """Same single F but the Energy is already attached this turn: the guard stands down."""
-    opts = _pilot().explain(_lunar_menu([F_ENERGY], energy_attached=True)).options
-    assert "dont-lunar-cycle-away-the-last-attachable-f" not in _fired(opts[0])
-    assert "fire-lunar-cycle" in _fired(opts[0])

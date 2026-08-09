@@ -1128,11 +1128,8 @@ any deck → **general**; reads deck `card_id`s / the deck's Line / deck Roles �
     2026-07-03, Gravity Mountain's by Issue #424, which also closed the bump-timing gap.
     `opp_has_stage2` survives as general Board infra with no reader in this deck, exactly as
     `opp_has_colorless_ability` does.)*
-  - **Lunar-Cycle guard (DECK pair):** probe fact — Lunar Cycle is an `ABILITY(10)` MAIN option
-    (nothing endorsed it: score 0 lost to any attack!), so `fire-lunar-cycle` (+15, tier-0
-    sequencing) + `dont-lunar-cycle-away-the-last-attachable-f` (−30, GENERAL Board
-    `hand_basic_energy`; self-sequencing: the guard stands down once the turn's attach lands, so
-    the ability still fires on the surplus the same turn).
+  - **Lunar Cycle (DECK):** direct MAIN policy retired by Issue #469. The clause-driven composer now
+    prices its Solrock gate, Basic {F} discard, draw Worth, and once-per-card Ability allowance.
 - **T9' (trainer-swap re-run): ✅ DONE 2026-07-03 — mostly DELETIONS + covers-as-is.** deck.txt trainer
   package edited (Pokémon core unchanged). The general layer (grown since Phase A) already covers all
   four new cards, so **no new deck Hypotheses were authored**:

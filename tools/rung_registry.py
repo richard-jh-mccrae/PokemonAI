@@ -17,6 +17,7 @@ UNRECORDED = "UNRECORDED"    # genuinely retired, but no ADR or fold note in the
 UNREPLACED = "UNREPLACED"    # deleted, and the note says OUTRIGHT that nothing has taken the family over
                              # yet. Distinct from UNRECORDED (nobody wrote it down) and from SUBSUMED
                              # (something already covered it): here the gap is the recorded finding.
+CORRECTED = "CORRECTED"      # a sound successor intentionally changes ranking; score parity is not claimed
 
 # Issue #459 retires these shared valuations from every runtime; `FOLDED` records their destination below.
 SHARED_RUNTIME_RETIRED = frozenset({
@@ -81,8 +82,8 @@ LEGACY_DECK_RUNTIME_RUNG_IDS = {
     "mega_lucario": frozenset({
         "attach-solrock-over-line-base", "fetch-the-missing-engine-half", "dont-fetch-the-redundant-piece",
         "dont-fetch-the-inert-engine-piece", "dont-bench-a-redundant-engine-piece", "spring-heave-ho-when-it-pays",
-        "heave-ho-decline-without-payoff", "heave-ho-gust-when-it-pays", "fire-lunar-cycle",
-        "grab-lunar-cycle-fuel", "dont-lunar-cycle-away-the-last-attachable-f", "lunar-cycle-the-weak-preevo-last-f",
+        "heave-ho-decline-without-payoff", "heave-ho-gust-when-it-pays",
+        "grab-lunar-cycle-fuel",
     }),
     "dragapult_ex": frozenset({"bench-the-comeback-drawer"}),
 }
@@ -141,6 +142,15 @@ FOLDED: dict[str, Fold] = {
     "gravity-mountain-vs-stage2": Fold(
         "", "common.pilot:Pilot._boost_lethal_tactical",
         "Issue #424: the boost reaches the card through its card_effects.json clause, not a deck-side id"),
+    "fire-lunar-cycle": Fold(
+        "", CORRECTED,
+        "Issue #469: common.composer:compose prices Lunar Cycle's gate, discard, draw and allowance"),
+    "dont-lunar-cycle-away-the-last-attachable-f": Fold(
+        "", CORRECTED,
+        "Issue #469: common.composer:compose chooses Basic {F} fuel through the shared shed oracle"),
+    "lunar-cycle-the-weak-preevo-last-f": Fold(
+        "", CORRECTED,
+        "Issue #469: common.composer:compose replaces the weak-pre-evolution exception by board delta"),
     # --- PR #447 (Issue #386) deleted the rung LADDER. Destinations below are transcribed from
     #     main's own tombstone notes, never inferred.
     "dig-before-commit": Fold(
