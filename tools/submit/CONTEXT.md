@@ -36,7 +36,9 @@ The self-contained HTML carried inside each Submission that **embeds** its Manif
 it for a human — one file that is both machine- and human-readable, the at-a-glance state of
 that agent at build time. Renders the full decklist (names from the card cache) and a highlighted
 **deck-change** callout versus this agent's previous build (the Build Ledger stores each build's
-deck as the baseline).
+deck as the baseline). Its sibling `brief.csv` is a long-form, appendable composer snapshot: the
+beam contract, bespoke equations retained in the leaf, state-value/terminal equations, and mechanics
+ranked purely by successor-state differencing.
 _Avoid_: report, readme, version_control card
 
 **Build Ledger**:

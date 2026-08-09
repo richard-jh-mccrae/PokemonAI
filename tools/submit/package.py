@@ -2,8 +2,9 @@
 
 Copies a deck-specific agent (`agents/<name>/`'s `*.py` + `deck.csv` + `tuned.json` when
 present) together with the shared `common/` and `cg/` packages (and the compiled
-`common/scouting/artifact.json`) into `dist/<name>/`, writes a self-contained `brief.html`
-(the embedded decision-steering **Manifest** — provenance, hypotheses, capabilities, deck;
+`common/scouting/artifact.json`) into `dist/<name>/`, writes a self-contained `brief.html` and
+machine-joinable `brief.csv` (the embedded decision-steering **Manifest** — provenance, hypotheses,
+capabilities, deck, composer inventory;
 see ADR-0019), then zips it to
 `dist/<name>_<YYYYMMDD>_<githash>.zip` — the staged dir *is* the exact shipped bundle,
 and the stamped zip names the deploy artifact by build date + commit (`-dirty` suffix when the
@@ -77,10 +78,11 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     shutil.copytree(MS / "cg", stage / "cg", ignore=_IGNORE)
 
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
-    from submit.brief import build_manifest, render_brief  # lazy: avoid import cycle
+    from submit.brief import build_manifest, render_brief, render_brief_csv  # lazy: avoid import cycle
     manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
     brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id, prev_hyps=prev_hyps)
     (stage / "brief.html").write_text(brief, encoding="utf-8")
+    (stage / "brief.csv").write_text(render_brief_csv(manifest), encoding="utf-8", newline="")
 
     stem = artifact_stem(name, when=when, git_hash=git_hash) if stamp else name
     return Path(shutil.make_archive(str(Path(dist) / stem), "zip", root_dir=stage))

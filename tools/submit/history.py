@@ -48,4 +48,11 @@ def summary(manifest: dict) -> dict:
         "deck_size": manifest["deck"]["size"],
         "posture": caps["posture"]["enabled"],
         "overrides": caps["overrides"]["count"],
+        "composer": {
+            "status": manifest["composer"]["status"],
+            "bespoke_equations": [row["id"] for row in manifest["composer"]["bespoke_equations"]],
+            "state_value_families": [row["id"] for row in manifest["composer"]["state_value_families"]],
+            "terminal_equations": [row["id"] for row in manifest["composer"]["terminal_equations"]],
+            "differencing_mechanics": [row["id"] for row in manifest["composer"]["differencing_mechanics"]],
+        },
     }
