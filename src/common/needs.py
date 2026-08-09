@@ -318,6 +318,9 @@ class Resolution:
     hand_ids: tuple = ()
     #: Worth of held cards that fill NO specific slot, already discounted by the resolver.
     latent_worth: float = 0.0
+    #: Per-card contribution to ``latent_worth``. Optional for existing callers; discard projection
+    #: uses it to keep the root demand ledger fixed while cards leave the hand.
+    latent_by_hand: tuple = ()
 
     def split(self) -> tuple:
         """``(re_access, coverage)`` over the whole held hand."""

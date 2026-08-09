@@ -89,6 +89,7 @@ EXPECTED_SHIPPED = {
     "snipe_relevance": True,        # ADR-0083: the Snipe Relevance scalar decides the DAMAGE
                                     # bench-target select; the additive target rungs stand down
     "deny_relevance": True,         # ADR-0080 / ADR-0093. Arm TOGETHER with `deny_strip_delta`
+    "leaf_followups": False,        # Issue #387: deck opt-in; Mega Starmie validates first
 }
 
 

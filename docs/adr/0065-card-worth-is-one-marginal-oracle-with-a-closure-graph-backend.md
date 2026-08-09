@@ -488,6 +488,26 @@ convergence: a graded term REPLACES its guard family and re-audits it, never bol
 
 ## Alternatives rejected
 
+### Amendment — Issue #387 (2026-08-09)
+
+Mega Starmie's forced-discard selector is no longer a separate Needs ranking. Ultra Ball iterates the common
+one-ply leaf: remove one visible hand card, project the fixed root Needs ledger onto the remaining
+hand, rebuild the `StateModel`, price `state_value.hand`, and repeat. Freezing demand is load-bearing:
+re-deriving a slot only from its remaining suppliers would make the need disappear with its last card.
+Mandatory picks never take the optional decline. Buddy-Buddy Poffin uses the same loop over a
+hypothetical Bench, bounded by `board_delta.bench_max`; it declines only an optional non-positive
+rounded marginal. The previous `_discard_needs_pick` and fetch re-score owners are retired from
+selection on the validated deck, preserving their value math only as the leaf's hand/development
+families. Other decks retain their prior owner until Issue #388. The immutable correction pins
+`82749656-20` and `82867148-48` move under the new owner without restamping; all seven immutable
+Mega Starmie discard rulings remain green through the leaf route.
+
+Re-measured against runtime-equivalent `47f7e91f`, then rebased onto docs-only `aec9982e`: the
+250-frame lab reports 199 composed / 51 no-scorable, median 112.49 ms, P95 869.88 ms, max 3458.52 ms. The production-shaped
+seeded lane covers contexts 3/4/7/15/17/21/22 and stays beneath the one-second packaging guard.
+`check_agent.py mega_starmie --matches 5` passes contents, legality, playability, and packaged
+deployability.
+
 - **Converge all four shadows at once.** Big-bang re-baselines every calibrated consumer in one
   step; the round-11 gotcha ("accurate data flips calibrated consumers") and ADR-0060's +76 incident
   both argue for staging each flip under its correction family + the score-diff gate.

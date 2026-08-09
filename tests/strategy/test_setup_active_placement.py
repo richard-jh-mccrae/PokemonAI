@@ -90,6 +90,15 @@ def test_issue_459_keeps_starter_assets_but_global_runtime_does_not_score_them()
         trace = _pilot(agent).explain(_setup_active_obs(cards))
         assert all(option.score == 0.0 and not option.fired for option in trace.options)
 
+
+@pytest.mark.parametrize(("cards", "expected"), (([CINDERACE, STARYU], 0),
+                                                    ([STARYU, CINDERACE], 1)))
+def test_mega_starmie_structurally_opens_cinderace_before_staryu(cards, expected):
+    """Issue #387: the deck declaration selects before composer or score ordering."""
+    trace = _pilot("mega_starmie").explain(_setup_active_obs(cards))
+    assert trace.chosen == [expected]
+    assert all(option.score == 0.0 and not option.fired for option in trace.options)
+
 def test_f2_opens_the_utility_body_over_the_fragile_line_base():
     """dragapult f2, from its recorded observation: all three options returned 0.0 with NO rule
     firing, so the engine's option index opened the 70-HP Line base."""

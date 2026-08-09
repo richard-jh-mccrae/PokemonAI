@@ -616,7 +616,8 @@ class _Node:
 
 def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: float = EPSILON,
             depth: int = SEQUENCE_DEPTH, search_api=None, deterministic=None,
-            clauses_cover=None, shed=None) -> ComposerResult:
+            clauses_cover=None, shed=None, continuation_boundary: bool = False,
+            required_pick: bool = False) -> ComposerResult:
     """``deterministic`` / ``clauses_cover`` / ``shed`` are caller-supplied per-option seams, each a
     value or an ``option -> value`` callable. **Pure and bit-identical**; wall-clock is not enforced."""
     if int(k) < 1 or int(depth) < 0:
@@ -636,7 +637,9 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
 
     state = _Run(k=k, epsilon=epsilon, depth=depth, search_api=search_api,
                  deterministic=deterministic, clauses_cover=clauses_cover, shed=shed,
-                 canon=canon, reps=reps, stamped=stamped)
+                 canon=canon, reps=reps, stamped=stamped,
+                 continuation_boundary=bool(continuation_boundary),
+                 required_pick=bool(required_pick))
 
     root = _Node(model=model, leaf=float(state_value(model)))
     frontier, root_ranked = [root], None
@@ -691,6 +694,10 @@ class _Run:
     canon: list
     reps: list
     stamped: list
+    #: A CARD follow-up commits exactly one choice, then returns to a fresh MAIN menu. Its after-board
+    #: receives the terminal action still reachable there; stale root options must not be replayed.
+    continuation_boundary: bool = False
+    required_pick: bool = False
     #: `None` makes a costed search REFUSE and name the seam, never price its cost as free.
     shed: object = None
     candidates: list = field(default_factory=list)
@@ -888,13 +895,17 @@ def _expand(state: _Run, node: _Node, ranked: list) -> list:
     emitted; a child that does NOT commute opens a FRESH block, so both orderings are explored."""
     state.nodes += 1
     children = []
-    state.candidates.append(_stop_here(state, node))
+    if not (state.required_pick and state.continuation_boundary and not node.steps):
+        state.candidates.append(_stop_here(state, node))
     for entry in _admit(state, ranked):
         if entry.terminal:
             state.candidates.append(_terminal_candidate(node, entry))
             continue
         if entry.refused or entry.after is None:
             state.candidates.append(_gap_or_reveal_candidate(node, entry))
+            continue
+        if state.continuation_boundary and not node.steps:
+            state.candidates.append(_continuation_candidate(node, entry))
             continue
         commutes = all(ao.footprints_commute(entry.footprint, fp) for fp in node.block_prints)
         if commutes and node.block and not _admissible_in_block(entry.key, node.block):
@@ -907,6 +918,14 @@ def _expand(state: _Run, node: _Node, ranked: list) -> list:
             else (entry.footprint,),
             truncated=node.truncated + entry.truncated, leaf=node.leaf + entry.delta))
     return children
+
+
+def _continuation_candidate(node: _Node, entry: _Ranked) -> Candidate:
+    """One committed CARD choice plus the best terminal action reachable on its after-board."""
+    leaf = node.leaf + entry.delta
+    ev = continuation_ev(entry.after)
+    return Candidate(steps=(_step_of(entry),), terminal=None, leaf=leaf, terminal_ev=ev,
+                     score=leaf + ev, truncated=node.truncated + entry.truncated)
 
 
 def _stop_here(state: _Run, node: _Node) -> Candidate:

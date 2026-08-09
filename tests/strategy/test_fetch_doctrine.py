@@ -143,19 +143,51 @@ def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
 
 # --- bench-fill grab (TO_BENCH): a min0 bench placement must bench the Basics, not whiff to [] -------
 @pytest.mark.req("REQ-GEN-0035")
-def test_bench_fill_grab_benches_basics_at_to_bench():
-    """Asserted with the decider at its class DEFAULT (off), the degraded path: nothing scores these
-    options, so the take-fewer bar alone must place bodies rather than waste the search."""
+def test_bench_fill_grab_benches_basics_at_to_bench_for_deferred_decks():
+    """Issue #388 decks retain the doctrine fallback and do not waste an optional search."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
-                                  STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
+                                  STAGE1: CardStat(STAGE1, synthetic=True, hp=90,
+                                                   evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # TO_BENCH, up to 2, minCount 0: two Basics + a non-Basic Stage-1 revealed from deck.
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
                       min_count=0, max_count=2, context=TO_BENCH,
                       deck=[{"id": BASIC}, {"id": BASIC}, {"id": STAGE1}],
                       current=state(active=poke(900, energy=1), bench=[]))
-    assert sorted(pilot.decide(obs)) == [0, 1]                        # bench both Basics, not [] (no whiff)
-    assert not any("bench-fill-a-basic" in _fired(o) for o in pilot.explain(obs).options)
+    assert sorted(pilot.decide(obs)) == [0, 1]
+    assert not any("bench-fill-a-basic" in _fired(option) for option in pilot.explain(obs).options)
+
+
+@pytest.mark.req("REQ-GEN-0035")
+def test_poffin_leaf_pick_benches_mega_starmies_line_base_and_may_stop_above_minimum():
+    """Issue #387: a useful Staryu has a positive leaf delta; the optional second pick may decline."""
+    cinderace, staryu, mega = 666, 1030, 1031
+    stats = DictCardStatProvider({cinderace: CardStat(cinderace, synthetic=True, name="Test Cinderace", hp=170),
+                                  staryu: CardStat(staryu, synthetic=True, name="Test Staryu", hp=70),
+                                  mega: CardStat(mega, synthetic=True, name="Test Mega", hp=330,
+                                                 evolvesFrom="Test Staryu", megaEx=True)})
+    strategy = Strategy(roles={cinderace: ["accel_source"], mega: ["win_condition", "primary_attacker"]},
+                        lines=[Line(path=[staryu, mega], payoff=mega, role="win_condition")])
+    pilot = Pilot(strategy, deck=[cinderace, staryu, mega] + [1] * 57,
+                  general_strategy=GENERAL_STRATEGY, stats=stats, leaf_followups=True)
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)],
+                      min_count=0, max_count=2, context=TO_BENCH,
+                      deck=[{"id": staryu}, {"id": cinderace}],
+                      current=state(active=poke(cinderace, energy=1), bench=[], hand=[mega]))
+    obs["search_begin_input"] = "seeded-poffin"
+    assert pilot.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-GEN-0035")
+def test_mega_starmie_required_non_poffin_grab_keeps_a_legal_fallback():
+    """A required TO_HAND menu belongs to Issue #388; unknown cards can never yield an illegal []."""
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
+                  leaf_followups=True)
+    obs = make_select([card_opt(DECK, i) for i in range(6)],
+                      min_count=3, max_count=3, context=TO_HAND,
+                      deck=[{} for _ in range(6)],
+                      current=state(active=poke(900), bench=[]))
+    chosen = pilot.decide(obs)
+    assert len(chosen) == 3 and len(set(chosen)) == 3
 
 
 @pytest.mark.req("REQ-DEPLOY-0001")
@@ -182,21 +214,22 @@ def test_the_deploy_marginal_prices_the_to_bench_entry_point():
 
 
 @pytest.mark.req("REQ-DEPLOY-0001")
-def test_the_to_bench_multi_pick_stops_when_the_bench_runs_out():
-    """The greedy re-derives after each take, so the second pick is priced on a smaller Bench. With
-    the last slot spent `deploy_marginal` returns 0 — no counterfactual for an unplaceable body."""
+def test_the_to_bench_multi_pick_respects_the_engine_bench_capacity():
+    """The structural capacity filter wins even when the select offers two mandatory candidates."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, name="Basicmon", hp=70),
                                   WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basicmon"),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=60)})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
     pilot = Pilot(strat, deck=[BASIC, WINC, PLAINMON] + [PLAINMON] * 57,
-                  general_strategy=GENERAL_STRATEGY, stats=stats)
+                  general_strategy=GENERAL_STRATEGY, stats=stats, leaf_followups=True)
     pilot.deploy_value = True
+    pilot._greedy_grab = lambda *_args, **_kwargs: pytest.fail("Poffin reached the deferred owner")
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)],
-                      min_count=0, max_count=2, context=TO_BENCH,
+                      min_count=1, max_count=2, context=TO_BENCH,
                       deck=[{"id": BASIC}, {"id": PLAINMON}],
                       current=state(active=poke(900, energy=1), bench=[poke(900)] * 4))
+    obs["search_begin_input"] = "seeded-poffin-capacity"
     assert pilot.decide(obs) == [0]                                   # the Line base fills the last slot
 
 

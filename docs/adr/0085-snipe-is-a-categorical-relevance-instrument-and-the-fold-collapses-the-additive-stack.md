@@ -1547,6 +1547,13 @@ a Corrections-schema question and stays with ADR-0082 and Issue #229.
 
 ## Alternatives rejected
 
+### Seeded-menu ownership note — Issue #387 (2026-08-09)
+
+When the engine-backed composer commits a seeded DAMAGE continuation, its after-board choice
+supersedes this target score. The equation remains the fallback for refusals and unseeded menus; it
+is not labelled `composed-into-the-leaf`, because `state_value.threat` does not implement the same
+categorical relevance equation.
+
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the
   pre-ADR-0044 blunder on `83667237-107`. Rejected on the measurement.
 - **Build a magnitude-shaped chip-conversion Δ** (the threshold-race as a prize rate or prize fraction).

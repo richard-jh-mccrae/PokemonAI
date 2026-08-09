@@ -79,6 +79,8 @@ PROFILE = {
     "deny_relevance": True,         # ADR-0080/0093: all three deny surfaces score off the relevance
                                     # read. ⚠️ OFF is DEGRADED MODE, never a rollback — Issue #228
                                     # DELETED the ADR-0062 magnitude oracle this replaced.
+    "leaf_followups": False,         # Issue #387: deck opt-in for composer-owned seeded CARD menus
+                                    # and leaf-owned multi-picks; Mega Starmie validates first.
 }
 # `deferred_target_expansion` RETIRED (Issue #446): ADR-0121 armed it off until a consumer existed;
 # Issue #386's composer opts in per call, so the flag gated nothing and read as a live kill-switch.
