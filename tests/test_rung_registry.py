@@ -320,8 +320,12 @@ def test_shared_runtime_retirements_are_globally_folded() -> None:
 
 
 def test_retained_third_deck_rungs_match_the_declared_out_of_competition_scope() -> None:
-    from agents.dragapult_ex.strategy import STRATEGY as dragapult
-    from agents.mega_lucario.strategy import STRATEGY as lucario
+    # `kaggle_environments` has its own top-level `agents` module in CI, so load the actual
+    # strategies through the same shipped builder used by runtime code.
+    from train.tune import _build_pilot
+
+    lucario = _build_pilot("mega_lucario")[0].strategy
+    dragapult = _build_pilot("dragapult_ex")[0].strategy
 
     assert {hypothesis.id for hypothesis in lucario.hypotheses} == LEGACY_DECK_RUNTIME_RUNG_IDS["mega_lucario"]
     assert {hypothesis.id for hypothesis in dragapult.hypotheses} == LEGACY_DECK_RUNTIME_RUNG_IDS["dragapult_ex"]

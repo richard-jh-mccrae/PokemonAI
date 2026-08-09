@@ -20,8 +20,12 @@ def _fired(option_trace):
 @pytest.mark.req("REQ-GEN-0063")
 def test_global_retirement_keeps_only_c10_guards_and_deck_local_rungs():
     """Issue #459 globally keeps only C10 guards while deck-local third-deck rungs remain."""
-    from agents.dragapult_ex.strategy import STRATEGY as dragapult
-    from agents.mega_lucario.strategy import STRATEGY as lucario
+    # Do not import `agents.<deck>.strategy` directly: kaggle_environments exposes a conflicting
+    # top-level `agents` module in CI. The shipped builder is also the runtime wiring under test.
+    from train.tune import _build_pilot
+
+    lucario = _build_pilot("mega_lucario")[0].strategy
+    dragapult = _build_pilot("dragapult_ex")[0].strategy
 
     assert {hypothesis.id for hypothesis in GENERAL_STRATEGY.hypotheses} == {
         "dont-search-an-empty-deck",
