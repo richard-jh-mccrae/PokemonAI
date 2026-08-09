@@ -5,9 +5,11 @@ Strategy + General Strategy and its shipped data files — never by running the 
 """
 from __future__ import annotations
 
+import csv
 import html
 import importlib.util
 import inspect
+import io
 import json
 import sys
 from collections import Counter
@@ -15,6 +17,123 @@ from datetime import datetime
 from pathlib import Path
 
 from submit.package import REPO, _git_hash, artifact_stem  # reuse build-stamp helpers
+
+
+_BRIEF_CSV_FIELDS = (
+    "schema_version", "record_type", "agent", "built_at", "git_hash", "artifact", "id",
+    "classification", "owner", "adr", "destination", "formula", "reads", "blind_to",
+)
+
+_COMPOSED_EQUATION_OWNERS = {
+    "attach-value-composed": "common.pilot:Pilot._attach_value",
+    "evolve-value-composed": "common.evolve_value:evolve_value",
+    "promote-retreat-value-composed": "common.promote_retreat_value:promote_value",
+    "deploy-value-composed": "common.deploy_value:deploy_value",
+}
+
+
+def _composer_manifest() -> dict:
+    """The runtime valuation inventory carried with every submission.
+
+    This is deliberately sourced from the live registries, rather than a parallel hand-maintained
+    list: it distinguishes per-seam equations retained inside the leaf from ordinary mechanics that
+    the composer ranks only by successor-state differencing.
+    """
+    from common import composer
+    from common.sound_rules import composed
+    from common.state_value import REGISTRY, TERMINAL_REGISTRY
+
+    return {
+        "owner": "common.composer:compose",
+        "status": "main_decider",
+        "score": "state_value(end_board) + EV(terminal_action)",
+        "beam": {
+            "width": composer.BEAM_WIDTH,
+            "depth": composer.SEQUENCE_DEPTH,
+            "epsilon": composer.EPSILON,
+        },
+        "bespoke_equations": [
+            {"id": rule.id, "entry": rule.entry, "owner": _COMPOSED_EQUATION_OWNERS[rule.id],
+             "adr": _adr_from_entry(rule.entry),
+             "destination": rule.composed_into, "fact": rule.fact}
+            for rule in composed()
+        ],
+        "state_value_families": [
+            {"id": family.name, "reads": list(family.reads), "blind_to": list(family.blind_to),
+             "composition": family.composition}
+            for family in REGISTRY
+        ],
+        "terminal_equations": [
+            {"id": family.name, "reads": list(family.reads), "blind_to": list(family.blind_to),
+             "composition": family.composition}
+            for family in TERMINAL_REGISTRY
+        ],
+        "differencing_mechanics": [
+            {"id": "transition", "formula": "state_value(after) - state_value(before)"},
+            {"id": "coin", "formula": "coin ordering(state_value) - state_value(before)"},
+            {"id": "refresh", "formula": "state_value(after) + refresh scalar - state_value(before)"},
+            {"id": "revealing_choice", "formula": "choice ordering(state_value) - state_value(before)"},
+            {"id": "deferred_target", "formula": "best target state_value(after) - state_value(before)"},
+        ],
+    }
+
+
+def _adr_from_entry(entry: str) -> str:
+    """The ADR token is useful for a CSV diff, without duplicating a second equation catalogue."""
+    import re
+
+    return ",".join(re.findall(r"ADR-\d{4}", entry))
+
+
+def render_brief_csv(manifest: dict) -> str:
+    """Render the submission's composer snapshot as stable, one-row-per-concern CSV.
+
+    Repeated provenance on each row makes rows appendable across submission bundles without an
+    external join.  List-valued fields stay JSON so a CSV reader never loses fact boundaries.
+    """
+    p, composer = manifest["provenance"], manifest["composer"]
+    common = {
+        "schema_version": manifest["schema_version"], "agent": p["agent"],
+        "built_at": p["built_at"], "git_hash": p["git_hash"], "artifact": p["artifact"],
+    }
+    rows = [
+        {**common, "record_type": "composer", "id": "sequence_composer",
+         "classification": composer["status"], "owner": composer["owner"],
+         "formula": composer["score"],
+         "reads": json.dumps(composer["beam"], sort_keys=True)},
+    ]
+    rows.extend(
+        {**common, "record_type": "equation", "id": row["id"],
+         "classification": "bespoke_equation_composed_into_leaf", "owner": row["owner"],
+         "adr": row["adr"], "destination": row["destination"],
+         "formula": f"{row['entry']}: {row['fact']}"}
+        for row in composer["bespoke_equations"]
+    )
+    rows.extend(
+        {**common, "record_type": "state_value_family", "id": row["id"],
+         "classification": "successor_state_differencing", "owner": "common.state_value:state_value",
+         "formula": row["composition"], "reads": json.dumps(row["reads"]),
+         "blind_to": json.dumps(row["blind_to"])}
+        for row in composer["state_value_families"]
+    )
+    rows.extend(
+        {**common, "record_type": "terminal_equation", "id": row["id"],
+         "classification": "terminal_action_ev", "owner": "common.composer:terminal_ev",
+         "formula": row["composition"], "reads": json.dumps(row["reads"]),
+         "blind_to": json.dumps(row["blind_to"])}
+        for row in composer["terminal_equations"]
+    )
+    rows.extend(
+        {**common, "record_type": "mechanic", "id": row["id"],
+         "classification": "pure_differencing", "owner": "common.composer:compose",
+         "formula": row["formula"]}
+        for row in composer["differencing_mechanics"]
+    )
+    out = io.StringIO(newline="")
+    writer = csv.DictWriter(out, fieldnames=_BRIEF_CSV_FIELDS, extrasaction="raise")
+    writer.writeheader()
+    writer.writerows(rows)
+    return out.getvalue()
 
 
 def render_brief(manifest: dict, *, prev_deck: dict | None = None,
@@ -277,7 +396,7 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
     training = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     search_budget = strategy.params.get("search_budget", 0)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),
@@ -286,6 +405,7 @@ def build_manifest(agent_dir, *, general_strategy=None, when=None, git_hash=None
         },
         "deck": _deck(agent_dir, cards),
         "training": training,
+        "composer": _composer_manifest(),
         "capabilities": {
             "search_budget": search_budget,
             "tier": 1 if search_budget > 0 else 0,    # >0 = Tier-1 Search; else Tier-0 closed-form

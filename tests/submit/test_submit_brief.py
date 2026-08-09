@@ -1,4 +1,6 @@
 """The Agent Brief's Manifest is an agent's decision-steering fingerprint (ADR-0019)."""
+import csv
+import io
 import json
 import shutil
 from datetime import datetime
@@ -8,7 +10,7 @@ import pytest
 
 import re
 
-from submit.brief import build_manifest, render_brief
+from submit.brief import build_manifest, render_brief, render_brief_csv
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "agents" / "mega_starmie"
 
@@ -196,6 +198,24 @@ def test_manifest_surfaces_training_provenance_from_sidecar(tmp_path):
     assert training["corrections_hash"] == "abc123def456"
 
 
+@pytest.mark.req("REQ-SUB-0011")
+def test_manifest_and_csv_inventory_distinguish_composed_equations_from_differencing(tmp_path):
+    manifest = build_manifest(_agent_with_tuned(tmp_path, {}))
+    composer = manifest["composer"]
+
+    assert composer["status"] == "main_decider"
+    assert {row["id"] for row in composer["bespoke_equations"]} == {
+        "attach-value-composed", "evolve-value-composed",
+        "promote-retreat-value-composed", "deploy-value-composed",
+    }
+    rows = list(csv.DictReader(io.StringIO(render_brief_csv(manifest))))
+    assert any(row["id"] == "attack_ev" and row["classification"] == "terminal_action_ev"
+               for row in rows)
+    assert any(row["id"] == "transition" and row["classification"] == "pure_differencing"
+               for row in rows)
+    assert all(row["artifact"] == manifest["provenance"]["artifact"] for row in rows)
+
+
 @pytest.mark.req("REQ-SUB-0004")
 def test_brief_is_self_contained_and_embeds_recoverable_manifest(tmp_path):
     agent = _agent_with_tuned(tmp_path, {"open-the-declared-starter": 99.0})
@@ -233,7 +253,7 @@ def test_package_ships_brief_and_drops_deck_txt_and_version_control(tmp_path):
         names = zf.namelist()
         html = zf.read("brief.html").decode("utf-8")
 
-    assert "brief.html" in names
+    assert "brief.html" in names and "brief.csv" in names
     assert "deck.txt" not in names and "version_control.md" not in names  # ADR-0019: brief replaces them
     manifest = json.loads(re.search(r'id="manifest">(.*?)</script>', html, re.S).group(1))
     assert manifest["provenance"]["agent"] == "mega_starmie"
