@@ -155,10 +155,15 @@ FOLDED: dict[str, Fold] = {
         "0092", "common.composer:compose", "a heal is priced by the survival delta it buys"),
     "hold-clutch-heal": Fold(
         "0092", "common.composer:compose", "the whole HEAL cluster went; the survival delta is the price"),
+    # Both said `compose`; Issue #423 MEASURED that it prices a Tool attach at 0.0 and re-pointed them.
     "deploy-hp-tool": Fold(
-        "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
+        "0028", UNREPLACED, "the +HP class moves `survival` only when its grant crosses the turn clock"),
     "hold-the-retreat-tool-with-no-retreat": Fold(
-        "0028", "common.composer:compose", "deleted with the Tool doctrine's MAIN-phase half"),
+        "0135", "common.deciders.attach:AttachMixin._tool_attach_value",
+        "emergent: a holder with no Retreat Cost to move differences to 0"),
+    "equip-the-retreat-tool-on-the-active": Fold(
+        "0135", "common.deciders.attach:AttachMixin._tool_attach_value",
+        "emergent: only the Active pays a Retreat Cost, so only there is the difference non-zero"),
     # The three ids `_finish_turn_last`'s two tiers matched as INLINE string literals. Registrable only
     # since PR #448 deleted those tiers: while a tier still named an id, the harvest read it as LIVE.
     "gust-for-the-ko": Fold(

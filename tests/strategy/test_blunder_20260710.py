@@ -122,8 +122,8 @@ def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
     assert chosen[0] != engine["i"], "the only {D} went into the draw engine again"
 
 
-# XFAIL RETIRED by Issue #423's Tool channel. The `FLIPS` row of the same name STAYS: it records the
-# COMPOSER's flip, and the composer still prices a Tool attach at 0.0 — only the Pilot now does not.
+# The `FLIPS` row of the same fixture name STAYS, and is not a contradiction: it records the
+# COMPOSER's flip, and the composer still prices a Tool attach at 0.0 (ADR-0135). Only the Pilot does.
 def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
     """The retreat tool belongs on the Active, and only the Active pays a Retreat Cost for it to buy
     down. Both legs of `_tool_attach_value` read the Active, so a bench recipient differences to 0."""

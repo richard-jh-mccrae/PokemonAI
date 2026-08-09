@@ -47,7 +47,11 @@ _ATTACH_ROW_ZEROS = {
 
 
 def _attach_row(**legs) -> dict:
-    """One row, whichever channel priced it — an unnamed leg reads as its zero, never as absent."""
+    """One row, whichever channel priced it — an unnamed leg reads as its zero, never as absent.
+    A misspelled leg RAISES: silently it would add a junk key and leave the real one reading 0.0."""
+    unknown = set(legs) - set(_ATTACH_ROW_ZEROS)
+    if unknown:
+        raise KeyError(f"attach row has no leg(s) {sorted(unknown)}")
     return {**_ATTACH_ROW_ZEROS, **legs}
 
 
@@ -358,8 +362,8 @@ class AttachMixin:
                     if target is active else active)
         delta = (self._retreat_option_value(obs, board, equipped)
                  - self._retreat_option_value(obs, board, active))
-        # ADR-0100's verdict says WHETHER and which way; ADR-0069 §1's band says WHAT IT IS WORTH —
-        # two claims about one Retreat Cost must not disagree by 50x, so the delta clamps into it.
+        # ADR-0100's verdict says WHETHER and which way; ADR-0069 §1's band says WHAT IT IS WORTH, and
+        # two claims about one Retreat Cost must not disagree. FLAT above the band — ADR-0135 §clamp.
         marginal = max(-_ATTACH_RETREAT_EQUITY, min(_ATTACH_RETREAT_EQUITY, delta))
         resource_cost = self._role_value(ecid) if ecid is not None else 0.0
         tactical = (marginal * _ATTACH_VALUE_SCALE

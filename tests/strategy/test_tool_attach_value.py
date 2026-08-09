@@ -125,15 +125,19 @@ def test_the_active_is_priced_and_every_benched_recipient_is_zero():
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0002")
 def test_the_benched_zero_is_arithmetic_and_not_an_area_gate():
-    """Both legs read the ACTIVE, so a Tool landing elsewhere differences one board against itself.
-    Asserted through the equation, so a later `if area == ACTIVE` short-circuit does not pass here."""
+    """The bench zero is not "this board prices nothing": the oracle DISCRIMINATES here — equipping
+    the Active moves it — and a bench recipient still differences to 0, because both its legs read A."""
     p = _pilot()
-    obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU)], [{"id": BALLOON}], [_attach(0, BENCH, 0)])
-    p.explain(obs)
+    obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": BALLOON}],
+               [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0)])
+    rows, _ = _rows(p, obs)
     active = p._my_active(obs)
     board = p._board(obs, obs["select"])
-    assert p._retreat_option_value(obs, board, active) == \
-        p._retreat_option_value(obs, board, active)
+    equipped = dict(active, tools=[{"id": BALLOON}])
+    bare, armed = (p._retreat_option_value(obs, board, active),
+                   p._retreat_option_value(obs, board, equipped))
+    assert armed != bare, "the oracle is inert on this board, so the bench 0.0 would prove nothing"
+    assert rows[0]["retreat_equity"] > 0.0 and rows[1]["retreat_equity"] == 0.0
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0003")
@@ -176,8 +180,8 @@ def test_rescue_boards_conditional_grant_is_read_on_the_real_body():
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0006")
 def test_the_value_is_clamped_into_the_retreat_equity_band():
-    """ADR-0100's verdict says WHETHER; ADR-0069 §1's band says WHAT IT IS WORTH. Uncapped, one
-    unlocked retreat priced 160.47 — 50x the band — and outbid a ruled Energy attach on `ml f64`."""
+    """ADR-0100's verdict says WHETHER; ADR-0069 §1's band says WHAT IT IS WORTH. Uncapped, an
+    unlocked retreat outbids a ruled Energy attach — the measurement is ADR-0135's."""
     p = _pilot()
     obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0)])
@@ -200,6 +204,16 @@ def test_both_kill_switches_reach_the_channel():
     assert _tactical(_pilot(promote_retreat_value=False)) == 0.0   # the equation it CONSUMES
 
 
+@pytest.mark.req("REQ-TOOL-ATTACH-0001")
+def test_a_misspelled_leg_raises_rather_than_reading_as_its_zero():
+    """Both channels build through one row, so a typo would add a junk key and leave the real leg at
+    0.0 — an assertion reading it would pass on the zero. The contract has to bite at the boundary."""
+    from common.deciders.attach import _attach_row
+    assert _attach_row(retreat_equity=1.0)["retreat_equity"] == 1.0
+    with pytest.raises(KeyError):
+        _attach_row(retreat_equty=1.0)
+
+
 # ── Style B: the corpus frames that ruled on an Air Balloon ───────────────────────────────────────
 
 #: Every ruled MAIN frame offering an Air Balloon attach. The first three rule it ONTO THE ACTIVE;
@@ -217,11 +231,29 @@ def _corpus_pilot():
 @pytest.mark.req("REQ-TOOL-ATTACH-0008")
 @pytest.mark.parametrize("episode,frame", _BALLOON_FRAMES)
 def test_the_ruled_balloon_frames_decide_the_way_the_human_ruled(_corpus_pilot, episode, frame):
-    """The whole point, end to end: before this channel the agent matched 1 of these 4 rulings."""
+    """The whole point, end to end — the channel's reason for existing, over the corpus."""
     rec = corpus_records([(episode, frame)])[0]
     assert replay_agent(rec) == "mega_lucario"
     decision = _corpus_pilot.explain(rec.obs)
     assert decision.chosen[0] in rec.correct
+
+
+#: The Balloon frames whose ruling is a DIFFERENT play. A channel that pays for mobility nobody wants
+#: would take these over, and `wasted_resource` is the human's own name for that blunder.
+_NON_BALLOON_FRAMES = [("86090147", 22), ("85058051", 4), ("86090666", 9)]
+
+
+@pytest.mark.req("REQ-TOOL-ATTACH-0009")
+@pytest.mark.parametrize("episode,frame", _NON_BALLOON_FRAMES)
+def test_the_channel_does_not_take_over_a_frame_that_wants_another_play(_corpus_pilot, episode, frame):
+    """`86090147-22` rules a RETREAT and `85058051-4` an Ultra Ball; on both, the Balloon buys a
+    retreat worth nothing, so the mobility difference is 0 and the pick stays where it was."""
+    rec = corpus_records([(episode, frame)])[0]
+    rows = {r["i"]: r for r in ((_corpus_pilot.explain(rec.obs).attach_working or {}).get("eq") or ())}
+    balloons = [i for i, r in rows.items() if r["energy"] == BALLOON]
+    assert balloons, f"{episode}-{frame} no longer offers a Balloon — the guard has stopped guarding"
+    assert all(rows[i]["retreat_equity"] == 0.0 for i in balloons)
+    assert _corpus_pilot.explain(rec.obs).chosen[0] not in balloons
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0008")
