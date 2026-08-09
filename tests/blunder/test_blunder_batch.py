@@ -135,3 +135,32 @@ def test_shell_serves_and_switches_replays_over_http(tmp_path):
     finally:
         httpd.shutdown()
         httpd.server_close()
+
+
+def test_shell_records_and_persists_a_complete_counterfactual_turn(tmp_path):
+    """SYSTEM: the alternate anchor runs through cgpy and the saved Correction carries its proof."""
+    replay = FIXTURES / "episode-81364540-replay.json.gz"
+    store = tmp_path / "c.jsonl"
+    shell.init_state([replay], store_path=str(store), agent="mega_lucario")
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), shell._Handler)
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        started = _post(port, "/counterfactual/start", {"frame": 5, "correct": [4]})
+        assert started["ok"] and started["status"] == "complete"
+        proof = started["counterfactual"]
+        assert proof["steps"][0]["choice"][0]["position"] == 4
+
+        saved = _post(port, "/correction", {
+            "frame": 5, "correct": [4], "category": "sequencing_error", "rationale": "end now",
+            "source": "own", "agent": "mega_lucario", "scope": "turn",
+            "intended_line": "end turn", "counterfactual": proof,
+        })
+        assert saved["ok"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+    [correction] = load_corrections(store)
+    assert correction.turn_plan["schema"] == "turn-sequence/v2"
+    assert correction.turn_plan["counterfactual"] == proof

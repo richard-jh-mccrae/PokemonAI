@@ -290,19 +290,30 @@ follow-up-select to MAIN→MAIN is a generalisation nobody has ruled on. The led
 addresses follow-up frames (asserted by a test), so every MAIN row here reports as a bare candidate
 count. Silently dropping those frames would be conforming to an unruled premise.
 
-**It does not grade the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
+**It does not parse or gate the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
 developer prose whose own file says *"Do not tidy these"*; a sequence parsed into option indices has
-already been interpreted once. The lab prints the developer's line verbatim beside the composer's and
-a human reads them, while Issue #291 §3c's index is consumed for the `sequence` / `pointer` /
-`verdict-only` classification — 16 of the 41 name a single action and cannot falsify a *sequence*
-composer at all.
+already been interpreted once. Issue #388's `--mega-starmie-ideal-sequences` view consumes the
+Issue #291 §3c index, emits the 21 indexed Mega Starmie full-sequence rows as review packets, and keeps
+the developer's text verbatim beside rendered composer steps. A human compares them. Its deliberately
+perturbed-text positive control proves the packet exposes a mismatch; it is not an automated prose
+grader. Pointers and verdict-only rows stay outside this sequence population.
 
 Two readings it keeps deliberately apart, because collapsing them would report a pass it never
 measured: a first step that **earned** a scored top-k slot, versus one merely **admitted** — a
 terminal or refused option is admitted unconditionally at delta 0.0 (the always-expand contract).
 _Avoid_: composer gate (it reports and exits 0 — a metric nobody has ruled on must not fail `main`),
-shadow (ADR-0092 decision 4 forbids a runtime one; this is on demand), turn-plan grader (it renders
-the ideal lines, it does not parse them)
+shadow (ADR-0092 decision 4 forbids a runtime one; this is on demand), prose grader (the executable
+counterfactual grader compares engine states; Composer Lab still does not parse ideal-line prose)
+
+**Counterfactual Turn Proof**:
+An executable `counterfactual-turn/v1` record inside a `turn-sequence/v2` Correction
+(`blunder/counterfactual.py`). It rebuilds the full-information Anchor in cgpy, records every newly
+generated menu by semantic card/target identity, and ends with a complete engine-state digest.
+Adjacent actions are `commutes` only when both orders remain legal, consume no randomness, and reach
+that same state; otherwise they are `ordered` or `branch-dependent`. The full-line grader accepts an
+exact order or proved equivalent reorder and names the first semantic divergence on mismatch.
+_Avoid_: parsed prose (no prose is interpreted), stale option indices (later menus are generated),
+same labels (the verdict compares engine states, not strings)
 
 **Satisfying a Correction**:
 What it means for a pick to match a human ruling: `correct ⊆ chosen`, never `correct == chosen`

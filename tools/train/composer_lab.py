@@ -1,6 +1,5 @@
 """Composer lab — replay corpus frames through the **sequence composer** and report what it would do
 (POC-T4/4, Issue #385; spec Issue #263 § *The composer lab*).
-
 An OFFLINE tool, never a runtime shadow (ADR-0092 decision 4). The composer it drives is the LIVE
 MAIN decider (`planner._composer_line`), but this lab runs it on frames production never would.
 `composer` / `chosen` / `ruled` are three different questions and only `ruled` is a judgement — see
@@ -10,6 +9,7 @@ The 41 verbatim ideal sequences are RENDERED, never parsed into option indices.
     python tools/train/composer_lab.py                      # the whole corpus
     python tools/train/composer_lab.py --agent dragapult_ex
     python tools/train/composer_lab.py --frame 85046350-32  # ONE frame, with its verbatim ideal line
+    python tools/train/composer_lab.py --mega-starmie-ideal-sequences
     python tools/train/composer_lab.py --acceptance         # f32 / f35 / f82 in-beam at this width
     python tools/train/composer_lab.py --epsilon-sweep      # tune EPSILON against the corpus
     python tools/train/composer_lab.py --out reports/composer.json
@@ -132,8 +132,68 @@ def ideal_sequences(path: Path = RULINGS) -> dict:
         return out
     text = path.read_text(encoding="utf-8")
     for hit in re.finditer(r"^- `([^`]+)` — (.+?)(?=^- `|^\n[#*]|\Z)", text, flags=re.M | re.S):
-        out[hit.group(1)] = " ".join(hit.group(2).split())
+        out[hit.group(1)] = hit.group(2)
     return out
+
+
+def ideal_sequence_packets(report: dict, *, agent: str) -> list[dict]:
+    """Human-review packets: verbatim ruling beside composer steps, never parsed into option indices."""
+    index, verbatim = ideal_index(), ideal_sequences()
+    packets = []
+    for row in report.get("rows") or ():
+        meta = index.get(row.get("key"))
+        if not meta or meta["agent"] != agent or not meta["kind"].startswith("sequence"):
+            continue
+        ruling = verbatim.get(row["key"])
+        steps = row.get("steps") or ()
+        labels = row.get("step_labels") or ()
+        ruled = row.get("ruled") or ()
+        composer = row.get("composer")
+        first_step = ("unavailable" if ruling is None or composer is None or not ruled
+                      else "match" if composer in ruled else "mismatch")
+        ruled_margin = row.get("ruled_margin")
+        if not ruled_margin:
+            beam_status = "unmeasured"
+        elif ruled_margin.get("in_beam"):
+            beam_status = "in-beam"
+        elif ruled_margin.get("admitted"):
+            beam_status = "outscored"
+        else:
+            beam_status = "pruned"
+        packets.append({
+            "frame": row["key"], "agent": agent, "kind": meta["kind"],
+            "ruled_sequence": ruling,
+            "composer_sequence": list(labels) if labels else [f"option {i}" for i in steps],
+            "comparison": ("pending-human-review" if ruling is not None
+                           else "unavailable-missing-verbatim-ruling"),
+            "state": ("ready" if ruling is not None and row.get("error") is None and steps
+                      else "unavailable"),
+            "first_step": first_step, "beam_status": beam_status,
+            "recommendation": ("restore the missing verbatim ruling" if ruling is None
+                               else "composition unavailable; inspect the captured error"
+                               if first_step == "unavailable"
+                               else "human sequence review: first composer step differs"
+                               if first_step == "mismatch"
+                               else "human sequence review: first steps agree; later steps remain ungraded"),
+            "margin": row.get("margin"), "ruled_margin": ruled_margin,
+            "error": row.get("error"),
+        })
+    return packets
+
+
+def ideal_sequence_control(packets: list[dict]) -> dict:
+    """Positive control for the packet renderer: a changed ruling must be visible as a mismatch."""
+    packets = [packet for packet in packets if packet["ruled_sequence"] is not None]
+    if not packets:
+        return {"healthy": False, "reason": "no sequence packet to perturb"}
+    packet = packets[0]
+    before = list(packet["composer_sequence"])
+    after = [*before, "[DELIBERATELY PERTURBED]"]
+    perturbed = {**packet, "composer_sequence": after}
+    rendered = _render_mega_starmie_packet(perturbed)
+    return {"healthy": "[DELIBERATELY PERTURBED]" in rendered, "frame": packet["frame"],
+            "difference": {"field": "composer_sequence", "before": before, "after": after},
+            "rendered": rendered}
 
 
 # ── the off-policy exposure (Issue #412), REPORTED and never filtered on ─────────────────────────
@@ -190,6 +250,7 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
            # grades on; at a follow-up select Issue #412's doctrine is already RULED.
            "context": ((obs.get("select") or {}).get("context")),
            "composer": None, "steps": None, "score": None, "margin": None, "ruled_margin": None,
+           "step_labels": [],
            "gaps": [], "bounds": [], "ms": None, "leaf_evals": None, "blocks": None,
            "coverage_gap": "", "expanded_families": None, "expansion_children": None,
            "no_scorable": False, "error": None}
@@ -226,6 +287,12 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
     if chosen is not None:
         row["composer"] = chosen.first_index
         row["steps"] = [s.index for s in chosen.steps]
+        from train.blunder.decode import option_label
+        current = obs.get("current") or {}
+        row["step_labels"] = [
+            option_label(options[i], current) if 0 <= i < len(options) else f"option {i}"
+            for i in row["steps"]
+        ]
         row["score"] = chosen.score
         row["coverage_gap"] = chosen.coverage_gap
     return row
@@ -474,7 +541,34 @@ def _print_acceptance(rpt) -> None:
             print(f"        {where}")
 
 
+def _render_mega_starmie_packet(packet: dict) -> str:
+    """One review packet. Keep the developer line byte-for-byte apart from renderer indentation."""
+    lines = [f"  {packet['frame']}  {packet['state']}  ({packet['kind']})",
+             f"    ruled:    {packet['ruled_sequence'] or '(MISSING VERBATIM RULING)'}",
+             "    composer: " + (" -> ".join(packet["composer_sequence"]) or "(none)"),
+             f"    first step: {packet['first_step']}   beam: {packet['beam_status']}",
+             f"    ruled margin: {packet['ruled_margin']}", f"    next: {packet['recommendation']}"]
+    if packet["error"]:
+        lines.append(f"    error:    {packet['error']}")
+    return "\n".join(lines)
+
+
+def _print_mega_starmie_ideal_sequences(packets: list[dict]) -> None:
+    """Render Issue #388's deck-scoped, sequence-level review packet."""
+    control = ideal_sequence_control(packets)
+    print("\n=== Mega Starmie ideal-sequence verification — Issue #388 ===")
+    print("  Developer ruling is verbatim. Composer steps are rendered from the replay menu.")
+    print("  Compare the two by human review; no prose is parsed into a replacement ruling.")
+    print("  renderer control: " + ("healthy" if control["healthy"] else "SILENT")
+          + " — deliberately perturbed composer steps "
+          + ("is visible" if control["healthy"] else "was not exposed"))
+    for packet in packets:
+        print("\n" + _render_mega_starmie_packet(packet))
+
+
 def main(argv=None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--store", type=Path, default=None,
                     help="corrections file or tree (default: the committed corpus)")
@@ -484,6 +578,8 @@ def main(argv=None) -> int:
                          "ruling, and the developer's verbatim ideal line if there is one")
     ap.add_argument("--acceptance", action="store_true",
                     help="report f32 / f35 / f82's first steps IN-BEAM at the chosen width")
+    ap.add_argument("--mega-starmie-ideal-sequences", action="store_true",
+                    help="render Issue #388's Mega Starmie full-sequence review packet")
     ap.add_argument("--epsilon-sweep", action="store_true",
                     help="how many frames each epsilon band rescues (the tuning measurement)")
     ap.add_argument("--beam-width", type=int, default=None)
@@ -491,6 +587,11 @@ def main(argv=None) -> int:
     ap.add_argument("--epsilon", type=float, default=None)
     ap.add_argument("--out", type=Path, default=None, help="write the report as JSON")
     args = ap.parse_args(argv)
+
+    if args.mega_starmie_ideal_sequences:
+        if args.agent not in (None, "mega_starmie"):
+            ap.error("--mega-starmie-ideal-sequences only supports --agent mega_starmie")
+        args.agent = "mega_starmie"
 
     from train.blunder.store import DEFAULT_ROOT, load_corrections
     from train.leaf_lab import _cgpy_pilot_builder, _git_rev
@@ -519,6 +620,12 @@ def main(argv=None) -> int:
     _print_report(rpt, frame=args.frame, index=ideal_index(), verbatim=ideal_sequences())
     if args.acceptance:
         _print_acceptance(rpt)
+    if args.mega_starmie_ideal_sequences:
+        packets = ideal_sequence_packets(rpt, agent="mega_starmie")
+        rpt["mega_starmie_ideal_sequences"] = {
+            "packets": packets, "positive_control": ideal_sequence_control(packets),
+        }
+        _print_mega_starmie_ideal_sequences(packets)
     if args.out:
         from train.gates import write_json_artifact
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})

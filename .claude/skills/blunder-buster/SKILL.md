@@ -146,8 +146,11 @@ them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + c
   `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
 - **Layer routing is load-bearing:** route ordinary decision and turn errors to
-  `composer-differencer` or `turn-sequencer`; use `value-equation` only when the emitted value-family
-  working proves that a bespoke equation, rather than transition/sequence coverage, decides the error.
+  `composer-differencer` or `turn-sequencer`; read `turn-sequence/v1` as an anchor record and
+  `turn-sequence/v2.counterfactual` as an executable full-line proof, including commutativity and
+  first-divergence grading; use `value-equation`
+  only when the emitted value-family working proves a bespoke equation, rather than transition or
+  sequence coverage, decides the error.
   Lethal proof remains `lethal-solver`; posture-mismatch remains `matchup-brief`. **Never emit a
   `general-hypothesis`, `deck-strategy`, rung, or new `when()` proposal from a Correction.**
 - **CRITICAL** flows headless unless a leaf routes it to refuted/capability-gap — then it hard-stops for

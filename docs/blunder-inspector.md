@@ -14,6 +14,7 @@ agents get wrong over the competition. See the [Training context](../tools/train
 |---|---|
 | `decisions.py` | `iter_decisions(replay)` → `Decision`s from the full-info `visualize` film |
 | `decode.py` | `option_label(option, current)` → readable dropdown labels |
+| `counterfactual.py` | execute an ideal turn through cgpy, grade full lines, prove adjacent action swaps |
 | `categories.py` | the closed Category vocabulary + `is_valid_category` |
 | `correction.py` | `Correction` + `build_correction(...)` with validation |
 | `store.py` | per-build correction tree `data/corrections/<agent_build>/corrections.jsonl` (committed); routes by `agent_build`, reads union the tree, **dedup by default** |
@@ -41,11 +42,18 @@ You always tag from an **Anchor**: a real Decision frame, the point you were loo
 context and provenance, *never identity* — the same turn tagged from two different frames is one
 Correction.
 
-A `turn`-scope `correct` is optional because a multi-frame counterfactual line **cannot** be
-expressed as option indices: prescribing a different pick at the Anchor invalidates every later
-frame's `select.option`, which only exists because the original pick was made. So at most one
-prescription is sound — the first divergent Decision — and giving it *is* the claim that this
-Anchor is that Decision. Leave it empty and the intended line lives in the `rationale`.
+A `turn`-scope `correct` is optional. Without an executable proof, at most one prescription is sound:
+the first divergent Decision, because changing it invalidates the recorded later menus. The
+**Executable ideal turn** recorder removes that limitation by forking the Anchor's full-information
+state through cgpy. Every later choice is selected from the newly generated menu and saved by
+semantic card/target identity, not by reusing a stale replay index.
+
+The resulting `turn-sequence/v2` plan contains a `counterfactual-turn/v1` proof: every engine menu
+choice, its action block, deterministic end-state digest, and each adjacent action pair classified
+as `commutes`, `ordered`, or `branch-dependent`. A swap earns `commutes` only when cgpy executes both
+orders from the same fork and their complete engine states match. The full-line grader accepts an
+exact order or a different order with the same proved end state; otherwise it reports the first
+semantic divergence. Unsupported card paths fail visibly and cannot be saved as a completed proof.
 
 **A decision-scope decline**
 ([ADR-0111](adr/0111-a-decline-is-a-ruling-the-writer-must-accept.md)):
@@ -132,6 +140,11 @@ The build inlines everything into a single self-contained `dist/index.html` (~60
   to its own-seat (varies per Replay); the right-pane list re-scopes to that episode. One shared
   `corrections.jsonl`; build identity comes from the directory stem (`batch.discover_replays` /
   `batch.load_game`).
+- **Executable ideal turn**: choose `turn` scope and the first correct move, then press **Start from
+  correct move**. Continue through every cgpy menu until the turn ends; effect sub-selections remain
+  inside their parent action block. **Undo** restores the exact prior engine fork. Saving embeds the
+  completed proof; Reset discards it. Seeded randomness stays deterministic and is never called
+  commutative with a non-random order.
 
 ## Frame read-out — the full board state of one frame
 

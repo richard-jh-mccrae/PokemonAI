@@ -15,6 +15,7 @@ See ADR-0014 / ADR-0015 / ADR-0049.
 from __future__ import annotations
 
 import json
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -55,11 +56,23 @@ def _turn_plan_from_form(form: dict) -> dict | None:
     non-turn-plan Correction."""
     if form.get("scope") != "turn":
         return None
-    intended = str(form.get("intended_line", "")).strip()
-    end_board = str(form.get("expected_end_board", "")).strip()
-    if not (intended or end_board):
+    intended = str(form.get("intended_line", ""))
+    end_board = str(form.get("expected_end_board", ""))
+    counterfactual = form.get("counterfactual")
+    if not (intended.strip() or end_board.strip() or counterfactual):
         return None
-    return {"intended_line": intended, "expected_end_board": end_board}
+    plan = {"intended_line": intended, "expected_end_board": end_board}
+    if counterfactual:
+        plan["counterfactual"] = counterfactual
+    return plan
+
+
+def _counterfactual_response(session_id: str, recorder) -> dict:
+    view = recorder.view()
+    payload = recorder.payload() if view["status"] == "complete" else None
+    recorded = [{"block": step["block"], "label": step["label"]} for step in recorder.steps]
+    return {"ok": True, "session": session_id, **view, "recorded_steps": recorded,
+            "counterfactual": payload}
 
 
 def _json(handler: BaseHTTPRequestHandler, payload, code: int = 200) -> None:
@@ -121,7 +134,38 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/game"):                 # switch which Replay we tag
             idx = max(0, min(len(STATE["replays"]) - 1, int(form.get("i", 0))))
             STATE["current"] = idx
+            STATE["counterfactuals"].clear()
             return _json(self, {"ok": True, **_games_payload()})
+        if self.path == "/counterfactual/start":
+            try:
+                from .counterfactual import CounterfactualRecorder
+                recorder = CounterfactualRecorder.from_replay(
+                    _game()["replay"], frame=int(form["frame"]), rng_seed=0)
+                recorder.choose([int(i) for i in form["correct"]])
+                session_id = uuid.uuid4().hex
+                STATE["counterfactuals"][session_id] = recorder
+                return _json(self, _counterfactual_response(session_id, recorder))
+            except Exception as exc:  # cgpy must refuse unsupported paths without killing the shell
+                return _json(self, {"error": str(exc)}, 400)
+        if self.path == "/counterfactual/step":
+            try:
+                session_id = str(form["session"])
+                recorder = STATE["counterfactuals"][session_id]
+                recorder.choose([int(i) for i in form["choice"]])
+                return _json(self, _counterfactual_response(session_id, recorder))
+            except Exception as exc:
+                return _json(self, {"error": str(exc)}, 400)
+        if self.path == "/counterfactual/undo":
+            try:
+                session_id = str(form["session"])
+                recorder = STATE["counterfactuals"][session_id]
+                recorder.undo()
+                return _json(self, _counterfactual_response(session_id, recorder))
+            except Exception as exc:
+                return _json(self, {"error": str(exc)}, 400)
+        if self.path == "/counterfactual/cancel":
+            removed = STATE["counterfactuals"].pop(str(form.get("session", "")), None)
+            return _json(self, {"ok": True, "removed": removed is not None})
         if not self.path.startswith("/correction"):
             return _json(self, {"error": "not found"}, 404)
         game = _game()
@@ -161,6 +205,7 @@ def init_state(replays, *, store_path, agent="", source="own", our_team=None,
     """Populate the server STATE for a batch of Replay paths (testable without starting HTTP)."""
     STATE.clear()
     STATE.update(replays=[str(p) for p in replays], current=0, cache={},
+                 counterfactuals={},
                  store_path=str(store_path), agent=agent, source=source, our_team=our_team,
                  submission_id=submission_id, agent_version=agent_version, viewer_dir=str(viewer_dir))
 
@@ -201,7 +246,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  .now{background:#f2f6fc;padding:10px;border-radius:6px;margin-bottom:6px}
  .now .big{font-size:18px;font-weight:700}
  label{display:block;margin:10px 0 3px;font-weight:600} select,textarea,input{width:100%;font:13px system-ui}
- textarea{height:200px;resize:vertical} #correct{height:120px}
+ textarea{height:200px;resize:vertical} #correct{height:120px} #cfchoice{height:100px}
  button{padding:6px 10px;cursor:pointer} #save{margin-top:12px;padding:8px 14px;font-weight:600}
  #msg{margin-top:8px} .ko{color:#b00} .ok{color:#070} #log{margin-top:6px;color:#555;font-size:12px}
  :disabled{opacity:.5}
@@ -255,6 +300,15 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
   <textarea id="intended_line" style="height:70px" placeholder="e.g. retreat Cinderace → attach {F} to Solrock → KO the Active"></textarea>
   <label>Expected end-board — what the line sets up (the leaf's target)</label>
   <textarea id="expected_end_board" style="height:55px" placeholder="e.g. Mega Lucario active with 2 {F}, boost line armed for next turn"></textarea>
+  <div class="live" id="cfbox">
+   <b>Executable ideal turn</b> — cgpy forks from the alternate anchor and proves safe reordering.
+   <div style="margin-top:6px"><button id="cfstart">Start from correct move</button>
+    <button id="cfundo" disabled>Undo</button><button id="cfcancel" disabled>Reset</button></div>
+   <div id="cfstatus" class="scopehint">not recorded</div>
+   <select id="cfchoice" multiple style="display:none"></select>
+   <button id="cfapply" style="display:none;margin-top:5px">Apply selected step</button>
+   <div id="cfsteps"></div>
+  </div>
   <div class="scopehint" id="firedhint"></div>
  </div>
  <button id="save">Save blunder ▸ ship</button>
@@ -264,6 +318,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
 </div>
 <script>
 let FR=[],META={},i=0,replayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
+let CFSESSION=null,CFPAYLOAD=null;
 const $=id=>document.getElementById(id);
 const FORM=['scope','category','correct','source','attribution','critical','posture_wrong','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -295,6 +350,11 @@ function openColorful(target){
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
   :'';
+const turnGrade=it=>{
+  const grade=it.turn_plan&&it.turn_plan.grade, first=grade&&grade.first_divergence;
+  if(!grade) return '';
+  return ` · <b class="sc">grade ${esc(grade.status)}${first?` @ f${first.frame}`:''}</b>`;
+};
 async function refreshList(){
   LIST=await (await fetch('/corrections.json')).json();
   $('count').textContent=LIST.length;
@@ -303,6 +363,7 @@ async function refreshList(){
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
     `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
     (it.scope!=='decision'?` · <b class="sc">${esc(scopeTag(it))}</b>`:'')+
+    turnGrade(it)+
     (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+
     (it.posture_mismatch?' · <b style="color:#4457b8">🔮 read wrong</b>':'')+
     (it.correct.length?`<br>→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`:'')+
@@ -321,6 +382,9 @@ function editItem(k){
   $('posture_wrong').checked=!!it.posture_mismatch;   // after gotoStep→show() reset it
   $('intended_line').value=(it.turn_plan&&it.turn_plan.intended_line)||'';
   $('expected_end_board').value=(it.turn_plan&&it.turn_plan.expected_end_board)||'';
+  resetCF(false);
+  if(it.turn_plan&&it.turn_plan.counterfactual){
+    CFPAYLOAD=it.turn_plan.counterfactual; renderStoredCF(CFPAYLOAD);}
   $('scope').value=it.scope||'decision'; applyScope();
   syncCrit();
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
@@ -352,6 +416,52 @@ function applyScope(){
   $('turnplan').style.display=(s==='turn')?'block':'none';   // the human's ideal-line note
   if(s==='turn') updateFired();
 }
+async function postCF(path,body){
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  return r.json();
+}
+function resetCF(cancel=true){
+  if(cancel&&CFSESSION) postCF('/counterfactual/cancel',{session:CFSESSION});
+  CFSESSION=null; CFPAYLOAD=null;
+  $('cfstatus').textContent='not recorded'; $('cfstatus').className='scopehint';
+  $('cfchoice').style.display='none'; $('cfapply').style.display='none';
+  $('cfchoice').innerHTML=''; $('cfsteps').innerHTML='';
+  $('cfundo').disabled=true; $('cfcancel').disabled=true;
+}
+function renderStoredCF(proof){
+  const rel=proof.adjacent_relations||[], commutes=rel.filter(x=>x.status==='commutes').length;
+  $('cfstatus').className='ok';
+  $('cfstatus').textContent=`complete · ${proof.steps.length} menu steps · ${commutes} safe swap(s)`+
+    ((proof.randomness||[]).length?` · sampled randomness ${(proof.randomness||[]).length}×`:'');
+  $('cfsteps').innerHTML=proof.steps.map((s,k)=>`<div>${k+1}. ${esc(s.label||'?')}</div>`).join('')+
+    rel.map(x=>`<div><b>${esc(x.status)}</b>: ${esc(x.left)} ↔ ${esc(x.right)}</div>`).join('');
+  $('cfcancel').disabled=false;
+}
+function renderCF(j){
+  if(!j.ok){$('cfstatus').className='ko';$('cfstatus').textContent=j.error||'cgpy refused';return;}
+  CFSESSION=j.session; CFPAYLOAD=j.counterfactual||null;
+  $('cfundo').disabled=!j.step_count;
+  $('cfsteps').innerHTML=(j.recorded_steps||[]).map((s,k)=>
+    `<div>${k+1}. ${esc(s.label)} <span class="scopehint">block ${s.block}</span></div>`).join('');
+  if(CFPAYLOAD){renderStoredCF(CFPAYLOAD);$('cfchoice').style.display='none';$('cfapply').style.display='none';return;}
+  $('cfstatus').className='scopehint';
+  $('cfstatus').textContent=`recording · choose ${j.min_count}..${j.max_count} option(s)`;
+  $('cfchoice').innerHTML=''; (j.options||[]).forEach(o=>$('cfchoice').add(new Option(o.label,o.position)));
+  $('cfchoice').style.display='block'; $('cfapply').style.display='inline-block'; $('cfcancel').disabled=false;
+}
+$('cfstart').onclick=async()=>{
+  const correct=[...$('correct').selectedOptions].map(o=>+o.value);
+  if($('scope').value!=='turn'||!correct.length){
+    $('cfstatus').className='ko';$('cfstatus').textContent='select a turn-scope correct anchor first';return;}
+  resetCF(); $('cfstatus').textContent='starting cgpy…';
+  renderCF(await postCF('/counterfactual/start',{frame:FR[i].frame,correct}));
+};
+$('cfapply').onclick=async()=>{
+  const choice=[...$('cfchoice').selectedOptions].map(o=>+o.value);
+  renderCF(await postCF('/counterfactual/step',{session:CFSESSION,choice}));
+};
+$('cfundo').onclick=async()=>renderCF(await postCF('/counterfactual/undo',{session:CFSESSION}));
+$('cfcancel').onclick=()=>resetCF();
 // Show which rule(s) the human's `correct` pick currently fires (from the live @T trace's opts.fired),
 // so `leans_on_rule` is DERIVED, never typed — blunder-buster reads the same `fired` at consume time.
 function updateFired(){
@@ -370,7 +480,7 @@ async function boot(){
   $('critical').onchange=()=>{$('rationale').value=applyCritical($('rationale').value,$('critical').checked);};
   $('rationale').oninput=syncCrit;
   $('scope').onchange=applyScope;
-  $('correct').onchange=updateFired;                 // refresh the derived leans-on-rule hint
+  $('correct').onchange=()=>{updateFired();if(CFSESSION||CFPAYLOAD)resetCF();};
   $('analyze').onchange=()=>{openColorful('viewer'); fillPick(); show(i);};
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
@@ -401,6 +511,7 @@ async function switchGame(d){
   loadGame();
 }
 function show(n){
+  if(FR.length) resetCF();
   i=Math.max(0,Math.min(FR.length-1,n)); const f=FR[i], own=isOwn(f.seat);
   $('pick').value=i; $('step').value=f.step; $('source').value=own?'own':'peer';
   let h=`<div class="big">Step ${f.step}/${total} &nbsp;·&nbsp; Turn ${f.turn}</div>`+
@@ -495,6 +606,7 @@ $('save').onclick=async()=>{
   const body={frame:f.frame,correct,category:$('category').value,rationale,
     scope:$('scope').value,                        // what the tag is about (ADR-0049)
     intended_line:$('intended_line').value, expected_end_board:$('expected_end_board').value,  // Phase-3 note
+    counterfactual:CFPAYLOAD,
     source:$('source').value, agent: own?META.agent:pname(f.seat),
     submission_id: own?META.submission_id:null, attribution:$('attribution').value,
     posture_mismatch:$('posture_wrong').checked,   // opponent Read flagged wrong (ADR-0041)
@@ -506,7 +618,7 @@ $('save').onclick=async()=>{
     saved++; $('msg').textContent=`saved: ${pname(f.seat)} · ${j.source} · ${j.scope}`+
       (j.subject!=null?` ${j.subject}`:'')+` · ${j.category}`+(j.correct_label?` → ${j.correct_label}`:'');
     $('log').textContent=`${saved} blunder(s) shipped this session`; $('rationale').value='';
-    $('intended_line').value=''; $('expected_end_board').value=''; $('firedhint').textContent='';
+    $('intended_line').value=''; $('expected_end_board').value=''; $('firedhint').textContent=''; resetCF();
     syncCrit(); refreshList();
   } else $('msg').textContent='error: '+j.error;
 };

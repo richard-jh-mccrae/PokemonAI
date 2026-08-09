@@ -15,8 +15,11 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+
+from common.option_equivalence import option_fingerprint
 
 from .categories import is_valid_category
 from .decisions import Decision
@@ -26,6 +29,8 @@ SCOPES = ("decision", "turn")                    # what the Correction is *about
 
 CRITICAL_MARKER = "CRITICAL"                     # uppercase token in rationale = must-fix-first
 _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
+TURN_PLAN_SCHEMA = "turn-sequence/v1"
+COUNTERFACTUAL_TURN_SCHEMA = "counterfactual-turn/v1"
 
 
 def is_critical(rationale: str | None) -> bool:
@@ -61,6 +66,74 @@ def _derive_id(data: dict) -> str:
     dec = data.get("decision") or {}
     key = f"{data.get('episode_id')}|{dec.get('frame')}|{data.get('seat')}|{data.get('tagged_at')}|{data.get('category')}"
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+
+
+def _option_reference(decision: Decision, position: int) -> dict:
+    """One menu choice as durable evidence: position aids replay, raw option + class key aid readers."""
+    option = decision.options[position]
+    return {"position": position, "option": deepcopy(option),
+            "equivalence_fingerprint": option_fingerprint(option, decision.snapshot())}
+
+
+def _validated_counterfactual(value, correct: list[int]) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("schema") != COUNTERFACTUAL_TURN_SCHEMA:
+        raise ValueError(f"counterfactual must use {COUNTERFACTUAL_TURN_SCHEMA}")
+    if value.get("backend") != "cgpy" or value.get("status") != "complete":
+        raise ValueError("counterfactual must be a complete cgpy recording")
+    if (not isinstance(value.get("rng_seed"), int)
+            or isinstance(value.get("rng_seed"), bool)):
+        raise ValueError("counterfactual rng_seed must be an integer")
+    steps = value.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("counterfactual must contain recorded steps")
+    first = steps[0].get("choice") if isinstance(steps[0], dict) else None
+    positions = [row.get("position") for row in first or () if isinstance(row, dict)]
+    if set(positions) != set(correct):
+        raise ValueError("counterfactual first step must equal correct")
+    if not isinstance(value.get("adjacent_relations"), list):
+        raise ValueError("counterfactual adjacent_relations must be a list")
+    if not isinstance(value.get("randomness"), list):
+        raise ValueError("counterfactual randomness must be a list")
+    digest = value.get("end_state_digest")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ValueError("counterfactual end_state_digest must be sha256")
+    return deepcopy(value)
+
+
+def _structured_turn_plan(decision: Decision, *, scope: str, correct: list[int],
+                          turn_plan: dict | None) -> dict | None:
+    """Compile human prose plus the anchor's exact choices into the versioned turn-plan contract."""
+    if turn_plan is None:
+        return None
+    if scope != "turn":
+        raise ValueError("turn_plan is valid only on a turn-scope correction")
+    if not isinstance(turn_plan, dict):
+        raise ValueError("turn_plan must be an object")
+    intended = turn_plan.get("intended_line", "")
+    end_board = turn_plan.get("expected_end_board", "")
+    if not isinstance(intended, str) or not isinstance(end_board, str):
+        raise ValueError("turn_plan intended_line and expected_end_board must be strings")
+    if not (intended.strip() or end_board.strip()):
+        return None
+
+    first_divergence = None
+    status = "ungraded"
+    if correct:
+        first_divergence = {
+            "frame": decision.frame,
+            "expected": [_option_reference(decision, position) for position in correct],
+            "observed": [_option_reference(decision, position) for position in decision.chosen],
+        }
+        status = "mismatch"
+    counterfactual = _validated_counterfactual(turn_plan.get("counterfactual"), correct)
+    out = {"schema": "turn-sequence/v2" if counterfactual else TURN_PLAN_SCHEMA,
+           "intended_line": intended, "expected_end_board": end_board,
+           "grade": {"status": status, "first_divergence": first_divergence}}
+    if counterfactual:
+        out["counterfactual"] = counterfactual
+    return out
 
 
 @dataclass(frozen=True)
@@ -105,8 +178,7 @@ class Correction:
                                     # the turn number (turn scope).
     span: list[dict] | None = None  # the Decisions the Scope covers; turn scope carries per-Decision
                                     # obs + live_trace so it is re-drivable.
-    turn_plan: dict | None = None   # turn scope: the human's ideal-line note, {intended_line,
-                                    # expected_end_board}. Sparse — None off turn-plan tags.
+    turn_plan: dict | None = None   # turn scope: human evidence + anchor grade + optional cgpy proof.
 
     @property
     def is_critical(self) -> bool:
@@ -212,5 +284,5 @@ def build_correction(
         scope=scope,
         subject=subject_of(scope, decision.snapshot()),
         span=span,
-        turn_plan=turn_plan,
+        turn_plan=_structured_turn_plan(decision, scope=scope, correct=correct, turn_plan=turn_plan),
     )

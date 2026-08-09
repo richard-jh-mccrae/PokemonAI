@@ -112,6 +112,15 @@ What a scoped Correction *does* carry:
   Anchor only; giving it asserts the Anchor is the first divergent Decision. When present, the
   fired-rule diff of §4 is still computed — but recorded as **information** for routing, never fed
   to the fit. When absent, `retest` reports `fixed: None`: there is nothing asserted to check.
+- Optional **turn-plan evidence**. `turn_plan.schema: turn-sequence/v1` keeps the human's
+  `intended_line` and `expected_end_board` verbatim, plus a deterministic `grade`: `mismatch` embeds
+  the exact expected and observed anchor options; `ungraded` embeds no invented divergence. This is
+  routing evidence for Blunder Buster, never a Composer verdict about later counterfactual steps.
+- An executable **counterfactual turn proof** upgrades the record to `turn-sequence/v2`. cgpy forks
+  from the full-information Anchor, generates every later menu, and stores semantic choices plus an
+  end-state digest. Adjacent actions commute only after both execution orders reach the same complete
+  engine state without consuming randomness. `grade_counterfactual` compares full proofs and reports
+  exact match, equivalent reorder, or first semantic divergence.
 
 ---
 
