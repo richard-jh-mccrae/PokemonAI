@@ -1,7 +1,7 @@
 """Promote/retreat DECIDER (ADR-0100, Issue #141) — the **Sub-lethal Residual**: what remains once
 the Knock-Outs available on both sides of the swap have cancelled, in the DAMAGE currency.
 
-    promote_value(B) = my_yield(B) + closure(B) - exposure(B) + tempo_denied(B) - fatal(B)
+    promote_value(B) = my_yield(B) + closure(B) - exposure(B) + tempo_denied(B) - fatal(B) - mobility(B)
     retreat_option   = max over bench B of promote_value(B)  +  preservation(A) - retreat_cost(A)
     pick_option(B)   = promote_value(B)
 
@@ -67,6 +67,11 @@ class PromoteBody:
     #: This body takes a Knock Out on arrival — ruling 5's stand-down, so `fatal` does not fire on a
     #: trade we are happy to make. The KO's own magnitude is the tactical layer's (§1, §11).
     takes_ko: bool = False
+
+    # -- mobility: forced-promote tie-break (§7b) ---------------------------------------------------
+    #: A tiny current retreat liability when this body is energyless and no Energy is in hand.  It is
+    #: deliberately sub-residual: meaningful yield, exposure, or HP terms still decide first.
+    mobility_cost: float = 0.0
 
     # ---- the terms ------------------------------------------------------------------------------
 
@@ -145,6 +150,7 @@ class PromoteRetreatValue:
     fatal: float = 0.0
     preservation: float = 0.0
     retreat_cost: float = 0.0
+    mobility_cost: float = 0.0
     total: float = 0.0
 
 
@@ -159,7 +165,8 @@ def promote_value(inp: PromoteRetreatInputs) -> PromoteRetreatValue:
     preserved = inp.retreat.body.preservation() if inp.retreat is not None else 0.0
     cost = inp.retreat.retreat_cost() if inp.retreat is not None else 0.0
 
-    total = my + clos - expo + tempo - fatal + preserved - cost
+    mobility = max(0.0, float(b.mobility_cost))
+    total = my + clos - expo + tempo - fatal + preserved - cost - mobility
     return PromoteRetreatValue(my_yield=my, closure=clos, exposure=expo, tempo_denied=tempo,
                                fatal=fatal, preservation=preserved, retreat_cost=cost,
-                               total=total)
+                               mobility_cost=mobility, total=total)

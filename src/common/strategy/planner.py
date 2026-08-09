@@ -45,6 +45,7 @@ def _tied_first_steps(result, chosen, options, traces) -> list:
         return []
     key = round(chosen.score, SCORE_PLACES)
     mine = chosen.first_index
+    chosen_tier = chosen.steps[0].tier if chosen.steps else composer.TIER_ENDER
 
     def distinct(index: int) -> bool:
         """False for two copies of the same revealed-by-menu deck card: one decision, two indices."""
@@ -62,6 +63,7 @@ def _tied_first_steps(result, chosen, options, traces) -> list:
     tied = {c.first_index for c in candidates
             if c.first_index is not None and c.first_index != mine
             and not c.coverage_gap and round(c.score, SCORE_PLACES) == key
+            and (c.steps[0].tier if c.steps else composer.TIER_ENDER) == chosen_tier
             and distinct(c.first_index)}
     return sorted(tied)
 
@@ -169,7 +171,7 @@ class PlannerMixin(
         if coverage_gap or chosen is None or chosen.first_index is None or chosen.coverage_gap:
             return None
         tied = _tied_first_steps(result, chosen, options, traces)
-        if tied:
+        if tied and not self._bounce_heal_precedes_target_attach(obs, select, model, chosen, options):
             self._composer_trace["tied_first_steps"] = tied
             return None
         self._composer_trace["chosen"] = chosen.working()
@@ -179,6 +181,52 @@ class PlannerMixin(
         return TurnLine(next_step=[chosen.first_index], goal="compose", value=chosen.score,
                         rationale="compose: the best within-turn sequence's first action",
                         ranked_by="composer", kind="sequence")
+
+    def _bounce_heal_precedes_target_attach(self, obs, select, model, chosen, options) -> bool:
+        """Commit a bounce-heal before an attach that it would immediately return.
+
+        A duplicated copy of the same heal otherwise makes the Composer intentionally defer on a
+        tie.  Here that defer would let the raw attach scorer waste the Energy, so the established
+        composed heal is the semantic first action.
+        """
+        if not chosen.steps:
+            return False
+        first = chosen.steps[0].option
+        cid = self._option_card_id(obs, select, first)
+        clauses = self.effects.clauses(cid) if (self.effects and cid is not None) else ()
+        if not any(c.get("kind") == "heal" and c.get("rider") == "bounce_energy_to_hand"
+                   for c in clauses):
+            return False
+        try:
+            from common import board_choice
+            seat = int((obs.get("current") or {}).get("yourIndex") or 0)
+            targets = set(board_choice.target_space(model, first, seat_index=seat))
+            me = ((obs.get("current") or {}).get("players") or [])[seat]
+            def holds_energy(target):
+                area, index = target
+                zone = "active" if area == _ACTIVE else "bench" if area == _BENCH else ""
+                bodies = me.get(zone) or ()
+                body = bodies[index] if isinstance(index, int) and index < len(bodies) else None
+                return bool((body or {}).get("energies")) and int(body.get("hp") or 0) < int(body.get("maxHp") or 0)
+            return any((option.get("inPlayArea"), option.get("inPlayIndex")) in targets
+                       and holds_energy((option.get("inPlayArea"), option.get("inPlayIndex")))
+                       for option in (options or ()) if composer.ao.transition_kind(option) == _ATTACH)
+        except (IndexError, TypeError, ValueError, Unmodellable):
+            return False
+
+    def _composer_precedes_hand_refresh(self, obs, options) -> bool:
+        """Keep a legal reveal or once-per-turn attach ahead of a hand-refresh gamble.
+
+        This sequencing guard leaves gamble classes and odds intact.  It belongs at the Planner's
+        sole Composer seam; importing Composer from the Gamble family would create a second route.
+        """
+        try:
+            model = self._leaf_state_model(obs, int((obs.get("current") or {}).get("yourIndex") or 0))
+            return any(composer.ao.transition_kind(option) == _ATTACH
+                       or composer.canonical_tier(model, option) == composer.TIER_INFORMATIVE
+                       for option in (options or ()))
+        except Exception:  # the gamble's pre-existing fail-safe remains authoritative
+            return False
 
     def _composer_search_api(self, obs):
         """Resolve the injected test seam or the packaged engine only for seeded live observations."""

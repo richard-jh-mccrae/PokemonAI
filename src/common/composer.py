@@ -536,7 +536,11 @@ def selection_key(model, candidate: Candidate) -> tuple:
             card_id = int(getattr(stat, "cardId", -1) or -1)
             worth = float(model.mine.role_worth(stat.cardId))
     index = candidate.first_index
-    return (bool(candidate.coverage_gap), -round(candidate.score, ao.SCORE_PLACES), -worth, card_id,
+    # A Composer tier is a semantic tie-break, not a score bonus: equal-valued lines take their
+    # information / Supporter step before an Energy commitment.  It also makes a tied composed line
+    # replayable instead of handing the menu back to a positional fallback.
+    tier = candidate.steps[0].tier if candidate.steps else TIER_ENDER
+    return (bool(candidate.coverage_gap), -round(candidate.score, ao.SCORE_PLACES), tier, -worth, card_id,
             index if index is not None else 1 << 30)
 
 
@@ -620,10 +624,23 @@ def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:
     """Apply only sound terminal dominance before the ordinary candidate ordering."""
     if not candidates:
         return ()
+    direct_kos = tuple(c for c in candidates if _direct_active_ko(model, c))
+    # A deterministic active KO is terminal information, not a setup alternative.  The ordinary
+    # key still orders simultaneous KOs by their existing terminal payoff.
+    if direct_kos:
+        return direct_kos
     ordinary = min(candidates, key=lambda c: selection_key(model, c))
     direct_wins = tuple(c for c in candidates if _direct_prize_win(model, c))
     if direct_wins and _direct_terminal_attack(ordinary):
         return direct_wins
+    # A revealing Item is free information.  A Supporter's search/evolution is not: it spends the
+    # turn's Supporter slot even when its footprint is informative, so it cannot preempt Pokégear.
+    free_reveals = tuple(c for c in candidates if not c.coverage_gap and c.steps
+                         and c.steps[0].tier == TIER_INFORMATIVE
+                         and (stat := _option_card_stat(model, c.steps[0].option)) is not None
+                         and getattr(stat, "is_item", False))
+    if free_reveals:
+        return free_reveals
     direct_kos = tuple(c for c in candidates if _one_prize_active_ko(model, c))
     if not direct_kos or not _active_has_energy(model):
         return tuple(candidates)

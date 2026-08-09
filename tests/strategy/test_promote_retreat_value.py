@@ -285,6 +285,14 @@ def test_the_pick_site_carries_no_a_side_terms():
     assert pick.preservation == 0.0 and pick.retreat_cost == 0.0
 
 
+def test_energyless_forced_promote_prefers_the_free_pivot_on_an_otherwise_equal_board():
+    """Current mobility breaks only an otherwise equal forced-promote body choice."""
+    free = pv(PromoteBody(mobility_cost=0.0))
+    base = pv(PromoteBody(mobility_cost=0.1))
+    mega = pv(PromoteBody(mobility_cost=0.2))
+    assert free.total > base.total > mega.total
+
+
 def test_the_same_evaluator_answers_both_questions():
     """§9: with two paths the agent could retreat BECAUSE one body was worth promoting and then
     promote a different one. One evaluator makes the A-side terms a constant OFFSET, so no reorder."""

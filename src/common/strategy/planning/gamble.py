@@ -39,6 +39,8 @@ class GambleMixin:
             return stand_down("active already reaches a KO")
         if any(t.tactical >= KO_SCORE for t in traces):
             return stand_down("a KO is already on the tuned menu")
+        if self._composer_precedes_hand_refresh(obs, options):
+            return stand_down("Composer has a pre-shuffle reveal or Energy attach")
         # the binary protected-hand stand-downs are REPLACED by the graded keep-cost priced in below
         from common.strategy.doctrines.doctrine_shuffle_refresh import _draw_branches
         me = self._my_player(obs)

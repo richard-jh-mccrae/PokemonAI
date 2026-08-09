@@ -52,6 +52,12 @@ class PromoteRetreatMixin:
                                                        reading=HARVEST_UNAVOIDABLE, **clock)
         cid = raw.get("id")
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        hand = (self._my_player(obs) or {}).get("hand") or ()
+        no_energy_in_hand = not any(
+            (st := self._stat_of((card or {}).get("id"))) is not None and st.is_energy
+            for card in hand)
+        mobility = (0.1 * self._effective_retreat_cost(obs, raw)
+                    if not (raw.get("energies") or []) and no_energy_in_hand else 0.0)
         return PromoteBody(
             reach=reach,
             # Same card rule: the race leg REPLACES `reach`, so ungated it re-introduces turn-1 damage.
@@ -63,7 +69,8 @@ class PromoteRetreatMixin:
             tempo_step=self._promote_tempo_step(raw),
             denies_items=("item_lock" in tags and self._opp_items_live()),
             opp_prizes_remaining=board.opp_prizes_remaining,
-            takes_ko=self._promote_body_kos(obs, board, raw))
+            takes_ko=self._promote_body_kos(obs, board, raw),
+            mobility_cost=mobility)
 
     def _promote_wall_progress(self, obs: dict, board: Board, raw: dict) -> float | None:
         """Per-turn wall progress (``hp / t_star``) for a body promoted into a STANDING wall, else None
@@ -296,7 +303,8 @@ class PromoteRetreatMixin:
                 "my_yield": round(val.my_yield, 2), "closure": round(val.closure, 2),
                 "exposure": round(val.exposure, 2), "tempo_denied": round(val.tempo_denied, 2),
                 "fatal": round(val.fatal, 2), "preservation": round(val.preservation, 2),
-                "retreat_cost": round(val.retreat_cost, 2), "total": round(val.total, 2)}
+                "retreat_cost": round(val.retreat_cost, 2), "mobility_cost": round(val.mobility_cost, 2),
+                "total": round(val.total, 2)}
 
     def _promote_ko_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for the body PICK that takes the prize (ADR-0100 §11) — the Solver and

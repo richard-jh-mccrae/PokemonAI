@@ -667,5 +667,10 @@
     "disposition": "fixed",
     "reason": "USER RULING 2026-08-02 (Issue #261 wave-2, items 2e+2h): ACCEPT the leaf flip. The SHIPPED DECISION on this frame is unchanged and already plays the human's option -- verified on the pre-change tree too, so the ruling is about the LEAF RANKING only, which moved OK -> MISS (rank 1 -> 2). Cause, located: item 2h re-pointed the fetch doctrine's shed predictor off the deleted _DISCARD ladder onto the keep-value v2 assignment, which prices the Ultra Ball's forced discard at 4.5 (its two cheapest sheds include the held Boss's Orders), so dont-shed-a-live-card fires and the greedy continuation INSIDE the sim declines the fetch. The human's line therefore develops less on the simmed end board (12.5 -> 0.0) while the Ultra-Ball-first line is unaffected (10.025) because _engine_leaf_value forces its first step and cannot decline anything. User's words on accepting: 'the decline agrees with that frame's own rationale' -- this frame's own correction says 'save boss's orders for a time when it is actually valuable', which is exactly what the new predictor refuses to spend. Non-voiding: the correction STANDS and keeps gating; the leaf baseline is re-captured against this ruling.",
     "round": "2026-08-02"
+  },
+  "91394270-t10s0": {
+    "disposition": "refuted",
+    "reason": "Human disposition: correction names no alternative; its ungraded intended line starts with the agent's chosen Play Staryu, so no actionable divergence is asserted.",
+    "round": "2026-08-09"
   }
 }
