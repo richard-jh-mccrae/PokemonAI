@@ -20,7 +20,7 @@ sys.path.insert(0, str(REPO / "tools"))
 from submit.package import package  # noqa: E402
 
 AGENT = "mega_starmie"
-TARGET = "dont-search-an-empty-deck"  # one of the three target-runtime rule guards (Issue #459).
+TARGET = "dont-search-an-empty-deck"  # one of the three C10 rule guards (Issue #459).
 AUTHORED = -60.0              # authored guard weight
 
 pytestmark = pytest.mark.skipif(

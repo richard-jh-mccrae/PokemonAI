@@ -79,7 +79,7 @@ def test_the_agent_plays_the_promoted_ruled_heal(fixture, _at_capture, ruled):
 
 @pytest.mark.req("REQ-PLANNER-0036")
 @pytest.mark.parametrize("fixture,ruled,_at_capture", FRAMES[:1])
-def test_target_runtime_defers_the_remaining_heal_valuation(
+def test_global_retirement_defers_the_remaining_heal_valuation(
         fixture, _at_capture, ruled):
     """Issue #459 leaves 0cbc's immutable ruling intact while composer valuation is deferred."""
     fx = _fx(fixture)

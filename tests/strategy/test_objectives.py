@@ -169,36 +169,6 @@ def test_phase_derivation_stabilize_hysteresis_and_close():
     pilot.objectives_phases = True
 
 
-@pytest.mark.req("REQ-OBJ-0008")
-def test_phase_bands_fire_and_gate_ban_holds():
-    """The gate ban (ADR-0040): no strategy rule may key on `c.plan`, enforced by scanning every
-    rule module. The two phase bands stay SMALL because they are advisory."""
-    import re
-    from common.pilot import Board, Context
-    from common.strategy.context import _PLAY
-    from common.strategy.strategy import Plan
-    from common.strategy.baseline.baseline_phases import HYPOTHESES
-
-    class _Stat:                     # a Pokémon-shaped stat (hp > 0) for the CLOSE develop band
-        hp = 70
-
-    stab = Context(plan=Plan.STABILIZE, select_context=0, option_type=_PLAY, card_id=1,
-                   board=Board(phase=Plan.STABILIZE), tags=["heal"])
-    close = Context(plan=Plan.CLOSE, select_context=0, option_type=_PLAY, card_id=1,
-                    board=Board(phase=Plan.CLOSE), stat=_Stat(), tags=[])
-    by_id = {h.id: h for h in HYPOTHESES}
-    assert by_id["phase-stabilize-prefer-heal"].when(stab)
-    assert not by_id["phase-stabilize-prefer-heal"].when(close)
-    assert by_id["phase-close-stop-developing"].when(close)
-    assert not by_id["phase-close-stop-developing"].when(stab)
-    assert abs(by_id["phase-stabilize-prefer-heal"].weight) <= 10   # bands stay SMALL (advisory)
-    assert abs(by_id["phase-close-stop-developing"].weight) <= 10
-
-    rule_files = (list((REPO / "src" / "common" / "strategy").rglob("*.py"))
-                  + list((REPO / "src" / "agents").rglob("strategy.py")))
-    offenders = [p.name for p in rule_files
-                 if re.search(r"c\.plan\b", p.read_text(encoding="utf-8"))]
-    assert offenders == [], f"gate ban (ADR-0040): rules must not key on c.plan — {offenders}"
 
 
 # ------------------------------------------------------------- the two-sided Prize Path (prize_paths)

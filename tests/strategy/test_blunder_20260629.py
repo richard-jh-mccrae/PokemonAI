@@ -133,38 +133,8 @@ def test_build_active_wincon_prefers_active_over_a_bench_copy():
     # The composer TIES these two — see `test_the_composer_ties_these_boards_and_why`.
 
 
-@pytest.mark.req("REQ-GEN-0026")
-def test_attach_before_hand_shuffle_demotes_a_hand_shuffle_while_holding_energy():
-    pilot = _pilot()
-    play_shuffle = opt(PLAY, area=HAND, index=0)          # a `shuffle_hand` Supporter
-    attach = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    obs = make_select([play_shuffle, attach],
-                      current=state(active=poke(WINCON, energy=1, hp=330), hand=[1223, WATER]))
-    assert "attach-before-hand-shuffle" in _fired(pilot.explain(obs).options[0])
-    assert pilot.decide(obs) == [1]
-
-    # No reusable Energy in hand -> nothing to attach first -> rule stands down.
-    no_energy = make_select([play_shuffle],
-                            current=state(active=poke(WINCON, energy=1, hp=330), hand=[1223]))
-    assert "attach-before-hand-shuffle" not in _fired(pilot.explain(no_energy).options[0])
 
 
-@pytest.mark.req("REQ-GEN-0027")
-def test_dont_rush_evolve_without_a_preevolution_in_play():
-    pilot = _pilot()
-    play_salvatore = opt(PLAY, area=HAND, index=0)        # a `rush_evolve` tutor
-    obs = make_select([play_salvatore], current=state(active=poke(WINCON, hp=330), hand=[1189]))
-    assert "dont-rush-evolve-without-target" in _fired(pilot.explain(obs).options[0])
-
-    # A pre-evolution IS in play -> the tutor has a target -> stands down.
-    pilot2 = Pilot(Strategy(roles={WINCON: ["win_condition"]},
-                            lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
-                   deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                   functions=CardFunctions({1189: ["search", "rush_evolve"]}),
-                   effects=fetch_effects({1189: ["search", "rush_evolve"]}))
-    has_preevo = make_select([play_salvatore],
-                             current=state(active=poke(WINCON, hp=330), bench=[poke(PREEVO, hp=70)], hand=[1189]))
-    assert "dont-rush-evolve-without-target" not in _fired(pilot2.explain(has_preevo).options[0])
 
 
 # The two snipe TARGET tests here were DELETED by ADR-0085; test_snipe_relevance.py carries the claim.
@@ -389,17 +359,6 @@ def test_dont_search_stands_down_mega_signal_when_all_megas_are_gone():
     assert not _ctx(pilot, make_select([play_signal, opt(END)], current=maybe), 0).search_targets_exhausted
 
 
-@pytest.mark.req("REQ-GEN-0032")
-def test_dont_tutor_the_held_wincon_for_a_wincon_only_tutor():
-    # A wincon-ONLY tutor is redundant with one in hand, even though the deck still holds Megas.
-    pilot = _search_pilot([WINCON] * 3 + [PREEVO] * 3 + [FILLER] * 54)
-    play_signal = opt(PLAY, area=HAND, index=0)
-    held = state(active=poke(PREEVO, hp=70), hand=[MEGA_SIGNAL, WINCON], prizes=6)
-    obs = make_select([play_signal, opt(END)], current=held)
-    c = _ctx(pilot, obs, 0)
-    assert c.search_redundant_wincon and not c.search_targets_exhausted   # redundant, not a whiff
-    assert "dont-tutor-the-held-wincon" in _fired(pilot.explain(obs).options[0])
-    assert _ranked(pilot, obs)[0][0] == 1
     # The composer DISAGREES (it values the reveal), and that flip is an UNRULED hand-built board.
 
 

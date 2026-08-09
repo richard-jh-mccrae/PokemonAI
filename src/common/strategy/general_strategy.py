@@ -1,4 +1,4 @@
-"""General Strategy — the legacy deck-agnostic doctrine beneath non-competition Strategies.
+"""General Strategy — the deck-agnostic doctrine the Pilot applies beneath every deck's own Strategy
 (docs/general-strategy.md, ADR-0008). ASSEMBLY-ONLY (ADR-0025): the baseline clusters live in
 `common.strategy.baseline` and the card-archetype doctrines in `common.strategy.doctrines`.
 
@@ -15,16 +15,3 @@ from common.strategy.strategy import Strategy
 GENERAL_STRATEGY = Strategy(
     name="general",
     hypotheses=BASELINE_HYPOTHESES + GUST_HYPOTHESES + FETCH_HYPOTHESES + REFRESH_HYPOTHESES)
-
-# Issue #459 leaves only rule-impossible guards in Mega Starmie / future Hydrapple.
-# The legacy roster remains loaded for Mega Lucario and Dragapult, outside competition scope.
-COMPETITION_RUNTIME_NAMES = frozenset({"mega_starmie", "hydrapple"})
-COMPETITION_GUARD_IDS = frozenset({
-    "dont-search-an-empty-deck",
-    "keep-a-startable-hand",
-    "honor-preferred-start",
-})
-COMPETITION_GENERAL_STRATEGY = Strategy(
-    name="competition_general",
-    hypotheses=[hypothesis for hypothesis in GENERAL_STRATEGY.hypotheses
-                if hypothesis.id in COMPETITION_GUARD_IDS])

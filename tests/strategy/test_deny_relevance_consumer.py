@@ -531,7 +531,7 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
             f"{fixture}: a whiffing Hammer must NOT be chosen — a free Item is tiered ahead of "
             f"everything by `_finish_turn_last`, and at the old 0.0 it TIED End and won on option "
             f"index. chosen={ex.chosen}")
-        # The remaining choice is no longer specified: Issue #459 removes unrelated target-runtime
+        # The remaining choice is no longer specified: Issue #459 removes unrelated shared-runtime
         # valuations while preserving this deny-floor assertion and the immutable corpus fixture.
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.strategy import Hypothesis, Strategy
+from tools.rung_registry import SHARED_RUNTIME_RETIRED
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -32,13 +33,12 @@ def _hypothesis_ids(agent: str) -> set[str]:
     return {h.id for h in (*GENERAL_STRATEGY.hypotheses, *_deck_hypotheses(agent))}
 
 
-def test_shipped_tuned_keys_are_real_hypotheses():
-    """REQ-TUNER-0011: every key in a shipped tuned.json matches a Hypothesis id; otherwise
-    _weight ignores it (a silent no-op) and the override is never actually used."""
+def test_shipped_tuned_keys_are_live_or_issue_459_shared_retirements():
+    """REQ-TUNER-0011: immutable deck assets may retain only Issue #459 shared retired keys."""
     for tuned in sorted((REPO / "src" / "agents").glob("*/tuned.json")):
         agent = tuned.parent.name
         keys = set(json.loads(tuned.read_text(encoding="utf-8")))
-        unknown = keys - _hypothesis_ids(agent)
+        unknown = keys - _hypothesis_ids(agent) - set(SHARED_RUNTIME_RETIRED)
         assert not unknown, f"{tuned}: overrides for unknown hypotheses {sorted(unknown)}"
 
 

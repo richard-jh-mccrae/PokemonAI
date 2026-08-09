@@ -46,23 +46,8 @@ def _fired(option):
     return {h.id for h, _w in option.fired}
 
 
-@pytest.mark.req("REQ-GEN-0075")
-def test_prefers_the_cheap_secondary_line_over_a_redundant_wincon_base():
-    """Mega online + a Riolu already in hand: the tie-break tips the pick to Makuhita over a 2nd
-    Riolu — the case the solrock `card_is_redundant` gate (needs Riolu IN PLAY) misses."""
-    dec = _pilot().explain(_fetch_obs(riolu_in_hand=True))
-    assert dec.chosen == [1]                                   # Makuhita, not the redundant 2nd Riolu
-    assert "develop-the-cheap-prize-wall-line" in _fired(dec.options[1])
-    assert "prefer-wincon-line-piece" in _fired(dec.options[1])   # broadened credit reaches the secondary base
 
 
-@pytest.mark.req("REQ-GEN-0075")
-def test_defers_to_fetch_the_base_when_the_wincon_base_is_genuinely_needed():
-    """No Riolu anywhere (base NOT deployable): fetching a Riolu is a real need (a 2nd Mega), so
-    `fetch-base-before-stranded-payoff` (+20) keeps Riolu ahead — the tie-break never starves the line."""
-    dec = _pilot().explain(_fetch_obs(riolu_in_hand=False))
-    assert dec.chosen == [0]                                   # Riolu (the needed base) wins
-    assert "fetch-base-before-stranded-payoff" in _fired(dec.options[0])
 
 
 @pytest.mark.req("REQ-GEN-0075")

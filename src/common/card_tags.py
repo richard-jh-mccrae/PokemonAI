@@ -45,13 +45,11 @@ TAG_REGISTRY: dict[str, Tag] = {
     "draw": Tag(DERIVED,
                 "Draws cards into hand — raw card advantage / engine fuel. A `DRAW` log by the "
                 "actor, or a look-at-top-then-take (`LOOKING→HAND`).",
-                ("common.deciders.context_build", "common.deciders.hand", "common.deciders.order", "common.strategy.context",
-                 "common.strategy.doctrines.doctrine_fetch")),
+                ("common.deciders.context_build", "common.deciders.hand", "common.deciders.order", "common.strategy.context")),
     "search": Tag(DERIVED,
                   "Tutors a SPECIFIC card straight out of the deck (`DECK→HAND`/`BENCH`/`ACTIVE`) — "
                   "consistency. A top-N look is `dig`+`draw`, not this.",
-                  ("common.deciders.hand", "common.deciders.order", "common.strategy.context",
-                   "common.strategy.doctrines.doctrine_fetch")),
+                  ("common.deciders.hand", "common.deciders.order", "common.strategy.context")),
     "dig": Tag(DERIVED,
                "Looks at / reorders the top or bottom of the deck — selection and information. A "
                "`MOVE_CARD` touching the `LOOKING` area.",
@@ -59,12 +57,10 @@ TAG_REGISTRY: dict[str, Tag] = {
     "energy_accel": Tag(DERIVED,
                         "Attaches Energy beyond the manual once-per-turn drop — ramp / tempo. An "
                         "`ATTACH` log by the actor from a non-Tool card.",
-                        ("common.strategy.combat_math.energy", "common.strategy.context",
-                         "common.strategy.baseline.baseline_energy")),
+                        ("common.strategy.combat_math.energy", "common.strategy.context")),
     "recycle": Tag(DERIVED,
                    "Returns cards from the discard pile to hand/deck/play — resource recursion.",
-                   ("common.card_worth", "common.needs",
-                    "common.strategy.doctrines.doctrine_fetch")),
+                   ("common.card_worth", "common.needs")),
     "tutor_energy": Tag(CURATED,
                         "A deck-search specifically for an ENERGY card into hand — the attachable "
                         "fuel the Turn Planner's Supporter-enabled KO line needs (ADR-0031). "
@@ -74,11 +70,10 @@ TAG_REGISTRY: dict[str, Tag] = {
                         ("common.strategy.planning.gamble", "common.strategy.planning.readiness", "common.strategy.combat_math.energy")),
     "tutor_pokemon": Tag(CURATED,
                          "A fetch whose reachable class is Pokémon — the Planner's fetch-class read "
-                         "and the fetch doctrine's cost/benefit split on an Ultra Ball-shaped play. "
+                         "and the planner's cost/benefit split on an Ultra Ball-shaped play. "
                          "NOT read by `fetch_closure`, whose ADR-0032 clause predicate REPLACED the "
                          "tag-keyed `_FETCH_FILTERS` (it names the tag only in prose).",
-                         ("common.deciders.deploy", "common.strategy.planning.gamble", "common.strategy.planning.ko_classes", "common.strategy.planning.readiness",
-                          "common.strategy.doctrines.doctrine_fetch")),
+                         ("common.deciders.deploy", "common.strategy.planning.gamble", "common.strategy.planning.ko_classes", "common.strategy.planning.readiness")),
     "tutor_mega": Tag(CURATED,
                       "A fetch restricted to a Rule-Box Mega ex — the fact the generic "
                       "`tutor_pokemon` cannot carry, so a wincon-in-hand read would over-claim. "
@@ -96,9 +91,8 @@ TAG_REGISTRY: dict[str, Tag] = {
                            ("common.deciders.attach", "common.deciders.deploy", "common.needs", "common.strategy.context")),
     "bench_fill": Tag(CURATED,
                       "Fetches Basics straight onto the Bench (Buddy-Buddy Poffin) — bench "
-                      "development and deck-thinning in one play; sequenced ahead of hand-refill "
-                      "tutors in a thin deck.",
-                      ("common.deciders.deploy", "common.strategy.doctrines.doctrine_fetch")),
+                      "development and deck-thinning in one play.",
+                      ("common.deciders.deploy",)),
     "cost_discard": Tag(CURATED,
                         "A fetch that COSTS a discard from hand (Ultra Ball class) — a blind, "
                         "costly commitment the sequencer defers behind free development, and whose "
@@ -114,8 +108,7 @@ TAG_REGISTRY: dict[str, Tag] = {
     "rush_evolve": Tag(CURATED,
                        "Evolves a Pokémon ahead of the normal schedule — even the turn its "
                        "pre-evolution was played. Brings the win condition online a turn early.",
-                       ("common.deciders.deploy", "common.deciders.hand", "common.deciders.needs", "common.strategy.planning.gamble",
-                        "common.strategy.baseline.baseline_evolution")),
+                       ("common.deciders.deploy", "common.deciders.hand", "common.deciders.needs", "common.strategy.planning.gamble")),
     "gust": Tag(DERIVED,
                 "Drags the opponent's Active out to pull a target up (Boss's Orders) — a `SWITCH` "
                 "log on the OPPONENT's side.",
@@ -138,7 +131,7 @@ TAG_REGISTRY: dict[str, Tag] = {
     "item_lock": Tag(CURATED,
                      "A body whose Ability locks Item play (the benched-disruptor maneuver) — read "
                      "on BOTH sides: it gates our own Item lines and prices their disruptor.",
-                     ("common.deciders.board_build", "common.deciders.promote", "common.strategy.doctrines.doctrine_fetch")),
+                     ("common.deciders.board_build", "common.deciders.promote")),
     "switch": Tag(DERIVED,
                   "Moves my OWN Active out — reposition / escape. Also read on THEIR side, where a "
                   "switch card anywhere waives the Threat-Clock bench-promotion surcharge.",
@@ -146,7 +139,7 @@ TAG_REGISTRY: dict[str, Tag] = {
     "heal": Tag(DERIVED,
                 "Removes damage from my Pokémon — longevity. An `HP_CHANGE` (value > 0, not a "
                 "damage counter) on my side.",
-                ("common.strategy.planning.ko_classes", "common.strategy.planning.ladder", "common.strategy.baseline.baseline_phases")),
+                ("common.strategy.planning.ko_classes", "common.strategy.planning.ladder")),
     "clutch_heal": Tag(CURATED,
                        "A heal that also BOUNCES the healed Pokémon's Energy to hand (Wally's "
                        "Compassion) — a defensive save, not a value heal: held until the Active is "

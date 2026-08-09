@@ -18,9 +18,8 @@ UNREPLACED = "UNREPLACED"    # deleted, and the note says OUTRIGHT that nothing 
                              # yet. Distinct from UNRECORDED (nobody wrote it down) and from SUBSUMED
                              # (something already covered it): here the gap is the recorded finding.
 
-# The Kaggle competition package deliberately excludes these shared valuations (Issue #459).  They are
-# NOT `FOLDED`: Mega Lucario and Dragapult retain the legacy general strategy, outside competition scope.
-TARGET_RUNTIME_RETIRED = frozenset({
+# Issue #459 retires these shared valuations from every runtime; `FOLDED` records their destination below.
+SHARED_RUNTIME_RETIRED = frozenset({
     "use-acceleration",
     "prefer-active-attach-in-setup",
     "feed-the-line-for-disruptor-lock",
@@ -77,7 +76,7 @@ TARGET_RUNTIME_RETIRED = frozenset({
     "dont-refresh-into-a-probable-miss",
 })
 
-# Deck-local third-runtime rungs intentionally retained outside the Kaggle competition package (Issue #459).
+# Deck-local third-deck rungs intentionally retained after the shared-runtime retirement (Issue #459).
 LEGACY_DECK_RUNTIME_RUNG_IDS = {
     "mega_lucario": frozenset({
         "attach-solrock-over-line-base", "fetch-the-missing-engine-half", "dont-fetch-the-redundant-piece",
@@ -338,10 +337,18 @@ FOLDED: dict[str, Fold] = {
     # --- ADR-0034 deck -> general folds. The destination is a LIVE rung, not a symbol.
     "fetch-the-engine-first": Fold(
         "0034", "fetch-the-missing-engine-half", "the replacement is role/quantity-aware, not blanket-engine"),
-    "never-fetch-cinderace": Fold("0034", "dont-fetch-the-setup-only-opener", "structural, and general once stated"),
+    "never-fetch-cinderace": Fold("0131", "common.composer:compose", "shared fetch valuation retired globally"),
     "prefer-going-second": Fold("0034", "honor-preferred-start", "reads Strategy.preferred_start instead of one deck"),
-    "tutor-the-wincon": Fold("0034", "play-a-tutor-for-the-unfound-wincon", "general once the wincon Role carried it"),
+    "tutor-the-wincon": Fold("0131", "common.composer:compose", "shared fetch valuation retired globally"),
 }
+
+# --- ADR-0131, Issue #459: the shared ladder is retired globally. The composer owns successor value;
+# attach-before-hand-shuffle remains a structural tier in the Pilot.
+FOLDED.update({
+    rung: Fold("0131", "common.pilot:Pilot._finish_turn_last" if rung == "attach-before-hand-shuffle"
+               else "common.composer:compose", "shared valuation retired globally")
+    for rung in SHARED_RUNTIME_RETIRED
+})
 
 #: Id-SHAPED tokens in `src/` prose that were never scoring rungs — so `FOLDED` is not asked to
 #: explain a retirement that never happened. Unlike `FOLDED`, an entry here may be removed.

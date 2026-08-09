@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from tools.rung_registry import (DECIDERS, EMERGENT, FOLDED, MAX_MENTIONS, NOT_A_RUNG, REVERTED, SUBSUMED,
-                                 LEGACY_DECK_RUNTIME_RUNG_IDS, TARGET_RUNTIME_RETIRED, UNRECORDED, UNREPLACED)
+                                 LEGACY_DECK_RUNTIME_RUNG_IDS, SHARED_RUNTIME_RETIRED, UNRECORDED, UNREPLACED)
 
 REPO = Path(__file__).resolve().parents[1]
 GIT = shutil.which("git")
@@ -38,7 +38,7 @@ _KEBAB = re.compile(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+){2,})`")
 _SENTINELS = {EMERGENT, SUBSUMED, REVERTED, UNRECORDED, UNREPLACED}
 #: One live id from each of three DIFFERENT modules, so deleting any one cluster cannot silently
 #: retire the whole control.
-_CONTROLS_LIVE = ("use-acceleration", "prefer-rush-evolve-tutor", "fetch-the-wincon")
+_CONTROLS_LIVE = ("dont-search-an-empty-deck", "fire-lunar-cycle", "bench-the-comeback-drawer")
 _CONTROL_DEAD = "this-rung-was-never-real"
 _CONTROL_SYMBOL_ABSENT = "common.pilot:Pilot._this_method_was_never_written"
 _MAX_NOTE = 120
@@ -88,6 +88,23 @@ def _live_strings(tracked: list[str]) -> set[str]:
             except (ValueError, OSError):
                 continue
     return live
+
+
+def _live_hypothesis_ids(tracked: list[str]) -> set[str]:
+    ids: set[str] = set()
+    for rel in tracked:
+        if not (rel.startswith("src/") and rel.endswith(".py")):
+            continue
+        try:
+            tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or getattr(node.func, "id", "") != "Hypothesis":
+                continue
+            ids |= {keyword.value.value for keyword in node.keywords
+                    if keyword.arg == "id" and isinstance(keyword.value, ast.Constant)}
+    return ids
 
 
 def _mentions(tracked: list[str], live: set[str], stems: set[str]) -> dict[str, list[str]]:
@@ -152,7 +169,7 @@ def scan() -> tuple[set[str], dict[str, list[str]], dict[str, list[str]]]:
 
 def test_the_harvest_finds_live_ids_and_not_invented_ones(scan) -> None:
     """A negative result needs a positive control: prove the instrument can see a rung before trusting a miss."""
-    live, _, _bare = scan
+    live = _live_hypothesis_ids(_tracked())
     missing = [control for control in _CONTROLS_LIVE if control not in live]
     assert not missing, (
         f"positive control failed — {missing} should be live Hypothesis ids. "
@@ -176,7 +193,7 @@ def test_the_resolver_rejects_a_symbol_that_does_not_exist() -> None:
 
 def test_every_fold_destination_exists(scan) -> None:
     """The whole value of a fold entry is the redirect. One that points nowhere is worse than no entry."""
-    live, _, _bare = scan
+    live = _live_hypothesis_ids(_tracked())
     broken = []
     for rung, fold in FOLDED.items():
         if fold.into in _SENTINELS:
@@ -244,7 +261,7 @@ def test_no_id_keyed_set_names_a_hypothesis_that_does_not_exist() -> None:
             if strings:
                 consumers[f"{rel}::{name}"] = strings
 
-    assert "use-acceleration" in authored, "positive control failed — no Hypothesis ids were harvested"
+    assert "dont-search-an-empty-deck" in authored, "positive control failed — no Hypothesis ids were harvested"
     consumers = {where: ids for where, ids in consumers.items() if ids & authored}
     assert consumers, "positive control failed — no id-keyed consumer set was discovered at all"
     inert = sorted(f"{where}: {sorted(ids - authored)}" for where, ids in consumers.items() if ids - authored)
@@ -269,7 +286,7 @@ def test_no_source_comment_names_a_rung_that_does_not_exist(scan) -> None:
 def test_no_folded_rung_has_come_back_to_life(scan) -> None:
     """`FOLDED` is PERMANENT — deliberately not pruned when the last mention goes (module docstring).
     The one real error is a LIVE rung claiming to be folded: the fold was reverted, or the id reused."""
-    live, _, _bare = scan
+    live = _live_hypothesis_ids(_tracked())
     resurrected = sorted(set(FOLDED) & live)
     assert not resurrected, (
         "these ids are registered as retired but are live Hypothesis ids again. A reused id silently\n"
@@ -293,14 +310,13 @@ def test_no_id_is_both_folded_and_not_a_rung() -> None:
     assert not overlap, f"registered as both a retired rung and never-a-rung: {overlap}"
 
 
-def test_target_runtime_retirements_are_the_legacy_roster_delta() -> None:
-    """Issue #459 narrows Kaggle competition without claiming Lucario/Dragapult rungs were deleted."""
-    from common.strategy.general_strategy import COMPETITION_GENERAL_STRATEGY, GENERAL_STRATEGY
+def test_shared_runtime_retirements_are_globally_folded() -> None:
+    """Issue #459 retires every listed shared valuation, not only the Kaggle package view."""
+    from common.strategy.general_strategy import GENERAL_STRATEGY
 
-    legacy = {hypothesis.id for hypothesis in GENERAL_STRATEGY.hypotheses}
-    competition = {hypothesis.id for hypothesis in COMPETITION_GENERAL_STRATEGY.hypotheses}
-    assert legacy - competition == TARGET_RUNTIME_RETIRED
-    assert not competition & TARGET_RUNTIME_RETIRED
+    general = {hypothesis.id for hypothesis in GENERAL_STRATEGY.hypotheses}
+    assert SHARED_RUNTIME_RETIRED <= set(FOLDED)
+    assert not general & SHARED_RUNTIME_RETIRED
 
 
 def test_retained_third_deck_rungs_match_the_declared_out_of_competition_scope() -> None:

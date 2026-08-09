@@ -28,9 +28,7 @@ PINS = {
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
     # discard-pair valuation (sets, not sums; role floors)
-    "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
-    # These five record a SINGLE flagged discard for a 2-card forced pitch, so they are `correct ⊆
-    # chosen` cases — a 1-index `correct` can never equal a 2-index pick.
+    # Five cases flag one card in a forced two-card pitch, so their one-index `correct` is a subset of `chosen`.
     "82525101-14": "dp: never Ultra-Ball away the Ignition burst — pitch the duplicate Wally's (⊆)",
     "82749656-20": "dp: keep the ACE SPEC Hero's Cape — give back the redundant Salvatore (⊆)",
     "83686860-18": "dp: don't pitch BOTH Dreepy — one line survives; Judge goes instead (⊆)",
@@ -89,11 +87,12 @@ POC_T4_FLIPS = {
     "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
                    "same cause as 83967841-17",
 }
-# Issue #459 leaves Mega Starmie's old shared valuations out of the packaged target runtime.
+# Issue #459 retires shared valuations from every runtime.
 # Strict xfail preserves the immutable corpus label and makes composer recovery reviewable.
-ISSUE_459_TARGET_RUNTIME_FLIPS = {
-    "82228640-9": "recovered from the 40 dropped records — target S4 defers its shared setup valuation",
-    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex — target S4 defers fetch valuation to composer",
+ISSUE_459_GLOBAL_RUNTIME_FLIPS = {
+    "82228640-9": "recovered from the 40 dropped records — global shared setup valuation retired",
+    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex — global shared fetch valuation retired",
+    "85045840-14": "dp: keep Dragapult ex — global shared discard valuation retired",
 }
 # The tagged blunder is DEAD but strict `correct`-equality cannot hold: the residue is a DIFFERENT,
 # separately adjudicated line. Assert only the substance.
@@ -207,7 +206,7 @@ def _param(cid, reason, *, xfail):
 _CASES = ([_param(c, r, xfail=False) for c, r in PINS.items()]
           + [_param(c, r, xfail=True) for c, r in TARGETS.items()]
           + [_param(c, r, xfail=True) for c, r in POC_T4_FLIPS.items()]
-          + [_param(c, r, xfail=True) for c, r in ISSUE_459_TARGET_RUNTIME_FLIPS.items()])
+          + [_param(c, r, xfail=True) for c, r in ISSUE_459_GLOBAL_RUNTIME_FLIPS.items()])
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

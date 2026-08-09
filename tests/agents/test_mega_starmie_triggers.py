@@ -66,19 +66,6 @@ def test_preferred_start_second_declines_the_coin_toss():
 
 
 @pytest.mark.req("REQ-MS-0002")
-def test_never_fetch_cinderace_penalises_grabbing_the_opener_at_a_search():
-    """A search must not pull Cinderace — it can only enter via Explosiveness at game start, so a
-    fetched copy is dead. Penalise the `opener` candidate; prefer the line piece (Staryu)."""
-    p = _pilot()
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": CINDERACE}, {"id": STARYU}], current=state(hand=[]))
-    opts = p.explain(obs).options
-    assert "dont-fetch-the-setup-only-opener" in _fired(opts[0])        # Cinderace (opener) -- penalised
-    assert "dont-fetch-the-setup-only-opener" not in _fired(opts[1])    # Staryu (line piece) -- not the opener
-    assert p.decide(obs) == [1]                              # take Staryu, never Cinderace
-
-
-@pytest.mark.req("REQ-MS-0002")
 def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
     """Choosing Cinderace as the opening Active (Explosiveness) is correct — the rule is about
     FETCHING (TO_HAND), so it must stay silent at the setup-Active choice."""

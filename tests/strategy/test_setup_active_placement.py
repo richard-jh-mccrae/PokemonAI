@@ -1,15 +1,8 @@
-"""The pregame Set-Up ACTIVE pick: one rule reading one deck declaration (ADR-0079).
+"""Pregame Set-Up ACTIVE metadata (ADR-0079).
 
-This file OWNS the `_SETUP_ACTIVE` seam. Five scoring rules used to live here; all are deleted, and
-`Strategy.starter_priority` (an ordered, COMPLETE list of startable bodies) plus the general
-`open-the-declared-starter` do the whole job.
-
-**These are OUTCOME tests, never score tests** — what is asserted is which body ends up Active,
-through `decide`/`explain`, plus the completeness invariant read off each agent's loaded `Strategy`.
-`board.top_starter_id` / `Context.card_is_top_starter` are deliberately NOT asserted: they are the
-plumbing between the two, fully observable through the decision.
-
-Card facts verified at source (`data/EN_Card_Data.csv`); mulligan rule at `docs/rulebook.txt` L224.
+Issue #459 globally retires its sole shared scorer, `open-the-declared-starter`. Deck declarations
+remain intact as scoped assets, but the runtime intentionally does not score them until a future
+deck-local successor is specified. These tests guard that metadata boundary, not a selection outcome.
 """
 from __future__ import annotations
 
@@ -87,6 +80,16 @@ def _setup_active_obs(hand_ids, offer_ids=None):
 
 # ── The corrections this seam exists to fix ──────────────────────────────────────────────────────
 
+def test_issue_459_keeps_starter_assets_but_global_runtime_does_not_score_them():
+    """Starter orders stay complete metadata; the retired shared scorer must not fire for any deck."""
+    offers = {"mega_lucario": [SOLROCK, RIOLU], "dragapult_ex": [BUDEW, DREEPY],
+              "mega_starmie": [CINDERACE, STARYU]}
+    assert all(_deck_strategy(agent).starter_priority for agent in offers)
+    assert not any(h.id == "open-the-declared-starter" for h in GENERAL_STRATEGY.hypotheses)
+    for agent, cards in offers.items():
+        trace = _pilot(agent).explain(_setup_active_obs(cards))
+        assert all(option.score == 0.0 and not option.fired for option in trace.options)
+
 def test_f2_opens_the_utility_body_over_the_fragile_line_base():
     """dragapult f2, from its recorded observation: all three options returned 0.0 with NO rule
     firing, so the engine's option index opened the 70-HP Line base."""
@@ -96,23 +99,10 @@ def test_f2_opens_the_utility_body_over_the_fragile_line_base():
         f"f2: chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
 
 
-def test_ml_f1_opens_the_attacker_over_the_draw_engine():
-    """mega_lucario f1 (CRITICAL): Solrock over Lunatone, the benched draw engine. Same root cause as
-    f2, and it used to be fixed by a rung gated on `card_id == SOLROCK` (ADR-0079 removes that)."""
-    pilot = _pilot("mega_lucario")
-    assert pilot.decide(_setup_active_obs([LUNATONE, SOLROCK])) == [1]
-    assert pilot.decide(_setup_active_obs([SOLROCK, LUNATONE])) == [0]
 
 
 # ── REQ-OPEN-0002: the multi-prize demotion, re-expressed through the declaration ────────────────
 
-@pytest.mark.req("REQ-OPEN-0002")
-def test_shipped_pilot_opens_the_plain_basic_over_meowth_ex():
-    """Same outcome the deleted −15 demotion bought — Meowth ex is simply ranked last — but it now
-    holds when the ex is the ONLY other option, and without a `_WINCON_ROLES` escape hatch."""
-    pilot = _pilot("mega_lucario")
-    assert pilot.decide(_setup_active_obs([MEOWTH_EX, RIOLU])) == [1], "should open Riolu, not Meowth ex"
-    assert pilot.decide(_setup_active_obs([RIOLU, MEOWTH_EX])) == [0], "order-independent"
 
 
 @pytest.mark.req("REQ-OPEN-0002")
@@ -135,21 +125,8 @@ def test_a_declared_multiprize_starter_is_not_demoted():
 
 # ── The other decks' declared openers ────────────────────────────────────────────────────────────
 
-def test_dragapult_opens_the_item_lock_starter_over_everything():
-    """Budew is rank 1 — the outcome the retired `open-the-item-lock-starter` bought, now ordered
-    against the whole field rather than against whatever else happened to score."""
-    pilot = _pilot("dragapult_ex")
-    assert pilot.decide(_setup_active_obs([DREEPY, MUNKIDORI, BUDEW])) == [2]
-    assert pilot.decide(_setup_active_obs([BUDEW, MEOWTH_EX])) == [0]
 
 
-def test_dragapult_ranks_the_line_base_below_the_bodies_it_can_spare():
-    """A PLACEMENT read, not a fragility one: the Line base belongs on the Bench evolving, so an
-    Active Dreepy is a line that is not being built. A fragility heuristic ranks it the other way."""
-    pilot = _pilot("dragapult_ex")
-    assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE])) == [1]
-    assert pilot.decide(_setup_active_obs([DREEPY, FEZANDIPITI_EX])) == [1]
-    assert pilot.decide(_setup_active_obs([DREEPY, MEOWTH_EX])) == [0], "but still above Meowth ex"
 
 
 def test_an_undeclared_deck_is_untouched():
@@ -164,27 +141,12 @@ def test_an_undeclared_deck_is_untouched():
     assert all(not o.fired for o in trace.options)
 
 
-def test_the_highest_ranked_body_PRESENT_wins_not_merely_rank_one():
-    """`board.top_starter_id` resolves against what is on OFFER, which is what makes a boolean
-    equivalent to a rank scale under a COMPLETE list (ADR-0079 decision 5)."""
-    pilot = _pilot("dragapult_ex")
-    assert pilot.decide(_setup_active_obs([DREEPY, MUNKIDORI])) == [1]
-    assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE, MUNKIDORI])) == [2]
-    assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE])) == [1]
 
 
 # ── ADR-0081: the Opener Marginal is `maxDamage(payoff) - maxDamage(body)` when a card in hand
 # evolves from the offered body AND is the deck's declared `Line` payoff; otherwise ZERO.
 
 
-def test_the_line_base_beats_rank_one_when_its_wincon_payoff_is_in_hand():
-    """ADR-0081 case 1: holding the Mega flips a declared rank-1. Read with the case-2 test below —
-    the SAME two bodies on offer, only the hand differs, so this is an inversion not a tie-break."""
-    pilot = _pilot("mega_lucario")
-    obs = _setup_active_obs([SOLROCK, RIOLU, MEGA_LUCARIO_EX], offer_ids=[SOLROCK, RIOLU])
-    assert pilot.decide(obs) == [1], "should open Riolu — the Mega in hand makes it a 2-turn 130"
-    flipped = _setup_active_obs([RIOLU, SOLROCK, MEGA_LUCARIO_EX], offer_ids=[RIOLU, SOLROCK])
-    assert pilot.decide(flipped) == [0], "order-independent"
 
 
 def test_rank_one_holds_when_the_payoff_is_not_in_hand():
@@ -197,12 +159,6 @@ def test_rank_one_holds_when_the_payoff_is_not_in_hand():
     assert pilot.decide(flipped) == [1], "order-independent"
 
 
-def test_a_mid_line_payoff_does_not_promote_the_line_base():
-    """SILENCE 1/4: a MID-line card is a stepping stone, not the declared payoff. Without the Line
-    clause this frame promotes Dreepy above Dunsparce and overturns ADR-0079 amendment B."""
-    pilot = _pilot("dragapult_ex")
-    obs = _setup_active_obs([DREEPY, DUNSPARCE, DRAKLOAK], offer_ids=[DREEPY, DUNSPARCE])
-    assert pilot.decide(obs) == [1], "Dunsparce (rank 3) still outranks Dreepy (rank 5)"
 
 
 def test_a_non_line_payoff_does_not_promote_the_draw_engine():
@@ -213,12 +169,6 @@ def test_a_non_line_payoff_does_not_promote_the_draw_engine():
     assert pilot.decide(obs) == [1], "Munkidori (rank 2) still outranks Dunsparce (rank 3)"
 
 
-def test_a_secondary_attacker_line_payoff_does_not_promote_its_base():
-    """SILENCE 3/4: Hariyama out-damages the Mega but its Line is `role="secondary_attacker"`. The
-    gate is `_wincon_lines`, so being the declared WIN CONDITION is what counts, not damage."""
-    pilot = _pilot("mega_lucario")
-    obs = _setup_active_obs([SOLROCK, MAKUHITA, HARIYAMA], offer_ids=[SOLROCK, MAKUHITA])
-    assert pilot.decide(obs) == [0], "Solrock's rank 1 holds — Hariyama is not the Line payoff"
 
 
 # ── The derived pin tracks DECK COMPOSITION, not the card ────────────────────────────────────────
@@ -259,12 +209,6 @@ def test_the_derived_pin_fires_when_the_deck_omits_the_evolution_route():
     assert pilot.decide(obs) == [1], "route-restricted body is pinned at rank 1"
 
 
-def test_the_derived_pin_LIFTS_when_the_deck_runs_the_evolution_route():
-    """Why the pin is DERIVED: add "Pre" to the deck and it lifts by itself. A declared pin would go
-    stale here and silently keep protecting a body that no longer needs it."""
-    pilot = _synth_pilot([_OPENER] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [_PRE] * 4 + [1] * 44)
-    obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
-    assert pilot.decide(obs) == [0], "pin lifted — the payoff in hand promotes the Line base"
 
 
 def test_the_pin_fails_CLOSED_when_it_cannot_tell():
@@ -276,19 +220,6 @@ def test_the_pin_fails_CLOSED_when_it_cannot_tell():
     assert pilot.decide(obs) == [1], "cannot evaluate the pin -> pin everything -> declaration stands"
 
 
-def test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base():
-    """The gate is the declared **Line payoff**, never the win-condition **Role** set. The two sets
-    COINCIDE on every authored deck, so collapsing them reddens nothing but this test."""
-    from common.strategy.strategy import Line
-    strategy = Strategy(starter_priority=[_RIVAL, _BASE],
-                        lines=[Line(path=[_RIVAL, _WINCON], payoff=_WINCON)],
-                        roles={_PAYOFF: ["primary_attacker"]})
-    pilot = Pilot(strategy, deck=[_RIVAL] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [_WINCON] * 4 + [1] * 44,
-                  general_strategy=GENERAL_STRATEGY, stats=_SYNTH_STATS, functions=CardFunctions({}))
-    obs = _setup_active_obs([_BASE, _RIVAL, _PAYOFF], offer_ids=[_BASE, _RIVAL])
-    assert pilot.decide(obs) == [1], (
-        "a `primary_attacker`-Roled body that is on no declared Line must NOT act as an opener "
-        "payoff — the declared rank 1 holds")
 
 
 def test_a_deck_with_no_declared_line_is_untouched():

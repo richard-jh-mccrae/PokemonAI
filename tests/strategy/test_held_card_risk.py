@@ -100,85 +100,18 @@ def test_fetch_one_turn_early_stands_down_and_the_attack_fires_f17():
 
 # ── fetch-EARLY leg: dont-fetch-before-the-deadline ───────────────────────────────────────────────
 
-@pytest.mark.req("REQ-GEN-0059")
-def test_costly_fetch_stands_down_when_the_target_cannot_land_this_turn():
-    """A cost-discard tutor whose only needed target is an evolution with no eligible base (the base
-    was benched THIS turn) nets ≤ 0 — the fetch succeeds identically next turn, the cost is paid now."""
-    pilot = _pilot_for(cost_discard=True)
-    bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1)]
-    obs = _menu([FETCH, VAN1, VAN2], bench=bench)
-    t = pilot.explain(obs).options[0]
-    assert "dont-fetch-before-the-deadline" in _fired(t)
-    assert t.score <= 0
 
 
-@pytest.mark.req("REQ-GEN-0059")
-def test_costly_fetch_plays_when_the_target_can_evolve_this_turn():
-    """Same board with the base ELIGIBLE (in play since last turn): the fetched evolution lands this
-    turn, so the deadline rung is silent and the endorsed fetch stays positive."""
-    pilot = _pilot_for(cost_discard=True)
-    bench = [poke(BASE), poke(VAN1)]                       # appearThisTurn absent -> eligible
-    obs = _menu([FETCH, VAN1, VAN2], bench=bench)
-    t = pilot.explain(obs).options[0]
-    assert "dont-fetch-before-the-deadline" not in _fired(t)
-    assert t.score > 0
 
 
-@pytest.mark.req("REQ-GEN-0059")
-def test_deadline_holds_on_my_first_turn_even_with_an_eligible_base():
-    """Neither player may evolve on their own first turn (rulebook L128): an eligible-looking base
-    (benched at setup) still cannot receive the evolution on turn 2 for the second player."""
-    pilot = _pilot_for(cost_discard=True)
-    bench = [poke(BASE), poke(VAN1)]
-    obs = _menu([FETCH, VAN1, VAN2], bench=bench, turn=2, first_player=1)
-    obs["current"]["yourIndex"] = 0                        # first_player=1, we are 0 -> our first turn is 2
-    t = pilot.explain(obs).options[0]
-    assert "dont-fetch-before-the-deadline" in _fired(t)
-    assert t.score <= 0
 
 
-@pytest.mark.req("REQ-GEN-0059")
-def test_free_fetch_holds_only_under_a_live_strip_read():
-    """A FREE tutor before the deadline is silent with no Read (fail-open) and stands down once the
-    matched Read prices a live symmetric refresh."""
-    bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1)]
-    # no Read: the free early fetch is NOT vetoed (waiting costs nothing, but neither does fetching)
-    pilot = _pilot_for(cost_discard=False)
-    obs = _menu([FREEFETCH, VAN1, VAN2], bench=bench)
-    assert "dont-fetch-before-the-deadline" not in _fired(pilot.explain(obs).options[0])
-    # a confident Read holding Judge copies: the held key would sit exposed -> fetch-late wins
-    pilot = _pilot_for(cost_discard=False, hand_disruption_judge=True)
-    om = OpponentModel()
-    om.copies_left_odds = lambda card_id=None: ({JUDGE: 0.9} if card_id is None else 0.9)
-    pilot.opponent = om
-    t = pilot.explain(obs).options[0]
-    assert "dont-fetch-before-the-deadline" in _fired(t)
-    assert t.score <= 0
 
 
-@pytest.mark.req("REQ-GEN-0059")
-def test_deadline_rung_leaves_the_starved_and_developed_board_to_its_own_rung():
-    """Replace, not stack: one rung per jurisdiction, never both."""
-    pilot = _pilot_for(cost_discard=True)
-    bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1), poke(VAN2)]
-    obs = _menu([FETCH, VAN1, VAN2], bench=bench, active=poke(900, energy=0))
-    fired = _fired(pilot.explain(obs).options[0])
-    assert "dont-costly-tutor-when-starved-and-developed" in fired
-    assert "dont-fetch-before-the-deadline" not in fired
 
 
 # ── fetch-LATE leg: dont-shuffle-away-the-deferred-fetch ─────────────────────────────────────────
 
-@pytest.mark.req("REQ-GEN-0060")
-def test_refresh_stands_down_while_a_held_fetch_is_deferred():
-    """A self-refresh shuffles the deferred plan's own vehicle away — the very strip the deferral is
-    guarding against — so the hold cancels the speculative draw credit."""
-    pilot = _pilot_for(cost_discard=True)
-    bench = [dict(poke(BASE), appearThisTurn=True), poke(VAN1)]
-    obs = _menu([REFRESH, FETCH, VAN1, VAN2], bench=bench)
-    t = pilot.explain(obs).options[0]
-    assert "dont-shuffle-away-the-deferred-fetch" in _fired(t)
-    assert t.score <= 0
 
 
 @pytest.mark.req("REQ-GEN-0060")

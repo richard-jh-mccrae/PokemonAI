@@ -28,22 +28,8 @@ def _fired_ids(option):
     return {h.id for h, _w in option.fired}
 
 
-@pytest.mark.req("REQ-GEN-0074")
-def test_f22_fetch_the_ability_fuel_color_over_a_redundant_attack_color():
-    """An Ability is repeatable free value, so its fuel colour outranks a redundant attack colour."""
-    fx = _fixture("dp_fetch_the_ability_color_f22")
-    dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                         # [3] Basic {D}, not [0] Basic {R}
-    assert "fetch-the-ability-fuel-color" in _fired_ids(dec.options[fx["correct"][0]])
 
 
-@pytest.mark.req("REQ-GEN-0074")
-def test_f86_attach_the_recipients_color_not_the_off_color():
-    """Every option scores 0 here, so the off-colour demote is the whole decision."""
-    fx = _fixture("dp_attach_the_recipients_color_f86")
-    dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                         # [1] Basic {P}, not [0] Basic {D}
-    assert "attach-off-color-at-fixed-recipient" in _fired_ids(dec.options[fx["chosen"][0]])   # the {D} pick
 
 
 @pytest.mark.req("REQ-GEN-0074")

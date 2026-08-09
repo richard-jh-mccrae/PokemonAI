@@ -186,16 +186,6 @@ def test_the_supporter_tutor_still_pays_when_the_held_supporter_is_not_a_draw_en
 
 
 @pytest.mark.req("REQ-ML-0016")
-def test_grab_the_gust_supporter_when_a_gust_kos():
-    """At the Last-Ditch TO_HAND grab, take Boss's (gust) when a gust would KO a benched body."""
-    p = _tagged_pilot()
-    cur = state(active=poke(MEGA_LUCARIO, energy=2, hp=340), opp_active=poke(WALL, hp=400),
-                opp_bench=[poke(STALLER, hp=100)])          # Mega Brave 270 KOs the gusted 100
-    obs = make_select([card_opt(1, 0)], context=TO_HAND, deck=[{"id": BOSS_ORDERS}], current=cur)
-    assert "grab-a-gust-supporter-for-the-ko" in _fired(p.explain(obs).options[0])
-
-
-@pytest.mark.req("REQ-ML-0016")
 def test_grab_a_draw_supporter_in_setup_default():
     """`grab-a-draw-supporter-in-setup` is RETIRED (ADR-0122 amendment) — `_refresh_swing` measures
     the same swing. The default still holds, it is just no longer a rung to name."""

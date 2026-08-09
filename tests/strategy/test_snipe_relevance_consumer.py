@@ -91,18 +91,6 @@ def test_the_incumbent_rungs_stand_down_as_a_body_when_armed():
         assert not ({h.id for h, _w in opt.fired} & target_rungs)
 
 
-@pytest.mark.req("REQ-SNIPECONS-0002")
-def test_the_counter_rungs_are_retained_and_the_target_rungs_are_gone():
-    """ADR-0085 decision 5: the counter rungs are deliberately RETAINED — disjoint select contexts,
-    so they never co-fired with a target rung, and no corpus frames to bench a rewrite against."""
-    from common.strategy.baseline.baseline_snipe import HYPOTHESES
-    counter = {"place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}
-    ids = {h.id for h in HYPOTHESES}
-    assert counter <= ids, "the counter rungs must survive the fold"
-    assert not (ids & _DELETED_TARGET_RUNGS), "the six target rungs must be gone, not suppressed"
-    assert ids == counter, "the snipe cluster is now exactly the counter family"
-    # ...and no surviving rung may still reference the retired stand-down flag.
-    assert not any("snipe_relevance_armed" in (h.when.__code__.co_names or ()) for h in HYPOTHESES)
 
 
 

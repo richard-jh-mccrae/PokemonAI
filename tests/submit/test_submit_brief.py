@@ -25,23 +25,23 @@ def _agent_with_tuned(tmp_path, tuned: dict) -> Path:
 
 @pytest.mark.req("REQ-SUB-0001")
 def test_manifest_reports_effective_weight_overlaying_tuned_on_authored(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-the-declared-starter": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"dont-search-an-empty-deck": 99.0})
     manifest = build_manifest(agent)
 
     hyp = next(h for h in manifest["general_strategy"]["hypotheses"]
-               if h["id"] == "open-the-declared-starter")
-    assert hyp["authored"] == 40.0       # the authored seed (baseline_opening)
+               if h["id"] == "dont-search-an-empty-deck")
+    assert hyp["authored"] == -60.0      # the authored safety guard (doctrine_fetch)
     assert hyp["effective"] == 99.0      # tuned.json overrides it
     assert hyp["overridden"] is True
 
 
 @pytest.mark.req("REQ-SUB-0001")
 def test_manifest_includes_general_strategy_hypotheses_with_overlay(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"prefer-bench-fill-first": 77.0})
+    agent = _agent_with_tuned(tmp_path, {"dont-search-an-empty-deck": 77.0})
     manifest = build_manifest(agent)
 
     gen = manifest["general_strategy"]["hypotheses"]
-    hyp = next(h for h in gen if h["id"] == "prefer-bench-fill-first")  # shared General Strategy rule
+    hyp = next(h for h in gen if h["id"] == "dont-search-an-empty-deck")
     assert hyp["effective"] == 77.0      # tuned overlay applies to general hyps too
 
 
@@ -54,16 +54,16 @@ def test_manifest_effective_weight_layers_authored_override_under_tuned(tmp_path
     (agent / "strategy.py").write_text(
         "from common.strategy import Strategy\n"
         "STRATEGY = Strategy(name='a', weight_overrides="
-        "{'prefer-bench-fill-first': 33.0, 'open-the-declared-starter': 44.0})\n", encoding="utf-8")
-    (agent / "tuned.json").write_text(json.dumps({"open-the-declared-starter": 99.0}), encoding="utf-8")
+        "{'dont-search-an-empty-deck': 33.0, 'keep-a-startable-hand': 44.0})\n", encoding="utf-8")
+    (agent / "tuned.json").write_text(json.dumps({"keep-a-startable-hand": 99.0}), encoding="utf-8")
     manifest = build_manifest(agent)
 
     gen = {h["id"]: h for h in manifest["general_strategy"]["hypotheses"]}
-    assert gen["prefer-bench-fill-first"]["effective"] == 33.0           # authored seed override applies
-    assert gen["prefer-bench-fill-first"]["seed_override"] == 33.0
-    assert gen["open-the-declared-starter"]["effective"] == 99.0   # learned tuned.json wins above it
+    assert gen["dont-search-an-empty-deck"]["effective"] == 33.0          # authored seed override applies
+    assert gen["dont-search-an-empty-deck"]["seed_override"] == 33.0
+    assert gen["keep-a-startable-hand"]["effective"] == 99.0       # learned tuned.json wins above it
     assert manifest["strategy"]["weight_overrides"] == {
-        "prefer-bench-fill-first": 33.0, "open-the-declared-starter": 44.0}
+        "dont-search-an-empty-deck": 33.0, "keep-a-startable-hand": 44.0}
 
 
 @pytest.mark.req("REQ-SUB-0002")
@@ -212,13 +212,13 @@ def test_brief_is_self_contained_and_embeds_recoverable_manifest(tmp_path):
 
 @pytest.mark.req("REQ-SUB-0004")
 def test_brief_renders_expandable_hypothesis_rows_with_all_info(tmp_path):
-    agent = _agent_with_tuned(tmp_path, {"open-the-declared-starter": 99.0})
+    agent = _agent_with_tuned(tmp_path, {"dont-search-an-empty-deck": 99.0})
     html = render_brief(build_manifest(agent, when=datetime(2026, 6, 25, 14, 30, 5), git_hash="abc1234"))
 
     assert "<details" in html                     # expandable rows
-    assert "open-the-declared-starter" in html         # hypothesis id (general, tuned per-deck)
+    assert "dont-search-an-empty-deck" in html         # hypothesis id (general, tuned per-deck)
     assert "99" in html                            # its effective (tuned) weight
-    assert "Explosiveness" in html                # its rationale text (the human "all info")
+    assert "legal target set" in html             # its rationale text (the human "all info")
     assert "lambda" in html                        # trigger source shown too
 
 

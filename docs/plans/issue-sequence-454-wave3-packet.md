@@ -239,19 +239,25 @@ or corpus interpretation changed. The Mega Starmie composer lab is diagnostic on
 composed, 0 failures, median 62.95 ms, P95 458.70 ms, max 1554.88 ms. No gate baseline was captured
 or restamped.
 
-## Issue #459 — target-runtime S4 retirement boundary
+## Issue #459 — global shared-runtime S4 retirement boundary
 
-The packaged competition runtime selects a three-guard general roster for Mega Starmie and the future
-Hydrapple entrypoint. Its other shared valuations are excluded from that package and recorded in
-`TARGET_RUNTIME_RETIRED`; they are not global `FOLDED` records. Mega Lucario and Dragapult continue
-to select the unchanged legacy general roster. `LEGACY_DECK_RUNTIME_RUNG_IDS` records their retained
-deck-local rung inventories; their strategy modules, tuned assets, tests, and documentation are
-intentionally out of competition scope. No watchdog workflow, benchmark baseline, or capture/restamp changed.
+Issue #459 globally retires the 54 shared valuation rungs in
+`tools.rung_registry.SHARED_RUNTIME_RETIRED`. `GENERAL_STRATEGY` now contains only the three C10
+guards: `keep-a-startable-hand`, `honor-preferred-start`, and `dont-search-an-empty-deck`.
+Each retired id has a `FOLDED` record under ADR-0131, so a historic tuned override is documented
+rather than silently mistaken for live runtime behavior.
 
-The leaf diff remains at the existing 57 unruled `OK -> MISS` records. The decision diff adds these
-eight target-runtime regressions to the pre-existing 33 (the baseline is deliberately unchanged):
-`81903490|0|decision|8 [1]->[0]`, `81903490|0|decision|93 [2]->[1]`,
-`82228640|0|decision|9 [1]->[0]`, `82749168|1|decision|21 [7]->[5]`,
-`82749656|0|decision|21 [2]->[0]`, `82752604|0|decision|14 [0]->[4]`,
-`82753102|1|decision|17 [3]->[0]`, and `83038055|0|decision|40 [0]->[3]`. These are reported,
-not re-ruled; the decision gate therefore remains failing at 41 unruled regressions.
+Mega Lucario's 12 and Dragapult ex's one deck-local rungs remain exactly as listed in
+`LEGACY_DECK_RUNTIME_RUNG_IDS`; their source strategies and tuned assets are intentionally untouched.
+Tests which asserted a retired shared valuation were removed or retargeted to a surviving C10 guard.
+No watchdog workflow, benchmark baseline, capture, or restamp changed. The gate results below are
+reported, never re-ruled.
+
+Read-only gate rerun: the leaf gate has 115 `OK -> MISS` records: 57 unruled, 51 held-out, and 7
+voided. The Decision Gate is 53 unruled regressions (26 held-out, 4 voided): relative to the prior
+41, global retirement adds `83966336|0|decision|9`, `83967841|1|decision|14`,
+`84889539|1|decision|26`, `84890060|1|decision|1`, `85045840|0|decision|14`,
+`85046350|0|decision|18`, `85058051|1|decision|4`, `85058574|1|decision|71`,
+`85059103|0|decision|1`, `85785606|0|decision|1`, `85785609|0|decision|22`,
+`85786096|0|decision|86`, and `86090147|0|turn|3`; `85058574|1|decision|69` recovered.
+These results are recorded only; neither `baseline.json` changed.

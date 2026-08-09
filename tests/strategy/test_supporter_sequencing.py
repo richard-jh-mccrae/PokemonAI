@@ -51,16 +51,6 @@ def _pilot(strat=None, **kw):
                  functions=_funcs(), **kw)
 
 
-@pytest.mark.req("REQ-PILOT-0023")
-def test_a_free_item_dig_is_sequenced_before_the_one_per_turn_supporter():
-    pilot = _pilot()
-    play_salvatore = opt(PLAY, area=HAND, index=0)
-    play_pokegear = opt(PLAY, area=HAND, index=1)
-    obs = make_select([play_salvatore, play_pokegear],
-                      current=state(active=poke(PREEVO, hp=70), hand=[SALVATORE, POKEGEAR]))
-    traces = pilot.explain(obs).options
-    assert traces[0].score > traces[1].score        # Salvatore outscores Pokegear
-    assert pilot.decide(obs) == [1]                 # ... yet the free Item dig goes first
 
 
 @pytest.mark.req("REQ-PILOT-0024")

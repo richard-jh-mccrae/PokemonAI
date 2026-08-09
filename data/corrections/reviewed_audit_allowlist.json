@@ -1,5 +1,5 @@
 {
-  "_note": "The covered-disposition WORKLIST (Issue #238, ADR-0114 decision 3). Every reviewed.json entry whose justification names a rung that no longer exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's flagged set equals this file exactly, so a NEW stale closure is red immediately. Rule the frame (docs/plans/covered-disposition-audit.md says how), re-close it against a live rule, then DELETE its line here. Regenerate with `python tools/train/reviewed_audit.py --write-allowlist` only when re-seeding deliberately. RE-SEEDED 2026-08-07 by POC-T4/5 (Issue #386), and the reason is recorded here because this file went from EMPTY to 17 in one commit: the swap DELETES the rung ladder, so every closure justified by one of `dig-before-commit` / `gust-for-the-ko` / `deploy-hp-tool` / `dont-waste-clutch-heal` / `use-the-draw-engine-ability` / `hold-the-retreat-tool-with-no-retreat` expired at once. That is a ruled bulk deletion, not drift, which is the ONE case the `--write-allowlist` re-seed is for. The 17 are a worklist, not an exemption — each still needs its frame opened and re-closed against whatever the composer does there now, and the ratchet goes red the moment an 18th appears.",
+  "_note": "The covered-disposition WORKLIST (Issue #238, ADR-0114 decision 3). Every reviewed.json entry whose justification names a rung that no longer exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's flagged set equals this file exactly, so a NEW stale closure is red immediately. Rule the frame (docs/plans/covered-disposition-audit.md says how), re-close it against a live rule, then DELETE its line here. Regenerate with `python tools/train/reviewed_audit.py --write-allowlist` only when re-seeding deliberately. RE-SEEDED 2026-08-07 by POC-T4/5 (Issue #386), and the reason is recorded here because this file went from EMPTY to 17 in one commit: the swap DELETES the rung ladder, so every closure justified by one of `dig-before-commit` / `gust-for-the-ko` / `deploy-hp-tool` / `dont-waste-clutch-heal` / `use-the-draw-engine-ability` / `hold-the-retreat-tool-with-no-retreat` expired at once. That is a ruled bulk deletion, not drift, which is the ONE case the `--write-allowlist` re-seed is for. The 17 are a worklist, not an exemption — each still needs its frame opened and re-closed against whatever the composer does there now, and the ratchet goes red the moment an 18th appears. Issue #459 appends 10 stale shared-runtime closure keys (and two newly retired ids on existing rows); baselines and reviewed dispositions remain immutable.",
   "entries": {
     "81904064-44": [
       "dig-before-commit"
@@ -13,6 +13,9 @@
     "82224509-46": [
       "gust-for-the-ko"
     ],
+    "82225138-82": [
+      "prefer-bench-fill-first"
+    ],
     "82225643-11": [
       "dig-before-commit"
     ],
@@ -23,13 +26,20 @@
       "dig-before-commit"
     ],
     "82228017-4": [
-      "dig-before-commit"
+      "dig-before-commit",
+      "dont-tutor-the-held-wincon"
     ],
     "82228640-7": [
       "dig-before-commit"
     ],
+    "82524455-6": [
+      "prefer-bench-fill-first"
+    ],
     "82525741-58": [
       "gust-for-the-ko"
+    ],
+    "82750161-16": [
+      "dont-tutor-the-held-wincon"
     ],
     "82866415-48": [
       "deploy-hp-tool"
@@ -37,14 +47,36 @@
     "83054602-32": [
       "dont-waste-clutch-heal"
     ],
+    "83117367-34": [
+      "dont-tutor-the-held-wincon"
+    ],
+    "83662396-19": [
+      "dont-tutor-the-held-wincon"
+    ],
+    "83666442-27": [
+      "recover-to-refill-bench"
+    ],
+    "83667237-120": [
+      "recover-to-refill-bench"
+    ],
+    "83667237-87": [
+      "recover-to-refill-bench"
+    ],
     "83966968-45": [
       "dig-before-commit"
     ],
     "84071010-30": [
-      "dig-before-commit"
+      "dig-before-commit",
+      "dont-refresh-into-a-probable-miss"
     ],
     "84897262-100": [
       "dig-before-commit"
+    ],
+    "85045840-10": [
+      "dont-shed-a-live-card"
+    ],
+    "85045840-12": [
+      "dont-shed-a-live-card"
     ],
     "85045840-8": [
       "dig-before-commit",

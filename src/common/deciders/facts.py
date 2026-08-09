@@ -250,7 +250,7 @@ class Context:
     card_is_support: bool = False      # hp > 0 with a draw/accel/search Ability (`_ENGINE_TAGS`)
     card_is_utility_body: bool = False  # draws/tutors/stalls and never attacks
     card_is_top_fetch_priority: bool = False  # == board.top_fetch_priority_id
-    card_is_top_starter: bool = False  # == board.top_starter_id — the sole scorer at SETUP_ACTIVE (ADR-0079)
+    card_is_top_starter: bool = False  # == board.top_starter_id; retained metadata after Issue #459 retired its scorer
     card_is_redundant: bool = False    # duplicates a Pokémon already in play
     card_is_hand_duplicate: bool = False  # held 2+ times (fungible Energy excluded)
     card_already_in_hand: bool = False  # at a TO_HAND search (fungible Energy excluded)

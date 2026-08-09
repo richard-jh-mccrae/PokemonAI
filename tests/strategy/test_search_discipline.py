@@ -47,33 +47,8 @@ def test_search_options_resolve_their_card_id_from_deck_and_discard():
 
 
 # --- fetch-the-wincon ----------------------------------------------------------------------------
-@pytest.mark.req("REQ-GEN-0013")
-def test_fetch_the_wincon_prefers_the_payoff_at_a_search():
-    stats = DictCardStatProvider({STARYU: CardStat(STARYU, hp=70),
-                                  MEGA: CardStat(MEGA, megaEx=True, hp=330)})
-    strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # active carries Energy -> not starved -> only fetch-the-wincon in play here
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": STARYU}, {"id": MEGA}],
-                      current=state(active=poke(CINDERACE, energy=1)))
-    assert pilot.decide(obs) == [1]                                  # pull the Mega, not the Staryu
-    assert "fetch-the-wincon" in _fired(pilot.explain(obs).options[1])
-    assert "fetch-the-wincon" not in _fired(pilot.explain(obs).options[0])
 
 
-@pytest.mark.req("REQ-GEN-0013")
-def test_fetch_the_wincon_yields_to_energy_when_starved():
-    # adversarial-review fix: unpowered wincon does nothing -> when starved, energy wins
-    stats = DictCardStatProvider({MEGA: CardStat(MEGA, megaEx=True, hp=330),
-                                  BASIC_W: CardStat(BASIC_W, energyType=WATER)})
-    pilot = Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}),
-                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": MEGA}, {"id": BASIC_W}],
-                      current=state(active=poke(900, energy=0), hand=[]))     # 0 energy, none in hand
-    assert "fetch-the-wincon" not in _fired(pilot.explain(obs).options[0])    # stands down
-    assert pilot.decide(obs) == [1]                                           # take the Energy
 
 
 @pytest.mark.req("REQ-GEN-0013")
@@ -89,30 +64,8 @@ def test_fetch_the_wincon_stands_down_when_the_payoff_is_already_in_play():
 
 
 # --- fetch-energy-when-starved -------------------------------------------------------------------
-@pytest.mark.req("REQ-GEN-0014")
-def test_fetch_energy_when_starved_takes_a_reusable_basic():
-    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, hp=70), BASIC_W: CardStat(BASIC_W, synthetic=True, energyType=WATER)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # starved: Active has 0 Energy, none in hand -> take the Energy over the Pokémon
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": 700}, {"id": BASIC_W}],
-                      current=state(active=poke(900, energy=0), hand=[]))
-    assert pilot.decide(obs) == [1]
-    assert "fetch-energy-when-starved" in _fired(pilot.explain(obs).options[1])
 
 
-@pytest.mark.req("REQ-GEN-0014")
-def test_fetch_energy_when_starved_skips_a_discard_energy_for_a_reusable_one():
-    stats = DictCardStatProvider({IGNITION: CardStat(IGNITION, energyType=0),       # colourless special
-                                  BASIC_W: CardStat(BASIC_W, energyType=WATER)})     # reusable Basic
-    funcs = CardFunctions({IGNITION: ignition_tags()})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": IGNITION}, {"id": BASIC_W}],
-                      current=state(active=poke(900, energy=0)))
-    assert pilot.decide(obs) == [1]                                  # the reusable Basic, not Ignition
-    assert "fetch-energy-when-starved" not in _fired(pilot.explain(obs).options[0])   # Ignition: skipped
-    assert "fetch-energy-when-starved" in _fired(pilot.explain(obs).options[1])       # Basic: boosted
 
 
 @pytest.mark.req("REQ-GEN-0014")
@@ -126,16 +79,6 @@ def test_fetch_energy_when_starved_is_off_when_energy_is_already_in_hand():
 
 
 # --- prefer-bench-fill-first ---------------------------------------------------------------------
-@pytest.mark.req("REQ-GEN-0015")
-def test_prefer_bench_fill_first_sequences_the_thinner_ahead_of_a_tutor():
-    funcs = CardFunctions({POFFIN: ["search", "bench_fill"], HILDA: ["search"]})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, functions=funcs)
-    # SETUP, both are search plays (dig-before-commit fires on each); bench-filler sequenced first
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                      current=state(hand=[HILDA, POFFIN]))
-    assert pilot.decide(obs) == [1]                                  # Buddy-Buddy Poffin first
-    assert "prefer-bench-fill-first" in _fired(pilot.explain(obs).options[1])
-    assert "prefer-bench-fill-first" not in _fired(pilot.explain(obs).options[0])
 
 
 @pytest.mark.req("REQ-GEN-0015")
@@ -215,17 +158,6 @@ def test_snipe_the_threat_outranks_the_weakest():
 
 
 # --- prefer-wincon-line-piece: fetch/promote the line's pre-evolution over an off-line card -------
-@pytest.mark.req("REQ-GEN-0019")
-def test_prefer_wincon_line_piece_fetches_the_preevolution_over_an_offline_card():
-    stats = DictCardStatProvider({STARYU: CardStat(STARYU, hp=70), MEGA: CardStat(MEGA, megaEx=True, hp=330),
-                                  CINDERACE: CardStat(CINDERACE, hp=160)})
-    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA)], roles={MEGA: ["win_condition"]})
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
-                      deck=[{"id": CINDERACE}, {"id": STARYU}], current=state(active=poke(900, energy=1)))
-    assert pilot.decide(obs) == [1]                                  # the line pre-evo (Staryu)
-    assert "prefer-wincon-line-piece" in _fired(pilot.explain(obs).options[1])
-    assert "prefer-wincon-line-piece" not in _fired(pilot.explain(obs).options[0])   # Cinderace: off-line
 
 
 @pytest.mark.req("REQ-GEN-0019")
@@ -295,5 +227,4 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
                                      bench=[poke(MEGA, energy=1)], opp_active=poke(999, hp=120)))
     assert pilot.decide(obs2) == [0]   # retreat -> bring up the ready Mega. EMERGENT from
                                       # destination value minus retreat cost (ADR-0100 §11)
-
 

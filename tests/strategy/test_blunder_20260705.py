@@ -29,12 +29,6 @@ def _fired_ids(option):
     return {h.id for h, _w in option.fired}
 
 
-@pytest.mark.req("REQ-GEN-0068")
-def test_critical_f9_energy_beats_a_redundant_engine_grab_when_starved():
-    """`fetch-energy-when-starved` must DOMINATE the engine/starter grabs at a TO_HAND search."""
-    fx = _fixture("ml0705_starved_solrock_f9")
-    dec = _shipped_pilot().explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # the Basic {F} Energy
 
 
 @pytest.mark.req("REQ-GEN-0069")
@@ -50,15 +44,6 @@ def test_critical_f14_never_play_a_damage_boost_when_it_cannot_attack():
         "frame would be passing by tie-break rather than by valuation")
 
 
-@pytest.mark.req("REQ-GEN-0070")
-def test_critical_f27_refresh_wins_the_supporter_slot_over_a_needless_tutor():
-    """`demote-needless-search-supporter-in-setup` neutralises the tutor's dig endorsement so the
-    refresh wins the mutually-exclusive Supporter slot."""
-    fx = _fixture("ml0705_petrel_over_lillies_f27")
-    dec = _shipped_pilot().explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # Lillie's Determination
-    petrel = fx["chosen"][0]
-    assert "demote-needless-search-supporter-in-setup" in _fired_ids(dec.options[petrel])
 
 
 @pytest.mark.req("REQ-GEN-0047")
@@ -72,12 +57,6 @@ def test_critical_f44_refill_when_the_held_wincon_is_undeployable():
     assert "hold-wincon-dont-shuffle" not in _fired_ids(dec.options[lillies])
 
 
-@pytest.mark.req("REQ-GEN-0068")
-def test_critical_ep2_f14_energy_beats_a_redundant_lunatone_when_starved():
-    """The starved-fetch sibling of f9, with a redundant Lunatone as the distractor."""
-    fx = _fixture("ml0705_starved_lunatone_f14")
-    dec = _shipped_pilot().explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # the Basic {F} Energy
 
 
 @pytest.mark.req("REQ-GEN-0071")
