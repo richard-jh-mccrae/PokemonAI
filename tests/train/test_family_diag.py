@@ -7,10 +7,17 @@ So the output must STATE the distinction rather than imply it: the AGENT's commi
 rendered beside the leaf's and the two are explicitly compared; agreement is `gates.satisfies_human`
 (ADR-0085 Amendment J's `correct ⊆ chosen`), never argmax equality; and a `--keys` list with no
 declared source is REFUSED, because an unlabelled key list is the input that produced the claim.
+
+Those columns are pure functions and were tested as such. The `_working` leg they render — the
+`_simulate_line` → `state_value` round-trip — was not, and unpacked a stale 7-tuple from a 6-tuple
+producer, so every invocation of the instrument died and its silence read as "no findings".
 """
 from __future__ import annotations
 
+import ast
+import inspect
 import sys
+import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,9 +29,11 @@ for sub in ("tools", "src"):
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from common.strategy.planning.leaf import LeafValueMixin  # noqa: E402
 from train.family_diag import (  # noqa: E402
-    LEAF_CAVEAT, SOURCE_CAVEAT, agent_columns, render,
+    LEAF_CAVEAT, SOURCE_CAVEAT, _working, agent_columns, diagnose, render,
 )
+from train.gates import keyed_corrections  # noqa: E402
 
 
 def _correction(chosen, correct):
@@ -173,3 +182,45 @@ def test_a_leaf_sourced_run_carries_the_leaf_caveat():
 def test_an_unknown_source_is_rejected_rather_than_rendered_unlabelled():
     with pytest.raises(ValueError):
         render([_row()], issue="#330", source="somewhere")
+
+
+# ── the `_simulate_line` leg runs at all ──────────────────────────────────────────────────────────
+
+def _tuple_return_widths(func) -> set:
+    return {len(n.value.elts) for n in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(func))))
+            if isinstance(n, ast.Return) and isinstance(n.value, ast.Tuple)}
+
+
+def _unpack_widths(func, name) -> set:
+    return {len(t.elts) for n in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(func))))
+            if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Tuple)
+            and isinstance(n.value, ast.Name) and n.value.id == name}
+
+
+def test_working_unpacks_exactly_what_simulate_line_returns():
+    """The producer's width is READ off its own `return`, never re-spelled here — a literal 6 would be
+    a second copy of the contract and would drift the same way the caller's 7 did."""
+    produced = _tuple_return_widths(LeafValueMixin._simulate_line)
+    consumed = _unpack_widths(_working, "sim")
+    # Positive control: the probe is AST-shaped, so a renamed local or a refactored `return` would
+    # leave it matching nothing and reporting agreement between two empty sets.
+    assert produced and consumed, "the AST probe matched nothing — the probe is broken, not the code"
+    assert produced == consumed, f"_simulate_line returns {produced}, _working unpacks {consumed}"
+
+
+def test_the_instrument_diagnoses_real_corpus_frames_end_to_end():
+    """The smoke the arity bug walked past: every other test here feeds `render` a hand-built row, so
+    nothing exercised a pilot, and the tool crashed on its first line of real work."""
+    keyed = dict(keyed_corrections(None))
+    assert keyed, "the committed corrections store is empty — this test has nothing to run on"
+    # A WINDOW, not a key: most corpus frames reseed offline but some cannot, and any single key can
+    # be voided out of the store, so the claim is that the leg works — not that a given frame scores.
+    window = list(keyed)[:12]
+    rows = diagnose(window, corrections=keyed)
+    scored = [r for r in rows if "deltas" in r]
+    assert scored, f"no frame of {len(window)} scored: {sorted({r.get('error') for r in rows})}"
+    assert any(abs(v) > 0.0 for r in scored for v in r["deltas"].values()), (
+        "every family flat on every frame — `state_value`'s `working` dict never populated")
+    report = render(rows, issue="#330", source="decider")
+    keyed_cell = window[0].replace("|", "\\|")     # a frame key is pipe-separated; `render` escapes it
+    assert f"`{keyed_cell}`" in report, "the scored rows reach the Markdown"
