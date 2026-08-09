@@ -84,7 +84,12 @@ class PlannerMixin(
         else:
             minimum = select.get("minCount", 0)
             maximum = select.get("maxCount", 0)
-            eligible = context in CARD_CONTINUATION_CONTEXTS and 0 <= minimum <= 1 <= maximum
+            # A continuation can commit exactly one card.  A multi-pick menu (Turbo Flare's
+            # 0--3 Basic Energy selection, for example) must fall through to the multi-pick
+            # selector; a composed TurnLine only carries one next-step index.
+            eligible = (context in CARD_CONTINUATION_CONTEXTS
+                        and 0 <= minimum <= 1
+                        and maximum == 1)
         if not eligible:
             return None
         if self._planning:                            # mid engine-sim: closed-form only, never nest search

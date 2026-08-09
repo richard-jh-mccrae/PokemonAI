@@ -21,7 +21,9 @@ from train.tune import _build_pilot
 
 _CONTEXTS = frozenset({1, 2, 3, 4, 7, 15, 17, 21, 22})
 _NATIVE_CONTEXTS = _CONTEXTS - {2}  # Native cannot restore the opponent Active's play-age bit.
-_RUNTIME_CONTEXTS = frozenset({3, 4, 7, 15, 17, 21, 22})
+# Context 22 can be a multi-pick deck-energy selection (Turbo Flare: up to three), so the
+# planner must leave it to the multi-pick selector rather than compose one continuation step.
+_RUNTIME_CONTEXTS = frozenset({3, 4, 7, 15, 17, 21})
 
 
 @dataclass
@@ -134,7 +136,7 @@ def test_composer_prices_only_the_eight_seeded_card_continuations(pilot):
     assert search.begun == 0
 
 
-def test_planner_arms_the_composer_for_the_seven_runtime_card_contexts(pilot):
+def test_planner_arms_the_composer_for_the_six_single_pick_runtime_card_contexts(pilot):
     """The planner reaches the single composer route for every reconstructible continuation."""
 
     records = {record["context"]: record for record in load_records()}
@@ -172,7 +174,7 @@ def test_planner_arms_the_composer_for_the_seven_runtime_card_contexts(pilot):
     assert pilot._search_api.begun == 0
 
 
-def test_runtime_built_pilot_uses_live_cg_api_for_all_seeded_card_menus(pilot, monkeypatch):
+def test_runtime_built_pilot_uses_live_cg_api_for_single_pick_seeded_card_menus(pilot, monkeypatch):
     """Every reconstructible packaged route resolves ``cg.api`` without private injection."""
     records = {record["context"]: record for record in load_records()}
     for context in sorted(_RUNTIME_CONTEXTS):
@@ -193,8 +195,26 @@ def test_runtime_built_pilot_uses_live_cg_api_for_all_seeded_card_menus(pilot, m
         assert search.begun == search.ended > 0, context
 
 
+def test_turbo_flare_multi_pick_bypasses_the_single_step_composer(pilot, monkeypatch):
+    """Turbo Flare's 0--3 Energy search must reach the normal multi-pick selector intact."""
+    record = next(record for record in load_records() if record["context"] == 22)
+    binding = bind_record(record, trace_root=FIXTURES)
+    assert binding.reason is None
+    search = _FreshSearch(binding.successor["obs"], range(len(record["seed_observation"]["select"]["option"])),
+                          terminal=True)
+    monkeypatch.setitem(sys.modules, "cg", types.SimpleNamespace(api=search))
+    runtime_pilot = build_pilot(pilot.strategy, pilot.deck, stats=pilot.stats,
+                                scout=None, briefs=None)
+
+    decision = runtime_pilot.explain(copy.deepcopy(record["seed_observation"]))
+
+    assert decision.planned is None
+    assert decision.chosen == [0, 1, 2]
+    assert search.begun == 0
+
+
 @needs_live_board_search
-def test_runtime_built_pilot_commits_all_seven_native_successors(pilot):
+def test_runtime_built_pilot_commits_all_single_pick_native_successors(pilot):
     """The packaged constructor and real native seam meet, not merely two separately green proofs."""
     records = {record["context"]: record for record in load_records()}
     for context in sorted(_RUNTIME_CONTEXTS):
@@ -229,9 +249,9 @@ def test_mega_starmie_promotion_corrections_are_priced_and_cannot_reuse_a_pre_ko
         assert pilot._turn_plan[0] == pilot._plan_fingerprint(obs, select)
 
 
-@pytest.mark.parametrize(("minimum", "maximum"), ((2, 2), (0, 0), (-1, 1)))
+@pytest.mark.parametrize(("minimum", "maximum"), ((2, 2), (0, 3), (0, 0), (-1, 1)))
 def test_planner_leaves_non_single_pick_seeded_continuations_out_of_scope(pilot, minimum, maximum):
-    """Issue #387, not the follow-up composer route, owns invalid or required multi-picks."""
+    """Issue #387, not the follow-up composer route, owns invalid, optional, and required multi-picks."""
 
     record = next(record for record in load_records() if record["context"] == 7)
     binding = bind_record(record, trace_root=FIXTURES)
