@@ -21,12 +21,23 @@ REPO = Path(__file__).resolve().parents[1]
 _REPLAYABLE = frozenset({"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"})
 
 
+def committed_keyed_corrections() -> list:
+    """The checked-in human corpus, excluding regenerable machine-label output.
+
+    The operational reader intentionally includes ``machine/`` so label output can feed the
+    training tools. Corpus assertions, however, describe a versioned baseline and must not change
+    when an earlier test (or a developer's local label run) writes that ignored directory.
+    """
+    return keyed_corrections(REPO / "data" / "corrections",
+                             predicate=lambda c: c.provenance != "machine")
+
+
 @lru_cache(maxsize=1)
 def corpus_index() -> dict:
     """`{(episode_id, frame): Correction}`, cached for the session. **The dict is shared and must be
     treated as read-only** — a caller that mutates it corrupts every later test in the session."""
     return {(str(c.episode_id), (c.decision or {}).get("frame")): c
-            for _key, c in keyed_corrections(REPO / "data" / "corrections")
+            for _key, c in committed_keyed_corrections()
             if c.obs and c.agent}
 
 

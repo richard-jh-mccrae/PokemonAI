@@ -52,8 +52,8 @@ def test_the_re_ruled_record_agrees_with_its_own_rationale():
 def test_the_mandatory_chosen_equals_correct_population_is_measured_not_assumed():
     """The census that stops this framing drifting into "every `chosen == correct` record is broken",
     which the shipped mandatory-select ruling forbids. The SPLIT is asserted rather than the total."""
-    from train.gates import keyed_corrections
-    recs = keyed_corrections()
+    from corpus_helpers import committed_keyed_corrections
+    recs = committed_keyed_corrections()
     same = [(k, c) for k, c in recs
             if c.chosen is not None and c.correct is not None
             and sorted(c.chosen) == sorted(c.correct)]

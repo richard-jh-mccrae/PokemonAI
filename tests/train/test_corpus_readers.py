@@ -14,6 +14,7 @@ mention from a read trains people to widen the exemption, which is how an allowl
 """
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -154,3 +155,21 @@ def test_the_shared_test_helper_is_the_one_door_for_tests():
     routing a new corpus test must stay easier than re-inventing a walk."""
     text = (REPO / "tests" / "corpus_helpers.py").read_text(encoding="utf-8")
     assert "keyed_corrections" in text and not _reaches_the_log(text)
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_static_corpus_reads_exclude_regenerable_machine_labels(monkeypatch):
+    """A label run may create ignored ``machine/`` output during pytest; static census pins may not
+    inherit it, while the operational reader deliberately still can."""
+    import corpus_helpers
+
+    human = SimpleNamespace(provenance="human")
+    machine = SimpleNamespace(provenance="machine")
+
+    def fake_reader(_store, *, predicate=None):
+        return [("human", human), ("machine", machine)] if predicate is None else [
+            (key, correction) for key, correction in (("human", human), ("machine", machine))
+            if predicate(correction)]
+
+    monkeypatch.setattr(corpus_helpers, "keyed_corrections", fake_reader)
+    assert corpus_helpers.committed_keyed_corrections() == [("human", human)]

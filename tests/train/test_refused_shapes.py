@@ -169,8 +169,8 @@ def test_the_committed_corpus_holds_no_refused_shapes():
 def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
     """The control the census is worthless without — an empty corpus or an always-`[]` predicate would
     also satisfy "0 refused shapes". The count is a ruling record: re-take it, never loosen it."""
-    from train.gates import keyed_corrections
-    recs = keyed_corrections(REPO / "data" / "corrections")
+    from corpus_helpers import committed_keyed_corrections
+    recs = committed_keyed_corrections()
     assert len(recs) == 375
     assert sum(1 for _k, c in recs if not refuses(c)) == 375
     the_record = next(c for k, c in recs if k == THE_RECORD)
@@ -184,8 +184,8 @@ def test_the_corpus_now_holds_no_match_scope_records_at_all():
     """`scope="match"` is theoretical vocabulary today, not dead code; a future tag can still use it."""
     from collections import Counter
 
-    from train.gates import keyed_corrections
-    recs = keyed_corrections(REPO / "data" / "corrections")
+    from corpus_helpers import committed_keyed_corrections
+    recs = committed_keyed_corrections()
     assert Counter(c.scope for _k, c in recs) == {"decision": 357, "turn": 18}
 
 

@@ -94,8 +94,8 @@ def test_the_real_f3_record_is_the_case_this_exists_for():
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_corpus_shape_census_is_what_the_scope_guard_was_sized_against():
     """The measurement that produced the guard, asserted so it cannot rot silently."""
-    from train.gates import keyed_corrections
-    hits = [(k, c) for k, c in keyed_corrections()
+    from corpus_helpers import committed_keyed_corrections
+    hits = [(k, c) for k, c in committed_keyed_corrections()
             if c.obs and int(((c.obs.get("select") or {}).get("minCount") or 0)) == 0
             and sorted(c.chosen or []) == sorted(c.correct or [])]
     assert len(hits) == 3, [k for k, _c in hits]
@@ -108,8 +108,8 @@ def test_the_corpus_shape_census_is_what_the_scope_guard_was_sized_against():
 def test_the_decline_census_the_writer_relaxation_was_sized_against():
     """Issue #229's measurement. Read through the Corpus Reader, never raw JSONL: a record with no
     explicit `scope` key only defaults to `decision` inside `Correction.from_dict`."""
-    from train.gates import keyed_corrections
-    recs = keyed_corrections()
+    from corpus_helpers import committed_keyed_corrections
+    recs = committed_keyed_corrections()
     assert len(recs) == 375
 
     declines = [(k, c) for k, c in recs if c.correct == []]
@@ -212,9 +212,9 @@ def test_the_live_exposure_is_named_and_still_carried_by_the_committed_baseline(
 def test_neither_exposed_frame_is_a_leaf_frame_so_no_symmetric_fix_is_owed():
     """`is_leaf_frame` is a DISJUNCTION — a `turn_plan` record is a leaf frame at ANY context with an
     EMPTY `correct`, so "a repaired decline is not a leaf frame either" is false in general."""
-    from train.gates import keyed_corrections
+    from corpus_helpers import committed_keyed_corrections
     from train.leaf_lab import is_leaf_frame
-    recs = keyed_corrections()
+    recs = committed_keyed_corrections()
     hits = [(k, c) for k, c in recs if unstatable(c, c.obs)]
     assert len(hits) == 2
     for k, c in hits:

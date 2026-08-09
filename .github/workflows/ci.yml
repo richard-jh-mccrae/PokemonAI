@@ -288,8 +288,8 @@ jobs:
       # answer gets `@needs_live_board_search` or a module-level skip that says WHY (see
       # tests/conftest.py). That way "cgpy can't do this yet" is a claim in the diff someone signs
       # off, and it disappears on its own as parity grows.
-      # tests/parity already uses cgpy directly and runs in the native arm; repeating it here proves
-      # nothing. Only its cg.game alias contract is retained in this arm.
+      # Keep the same ordered target list as the native arm. A hand-expanded directory list changes
+      # pytest's collection order and can expose state leaks between otherwise independent suites.
       # `always()`, so a red backstop cannot hide this arm's result (it did on run 30303172709,
       # where the backstop failed and this step was skipped — two signals, one of them lost).
       # Still gating: `if:` controls whether a step RUNS, not whether it counts.
@@ -299,28 +299,7 @@ jobs:
           CG_ENGINE: py
           PYTEST_PATHS: ${{ steps.plan.outputs.paths }}
         run: |
-          TWIN_PATHS=()
-          INCLUDE_COMPAT=false
-          for path in $PYTEST_PATHS; do
-            if [ "$path" = "tests" ]; then
-              while IFS= read -r area; do TWIN_PATHS+=("$area"); done < <(
-                find tests -mindepth 1 -maxdepth 1 -type d \
-                  ! -name parity ! -name fixtures ! -name __pycache__ | sort
-              )
-              while IFS= read -r root_test; do TWIN_PATHS+=("$root_test"); done < <(
-                find tests -maxdepth 1 -type f -name 'test_*.py' | sort
-              )
-              INCLUDE_COMPAT=true
-            elif [ "$path" = "tests/parity" ]; then
-              INCLUDE_COMPAT=true
-            else
-              TWIN_PATHS+=("$path")
-            fi
-          done
-          if [ "$INCLUDE_COMPAT" = "true" ]; then
-            TWIN_PATHS+=(tests/parity/test_compat_game.py)
-          fi
-          python -m pytest "${TWIN_PATHS[@]}" -q -p no:cacheprovider --tb=line --durations=10
+          python -m pytest $PYTEST_PATHS -q -p no:cacheprovider --tb=line --durations=10
 
       # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
       # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
