@@ -108,9 +108,38 @@ def test_turn_plan_without_an_anchor_prescription_is_explicitly_ungraded():
 
 
 @pytest.mark.req("REQ-BLUNDER-0018")
+def test_completed_counterfactual_upgrades_the_plan_and_is_tied_to_the_anchor():
+    counterfactual = {
+        "schema": "counterfactual-turn/v1", "backend": "cgpy", "rng_seed": 0,
+        "status": "complete", "steps": [{"block": 0, "choice": [{"position": 1}]}],
+        "adjacent_relations": [], "randomness": [], "end_state_digest": "a" * 64,
+    }
+    corr = build_correction(_decision(), source="own", agent="mega_lucario", correct=[1],
+                            category="sequencing_error", rationale="turn plan", scope="turn",
+                            turn_plan={"intended_line": "draw before evolve",
+                                       "counterfactual": counterfactual})
+    assert corr.turn_plan["schema"] == "turn-sequence/v2"
+    assert corr.turn_plan["counterfactual"] == counterfactual
+
+    counterfactual["steps"][0]["choice"][0]["position"] = 0
+    with pytest.raises(ValueError, match="first step must equal correct"):
+        build_correction(_decision(), source="own", agent="mega_lucario", correct=[1],
+                         category="sequencing_error", rationale="turn plan", scope="turn",
+                         turn_plan={"intended_line": "draw", "counterfactual": counterfactual})
+
+    counterfactual["steps"][0]["choice"][0]["position"] = 1
+    counterfactual["end_state_digest"] = "z" * 64
+    with pytest.raises(ValueError, match="must be sha256"):
+        build_correction(_decision(), source="own", agent="mega_lucario", correct=[1],
+                         category="sequencing_error", rationale="turn plan", scope="turn",
+                         turn_plan={"intended_line": "draw", "counterfactual": counterfactual})
+
+
+@pytest.mark.req("REQ-BLUNDER-0018")
 def test_shell_html_exposes_the_turn_plan_fields():
     """The tagging shell renders the two turn-plan inputs and the derived leans-on-rule hint, so the
     human can record an ideal line and see which rule their pick currently fires — without typing it."""
     from train.blunder.shell import _SHELL_HTML
-    for token in ("intended_line", "expected_end_board", "turnplan", "firedhint", "turnGrade"):
+    for token in ("intended_line", "expected_end_board", "turnplan", "firedhint", "turnGrade",
+                  "cfstart", "/counterfactual/start"):
         assert token in _SHELL_HTML

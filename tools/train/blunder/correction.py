@@ -30,6 +30,7 @@ SCOPES = ("decision", "turn")                    # what the Correction is *about
 CRITICAL_MARKER = "CRITICAL"                     # uppercase token in rationale = must-fix-first
 _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
 TURN_PLAN_SCHEMA = "turn-sequence/v1"
+COUNTERFACTUAL_TURN_SCHEMA = "counterfactual-turn/v1"
 
 
 def is_critical(rationale: str | None) -> bool:
@@ -74,6 +75,33 @@ def _option_reference(decision: Decision, position: int) -> dict:
             "equivalence_fingerprint": option_fingerprint(option, decision.snapshot())}
 
 
+def _validated_counterfactual(value, correct: list[int]) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("schema") != COUNTERFACTUAL_TURN_SCHEMA:
+        raise ValueError(f"counterfactual must use {COUNTERFACTUAL_TURN_SCHEMA}")
+    if value.get("backend") != "cgpy" or value.get("status") != "complete":
+        raise ValueError("counterfactual must be a complete cgpy recording")
+    if (not isinstance(value.get("rng_seed"), int)
+            or isinstance(value.get("rng_seed"), bool)):
+        raise ValueError("counterfactual rng_seed must be an integer")
+    steps = value.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("counterfactual must contain recorded steps")
+    first = steps[0].get("choice") if isinstance(steps[0], dict) else None
+    positions = [row.get("position") for row in first or () if isinstance(row, dict)]
+    if set(positions) != set(correct):
+        raise ValueError("counterfactual first step must equal correct")
+    if not isinstance(value.get("adjacent_relations"), list):
+        raise ValueError("counterfactual adjacent_relations must be a list")
+    if not isinstance(value.get("randomness"), list):
+        raise ValueError("counterfactual randomness must be a list")
+    digest = value.get("end_state_digest")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ValueError("counterfactual end_state_digest must be sha256")
+    return deepcopy(value)
+
+
 def _structured_turn_plan(decision: Decision, *, scope: str, correct: list[int],
                           turn_plan: dict | None) -> dict | None:
     """Compile human prose plus the anchor's exact choices into the versioned turn-plan contract."""
@@ -99,9 +127,13 @@ def _structured_turn_plan(decision: Decision, *, scope: str, correct: list[int],
             "observed": [_option_reference(decision, position) for position in decision.chosen],
         }
         status = "mismatch"
-    return {"schema": TURN_PLAN_SCHEMA, "intended_line": intended,
-            "expected_end_board": end_board,
-            "grade": {"status": status, "first_divergence": first_divergence}}
+    counterfactual = _validated_counterfactual(turn_plan.get("counterfactual"), correct)
+    out = {"schema": "turn-sequence/v2" if counterfactual else TURN_PLAN_SCHEMA,
+           "intended_line": intended, "expected_end_board": end_board,
+           "grade": {"status": status, "first_divergence": first_divergence}}
+    if counterfactual:
+        out["counterfactual"] = counterfactual
+    return out
 
 
 @dataclass(frozen=True)
@@ -146,7 +178,7 @@ class Correction:
                                     # the turn number (turn scope).
     span: list[dict] | None = None  # the Decisions the Scope covers; turn scope carries per-Decision
                                     # obs + live_trace so it is re-drivable.
-    turn_plan: dict | None = None   # turn scope: versioned human evidence + exact anchor divergence.
+    turn_plan: dict | None = None   # turn scope: human evidence + anchor grade + optional cgpy proof.
 
     @property
     def is_critical(self) -> bool:

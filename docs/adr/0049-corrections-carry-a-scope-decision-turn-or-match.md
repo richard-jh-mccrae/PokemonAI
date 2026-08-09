@@ -134,3 +134,16 @@ Amendment, not that text, is authoritative on Scope's live vocabulary from 2026-
 **Not touched.** Category (orthogonal to Scope, per the original decision, unchanged). `turn` scope's
 entire contract — subject-keying, optional Anchor-indexed `correct`, Span shape, `retest_span`'s
 re-drive. `decision` scope, ADR-0111, ADR-0113 decisions 2 and 4 — all unaffected.
+
+## Amendment B — executable counterfactual turn proof
+
+The historical invariant above still forbids reusing later replay option indices. A completed
+`counterfactual-turn/v1` proof now supplies the missing sound representation: cgpy reconstructs the
+Anchor, executes the alternate choice, and records every newly generated menu by semantic card and
+target identity. The enclosing Correction upgrades to `turn-sequence/v2` only after the simulated
+line reaches the end of that turn.
+
+Adjacent Main actions commute only when cgpy executes both orders from the same fork, neither order
+consumes randomness, and their complete state digests agree. Random action orders remain
+`branch-dependent`; legal orders with different states remain `ordered`. This amends the old Tier-2
+deferral without weakening its ban on stale indices.

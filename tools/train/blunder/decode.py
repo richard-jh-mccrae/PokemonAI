@@ -74,9 +74,15 @@ def _mon_entry(current: dict, area: int | None, index: int | None,
     return None
 
 
-def _card_name(current: dict, area: int | None, index: int | None, player_index: int) -> str | None:
+def _card_name(current: dict, area: int | None, index: int | None, player_index: int,
+               select: dict | None = None) -> str | None:
     zone_key = _AREA.get(area)
     if zone_key is None or index is None:
+        return None
+    if zone_key == "deck" and isinstance(select, dict) and select.get("deck") is not None:
+        zone = select.get("deck") or []
+        if 0 <= index < len(zone) and isinstance(zone[index], dict):
+            return zone[index].get("name") or _known_card_name(zone[index].get("id"))
         return None
     if zone_key == "looking":
         zone = current.get("looking") or []
@@ -114,7 +120,7 @@ def _board_target(current: dict, area: int | None, index: int | None,
     return f"{owner}{name} ({' · '.join(bits)})"
 
 
-def option_label(option: dict, current: dict) -> str:
+def option_label(option: dict, current: dict, *, select: dict | None = None) -> str:
     """A readable label for one option, resolved against the full-info board."""
     kind = option.get("type")
     if isinstance(kind, int) and not isinstance(kind, bool):
@@ -125,10 +131,10 @@ def option_label(option: dict, current: dict) -> str:
     if kind == "End":
         return "End turn"
     if kind == "Play":                       # index is a hand position
-        name = _card_name(current, 2, option.get("index"), player_index)
+        name = _card_name(current, 2, option.get("index"), player_index, select)
         return f"Play {name}" if name else "Play"
     if kind == "Attach":
-        src = _card_name(current, option.get("area"), option.get("index"), player_index)
+        src = _card_name(current, option.get("area"), option.get("index"), player_index, select)
         tgt = _board_target(current, option.get("inPlayArea"), option.get("inPlayIndex"),
                             player_index, seat)
         if src and tgt:
@@ -137,7 +143,7 @@ def option_label(option: dict, current: dict) -> str:
             return f"Attach → {tgt}"
         return f"Attach {src}" if src else "Attach"
     if kind == "Evolve":
-        evo = _card_name(current, option.get("area"), option.get("index"), player_index)
+        evo = _card_name(current, option.get("area"), option.get("index"), player_index, select)
         tgt = _board_target(current, option.get("inPlayArea"), option.get("inPlayIndex"),
                             player_index, seat)
         if evo and tgt:
@@ -154,14 +160,14 @@ def option_label(option: dict, current: dict) -> str:
     if kind == "Card":
         tgt = _board_target(current, option.get("area"), option.get("index"), player_index, seat)
         return tgt or _card_name(current, option.get("area"), option.get("index"),
-                                 player_index) or "(card)"
+                                 player_index, select) or "(card)"
 
     # Evolve handled above; ToolCard / Energy / Ability / Retreat / Discard / ...: prefer
     # disambiguated board target, else card name, else bare action kind.
     tgt = _board_target(current, option.get("area"), option.get("index"), player_index, seat)
     if tgt:
         return f"{kind}: {tgt}"
-    name = _card_name(current, option.get("area"), option.get("index"), player_index)
+    name = _card_name(current, option.get("area"), option.get("index"), player_index, select)
     if name:
         return f"{kind}: {name}"
     return str(kind) if kind else "(option)"

@@ -69,6 +69,14 @@ prove later counterfactual steps after the anchor changes the board. A legacy pl
 remains prose-only. Route every case by the **generic `scope: turn`** rule above, then read the
 expected anchor's `opts[correct].fired` for retire-candidates.
 
+`turn-sequence/v2` adds `counterfactual.schema: counterfactual-turn/v1`. This is executable cgpy
+evidence, not prose. Read `steps[].block/choice[].selector`, `end_state_digest`, and
+`adjacent_relations`. `commutes` means both orders executed from one fork and reached the same full
+engine state; `ordered` names a legality or state difference; `branch-dependent` consumed randomness.
+Use `train.blunder.counterfactual.grade_counterfactual(ideal, candidate)` when a Composer candidate
+has been executed through the same recorder contract: `match/exact`, `match/equivalent-reorder`, or
+`mismatch` with the first semantic block. Never infer a full-line verdict from v1 or legacy prose.
+
 **Rule-retirement proposal (removal, not addition).** One per candidate rule R:
 `target_layer: rule-retirement`, `for: general` (or `deck:<deck>` if R is deck-scoped),
 `candidate_signal: n/a`, `verification_contract: seed-ladder`. `spec` = R's id + its charter (a rule

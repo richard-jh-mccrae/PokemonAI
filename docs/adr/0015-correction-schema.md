@@ -80,6 +80,18 @@ embeds the **Span** of Decisions it covers. The Tier-2 deferral above is upgrade
 a multi-frame counterfactual line cannot be option-indexed at all, because prescribing a different
 Anchor pick invalidates every later frame's `select.option`.
 
+## Amendment: executable counterfactual turns
+
+The Tier-2 deferral is now built for retained replays. `counterfactual.py` reconstructs the Anchor's
+full-information state in cgpy, executes the human's alternate first choice, and records each newly
+generated menu by semantic option identity. `turn-sequence/v2` embeds the completed proof and its
+end-state digest; raw later replay indices remain invalid and are never reused.
+
+Commutativity is empirical engine evidence: fork once, execute both adjacent action orders, and call
+them `commutes` only when both remain legal, consume no randomness, and produce the same complete
+engine state. The full-line grader compares end-state digests, so a proved reorder satisfies the
+ideal line while a genuinely different state reports its first semantic block divergence.
+
 ## Amendment ([ADR-0019](0019-submissions-are-traceable-and-tracked.md)): embed the live trace
 
 When the game's **Decision Telemetry** log (`episode-<id>-agent-<seat>-logs.json`) is available, the

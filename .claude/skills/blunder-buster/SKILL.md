@@ -146,8 +146,9 @@ them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + c
   `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
 - **Layer routing is load-bearing:** route ordinary decision and turn errors to
-  `composer-differencer` or `turn-sequencer`; read `turn_plan.schema: turn-sequence/v1` as a
-  deterministic anchor mismatch/ungraded record, never a Composer verdict; use `value-equation`
+  `composer-differencer` or `turn-sequencer`; read `turn-sequence/v1` as an anchor record and
+  `turn-sequence/v2.counterfactual` as an executable full-line proof, including commutativity and
+  first-divergence grading; use `value-equation`
   only when the emitted value-family working proves a bespoke equation, rather than transition or
   sequence coverage, decides the error.
   Lethal proof remains `lethal-solver`; posture-mismatch remains `matchup-brief`. **Never emit a
