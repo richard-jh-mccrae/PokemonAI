@@ -66,6 +66,17 @@ def _tied_first_steps(result, chosen, options, traces) -> list:
     return sorted(tied)
 
 
+def _unspent_burst_substitute(rows, chosen_index):
+    """Prefer a reusable Energy on the same body when Composer picked an evaporating burst."""
+    chosen = next((row for row in rows if row.get("i") == chosen_index), None)
+    if not chosen or not (chosen.get("burst") and chosen.get("evaporates")):
+        return None
+    alternatives = [row for row in rows
+                    if row.get("slot") == chosen.get("slot") and not row.get("burst")
+                    and row.get("tactical", 0.0) > chosen.get("tactical", 0.0)]
+    return max(alternatives, key=lambda row: (row["tactical"], -row["i"]))["i"] if alternatives else None
+
+
 class PlannerMixin(
     # base order IS ladder order, top rung first
     WinLineMixin, GoalLadderMixin, GambleMixin, KoClassMixin,
@@ -163,6 +174,30 @@ class PlannerMixin(
         coverage_gap = continuation and any(delta is None for delta in result.fanned)
         if coverage_gap or chosen is None or chosen.first_index is None or chosen.coverage_gap:
             return None
+        by_score = self._score_order(obs, options, traces)
+        ordered = self._finish_turn_last(obs, board, options, traces, by_score,
+                                         int((select or {}).get("maxCount") or 0), context)
+        informative = ordered[0] if ordered else None
+        info_card = getattr(traces[informative], "card_id", None) if informative is not None else None
+        info_tags = set(self.functions.tags(info_card) or ()) if self.functions and info_card else set()
+        if (informative is not None and informative != chosen.first_index
+                and options[informative].get("type") == _PLAY
+                and "dig" in info_tags):
+            self._composer_trace["information_first"] = {
+                "from": chosen.first_index, "to": informative,
+            }
+            return TurnLine(next_step=[informative], goal="information", value=chosen.score,
+                            rationale="collect information before committing a turn resource",
+                            ranked_by="information_first", kind="sequence")
+        attach_rows = (self._attach_working(obs, select, board, options) or {}).get("eq", ())
+        substitute = _unspent_burst_substitute(attach_rows, chosen.first_index)
+        if substitute is not None:
+            self._composer_trace["unspent_burst_substitute"] = {
+                "from": chosen.first_index, "to": substitute,
+            }
+            return TurnLine(next_step=[substitute], goal="attach_safety", value=chosen.score,
+                            rationale="keep reusable Energy when the burst cannot cash this turn",
+                            ranked_by="attach_safety", kind="sequence")
         tied = _tied_first_steps(result, chosen, options, traces)
         if tied:
             self._composer_trace["tied_first_steps"] = tied

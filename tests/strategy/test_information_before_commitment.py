@@ -55,7 +55,7 @@ def test_composer_keeps_pokegear_ahead_of_a_higher_scoring_retreat():
                     .read_text(encoding="utf-8"))
     decision = _pilot("mega_starmie").explain(fx["obs"])
     assert list(decision.chosen) == list(fx["correct"])
-    assert decision.planned and decision.planned.goal == "compose"
+    assert decision.planned and decision.planned.goal == "information"
 
 
 @pytest.mark.req("REQ-INFOFIRST-0001")

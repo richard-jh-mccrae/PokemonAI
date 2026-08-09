@@ -16,6 +16,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
+from common.strategy.planner import _unspent_burst_substitute
 from common import telemetry
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
@@ -33,6 +34,17 @@ RETREAT = 12    # OptionType.RETREAT
 WINCON = 900    # my Active attacker / win-condition (Mega Starmie ex shape)
 PREEVO = 800    # Staryu — Line base (evolves into WINCON), weak attacker alone
 OPENER = 850    # spent opener Basic (can't KO, no evolution) — retreat OUT of this
+
+
+def test_composer_replaces_an_unspent_burst_with_reusable_energy_on_the_same_body():
+    """A burst that cannot cash now must not beat reusable Energy on its own target."""
+    rows = [
+        {"i": 3, "slot": [4, 0], "burst": True, "evaporates": True, "tactical": -31.1},
+        {"i": 7, "slot": [4, 0], "burst": False, "tactical": 1.5},
+        {"i": 8, "slot": [5, 0], "burst": False, "tactical": 70.0},
+    ]
+    assert _unspent_burst_substitute(rows, 3) == 7
+    assert _unspent_burst_substitute(rows, 7) is None
 OPP = 678       # opponent's Active (1 prize)
 EXOPP = 679     # opponent's Active: a Pokémon ex (2 prizes)
 BENCHIE = 700   # opponent's benched body (1 prize, harmless)
