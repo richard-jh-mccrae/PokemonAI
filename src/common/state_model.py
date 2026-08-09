@@ -578,6 +578,11 @@ class MySide(_SideBase):
         return int(count) if count is not None else len(self.player.get("hand") or [])
 
     @lazy
+    def unknown_hand_count(self) -> int:
+        """Own hand cards whose identities the hypothetical snapshot no longer carries."""
+        return max(0, self.hand_size - len(self.hand_ids))
+
+    @lazy
     def hand_energy_counts(self) -> dict:
         """``{EnergyType: count}`` of Basic Energy in my hand — the manual attach's immediately
         playable supply, as a COUNT because "one {R} left" and "three" are different decisions."""
@@ -648,10 +653,14 @@ class MySide(_SideBase):
                    if not (isinstance(p, dict) and p.get("id") is not None))
 
     @lazy
+    def hidden_outside_deck(self) -> int:
+        """Uniformly unknown cards known not to be in deck: face-down prizes plus own hidden hand."""
+        return self.prizes_hidden + self.unknown_hand_count
+
+    @lazy
     def deck_count(self) -> int:
-        """Cards left in my deck. Pre-anchor this is the unseen pool minus the hidden prize slots;
-        anchored it is the unseen pool itself."""
-        return max(0, sum(self.unseen_counts.values()) - self.prizes_hidden)
+        """Cards left in my deck: unseen identities minus every hidden slot outside the deck."""
+        return max(0, sum(self.unseen_counts.values()) - self.hidden_outside_deck)
 
     @lazy
     def deck_energy_counts(self) -> dict:
@@ -662,7 +671,7 @@ class MySide(_SideBase):
             stat = self._combat._card_stat(cid)
             if stat is not None and stat.is_typed_basic_energy:
                 per_type[stat.energyType] += n
-        hidden, deck = self.prizes_hidden, self.deck_count
+        hidden, deck = self.hidden_outside_deck, self.deck_count
         return {t: count_triple(n, hidden, deck) for t, n in per_type.items()}
 
     @lazy

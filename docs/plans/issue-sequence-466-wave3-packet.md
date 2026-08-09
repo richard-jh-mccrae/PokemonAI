@@ -119,3 +119,22 @@ commands report them as unruled against the committed baselines.
 | `86090147\|0\|turn\|3` | decider | Issue #466 | `[4]` | `[3]` (human `[4]`) | Pre-existing on `origin/main`; developer baseline ruling. |
 | `86090164\|1\|decision\|40` | decider | Issue #466 | `[0]` | `[1]` (human `[0]`) | Pre-existing on `origin/main`; developer baseline ruling. |
 | `86091435\|0\|decision\|30` | decider | Issue #466 | `[0]` | `[1]` (human `[0]`) | Pre-existing on `origin/main`; developer baseline ruling. |
+
+## Issue #468 additions
+
+These nine rows are new in Issue #468. The newly structural Judge, Harlequin, Lillie's
+Determination, and Unfair Stamp routes make a previously refused draw option scorable. That changes
+the surrounding leaf ordering even when the draw is not the final first action. They require a
+developer ruling; the committed baselines remain untouched.
+
+| frame | gate | issue | old | new | recommendation |
+|---|---|---|---|---|---|
+| `81903490\|0\|decision\|74` | leaf | Issue #468 | OK (rank 1) | MISS (rank 2) | Harlequin is newly scorable; developer baseline ruling. |
+| `82522726\|1\|decision\|23` | leaf | Issue #468 | OK (rank 1) | MISS (rank 2) | Lillie's is newly scorable; developer baseline ruling. |
+| `82523164\|1\|decision\|11` | leaf | Issue #468 | OK (rank 1) | MISS (rank 3) | Lillie's is newly scorable; developer baseline ruling. |
+| `83053965\|1\|decision\|28` | leaf | Issue #468 | OK (rank 1) | MISS (rank 2) | Lillie's is newly scorable; developer baseline ruling. |
+| `83455356\|0\|decision\|11` | leaf | Issue #468 | OK (rank 1) | MISS (rank 2) | Lillie's is newly scorable; developer baseline ruling. |
+| `83665798\|1\|decision\|12` | leaf | Issue #468 | OK (rank 1) | MISS (rank 2) | Lillie's is newly scorable; developer baseline ruling. |
+| `83665798\|1\|decision\|12` | decider | Issue #468 | `[7]` | `[0]` (human `[7]`) | Draw routing changed the composed first action; developer baseline ruling. |
+| `85058574\|1\|decision\|16` | decider | Issue #468 | `[6]` | `[2]` (human `[6]`) | Judge/Unfair Stamp are newly scorable; developer baseline ruling. |
+| `85164605\|1\|decision\|64` | decider | Issue #468 | `[5]` | `[0]` (human `[5]`) | Lillie's now precedes the direct attack in composer value; developer baseline ruling. |

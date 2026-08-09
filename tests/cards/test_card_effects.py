@@ -290,6 +290,8 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     # doubling it, with the heads leg as the base and the tails leg as the replacement.
     assert eff.clauses(1223) == ({"kind": "draw", "amount": 5,                          # Harlequin
                                   "amount_if": {"condition": "coin_tails", "amount": 3},
+                                  "opponent_amount": 3,
+                                  "opponent_amount_if": {"condition": "coin_tails", "amount": 5},
                                   "rider": "shuffle_both_hands"},)
     assert eff.clauses(1237) == ({"kind": "draw", "amount": 6,                             # Lucian
                                   "amount_if": {"condition": "coin_tails", "amount": 3},
@@ -299,13 +301,15 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     # Judge gains the rider its own count never needed; Unfair Stamp is UNCHANGED — its own leg was
     # already exact, which is why it is in the issue's 14 for the opponent leg alone.
     assert eff.clauses(1213) == ({"kind": "draw", "amount": 4,                              # Judge
-                                  "rider": "shuffle_both_hands"},)
+                                  "opponent_amount": 4, "rider": "shuffle_both_hands"},)
     assert eff.clauses(1080) == ({"kind": "draw", "amount": 5,                     # Unfair Stamp
                                   "condition": "pokemon_ko_last_turn",
+                                  "opponent_amount": 2,
                                   "rider": "shuffle_both_hands"},)
     assert [eff.covers(c) for c in (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1213, 1216, 1223,
                                     1227)] == ["full"] * 11
-    for still_partial in (1080, 1237, 1239):
+    assert eff.covers(1080) == "full" and eff.clauses_cover(1080) is True
+    for still_partial in (1237, 1239):
         assert eff.covers(still_partial) == "partial", still_partial
         assert eff.clauses_cover(still_partial) is False, still_partial
     # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts for
@@ -315,6 +319,46 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert [c["cost"] for c in eff.clauses(1206)] == ["discard_hand"] * 3
     assert [eff.covers(c) for c in (1206, 1214)] == ["full", "full"]
     assert [c["cost"] for c in eff.clauses(1092)] == ["discard_3"] * 4               # the precedent
+
+
+@pytest.mark.parametrize("clause", [
+    {"kind": "draw", "amount": 4, "opponent_amount": 0},
+    {"kind": "draw", "amount": 4, "opponent_amount": 4, "opponent_amount_if": []},
+    {"kind": "draw", "amount": 4, "opponent_amount": 4,
+     "opponent_amount_if": {"condition": "coin_tails", "amount": 0}},
+    {"kind": "draw", "amount": 4,
+     "amount_if": {"condition": "coin_tails", "amount": 3},
+     "opponent_amount_if": {"condition": "coin_tails", "amount": 5}},
+    {"kind": "draw", "amount": 4, "opponent_amount": 4,
+     "opponent_amount_if": {"condition": "coin_tails", "amount": 5}},
+    {"kind": "draw", "amount": 4,
+     "amount_if": {"condition": "coin_heads", "amount": 3}, "opponent_amount": 4,
+     "opponent_amount_if": {"condition": "coin_tails", "amount": 5}},
+])
+def test_builder_rejects_malformed_opponent_draw_fields(clause):
+    from common.snapshot_coverage import opponent_draw_problems
+    payload = {"_covers": {"9999": {"covers": "full", "reason": "fixture"}},
+               "9999": [clause]}
+    assert opponent_draw_problems(payload)
+
+
+def test_effect_builder_refuses_to_write_malformed_opponent_draw_fields(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    overrides = tmp_path / "overrides.json"
+    overrides.write_text(json.dumps({
+        "9999": [{"kind": "draw", "amount": 4, "opponent_amount": 0}],
+        "_covers": {"9999": {"covers": "full", "reason": "fixture"}},
+    }), encoding="utf-8")
+    out = tmp_path / "effects.json"
+    result = subprocess.run([
+        sys.executable, str(Path(__file__).resolve().parents[2] / "tools" / "build_card_effects.py"),
+        "--limit", "0", "--fresh", "--overrides", str(overrides), "--out", str(out),
+    ], capture_output=True, text=True, encoding="utf-8")
+    assert result.returncode != 0
+    assert "opponent_amount must be a positive integer" in result.stdout
+    assert not out.exists()
 
 
 @pytest.mark.req("REQ-EFFECT-0004")

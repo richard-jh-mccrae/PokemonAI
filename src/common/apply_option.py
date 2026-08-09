@@ -355,6 +355,8 @@ class OutcomeClass:
     #: The resulting StateModel for this branch; `None` on a hand-built class.
     model: object | None = None
     fingerprint: tuple = ()
+    #: Closed-form value for information this branch's snapshot cannot hold (Issue #468).
+    scalar: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -381,7 +383,7 @@ class Expectation:
             raise ValueError(
                 "cannot order an Expectation with no enumerated classes — that is an un-enumerated "
                 "effect, and returning 0.0 would price it as a worthless one")
-        return max(float(score(c.model)) for c in self.classes)
+        return max(float(score(c.model)) + float(c.scalar) for c in self.classes)
 
     def expected(self, score: Callable[[object], float]) -> float:
         """The probability-weighted class score, renormalised over the enumerated mass."""
@@ -390,7 +392,8 @@ class Expectation:
             raise ValueError(
                 "cannot order an Expectation with no enumerated mass — that is an un-enumerated "
                 "effect, and returning 0.0 would price it as a worthless one")
-        return float(sum(c.probability * float(score(c.model)) for c in self.classes) / mass)
+        return float(sum(c.probability * (float(score(c.model)) + float(c.scalar))
+                         for c in self.classes) / mass)
 
     def ordering(self, score: Callable[[object], float]) -> float:
         """The value that orders this resolution: max for CHOSEN, expectation for DEALT."""

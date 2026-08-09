@@ -54,8 +54,8 @@
 "reason": "a top-4 dig taking any number of Supporters (`dig: 4`, `amount: all`); shuffling the rest back is the dig's own convention"
 },
 "1080": {
-"covers": "partial",
-"reason": "clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled"
+"covers": "full",
+"reason": "draws 5 after our previous-turn KO, shuffles both hands, and explicitly redraws the opponent to 2"
 },
 "1082": {
 "covers": "full",
@@ -536,6 +536,7 @@
 "kind": "draw",
 "amount": 5,
 "condition": "pokemon_ko_last_turn",
+"opponent_amount": 2,
 "rider": "shuffle_both_hands"
 }
 ],
@@ -1109,6 +1110,7 @@
 {
 "kind": "draw",
 "amount": 4,
+"opponent_amount": 4,
 "rider": "shuffle_both_hands"
 }
 ],
@@ -1189,6 +1191,11 @@
 "amount_if": {
 "condition": "coin_tails",
 "amount": 3
+},
+"opponent_amount": 3,
+"opponent_amount_if": {
+"condition": "coin_tails",
+"amount": 5
 },
 "rider": "shuffle_both_hands"
 }

@@ -54,18 +54,9 @@ _UNDECIDABLE_FETCH_FIELDS: dict[str, str] = {
 
 _HAMMER_COIN = {"kind": "coin", "effect": "discard_opp_energy", "amount": 1}
 
-# The draw-count oracle remains the source of arithmetic until Issue #468. Dispatch is structural:
-# these are exactly the three shapes the old card-id gate admitted, so adding a new oracle row cannot
-# silently widen runtime coverage.
-_CLOSED_REFRESH_SHAPES = (
-    {"kind": "draw", "amount": 4, "rider": "shuffle_both_hands"},
-    {"kind": "draw", "amount": 5,
-     "amount_if": {"condition": "coin_tails", "amount": 3},
-     "rider": "shuffle_both_hands"},
-    {"kind": "draw", "amount": 6,
-     "amount_if": {"condition": "exactly_6_prizes_remaining", "amount": 8},
-     "rider": "shuffle_own_hand_in"},
-)
+_SCALAR_DRAW_KEYS = frozenset({
+    "kind", "amount", "amount_if", "condition", "opponent_amount", "opponent_amount_if", "rider",
+})
 
 
 @dataclass(frozen=True)
@@ -205,7 +196,12 @@ def _spent_trainer(model, source: _Source):
     obs = getattr(model, "source_obs", None) or {}
     new_obs, current, players = board_delta.fork(obs)
     me = board_delta.fork_player(players, source.seat)
+    hand_count = int(me.get("handCount")) if me.get("handCount") is not None else len(
+        me.get("hand") or ())
     card = board_delta.take_from_hand(me, source.index, "closed-form play")
+    # ``take_from_hand`` normally resyncs to the visible list. A hypothetical blind draw may leave
+    # identities unknown, so preserve the authoritative count and spend exactly one source card.
+    me["handCount"] = max(0, hand_count - 1)
     me["discard"] = list(me.get("discard") or ()) + [card]
     if getattr(source.stat, "is_supporter", False):
         current["supporterPlayed"] = True
@@ -255,39 +251,66 @@ def _coin_expectation(model, source: _Source, _clause, *, score: Callable[[objec
                                 OutcomeClass(0.5, head, fingerprint)), resolution=DEALT)
 
 
-def _refresh_transition(model, source: _Source, _clause, *, score=None):
-    """A shuffle-refresh's known writes plus its hand-count EV; never enumerate a shuffled hand."""
-    from common.apply_option import ScalarTransition
+def _draw_transition(model, source: _Source, clause, *, score=None):
+    """Known scalar draw writes plus composition Worth; never sample a shuffled deck."""
+    from common.apply_option import DEALT, Expectation, OutcomeClass, ScalarTransition
+    from common.deck_value import deck_draw_worth
+    from common.state_value import worth_to_prizes
     from common.strategy import refresh
 
     card_id = source.card_id
+    problem = refresh.draw_shape_problem(clause)
+    if problem is not None:
+        _no(card_id, getattr(source.stat, "name", "?"), f"draw route refuses: {problem}")
+    if clause.get("condition") == "pokemon_ko_last_turn" and not model.my_pokemon_koed_last_turn:
+        _no(card_id, getattr(source.stat, "name", "?"),
+            "draw route condition `pokemon_ko_last_turn` does not hold")
     prizes = model.prize_race
-    branches = refresh.refresh_branches(card_id, prizes.my_prizes_remaining,
-                                        prizes.opp_prizes_remaining)
+    branches = refresh.draw_branches(clause, prizes.my_prizes_remaining,
+                                     prizes.opp_prizes_remaining,
+                                     my_hand_size=model.mine.hand_size)
     if branches is None:
         _no(card_id, getattr(source.stat, "name", "?"),
-            "the structural refresh route has no draw-count facts")
-    spent_obs, players = _spent_trainer(model, source)
+            "draw route has no decidable count branches")
+    spent_obs, _players = _spent_trainer(model, source)
     seat = source.seat
-    mine = board_delta.fork_player(players, seat)
-    mine["hand"] = []
-    mine["handCount"] = int(sum(my_draw for my_draw, _opp_draw in branches) / len(branches))
+    rider = clause.get("rider")
+    shuffled_own = rider in {"shuffle_own_hand_in", "shuffle_both_hands"}
+    own_available = model.mine.deck_count + (max(0, model.mine.hand_size - 1) if shuffled_own else 0)
     other = 1 - seat
-    theirs = board_delta.fork_player(players, other)
-    if refresh.opponent_shuffles(card_id):
-        draw = sum(opp_draw for _my_draw, opp_draw in branches) / len(branches)
-        hand_count = int(theirs.get("handCount") or 0)
-        theirs["handCount"] = int(draw)
-        if theirs.get("deckCount") is not None:
-            theirs["deckCount"] = int(theirs.get("deckCount") or 0) + hand_count - int(draw)
-    mine, _theirs = refresh.net_change(card_id, model.mine.hand_size, model.theirs.hand_size,
-                                       prizes.my_prizes_remaining, prizes.opp_prizes_remaining)
-    after = model.rebuilt(spent_obs, reuse_their_side=not refresh.opponent_shuffles(card_id))
-    return ScalarTransition(model=after, scalar=float(mine) / 120.0)
+    opponent_shuffles = rider == "shuffle_both_hands"
 
+    def transition(my_draw: int, opp_draw: int):
+        branch_obs, _current, players = board_delta.fork(spent_obs)
+        mine = board_delta.fork_player(players, seat)
+        actual_my = min(own_available, my_draw)
+        if shuffled_own:
+            mine["hand"] = []
+            mine["handCount"] = actual_my
+        else:
+            mine["handCount"] = int(mine.get("handCount") or 0) + actual_my
+        actual_opp = opp_draw
+        theirs = board_delta.fork_player(players, other)
+        if opponent_shuffles:
+            hand_count = int(theirs.get("handCount") or 0)
+            deck_count = int(theirs.get("deckCount") or 0)
+            actual_opp = min(deck_count + hand_count, opp_draw)
+            theirs["handCount"] = actual_opp
+            if theirs.get("deckCount") is not None:
+                theirs["deckCount"] = deck_count + hand_count - actual_opp
+        after = model.rebuilt(branch_obs, reuse_their_side=not opponent_shuffles)
+        scalar = worth_to_prizes(deck_draw_worth(model, actual_my))
+        return ScalarTransition(model=after, scalar=float(scalar)), actual_my, actual_opp
 
-def _accept_refresh(clause: Mapping) -> bool:
-    return any(dict(clause) == shape for shape in _CLOSED_REFRESH_SHAPES)
+    outcomes = tuple(transition(my_draw, opp_draw) for my_draw, opp_draw in branches)
+    if len(outcomes) == 1:
+        return outcomes[0][0]
+    probability = 1.0 / len(outcomes)
+    return Expectation(
+        classes=tuple(OutcomeClass(probability, result.model,
+                                   ("draw", branch, actual_my, actual_opp), result.scalar)
+                      for branch, (result, actual_my, actual_opp) in enumerate(outcomes)),
+        resolution=DEALT)
 
 
 # Ordered for deterministic diagnostics only. Acceptance still requires exactly one match.
@@ -297,9 +320,9 @@ CLOSED_FORM_ROUTES = (
         handled_keys=frozenset(_HAMMER_COIN),
         accepts=lambda clause: dict(clause) == _HAMMER_COIN, build=_coin_expectation),
     ClosedFormRoute(
-        name="refresh", option_kinds=frozenset({_PLAY}), clause_kind="draw",
-        handled_keys=frozenset({"kind", "amount", "amount_if", "rider"}),
-        accepts=_accept_refresh, build=_refresh_transition),
+        name="draw", option_kinds=frozenset({_PLAY}), clause_kind="draw",
+        handled_keys=_SCALAR_DRAW_KEYS,
+        accepts=lambda clause: clause.get("kind") == "draw", build=_draw_transition),
 )
 
 
@@ -364,7 +387,7 @@ def outcome_pool(model, clause: dict) -> dict:
 def _class_weight(model, delivered: tuple) -> float:
     """An AVAILABILITY weight (ADR-0029's hypergeometric split at the class's multiplicity), NOT a
     joint draw probability. Not normalised here — the caller normalises over the FULL class set."""
-    hidden, left = model.mine.prizes_hidden, model.mine.deck_count
+    hidden, left = model.mine.hidden_outside_deck, model.mine.deck_count
     unseen = model.mine.unseen_counts or {}
     weight = 1.0
     for cid, need in Counter(delivered).items():
@@ -571,7 +594,7 @@ def _dig_expectation(model, legs, pools: tuple, dig: int, *, class_of, score, ca
     union: dict = {}
     for pool in pools:
         union.update(pool)
-    left, hidden = int(model.mine.deck_count), int(model.mine.prizes_hidden)
+    left, hidden = int(model.mine.deck_count), int(model.mine.hidden_outside_deck)
     singles = {cid: class_of((cid,), 0.0) for cid in union}
     # ADR-0128's noise floor, then the id: this ranking IS the policy priced, so two processes reading
     # one board must reach the same one or they enumerate different distributions.

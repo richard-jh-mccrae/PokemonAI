@@ -54,7 +54,8 @@ WRITABLE: tuple[Zone, ...] = (
     Zone("my_deck_count", "cards left in my deck", HOMED, home="mine.deck_count"),
     Zone("their_deck_count", "cards left in their deck", HOMED, home="theirs.deck_count"),
     Zone("deck_odds", "the sound-emptiness and Deck-Content Odds reads over my deck (ADR-0029)",
-         HOMED, home="mine.unseen_counts,mine.visible_counts,mine.prizes_hidden"),
+         HOMED, home="mine.unseen_counts,mine.visible_counts,mine.prizes_hidden,"
+                     "mine.unknown_hand_count,mine.hidden_outside_deck"),
     Zone("my_prizes", "my prizes remaining", HOMED, home="mine.prizes_remaining"),
     Zone("their_prizes", "their prizes remaining", HOMED, home="theirs.prizes_remaining"),
     Zone("stadium", "the Stadium in play", HOMED, home="stadium"),
@@ -252,6 +253,9 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "amount_if": "{condition, amount|to_hand_size} — the magnitude that REPLACES the base one when "
                  "the board predicate holds (Issue #302; `amount_on_evolution`'s shape, generalised "
                  "to a named predicate rather than one hard-coded branch)",
+    "opponent_amount": "how many cards the opponent draws from a symmetric draw clause",
+    "opponent_amount_if": "{condition, amount} — the opponent magnitude replacing its base on "
+                          "the same branch as `amount_if`",
     "to_hand_size": "draw UNTIL the hand holds N — a refill, not a draw-N (Issue #302). Mutually "
                     "exclusive with `amount`: the count depends on the hand at resolution",
     # ── board-scaled magnitudes: TWO keys, not one — reading either as the other is wrong by
@@ -585,6 +589,41 @@ def covers_problems(payload: Mapping) -> list[str]:
     return problems
 
 
+def opponent_draw_problems(payload: Mapping) -> list[str]:
+    """Schema errors in Issue #468's symmetric draw magnitudes. Empty is the build contract."""
+    problems: list[str] = []
+
+    def positive_int(value) -> bool:
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    for cid, clauses in sorted(clause_lists(payload).items()):
+        for index, clause in enumerate(clauses):
+            if clause.get("kind") != "draw":
+                continue
+            base = clause.get("opponent_amount")
+            branch = clause.get("opponent_amount_if")
+            where = f"card {cid} draw clause {index}"
+            if base is not None and not positive_int(base):
+                problems.append(f"{where}: opponent_amount must be a positive integer")
+            if branch is None:
+                continue
+            if not isinstance(branch, Mapping):
+                problems.append(f"{where}: opponent_amount_if must be a condition map")
+                continue
+            if set(branch) != {"condition", "amount"} or not str(
+                    branch.get("condition") or "").strip() or not positive_int(branch.get("amount")):
+                problems.append(f"{where}: opponent_amount_if must contain one named condition and "
+                                "one positive integer amount")
+            if base is None:
+                problems.append(f"{where}: opponent_amount_if requires opponent_amount")
+            own = clause.get("amount_if")
+            if not isinstance(own, Mapping):
+                problems.append(f"{where}: opponent_amount_if requires amount_if for its shared branch")
+            elif own.get("condition") != branch.get("condition"):
+                problems.append(f"{where}: opponent_amount_if and amount_if conditions must match")
+    return problems
+
+
 def cost_card_problems(payload: Mapping) -> list[str]:
     """Every way the compendium, :data:`COST_CARDS` and :data:`CLAUSE_WRITES` disagree about the cost
     vocabulary. A stale `COST_CARDS` entry for a value no card carries is a declared refusal, not a bug."""
@@ -688,7 +727,7 @@ __all__: Sequence[str] = (
     "is_card_key", "clause_lists", "covers_table", "clause_values", "clause_vocabulary",
     "clause_keys", "clause_selectors",
     "clauses_cover", "partial_clause_cards",
-    "cost_card_problems", "choice_relation_problems",
+    "cost_card_problems", "choice_relation_problems", "opponent_draw_problems",
     "covers_problems", "validate", "homes", "unhomed",
     "undeclared_clauses", "undeclared_clause_keys", "undeclared_selector_values", "unknown_zones",
     "clauses_writing_unhomed",

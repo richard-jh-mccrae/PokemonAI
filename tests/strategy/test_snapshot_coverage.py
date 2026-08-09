@@ -227,6 +227,11 @@ def test_the_two_refresh_riders_declare_exactly_the_hands_they_move():
     assert not (own & {"their_hand_size", "their_deck_count"})
     assert both == sc.CLAUSE_WRITES["shuffle_both_hands"]
     assert both == own | {"their_hand_size", "their_deck_count"}
+
+
+def test_draw_clauses_declare_both_opponent_magnitude_parameters():
+    assert "opponent_amount" in sc.CLAUSE_PARAMETERS
+    assert "opponent_amount_if" in sc.CLAUSE_PARAMETERS
     assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= sc.NONDETERMINISTIC_CLAUSES
     # Declared, and actually USED — a write-set for a rider no card carries would be untested prose.
     assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= set(sc.clause_vocabulary(_compendium()))
@@ -649,7 +654,7 @@ def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
     """The owed list is generated from the artifact; every listed verdict names its missing leg."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert len(partial) == 14
+    assert len(partial) == 13
     assert 1237 in partial and "coin" in partial[1237].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
