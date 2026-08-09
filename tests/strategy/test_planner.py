@@ -16,7 +16,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
-from common.strategy.planner import _unspent_burst_substitute
+from common.strategy.planner import _setup_before_nonko_attack, _unspent_burst_substitute
 from common import telemetry
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
@@ -45,6 +45,14 @@ def test_composer_replaces_an_unspent_burst_with_reusable_energy_on_the_same_bod
     ]
     assert _unspent_burst_substitute(rows, 3) == 7
     assert _unspent_burst_substitute(rows, 7) is None
+
+
+def test_composer_banks_the_best_productive_energy_before_its_nonko_attack():
+    options = [opt(ATTACH), attack_opt(JETTING), opt(ATTACH)]
+    traces = [type("Trace", (), {"tactical": 4.0})(), type("Trace", (), {"tactical": 1000.9})(),
+              type("Trace", (), {"tactical": 7.0})()]
+    assert _setup_before_nonko_attack(options, traces, 1) == 2
+    assert _setup_before_nonko_attack(options, traces, 0) is None
 OPP = 678       # opponent's Active (1 prize)
 EXOPP = 679     # opponent's Active: a Pokémon ex (2 prizes)
 BENCHIE = 700   # opponent's benched body (1 prize, harmless)

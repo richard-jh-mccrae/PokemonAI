@@ -77,6 +77,16 @@ def _unspent_burst_substitute(rows, chosen_index):
     return max(alternatives, key=lambda row: (row["tactical"], -row["i"]))["i"] if alternatives else None
 
 
+def _setup_before_nonko_attack(options, traces, chosen_index):
+    """Bank the highest-value manual Energy before a Composer-only non-KO attack."""
+    if not (isinstance(chosen_index, int) and 0 <= chosen_index < len(options)
+            and options[chosen_index].get("type") == _ATTACK):
+        return None
+    candidates = [i for i, option in enumerate(options)
+                  if option.get("type") == _ATTACH and getattr(traces[i], "tactical", 0.0) > 0.0]
+    return max(candidates, key=lambda i: (traces[i].tactical, -i)) if candidates else None
+
+
 class PlannerMixin(
     # base order IS ladder order, top rung first
     WinLineMixin, GoalLadderMixin, GambleMixin, KoClassMixin,
@@ -189,6 +199,12 @@ class PlannerMixin(
             return TurnLine(next_step=[informative], goal="information", value=chosen.score,
                             rationale="collect information before committing a turn resource",
                             ranked_by="information_first", kind="sequence")
+        setup = _setup_before_nonko_attack(options, traces, chosen.first_index)
+        if setup is not None:
+            self._composer_trace["setup_before_attack"] = {"from": chosen.first_index, "to": setup}
+            return TurnLine(next_step=[setup], goal="setup_before_attack", value=chosen.score,
+                            rationale="bank productive Energy before a non-KO attack",
+                            ranked_by="setup_before_attack", kind="sequence")
         attach_rows = (self._attach_working(obs, select, board, options) or {}).get("eq", ())
         substitute = _unspent_burst_substitute(attach_rows, chosen.first_index)
         if substitute is not None:
