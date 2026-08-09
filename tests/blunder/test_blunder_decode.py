@@ -78,3 +78,29 @@ def test_evolve_label_shows_which_basic_is_targeted():
     }
     opt = {"type": "Evolve", "area": 2, "index": 0, "inPlayArea": 5, "inPlayIndex": 1}
     assert option_label(opt, current) == "Evolve Mega Starmie ex → Staryu (bench 2 · 60/60)"
+
+
+def test_engine_integer_option_types_render_like_their_named_equivalents():
+    """Corrections preserve the engine's integer enum; a report must not expose bare `9` / `13`."""
+    current = {
+        "yourIndex": 0,
+        "players": [{
+            "hand": [{"name": "Mega Starmie ex"}],
+            "bench": [{"name": "Staryu", "hp": 60, "maxHp": 60, "energyCards": []}],
+        }, {}],
+    }
+    option = {"type": 9, "area": 2, "index": 0, "inPlayArea": 5, "inPlayIndex": 0}
+    assert option_label(option, current) == "Evolve Mega Starmie ex → Staryu (bench 1 · 60/60)"
+
+
+def test_observation_card_ids_are_enriched_for_report_labels():
+    """The agent observation omits visible card names but the committed card table resolves them."""
+    current = {
+        "yourIndex": 0,
+        "players": [{
+            "hand": [{"id": 1031}],
+            "bench": [{"id": 1030, "hp": 60, "maxHp": 60, "energyCards": []}],
+        }, {}],
+    }
+    option = {"type": 9, "area": 2, "index": 0, "inPlayArea": 5, "inPlayIndex": 0}
+    assert option_label(option, current) == "Evolve Mega Starmie ex → Staryu (bench 1 · 60/60)"

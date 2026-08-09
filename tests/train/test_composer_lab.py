@@ -21,7 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from train.composer_lab import ACCEPTANCE, COLUMN_CAVEAT, fixture_rulings, ideal_index
+from train.composer_lab import (ACCEPTANCE, COLUMN_CAVEAT, fixture_rulings, ideal_index,
+                                ideal_sequence_control, ideal_sequence_packets, ideal_sequences)
 
 REPO = Path(__file__).resolve().parents[2]
 F32_KEY = "85046350|0|decision|32"
@@ -93,6 +94,77 @@ def test_the_sequence_vs_verdict_split_DISAGREES_with_the_prose_total_by_one():
     assert sum(1 for k in kinds if k.startswith("sequence")) == 23
     assert sum(1 for k in kinds if k.startswith("verdict-only")) == 15
     assert ideal_index()["82227388|0|decision|50"]["kind"] == "sequence (pointer + its own ordering)"
+
+
+@pytest.mark.req("REQ-COMPOSERLAB-0005")
+def test_mega_starmie_sequence_packets_keep_the_ruling_verbatim_and_exercise_the_control():
+    """Issue #388 is a human comparison of the developer's exact prose against the composer's
+    sequence. The packet must not translate the ruling into a second, silently authoritative form."""
+    key = "81785223|0|decision|32"
+    report = {"rows": [{"key": key, "agent": "mega_starmie", "error": None,
+                        "steps": [4, 2], "step_labels": ["Evolve Mega Starmie ex", "Play Hilda"],
+                        "composer": 4, "ruled": [3], "score": 1.25, "margin": {"rank": 1},
+                        "ruled_margin": {"in_beam": False, "rank": 6}}]}
+
+    packets = ideal_sequence_packets(report, agent="mega_starmie")
+    packet = next(p for p in packets if p["frame"] == key)
+
+    text = (REPO / "data" / "leaf_lab" / "wave3-rulings.md").read_text(encoding="utf-8")
+    start = text.index(f"- `{key}` — ") + len(f"- `{key}` — ")
+    end = text.index("\n- `81785223|0|decision|44`", start)
+    assert packet["ruled_sequence"] == text[start:end + 1]
+    assert packet["composer_sequence"] == ["Evolve Mega Starmie ex", "Play Hilda"]
+    assert packet["comparison"] == "pending-human-review"
+    assert packet["ruled_margin"] == {"in_beam": False, "rank": 6}
+    assert packet["recommendation"] == "human sequence review: first composer step differs"
+    assert packet["first_step"] == "mismatch"
+    assert packet["beam_status"] == "pruned"
+    assert all(p["agent"] == "mega_starmie" for p in packets)
+
+    control = ideal_sequence_control(packets)
+    assert control["healthy"], "positive control silent: changed ruling text was not exposed"
+    assert control["difference"]["field"] == "composer_sequence"
+    assert "[DELIBERATELY PERTURBED]" in control["rendered"]
+
+
+@pytest.mark.req("REQ-COMPOSERLAB-0005")
+def test_mega_starmie_packet_population_is_every_indexed_full_sequence_not_a_verdict_or_other_deck():
+    """The Issue #291 index, not a fresh prose scan, defines the Mega Starmie acceptance population."""
+    rows = [{"key": key, "agent": meta["agent"], "error": None, "steps": [0],
+             "step_labels": ["one step"], "margin": None}
+            for key, meta in ideal_index().items()]
+
+    packets = ideal_sequence_packets({"rows": rows}, agent="mega_starmie")
+
+    assert len(packets) == 21
+    assert {p["frame"] for p in packets} == {
+        key for key, meta in ideal_index().items()
+        if meta["agent"] == "mega_starmie" and meta["kind"].startswith("sequence")
+    }
+    missing = next(p for p in packets if p["frame"] == "81906755|1|decision|9")
+    assert missing["state"] == "unavailable"
+    assert missing["comparison"] == "unavailable-missing-verbatim-ruling"
+
+
+@pytest.mark.req("REQ-COMPOSERLAB-0005")
+def test_ideal_sequence_text_preserves_the_developers_whitespace(tmp_path):
+    """Whitespace is part of the verbatim ruling; normalising it creates a new interpretation."""
+    rulings = tmp_path / "rulings.md"
+    rulings.write_text("- `frame|0|decision|1` — first  action\n  then second", encoding="utf-8")
+
+    assert ideal_sequences(rulings) == {"frame|0|decision|1": "first  action\n  then second"}
+
+
+@pytest.mark.req("REQ-COMPOSERLAB-0005")
+def test_unavailable_composition_is_not_reported_as_first_step_agreement():
+    report = {"rows": [{"key": "81785223|0|decision|32", "agent": "mega_starmie",
+                        "composer": None, "ruled": [4], "steps": [], "step_labels": [],
+                        "margin": None, "ruled_margin": None, "error": "Unmodellable"}]}
+
+    packet = ideal_sequence_packets(report, agent="mega_starmie")[0]
+
+    assert packet["first_step"] == "unavailable"
+    assert packet["recommendation"] == "composition unavailable; inspect the captured error"
 
 
 # ── the off-policy exposure (§S10.2, Issue #412) ─────────────────────────────────────────────────

@@ -19,9 +19,17 @@ _AREA = {
     6: "prize", 7: "stadium", 9: "tool", 12: "looking",
 }
 
+# Corrections preserve integer ``OptionType`` values; direct callers sometimes use names. Normalise here.
+_OPTION_TYPE = {
+    0: "Number", 1: "Yes", 2: "No", 3: "Card", 4: "ToolCard", 5: "EnergyCard",
+    6: "Energy", 7: "Play", 8: "Attach", 9: "Evolve", 10: "Ability", 11: "Discard",
+    12: "Retreat", 13: "Attack", 14: "End", 15: "Skill", 16: "SpecialCondition",
+}
+
 # Lazily resolved so a label-only caller never loads the native engine until it tags an Attack;
 # degrades to "Attack #<id>" when the engine is unavailable.
 _ATTACK_NAMES: dict[int, str] | None = None
+_CARD_NAMES: dict[int, str] | None = None
 
 
 def _attack_name(attack_id: int | None) -> str | None:
@@ -35,6 +43,20 @@ def _attack_name(attack_id: int | None) -> str | None:
         except Exception:
             _ATTACK_NAMES = {}
     return _ATTACK_NAMES.get(attack_id)
+
+
+def _known_card_name(card_id: int | None) -> str | None:
+    """Resolve an Observation's visible card id when its compact form omits ``name``."""
+    global _CARD_NAMES
+    if card_id is None:
+        return None
+    if _CARD_NAMES is None:
+        try:
+            from cgpy.cards import CardDB
+            _CARD_NAMES = {cid: stat.name for cid, stat in CardDB.load().cards.items()}
+        except Exception:
+            _CARD_NAMES = {}
+    return _CARD_NAMES.get(card_id)
 
 
 def _mon_entry(current: dict, area: int | None, index: int | None,
@@ -62,7 +84,9 @@ def _card_name(current: dict, area: int | None, index: int | None, player_index:
             return zone[index].get("name")
         return None
     entry = _mon_entry(current, area, index, player_index)
-    return entry.get("name") if entry else None
+    if entry is None:
+        return None
+    return entry.get("name") or _known_card_name(entry.get("id"))
 
 
 def _board_target(current: dict, area: int | None, index: int | None,
@@ -86,12 +110,15 @@ def _board_target(current: dict, area: int | None, index: int | None,
     if n_energy:
         bits.append(f"{n_energy}⚡")
     owner = "opp " if (seat is not None and player_index != seat) else ""
-    return f"{owner}{entry.get('name') or '?'} ({' · '.join(bits)})"
+    name = entry.get("name") or _known_card_name(entry.get("id")) or "?"
+    return f"{owner}{name} ({' · '.join(bits)})"
 
 
 def option_label(option: dict, current: dict) -> str:
     """A readable label for one option, resolved against the full-info board."""
     kind = option.get("type")
+    if isinstance(kind, int) and not isinstance(kind, bool):
+        kind = _OPTION_TYPE.get(kind, kind)
     seat = current.get("yourIndex", 0)
     player_index = option.get("playerIndex", seat)
 

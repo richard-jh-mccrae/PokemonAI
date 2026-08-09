@@ -290,12 +290,13 @@ follow-up-select to MAIN→MAIN is a generalisation nobody has ruled on. The led
 addresses follow-up frames (asserted by a test), so every MAIN row here reports as a bare candidate
 count. Silently dropping those frames would be conforming to an unruled premise.
 
-**It does not grade the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
+**It does not parse or gate the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
 developer prose whose own file says *"Do not tidy these"*; a sequence parsed into option indices has
-already been interpreted once. The lab prints the developer's line verbatim beside the composer's and
-a human reads them, while Issue #291 §3c's index is consumed for the `sequence` / `pointer` /
-`verdict-only` classification — 16 of the 41 name a single action and cannot falsify a *sequence*
-composer at all.
+already been interpreted once. Issue #388's `--mega-starmie-ideal-sequences` view consumes the
+Issue #291 §3c index, emits the 21 indexed Mega Starmie full-sequence rows as review packets, and keeps
+the developer's text verbatim beside rendered composer steps. A human compares them. Its deliberately
+perturbed-text positive control proves the packet exposes a mismatch; it is not an automated prose
+grader. Pointers and verdict-only rows stay outside this sequence population.
 
 Two readings it keeps deliberately apart, because collapsing them would report a pass it never
 measured: a first step that **earned** a scored top-k slot, versus one merely **admitted** — a
