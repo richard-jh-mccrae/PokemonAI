@@ -157,4 +157,5 @@ def test_cli_runs_a_real_agent_through_playability():
     assert "[PASS] playability" in out
     assert "OpenSpiel exception" not in out        # noisy kaggle_environments import muted
     assert "Successfully loaded OpenSpiel" not in out
+    assert "LiteLLM:WARNING" not in out            # optional model-cost metadata is irrelevant here
     assert "Logging error" not in out              # import doesn't break logging either
