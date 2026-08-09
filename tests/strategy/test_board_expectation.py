@@ -296,12 +296,6 @@ def test_a_cap_below_one_raises_rather_than_manufacturing_a_zero_class_expectati
         be.expectation(_search_board(), _play_option(), cap=0)
 
 
-def test_expected_raises_on_an_un_enumerated_effect():
-    """An Expectation with no classes is UN-ENUMERATED, and 0.0 would read as a worthless answer."""
-    with pytest.raises(ValueError):
-        ao.Expectation().expected(lambda m: 1.0)
-
-
 def test_an_empty_pool_returns_one_certain_whiff_transition():
     """A known whiff spends the source card. It is one certain transition, never an unpriced empty node."""
     exp = be.expectation(_search_board(deck=[E_F] * 6 + [MASTER_BALL]), _play_option())

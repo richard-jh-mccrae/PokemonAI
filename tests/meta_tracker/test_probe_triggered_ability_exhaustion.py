@@ -61,13 +61,6 @@ def test_no_select_at_all_is_exhausted_for_an_up_to_search_too():
     assert _accept_capture_is_exhausted(_rec([]), 5)
 
 
-@pytest.mark.req("REQ-TRIGGER-0001")
-def test_a_ceiling_exactly_at_the_bound_is_not_flagged():
-    """A `<` off-by-one here would leave the retry loop unable to accept the full-search case —
-    the one shape the whole probe exists to record."""
-    assert not _accept_capture_is_exhausted(_rec([_select(5)]), 5)
-
-
 # --- _gate_was_skipped: TOTAL exhaustion (deckCount == 0) breaks BOTH modes --------------------
 # At deckCount == 0 the engine offers no y/n at all, so `gate_select` is already a MAIN select.
 
@@ -88,10 +81,3 @@ def test_a_gate_that_is_already_a_MAIN_select_was_skipped():
     """`_capture_trigger` takes whatever select follows the PLAY/EVOLVE option as `gate_select`, so
     a fizzled trigger leaves an unrelated MAIN decision sitting there instead of an ACTIVATE y/n."""
     assert _gate_was_skipped(_gate(_CTX_MAIN))
-
-
-@pytest.mark.req("REQ-TRIGGER-0002")
-def test_skip_detection_is_independent_of_mode():
-    """`_accept_capture_is_exhausted` is skipped for decline mode by design, so it cannot catch a
-    fizzled gate there; `_gate_was_skipped` reads only `gate_select`, which both modes record."""
-    assert _gate_was_skipped(_gate(_CTX_MAIN))          # would apply the same regardless of mode

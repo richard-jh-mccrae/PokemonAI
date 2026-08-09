@@ -10,8 +10,8 @@
 
 # True global foundation. src/cg/** (the native engine) underlies nearly everything except
 # tools/meta_tracker, which only ever parses already-recorded replay JSON and never makes a
-# live engine call. Shared test infra + committed data stay foundation-level too: anything
-# here can break collection for the *whole* suite.
+# live engine call. Global test config + committed data stay foundation-level too: anything
+# here can break collection for the *whole* suite. Area helpers route to their importers below.
 full:
   - 'src/cg/**'
   - 'requirements.txt'
@@ -19,10 +19,6 @@ full:
   - 'pytest.ini'
   - '.github/**'
   - 'tests/conftest.py'
-  - 'tests/pilot_helpers.py'
-  - 'tests/scouting_helpers.py'
-  - 'tests/lethal_helpers.py'
-  - 'tests/seam_census_helpers.py'
   # Fixtures + committed data trigger the full suite EXCEPT the cgpy-only ones, which route
   # to the self-contained `parity` filter below (negation = "match all but these").
   - 'tests/fixtures/**'
@@ -58,15 +54,19 @@ common_agent_core:
 agents:
   - 'src/agents/**'
   - 'tests/agents/**'
+  - 'tests/pilot_helpers.py'
+  - 'tests/card_facts.py'
 arena:
   - 'tools/arena/**'
   - 'tests/arena/**'
+  - 'tests/pilot_helpers.py'
 # The two attack-override stores are named here because `common_agent_core` matches
 # `src/common/*.py` -- .py ONLY -- so a table-only diff reached the suite via the `any`
 # fail-safe rather than by design. Rationale in full: docs/ci.md, the `tools/sim/**` row.
 sim:
   - 'tools/sim/**'
   - 'tests/sim/**'
+  - 'tests/lethal_helpers.py'
   - 'src/common/attack_overrides.json'
   - 'src/common/attack_overrides.provenance.json'
 submit:
@@ -117,8 +117,17 @@ cards:
 scouting:
   - 'tools/build_scouting_artifact.py'
   - 'tests/scouting/**'
+  - 'tests/pilot_helpers.py'
+  - 'tests/scouting_helpers.py'
 strategy:
   - 'tests/strategy/**'
+  - 'tests/pilot_helpers.py'
+  - 'tests/scouting_helpers.py'
+  - 'tests/lethal_helpers.py'
+  - 'tests/seam_census_helpers.py'
+  - 'tests/card_facts.py'
+  - 'tests/engine_admissibility.py'
+  - 'tests/corpus_helpers.py'
   # The POC-A2 coverage census (Issue #269) is a tools/ script whose ONLY tests live in
   # tests/strategy (it measures common/apply_option + common/snapshot_coverage), so it is named
   # here rather than left to the `any` fail-safe. Its INPUTS are named too, and deliberately:
@@ -140,10 +149,15 @@ value:
   - 'tests/value/**'
 tuner:
   - 'tests/tuner/**'
+  - 'tests/pilot_helpers.py'
 blunder:
   - 'tests/blunder/**'
+  - 'tests/pilot_helpers.py'
+  - 'tests/corrections_helpers.py'
 train:
   - 'tests/train/**'
+  - 'tests/corrections_helpers.py'
+  - 'tests/corpus_helpers.py'
 label:
   - 'tests/label/**'
 
@@ -168,6 +182,7 @@ parity:
   - 'src/cgpy/**'
   - 'tests/parity/**'
   - 'tests/fixtures/parity/**'
+  - 'tests/cgpy_state_helpers.py'
   - 'data/engine/coverage.json'
   - 'src/common/apply_option.py'
   - 'src/common/apply_engine.py'

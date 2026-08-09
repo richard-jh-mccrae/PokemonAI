@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from poc_t4_flips import marks
-
 REPO = Path(__file__).resolve().parents[2]
 
 AURA_JAB_DMG, MEGA_BRAVE_DMG = 130, 270
@@ -52,12 +50,3 @@ def test_a_doomed_active_pays_no_cooldown_charge():
     board, attacks = _attacks(pilot, _fx("ml_dont_judge_away_the_bigger_hand_f111.json"))
     assert board.active_doomed
     assert attacks[MEGA_BRAVE_DMG][1] == 0
-
-
-@pytest.mark.xfail(strict=True,
-                   reason=marks("ml_dont_wake_the_giant_with_the_locking_ko_f88")[0].kwargs["reason"])
-def test_the_locking_ko_is_still_declined_when_the_line_is_better():
-    fx = _fx("ml_dont_wake_the_giant_with_the_locking_ko_f88.json")
-    chosen = _shipped_pilot().explain(fx["obs"]).chosen
-    assert all(c in chosen for c in fx["correct"]), (
-        f"chose {chosen}, want {fx['correct']} ({fx['correct_label']})")

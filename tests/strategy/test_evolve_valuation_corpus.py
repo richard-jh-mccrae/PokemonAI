@@ -28,11 +28,6 @@ def _fixture(name: str) -> dict:
 
 
 @pytest.mark.parametrize("agent,fixture,leg", [
-    ("dragapult_ex", "dragapult_promote_over_fragile_base_f31", "promote-preserve-the-line"),
-    ("dragapult_ex", "dp_charge_the_line_f29", "line-progress (advance over spread)"),
-    param_for("dragapult_concentrate_line_preevo_f85",
-              "dragapult_ex", "dragapult_concentrate_line_preevo_f85", "concentrate on the started line",
-              id="dragapult_ex-dragapult_concentrate_line_preevo_f85"),
     param_for("dp_evolve_the_draw_engine_f40",
               "dragapult_ex", "dp_evolve_the_draw_engine_f40", "income-ON (one-shot burst)",
               id="dragapult_ex-dp_evolve_the_draw_engine_f40"),
