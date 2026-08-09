@@ -1,9 +1,12 @@
 """Odds — pure own-deck math (the ADR-0065 glossary term): the chance of drawing or reaching something
 by a given draw window. No opinion about value (that is Worth, `card_worth.py`).
 
-Two families with OPPOSITE fail directions, and nothing here ever raises:
+Three families, and nothing here ever raises. The first two fail in OPPOSITE directions; the third is
+the first one's complement, so its 1.0 is the same refusal to endorse:
 
 * the draw-window hypergeometrics are ENDORSERS — bad input → 0.0, so a gamble never fires on garbage.
+* the window MISS (a dig's whiff, ADR-0133) is that same direction read the other way up — bad input
+  → 1.0, "the look found nothing", so a dig is priced at its empty-handed board rather than a hit.
 * the prize-split content estimate (ADR-0029) is a SUPPRESSOR — bad input → 1.0 ("assume present"), so
   a search is never stood down on garbage. It agrees with `deck_tracker`'s sound oracle at every
   extreme and only fills the uncertain middle that oracle declines to answer.
@@ -17,30 +20,23 @@ from math import comb
 
 def draw_hit_probability(copies, pool, draws) -> float:
     """P(≥1 of ``copies`` among ``draws`` from ``pool``) — exact hypergeometric (ADR-0039). Overdraws
-    clamp; bad input → 0.0, the ENDORSER direction (contrast ``p_contains``'s 1.0)."""
+    clamp; bad input → 0.0, the ENDORSER direction, which is the MISS's 1.0 read the other way up."""
+    return 1.0 - window_miss_probability(copies, pool, draws)
+
+
+def window_miss_probability(marked, pool, window) -> float:
+    """P(none of ``marked`` copies sit in a ``window``-card look at ``pool`` — a dig's whiff, and the
+    bracket its every outcome class differences from (ADR-0133). Bad input → 1.0: a bad look finds nothing."""
     try:
-        c, p, n = int(copies), int(pool), int(draws)
+        k, p, n = int(marked), int(pool), int(window)
     except Exception:
-        return 0.0
-    if c <= 0 or p <= 0:
-        return 0.0
+        return 1.0
     n = min(n, p)
-    if n <= 0:
-        return 0.0
-    if c >= p:
+    if n <= 0 or k <= 0:
         return 1.0
-    return 1.0 - comb(p - c, n) / comb(p, n)
-
-
-def _none_of(k, pool, n) -> float:
-    """P(none of ``k`` marked cards among ``n`` drawn from ``pool``) — the miss ratio both bracket terms
-    of the Stage-2 form are built from. Overdraws clamp."""
-    n = min(n, pool)
-    if n <= 0:
-        return 1.0
-    if pool - k < n:
+    if p - k < n:
         return 0.0
-    return comb(pool - k, n) / comb(pool, n)
+    return comb(p - k, n) / comb(p, n)
 
 
 def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
@@ -59,7 +55,8 @@ def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
     total = base
     pool_k = p
     drawn = min(n, p)
-    weight = _none_of(o, p, n) - _none_of(o + e, p, n)   # missed, but drew ≥1 usable engine
+    weight = (window_miss_probability(o, p, n)
+              - window_miss_probability(o + e, p, n))   # missed, but drew ≥1 usable engine
     for k, m in enumerate(ws):
         pool_k -= drawn
         if pool_k <= 0 or weight <= 0.0 or m <= 0:
@@ -68,7 +65,8 @@ def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
         e_left = e - (k + 1)                             # one engine consumed per activation
         if e_left <= 0:
             break
-        weight *= _none_of(o, pool_k, m) - _none_of(o + e_left, pool_k, m)
+        weight *= (window_miss_probability(o, pool_k, m)
+                   - window_miss_probability(o + e_left, pool_k, m))
         drawn = min(m, pool_k)
     return max(0.0, min(1.0, total))
 

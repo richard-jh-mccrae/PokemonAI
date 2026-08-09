@@ -40,17 +40,17 @@ _COMPOSER_GAP_K = 8           # cap on coverage-gap reasons in the `composer` te
 
 
 def _tied_first_steps(result, chosen) -> list:
-    """Menu indices whose best sequence ties ``chosen``'s score at `composer._SCORE_PLACES` — the
+    """Menu indices whose best sequence ties ``chosen``'s score at `apply_option.SCORE_PLACES` — the
     composer having NO OPINION about which action to take first, so the caller defers (ADR-0131)."""
-    from common.composer import _SCORE_PLACES
+    from common.apply_option import SCORE_PLACES
     candidates = getattr(result, "selection_candidates", ()) or getattr(result, "candidates", ())
     if not candidates:
         return []
-    key = round(chosen.score, _SCORE_PLACES)
+    key = round(chosen.score, SCORE_PLACES)
     mine = chosen.first_index
     tied = {c.first_index for c in candidates
             if c.first_index is not None and c.first_index != mine
-            and not c.coverage_gap and round(c.score, _SCORE_PLACES) == key}
+            and not c.coverage_gap and round(c.score, SCORE_PLACES) == key}
     return sorted(tied)
 
 

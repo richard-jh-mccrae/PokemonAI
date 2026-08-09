@@ -597,24 +597,29 @@ never replacing the sound gate. Own-deck only.
 _Avoid_: deck tracker / deck-emptiness oracle (that's the SOUND, certain-or-silent half — these two are
 deliberately distinct epistemics), Scout/Read (that's opponent-deck recognition)
 
-**Fetch Reach** / **Fetch Deadness**:
-The two **opposite** readings of one fetch clause (ADR-0073). **Reach** is the optimistic question —
-*"can this card get me card X back?"* — consumed by the card-worth closure's out-count
-([fetch_closure.py](fetch_closure.py) `reaccess_outs`), the recycler count, and the tutor-chain
-graph; it **rejects `dig` / `trigger` clauses**, because a 7-card dig is no guarantee. **Deadness**
-is the pessimistic one — *"is anything left in my deck for this card to find?"* — consumed by the
-play-side whiff veto (`dont-search-an-empty-deck`) and the fetcher deadline gate
-(`fetch_deploy_odds`); it **accepts** those clauses, because zero targets in deck means a dig
-provably whiffs. Reach also narrows a fetched body to the clause's `energy_type` colour where deadness
-does not, for the same reason. Both read the same clause row and the same sound deck facts; they differ
-only in which direction over-inclusion is safe. `fetch_target_matches(..., deadness=True)` is the single
-opt-out, and each reading carries its own memoised target set: `_search_deck_set` (reach) and
-`_fetch_deadness_set` (deadness, a **superset**). The two cannot be merged, because the reading is
-only safe under the consumer's quantifier — deadness asks `all(gone)`, where a wider set can only
-*suppress* a claim, while the reach set also feeds ENDORSERS asking `any(reachable)`, where a wider
-set would *fabricate* one.
-_Avoid_: "the fetch predicate" (singular — there is one function, two readings, and conflating them
-is the ADR-0073 defect), whiff (that's the deadness reading's *outcome*, not the reading)
+**Fetch Reach** / **Fetch Deadness** / **Fetch Window**:
+The **three** readings of one fetch clause (ADR-0073, ADR-0133), each safe only under its consumer's
+quantifier. **Reach** is the optimistic `any(reachable)` — *"can this card get me card X back?"* —
+consumed by the card-worth closure's out-count ([fetch_closure.py](fetch_closure.py) `reaccess_outs`),
+the recycler count, and the tutor-chain graph; it **rejects `dig` / `trigger` clauses**, because a
+7-card dig is no guarantee, blocks the `supporter` / `any` classes for the same reason, and narrows a
+fetched body to the clause's `energy_type` colour (PR #471). **Deadness** is the pessimistic
+`all(gone)` — *"is anything left in my deck for this card to find?"* — consumed by the play-side whiff
+veto (`dont-search-an-empty-deck`) and the fetcher deadline gate (`fetch_deploy_odds`); it **accepts**
+those clauses, because zero targets in deck means a dig provably whiffs, and never narrows by colour.
+**Window** is neither: it **enumerates and weights**, for the reveal node
+([board_expectation.py](board_expectation.py)), so it accepts a `dig` (it prices the miss instead of
+assuming it away), resolves `supporter` (an enumerator makes no claim to *reach* one), and — like
+reach — narrows by colour.
+`fetch_target_matches(..., reading=...)` is the single selector, and reach/deadness each carry their
+own memoised target set: `_search_deck_set` (reach) and `_fetch_deadness_set` (deadness, a
+**superset**). No two can be merged: a wider deadness set can only *suppress* a claim, while the reach
+set feeds ENDORSERS where a wider one would *fabricate* one. Each of window's two departures from
+reach is safe in only one OTHER direction, not both: resolving `supporter` would fabricate a reach
+claim if allowed there, and the colour narrowing would fabricate a deadness whiff if allowed there.
+_Avoid_: "the fetch predicate" (singular — there is one function, three readings, and conflating them
+is the ADR-0073 defect), whiff (that's the deadness reading's *outcome*, and the window reading's
+*class* — never the reading itself)
 
 **Attack Payoff**:
 What a body can actually **land on this board**, as one record: `AttackPayoff(attack_id, damage)`,

@@ -38,6 +38,15 @@ FETCH_DEADNESS_TARGETS = (FETCH_POKEMON_TARGETS | FETCH_TRAINER_TARGETS
 #: search — see :func:`fetch_is_unconditional`.
 _CONDITIONAL_FETCH_FIELDS = ("trigger", "dig", "condition", "name_family")
 
+#: The three READINGS of one clause row (ADR-0073, ADR-0133). Each is safe only under its consumer's
+#: quantifier: `any(reachable)` ENDORSES, `all(gone)` VETOES, and a window ENUMERATES and weights.
+REACH, DEADNESS, WINDOW = "reach", "deadness", "window"
+READINGS = frozenset({REACH, DEADNESS, WINDOW})
+
+#: Readings that narrow a fetched BODY to the clause's `energy_type` colour (PR #471, ADR-0133).
+#: DEADNESS can never join: narrowing its `all(gone)` conjunction fabricates a whiff (ADR-0073).
+_COLOUR_NARROWED_READINGS = frozenset({REACH, WINDOW})
+
 
 def fetch_is_unconditional(clause: dict) -> bool:
     """Is this FETCH clause the unconditional, decidable whole-deck search every REACH consumer assumes
@@ -45,7 +54,7 @@ def fetch_is_unconditional(clause: dict) -> bool:
     return not any(clause.get(f) for f in _CONDITIONAL_FETCH_FIELDS)
 
 
-def _pokemon_body_matches(clause: dict, stat, *, deadness: bool) -> bool:
+def _pokemon_body_matches(clause: dict, stat, reading: str) -> bool:
     """The per-BODY predicates every Pokémon target class shares. Applied UNIFORMLY, not per class:
     each is a property of the body fetched, so a per-class spelling fails OPEN on a new pairing."""
     if clause.get("no_rule_box") and getattr(stat, "is_ex_body", False):
@@ -53,21 +62,26 @@ def _pokemon_body_matches(clause: dict, stat, *, deadness: bool) -> bool:
     if clause.get("no_ability") and getattr(stat, "hasAbility", False):
         return False
     etype = clause.get("energy_type")
-    # Colour narrows REACH only: deadness asks `all(gone)`, which a NARROWER set satisfies too early
-    # and so fabricates a whiff (ADR-0073). Only bodies reach here, so 0 reads as {C}, not as a Trainer.
-    if etype is not None and not deadness and getattr(stat, "energyType", None) != etype:
+    # Which readings narrow is `_COLOUR_NARROWED_READINGS`'s answer. Only BODIES reach here, so a 0
+    # unambiguously means {C} rather than "not applicable" (ADR-0073 §3's caveat, now stale).
+    if (reading in _COLOUR_NARROWED_READINGS and etype is not None
+            and getattr(stat, "energyType", None) != etype):
         return False
     hp_max = clause.get("hp_max")
     return hp_max is None or getattr(stat, "hp", 0) <= hp_max
 
 
-def fetch_target_matches(clause: dict, stat, *, deadness: bool = False) -> bool:
-    """Does a card with ``stat`` match a FETCH ``clause``'s target class? ``deadness=True`` asks the
-    OPPOSITE question and drops the body-colour narrowing; the default is the safe reading."""
+def fetch_target_matches(clause: dict, stat, *, reading: str = REACH) -> bool:
+    """Does a card with ``stat`` match a FETCH ``clause``'s target class, under one of the three
+    :data:`REACH` / :data:`DEADNESS` / :data:`WINDOW` readings? The default is the safe one."""
     if stat is None:
         return False
-    if not deadness and not fetch_is_unconditional(clause):
+    # An unknown name would otherwise be a FOURTH reading — wider than all three, since every gate
+    # below is spelled against a named one. Falls back to the safe reading rather than raising.
+    reading = reading if reading in READINGS else REACH
+    if reading == REACH and not fetch_is_unconditional(clause):
         return False              # not an unconditional, decidable whole-deck search — never an edge
+    deadness = reading == DEADNESS
     target = clause.get("target")
     etype = clause.get("energy_type")
     if target == "any":
@@ -79,7 +93,9 @@ def fetch_target_matches(clause: dict, stat, *, deadness: bool = False) -> bool:
     if target == "energy":
         return stat.is_energy and (etype is None or getattr(stat, "energyType", None) == etype)
     if target == "supporter":
-        return deadness and bool(getattr(stat, "is_supporter", False))   # deadness-only, see above
+        # Blocked for REACH alone (ADR-0073): a dig-7 Pokégear must never CLAIM it fills a Supporter
+        # need. An enumerator makes no claim — it prices the miss — so WINDOW resolves the class.
+        return reading != REACH and bool(getattr(stat, "is_supporter", False))
     if target == "item":
         return bool(getattr(stat, "is_item", False))
     if target == "tool":
@@ -114,7 +130,7 @@ def fetch_target_matches(clause: dict, stat, *, deadness: bool = False) -> bool:
     elif target == "pokemon_ex":
         if not getattr(stat, "is_ex_body", False):
             return False
-    return _pokemon_body_matches(clause, stat, deadness=deadness)
+    return _pokemon_body_matches(clause, stat, reading)
 
 
 #: ``relation`` is ``"single"`` / ``"union"`` / ``"conjunction"``; ``cap`` is how many cards the whole

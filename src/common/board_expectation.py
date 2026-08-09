@@ -10,12 +10,13 @@ from __future__ import annotations
 from typing import Callable, NoReturn
 
 from collections import Counter
+from dataclasses import replace
 from itertools import product
+from math import comb
 
 from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
-from common.fetch_closure import (fetch_is_unconditional, fetch_target_matches,
-                                  multiset_classes, reveal_legs)
+from common.fetch_closure import WINDOW, fetch_target_matches, multiset_classes, reveal_legs
 from common.option_equivalence import AREA_BENCH, AREA_HAND, option_fingerprint
 from common.strategy.context import _PLAY
 
@@ -32,12 +33,23 @@ BRANCH_CAP = 12
 _HANDLED_FETCH_KEYS = frozenset({
     "kind", "target", "zone", "amount", "dest",
     "energy_type", "hp_max", "no_rule_box", "no_ability",
+    # How deep the look goes. `dig_from` is deliberately ABSENT beside it: the bottom-N is the same
+    # distribution, but nothing shipped needs it and an unhandled key is the fail-closed answer.
+    "dig",
     # how several revealing legs COMBINE — read by `fetch_closure.reveal_legs`, shared with the
     # CHOICE node.
     "choice",
     # `cost_required` needs no handling here: an unpayable cost already refuses as an illegal play.
     "cost", "cost_required",
 })
+
+#: The clause fields this seam cannot decide, each with its OWN reason — the refusal names only the
+#: ones that fired, so a test can tell which, and `dig` is absent because ADR-0133 prices it.
+_UNDECIDABLE_FETCH_FIELDS: dict[str, str] = {
+    "trigger": "fires off some other event than this play",
+    "condition": "reads board history the snapshot does not hold",
+    "name_family": "needs a pool index keyed by printed name",
+}
 
 _HAMMER_COIN = {"kind": "coin", "effect": "discard_opp_energy", "amount": 1}
 # The coverage exit names these complete cards. The draw-count oracle remains the source of their
@@ -90,11 +102,12 @@ def _check_clause(clause: dict, card_id, name) -> None:
             "never the JOINT distribution over which n cards arrived; single-card classes would be a "
             "conditional biased toward the highest-count cards, which is worse than the search "
             "case's honest lower bound")
-    if not fetch_is_unconditional(clause):
-        _no(card_id, name, "not the unconditional, decidable whole-deck search "
-                           "`fetch_closure.fetch_is_unconditional` defines — it carries a `trigger`, "
-                           "a `dig`, a `condition` or a `name_family`, none of which this seam can "
-                           "decide")
+    # NOT `fetch_is_unconditional`: that is an ENDORSER's question and this node enumerates. A `dig`
+    # is admitted because the window is PRICED (ADR-0133); the other three stay undecidable here.
+    undecidable = [f for f in _UNDECIDABLE_FETCH_FIELDS if clause.get(f)]
+    if undecidable:
+        _no(card_id, name, "this seam cannot decide " + "; ".join(
+            f"`{f}`, which {_UNDECIDABLE_FETCH_FIELDS[f]}" for f in undecidable))
     if clause.get("zone") != "deck":
         _no(card_id, name, f"a {clause.get('zone')!r}-zone search carries NO chance — that zone is "
                            f"visible — so it is a pure CHOICE node, not an expectation")
@@ -238,9 +251,9 @@ def refresh_transition(model, option):
 
 def outcome_pool(model, clause: dict) -> dict:
     """``{card id: unseen copies}`` — the deck cards this search can deliver. The filter is the
-    SHIPPED `fetch_target_matches`, never a second matcher (ADR-0087)."""
+    SHIPPED `fetch_target_matches` at its WINDOW reading, never a second matcher (ADR-0087)."""
     return {cid: n for cid, n in (model.mine.unseen_counts or {}).items()
-            if n > 0 and fetch_target_matches(clause, model.card_stat(cid))}
+            if n > 0 and fetch_target_matches(clause, model.card_stat(cid), reading=WINDOW)}
 
 
 def _class_weight(model, delivered: tuple) -> float:
@@ -379,6 +392,103 @@ def _fingerprint(obs, indices: tuple, seat_index, dest=None) -> tuple:
                  for index in indices)
 
 
+def _dig_depth(legs, *, card_id, name):
+    """The ONE window this play looks at, or None when no leg digs. A union shares a single look, so
+    two depths name two windows and there is no distribution over both."""
+    depths = {int(leg["dig"]) for leg in legs.legs if leg.get("dig")}
+    if not depths:
+        return None
+    if len(depths) > 1:
+        _no(card_id, name, f"its legs declare DIFFERENT dig depths {sorted(depths)} — one play takes "
+                           f"ONE look at the top of the deck, so there is no single window to "
+                           f"enumerate over; refusing rather than picking one")
+    if legs.relation == "conjunction":
+        _no(card_id, name, "a dig on CONJUNCTION legs — each leg carries its own budget but they "
+                           "share one window, so the per-leg picks are NOT independent and the "
+                           "product this seam enumerates would count the same cards twice")
+    return depths.pop()
+
+
+def window_classes(order: tuple, copies: dict, pool: int, window: int, take: int) -> dict:
+    """``{delivered class: probability}`` for taking the best ``take`` of ``order`` that a ``window``-card
+    look at ``pool`` reveals. EXACT, sums to 1.0, and ``()`` is the whiff (ADR-0133)."""
+    pool, window, take = int(pool), min(int(window), int(pool)), int(take)
+    counts = [int(copies.get(cid, 0)) for cid in order]
+    cum, running = [0], 0      # `cum[i]` = copies ranked ABOVE group `i`; `cum[-1]` = every match
+    for c in counts:
+        running += c
+        cum.append(running)
+    total = comb(pool, window) if 0 <= window <= pool else 0
+    if total <= 0 or take < 1:
+        return {(): 1.0}
+    # ONE definition of the whiff — the shared bracket, not this enumerator's all-zero branch, which
+    # is why `emit` will not write `()` and why a zero-mass whiff is absent rather than present at 0.
+    whiff = deck_odds.window_miss_probability(cum[-1], pool, window)
+    out: dict = {(): whiff} if whiff > 0.0 else {}
+
+    def emit(prefix: tuple, ways: float) -> None:
+        klass = tuple(sorted(cid for cid, a in zip(order, prefix) for _ in range(a)))
+        if klass:
+            out[klass] = out.get(klass, 0.0) + ways / total
+
+    def walk(i: int, slots: int, prefix: tuple, ways: int) -> None:
+        if i == len(order):        # every group ranged over: the look held fewer than `take` matches
+            rest = window - sum(prefix)
+            if 0 <= rest <= pool - cum[i]:
+                emit(prefix, ways * comb(pool - cum[i], rest))
+            return
+        for a in range(min(counts[i], slots) + 1):
+            if a < slots:          # group not the cutoff, so EXACTLY `a` of it showed up
+                walk(i + 1, slots - a, prefix + (a,), ways * comb(counts[i], a))
+                continue
+            # `a == slots` fills the delivery HERE, so any b >= a of this group leaves the same class
+            # and everything ranked below is free: it was never reached.
+            mass = sum(ways * comb(counts[i], b) * comb(pool - cum[i + 1], window - sum(prefix) - b)
+                       for b in range(a, counts[i] + 1)
+                       if 0 <= window - sum(prefix) - b <= pool - cum[i + 1])
+            if mass:
+                emit(prefix + (a,), mass)
+
+    walk(0, take, (), 1)
+    return out
+
+
+def _dig_expectation(model, legs, pools: tuple, dig: int, *, class_of, score, cap, card_id, name):
+    """A dig's classes: the WINDOW deals, and inside it I take the best-scoring match. The probabilities
+    are exact under exactly that policy, so the ranking is part of the model rather than a display order."""
+    from common.apply_option import DEALT, SCORE_PLACES, Expectation
+
+    if score is None:
+        _no(card_id, name, "a dig's classes are ordered by what each delivery is WORTH and no `score` "
+                           "oracle was supplied — the window deals and I take the best match in it, "
+                           "so the caller passes the value it ranks by, exactly as `_cost_indices` "
+                           "makes it pass `shed`")
+    union: dict = {}
+    for pool in pools:
+        union.update(pool)
+    left, hidden = int(model.mine.deck_count), int(model.mine.prizes_hidden)
+    singles = {cid: class_of((cid,), 0.0) for cid in union}
+    # ADR-0128's noise floor, then the id: this ranking IS the policy priced, so two processes reading
+    # one board must reach the same one or they enumerate different distributions.
+    order = tuple(sorted(singles, key=lambda cid: (-round(float(score(singles[cid].model)),
+                                                          SCORE_PLACES), cid)))
+    # The look is at the top of the DECK, so it is that deep; the pool it is drawn from is every unseen
+    # card, because deck-then-window composes to one uniform subset of deck+prizes (ADR-0133).
+    weights = window_classes(order, union, left + hidden, min(int(dig), left), int(legs.cap))
+    whiff = weights.pop((), 0.0)
+    ranked = sorted(weights, key=lambda klass: (-weights[klass], klass))
+    # The whiff is PINNED — under a greedy ranking the cap drops the WORST outcomes, which on a DEALT
+    # node biases `expected()` upward. It never takes the only slot, or a live dig prices as dead.
+    pinned = whiff > 0.0 and int(cap) >= 2
+    kept, dropped = ranked[:int(cap) - pinned], ranked[int(cap) - pinned:]
+    classes = [replace(singles[klass[0]], probability=weights[klass]) if len(klass) == 1
+               else class_of(klass, weights[klass]) for klass in kept]
+    if pinned:
+        classes.append(class_of((), whiff))
+    return Expectation(classes=tuple(classes), resolution=DEALT,
+                       truncated=len(dropped) + (whiff > 0.0 and not pinned))
+
+
 def _classes_for(legs, pools: tuple) -> list:
     """Outcome classes as sorted tuples of card ids; ``[]`` when the legs deliver nothing. For a
     conjunction an empty leg SKIPS — the engine's own behaviour — so refuse only when EVERY leg is."""
@@ -394,9 +504,9 @@ def _classes_for(legs, pools: tuple) -> list:
 
 
 def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP,
-                shed=None):
-    """The :class:`~common.apply_option.Expectation` over ``option``'s reveal, or
-    :class:`~common.board_delta.Unmodellable`. A class's ``probability`` is an AVAILABILITY weight."""
+                shed=None, score=None):
+    """``option``'s reveal as an :class:`~common.apply_option.Expectation`, or an ``Unmodellable``. A
+    whole-deck search weights by AVAILABILITY and is CHOSEN; a dig by its window, and is DEALT (ADR-0133)."""
     from common.apply_option import CHOSEN, Expectation, OutcomeClass  # contract, imported lazily
 
     if int(cap) < 1:
@@ -453,14 +563,19 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
 
     paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
     dest = _dest_of(legs, card_id=card_id, name=name)
+    dig = _dig_depth(legs, card_id=card_id, name=name)
+
+    def _class_of(delivered: tuple, probability: float):
+        """One enumerated outcome. The reveal never reaches across the table, so their side is reusable."""
+        after_obs, at = _revealed(model, option, delivered, seat_index=seat_index, stat=stat,
+                                  paid=paid, dest=dest, card_id=card_id, name=name)
+        return OutcomeClass(probability=probability,
+                            model=model.rebuilt(after_obs, reuse_their_side=True),
+                            fingerprint=_fingerprint(after_obs, at, seat_index, dest))
 
     def _whiff():
         """The known no-delivery transition — search still pays its normal play cost."""
-        after_obs, at = _revealed(model, option, (), seat_index=seat_index, stat=stat, paid=paid,
-                                  dest=dest, card_id=card_id, name=name)
-        return Expectation(classes=(OutcomeClass(
-            probability=1.0, model=model.rebuilt(after_obs, reuse_their_side=True),
-            fingerprint=_fingerprint(after_obs, at, seat_index, dest)),), resolution=CHOSEN)
+        return Expectation(classes=(_class_of((), 1.0),), resolution=CHOSEN)
 
     if dest == "bench":
         # TRUNCATES, never filters: every carrier searches for "up to" N, so one slot delivers one
@@ -476,6 +591,9 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     if legs.relation != "conjunction":
         legs = legs._replace(cap=min(int(legs.cap), int(model.mine.deck_count)))
     pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
+    if dig is not None:
+        return _dig_expectation(model, legs, pools, dig, class_of=_class_of, score=score, cap=cap,
+                                card_id=card_id, name=name)
     candidates = _classes_for(legs, pools)
     if not candidates:
         return _whiff()
@@ -503,5 +621,5 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     return Expectation(classes=tuple(classes), truncated=len(dropped), resolution=CHOSEN)
 
 
-__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "coin_expectation",
+__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "window_classes", "coin_expectation",
            "refresh_transition", "expectation")
