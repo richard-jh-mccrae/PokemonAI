@@ -21,7 +21,7 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.state_model import StateModel
 from common.state_value import state_value
 from common.strategy.combat import CombatMath
-from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RETREAT
+from common.strategy.context import _ABILITY, _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RETREAT
 
 MAIN = bd.CONTEXT_MAIN
 ACTIVE, BENCH, HAND = AREA_ACTIVE, AREA_BENCH, AREA_HAND
@@ -947,6 +947,7 @@ def test_a_revealing_play_takes_the_informative_tier_and_joins_no_block():
 # ── does a reveal RIDE this option? (the routing question, not the footprint's) ──────────────────
 # Both rows verified at `data/EN_Card_Data.csv` + `src/common/card_effects.json`.
 DRAKLOAK, TELEPATH = 120, 19
+JUDGE = 1213
 _RIDE_STATS = {
     **_STATS,
     DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON, evolvesFrom="Dreepy",
@@ -978,6 +979,30 @@ def test_an_ability_reveal_does_NOT_ride_the_evolve_that_puts_its_body_in_play()
     evolve = {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0}
     assert ao.option_footprint(model, evolve).reveals_information is True   # the CARD can reveal
     assert cp._reveal_rides(model, evolve) is False                         # this OPTION does not
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_an_ability_reveal_is_not_misread_as_the_same_index_in_hand():
+    """The closed-form dispatcher checks kind first: hand[0]=Judge cannot hijack Drakloak's option."""
+    drakloak = {**_body(RIOLU), "id": DRAKLOAK, "hp": 90, "maxHp": 90}
+    obs = _obs(_player(active=drakloak, hand=[JUDGE]))
+    stats = {**_RIDE_STATS, JUDGE: CardStat(JUDGE, name="Judge", cardType=3)}
+    effects = {
+        **_RIDE_CLAUSES,
+        JUDGE: [{"kind": "draw", "amount": 4, "rider": "shuffle_both_hands"}],
+        "_covers": {
+            str(DRAKLOAK): {"covers": "full", "reason": "test verdict"},
+            str(JUDGE): {"covers": "full", "reason": "test verdict"},
+        },
+    }
+    combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
+                        functions=CardFunctions({}), transients=None,
+                        effects=CardEffects(effects))
+    model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+    result = cp.compose(model, [{"type": _ABILITY, "area": ACTIVE, "index": 0}])
+    assert result.fanned == (None,)
+    assert any("revealing `_ABILITY` is an in-play source" in gap for gap in result.gaps), result.gaps
+    assert not any("source index" in gap or "occupied hand" in gap for gap in result.gaps)
 
 
 @pytest.mark.req("REQ-COMPOSER-0011")

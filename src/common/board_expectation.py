@@ -4,13 +4,14 @@ Where `board_delta` returns ONE board, a draw/search has a DISTRIBUTION. `apply_
 frozen `OutcomeClass` / `Expectation` shapes; this only fills them. Never a sampled engine shuffle,
 and class identity is taken AFTER the reveal (ADR-0091).
 
-**LIVE at runtime** — `composer._one_ply` calls :func:`expectation` for a revealing `_PLAY`."""
+**LIVE at runtime** — `composer._one_ply` first calls :func:`closed_form_transition` for the ordered
+coin/refresh registry, then :func:`expectation` for an enumerated revealing `_PLAY`."""
 from __future__ import annotations
 
-from typing import Callable, NoReturn
+from typing import Callable, Mapping, NoReturn
 
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import product
 from math import comb
 
@@ -52,9 +53,40 @@ _UNDECIDABLE_FETCH_FIELDS: dict[str, str] = {
 }
 
 _HAMMER_COIN = {"kind": "coin", "effect": "discard_opp_energy", "amount": 1}
-# The coverage exit names these complete cards. The draw-count oracle remains the source of their
-# values; partial refreshes must stay on the generic fail-closed path.
-_CLOSED_REFRESH_IDS = frozenset({1213, 1223, 1227})
+
+# The draw-count oracle remains the source of arithmetic until Issue #468. Dispatch is structural:
+# these are exactly the three shapes the old card-id gate admitted, so adding a new oracle row cannot
+# silently widen runtime coverage.
+_CLOSED_REFRESH_SHAPES = (
+    {"kind": "draw", "amount": 4, "rider": "shuffle_both_hands"},
+    {"kind": "draw", "amount": 5,
+     "amount_if": {"condition": "coin_tails", "amount": 3},
+     "rider": "shuffle_both_hands"},
+    {"kind": "draw", "amount": 6,
+     "amount_if": {"condition": "exactly_6_prizes_remaining", "amount": 8},
+     "rider": "shuffle_own_hand_in"},
+)
+
+
+@dataclass(frozen=True)
+class ClosedFormRoute:
+    """One conservative closed-form owner. Key coverage only admits the semantic predicate to run."""
+
+    name: str
+    option_kinds: frozenset[int]
+    clause_kind: str
+    handled_keys: frozenset[str]
+    accepts: Callable[[Mapping], bool]
+    build: Callable
+
+
+@dataclass(frozen=True)
+class _Source:
+    kind: int
+    seat: int
+    index: int
+    card_id: int
+    stat: object
 
 
 def revealing_clauses(combat, card_id) -> tuple:
@@ -140,24 +172,44 @@ def _check_clause(clause: dict, card_id, name) -> None:
                            f"refuses an undeclared clause VALUE")
 
 
-def _spent_trainer(model, option):
-    """The certain half of a Trainer play, shared by the coin and scalar routes."""
+def _source(model, option) -> _Source | None:
+    """Resolve the only source currently owned: a Trainer in hand selected by MAIN ``_PLAY``.
+
+    Kind and context are checked before the hand is touched. Other kinds/contexts belong to other
+    transition nodes; malformed options inside this owned source refuse rather than becoming a
+    misleading Ability-as-hand diagnostic.
+    """
+    if (option or {}).get("type") != _PLAY:
+        return None
     obs = getattr(model, "source_obs", None) or {}
     if (obs.get("select") or {}).get("context") != board_delta.CONTEXT_MAIN:
-        raise Unmodellable("closed-form chance nodes require the MAIN play context")
-    if int((option or {}).get("type", -1)) != _PLAY:
-        raise Unmodellable("closed-form chance nodes require a `_PLAY` option")
+        return None
     seat = int(getattr(model, "my_index", 0))
-    new_obs, current, players = board_delta.fork(obs)
-    me = board_delta.fork_player(players, seat)
-    card = board_delta.take_from_hand(me, option.get("index"), "play")
-    stat = model.card_stat(card.get("id"))
+    players = (obs.get("current") or {}).get("players") or ()
+    me = players[seat] if 0 <= seat < len(players) else {}
+    hand = me.get("hand") or ()
+    index = (option or {}).get("index")
+    if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(hand):
+        raise Unmodellable(
+            f"closed-form MAIN `_PLAY` source index {index!r} is not an occupied hand slot")
+    card = hand[index] or {}
+    card_id = card.get("id")
+    stat = model.card_stat(card_id)
     if stat is None or not (getattr(stat, "is_item", False) or getattr(stat, "is_supporter", False)):
-        raise Unmodellable("closed-form chance nodes require a readable Item or Supporter")
+        return None
+    return _Source(kind=_PLAY, seat=seat, index=index, card_id=int(card_id), stat=stat)
+
+
+def _spent_trainer(model, source: _Source):
+    """The certain half of a gated Trainer route. Never re-resolves the option source."""
+    obs = getattr(model, "source_obs", None) or {}
+    new_obs, current, players = board_delta.fork(obs)
+    me = board_delta.fork_player(players, source.seat)
+    card = board_delta.take_from_hand(me, source.index, "closed-form play")
     me["discard"] = list(me.get("discard") or ()) + [card]
-    if getattr(stat, "is_supporter", False):
+    if getattr(source.stat, "is_supporter", False):
         current["supporterPlayed"] = True
-    return new_obs, players, seat, card, stat
+    return new_obs, players
 
 
 def _discarded_energy_models(model, spent_obs: dict, *, seat: int) -> tuple:
@@ -185,19 +237,10 @@ def _discarded_energy_models(model, spent_obs: dict, *, seat: int) -> tuple:
     return tuple(out)
 
 
-def coin_expectation(model, option, *, score: Callable[[object], float]):
+def _coin_expectation(model, source: _Source, _clause, *, score: Callable[[object], float]):
     """Crushing Hammer's two DEALT outcomes, with the heads target chosen after the flip."""
-    obs = getattr(model, "source_obs", None) or {}
-    seat = int(getattr(model, "my_index", 0))
-    hand = ((obs.get("current") or {}).get("players") or [{}])[seat].get("hand") or ()
-    index = option.get("index")
-    if not isinstance(index, int) or not 0 <= index < len(hand):
-        return None
-    card_id = (hand[index] or {}).get("id")
-    clauses = board_delta.card_clauses(model.combat, card_id)
-    if clauses != (_HAMMER_COIN,):
-        return None
-    spent_obs, _players, seat, _card, _stat = _spent_trainer(model, option)
+    spent_obs, _players = _spent_trainer(model, source)
+    seat = source.seat
     tail = model.rebuilt(spent_obs, reuse_their_side=True)
     heads = _discarded_energy_models(model, spent_obs, seat=seat)
     if heads:
@@ -212,26 +255,20 @@ def coin_expectation(model, option, *, score: Callable[[object], float]):
                                 OutcomeClass(0.5, head, fingerprint)), resolution=DEALT)
 
 
-def refresh_transition(model, option):
+def _refresh_transition(model, source: _Source, _clause, *, score=None):
     """A shuffle-refresh's known writes plus its hand-count EV; never enumerate a shuffled hand."""
     from common.apply_option import ScalarTransition
     from common.strategy import refresh
 
-    obs = getattr(model, "source_obs", None) or {}
-    seat = int(getattr(model, "my_index", 0))
-    hand = ((obs.get("current") or {}).get("players") or [{}])[seat].get("hand") or ()
-    index = option.get("index")
-    if not isinstance(index, int) or not 0 <= index < len(hand):
-        return None
-    card_id = (hand[index] or {}).get("id")
-    if card_id not in _CLOSED_REFRESH_IDS:
-        return None
+    card_id = source.card_id
     prizes = model.prize_race
     branches = refresh.refresh_branches(card_id, prizes.my_prizes_remaining,
                                         prizes.opp_prizes_remaining)
     if branches is None:
-        return None
-    spent_obs, players, seat, _card, _stat = _spent_trainer(model, option)
+        _no(card_id, getattr(source.stat, "name", "?"),
+            "the structural refresh route has no draw-count facts")
+    spent_obs, players = _spent_trainer(model, source)
+    seat = source.seat
     mine = board_delta.fork_player(players, seat)
     mine["hand"] = []
     mine["handCount"] = int(sum(my_draw for my_draw, _opp_draw in branches) / len(branches))
@@ -247,6 +284,74 @@ def refresh_transition(model, option):
                                        prizes.my_prizes_remaining, prizes.opp_prizes_remaining)
     after = model.rebuilt(spent_obs, reuse_their_side=not refresh.opponent_shuffles(card_id))
     return ScalarTransition(model=after, scalar=float(mine) / 120.0)
+
+
+def _accept_refresh(clause: Mapping) -> bool:
+    return any(dict(clause) == shape for shape in _CLOSED_REFRESH_SHAPES)
+
+
+# Ordered for deterministic diagnostics only. Acceptance still requires exactly one match.
+CLOSED_FORM_ROUTES = (
+    ClosedFormRoute(
+        name="coin", option_kinds=frozenset({_PLAY}), clause_kind="coin",
+        handled_keys=frozenset(_HAMMER_COIN),
+        accepts=lambda clause: dict(clause) == _HAMMER_COIN, build=_coin_expectation),
+    ClosedFormRoute(
+        name="refresh", option_kinds=frozenset({_PLAY}), clause_kind="draw",
+        handled_keys=frozenset({"kind", "amount", "amount_if", "rider"}),
+        accepts=_accept_refresh, build=_refresh_transition),
+)
+
+
+def closed_form_transition(model, option, *, score: Callable[[object], float],
+                           clauses_cover: bool | None = None):
+    """Dispatch one fully-covered closed-form clause, or return ``None`` when this is not our source.
+
+    Once a clause kind is owned, every uncertainty refuses: incomplete coverage, siblings, unknown
+    keys, unsupported values, and ambiguous registry matches. No builder runs before all gates pass.
+    """
+    source = _source(model, option)
+    if source is None:
+        return None
+    routes = tuple(route for route in CLOSED_FORM_ROUTES if source.kind in route.option_kinds)
+    clauses = board_delta.card_clauses(model.combat, source.card_id)
+    owned_kinds = frozenset(route.clause_kind for route in routes)
+    owned = tuple(clause for clause in clauses if clause.get("kind") in owned_kinds)
+    if not owned:
+        return None
+
+    cover = clauses_cover
+    if cover is None:
+        effects = getattr(getattr(model, "combat", None), "effects", None)
+        cover = effects.clauses_cover(source.card_id) if effects is not None else None
+    name = getattr(source.stat, "name", "?")
+    if cover is not True:
+        state = "partial" if cover is False else "unruled"
+        _no(source.card_id, name,
+            f"clause coverage is {state}; a closed-form route requires the whole printed effect")
+    if len(owned) != 1:
+        _no(source.card_id, name,
+            f"ambiguous closed-form ownership: {len(owned)} owned clauses match; exactly one is "
+            "required")
+    if len(clauses) != 1:
+        _no(source.card_id, name,
+            f"a sibling clause would be dropped by the closed-form route ({len(clauses)} total)")
+
+    clause = owned[0]
+    candidates = tuple(route for route in routes if route.clause_kind == clause.get("kind"))
+    handled = frozenset().union(*(route.handled_keys for route in candidates))
+    unknown = sorted(set(clause) - handled)
+    if unknown:
+        _no(source.card_id, name, f"unhandled key(s) {unknown} in closed-form clause")
+    matches = tuple(route for route in candidates
+                    if set(clause) <= route.handled_keys and route.accepts(clause))
+    if not matches:
+        _no(source.card_id, name,
+            f"no closed-form route accepts clause shape {dict(clause)!r}")
+    if len(matches) != 1:
+        route_names = [route.name for route in matches]
+        _no(source.card_id, name, f"ambiguous closed-form routes {route_names}")
+    return matches[0].build(model, source, clause, score=score)
 
 
 def outcome_pool(model, clause: dict) -> dict:
@@ -621,5 +726,5 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     return Expectation(classes=tuple(classes), truncated=len(dropped), resolution=CHOSEN)
 
 
-__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "window_classes", "coin_expectation",
-           "refresh_transition", "expectation")
+__all__ = ("BRANCH_CAP", "ClosedFormRoute", "CLOSED_FORM_ROUTES", "closed_form_transition",
+           "revealing_clauses", "outcome_pool", "window_classes", "expectation")
