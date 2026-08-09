@@ -278,7 +278,7 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "source": "the zone a clause draws its material from",
     "source_class": "the card class the modifier's SOURCE must belong to",
     "energy": "the Energy class an accel attaches (basic / special)",
-    "energy_type": "an EnergyType lock on the Energy a clause moves",
+    "energy_type": "an EnergyType lock — on the Energy a clause moves, or on a fetched BODY's colour",
     "dig_from": "which end of the deck a dig reads",
     "to_hand": "how many of an accel's units go to HAND instead of being attached",
     # ── gates ─────────────────────────────────────────────────────────────────────────────────────
