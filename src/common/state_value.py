@@ -195,8 +195,13 @@ REGISTRY: tuple[TermFamily, ...] = (
             "special_conditions — Asleep/Paralyzed/Poisoned/Burned change what survives and what "
             "can act, and `snapshot_coverage` lists the zone as OWED (no snapshot home). Curing a "
             "condition therefore prices 0. Owned by T1 (Issue #260) via the completeness contract.",
-            "attached_tools — a defensive Tool's survival contribution (ADR-0028's math) has no "
-            "snapshot home either, so equipping one prices 0 at ordering time. Same owner.",
+            "the `retreatReduction` Tool class — Air Balloon, Gravity Gemstone and Rescue Board move "
+            "NO family at all (measured, Issue #423), because the only value-consuming reader of "
+            "`tool_ids` anywhere in `src/` is `state_model.damage_boosts` and nothing prices "
+            "MOBILITY. Deliberately narrow: ADR-0028's +HP class is NOT blind here — a Tool's "
+            "`hpBonus` lands on `hp`/`maxHp` and declares `damage_counters` (`board_delta._attach`), "
+            "which this family reads through `turns_to_ko_me`. The retreat SLOT's own worth stays "
+            "`readiness.blind_to`'s.",
             "healing that does NOT move `turns_to_ko_me` — the clock is integer turns, so a heal "
             "smaller than one turn of incoming is invisible here. Real, accepted at POC bar: the "
             "clock is the shipped survival vocabulary and a sub-turn HP term would be new math.",
