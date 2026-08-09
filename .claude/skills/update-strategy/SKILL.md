@@ -31,6 +31,8 @@ re-derive it):
 grep -rn '^- status: open' data/strategy/proposals/*.md
 ```
 Each hit is `<file>:<line>: - status: open`; the enclosing `## ` heading above it is the proposal.
+Reject or return any legacy `general-hypothesis` / `deck-strategy` proposal for re-routing: this skill
+never authors a new rung, Hypothesis, or `when()` predicate.
 Read open proposals from `data/strategy/proposals/` (status `open`). **Fan out one read-only agent per
 proposal** to follow `provenance` → source doc, confirm `candidate_signal` maps to a real signal, and
 return a tight **grill brief** (candidate trigger + weight band + capability-gap smell). Bounce any `spec`
@@ -45,22 +47,22 @@ capability-gap. On lock, drop it onto the conveyor and move to the next; **do no
 ### Phase 2 · Conveyor — author + pre-verify in the background
 Per locked proposal a background Agent authors into `target_layer`, then runs *that proposal's own*
 `verification_contract` (mechanics + parallel/serial rules: [authoring-gates.md](references/authoring-gates.md)):
-- **author** — `general-hypothesis` → `baseline_*.py` `when()`+weight+`status:assumed` · `deck-strategy` →
-  `src/agents/<deck>/strategy.py` · `matchup-brief` → `briefs/<slug>.json` · `planner-code` →
-  Turn-Planner / Lethal-Solver code.
-- **gate** — `verifier` (re-fit over Corrections) · `score-diff` (neutrality, ADR-0034) · `brief-validator`
-  (`validate_brief.py <slug>`) · `seed-ladder` (ship `assumed`, kill-switched + telemetry, ladder-validated).
+- **author** — `composer-differencer` → `common/composer.py`, apply/expectation seams, or
+  `state_model.py` transition coverage · `turn-sequencer` → Composer search/commit sequencing and its
+  `planner.py` hand-off · `value-equation` → the named `state_value.py` family only · `lethal-solver` →
+  sound win detection · `matchup-brief` → `briefs/<slug>.json`.
+- **gate** — `composer-retest` (fixture re-drive plus `@T` value/difference/sequence comparison) ·
+  `engine-cascade` for native follow-up lines · `brief-validator` (`validate_brief.py <slug>`).
 
 Disjoint proposals author in parallel worktrees; a shared **serial-only surface** (same
 `card_functions.json` card, same `ROLES`/ctor, any new `Context`/`Board` signal) serializes. An
 unbuilt-infra proposal → capability-gap, off the conveyor.
 
 ### Phase 3 · End-join (once, serial — the barrier)
-When the last grill lands and the conveyor drains: **union-verify the merged tree** (`train.tuner`
-`union_verify` — each Hypothesis injected once vs a seeds-only baseline, over the corpus **including**
-previously-`covered` corrections; raises on duplicate ids / regressions) **+ one `pytest` over the whole
-suite** — the suite runs once here, not per proposal. A regressing pair is behavior-dependent → merge into
-one cluster, triggers mutually exclusive, re-join.
+When the last grill lands and the conveyor drains: union-retest all correction fixtures with the real
+Composer and compare their emitted `@T` working (chosen, differences, sequence, and named equation terms)
+**+ one `pytest` over the whole suite** — the suite runs once here, not per proposal. A regressing pair is
+behavior-dependent → merge into one cluster and re-join.
 
 ### Phase 4 · One diff, one commit
 Present the single combined diff. **The human makes ONE commit** (single commit authority). Set each
@@ -71,8 +73,9 @@ definition-of-done, like blunder-buster's 4th outcome).
 - **Thin fodder, apply-time authoring** — author from the `spec`; never invent doctrine the producer owed,
   never wait for it to hand you finished code.
 - **No auto-commit of executable code** (ADR-0018) — the end-join gate passes first, then the human commits.
-- **Weights are ladder-tuned seeds** — a doctrine-sourced weight ships `assumed` + kill-switched; never
-  present a fabricated number as validated.
+- **No new rungs or Hypotheses — ever.** Corrections improve transition modelling, differencing, sequence
+  search, or (only with term-level proof) a bespoke value equation. Existing-rule retirement is allowed;
+  adding, reviving, or reweighting a decision rule is not.
 - **Card claims are the producer's** — the engine + `data/EN_Card_Data.csv` are ground truth; re-verify a
   proposal's card claim before shipping.
 - **Verification is READ-ONLY; never clobber `tuned.json`.** Probe fixes with `retest_one.py <deck>

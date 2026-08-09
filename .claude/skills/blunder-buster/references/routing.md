@@ -11,14 +11,14 @@ Every record carries `scope` (`decision` | `turn` | `match`), `subject`, and a s
 is a **strong routing prior — never an auto-route** (routing is this skill's value; don't let `tune.py`
 do it):
 
-- **`scope: turn`** — a whole ply was misplayed. Prima facie **`target_layer: planner-code`** (the Turn
-  Planner, `plan_turn`), `verification_contract: verifier` — the gate is `retest_span`, which re-drives
-  the Span to its **first divergence**. *But check:* if the Span's `live_trace.planned` is `null`
-  throughout, the Planner never committed there → the real gap is a **`general-hypothesis`**.
+- **`scope: turn`** — a whole ply was misplayed. Prima facie **`target_layer: turn-sequencer`** (the
+  Composer's sequence search and `plan_turn` hand-off), `verification_contract: composer-retest` — the
+  gate is `retest_span`, which re-drives the Span to its **first divergence**. A null `planned` verdict
+  does not re-open rule authoring: it is a `composer-differencer` coverage/transition investigation.
   *A `turn_plan` note adds the human's ideal line as evidence for this prior; it no longer selects a
   different rulebook (below).*
 - **`scope: match`** — a whole game was misplayed. Read the Span's per-turn `game_plan` (ADR-0045). Wrong
-  mode/goal → **`planner-code`** (`plan_match`); wrong opponent read → **`matchup-brief`**; a line that
+  mode/goal → **`turn-sequencer`** (`plan_match`/sequence hand-off); wrong opponent read → **`matchup-brief`**; a line that
   needs cross-turn search → **capability-gap**. `verification_contract: seed-ladder` either way (a match
   Correction embeds no `obs` and is never re-driven).
 - A scoped record's `seed_weight` is `0` and its `attribution` (when present) is *information only* — it
@@ -34,22 +34,26 @@ Each Correction embeds `live_trace` — the `@T` telemetry the shipped agent emi
 blunder this read **determines `target_layer` + `verification_contract`**:
 
 - **Reorder markers first** (when `chosen` isn't top-`score`): `reordered`+`deferred` (attack-last
-  resequencer — a *sequencing* decision, `planner-code`, not an under-weighted attack), `needy`
+  resequencer — a *sequencing* decision, `turn-sequencer`, not an under-weighted attack), `needy`
   (equal-score attach tie-break), `grabbed` (multi-pick set). Don't author a rule to "fix" a by-design
   reorder.
 - **`live_trace.lethal` (ADR-0030)** — the Lethal Solver short-circuits scoring → a lethal-shaped blunder
-  is **`planner-code`**, never a weight/`when()`. `null`-but-a-win-existed → the generator missed a
+  is **`lethal-solver`**, never a weight/`when()`. `null`-but-a-win-existed → the generator missed a
   win-shape; non-null-but-rejected → it over-fired.
 - **`live_trace.planned` (ADR-0031)** — the Turn Planner short-circuits → a this-turn multi-step-line
-  blunder is **`planner-code`**. If the better line spans **>1 of my turns** → **capability-gap** (don't
+  blunder is **`turn-sequencer`**. If the better line spans **>1 of my turns** → **capability-gap** (don't
   bolt multi-turn onto the closed-form Planner — ADR-0040).
 - **`live_trace.posture` (ADR-0041)** — a `posture_mismatch` (or a member sharing one
   `believed_archetype` with others) is a **matchup-doctrine** miss → **`matchup-brief`**, never a
   deck-agnostic `when()`. Right-read-wrong-counterplay → a Brief data/lever change. No Brief covers it →
   route to `/matchup-genie <slug>` (a named hand-off). Wrong *Read* (γ low) → a recognition gap →
   **capability-gap**.
-- **Otherwise** (no layer flag) → **`general-hypothesis`**, `verification_contract: verifier` (the
-  correction fixture is the re-measure gate).
+- **Otherwise** (no layer flag) → **`composer-differencer`**, `verification_contract: composer-retest`.
+  Read `live_trace.composer.root.terms`, `differencing`, `ranked`, and `candidates`: missing/refused
+  transition, pruned first step, or wrong continuation/order belongs to the Composer/differencer. Route
+  to **`value-equation`** only if those complete traces show the competing transitions are covered and
+  the correction depends on a specific `state_value` family producing the wrong ordering. The spec must
+  name that family and the before/after terms; otherwise it is not an equation proposal.
 
 `tune.py` tags lines `[TURN <n>]`/`[MATCH]`/`[LETHAL]`/`[PLANNED]`/`[POSTURE≠ <arch>]`; the snapshot
 carries `scope`+`subject`+`key` and `lethal_locked`/`planner_committed`/`posture_mismatch`+
@@ -80,7 +84,8 @@ nominate.
 
 Write the mini-spec from **live source, never memory**: `src/common/pilot.py` (`Context`/`Board` fields),
 `src/cg/api.py` (enums), `src/common/cards.py` + `card_functions.json` (tags), `baseline_*.py` +
-`src/agents/<deck>/strategy.py` (style), and `lethal.py`/`planner.py` for planner-code routes. If the
+`src/agents/<deck>/strategy.py` (style), and `composer.py`/`state_value.py`/`planner.py` for sequence
+routes. If the
 sound fix needs a signal that doesn't exist, **say so in the `spec`** (`candidate_signal: "needs a new
 signal"` + which layer) — `/update-strategy` builds it at apply time; that is **not** a capability-gap.
 

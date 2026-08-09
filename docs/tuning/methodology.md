@@ -10,6 +10,14 @@ See also: [blunder-tuner.md](../blunder-tuner.md) (the implementation), [weights
 (the weight scale), and [ADR-0009](../adr/0009-training-methodology.md) / [ADR-0017](../adr/0017-corrections-compile-to-hypotheses.md)
 (the design decisions).
 
+> **Current correction policy (supersedes the legacy W/H authoring text below).** Corrections no longer
+> create or tune decision rungs, Hypotheses, or `when()` rules. The replay's Composer telemetry is the
+> diagnostic substrate: first repair transition coverage and end-state differencing; then repair
+> within-turn sequence enumeration and commit ordering. A `state_value` equation may change only when
+> the trace proves both competing transitions were modelled and identifies the specific value family
+> responsible for the wrong ordering. This keeps correction work focused on the differencer and turn
+> sequencer rather than compensating for a missing sequence with another local rule.
+
 ---
 
 ## 1. The loop in one picture

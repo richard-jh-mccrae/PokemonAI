@@ -32,7 +32,7 @@ is empty for **every** agent.
 - **proposal-routed** — a well-formed Strategy Proposal is queued (its cluster's record in
   `data/strategy/proposals/`). Done = the proposal *exists*, not that code shipped — `/update-strategy`
   ships it.
-- **covered** — an existing Hypothesis/Brief already handles it; **name** it, confirmed against the real
+- **covered** — the Composer/differencer, a sound solver, or a Brief already handles it; **name** it, confirmed against the real
   Pilot `decide()` (not the W-route). No proposal.
 - **refuted** — a bad correction (forgoes a KO / high-value attack), **proven with a test**; dropped from
   the fit. See [[forgo-ko-corrections-are-refuted]]. No proposal.
@@ -72,9 +72,10 @@ specific uncertainty; **your call assigns the terminal outcome**. Sibling-uncert
 bigger cluster?") is **not** raised here — it resolves at the join.
 
 **3. Join — cluster + finalize route (main loop).** Every correction is now routed + resolved. Cluster by
-**same target_layer + same fix**: a `general-hypothesis` / `planner-code` / `matchup-brief` pattern MAY
-pool members **across decks** into ONE cross-agent proposal (the fix is deck-agnostic); a `deck-strategy`
-pattern **stays within its deck**. Consume `sibling_hint`s (members sharing one `believed_archetype` → one
+**same target_layer + same fix**: a `composer-differencer` / `turn-sequencer` / `value-equation` /
+`lethal-solver` / `matchup-brief` pattern MAY
+pool members **across decks** into ONE cross-agent proposal (the fix is deck-agnostic); a
+Composer/equation pattern names its affected decks in provenance. Consume `sibling_hint`s (members sharing one `believed_archetype` → one
 matchup-brief cluster; a turn bug + its inner decision bugs → one cluster). Dedup.
 
 **4. Emit + gate.** Per cluster, a proposal or a recorded set-aside (mechanics below), then the completion
@@ -127,7 +128,7 @@ or an evidenced **capability-gap** (`reviewed (excluded)`). Confirm no agent's b
 `open`/`UNSATISFIED`. Produce a single terminal-outcome ledger spanning all agents — one line per
 correction, its outcome + evidence (proposal id / named Hypothesis / refutation test / four artifacts),
 grouped by agent. Refresh `reports/blunders.html`. Only then report finished. Then `/update-strategy`
-drains the queue (authors + Verifier/gate + commits).
+drains the queue (authors + Composer/sequencer gate + commits).
 
 ## Rounds & reconciliation
 
@@ -139,18 +140,16 @@ them). Loop: tag → `/blunder-buster` (route) → `/update-strategy` (apply + c
 
 ## Rules
 
-- **All agents by default** — `<deck>` narrows to one. A general/planner/matchup cluster may pool members
-  across decks into one proposal; a deck-strategy cluster stays in its deck.
+- **All agents by default** — `<deck>` narrows to one. A Composer/sequencer/equation/matchup cluster may
+  pool members across decks into one proposal; provenance names the affected decks.
 - **Route, don't author.** The product is a *routed proposal* (or a tested set-aside), never a committed
   `when()`/code. Routing is the value; authoring is `/update-strategy`'s.
 - **One proposal per cluster**, covering all members — not per-correction point-fixes.
-- **Layer routing is load-bearing:** scope turn/match → `planner-code` (prior; verify against the trace);
-  a `scope: turn` correction with a `turn_plan` note carries no machine verdict — route it generically
-  and read `references/routing.md` for the rule-retirement proposal shape; lethal/planned →
-  `planner-code`; posture-mismatch →
-  `matchup-brief` (or `/matchup-genie`); else → `general-hypothesis`. Never a deck-agnostic weight for a
-  one-archetype misplay, never a `when()` for a Solver/Planner-driven decision, **never a weight for a
-  scoped blunder** (it never entered the fit).
+- **Layer routing is load-bearing:** route ordinary decision and turn errors to
+  `composer-differencer` or `turn-sequencer`; use `value-equation` only when the emitted value-family
+  working proves that a bespoke equation, rather than transition/sequence coverage, decides the error.
+  Lethal proof remains `lethal-solver`; posture-mismatch remains `matchup-brief`. **Never emit a
+  `general-hypothesis`, `deck-strategy`, rung, or new `when()` proposal from a Correction.**
 - **CRITICAL** flows headless unless a leaf routes it to refuted/capability-gap — then it hard-stops for
   human acknowledgement in the intervention pass (the invariant above). Resolve the CRITICAL interventions
   before any other.

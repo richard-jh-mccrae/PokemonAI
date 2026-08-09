@@ -36,10 +36,6 @@ from common.strategy.planning.turn_line import (_prune_none, _PRIZE_AREA, _rng_p
 from common.strategy.planning.wins import WinLineMixin
 
 
-_COMPOSER_GAP_K = 8           # cap on coverage-gap reasons in the `composer` telemetry block; the full
-                              # count rides `stats`, so a truncated list never reads as "all of them"
-
-
 def _tied_first_steps(result, chosen, options, traces) -> list:
     """Menu indices whose best sequence ties ``chosen``'s score at `apply_option.SCORE_PLACES` — the
     composer having NO OPINION about which action to take first, so the caller defers (ADR-0131)."""
@@ -162,8 +158,7 @@ class PlannerMixin(
         except Unmodellable:
             return None
         chosen = result.chosen
-        self._composer_trace = {"margin": result.margin.working(), "stats": result.stats,
-                                "gaps": list(result.gaps)[:_COMPOSER_GAP_K]}
+        self._composer_trace = {"margin": result.margin.working(), **result.working()}
         continuation = context in CARD_CONTINUATION_CONTEXTS
         coverage_gap = continuation and any(delta is None for delta in result.fanned)
         if coverage_gap or chosen is None or chosen.first_index is None or chosen.coverage_gap:
