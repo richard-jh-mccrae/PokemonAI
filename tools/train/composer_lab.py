@@ -378,6 +378,20 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
     }
 
 
+def correction_ids_from_chunk(path: Path, chunk: int) -> set[str]:
+    """Read one explicit correction chunk from the review queue artifact."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema") != "composer-correction-queue/v1":
+        raise ValueError("expected a composer-correction-queue/v1 artifact")
+    matches = [row for row in payload.get("chunks", ()) if row.get("chunk") == chunk]
+    if len(matches) != 1:
+        raise ValueError(f"chunk {chunk} is not present exactly once")
+    ids = {row.get("id") for row in matches[0].get("corrections", ())}
+    if not ids or None in ids:
+        raise ValueError(f"chunk {chunk} has no usable correction ids")
+    return ids
+
+
 #: IMPORTED rather than re-spelled: the two labs' tails must be comparable, and a product of two
 #: hand-written percentile conventions is not a percentile of anything.
 from train.value_lab import _percentile                        # noqa: E402
@@ -573,6 +587,10 @@ def main(argv=None) -> int:
     ap.add_argument("--store", type=Path, default=None,
                     help="corrections file or tree (default: the committed corpus)")
     ap.add_argument("--agent", default=None, help="only this agent's frames")
+    ap.add_argument("--chunk-file", type=Path, default=None,
+                    help="a composer-correction-queue/v1 JSON artifact")
+    ap.add_argument("--chunk", type=int, default=None,
+                    help="run exactly this chunk from --chunk-file")
     ap.add_argument("--frame", default=None,
                     help="print ONE frame: the composer's sequence, the committed decision, the "
                          "ruling, and the developer's verbatim ideal line if there is one")
@@ -588,6 +606,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, default=None, help="write the report as JSON")
     args = ap.parse_args(argv)
 
+    if (args.chunk_file is None) != (args.chunk is None):
+        ap.error("--chunk-file and --chunk must be used together")
+
     if args.mega_starmie_ideal_sequences:
         if args.agent not in (None, "mega_starmie"):
             ap.error("--mega-starmie-ideal-sequences only supports --agent mega_starmie")
@@ -599,6 +620,14 @@ def main(argv=None) -> int:
     corrs = load_corrections(args.store or DEFAULT_ROOT)
     if args.agent:
         corrs = [c for c in corrs if c.agent == args.agent]
+    if args.chunk_file:
+        try:
+            ids = correction_ids_from_chunk(args.chunk_file, args.chunk)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            ap.error(f"cannot load correction chunk: {exc}")
+        corrs = [c for c in corrs if c.id in ids]
+        if len(corrs) != len(ids):
+            ap.error(f"chunk {args.chunk} resolved {len(corrs)}/{len(ids)} correction ids")
     builder = _cgpy_pilot_builder()
 
     if args.epsilon_sweep:

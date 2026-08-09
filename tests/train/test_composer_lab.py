@@ -22,11 +22,23 @@ from pathlib import Path
 import pytest
 
 from train.composer_lab import (ACCEPTANCE, COLUMN_CAVEAT, fixture_rulings, ideal_index,
-                                ideal_sequence_control, ideal_sequence_packets, ideal_sequences)
+                                correction_ids_from_chunk, ideal_sequence_control,
+                                ideal_sequence_packets, ideal_sequences)
 
 REPO = Path(__file__).resolve().parents[2]
 F32_KEY = "85046350|0|decision|32"
 F32_FIXTURE = REPO / "tests" / "fixtures" / "corrections" / "dragapult_hammer_over_develop_f32.json"
+
+
+def test_chunk_queue_selects_only_its_declared_correction_ids(tmp_path):
+    """Chunk execution must use persisted IDs, never an implicit ordering."""
+    queue = tmp_path / "queue.json"
+    queue.write_text(json.dumps({"schema": "composer-correction-queue/v1", "chunks": [
+        {"chunk": 3, "corrections": [{"id": "a"}, {"id": "b"}]},
+    ]}), encoding="utf-8")
+    assert correction_ids_from_chunk(queue, 3) == {"a", "b"}
+    with pytest.raises(ValueError, match="chunk 4"):
+        correction_ids_from_chunk(queue, 4)
 
 
 @pytest.mark.req("REQ-COMPOSERLAB-0001")
