@@ -5,6 +5,13 @@ nothing from `common` — anchored so a typed Basic Energy sits at the retired A
 """
 from __future__ import annotations
 
+from typing import NewType
+
+
+#: Card-worth points. A distinct annotation keeps the Worth scale visible at public seams while
+#: retaining float arithmetic at runtime.
+Worth = NewType("Worth", float)
+
 ROLE_TIER: dict[str, float] = {
     "win_condition": 30.0,
     "primary_attacker": 30.0,

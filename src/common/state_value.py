@@ -2,7 +2,7 @@
 
 `state_value(model)` answers *what is this position worth, in prizes?*; a play is priced by
 DIFFERENCING it against `apply_option`'s closed-form `after`. Damage crosses on
-`currency.PRIZE_DAMAGE_RATE`, Worth only on :data:`POC_WORTH_PRIZE_RATE`; one prize == `KO_SCORE`.
+`currency.PRIZE_DAMAGE_RATE`, Worth only through :func:`worth_to_prizes`; one prize == `KO_SCORE`.
 
 Three standing constraints (reasoning in the ADRs):
 
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
 
 from common import currency, needs as _needs
-from common.card_worth import ROLE_TIER
+from common.card_worth import ROLE_TIER, Worth
 from common.grading import HORIZON, halve
 from common.strategy.context import ENERGY_RECOVER, FOLLOWUP_W, _BENCH_MAX
 from common.strategy.sequence import followup_damage
@@ -29,7 +29,12 @@ if TYPE_CHECKING:                      # the seam, expressed without importing t
 
 #: **AUTHORED, never derived** — 1/120 prizes per Worth point, the one Worth->prize bridge (ADR-0097).
 #: A LITERAL, not an expression over `currency.py`'s DERIVED constants, and it must never migrate there.
-POC_WORTH_PRIZE_RATE: float | None = 1.0 / 120.0
+_POC_WORTH_PRIZE_RATE: float | None = 1.0 / 120.0
+
+
+def worth_to_prizes(worth: Worth) -> float:
+    """Cross card Worth into composer prize currency at the one authored rate."""
+    return float(worth) * float(_POC_WORTH_PRIZE_RATE or 0.0)
 
 # ── the positional band — every constant below is a SCALE anchor or a RUNAWAY GUARD ───────────────
 # Bound per-play, never as a family TOTAL: a saturated term has zero derivative and is never explored.
@@ -484,7 +489,7 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("body_payoff", "deploy_marginal"),
         composition="Assignment coverage of LIVE slots plus re-access, on the `set_keep_v2` spine, "
                     "MINUS the demand those slots represent (Issue #400 Phase 2). Its "
-                    "Worth-denominated part is the one place POC_WORTH_PRIZE_RATE crosses. A "
+                    "Worth-denominated part is the one place worth_to_prizes crosses. A "
                     "card's value once PLAYED belongs to `readiness` or `development`; this family "
                     "prices it only while it is still in hand — but it also prices the NEED that "
                     "playing it retires, which is what makes a play a gain rather than a loss.",
@@ -912,13 +917,12 @@ def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
          slot_demand: float = 0.0, worth_prize_rate: float | None = None) -> float:
     """What is still IN HAND against what the position still NEEDS, in prizes. ⚠️ ``slot_demand`` is
     the DEMAND half of one ledger (ADR-0127): without it every card play priced as a loss. SIGNED."""
-    rate = POC_WORTH_PRIZE_RATE if worth_prize_rate is None else worth_prize_rate
-    if not rate:
-        return 0.0
     worth = (float(assignment_coverage) + float(re_access) + float(hand_worth)
              - float(slot_demand))
+    converted = (worth_to_prizes(Worth(worth)) if worth_prize_rate is None
+                 else worth * float(worth_prize_rate))
     # Capped from ABOVE only: a `max(0.0, …)` floor would make an unmet need free again.
-    return min(_HAND_CAP, worth * float(rate))
+    return min(_HAND_CAP, converted)
 
 
 def development(*, deploy_marginal: float, evolve_marginal: float, bench_slot_price: float,
@@ -1109,7 +1113,7 @@ def double_counted() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "POC_WORTH_PRIZE_RATE", "LOSS_PRIZES", "WIN_PRIZES",
+    "LOSS_PRIZES", "WIN_PRIZES", "worth_to_prizes",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
     "TermFamily", "ExposedBody", "ReadyBody", "AttackEV",
     "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",

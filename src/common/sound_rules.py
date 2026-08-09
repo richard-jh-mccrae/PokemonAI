@@ -259,7 +259,7 @@ WHITELIST: tuple[SoundRule, ...] = (
                        "reconciliation is the sharpest of the three: composing the two SHIPPED legs "
                        "(`PRIZE_DAMAGE_RATE` 100 / `ITEM_HOLD_WORTH_RATE` 1.0) says ~100 worth per "
                        "prize, a ~39x disagreement recorded in `currency.py` rather than smoothed "
-                       "over. `POC_WORTH_PRIZE_RATE` SETTLED it (POC-T3, 2026-08-02) and settled it "
+                       "over. `state_value.worth_to_prizes` SETTLED it (POC-T3, 2026-08-02) and settled it "
                        "by REFERENT rather than by moving either number: the gust rate converts a "
                        "prize-equivalent INTO Worth to rank a slot inside a Worth-denominated DP, "
                        "while the scaffold converts a HELD CARD's Worth into prizes to price "
@@ -280,7 +280,7 @@ WHITELIST: tuple[SoundRule, ...] = (
     ),
     SoundRule(
         id="poc-worth-prize-rate",
-        entry="`POC_WORTH_PRIZE_RATE` (module-local to `state_value`)",
+        entry="`state_value.worth_to_prizes` (private authored rate)",
         type=AUTHORED_SCAFFOLD,
         fact="the Worth -> prize exchange rate",
         reason="Needed because differencing makes every card-spending play cross the scale boundary: "

@@ -737,10 +737,12 @@ seam this composes), combat module (bare)
 
 **Card-Worth Oracle** (ADR-0065):
 The ONE closed-form home for card keep/shed valuation — every equation is `value = Worth × Odds`.
-Six modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
-for the five; the sixth, **Playability**, is ADR-0104's and has no glossary term of its own):
+Seven modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
+for the five; **Playability** and the blind-draw composition helper add no glossary term):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
-probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
+probability; [deck_value.py](deck_value.py) gives one blind draw the copy-weighted mean Worth of the
+unseen deck-plus-prizes pool, capped by live deck size for multiple draws), **Odds**
+([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
 factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
@@ -1343,7 +1345,7 @@ already shipped — but it does carry `DEPLOY_BAND`'s reconciliation debt, and t
 it: composing the two shipped legs (`PRIZE_DAMAGE_RATE` 100 ÷ `ITEM_HOLD_WORTH_RATE` 1.0) says ~100
 worth per prize, a ~39× disagreement. That is evidence about the WORTH scale (range 0–30 by
 construction, so a 100-point slot would erase every other card's contribution rather than price one),
-and `state_value.POC_WORTH_PRIZE_RATE` is what settles it.
+and `state_value.worth_to_prizes` is what settles it; the authored rate stays private.
 _Avoid_: Worth Damage Rate (a different scale PAIR, and still absent by design), prize_to_worth (the
 GENERAL rate this is not — `test_currency.py` fails the moment that name appears), "conversion factor"
 for the ratio itself (the ratio is dimensionless; only the band carries units)
@@ -2056,7 +2058,7 @@ element-level granularity is what separates two writes to distinct instances)
 **Hand Ledger**:
 `state_value.hand` reads ONE `needs.Resolution` and prices both sides of it: what my hand and deck
 COVER (`assignment_coverage` + `re_access` + `hand_worth`) MINUS what the position DEMANDS
-(`slot_demand`), crossed once at `POC_WORTH_PRIZE_RATE`. Ruled by **ADR-0130** (Issue #400). Before
+(`slot_demand`), crossed once at `state_value.worth_to_prizes`. Ruled by **ADR-0130** (Issue #400). Before
 the demand leg it priced supply alone, which under differencing inverts every card play — spending a
 card moved supply down and demand not at all, so the human-ruled Energy attach priced **negative on
 31 of 31** corpus frames. One Energy retires two `fund_attack` slots (16 Worth of demand) for 8 of

@@ -334,12 +334,24 @@ def test_every_family_publishes_an_ACTIONABLE_blind_spot_list():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
+def test_worth_to_prizes_is_the_public_worth_currency_crossing():
+    from common.card_worth import Worth
+
+    assert sv.worth_to_prizes(Worth(0.0)) == 0.0
+    assert sv.worth_to_prizes(Worth(30.0)) == pytest.approx(0.25)
+    assert not hasattr(sv, "POC_WORTH_PRIZE_RATE")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_is_reconciled_against_its_anchor_not_pinned_as_a_literal():
     """ADR-0097 decision 1: the rate is authored but must be STATED against the incumbents. Asserting
     the arithmetic is what binds it — re-deriving `DEPLOY_BAND` fails here rather than silently."""
-    assert sv.POC_WORTH_PRIZE_RATE == pytest.approx(
+    from common.card_worth import Worth
+
+    rate = sv.worth_to_prizes(Worth(1.0))
+    assert rate == pytest.approx(
         currency.DEPLOY_BAND / currency.DEPLOY_WORTH_SCALE / currency.PRIZE_DAMAGE_RATE)
-    per_worth_damage = sv.POC_WORTH_PRIZE_RATE * currency.PRIZE_DAMAGE_RATE
+    per_worth_damage = rate * currency.PRIZE_DAMAGE_RATE
     assert per_worth_damage == pytest.approx(25.0 / 30.0, rel=1e-6)
     # Inside the catalogued spread (deploy 0.83 .. energy 6.67) — ADR-0078's own honesty condition.
     assert 25.0 / 30.0 <= per_worth_damage <= (160.0 / 3.0) / 8.0
@@ -348,10 +360,10 @@ def test_the_worth_scaffold_is_reconciled_against_its_anchor_not_pinned_as_a_lit
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_by_averaging():
     """The two rates answer DIFFERENT questions, so neither moves: `GUST_TARGET_WORTH_RATE` converts a
-    prize INTO Worth, `POC_WORTH_PRIZE_RATE` a held card's Worth into prizes (ADR-0107)."""
-    from common.card_worth import ROLE_TIER
+    prize INTO Worth, `worth_to_prizes` a held card's Worth into prizes (ADR-0107)."""
+    from common.card_worth import ROLE_TIER, Worth
 
-    mine_worth_per_prize = 1.0 / sv.POC_WORTH_PRIZE_RATE
+    mine_worth_per_prize = 1.0 / sv.worth_to_prizes(Worth(1.0))
     gust_worth_per_prize = currency.GUST_TARGET_WORTH_RATE
     assert mine_worth_per_prize / gust_worth_per_prize > 40.0, (
         "the disagreement is real and RECORDED — if it ever closes, say so deliberately")
@@ -362,7 +374,7 @@ def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_
 
     # The reductio: on the gust seam's rate a held wincon outvalues the six prizes that END the match.
     wincon = ROLE_TIER["win_condition"]
-    assert wincon * sv.POC_WORTH_PRIZE_RATE == pytest.approx(0.25)
+    assert sv.worth_to_prizes(Worth(wincon)) == pytest.approx(0.25)
     assert wincon / gust_worth_per_prize > 6.0
 
 
@@ -383,25 +395,6 @@ def test_the_worth_leg_is_scale_invariant():
     base = sv.hand(**legs, worth_prize_rate=0.01)
     assert sv.hand(**legs, worth_prize_rate=0.02) == pytest.approx(2.0 * base)
     assert sv.hand(**legs, worth_prize_rate=0.0) == 0.0
-
-    # Re-pointing the MODULE constant is stronger than checking the families' signatures.
-    original = sv.POC_WORTH_PRIZE_RATE
-    try:
-        before = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=5),
-                  sv.survival([sv.ExposedBody(2.0, 2)]), sv.threat([1.0]),
-                  sv.readiness([sv.ReadyBody(2.1, 0.5, 1.0)]),
-                  sv.development(deploy_marginal=0.2, evolve_marginal=0.1,
-                                 bench_slot_price=0.05, line_topology=0.0))
-        sv.POC_WORTH_PRIZE_RATE = original * 7.0
-        after = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=5),
-                 sv.survival([sv.ExposedBody(2.0, 2)]), sv.threat([1.0]),
-                 sv.readiness([sv.ReadyBody(2.1, 0.5, 1.0)]),
-                 sv.development(deploy_marginal=0.2, evolve_marginal=0.1,
-                                bench_slot_price=0.05, line_topology=0.0))
-        assert before == after
-    finally:
-        sv.POC_WORTH_PRIZE_RATE = original
-
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_readiness_scale_is_the_planners_own_weight_carried_at_the_same_band():
@@ -2627,7 +2620,8 @@ def test_attaching_an_energy_that_retires_two_fund_slots_is_a_GAIN_not_a_loss():
     is worth +8. Supply alone read -8 — the sign inversion of Issue #400 Phase 2."""
     before = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=2, covering_card=True)))
     after = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=0, covering_card=False)))
-    assert after - before == pytest.approx(8.0 * sv.POC_WORTH_PRIZE_RATE), (
+    from common.card_worth import Worth
+    assert after - before == pytest.approx(sv.worth_to_prizes(Worth(8.0))), (
         "attaching the Energy retires 16 Worth of demand at a cost of 8 Worth of supply")
     assert after > before, "the attach must be a GAIN — this is the whole defect"
 
@@ -2640,8 +2634,9 @@ def test_a_play_that_retires_no_need_is_still_charged_its_hold():
     holding = needs.Resolution(slots=(), eligibility=(), resupply=(), hand_ids=(E_F,),
                                latent_worth=9.0)
     spent = needs.Resolution(slots=(), eligibility=(), resupply=(), hand_ids=(), latent_worth=0.0)
+    from common.card_worth import Worth
     assert (sv.hand(**_hand_legs_of(spent)) - sv.hand(**_hand_legs_of(holding))
-            == pytest.approx(-9.0 * sv.POC_WORTH_PRIZE_RATE))
+            == pytest.approx(-sv.worth_to_prizes(Worth(9.0))))
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
