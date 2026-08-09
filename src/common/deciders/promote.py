@@ -199,10 +199,10 @@ class PromoteRetreatMixin:
             energies.pop(keep)
         return dict(ma, energies=energies)
 
-    def _retreat_cost_legs(self, obs: dict, card_worth: float = 0.0) -> dict:
+    def _retreat_cost_legs(self, obs: dict, card_worth: float = 0.0, *, active=None) -> dict:
         """What LEAVING the Active Spot costs (ADR-0100 §8, ADR-0069 §5c). Computed ONCE per menu —
         §9's claim is that it is CONSTANT across destinations. ``card_worth`` prices a switch ITEM (§11)."""
-        ma = self._my_active(obs)
+        ma = self._my_active(obs) if active is None else active
         if not ma:
             return {}
         if card_worth > 0.0:                          # a Switch Item pays a card, never a build
@@ -219,13 +219,35 @@ class PromoteRetreatMixin:
         return {"build_before": self._build_standing(ma),
                 "build_after": self._build_standing(after), "resource_premium": premium}
 
-    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw, cost: dict) -> RetreatSide:
+    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw, cost: dict,
+                      active=None) -> RetreatSide:
         """The A-side of a voluntary swap, for ONE destination (ADR-0100 §4, §8). Only PRESERVATION is
         per-destination: the Bench A lands on depends on which body left it."""
-        ma = self._my_active(obs)
+        ma = self._my_active(obs) if active is None else active
         bench_after = [b for b in self._my_bench_raws(obs) if b is not promoted_raw] + [ma]
         return RetreatSide(body=self._promote_body(obs, board, ma, draws=0,
                                                    bench_after=bench_after), **cost)
+
+    def _retreat_option_value(self, obs: dict, board: Board, active: dict | None) -> float:
+        """ADR-0100 §9's whether-site asked as a COUNTERFACTUAL: what retreating off ``active`` is
+        worth. 0.0 when unaffordable there — an option that does not exist buys nothing."""
+        if not (getattr(self, "promote_retreat_value", False) and active):
+            return 0.0
+        # NOT `_can_retreat`, which consults no board-level grant — the divergence `common.retreat_cost`
+        # records against Issue #149. This side must agree with the cost it then charges.
+        if self._effective_retreat_cost(obs, active) > len(active.get("energies") or []):
+            return 0.0
+        cost = self._retreat_cost_legs(obs, active=active)
+        draws = self._turn_dig_depth(obs)
+        best = 0.0
+        for raw in self._my_bench_raws(obs):
+            if not raw or raw.get("id") is None:
+                continue
+            val = promote_value(PromoteRetreatInputs(
+                body=self._promote_body(obs, board, raw, draws=draws),
+                retreat=self._retreat_side(obs, board, promoted_raw=raw, cost=cost, active=active)))
+            best = max(best, val.total)
+        return best                                   # floored at 0: a retreat you would not take
 
     def _promote_retreat_decision(self, obs: dict, select: dict, board: Board, ctx, option: dict):
         """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0100). Returns the TERM row, or None to

@@ -263,7 +263,9 @@ def _csv_truth(*, hp_shift=0):
         fake_card = SimpleNamespace(
             name=_norm_text(first.get("Card Name")) or "",
             cardType=CARD_TYPES.get(_norm_text(first.get(STAGE_COLUMN))),
-            skills=effect_texts,
+            # `.text`-carrying, because `card_text._skill_texts` reads `s.text`/`s["text"]` and skips
+            # a bare string — as plain texts these derived BOTH Tool legs as 0 for EVERY Tool.
+            skills=[{"text": text} for text in effect_texts],
             **_stage_flags(_norm_text(first.get(STAGE_COLUMN)), effect_texts),
         )
         truth[cid] = {

@@ -122,14 +122,16 @@ def test_dont_feed_the_draw_engine_dragapult_f21(dragapult):
     assert chosen[0] != engine["i"], "the only {D} went into the draw engine again"
 
 
-@pytest.mark.xfail(strict=True, reason=marks("ml_air_balloon_on_the_active_f87")[0].kwargs["reason"])
+# The `FLIPS` row of the same fixture name STAYS, and is not a contradiction: it records the
+# COMPOSER's flip, and the composer still prices a Tool attach at 0.0 (ADR-0135). Only the Pilot does.
 def test_a_tool_attach_is_not_an_energy_attach_f87(lucario):
-    """The retreat tool belongs on the Active. Scored in ISOLATION: at the live frame the planner
-    commits an attack instead, so `decide()` there answers a different question."""
+    """The retreat tool belongs on the Active, and only the Active pays a Retreat Cost for it to buy
+    down. Both legs of `_tool_attach_value` read the Active, so a bench recipient differences to 0."""
     fx = _fixture("ml_air_balloon_on_the_active_f87")
     d = lucario.explain(fx["obs"])
     active_attach, bench_attach = fx["correct"][0], 2
     assert d.options[active_attach].score > d.options[bench_attach].score
+    assert d.chosen[0] == active_attach, "the frame now DECIDES it, not merely scores it higher"
 
 
 
