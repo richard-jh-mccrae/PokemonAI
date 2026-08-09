@@ -97,3 +97,13 @@ class OpeningMixin:
             if card and card.get("id") is not None:
                 present.add(card["id"])
         return next((cid for cid in self._effective_starter_order(obs, sp) if cid in present), None)
+
+    def _declared_starter_pick(self, obs: dict, select: dict, top_starter_id: int | None) -> int | None:
+        """The structural Set-Up Active winner's menu index, or None outside a declaration."""
+        if top_starter_id is None or select.get("context") != _SETUP_ACTIVE:
+            return None
+        for index, option in enumerate(select.get("option") or []):
+            card = self._option_pokemon(obs, select, option)
+            if card and card.get("id") == top_starter_id:
+                return index
+        return None

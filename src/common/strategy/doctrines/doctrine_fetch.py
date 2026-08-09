@@ -13,8 +13,7 @@ from typing import NamedTuple
 from common.fetch_closure import (DEADNESS as _DEADNESS_READING, REACH as _REACH_READING,
                                   FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
                                   FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
-from common.option_equivalence import canonical_keys   # ADR-0103: the grab's tie-break is a board
-                                                       # fact (the fingerprint), never the menu index
+from common.option_equivalence import canonical_keys
 from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _CARD,
                                       _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
                                       _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
@@ -388,46 +387,43 @@ class FetchMixin:
         return bool(st and st.hp > 0 and (_ENGINE_TAGS & set(tags)))
 
     def _virtual_grab_board(self, board, select: dict, acquired_ids: list, bench_ctx: bool):
-        """`board` as if the cards acquired so far this multi-pick were already had, so greedy re-scoring
-        will not re-pick an already-satisfied need (ADR-0023)."""
-        acq = {a for a in acquired_ids if a is not None}
-        wincon = self._wincon_set()
+        """Board after prior picks, so Issue #388 decks keep their validated fetch comparator."""
+        acquired = {cid for cid in acquired_ids if cid is not None}
+        wincons = self._wincon_set()
         return replace(
             board,
-            in_play_ids=board.in_play_ids | acq,
+            in_play_ids=board.in_play_ids | acquired,
             my_bench=board.my_bench + (len(acquired_ids) if bench_ctx else 0),
-            wincon_in_play=board.wincon_in_play or bool(wincon & acq),
-            wincon_in_hand=board.wincon_in_hand or bool(wincon & acq),
-            support_in_play=board.support_in_play or any(self._is_support_id(a) for a in acq),
-            top_fetch_priority_id=self._top_fetch_priority_id(select, exclude=acq))
+            wincon_in_play=board.wincon_in_play or bool(wincons & acquired),
+            wincon_in_hand=board.wincon_in_hand or bool(wincons & acquired),
+            support_in_play=board.support_in_play or any(self._is_support_id(cid) for cid in acquired),
+            top_fetch_priority_id=self._top_fetch_priority_id(select, exclude=acquired))
 
     def _greedy_grab(self, obs: dict, select: dict, board, traces: list, options: list,
                      min_count: int, max_count: int) -> list[int]:
-        """Resolve a fetch-grab multi-select greedily rather than static top-N, re-scoring against a virtual
-        board between picks (ADR-0023). The decline bar is BELOW zero at a bench grab, ``<= 0`` at TO_HAND."""
+        """Doctrine-owned fallback: greedily reprice after each acquired card (ADR-0023)."""
         bench_ctx = select.get("context") in _BENCH_PLACEMENT_CONTEXTS
         canon = canonical_keys(options, obs)
         if bench_ctx:
-            # The Bench holds FIVE (`docs/rulebook.txt` L75) — a game rule, so it bounds the pick as a
-            # filter, not a price. `min_count` still wins: refusing a mandatory pick is worse.
             max_count = max(int(min_count),
                             min(int(max_count), _BENCH_MAX - int(board.my_bench or 0)))
         remaining = set(range(len(options)))
-        cur = traces
+        current = traces
         chosen: list[int] = []
         acquired: list = []
         while len(chosen) < max_count and remaining:
-            i = min(remaining, key=lambda j: self._order_key(cur[j], canon[j], j))
-            if len(chosen) >= min_count and (cur[i].score < 0 if bench_ctx else cur[i].score <= 0):
-                break                                        # take-fewer: nothing more worth grabbing
-            chosen.append(i)
-            remaining.discard(i)
-            acquired.append(cur[i].card_id)
+            index = min(remaining, key=lambda i: self._order_key(current[i], canon[i], i))
+            if len(chosen) >= min_count and (current[index].score < 0 if bench_ctx
+                                             else current[index].score <= 0):
+                break
+            chosen.append(index)
+            remaining.remove(index)
+            acquired.append(current[index].card_id)
             if len(chosen) >= max_count or not remaining:
                 break
-            vboard = self._virtual_grab_board(board, select, acquired, bench_ctx)
-            cur = [self._option_trace(obs, select, vboard, o, k) if k in remaining else cur[k]
-                   for k, o in enumerate(options)]
+            virtual = self._virtual_grab_board(board, select, acquired, bench_ctx)
+            current = [self._option_trace(obs, select, virtual, option, i) if i in remaining
+                       else current[i] for i, option in enumerate(options)]
         return chosen
 
     def _support_in_play(self, me: dict) -> bool:

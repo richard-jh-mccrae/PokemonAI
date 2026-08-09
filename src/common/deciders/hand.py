@@ -177,15 +177,6 @@ class HandMixin:
             self._discard_fuel_cache = frozenset(types)
         return self._discard_fuel_cache
 
-    def _discard_needs_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
-        """**The** forced-discard DECIDER, unconditionally. No kill-switch and nothing to revert TO: seam-D v1
-        and the `_DISCARD` ladder are deleted, so an OFF branch would run a path nothing has ever graded."""
-        rows = self._discard_equation_rows(obs, select, board, options)
-        if not rows:
-            return None
-        _keeps, eq2_pick = self._needs_v2(obs, board, rows, picks)
-        return eq2_pick or None
-
     def _discard_equation_rows(self, obs: dict, select: dict, board: Board, options: list):
         """The per-candidate priced rows `_needs_v2` consumes, plus the gates/fuel/burst flags the gust and
         refresh keep-value sites read off the same computation. Pure and deterministic (safe mid-sim)."""

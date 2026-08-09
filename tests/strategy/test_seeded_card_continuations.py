@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import sys
+import types
 from dataclasses import dataclass
 
 import pytest
@@ -10,13 +12,16 @@ from conftest import needs_live_board_search
 from common import apply_engine
 from common import apply_option as ao
 from common import composer as cp
+from common.runtime import build_pilot
 from common.strategy.context import _CARD
+from common.strategy.planner import TurnLine
 from train.continuation_parity import FIXTURES, bind_record, load_records, observable_writes
 from train.tune import _build_pilot
 
 
 _CONTEXTS = frozenset({1, 2, 3, 4, 7, 15, 17, 21, 22})
 _NATIVE_CONTEXTS = _CONTEXTS - {2}  # Native cannot restore the opponent Active's play-age bit.
+_RUNTIME_CONTEXTS = frozenset({3, 4, 7, 15, 17, 21, 22})
 
 
 @dataclass
@@ -31,9 +36,12 @@ class _EngineObservation:
 class _FreshSearch:
     """One returned native successor per fresh session; reusing one must fail the test."""
 
-    def __init__(self, after: dict, expected_index: int):
+    def __init__(self, after: dict, expected_index: int, *, terminal: bool = False,
+                 preferred_index: int | None = None):
         self.after = after
-        self.expected_index = expected_index
+        self.expected_indices = {expected_index} if isinstance(expected_index, int) else set(expected_index)
+        self.terminal = terminal
+        self.preferred_index = preferred_index
         self.begun = self.ended = 0
         self.open = False
 
@@ -49,10 +57,15 @@ class _FreshSearch:
 
     def search_step(self, search_id, selected):
         assert self.open and search_id == self.begun
-        assert selected == [self.expected_index]
+        assert len(selected) == 1 and selected[0] in self.expected_indices
+        current = copy.deepcopy(self.after["current"])
+        if self.preferred_index is not None and selected[0] != self.preferred_index:
+            my_index = int(current.get("yourIndex") or 0)
+            prizes = current["players"][my_index].setdefault("prize", [])
+            prizes.extend(copy.deepcopy(prizes[0]) for _ in range(selected[0] + 1))
         return type("Stepped", (), {"observation": _EngineObservation(
-            current=self.after["current"], logs=self.after.get("logs") or [],
-            select=self.after.get("select"))})()
+            current=current, logs=self.after.get("logs") or [],
+            select=None if self.terminal else self.after.get("select"))})()
 
     def search_end(self):
         assert self.open
@@ -111,7 +124,8 @@ def test_composer_prices_only_the_eight_seeded_card_continuations(pilot):
     record = records[2]
     binding = bind_record(record, trace_root=FIXTURES)
     assert binding.reason is None
-    search = _FreshSearch(binding.successor["obs"], record["selected"][0])
+    search = _FreshSearch(binding.successor["obs"], range(len(record["seed_observation"]["select"]["option"])),
+                          terminal=True)
     model, option = _model_and_option(pilot, record)
     result = cp.compose(model, [option], search_api=search)
 
@@ -120,11 +134,11 @@ def test_composer_prices_only_the_eight_seeded_card_continuations(pilot):
     assert search.begun == 0
 
 
-def test_planner_arms_the_composer_for_only_the_eight_seeded_card_contexts(pilot):
+def test_planner_arms_the_composer_for_the_seven_runtime_card_contexts(pilot):
     """The planner reaches the single composer route for every reconstructible continuation."""
 
     records = {record["context"]: record for record in load_records()}
-    for context in sorted(_NATIVE_CONTEXTS):
+    for context in sorted(_RUNTIME_CONTEXTS):
         record = records[context]
         binding = bind_record(record, trace_root=FIXTURES)
         assert binding.reason is None
@@ -156,6 +170,63 @@ def test_planner_arms_the_composer_for_only_the_eight_seeded_card_contexts(pilot
     assert pilot.plan_turn(obs, select, board, [option], traces) is None
     assert pilot._composer_trace is None
     assert pilot._search_api.begun == 0
+
+
+def test_runtime_built_pilot_uses_live_cg_api_for_all_seeded_card_menus(pilot, monkeypatch):
+    """Every reconstructible packaged route resolves ``cg.api`` without private injection."""
+    records = {record["context"]: record for record in load_records()}
+    for context in sorted(_RUNTIME_CONTEXTS):
+        record = records[context]
+        binding = bind_record(record, trace_root=FIXTURES)
+        assert binding.reason is None
+        option_count = len(record["seed_observation"]["select"]["option"])
+        preferred = None if context in {7, 22} else record["selected"][0]
+        search = _FreshSearch(binding.successor["obs"], range(option_count), terminal=True,
+                              preferred_index=preferred)
+        monkeypatch.setitem(sys.modules, "cg", types.SimpleNamespace(api=search))
+        runtime_pilot = build_pilot(pilot.strategy, pilot.deck, stats=pilot.stats,
+                                    scout=None, briefs=None)
+
+        decision = runtime_pilot.explain(copy.deepcopy(record["seed_observation"]))
+
+        assert decision.planned and decision.planned.goal == "compose", context
+        assert search.begun == search.ended > 0, context
+
+
+@needs_live_board_search
+def test_runtime_built_pilot_commits_all_seven_native_successors(pilot):
+    """The packaged constructor and real native seam meet, not merely two separately green proofs."""
+    records = {record["context"]: record for record in load_records()}
+    for context in sorted(_RUNTIME_CONTEXTS):
+        runtime_pilot = build_pilot(pilot.strategy, pilot.deck, stats=pilot.stats,
+                                    scout=None, briefs=None)
+
+        decision = runtime_pilot.explain(copy.deepcopy(records[context]["seed_observation"]))
+
+        assert decision.planned and decision.planned.goal == "compose", context
+        assert decision.composer and not decision.composer["gaps"], context
+
+
+def test_mega_starmie_promotion_corrections_are_priced_and_cannot_reuse_a_pre_ko_plan(pilot):
+    """All four empty-Active frames are priced; their fingerprint rejects a cached pre-KO line."""
+    from corpus_helpers import corpus_index
+    frames = [c.obs for c in corpus_index().values()
+              if c.agent == "mega_starmie" and (c.obs.get("select") or {}).get("context") == 4]
+    assert len(frames) == 4
+    for obs in frames:
+        select = obs["select"]
+        assert not ((obs["current"]["players"][obs["current"]["yourIndex"]].get("active") or [None])[0])
+        pre_ko = copy.deepcopy(obs)
+        pre_ko["current"]["players"][pre_ko["current"]["yourIndex"]]["active"] = [{"id": 666, "hp": 1}]
+        pilot._turn_plan = (pilot._plan_fingerprint(pre_ko, select),
+                            TurnLine(next_step=[0], goal="stale"))
+        board = pilot._board(obs, select)
+        traces = [pilot._option_trace(obs, select, board, option, index)
+                  for index, option in enumerate(select["option"])]
+
+        assert all(trace.promote_retreat_working is not None for trace in traces)
+        assert pilot.plan_turn(obs, select, board, select["option"], traces) is None
+        assert pilot._turn_plan[0] == pilot._plan_fingerprint(obs, select)
 
 
 @pytest.mark.parametrize(("minimum", "maximum"), ((2, 2), (0, 0), (-1, 1)))

@@ -1,5 +1,4 @@
 """The forced-discard keep-value equation — its priced ROWS and the v2 needs-assignment that DECIDES.
-
 Each case reads the columns off `_discard_equation_rows` directly AND asserts the decision off
 `dec.chosen`, through the shipped keep-value v2 path with no v1 ranking and no ladder beneath it.
 ADR-0106 gave `needs.cheapest_removal`'s ranking key a DEADNESS leg above residual worth.
@@ -41,7 +40,7 @@ def _setup(hand_ids, *, minc=2, powered=False):
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=funcs)
+                  functions=funcs, leaf_followups=True)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     active = [{"id": MEGA, "hp": 330, "energies": [0] * 3}] if powered else [None]
@@ -85,8 +84,6 @@ def test_a_spent_burst_is_fodder_only_once_the_active_is_fully_powered():
     rp = _by_cid(_rows(powered, obs_p))
     assert rp[IGNITION]["keep"] == 0.0 and rp[IGNITION]["spent_burst"] is True    # spent -> fodder
     assert rp[IGNITION]["deadness"] > rp[FILLER]["deadness"]
-    # The case residual worth gets BACKWARDS: the spent burst still carries catalog worth 30 against
-    # the filler's 0, so a worth-first tie-break sheds the live spare and keeps the corpse.
     assert powered.explain(obs_p).chosen == [1]
 
 
@@ -147,7 +144,7 @@ def test_deadness_is_one_bit_however_many_ways_a_card_is_expired():
     row = _by_cid(_rows(pilot, obs))[SALVATORE]
     assert row["redundant_tutor"] is True
     assert row["deadness"] == 1 and row["pitch"] >= 1
-    assert pilot.explain(obs).chosen != [0]                 # never the Mega
+    assert pilot.explain(obs).chosen == [1]
 
 
 @pytest.mark.req("REQ-NEEDS-0005")
@@ -166,9 +163,33 @@ def test_v2_prices_duplicate_wincons_as_a_SET_not_a_sum():
 
 
 @pytest.mark.req("REQ-NEEDS-0006")
-def test_v2_STANDS_ALONE_as_the_discard_decider():
-    """The v2 needs-assignment IS the discard decider: no seam-D v1 under it, no `_DISCARD` ladder
-    under that."""
+def test_leaf_differencing_stands_alone_as_the_discard_decider():
+    """The leaf preserves the exact hand-ledger result without the retired Needs decider."""
     pilot, obs = _setup([MEGA, MEGA, CAPE, WATER, SALVATORE])
-    assert set(pilot.explain(obs).chosen) == {3, 4}
-    assert not {0, 1} <= set(pilot.explain(obs).chosen)         # both Megas kept
+    chosen = pilot.explain(obs).chosen
+    assert set(chosen) == {3, 4}
+    assert not {0, 1} <= set(chosen)
+    assert not hasattr(pilot, "_discard_needs_pick")
+
+
+@pytest.mark.req("REQ-NEEDS-0007")
+def test_all_seven_mega_starmie_corrections_run_through_the_leaf_owner():
+    """The shipped population is priced by the iterative leaf, never the deferred deck owner."""
+    from corpus_helpers import corpus_index
+    from train.tune import _build_pilot
+
+    records = [c for c in corpus_index().values()
+               if c.agent == "mega_starmie" and (c.obs.get("select") or {}).get("context") == DISCARD]
+    assert len(records) == 7
+    for record in records:
+        pilot = _build_pilot("mega_starmie")[0]
+        calls = []
+        leaf = pilot._leaf_discard_picks
+        pilot._leaf_discard_picks = lambda *args, **kwargs: (calls.append(True) or leaf(*args, **kwargs))
+        pilot._deferred_deck_discard_picks = lambda *_args, **_kwargs: pytest.fail(
+            "Mega Starmie reached the deferred Needs owner")
+
+        chosen = pilot.explain(record.obs).chosen
+
+        assert calls == [True]
+        assert set(record.correct) <= set(chosen)

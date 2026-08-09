@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from common import needs
 from common.state_model import StateModel
-from common.strategy.context import KO_SCORE
+from common.strategy.context import KO_SCORE, _DISCARD
 from common.strategy.planning.readiness import _READINESS_CAP
 from common.strategy.planning.turn_line import _prune_none
 
@@ -123,18 +123,36 @@ class LeafValueMixin:
         try:
             board = self._board_hypothetical(mobs)
             rows = self._needs_hand_rows(mobs, board)
+            discard_context = (mobs.get("select") or {}).get("context") == _DISCARD
+            if discard_context:
+                rows = self._as_discard_rows(rows, mobs, board)
             if not rows:
                 return None
-            slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
-            # deferred import: `common.pilot` imports THIS module, so a top-level import is a cycle
-            from common.pilot import _GENERAL_WORTH_W
+            # A discard projection freezes this root ledger across removals, so general-worth belongs
+            # in saturating slots (duplicates cover one slot). Other leaf states retain the latent form.
+            slots, elig = self._resolve_needs(mobs, board, rows,
+                                              include_general=discard_context)
+            if discard_context:
+                # A row already classified as discard fuel/fodder has no KEEP supply. Fuel slots remain
+                # eligible but are intentionally absent from state_value.hand's demand and coverage.
+                elig = [({j for j in row_elig if slots[j].supplied_by_pitch}
+                         if rows[i].get("pitch", 0) else row_elig)
+                        for i, row_elig in enumerate(elig)]
             covered = {i for i, e in enumerate(elig) if e}
-            latent = sum(_GENERAL_WORTH_W * self._role_value(r["cid"])
-                         for i, r in enumerate(rows) if i not in covered)
+            if discard_context:
+                latent_by_hand = tuple(0.0 for _ in rows)
+            else:
+                # deferred import: `common.pilot` imports THIS module, so a top-level import is a cycle
+                from common.pilot import _GENERAL_WORTH_W
+                latent_by_hand = tuple(
+                    _GENERAL_WORTH_W * self._role_value(r["cid"])
+                    if i not in covered else 0.0
+                    for i, r in enumerate(rows))
             return needs.Resolution(slots=tuple(slots), eligibility=tuple(elig),
                                     resupply=tuple([0.0] * len(slots)),
                                     hand_ids=tuple(r["cid"] for r in rows),
-                                    latent_worth=float(latent))
+                                    latent_worth=float(sum(latent_by_hand)),
+                                    latent_by_hand=latent_by_hand)
         except Exception:
             return None
         finally:

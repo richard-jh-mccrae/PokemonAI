@@ -32,6 +32,7 @@ from common.strategy.damage_context import damage_context as _assemble_damage_co
 #: Sentinel for "use the policy threaded at :meth:`StateModel.build`". An explicit ``charged=None``
 #: means the worst-case CEILING, not "unset" — a plain ``None`` default would collapse the two.
 _THREADED = object()
+_REBUILD_UNCHANGED = object()
 
 #: Fallback Bench cap when an observation omits the engine's own ``benchMax`` (rulebook L75).
 _BENCH_MAX = 5
@@ -1194,16 +1195,21 @@ class StateModel(_Lazily):
         })
         return model
 
-    def rebuilt(self, obs: dict, *, reuse_their_side: bool = False) -> "StateModel":
+    def rebuilt(self, obs: dict, *, reuse_their_side: bool = False,
+                needs_override=_REBUILD_UNCHANGED) -> "StateModel":
         """**The ONE sanctioned route to a hypothetical board** (Issue #382): a FRESH model over
-        ``obs``, never a patch. ``reuse_their_side`` requires the caller to have proven sharing."""
+        ``obs``. Reuse requires proof; ``needs_override`` carries a fixed demand across projection."""
         kwargs = self._origin[1]
         if not kwargs:
             raise ValueError(
                 "rebuilt() needs the knowledge seams `build()` was handed; this model was "
                 "constructed directly, so there is no Stat Provider to rebuild with")
+        if reuse_their_side or needs_override is not _REBUILD_UNCHANGED:
+            kwargs = dict(kwargs)
         if reuse_their_side:
-            kwargs = dict(kwargs, their_side=self.theirs)
+            kwargs["their_side"] = self.theirs
+        if needs_override is not _REBUILD_UNCHANGED:
+            kwargs["needs"] = needs_override
         return type(self).build(obs, **kwargs)
 
     @property

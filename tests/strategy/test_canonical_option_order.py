@@ -7,7 +7,7 @@ permuting the menu must not change which option the policy picks.
 import pytest
 
 from common.cards import CardFunctions
-from common.option_equivalence import AREA_BENCH, AREA_DECK, AREA_HAND
+from common.option_equivalence import AREA_BENCH, AREA_DECK, AREA_HAND, canonical_keys
 from common.pilot import OptionTrace, Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy
@@ -90,11 +90,10 @@ def test_the_needy_line_attach_tiebreak_still_outranks_the_canonical_key():
 
 @pytest.mark.req("REQ-PILOT-0028")
 def test_the_greedy_grab_picks_the_same_cards_from_a_permuted_menu():
-    """`_greedy_grab` RE-SCORES between picks, so it cannot consume `_score_order`'s list — it takes
-    the same canonical key instead."""
+    """The deferred doctrine fallback still re-scores and keeps canonical ties."""
     p = _pilot()
-    p._virtual_grab_board = lambda *a, **k: None                  # the re-score is not what is tested
-    p._option_trace = lambda obs, select, board, o, k: _trace(k, 1.0)
+    p._virtual_grab_board = lambda *args, **kwargs: None
+    p._option_trace = lambda obs, select, board, option, index: _trace(index, 1.0)
     cards = [_body(hp=70, serial=1), _body(hp=40, serial=2), _body(hp=10, serial=3)]
     select = {"context": _TO_HAND, "option": None}
 
@@ -103,12 +102,56 @@ def test_the_greedy_grab_picks_the_same_cards_from_a_permuted_menu():
         opts = [{"area": AREA_HAND, "index": i, "playerIndex": 0, "type": OPT_CARD}
                 for i in range(len(hand))]
         obs = {"current": {"yourIndex": 0,
-                           "players": [{"active": [], "bench": [], "hand": hand, "discard": []}, {}]}}
+                           "players": [{"active": [], "bench": [], "hand": hand,
+                                        "discard": []}, {}]}}
         picks = p._greedy_grab(obs, {**select, "option": opts}, None,
                                [_trace(i, 1.0) for i in range(len(hand))], opts, 0, 2)
         return sorted(hand[i]["serial"] for i in picks)
 
     assert grabbed((0, 1, 2)) == grabbed((2, 0, 1)) == grabbed((1, 2, 0))
+
+
+@pytest.mark.req("REQ-PILOT-0028")
+def test_leaf_multi_pick_uses_the_same_canonical_key_after_menu_permutation(monkeypatch):
+    """Iterated equal leaf deltas keep ADR-0103's board-fact tie break."""
+    from common import multi_pick
+    from common.multi_pick import leaf_pick_indices
+
+    monkeypatch.setattr(multi_pick, "state_value", lambda selected: float(len(selected)))
+    cards = [_body(hp=70, serial=1), _body(hp=40, serial=2), _body(hp=10, serial=3)]
+
+    def grabbed(order):
+        hand = [cards[i] for i in order]
+        opts = [{"area": AREA_HAND, "index": i, "playerIndex": 0, "type": OPT_CARD}
+                for i in range(len(hand))]
+        obs = {"current": {"yourIndex": 0,
+                           "players": [{"active": [], "bench": [], "hand": hand, "discard": []}, {}]}}
+        picks = leaf_pick_indices((), minimum=0, maximum=2,
+                                  keys=canonical_keys(opts, obs),
+                                  project=lambda selected: selected)
+        return sorted(hand[i]["serial"] for i in picks)
+
+    assert grabbed((0, 1, 2)) == grabbed((2, 0, 1)) == grabbed((1, 2, 0))
+
+
+def test_leaf_multi_pick_always_maximizes_the_after_state_delta(monkeypatch):
+    """Higher state value is better; no policy flag may invert the oracle."""
+    from common import multi_pick
+    from common.multi_pick import leaf_pick_indices
+
+    values = (-5.0, 1.0)
+    monkeypatch.setattr(multi_pick, "state_value", float)
+    picks = leaf_pick_indices(0.0, minimum=1, maximum=1, keys=["a", "b"],
+                              project=lambda selected: sum(values[i] for i in selected))
+    assert picks == [1]
+
+
+def test_leaf_multi_pick_rejects_an_impossible_mandatory_count():
+    from common.multi_pick import leaf_pick_indices
+
+    with pytest.raises(ValueError, match="legal selection"):
+        leaf_pick_indices(0.0, minimum=2, maximum=2, keys=["only"],
+                          project=lambda selected: selected)
 
 
 @pytest.mark.req("REQ-PILOT-0028")

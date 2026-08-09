@@ -12,12 +12,13 @@ import copy
 import dataclasses
 
 from collections import Counter
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from common import board_delta                # the Stadium clause home (Issue #410/#424): its
+from common import board_delta, needs         # the Stadium clause home (Issue #410/#424): its
                                               # `stadium_hp_delta` + `applies_to` are never re-derived
 from common import deck_odds
+from common.multi_pick import leaf_pick_indices
 from common import retreat_cost                # ADR-0100 §8's grant-aware cost
 from common.board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
@@ -169,7 +170,7 @@ class Pilot(
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, copy_top_value=False):
+                 snipe_relevance=False, copy_top_value=False, leaf_followups=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -244,6 +245,8 @@ class Pilot(
                                                         # ADR-0051 steer stand down together while it is armed
         self.deny_relevance = deny_relevance            # ADR-0080: emits the Deny Relevance read and ARMS all
                                                         # three deny surfaces. OFF leaves ADR-0062's oracle live.
+        self.leaf_followups = leaf_followups            # Issue #387: Mega Starmie's validated CARD and
+                                                        # multi-pick leaf ownership; other decks defer.
         self._phase_prev = None                         # Carried State (ADR-0068): the phase hysteresis memory
                                                         # — read via `carried()`, never mutated by a hypothetical
         self.gamble_lines = gamble_lines                # ADR-0039: the Tier-2 Gamble rung
@@ -309,6 +312,13 @@ class Pilot(
         options = select.get("option") or []
         board = self._board(obs, select, carried=carried)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
+        starter_pick = self._declared_starter_pick(obs, select, board.top_starter_id)
+        if starter_pick is not None:
+            return Decision(chosen=[starter_pick], options=traces, read=board.read,
+                            posture=self._posture_record(board),
+                            objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
+                            game_plan=self._game_plan_record(board),
+                            lethal_refuted=self._lethal_refutes)
         replayed = self.replay_locked_line(obs, select)   # ADR-0037 stage 3: a verified locked line
         if replayed is not None:                          # owns the turn — identity-matched replay,
             chosen, line = replayed                       # any divergence falls through below
@@ -348,14 +358,20 @@ class Pilot(
         order = self._empty_bench_forced(obs, select, board, options, order)
         reordered = order != by_score
         grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        # ADR-0065 SWAP: at a forced discard keep-value v2 DECIDES and STANDS ALONE — seam-D v1 and the
-        # tuned `_DISCARD` ladder are DELETED. None (nothing priceable) falls to the scored order.
-        eq_discard = None
-        if select.get("context") == _DISCARD and max_count > 0:
-            eq_discard = self._discard_needs_pick(obs, select, board, options, max_count)
-        if eq_discard:
-            chosen = eq_discard
-        elif grabbed:                                   # greedy gap-update + take-fewer
+        leaf_picks = None
+        if self.leaf_followups and select.get("context") == _DISCARD and max_count > 0:
+            leaf_picks = self._leaf_discard_picks(obs, select, options, max_count)
+        elif select.get("context") == _DISCARD and max_count > 0:
+            leaf_picks = self._deferred_deck_discard_picks(obs, select, board, options, max_count)
+        if leaf_picks is not None:
+            chosen = leaf_picks
+        elif grabbed and self.leaf_followups and select.get("context") == _TO_BENCH:
+            chosen = self._leaf_grab_picks(obs, select, board, options,
+                                           select.get("minCount", 0), max_count)
+            if chosen is None:
+                chosen = self._greedy_grab(obs, select, board, traces, options,
+                                           select.get("minCount", 0), max_count)
+        elif grabbed:
             chosen = self._greedy_grab(obs, select, board, traces, options,
                                        select.get("minCount", 0), max_count)
         else:
@@ -376,6 +392,98 @@ class Pilot(
                         composer=getattr(self, "_composer_trace", None),
                         attach_working=self._attach_working(obs, select, board, options),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
+
+    def _leaf_discard_picks(self, obs: dict, select: dict, options: list, maximum: int) -> list[int] | None:
+        """Mandatory discard picks, repriced after each removed visible hand card."""
+        seat = int((obs.get("current") or {}).get("yourIndex") or 0)
+        hand = ((obs.get("current") or {}).get("players") or [{}])[seat].get("hand") or []
+        hand_indices = [option.get("index") for option in options]
+        if (len(options) < maximum
+                or any(not isinstance(index, int) or not 0 <= index < len(hand)
+                       for index in hand_indices)
+                or len(set(hand_indices)) != len(hand_indices)):
+            return None
+        try:
+            model = self._leaf_state_model(obs, seat)
+            root_needs = model.mine.needs
+            if (root_needs is None or len(root_needs.eligibility) != len(hand)
+                    or len(root_needs.hand_ids) != len(hand)):
+                return None
+
+            def project(indices):
+                removed = {options[i]["index"] for i in indices}
+                after = copy.deepcopy(obs)
+                mine = after["current"]["players"][seat]
+                mine["hand"] = [card for index, card in enumerate(hand) if index not in removed]
+                mine["handCount"] = len(mine["hand"])
+                mine["discard"] = list(mine.get("discard") or []) + [hand[index] for index in sorted(removed)]
+                keep = [index for index in range(len(hand)) if index not in removed]
+                latent_by_hand = tuple(root_needs.latent_by_hand[index] for index in keep) \
+                    if len(root_needs.latent_by_hand) == len(hand) else ()
+                projected_needs = needs.Resolution(
+                    slots=root_needs.slots,
+                    eligibility=tuple(root_needs.eligibility[index] for index in keep),
+                    resupply=root_needs.resupply,
+                    hand_ids=tuple(root_needs.hand_ids[index] for index in keep),
+                    latent_worth=sum(latent_by_hand),
+                    latent_by_hand=latent_by_hand)
+                return model.rebuilt(after, needs_override=projected_needs)
+
+            return leaf_pick_indices(model, minimum=int(select.get("minCount", 0)), maximum=maximum,
+                                     keys=canonical_keys(options, obs), project=project)
+        except (IndexError, KeyError, TypeError, ValueError, board_delta.Unmodellable):
+            return None
+
+    def _deferred_deck_discard_picks(self, obs: dict, select: dict, board: Board,
+                                     options: list, maximum: int) -> list[int] | None:
+        """Preserve the validated Needs owner for decks deferred to Issue #388."""
+        rows = self._discard_equation_rows(obs, select, board, options)
+        if not rows:
+            return None
+        _keeps, picks = self._needs_v2(obs, board, rows, maximum)
+        return picks or None
+
+    def _leaf_grab_picks(self, obs: dict, select: dict, board: Board, options: list,
+                         minimum: int, maximum: int) -> list[int] | None:
+        """Fetch picks, repriced after each selected card enters the hypothetical hand or Bench."""
+        seat = int((obs.get("current") or {}).get("yourIndex") or 0)
+        bench_context = select.get("context") in _BENCH_PLACEMENT_CONTEXTS
+        if bench_context:
+            capacity = max(0, board_delta.bench_max(obs, seat) - int(board.my_bench or 0))
+            maximum = min(maximum, capacity)
+            minimum = min(minimum, maximum)
+        if maximum <= 0:
+            return []
+        card_ids = [self._option_card_id(obs, select, option) for option in options]
+        if any(card_id is None for card_id in card_ids):
+            return None
+        try:
+            model = self._leaf_state_model(obs, seat)
+
+            def project(indices):
+                after = copy.deepcopy(obs)
+                mine = after["current"]["players"][seat]
+                if bench_context:
+                    bench = list(mine.get("bench") or [])
+                    for index in indices:
+                        card_id = card_ids[index]
+                        stat = self.stats.get(card_id) if self.stats else None
+                        if stat is None:
+                            raise board_delta.Unmodellable("selected Bench card has no stat")
+                        bench.append(board_delta.bench_body(card_id, stat, seat_index=seat,
+                                                           serial=-(index + 1)))
+                    mine["bench"] = bench
+                else:
+                    hand = list(mine.get("hand") or [])
+                    hand.extend({"id": card_ids[index], "playerIndex": seat} for index in indices)
+                    mine["hand"] = hand
+                    mine["handCount"] = len(hand)
+                return model.rebuilt(after)
+
+            return leaf_pick_indices(model, minimum=minimum, maximum=maximum,
+                                     keys=canonical_keys(options, obs), project=project)
+        except (IndexError, KeyError, TypeError, ValueError, board_delta.Unmodellable):
+            return None
 
     @staticmethod
     def _posture_record(board: Board) -> dict | None:

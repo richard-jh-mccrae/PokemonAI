@@ -180,4 +180,5 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     keeps, _pick = pilot._needs_v2(rec.obs, board, rows, rec.obs["select"]["maxCount"])
     boss = next(k for r, k in zip(rows, keeps) if r["cid"] == BOSS)
     assert boss == pytest.approx(4.5)                        # its general floor — the strip is below it
-    assert pilot.explain(rec.obs).chosen == _pick            # ...and the DECIDED pick is unmoved
+    chosen = pilot.explain(rec.obs).chosen
+    assert len(chosen) == 2 and chosen != _pick              # Issue #387: Needs no longer decides Mega Starmie

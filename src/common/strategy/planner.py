@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from common import composer, needs, playability
 from common.apply_engine import CARD_CONTINUATION_CONTEXTS
 from common.board_delta import Unmodellable
+from common.option_equivalence import AREA_DECK
 from common.state_model import StateModel
 from common.state_value import WIN_PRIZES, state_value
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
@@ -39,7 +40,7 @@ _COMPOSER_GAP_K = 8           # cap on coverage-gap reasons in the `composer` te
                               # count rides `stats`, so a truncated list never reads as "all of them"
 
 
-def _tied_first_steps(result, chosen) -> list:
+def _tied_first_steps(result, chosen, options, traces) -> list:
     """Menu indices whose best sequence ties ``chosen``'s score at `apply_option.SCORE_PLACES` — the
     composer having NO OPINION about which action to take first, so the caller defers (ADR-0131)."""
     from common.apply_option import SCORE_PLACES
@@ -48,9 +49,24 @@ def _tied_first_steps(result, chosen) -> list:
         return []
     key = round(chosen.score, SCORE_PLACES)
     mine = chosen.first_index
+
+    def distinct(index: int) -> bool:
+        """False for two copies of the same revealed-by-menu deck card: one decision, two indices."""
+        if not (isinstance(mine, int) and 0 <= mine < len(options)
+                and isinstance(index, int) and 0 <= index < len(options)):
+            return True
+        left, right = options[mine], options[index]
+        left_id = getattr(traces[mine], "card_id", None) if mine < len(traces) else None
+        right_id = getattr(traces[index], "card_id", None) if index < len(traces) else None
+        return not (left.get("area") == right.get("area") == AREA_DECK
+                    and left.get("type") == right.get("type")
+                    and left.get("playerIndex") == right.get("playerIndex")
+                    and left_id is not None and left_id == right_id)
+
     tied = {c.first_index for c in candidates
             if c.first_index is not None and c.first_index != mine
-            and not c.coverage_gap and round(c.score, SCORE_PLACES) == key}
+            and not c.coverage_gap and round(c.score, SCORE_PLACES) == key
+            and distinct(c.first_index)}
     return sorted(tied)
 
 
@@ -136,17 +152,23 @@ class PlannerMixin(
         my_index = int((obs.get("current") or {}).get("yourIndex") or 0)
         try:
             model = self._leaf_state_model(obs, my_index)
+            context = (select or {}).get("context")
             result = composer.compose(model, options,
-                                      search_api=getattr(self, "_search_api", None),
-                                      shed=self.cost_shed_indices)
+                                      search_api=self._composer_search_api(obs),
+                                      shed=self.cost_shed_indices,
+                                      continuation_boundary=context in CARD_CONTINUATION_CONTEXTS,
+                                      required_pick=(context in CARD_CONTINUATION_CONTEXTS
+                                                     and int((select or {}).get("minCount") or 0) >= 1))
         except Unmodellable:
             return None
         chosen = result.chosen
         self._composer_trace = {"margin": result.margin.working(), "stats": result.stats,
                                 "gaps": list(result.gaps)[:_COMPOSER_GAP_K]}
-        if chosen is None or chosen.first_index is None or chosen.coverage_gap:
+        continuation = context in CARD_CONTINUATION_CONTEXTS
+        coverage_gap = continuation and any(delta is None for delta in result.fanned)
+        if coverage_gap or chosen is None or chosen.first_index is None or chosen.coverage_gap:
             return None
-        tied = _tied_first_steps(result, chosen)
+        tied = _tied_first_steps(result, chosen, options, traces)
         if tied:
             self._composer_trace["tied_first_steps"] = tied
             return None
@@ -157,3 +179,16 @@ class PlannerMixin(
         return TurnLine(next_step=[chosen.first_index], goal="compose", value=chosen.score,
                         rationale="compose: the best within-turn sequence's first action",
                         ranked_by="composer", kind="sequence")
+
+    def _composer_search_api(self, obs):
+        """Resolve the injected test seam or the packaged engine only for seeded live observations."""
+        injected = getattr(self, "_search_api", None)
+        if injected is not None:
+            return injected
+        if not getattr(self, "leaf_followups", False):
+            return None
+        context = ((obs or {}).get("select") or {}).get("context")
+        if context not in CARD_CONTINUATION_CONTEXTS or not (obs or {}).get("search_begin_input"):
+            return None
+        from cg import api
+        return api

@@ -106,3 +106,15 @@ Value(question, moment) = Worth × Odds × Gates    (Needs supplying WHICH worth
   deadline predicates that live as rung `when=` conditions (e.g. seam B's
   `dont-fetch-before-the-deadline`) are deadline logic but outside the Gates module until/unless a
   future convergence folds them in — say "a deadline predicate," not "a Gate," for those.
+
+## Amendment — Issue #387 (2026-08-09)
+
+Mega Starmie's forced multi-picks now use iterated 1-ply `state_value.hand` differencing. Each Ultra Ball discard
+removes one visible hand card, projects the fixed root Needs demand ledger onto the remaining hand,
+then rebuilds and prices the next removal; mandatory `minCount=2` never declines. Fixing demand is
+what prevents the last supplier's removal from erasing the need itself. This retires
+`_discard_needs_pick` as a selector.
+The same shared loop places Poffin bodies on a hypothetical Bench and reprices after each pick; its
+capacity comes from `board_delta.bench_max`, while optional picks stop only on a non-positive rounded
+leaf delta. DISCARD therefore composes into the leaf's **hand** family rather than retaining a second
+keep-value ordering rule. `leaf_followups` is the explicit deck opt-in; Issue #388 owns other decks.
