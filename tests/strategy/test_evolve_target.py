@@ -86,7 +86,7 @@ def test_corpus_ctx19_is_moot_because_every_menu_is_copies_of_one_species():
                if 0 <= o["index"] < len(deck)}
         if len(ids) > 1:
             multi_species.append((trace, index, sorted(ids)))
-    assert len(steps) == 20
+    assert len(steps) == 19
     assert multi_species == []
 
 

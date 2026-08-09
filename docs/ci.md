@@ -54,7 +54,8 @@ test, that test runs.
 | `tools/meta_tracker/**`, root card/meta tool scripts | `tests/meta_tracker`, `tests/cards`, `tests/agents`, `tests/arena`, `tests/blunder`, `tests/label`, `tests/scouting`, `tests/sim`, `tests/submit`, `tests/train` | `cards`/`archetype`/`parse` are imported widely, but **not** by `tuner`, `strategy`, `value`, or `parity` — verified via the import graph (a real narrowing; the old mapping also under-counted `agents`/`label`/`scouting`, a gap this fixes) |
 | `src/common/cards.py`, `src/common/effects.py` (the `cards` filter) | `tests/cards` (plus `common_agent_core`'s broad set, since these two files are also in that glob) | `test_cards.py` imports `common.cards` directly; the rest of `tests/cards` exercises `tools/meta_tracker`'s independent card-parsing twin, already covered above |
 | `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json`, **the apply-seam sources** (`apply_option.py`, `apply_engine.py`, `board_delta.py`, `board_expectation.py`, `board_choice.py`, `retreat_cost.py`, `state_model.py`, `snapshot_coverage.py`, `tools/train/apply_parity.py`, `tools/train/choice_parity.py`) | `tests/parity` | The ADR-0050/59 pure-Python engine twin is self-contained — nothing else imports `src/cgpy` at runtime, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it). **The apply-seam rows were added by Issue #392 and close a gap rather than widen the filter**: `tests/parity` also holds the two trace-replay lanes that diff the seam against the recorded native engine — the point transition's (Issue #382) and the choice node's (Issue #392) — and neither was reachable from a source change, because `common_agent_core` matches `src/common/*.py` but adds `tests/agents`…`tests/value` and *not* `tests/parity`. A PR could rewrite a modelled transition without replaying a single trace. Pushes to `main` run everything, so this only ever bit on PRs — which is where a seam divergence is cheapest to catch |
-| shared test infra (`tests/conftest.py`, `tests/*_helpers.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
+| global test infra (`tests/conftest.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
+| test helpers | only their importing areas | `pilot_helpers` → agents/arena/blunder/scouting/strategy/tuner; `scouting_helpers` → scouting/strategy; `lethal_helpers` → sim/strategy; `seam_census_helpers` and `engine_admissibility` → strategy; `card_facts` → agents/strategy; `corrections_helpers` → blunder/train; `corpus_helpers` → strategy/train; `cgpy_state_helpers` → parity. These paths previously fell through to the full suite despite a bounded static import graph. |
 | `tools/apply_seam_coverage.py`, and its inputs `src/agents/*/deck.csv`, `src/agents/*/STRATEGY.md`, `docs/plans/apply-seam-coverage.md` (the `strategy` filter) | `tests/strategy` | The POC-A2 apply-seam coverage census (Issue #269) is a `tools/` script whose only tests live in `tests/strategy`, because what it measures is `common/apply_option` + `common/snapshot_coverage`. Its inputs are named on the same filter deliberately: the census's rot-guard trips when a **deck** gains a card carrying Effect Clauses, but `agents` maps only to `tests/agents`, and the markers test reads a **`.md`**, which `docs` plans as nothing — so without these lines each guard would be skipped by exactly the change that breaks it |
 | `tools/meta_tracker/probe_cards.py`, `tools/meta_tracker/probe_triggered_ability.py` (also on the `strategy` filter) | `tests/strategy` (plus `meta`'s broad set, since both files are under `tools/meta_tracker/**`) | Issue #305's triggered-Ability measurement lives in `tests/strategy` but is *driven* by the probe harness, which `meta` maps to `tests/meta_tracker` only — so without these lines an edit to the probe would never run the one test that re-drives it against the live engine |
 | a single `tests/<area>/**` file with no matching source change | just `tests/<area>` | A pure test-file edit touches no source, so it stays narrow instead of paying for a broader filter's reverse-dependency add-list |
@@ -95,9 +96,8 @@ full suite):
 
 ### Determinism gates (#178, ADR-0072 amendment C)
 
-Both run on every non-docs change, gating, and together they cost about **11 minutes** — see the job
-budget below. (This line read "about 2 minutes" until 2026-08-08; the backstop is still ~1 min, but
-the cgpy twin has grown from 3,883 tests to 5,441 and now costs ~9.6 min on its own.)
+Both run on every non-docs change and remain gating. The twin now excludes tests that already invoke
+cgpy directly, avoiding a second run of the parity oracle without weakening either gate.
 
 - **Determinism backstop** — the seven live-native-engine modules, repeated **15×**. They are the
   only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
@@ -106,9 +106,11 @@ the cgpy twin has grown from 3,883 tests to 5,441 and now costs ~9.6 min on its 
   is the cheap net *underneath* the real guard, which is
   `tests/strategy/test_engine_admissibility.py`: that one measures whether a drive consumed
   randomness at all, so a sampled frame fails the day it is added rather than 1 run in 30 later.
-- **cgpy twin arm** — the whole selected suite again under `CG_ENGINE=py`. cgpy's search is
-  `SeededRng(0)`, so this arm is reproducible *by construction* and any flap in it is a real bug.
-  Green as of 2026-07-27 (3883 passed / 8 skipped).
+- **cgpy twin arm** — selected behavioral tests again under `CG_ENGINE=py`. The native arm already
+  runs `tests/parity`, whose tests import cgpy directly; repeating that directory under an alias is
+  identical work. The twin therefore excludes it except for `test_compat_game.py`, which specifically
+  verifies the `cg.game` alias contract. cgpy's search is `SeededRng(0)`, so this arm is reproducible
+  *by construction* and any flap in it is a real bug.
 
   A test the twin cannot answer is marked in the diff, never waved through by making the step
   non-gating: `@needs_live_board_search` (`tests/conftest.py`) for one that needs a live-board
@@ -118,9 +120,9 @@ the cgpy twin has grown from 3,883 tests to 5,441 and now costs ~9.6 min on its 
 
 ### Job budget and `timeout-minutes`
 
-The job runs the whole selected suite **twice** — once natively, once as the cgpy twin — so its floor
-is the sum of two full runs, not one. Measured per-step on run `31275026627`, job `93150346764`
-(ubuntu-latest, py3.12, full non-docs plan):
+The native arm runs the whole selected suite. The cgpy arm repeats only behavioral tests for which
+engine substitution changes the subject; the direct-cgpy parity oracle runs once. Before that
+narrowing, run `31275026627`, job `93150346764` measured this baseline (ubuntu-latest, py3.12):
 
 | Step | Cost |
 | --- | --- |
@@ -129,7 +131,11 @@ is the sum of two full runs, not one. Measured per-step on run `31275026627`, jo
 | Determinism backstop (7 modules × 15 repeats) | 1.0 min |
 | Install dependencies | 1.1 min |
 | Everything else (checkout, Python, plan, guards, upload) | ~0.3 min |
-| **Total** | **~30.5 min** |
+| **Old total** | **~30.5 min** |
+
+The next full CI run should replace this historical baseline with measured post-filter timings.
+Local collection after the narrowing is 5,091 native tests and 4,232 twin tests; runner timing is
+intentionally left to that CI measurement rather than inferred from collection counts.
 
 That is the whole reason for `timeout-minutes: 45`. **The failure mode this prevents does not look
 like a failure**: the runner cancels the job at the ceiling, every test step still reads `success`,

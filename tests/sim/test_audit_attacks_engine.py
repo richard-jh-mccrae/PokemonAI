@@ -6,7 +6,12 @@ arrival, guarded by a bounded retry.
 """
 import pytest
 
+from conftest import on_cgpy_twin
 from sim.audit_attacks import CRUSTLE, card_pool, measure_attack, plan_scenarios
+
+if on_cgpy_twin():
+    pytest.skip("attack-audit measurements require native effects deferred by cgpy",
+                allow_module_level=True)
 
 OKIDOGI, GOOD_PUNCH = 116, 147          # Fighting, Good Punch printed 70, cost {F}{F}, no rider
 HO_OH = 318                             # 130 HP, resists Fighting, no ability

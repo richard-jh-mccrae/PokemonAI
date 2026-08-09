@@ -29,8 +29,8 @@ from train import choice_parity as lane                   # noqa: E402
 CI_TRACES = int(os.environ["CHOICE_PARITY_TRACES"]) if os.environ.get("CHOICE_PARITY_TRACES") else None
 
 #: The full corpus's own numbers, so a subset run cannot quietly report as the gate the criterion
-#: names. Measured at this commit: 377 traces / 37 983 frames / 2339 choice steps.
-FULL_CHOICE_STEPS = 2339
+#: names. Measured at this commit: 369 traces / 37 418 frames / 2304 choice steps.
+FULL_CHOICE_STEPS = 2304
 
 
 def _swap_applier(fn):
@@ -67,7 +67,7 @@ def test_the_lane_is_not_vacuous(report):
     assert report.verified > report.choice_steps * 0.9, str(report)
     assert set(lane.TAKEN) == set(lane.PARITY_KEYS)
     assert all(report.by_key[key]["verified"] > 0 for key in lane.PARITY_KEYS), str(report)
-    # The criterion names 2254 steps; assert the gate actually walked them rather than a subset that
+    # Assert the gate actually walked the full denominator rather than a subset that
     # happened to be green. Skipped only when a local run deliberately shortened the corpus.
     if CI_TRACES is None:
         assert report.choice_steps == FULL_CHOICE_STEPS, str(report)

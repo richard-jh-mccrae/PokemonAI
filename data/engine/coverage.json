@@ -1,7 +1,7 @@
 {
  "_meta": {
   "tool": "tools/parity/report.py",
-  "updated": "2026-07-13",
+  "updated": "2026-08-09",
   "note": "per-chain coverage of the cgpy ChainDef pool (ADR-0050 M4); statuses: verified > derived > seeded > unprobed > deferred"
  },
  "summary": {
@@ -17,8 +17,8 @@
    "seeded": 583
   },
   "cleanFrames": {
-   "clean": 37983,
-   "total": 37983,
+   "clean": 37418,
+   "total": 37418,
    "note": "committed fixtures are green by the CI parity gate"
   },
   "ops": {
@@ -127,7 +127,7 @@
     "xTurnDamageBonus"
    ]
   },
-  "traces": 377
+  "traces": 369
  },
  "cards": {
   "1": {
@@ -181,8 +181,6 @@
     "brockscout_9002",
     "cn1037_9000",
     "cn1037_9001",
-    "cnt_groundmelter_9980",
-    "cnt_lavaburst_9980",
     "cyrano_9000",
     "cyrano_9001",
     "cyrano_9002",
@@ -217,7 +215,7 @@
     "waitress_9001",
     "waitress_9002"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "3": {
    "name": "Basic {W} Energy",
@@ -298,14 +296,6 @@
     "cn951_9000",
     "cn971_9000",
     "cn971_9001",
-    "cnt_bellowing_9980",
-    "cnt_doubleeater_9980",
-    "cnt_dragoff_9980",
-    "cnt_flashspear_9980",
-    "cnt_followme_9980",
-    "cnt_groundmelter_9980",
-    "cnt_lavaburst_9980",
-    "cnt_steelburst_9980",
     "cyrano_9000",
     "cyrano_9001",
     "cyrano_9002",
@@ -585,7 +575,7 @@
     "xero_9000",
     "xero_9002"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "4": {
    "name": "Basic {L} Energy",
@@ -597,8 +587,6 @@
    "evidence": [
     "cn364_9000",
     "cn364_9001",
-    "cnt_bellowing_9980",
-    "cnt_flashspear_9980",
     "estream_9000",
     "estream_9001",
     "estream_9002",
@@ -627,7 +615,7 @@
     "sgc87_9301",
     "sgc87_9302"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "5": {
    "name": "Basic {P} Energy",
@@ -651,8 +639,6 @@
     "cn173_9001",
     "cn607_9000",
     "cn607_9001",
-    "cnt_doubleeater_9980",
-    "cnt_followme_9980",
     "enrich_9000",
     "enrich_9001",
     "enrich_9002",
@@ -720,7 +706,7 @@
     "vanilla_3002",
     "vanilla_3003"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "6": {
    "name": "Basic {F} Energy",
@@ -745,7 +731,6 @@
     "cn259_9001",
     "cn971_9000",
     "cn971_9001",
-    "cnt_bellowing_9980",
     "duskball_9000",
     "duskball_9001",
     "duskball_9002",
@@ -782,7 +767,7 @@
     "xero_9000",
     "xero_9002"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "7": {
    "name": "Basic {D} Energy",
@@ -862,11 +847,10 @@
     "cn1205_9601",
     "cn261_9000",
     "cn261_9001",
-    "cnt_steelburst_9980",
     "micro_cnt_steelburst_9980",
     "micro_deckattach_9720"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "9": {
    "name": "Boomerang Energy",
@@ -1164,10 +1148,9 @@
     "attack:20": "verified"
    },
    "evidence": [
-    "cnt_groundmelter_9980",
     "micro_cnt_groundmelter_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "32": {
    "name": "Glaceon",
@@ -1321,7 +1304,6 @@
    },
    "evidence": [
     "cn173_9000",
-    "cnt_flashspear_9980",
     "micro_cnt_flashspear_9980",
     "micro_onboard43a39_9900",
     "micro_onboard43a39_9901",
@@ -1329,7 +1311,7 @@
     "sg328_9000",
     "sg328_9001"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "44": {
    "name": "Bloodmoon Ursaluna ex",
@@ -1623,7 +1605,6 @@
     "cn879_9001",
     "cn951_9000",
     "cn971_9001",
-    "cnt_bellowing_9980",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -1687,7 +1668,7 @@
     "sgc87_9301",
     "sgc87_9302"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "64": {
    "name": "Hoothoot",
@@ -2373,10 +2354,9 @@
     "attack:149": "verified"
    },
    "evidence": [
-    "cnt_steelburst_9980",
     "micro_cnt_steelburst_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "119": {
    "name": "Dreepy",
@@ -3962,10 +3942,9 @@
     "attack:337": "seeded"
    },
    "evidence": [
-    "cnt_flashspear_9980",
     "micro_cnt_flashspear_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "245": {
    "name": "Alakazam",
@@ -4681,9 +4660,6 @@
     "cn879_9001",
     "cn951_9000",
     "cn971_9000",
-    "cnt_followme_9980",
-    "cnt_lavaburst_9980",
-    "cnt_steelburst_9980",
     "lev_9000",
     "lev_9001",
     "lev_9002",
@@ -4828,7 +4804,7 @@
     "sg965_9000",
     "sg965_9001"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "300": {
    "name": "Bagon",
@@ -5488,10 +5464,9 @@
     "attack:492": "verified"
    },
    "evidence": [
-    "cnt_lavaburst_9980",
     "micro_cnt_lavaburst_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "356": {
    "name": "Ethan's Magcargo",
@@ -5502,10 +5477,9 @@
     "attack:493": "verified"
    },
    "evidence": [
-    "cnt_lavaburst_9980",
     "micro_cnt_lavaburst_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "357": {
    "name": "Ethan's Ho-Oh ex",
@@ -7288,10 +7262,9 @@
     "attack:720": "verified"
    },
    "evidence": [
-    "cnt_dragoff_9980",
     "micro_cnt_dragoff_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "509": {
    "name": "Kyurem ex",
@@ -7373,13 +7346,6 @@
     "attack:732": "seeded"
    },
    "evidence": [
-    "cnt_bellowing_9980",
-    "cnt_doubleeater_9980",
-    "cnt_dragoff_9980",
-    "cnt_flashspear_9980",
-    "cnt_followme_9980",
-    "cnt_groundmelter_9980",
-    "cnt_steelburst_9980",
     "micro_cnt_bellowing_9980",
     "micro_cnt_doubleeater_9980",
     "micro_cnt_dragoff_9980",
@@ -7465,7 +7431,7 @@
     "micro_psychout_9970",
     "micro_tucktail_9530"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "516": {
    "name": "Munna",
@@ -10443,12 +10409,6 @@
     "cn951_9000",
     "cn971_9000",
     "cn971_9001",
-    "cnt_bellowing_9980",
-    "cnt_dragoff_9980",
-    "cnt_flashspear_9980",
-    "cnt_followme_9980",
-    "cnt_groundmelter_9980",
-    "cnt_lavaburst_9980",
     "cyrano_9000",
     "cyrano_9001",
     "cyrano_9002",
@@ -10670,7 +10630,7 @@
     "xero_9000",
     "xero_9002"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "755": {
    "name": "Latios",
@@ -14066,10 +14026,9 @@
     "attack:1500": "verified"
    },
    "evidence": [
-    "cnt_followme_9980",
     "micro_cnt_followme_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "1040": {
    "name": "Mega Clefable ex",
@@ -14091,10 +14050,9 @@
     "attack:1502": "verified"
    },
    "evidence": [
-    "cnt_doubleeater_9980",
     "micro_cnt_doubleeater_9980"
    ],
-   "updated": "2026-07-13"
+   "updated": "2026-08-09"
   },
   "1042": {
    "name": "Espurr",

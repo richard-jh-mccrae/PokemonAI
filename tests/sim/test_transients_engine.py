@@ -10,6 +10,12 @@ from pathlib import Path
 
 import pytest
 
+from conftest import on_cgpy_twin
+
+if on_cgpy_twin():
+    pytest.skip("transient-window measurement requires native effects deferred by cgpy",
+                allow_module_level=True)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 ATTACK, PLAY, ATTACH, CARD, END, YES, NO = 13, 7, 8, 3, 14, 1, 2

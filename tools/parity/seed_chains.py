@@ -1043,7 +1043,7 @@ def _discard_count_scaled(sents, i):
 @ATK.rule("R-D02")
 def _gust_switch_in(sents, i):
     """Pull / Drag Off: the attacker chooses the defender's new Active; optional flat
-    damage to the new Active (pinned cnt_dragoff_9980 f8/f9)."""
+    damage to the new Active (pinned micro_cnt_dragoff_9980 f8/f9)."""
     if not _s(r"Switch in 1 of your opponent.s Benched Pok.mon to the Active "
               r"Spot\.")(sents, i):
         return None

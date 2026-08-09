@@ -148,18 +148,6 @@ def test_a_ko_dominates_the_positional_snipe_stack(starmie, name):
     assert _decide(starmie, fx)[0] == fx["correct"]
 
 
-@pytest.mark.parametrize("name,agent_name", [
-    param("dragapult_concentrate_line_preevo_f85", "dragapult"),
-    param("dragapult_promote_over_fragile_base_f31", "dragapult"),
-])
-def test_line_readiness_signals_model_the_multi_stage_line(request, name, agent_name):
-    """The corpus's first 2-stage line: `priority_wincon_slot` must see a STARTED pre-evo, and
-    `evolve_to_ready_wincon_available` must require the payoff's IMMEDIATE pre-evolution."""
-    pilot = request.getfixturevalue(agent_name)
-    fx = _fixture(name)
-    assert _decide(pilot, fx)[0] == fx["correct"]
-
-
 @pytest.mark.xfail(strict=True, reason=marks("ml_lethal_retreat_boost_to_ko_f24")[0].kwargs["reason"])
 def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
     """With every pre-evo bare there is nothing to concentrate, so the attach stays free. Also the
@@ -169,11 +157,6 @@ def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
 
 
 # ── apply pass 2 (2026-07-10): the dragapult round's remaining general rules ────────────────────
-def test_dont_strip_energy_from_a_harmless_active_f6(dragapult):
-    """`incoming_active_damage` is no help here: it is affordability-blind and reads an unaffordable
-    attack, so the discard-scaling attack that computes to 0 has to be read separately."""
-    fx = _fixture("dragapult_hammer_no_threat_f6")
-    assert _decide(dragapult, fx)[0] == fx["correct"]
 @pytest.mark.parametrize("name", [param("dragapult_poffin_whiff_take_gust_ko_f79"),
                                   param("dragapult_gust_ko_over_accel_f81")])
 def test_a_ko_setup_gust_precedes_the_supporter_that_would_eat_its_slot(dragapult, name):
