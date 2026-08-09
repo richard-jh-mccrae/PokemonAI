@@ -1,6 +1,11 @@
-"""The energy-attach decider (ADR-0069): the axes-sum marginal — attack axis + Retreat Equity + Ability
+"""The attach decider (ADR-0069): the axes-sum marginal — attack axis + Retreat Equity + Ability
 Fuel − evaporation loss — pricing every Energy attach and every accelerator recipient. The rungs it
-replaced are in `tools/rung_registry.py` (FOLDED, ADR-0069 group)."""
+replaced are in `tools/rung_registry.py` (FOLDED, ADR-0069 group).
+
+A Pokémon TOOL takes its own channel (:meth:`AttachMixin._tool_attach_value`, Issue #423): it carries
+no Energy, so every axis above reads 0 and what it buys is Retreat Equity alone — differenced over
+ADR-0100's shipped retreat equation. A Tool that moves no Retreat Cost still abstains; the +HP class
+is ADR-0028's survival-turns math and has no owner since Issue #386 deleted the Tool doctrine."""
 from __future__ import annotations
 
 
@@ -29,6 +34,21 @@ _ATTACH_RESOURCE_TIEBREAK = 0.05
 # A pre-evolution's Energy carries through evolution, but the body must EVOLVE before the payoff
 # fires, so its forward build is discounted below an already-evolved body's.
 _ATTACH_PREEVO_DISCOUNT = 0.25
+
+#: Every key an attach row carries, at its zero. Both channels build through :func:`_attach_row`, so
+#: the shape `_attach_working` and the wire depend on cannot drift between them.
+_ATTACH_ROW_ZEROS = {
+    "i": None, "target": None, "energy": None, "slot": None,
+    "marginal": 0.0, "tactical": 0.0, "attack_axis": 0.0, "this_turn": 0.0, "build": 0.0,
+    "accel_value": 0.0, "retreat_equity": 0.0, "ability_fuel": 0.0, "evaporation_loss": 0.0,
+    "units": 0, "role_gated": False, "spent_utility_gated": False, "overkill": False,
+    "doomed": False, "burst": False, "evaporates": False, "line_value": 0.0, "resource_cost": 0.0,
+}
+
+
+def _attach_row(**legs) -> dict:
+    """One row, whichever channel priced it — an unnamed leg reads as its zero, never as absent."""
+    return {**_ATTACH_ROW_ZEROS, **legs}
 
 
 class AttachMixin:
@@ -202,8 +222,8 @@ class AttachMixin:
         return _ATTACH_RETREAT_EQUITY * covered / cost
 
     def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
-        """Price ONE energy-attach option as an AXES-SUM (ADR-0069): MAX within the attack axis (its
-        terms re-read one progress), SUM across the channels. None ABSTAINS — a Tool is not Energy."""
+        """Price ONE attach option as an AXES-SUM (ADR-0069): MAX within the attack axis (its terms
+        re-read one progress), SUM across the channels. A Tool routes to its own channel."""
         ctx = select.get("context")
         is_attach = option.get("type") == _ATTACH
         is_from = ctx == _ATTACH_FROM and option.get("type") == _CARD
@@ -212,7 +232,7 @@ class AttachMixin:
         ecid = self._option_card_id(obs, select, option)
         estat = self.stats.get(ecid) if (self.stats and ecid is not None) else None
         if is_attach and not self._attach_is_energy(estat):
-            return None                                        # a Pokémon Tool is not Energy
+            return self._tool_attach_value(obs, board, option, ecid, estat)
         target = self._attach_target(obs, option)
         if target is None and is_from:
             target = self._option_pokemon(obs, select, option)
@@ -310,17 +330,48 @@ class AttachMixin:
         # The resolved target SLOT, not the raw option index (duplicate sources would read as false
         # disagreements). ATTACH carries inPlayArea/inPlayIndex; ATTACH_FROM carries area/index.
         slot = [area, option.get("inPlayIndex") if is_attach else option.get("index")]
-        return {"i": None, "target": tcid, "energy": ecid, "slot": slot,
-                "marginal": round(marginal, 2), "tactical": round(tactical, 2),
-                "attack_axis": round(attack_axis, 2), "this_turn": round(this_turn, 2),
-                "build": round(build, 2), "accel_value": round(accel_value, 2),
-                "retreat_equity": round(retreat_equity, 2), "ability_fuel": round(ability_fuel, 2),
-                "evaporation_loss": round(evaporation_loss, 2), "units": units,
-                "role_gated": role_gated, "spent_utility_gated": spent_utility_gated,
-                "overkill": overkill, "doomed": not survives,
-                "burst": burst, "evaporates": evaporates,
-                "line_value": round(0.0 if gated_off else self._role_value(tcid), 1),
-                "resource_cost": round(resource_cost, 1)}
+        return _attach_row(
+            target=tcid, energy=ecid, slot=slot,
+            marginal=round(marginal, 2), tactical=round(tactical, 2),
+            attack_axis=round(attack_axis, 2), this_turn=round(this_turn, 2),
+            build=round(build, 2), accel_value=round(accel_value, 2),
+            retreat_equity=round(retreat_equity, 2), ability_fuel=round(ability_fuel, 2),
+            evaporation_loss=round(evaporation_loss, 2), units=units,
+            role_gated=role_gated, spent_utility_gated=spent_utility_gated,
+            overkill=overkill, doomed=not survives,
+            burst=burst, evaporates=evaporates,
+            line_value=round(0.0 if gated_off else self._role_value(tcid), 1),
+            resource_cost=round(resource_cost, 1))
+
+    def _tool_attach_value(self, obs: dict, board: Board, option: dict, ecid, estat):
+        """Price a Pokémon TOOL attach on its own channel: what the Retreat Cost it moves buys, as a
+        difference over ADR-0100's shipped retreat equation. None ABSTAINS — no Retreat Cost moved."""
+        if not int(getattr(estat, "retreatReduction", 0) or 0):
+            return None                     # the +HP class: ADR-0028's survival-turns math, not this
+        target = self._attach_target(obs, option)
+        if target is None:
+            return None
+        # No area gate: only the Active pays a Retreat Cost, so a Tool landing anywhere else leaves
+        # BOTH legs the same object and the difference is 0.0 by arithmetic.
+        active = self._my_active(obs)
+        equipped = (dict(active, tools=list(active.get("tools") or []) + [{"id": ecid}])
+                    if target is active else active)
+        delta = (self._retreat_option_value(obs, board, equipped)
+                 - self._retreat_option_value(obs, board, active))
+        # ADR-0100's verdict says WHETHER and which way; ADR-0069 §1's band says WHAT IT IS WORTH —
+        # two claims about one Retreat Cost must not disagree by 50x, so the delta clamps into it.
+        marginal = max(-_ATTACH_RETREAT_EQUITY, min(_ATTACH_RETREAT_EQUITY, delta))
+        resource_cost = self._role_value(ecid) if ecid is not None else 0.0
+        tactical = (marginal * _ATTACH_VALUE_SCALE
+                    - _ATTACH_RESOURCE_TIEBREAK * max(0.0, resource_cost - ENERGY_TIER))
+        return _attach_row(
+            target=target.get("id"), energy=ecid,
+            slot=[option.get("inPlayArea"), option.get("inPlayIndex")],
+            marginal=round(marginal, 2), tactical=round(tactical, 2),
+            retreat_equity=round(marginal, 2),
+            doomed=bool(target is active and board.active_doomed),
+            line_value=round(self._role_value(target.get("id")), 1),
+            resource_cost=round(resource_cost, 1))
 
     def _burst_capped_tonight(self, obs: dict, view, target_stat, this_turn: float,
                               base_dmg: float, committed_dmg: float) -> float:
@@ -351,8 +402,8 @@ class AttachMixin:
         return 0.0 if row is None else row["tactical"]
 
     def _attach_working(self, obs: dict, select: dict, board: Board, options: list):
-        """The attach decider's LEGIBLE WORKING (ADR-0069 §9). A Tool ABSTAINS and is counted, never
-        priced. None off an attach menu or mid-sim (`self._planning`), so the wire key stays sparse."""
+        """The attach decider's LEGIBLE WORKING (ADR-0069 §9). A Tool no channel prices ABSTAINS and is
+        counted. None off an attach menu or mid-sim (`self._planning`), so the wire key stays sparse."""
         if self._planning:
             return None
         ctx = select.get("context")
@@ -363,7 +414,7 @@ class AttachMixin:
         rows, abstained = [], 0
         for i in attach_idx:
             row = self._attach_value(obs, select, board, options[i])
-            if row is None:                                    # a Tool abstains — no row
+            if row is None:                                    # no channel prices it — no row
                 abstained += 1
                 continue
             row["i"] = i

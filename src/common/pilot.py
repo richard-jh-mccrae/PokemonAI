@@ -135,7 +135,7 @@ class Decision:
                                      # margin block, run stats, the winner's `working()` legs and step
                                      # indices, plus any coverage-gap reasons. None unless it ran.
     attach_working: dict | None = None  # ADR-0069 §9 per-option AXES rows. This DECIDES, so there is no
-                                     # agreement bit. A Pokémon Tool ABSTAINS (not Energy) and is counted.
+                                     # agreement bit. A Tool no channel prices ABSTAINS and is counted.
 
 
 class Pilot(
