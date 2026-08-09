@@ -5,7 +5,8 @@
 A single Replay file tags one Episode; a directory (e.g. data/replays/<build_stem>/) is batch
 mode -- the shell's ◀/▶ steps across its Replays in episode-id order without leaving the tool.
 Serves the local tagging shell (official viewer + side panel) and appends each tagged blunder to
-the Correction log. See docs/blunder-inspector.md.
+the Correction log. Turn-plan tags preserve human prose and record the exact first divergent menu
+choice. See docs/blunder-inspector.md.
 """
 from __future__ import annotations
 

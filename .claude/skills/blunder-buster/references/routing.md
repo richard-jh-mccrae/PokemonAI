@@ -15,8 +15,7 @@ do it):
   Composer's sequence search and `plan_turn` hand-off), `verification_contract: composer-retest` — the
   gate is `retest_span`, which re-drives the Span to its **first divergence**. A null `planned` verdict
   does not re-open rule authoring: it is a `composer-differencer` coverage/transition investigation.
-  *A `turn_plan` note adds the human's ideal line as evidence for this prior; it no longer selects a
-  different rulebook (below).*
+  *A `turn_plan` adds human evidence for this prior; its versioned anchor record is parsed below.*
 - **`scope: match`** — a whole game was misplayed. Read the Span's per-turn `game_plan` (ADR-0045). Wrong
   mode/goal → **`turn-sequencer`** (`plan_match`/sequence hand-off); wrong opponent read → **`matchup-brief`**; a line that
   needs cross-turn search → **capability-gap**. `verification_contract: seed-ladder` either way (a match
@@ -61,12 +60,14 @@ carries `scope`+`subject`+`key` and `lethal_locked`/`planner_committed`/`posture
 
 ## `turn_plan` corrections and rule retirement
 
-A `scope: turn` correction carrying a `turn_plan` note is the human's ideal-line tag on a
-setup/development turn. It carries **no machine verdict**: the develop rollout rung that classified
-one died with the rung ladder (Issue #386), and `common.composer` publishes no per-alternative
-ranking to rebuild an equivalent from. Route these by the **generic `scope: turn`** rule above, and
-read the ideal line against `opts[correct].fired` for the rules the human's pick already fires —
-those are the retire-candidates the verdict used to nominate.
+A `scope: turn` correction may carry `turn_plan.schema: turn-sequence/v1`. Read its fields directly:
+`grade.status: mismatch` means `grade.first_divergence` is the human-asserted anchor mismatch;
+`expected` and `observed` contain exact menu options, positions, and equivalence fingerprints.
+`grade.status: ungraded` has no asserted anchor action. `intended_line` and `expected_end_board` stay
+verbatim human evidence. This is deterministic tagging evidence, **not** a Composer verdict: it cannot
+prove later counterfactual steps after the anchor changes the board. A legacy plan without `schema`
+remains prose-only. Route every case by the **generic `scope: turn`** rule above, then read the
+expected anchor's `opts[correct].fired` for retire-candidates.
 
 **Rule-retirement proposal (removal, not addition).** One per candidate rule R:
 `target_layer: rule-retirement`, `for: general` (or `deck:<deck>` if R is deck-scoped),

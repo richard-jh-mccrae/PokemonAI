@@ -15,8 +15,11 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+
+from common.option_equivalence import option_fingerprint
 
 from .categories import is_valid_category
 from .decisions import Decision
@@ -26,6 +29,7 @@ SCOPES = ("decision", "turn")                    # what the Correction is *about
 
 CRITICAL_MARKER = "CRITICAL"                     # uppercase token in rationale = must-fix-first
 _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
+TURN_PLAN_SCHEMA = "turn-sequence/v1"
 
 
 def is_critical(rationale: str | None) -> bool:
@@ -61,6 +65,43 @@ def _derive_id(data: dict) -> str:
     dec = data.get("decision") or {}
     key = f"{data.get('episode_id')}|{dec.get('frame')}|{data.get('seat')}|{data.get('tagged_at')}|{data.get('category')}"
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+
+
+def _option_reference(decision: Decision, position: int) -> dict:
+    """One menu choice as durable evidence: position aids replay, raw option + class key aid readers."""
+    option = decision.options[position]
+    return {"position": position, "option": deepcopy(option),
+            "equivalence_fingerprint": option_fingerprint(option, decision.snapshot())}
+
+
+def _structured_turn_plan(decision: Decision, *, scope: str, correct: list[int],
+                          turn_plan: dict | None) -> dict | None:
+    """Compile human prose plus the anchor's exact choices into the versioned turn-plan contract."""
+    if turn_plan is None:
+        return None
+    if scope != "turn":
+        raise ValueError("turn_plan is valid only on a turn-scope correction")
+    if not isinstance(turn_plan, dict):
+        raise ValueError("turn_plan must be an object")
+    intended = turn_plan.get("intended_line", "")
+    end_board = turn_plan.get("expected_end_board", "")
+    if not isinstance(intended, str) or not isinstance(end_board, str):
+        raise ValueError("turn_plan intended_line and expected_end_board must be strings")
+    if not (intended.strip() or end_board.strip()):
+        return None
+
+    first_divergence = None
+    status = "ungraded"
+    if correct:
+        first_divergence = {
+            "frame": decision.frame,
+            "expected": [_option_reference(decision, position) for position in correct],
+            "observed": [_option_reference(decision, position) for position in decision.chosen],
+        }
+        status = "mismatch"
+    return {"schema": TURN_PLAN_SCHEMA, "intended_line": intended,
+            "expected_end_board": end_board,
+            "grade": {"status": status, "first_divergence": first_divergence}}
 
 
 @dataclass(frozen=True)
@@ -105,8 +146,7 @@ class Correction:
                                     # the turn number (turn scope).
     span: list[dict] | None = None  # the Decisions the Scope covers; turn scope carries per-Decision
                                     # obs + live_trace so it is re-drivable.
-    turn_plan: dict | None = None   # turn scope: the human's ideal-line note, {intended_line,
-                                    # expected_end_board}. Sparse — None off turn-plan tags.
+    turn_plan: dict | None = None   # turn scope: versioned human evidence + exact anchor divergence.
 
     @property
     def is_critical(self) -> bool:
@@ -212,5 +252,5 @@ def build_correction(
         scope=scope,
         subject=subject_of(scope, decision.snapshot()),
         span=span,
-        turn_plan=turn_plan,
+        turn_plan=_structured_turn_plan(decision, scope=scope, correct=correct, turn_plan=turn_plan),
     )

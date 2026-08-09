@@ -55,9 +55,9 @@ def _turn_plan_from_form(form: dict) -> dict | None:
     non-turn-plan Correction."""
     if form.get("scope") != "turn":
         return None
-    intended = str(form.get("intended_line", "")).strip()
-    end_board = str(form.get("expected_end_board", "")).strip()
-    if not (intended or end_board):
+    intended = str(form.get("intended_line", ""))
+    end_board = str(form.get("expected_end_board", ""))
+    if not (intended.strip() or end_board.strip()):
         return None
     return {"intended_line": intended, "expected_end_board": end_board}
 
@@ -295,6 +295,11 @@ function openColorful(target){
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
   :'';
+const turnGrade=it=>{
+  const grade=it.turn_plan&&it.turn_plan.grade, first=grade&&grade.first_divergence;
+  if(!grade) return '';
+  return ` · <b class="sc">grade ${esc(grade.status)}${first?` @ f${first.frame}`:''}</b>`;
+};
 async function refreshList(){
   LIST=await (await fetch('/corrections.json')).json();
   $('count').textContent=LIST.length;
@@ -303,6 +308,7 @@ async function refreshList(){
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
     `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
     (it.scope!=='decision'?` · <b class="sc">${esc(scopeTag(it))}</b>`:'')+
+    turnGrade(it)+
     (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+
     (it.posture_mismatch?' · <b style="color:#4457b8">🔮 read wrong</b>':'')+
     (it.correct.length?`<br>→ ${esc(it.correct_label||('opt '+it.correct.join(',')))}`:'')+
