@@ -84,7 +84,7 @@ def _working(pilot, obs, idx) -> tuple:
         pilot._planning = False
     if sim is None:
         return None, "sim unavailable"
-    end, my_index, _start_prizes, _result, line_val, _coins, _stream = sim
+    end, my_index, _start_prizes, _result, line_val, _coins = sim
     working: dict = {}
     try:
         total = state_value(pilot._leaf_state_model(end, my_index), working=working)
