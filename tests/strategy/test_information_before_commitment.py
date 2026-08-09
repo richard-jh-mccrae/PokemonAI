@@ -49,6 +49,16 @@ def test_the_dig_is_taken_before_the_committing_item_on_the_anchor_frame(f11):
 
 
 @pytest.mark.req("REQ-INFOFIRST-0001")
+def test_composer_keeps_pokegear_ahead_of_a_higher_scoring_retreat():
+    """Composer must retain the structural information tier when scores disagree."""
+    fx = json.loads((FIXTURES / "ms_t3holdout_82227388_0_decision_50.json")
+                    .read_text(encoding="utf-8"))
+    decision = _pilot("mega_starmie").explain(fx["obs"])
+    assert list(decision.chosen) == list(fx["correct"])
+    assert decision.planned and decision.planned.goal == "compose"
+
+
+@pytest.mark.req("REQ-INFOFIRST-0001")
 def test_the_hammer_is_still_endorsed_so_this_is_an_ORDERING_not_a_suppression(f11):
     _fx, _p, dec = f11
     hammers = [o for o in dec.options if o.card_id == HAMMER]

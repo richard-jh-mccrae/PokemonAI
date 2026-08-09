@@ -525,19 +525,20 @@ def choose_target(model, option: Mapping, *, seat_index=None, cap=None, ranker=N
 
 
 def selection_key(model, candidate: Candidate) -> tuple:
-    """The ONE ordering key for choosing among candidates: score, then touched-card Worth, then a
-    card-id sort and the menu index. Never falls through to raw generation order."""
+    """The ONE ordering key: information tier, score, Worth, card id, then menu index."""
     worth, card_id = 0.0, -1
     step = candidate.steps[0] if candidate.steps else None
     option = step.option if step is not None else candidate.terminal
+    tier = TIER_ENDER
     if option is not None:
+        tier = canonical_tier(model, option)
         stat = _option_card_stat(model, option)
         if stat is not None:
             card_id = int(getattr(stat, "cardId", -1) or -1)
             worth = float(model.mine.role_worth(stat.cardId))
     index = candidate.first_index
-    return (bool(candidate.coverage_gap), -round(candidate.score, ao.SCORE_PLACES), -worth, card_id,
-            index if index is not None else 1 << 30)
+    return (bool(candidate.coverage_gap), tier, -round(candidate.score, ao.SCORE_PLACES), -worth,
+            card_id, index if index is not None else 1 << 30)
 
 
 def _attack_leg(model, candidate: Candidate):
