@@ -26,7 +26,6 @@ PINS = {
                    "`_matches_up_to_interchangeability`)",
     "83661652-29": "hold: play the Riolu base rather than Ultra Ball away held outs",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
-    "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
     # discard-pair valuation (sets, not sums; role floors)
     # Five cases flag one card in a forced two-card pitch, so their one-index `correct` is a subset of `chosen`.
     "82525101-14": "dp: never Ultra-Ball away the Ignition burst — pitch the duplicate Wally's (⊆)",
@@ -47,8 +46,6 @@ PINS = {
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
     # Costed-search POC: 83967841-17/85163634-17 moved; composer plays Ultra Ball on both.
     # shuffle timing & keep-value (the refresh side)
-    "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
-                   "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
     # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
     # scoring the whole TURN.
@@ -71,6 +68,14 @@ S5_REJECTED_GUSTS = {
     "85164605-64": (1, 1182, {742, 65, 741}, 5, "Boss's Orders trades away the energized active "
                                               "Kadabra; Jetting Blow takes its active KO instead"),
 }
+# The terminal-pick half of `85164605-64` is an unruled Issue #466/#468 flip (same packet as
+# POC_T4_FLIPS above): the closed-form draw route now prices Lillie's Determination above the
+# direct Jetting Blow KO. The gust-coverage assertions above it are untouched and stay strict.
+S5_REJECTED_GUSTS_PENDING = {
+    "85164605-64": "Lillie's Determination now prices above the direct Jetting Blow KO — "
+                   "docs/plans/issue-sequence-466-wave3-packet.md row `85164605|1|decision|64` "
+                   "(decider), pending developer ruling",
+}
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
 POC_T4_FLIPS = {
@@ -88,6 +93,13 @@ POC_T4_FLIPS = {
                    "search is priced for the first time",
     "85163634-17": "the composer plays Ultra Ball where the human ruled Attack with Turbo Flare; "
                    "same cause as 83967841-17",
+    # Issues #466-#469 (PR #483) unified draw/fetch closed-form composition, making Lunatone's
+    # ability and Lillie's Determination newly structural/scorable where they used to be refused.
+    # Packeted in docs/plans/issue-sequence-466-wave3-packet.md as unruled Issue #466/#468 flips;
+    # neither baseline was recaptured. Original PIN text kept verbatim.
+    "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
+    "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
+                   "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
 }
 # Issue #459 retires shared valuations from every runtime.
 # Strict xfail preserves the immutable corpus label and makes composer recovery reviewable.
@@ -223,7 +235,9 @@ def test_correction_ranks_the_human_pick_top(cid):
 
 @pytest.mark.req("REQ-CORPUS-0001")
 @pytest.mark.parametrize("cid,gust_index,gust_card,expected_targets,direct_index,_why", [
-    pytest.param(cid, index, card, targets, direct, why, id=cid)
+    pytest.param(cid, index, card, targets, direct, why, id=cid,
+                 marks=((pytest.mark.xfail(strict=True, reason=S5_REJECTED_GUSTS_PENDING[cid]),)
+                        if cid in S5_REJECTED_GUSTS_PENDING else ()))
     for cid, (index, card, targets, direct, why) in S5_REJECTED_GUSTS.items()
 ])
 def test_s5_rejected_gust_keeps_its_target_coverage_but_not_the_turn(

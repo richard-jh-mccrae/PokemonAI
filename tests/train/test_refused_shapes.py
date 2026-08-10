@@ -171,8 +171,8 @@ def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
     also satisfy "0 refused shapes". The count is a ruling record: re-take it, never loosen it."""
     from corpus_helpers import committed_keyed_corrections
     recs = committed_keyed_corrections()
-    assert len(recs) == 375
-    assert sum(1 for _k, c in recs if not refuses(c)) == 375
+    assert len(recs) == 384
+    assert sum(1 for _k, c in recs if not refuses(c)) == 384
     the_record = next(c for k, c in recs if k == THE_RECORD)
     assert refuses(the_record) == []
     assert the_record.scope == "decision" and the_record.correct == [0]
@@ -186,7 +186,7 @@ def test_the_corpus_now_holds_no_match_scope_records_at_all():
 
     from corpus_helpers import committed_keyed_corrections
     recs = committed_keyed_corrections()
-    assert Counter(c.scope for _k, c in recs) == {"decision": 357, "turn": 18}
+    assert Counter(c.scope for _k, c in recs) == {"decision": 362, "turn": 22}
 
 
 @pytest.mark.req("REQ-GATE-0009")

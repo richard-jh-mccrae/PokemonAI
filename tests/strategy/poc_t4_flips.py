@@ -107,13 +107,29 @@ FLIPS = {
         "composer has no opinion, so the tie-defer hands the turn to the tuned ladder — which picks "
         "[0], not the ruled [1]. That makes this the only surviving row whose disagreement belongs "
         "to the LADDER rather than to the composer, and the one the composer cannot be asked to fix"),
+    "ml_lunar_cycle_over_inert_bench_attach_f16": (
+        "VALUATION", [6], [2],
+        "previously RETIRED_BY_THE_TIE_DEFER, re-flipped by Issues #466-#469 (PR #483): unifying "
+        "draw/fetch closed-form composition makes the Lunar Cycle route newly scored (isolated "
+        "compose returns no gaps) where it used to be refused, and the composer still ranks the "
+        "bench attach above it. Packeted in docs/plans/issue-sequence-466-wave3-packet.md as an "
+        "unruled flip; neither baseline was recaptured"),
+    "ml_dont_judge_away_the_bigger_hand_f111": (
+        "VALUATION", [6], [2],
+        "Issues #466-#469 (PR #483) make Judge newly structural/scorable (isolated compose returns "
+        "no gaps) where it used to be refused. The per-option decider still scores Judge at -36.5 "
+        "and would never choose it, but the composer's sequence-level valuation now outranks the "
+        "ruled option [6] with it anyway — the same 'a later step pays for the cheap first move' "
+        "shape this table already documents elsewhere. Pending developer ruling, docs/plans/"
+        "issue-sequence-466-wave3-packet.md"),
 }
 
 #: Rows RETIRED by the tie-defer (`planner._tied_first_steps`). Kept by name because a flip table
-#: that only grows is one nobody trusts to have been re-measured.
+#: that only grows is one nobody trusts to have been re-measured. `ml_lunar_cycle_over_inert_bench_
+#: attach_f16` moved OUT of this tuple and back into `FLIPS`: the guard below forbids carrying both
+#: claims on one name, and the row's own note is where its tie-defer history now lives.
 RETIRED_BY_THE_TIE_DEFER = ("ml0703_develop_riolu_not_shuffle_f40",
-                            "ml_dont_energize_the_supporter_tutor_f84",
-                            "ml_lunar_cycle_over_inert_bench_attach_f16")
+                            "ml_dont_energize_the_supporter_tutor_f84")
 
 #: CORPUS RECORD frames, keyed ``(episode, frame)`` — the key `decider_lab`'s gate already uses.
 #: A separate dict because `FLIPS`' guards resolve every key to a `tests/fixtures/corrections/` file.

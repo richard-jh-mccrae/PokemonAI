@@ -64,5 +64,5 @@ def test_the_mandatory_chosen_equals_correct_population_is_measured_not_assumed(
     assert RESOLVED[0] not in {k.split("|")[0] for k, _c in same}
     # POSITIVE CONTROL. Every count above is of a shape that must be FOUND; a broken reader, a
     # renamed field or an empty corpus would read 0 for all of them and look like a clean corpus.
-    assert len(recs) == 375
-    assert sum(1 for _k, c in recs if c.correct) == 365
+    assert len(recs) == 384
+    assert sum(1 for _k, c in recs if c.correct) == 373

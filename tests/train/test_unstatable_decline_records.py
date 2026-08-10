@@ -110,10 +110,10 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
     explicit `scope` key only defaults to `decision` inside `Correction.from_dict`."""
     from corpus_helpers import committed_keyed_corrections
     recs = committed_keyed_corrections()
-    assert len(recs) == 375
+    assert len(recs) == 384
 
     declines = [(k, c) for k, c in recs if c.correct == []]
-    assert len(declines) == 10
+    assert len(declines) == 11
     assert {c.scope for _k, c in declines} == {"turn"}
 
     optional = [(k, c) for k, c in recs if c.scope == "decision" and c.obs
@@ -124,7 +124,7 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
 
     # POSITIVE CONTROL. Every assertion above is a shape that must NOT be found; an empty corpus, a
     # broken reader or a mis-typed field would satisfy all of them at once.
-    assert sum(1 for _k, c in recs if c.correct) == 365
+    assert sum(1 for _k, c in recs if c.correct) == 373
 
 
 # Issue #251 — the predicate REPORTS. It must never come to excuse or exclude.
@@ -231,4 +231,4 @@ def test_neither_exposed_frame_is_a_leaf_frame_so_no_symmetric_fix_is_owed():
 
     # POSITIVE CONTROL. `is_leaf_frame` returning False on everything would satisfy the loop above
     # while proving nothing; it must still recognise the frames it is for.
-    assert sum(1 for _k, c in recs if is_leaf_frame(c)) == 278
+    assert sum(1 for _k, c in recs if is_leaf_frame(c)) == 286

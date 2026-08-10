@@ -232,7 +232,7 @@ def test_mega_starmie_promotion_corrections_are_priced_and_cannot_reuse_a_pre_ko
     from corpus_helpers import corpus_index
     frames = [c.obs for c in corpus_index().values()
               if c.agent == "mega_starmie" and (c.obs.get("select") or {}).get("context") == 4]
-    assert len(frames) == 4
+    assert len(frames) == 5
     for obs in frames:
         select = obs["select"]
         assert not ((obs["current"]["players"][obs["current"]["yourIndex"]].get("active") or [None])[0])
