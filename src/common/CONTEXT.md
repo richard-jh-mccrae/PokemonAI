@@ -2131,3 +2131,15 @@ _Avoid_: beam admission (the REJECTED option — presence without comparability)
 downstream act; expansion is what makes it comparable in the first place), chance node (a target
 choice is a CHOICE node — the player sees the space and picks, so the composer takes the **max**, not
 `.expected()`), commitment (D6 ruled the opposite: the follow-up select re-decides)
+
+**Canonical Value Contract**:
+`state_value(model)` remains the fast authoritative prize scalar. `value_breakdown(model)` is its
+explicit immutable diagnostic projection; `value_difference(before, after)` aligns and subtracts
+families and dynamic legs once. The registry owns economic consequences, not exclusive raw inputs:
+two families may consult one input only through distinct globally unique consequence keys with
+separate rationales. `PotentialStatus` distinguishes known zero, deliberate zero, and unknown
+without changing arithmetic. `registry_identity()` hashes ordered callable-free metadata so stored
+diagnostics cannot silently join different contracts. Terminal `attack_ev` remains excluded from
+absolute state potential. Ruled by **ADR-0136** (Issue #494).
+_Avoid_: private value extractor imports in diagnostics; hand-written family subtraction; treating
+every authored blind spot as a runtime unknown; folding terminal action conversion into state value.

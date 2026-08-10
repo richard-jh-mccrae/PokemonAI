@@ -72,7 +72,7 @@ def _working(pilot, obs, idx) -> tuple:
     """Rides `planner._simulate_line` and `planner._leaf_state_model` rather than rebuilding either,
     so the boards scored here are the ones the Discrimination Gate ranks."""
     from train.leaf_lab import _PLACEHOLDER_SBI
-    from common.state_value import state_value
+    from common.state_value import value_breakdown
 
     obs = {**obs, "search_begin_input": obs.get("search_begin_input") or _PLACEHOLDER_SBI}
     pilot._planning = True                       # the rung's reentrancy guard (never nest a search)
@@ -85,12 +85,14 @@ def _working(pilot, obs, idx) -> tuple:
     if sim is None:
         return None, "sim unavailable"
     end, my_index, _start_prizes, _result, line_val, _coins = sim
-    working: dict = {}
     try:
-        total = state_value(pilot._leaf_state_model(end, my_index), working=working)
+        model = pilot._leaf_state_model(end, my_index)
+        breakdown = value_breakdown(model)
     except Exception as exc:
         return None, f"state_value raised {exc!r}"
-    return {"total": total, "line": float(line_val), "working": working}, None
+    working = {family.family: family.value_prizes for family in breakdown.families}
+    return {"total": breakdown.total, "line": float(line_val), "working": working,
+            "model": model, "breakdown": breakdown.as_dict()}, None
 
 
 def diagnose(keys, *, corrections=None) -> list:
@@ -130,11 +132,13 @@ def diagnose(keys, *, corrections=None) -> list:
         if ruled is None or leaf is None:
             out.append({**row, "error": f"ruled: {err_r or 'ok'} / leaf: {err_l or 'ok'}"})
             continue
-        deltas = {n: float(ruled["working"].get(n, 0.0)) - float(leaf["working"].get(n, 0.0))
-                  for n in sorted(set(ruled["working"]) | set(leaf["working"]))}
+        from common.state_value import value_difference
+        difference = value_difference(leaf["model"], ruled["model"])
+        deltas = {family.family: family.delta for family in difference.families}
         against = {n: d for n, d in deltas.items() if d < -DECIDER_FLOOR}
         out.append({**row, "deltas": deltas,
                     "ruled_terms": dict(ruled["working"]), "leaf_terms": dict(leaf["working"]),
+                    "difference": difference.as_dict(),
                     "line_delta": ruled["line"] - leaf["line"],
                     "total_delta": ruled["total"] - leaf["total"],
                     "decider": min(against, key=against.get) if against else None})

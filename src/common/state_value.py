@@ -16,7 +16,11 @@ Three standing constraints (reasoning in the ADRs):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
+from enum import Enum
+import hashlib
+import json
+import math
+from typing import TYPE_CHECKING, Callable, Iterable, Mapping, NamedTuple, Sequence
 
 from common import currency, needs as _needs
 from common.card_worth import ROLE_TIER, Worth
@@ -120,6 +124,159 @@ class ReadyBody(NamedTuple):
     role_relevance: float
 
 
+class PotentialStatus(str, Enum):
+    """Epistemic status of one canonical potential, separate from its numeric value."""
+
+    KNOWN = "known"
+    DELIBERATE_ZERO = "deliberate_zero"
+    UNKNOWN = "unknown"
+
+
+def _plain_float(value: float) -> float:
+    value = float(value)
+    return 0.0 if value == 0.0 else value
+
+
+@dataclass(frozen=True)
+class PotentialLeg:
+    key: str
+    value_prizes: float
+    status: PotentialStatus = PotentialStatus.KNOWN
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.key or not math.isfinite(float(self.value_prizes)):
+            raise ValueError("potential legs require a key and finite prize value")
+        if self.status is not PotentialStatus.KNOWN and (self.value_prizes != 0.0 or not self.reason):
+            raise ValueError("unknown and deliberate-zero legs must be reasoned numeric zeroes")
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "value_prizes": _plain_float(self.value_prizes),
+                "status": self.status.value, "reason": self.reason}
+
+
+@dataclass(frozen=True)
+class PotentialResult:
+    family: str
+    value_prizes: float
+    legs: tuple[PotentialLeg, ...]
+    status: PotentialStatus = PotentialStatus.KNOWN
+    unknowns: tuple[str, ...] = ()
+    applied_bounds: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.family or not math.isfinite(float(self.value_prizes)):
+            raise ValueError("potential results require a family and finite prize value")
+        if len({leg.key for leg in self.legs}) != len(self.legs):
+            raise ValueError(f"duplicate leg key in {self.family}")
+        derived = (PotentialStatus.UNKNOWN if any(leg.status is PotentialStatus.UNKNOWN for leg in self.legs)
+                   else PotentialStatus.DELIBERATE_ZERO
+                   if self.legs and all(leg.status is PotentialStatus.DELIBERATE_ZERO for leg in self.legs)
+                   else PotentialStatus.KNOWN)
+        if self.status is not derived:
+            raise ValueError(f"{self.family} status must be derived from its legs")
+        expected_unknowns = tuple(leg.key for leg in self.legs
+                                  if leg.status is PotentialStatus.UNKNOWN)
+        if self.unknowns != expected_unknowns:
+            raise ValueError(f"{self.family} unknowns must name its unknown legs in order")
+        if not math.isclose(sum(leg.value_prizes for leg in self.legs), self.value_prizes,
+                            rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError(f"{self.family} legs do not aggregate to its value")
+
+    def as_dict(self) -> dict:
+        return {"family": self.family, "value_prizes": _plain_float(self.value_prizes),
+                "legs": [leg.as_dict() for leg in self.legs], "status": self.status.value,
+                "unknowns": list(self.unknowns), "applied_bounds": list(self.applied_bounds)}
+
+
+@dataclass(frozen=True)
+class ValueBreakdown:
+    total: float
+    families: tuple[PotentialResult, ...]
+    registry_identity: str
+    terminal_excluded: bool = True
+    unknowns: tuple[str, ...] = ()
+    deliberate_zeros: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(float(self.total)) or not math.isclose(
+                sum(family.value_prizes for family in self.families), self.total,
+                rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("breakdown families do not aggregate to its finite total")
+
+    def as_dict(self) -> dict:
+        return {"total": _plain_float(self.total),
+                "families": [family.as_dict() for family in self.families],
+                "registry_identity": self.registry_identity,
+                "terminal_excluded": self.terminal_excluded,
+                "unknowns": list(self.unknowns), "deliberate_zeros": list(self.deliberate_zeros)}
+
+
+@dataclass(frozen=True)
+class LegDifference:
+    key: str
+    before: float
+    after: float
+    delta: float
+    before_status: PotentialStatus
+    after_status: PotentialStatus
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "before": _plain_float(self.before),
+                "after": _plain_float(self.after), "delta": _plain_float(self.delta),
+                "before_status": self.before_status.value, "after_status": self.after_status.value}
+
+
+@dataclass(frozen=True)
+class FamilyDifference:
+    family: str
+    before: float
+    after: float
+    delta: float
+    legs: tuple[LegDifference, ...]
+
+    def as_dict(self) -> dict:
+        return {"family": self.family, "before": _plain_float(self.before),
+                "after": _plain_float(self.after), "delta": _plain_float(self.delta),
+                "legs": [leg.as_dict() for leg in self.legs]}
+
+
+@dataclass(frozen=True)
+class ValueDifference:
+    before: float
+    after: float
+    delta: float
+    families: tuple[FamilyDifference, ...]
+
+    def as_dict(self) -> dict:
+        return {"before": _plain_float(self.before), "after": _plain_float(self.after),
+                "delta": _plain_float(self.delta),
+                "families": [family.as_dict() for family in self.families]}
+
+
+@dataclass(frozen=True)
+class ConsequenceSpec:
+    key: str
+    inputs: tuple[str, ...]
+    rationale: str
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "inputs": list(self.inputs), "rationale": self.rationale}
+
+
+@dataclass(frozen=True)
+class BoundSpec:
+    key: str
+    lower: float | None
+    upper: float | None
+    scope: str
+    rationale: str = ""
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "lower": self.lower, "upper": self.upper,
+                "scope": self.scope, "rationale": self.rationale}
+
+
 @dataclass(frozen=True)
 class TermFamily:
     """A family, the facts it prices, and the facts it refuses. A fact in some ``does_not_read``
@@ -127,23 +284,93 @@ class TermFamily:
 
     #: The family's name, and its key in the `working` breakdown.
     name: str
-    #: Board facts this family PRICES. Pairwise disjoint across the registry, asserted by test.
-    reads: tuple[str, ...]
+    #: The consequences this family owns. Raw inputs may be shared; consequence keys may not.
+    consequences: tuple[ConsequenceSpec, ...]
     #: Facts left to another family. An entry no family `reads` names a gap.
     does_not_read: tuple[str, ...]
     #: How the family composes — the frozen semantics.
     composition: str
+    evaluator: Callable | None = None
+    unit: str = "prizes"
+    horizon: str = "state"
+    bounds: tuple[BoundSpec, ...] = ()
     #: Dimensions this family plausibly OUGHT to price and knowingly does not — owned by NOBODY,
     #: unlike `does_not_read`. Under 1-ply differencing a 0 delta is never explored. Read by nothing.
     blind_to: tuple[str, ...] = ()
+
+    @property
+    def reads(self) -> tuple[str, ...]:
+        """Ordered input union, derived from consequence ownership for compatibility."""
+        return tuple(dict.fromkeys(value for consequence in self.consequences
+                                   for value in consequence.inputs))
+
+    def as_dict(self) -> dict:
+        return {"name": self.name, "consequences": [item.as_dict() for item in self.consequences],
+                "reads": list(self.reads), "does_not_read": list(self.does_not_read),
+                "composition": self.composition, "unit": self.unit, "horizon": self.horizon,
+                "bounds": [bound.as_dict() for bound in self.bounds],
+                "blind_to": list(self.blind_to)}
+
+
+def _consequences(*items: tuple[str, tuple[str, ...], str]) -> tuple[ConsequenceSpec, ...]:
+    return tuple(ConsequenceSpec(*item) for item in items)
+
+
+def _evaluate_prize_race(model: "StateModel", diagnostics: bool = False):
+    race, working = model.prize_race, {} if diagnostics else None
+    value = prize_race(my_prizes_remaining=race.my_prizes_remaining,
+                       their_prizes_remaining=race.opp_prizes_remaining, working=working)
+    return _potential_result("prize_race", value, working) if diagnostics else value
+
+
+def _evaluate_survival(model: "StateModel", diagnostics: bool = False):
+    working = {} if diagnostics else None
+    value = survival(_exposed_bodies(model), predicted_loss=_predicted_loss(model), working=working)
+    return _potential_result("survival", value, working) if diagnostics else value
+
+
+def _evaluate_threat(model: "StateModel", diagnostics: bool = False):
+    working = {} if diagnostics else None
+    value = threat(_reachable_target_values(model), opponent_hand_resource=model.theirs.hand_size,
+                   working=working)
+    return _potential_result("threat", value, working) if diagnostics else value
+
+
+def _evaluate_readiness(model: "StateModel", diagnostics: bool = False):
+    working = {} if diagnostics else None
+    if diagnostics:
+        rows = _ready_bodies(model, with_keys=True)
+        value = readiness((body for _key, body in rows),
+                          keys=(key for key, _body in rows), working=working)
+    else:
+        value = readiness(_ready_bodies(model))
+    return _potential_result("readiness", value, working) if diagnostics else value
+
+
+def _evaluate_hand(model: "StateModel", diagnostics: bool = False):
+    working = {} if diagnostics else None
+    value = hand(**_hand_legs(model), working=working)
+    return _potential_result("hand", value, working) if diagnostics else value
+
+
+def _evaluate_development(model: "StateModel", diagnostics: bool = False):
+    working = {} if diagnostics else None
+    value = development(**_development_legs(model), working=working)
+    return _potential_result("development", value, working) if diagnostics else value
 
 
 #: **The coverage map** — the six families of ADR-0092 §4-T0.
 REGISTRY: tuple[TermFamily, ...] = (
     TermFamily(
         name="prize_race",
-        reads=("my_prizes_remaining", "their_prizes_remaining"),
+        consequences=_consequences(
+            ("race.lead", ("my_prizes_remaining", "their_prizes_remaining"),
+             "Prices the signed distance between the two prize races."),
+            ("race.proximity", ("my_prizes_remaining", "their_prizes_remaining"),
+             "Prices nonlinear proximity to completing either prize race.")),
         does_not_read=("prize_at_risk", "opponent_target_value"),
+        evaluator=_evaluate_prize_race,
+        bounds=(BoundSpec("uncapped", None, None, "family", "Forecasts real prize flow."),),
         composition="Lead plus proximity over the two prize counts. The RACE only — what a body is "
                     "worth when it falls is `survival` (mine) or `threat` (theirs), so the prize "
                     "VALUES of individual bodies are deliberately absent here. One reader arrives "
@@ -161,8 +388,14 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="survival",
-        reads=("prize_at_risk", "turns_to_ko_me", "bench_harvest", "predicted_loss"),
+        consequences=_consequences(
+            ("survival.body_exposure", ("prize_at_risk", "turns_to_ko_me", "bench_harvest"),
+             "Prices ranked prize exposure of my bodies."),
+            ("outcome.predicted_loss", ("predicted_loss", "their_prizes_remaining"),
+             "Prices the terminal consequence of a reachable loss.")),
         does_not_read=("my_prizes_remaining", "readiness_odds"),
+        evaluator=_evaluate_survival,
+        bounds=(BoundSpec("uncapped", None, None, "family", "Forecasts real prize loss."),),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
                     "Bench-Harvest-aware. Both of this family's damage reads — the "
                     "`turns_to_ko_me` clock and `_predicted_loss`'s Incoming — are taken at "
@@ -216,9 +449,16 @@ REGISTRY: tuple[TermFamily, ...] = (
         name="threat",
         # `denied_forward_payoff` -> `denied_line_prize` (ADR-0119) is a REPLACEMENT, not a rename:
         # the old fact was forward DAMAGE, which `incoming()` already puts inside `survival`.
-        reads=("opponent_target_value", "my_reachable_kos", "denied_line_prize",
-               "opponent_hand_resource"),
+        consequences=_consequences(
+            ("threat.reachable_target_exposure",
+             ("opponent_target_value", "my_reachable_kos", "denied_line_prize"),
+             "Prices exposed opposing bodies I can reach."),
+            ("threat.hidden_hand_pressure", ("opponent_hand_resource",),
+             "Prices uncertainty pressure carried by the opponent hand.")),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
+        evaluator=_evaluate_threat,
+        bounds=(BoundSpec("family_cap", -_THREAT_CAP, _THREAT_CAP, "family",
+                          "Runaway guard for the positional band."),),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
                     "THIS family must not read a clock — `turns_to_ko_me` is THEIR clock on MY "
@@ -400,8 +640,16 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="readiness",
-        reads=("body_payoff", "readiness_odds", "role_relevance"),
+        consequences=_consequences(
+            ("readiness.attack_realization",
+             ("body_payoff", "readiness_odds", "role_relevance", "turns_to_ko_me"),
+             "Prices the probability that relevant bodies realize attack payoff."),),
         does_not_read=("assignment_coverage", "bench_slot_price"),
+        evaluator=_evaluate_readiness,
+        bounds=(BoundSpec("body_cap", 0.0, _READINESS_BODY_CAP, "leg",
+                          "Per-body runaway guard."),
+                BoundSpec("board_cap", 0.0, _READINESS_CAP, "family",
+                          "Whole-board runaway guard.")),
         composition="Per-body payoff x readiness odds x role relevance, composed from the existing "
                     "Attach-Budget / readiness-odds / Needs machinery rather than a second opinion "
                     "about any of them. The payoff is `StateModel.attack_payoff` — the best attack the "
@@ -485,8 +733,14 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="hand",
-        reads=("assignment_coverage", "re_access", "hand_worth", "slot_demand"),
+        consequences=_consequences(
+            ("resources.hand_supply_demand",
+             ("assignment_coverage", "re_access", "hand_worth", "slot_demand"),
+             "Prices hand supply against the position's declared demand."),),
         does_not_read=("body_payoff", "deploy_marginal"),
+        evaluator=_evaluate_hand,
+        bounds=(BoundSpec("family_cap", None, _HAND_CAP, "family",
+                          "Upper runaway guard; unmet demand remains signed."),),
         composition="Assignment coverage of LIVE slots plus re-access, on the `set_keep_v2` spine, "
                     "MINUS the demand those slots represent (Issue #400 Phase 2). Its "
                     "Worth-denominated part is the one place worth_to_prizes crosses. A "
@@ -533,8 +787,17 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="development",
-        reads=("deploy_marginal", "evolve_marginal", "bench_slot_price", "line_topology"),
-        does_not_read=("role_relevance", "prize_at_risk"),
+        consequences=_consequences(
+            ("development.board_bodies", ("deploy_marginal", "role_relevance"),
+             "Prices relevant bodies established on my board."),
+            ("development.evolution", ("evolve_marginal", "line_topology", "role_relevance"),
+             "Prices reachable evolution potential and topology."),
+            ("development.bench_capacity", ("bench_slot_price",),
+             "Prices consumed Bench capacity.")),
+        does_not_read=("prize_at_risk",),
+        evaluator=_evaluate_development,
+        bounds=(BoundSpec("family_cap", None, _DEVELOPMENT_CAP, "family",
+                          "Upper runaway guard; over-spent capacity remains signed."),),
         composition="Bench and line topology through the deploy (ADR-0086) and evolve (ADR-0070) "
                     "marginals, PLUS an escalating Bench-slot price: a slot's marginal cost rises as "
                     "open slots deplete, so the last slot is not spent on a non-critical support "
@@ -557,8 +820,15 @@ REGISTRY: tuple[TermFamily, ...] = (
 TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
     TermFamily(
         name="attack_ev",
-        reads=("attack_damage", "attack_riders", "attack_economy", "next_turn_lock"),
+        consequences=_consequences(
+            ("terminal.attack_damage", ("attack_damage",), "Prices KO and chip damage conversion."),
+            ("terminal.attack_riders", ("attack_riders",), "Prices snipe and spread conversion."),
+            ("terminal.attack_economy", ("attack_economy",), "Prices attack economy effects."),
+            ("terminal.next_turn_lock", ("next_turn_lock",), "Prices forfeited next-turn payoff.")),
         does_not_read=("opponent_target_value", "readiness_odds"),
+        evaluator=None,
+        horizon="terminal_action",
+        bounds=(BoundSpec("unbounded", None, None, "family", "Terminal conversion is not state potential."),),
         composition="EV of the attack that ENDS the turn (Issue #263 § Terminal-action valuation; "
                     "old Issue #145 amendment B made concrete). Composed from the shipped oracles, "
                     "never new math: the KO band / `predicted_damage` with coin branches entering "
@@ -662,17 +932,78 @@ def state_value(model: "StateModel", *, working: dict | None = None) -> float:
 def _terms(model: "StateModel") -> dict:
     """The six families, evaluated once. **Insertion order is REGISTRY order and that is a contract**
     — float addition is not associative, so a reorder moves the sum's last bits (Issue #262)."""
-    race = model.prize_race
-    return {
-        "prize_race": prize_race(my_prizes_remaining=race.my_prizes_remaining,
-                                 their_prizes_remaining=race.opp_prizes_remaining),
-        "survival": survival(_exposed_bodies(model), predicted_loss=_predicted_loss(model)),
-        "threat": threat(_reachable_target_values(model),
-                         opponent_hand_resource=model.theirs.hand_size),
-        "readiness": readiness(_ready_bodies(model)),
-        "hand": hand(**_hand_legs(model)),
-        "development": development(**_development_legs(model)),
-    }
+    return {family.name: float(family.evaluator(model)) for family in REGISTRY}
+
+
+_VALUE_CONTRACT_SCHEMA = 1
+
+
+def registry_identity() -> str:
+    """Content identity for the ordered, callable-free registry contract."""
+    payload = json.dumps([family.as_dict() for family in _all_families()], sort_keys=True,
+                         separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+    return f"state-value/{_VALUE_CONTRACT_SCHEMA}:{hashlib.sha256(payload).hexdigest()}"
+
+
+def _potential_result(family: str, value: float, working: dict | None) -> PotentialResult:
+    legs = [PotentialLeg(key, _plain_float(part)) for key, part in (working or {}).items()]
+    residue = float(value) - sum(leg.value_prizes for leg in legs)
+    if residue != 0.0:
+        legs.append(PotentialLeg("rounding_adjustment", residue))
+    adjustment_keys = tuple(leg.key for leg in legs
+                            if "adjustment" in leg.key and leg.value_prizes != 0.0)
+    applied = tuple(bound.key for bound in FAMILIES[family].bounds
+                    if (bound.scope == "leg" and any(
+                            key.endswith("cap_adjustment") and key != "board_cap_adjustment"
+                            for key in adjustment_keys))
+                    or (bound.scope == "family" and any(
+                            key in {"bound_adjustment", "board_cap_adjustment"}
+                            for key in adjustment_keys)))
+    return PotentialResult(family=family, value_prizes=float(value), legs=tuple(legs),
+                           applied_bounds=applied)
+
+
+def value_breakdown(model: "StateModel") -> ValueBreakdown:
+    """Canonical, memoized diagnostic projection. The scalar path never allocates it."""
+    identity = registry_identity()
+
+    def build() -> ValueBreakdown:
+        families = tuple(family.evaluator(model, diagnostics=True) for family in REGISTRY)
+        terms = {family.family: family.value_prizes for family in families}
+        model._memoized(("state_value",), lambda: terms)
+        unknowns = tuple(f"{family.family}.{leg.key}" for family in families for leg in family.legs
+                         if leg.status is PotentialStatus.UNKNOWN)
+        deliberate = tuple(f"{family.family}.{leg.key}" for family in families for leg in family.legs
+                           if leg.status is PotentialStatus.DELIBERATE_ZERO)
+        return ValueBreakdown(total=float(sum(terms.values())), families=families,
+                              registry_identity=identity, terminal_excluded=True,
+                              unknowns=unknowns, deliberate_zeros=deliberate)
+
+    return model._memoized(("value_breakdown", identity), build)
+
+
+def value_difference(before: "StateModel", after: "StateModel") -> ValueDifference:
+    """Align two canonical breakdowns and subtract once, preserving registry and leg order."""
+    left, right = value_breakdown(before), value_breakdown(after)
+    right_families = {family.family: family for family in right.families}
+    differences = []
+    for old_family in left.families:
+        new_family = right_families[old_family.family]
+        old_legs = {leg.key: leg for leg in old_family.legs}
+        new_legs = {leg.key: leg for leg in new_family.legs}
+        keys = tuple(old_legs) + tuple(key for key in new_legs if key not in old_legs)
+        legs = []
+        for key in keys:
+            old = old_legs.get(key, PotentialLeg(key, 0.0))
+            new = new_legs.get(key, PotentialLeg(key, 0.0))
+            legs.append(LegDifference(key, old.value_prizes, new.value_prizes,
+                                      _plain_float(new.value_prizes - old.value_prizes),
+                                      old.status, new.status))
+        differences.append(FamilyDifference(
+            old_family.family, old_family.value_prizes, new_family.value_prizes,
+            _plain_float(new_family.value_prizes - old_family.value_prizes), tuple(legs)))
+    return ValueDifference(left.total, right.total, _plain_float(right.total - left.total),
+                           tuple(differences))
 
 
 # ── the extractors — StateModel -> the families' plain numbers ────────────────────────────────────
@@ -752,21 +1083,26 @@ def _forward_credit(forward, *, relevance: float = 1.0) -> float:
             * halve(forward.hops) * relevance)
 
 
-def _ready_bodies(model: "StateModel") -> tuple:
+def _ready_bodies(model: "StateModel", *, with_keys: bool = False) -> tuple:
     """MY bodies as `readiness` reads them: `attack_payoff` on THIS board, not the printed roll-up
     (ADR-0109), x odds asked about that SAME attack, x role relevance."""
     out = []
     seen: set = set()
+    bench_index = 0
     for b in model.mine.bodies:
+        key = "active" if b.is_active else f"bench.{bench_index}"
+        if not b.is_active:
+            bench_index += 1
         if b.stat is None:
             continue                       # unknown card: make no claim (the oracle's own direction)
         paying = model.mine.attack_payoff(b)
         payoff = paying.damage / currency.PRIZE_DAMAGE_RATE
         if payoff <= 0.0:
             continue                       # nothing this body can land: a condition it cannot meet
-        out.append(ReadyBody(payoff=payoff,
-                             readiness_odds=_readiness_odds(model, b, paying.attack_id),
-                             role_relevance=_body_relevance(model, b.card_id, seen)))
+        body = ReadyBody(payoff=payoff,
+                         readiness_odds=_readiness_odds(model, b, paying.attack_id),
+                         role_relevance=_body_relevance(model, b.card_id, seen))
+        out.append((key, body) if with_keys else body)
     return tuple(out)
 
 
@@ -875,63 +1211,105 @@ def _bench_slot_price(occupied: int) -> float:
 # Plain numbers, not the model, so each equation tests with no engine and no board construction.
 
 
-def prize_race(*, my_prizes_remaining: int, their_prizes_remaining: int) -> float:
+def prize_race(*, my_prizes_remaining: int, their_prizes_remaining: int,
+               working: dict | None = None) -> float:
     """Lead plus proximity over the two prize COUNTS, in prizes. **The lead leg has UNIT SLOPE** —
     that is what makes the scalar prize-denominated; proximity is a `halve` difference and cannot invert it."""
     mine, theirs = int(my_prizes_remaining), int(their_prizes_remaining)
     lead = float(theirs - mine)
     proximity = halve(mine - 1) - halve(theirs - 1)
-    return lead + _PROXIMITY_W * proximity
+    proximity_value = _PROXIMITY_W * proximity
+    if working is not None:
+        working.update((('lead', lead), ('proximity', proximity_value)))
+    return lead + proximity_value
 
 
-def survival(bodies: Iterable[ExposedBody], *, predicted_loss: bool = False) -> float:
+def survival(bodies: Iterable[ExposedBody], *, predicted_loss: bool = False,
+             working: dict | None = None) -> float:
     """My bodies' exposure, in prizes — **negative**, UNCAPPED (it forecasts real prize flow), and
     RANK-GRADED because they attack ONCE a turn (`docs/rules.md` §3): ungraded it reached -4.5."""
     graded = sorted((float(b.prize_at_risk) * halve(int(b.turns_to_ko_me) - 1) for b in bodies),
                     reverse=True)
-    exposure = sum(g * halve(rank) for rank, g in enumerate(graded))
+    exposure = sum(grade * halve(rank) for rank, grade in enumerate(graded))
+    loss = -LOSS_PRIZES if predicted_loss else 0.0
+    if working is not None:
+        working.update((f"exposure.rank.{rank}", -(grade * halve(rank)))
+                       for rank, grade in enumerate(graded))
+        working["predicted_loss"] = loss
     return -(exposure + (LOSS_PRIZES if predicted_loss else 0.0))
 
 
-def threat(targets: Iterable[float], *, opponent_hand_resource: float = 0.0) -> float:
+def threat(targets: Iterable[float], *, opponent_hand_resource: float = 0.0,
+           working: dict | None = None) -> float:
     """Their bodies' exposure to ME, in prizes — positive and POSITIONAL, so :data:`_THREAT_W`-scaled
     THEN capped. Converting any of it is `attack_ev`'s; the guard bites on ~7% of non-empty inputs."""
     resource = _OPPONENT_HAND_RESOURCE_W * float(opponent_hand_resource)
-    return max(-_THREAT_CAP, min(_THREAT_CAP,
-                                 _THREAT_W * float(sum(float(t) for t in targets)) - resource))
+    reachable = _THREAT_W * float(sum(float(t) for t in targets))
+    raw = reachable - resource
+    value = max(-_THREAT_CAP, min(_THREAT_CAP, raw))
+    if working is not None:
+        working.update((('reachable_targets', reachable), ('opponent_hand_resource', -resource),
+                        ('bound_adjustment', value - raw)))
+    return value
 
 
-def readiness(bodies: Iterable[ReadyBody]) -> float:
+def readiness(bodies: Iterable[ReadyBody], *, keys: Iterable[str] | None = None,
+              working: dict | None = None) -> float:
     """How close my board is to DOING something, in prizes. MULTIPLICATIVE — a huge payoff at zero
     odds is zero — then per-body and total runaway guards. Positional: the swing is `attack_ev`'s."""
     total = 0.0
-    for body in bodies:
+    labels = iter(keys) if keys is not None else None
+    for index, body in enumerate(bodies):
         contribution = (_READINESS_W * float(body.payoff)
                         * min(1.0, max(0.0, float(body.readiness_odds)))
                         * min(1.0, max(0.0, float(body.role_relevance))))
-        total += min(_READINESS_BODY_CAP, contribution)
-    return min(_READINESS_CAP, total)
+        bounded = min(_READINESS_BODY_CAP, contribution)
+        total += bounded
+        if working is not None:
+            key = next(labels) if labels is not None else str(index)
+            working[f"body.{key}"] = contribution
+            working[f"body.{key}.cap_adjustment"] = bounded - contribution
+    value = min(_READINESS_CAP, total)
+    if working is not None:
+        working["board_cap_adjustment"] = value - total
+    return value
 
 
 def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
-         slot_demand: float = 0.0, worth_prize_rate: float | None = None) -> float:
+         slot_demand: float = 0.0, worth_prize_rate: float | None = None,
+         working: dict | None = None) -> float:
     """What is still IN HAND against what the position still NEEDS, in prizes. ⚠️ ``slot_demand`` is
     the DEMAND half of one ledger (ADR-0127): without it every card play priced as a loss. SIGNED."""
     worth = (float(assignment_coverage) + float(re_access) + float(hand_worth)
              - float(slot_demand))
-    converted = (worth_to_prizes(Worth(worth)) if worth_prize_rate is None
-                 else worth * float(worth_prize_rate))
+    rate = float(_POC_WORTH_PRIZE_RATE or 0.0) if worth_prize_rate is None else float(worth_prize_rate)
+    converted = (worth_to_prizes(Worth(worth)) if worth_prize_rate is None else worth * rate)
     # Capped from ABOVE only: a `max(0.0, …)` floor would make an unmet need free again.
-    return min(_HAND_CAP, converted)
+    value = min(_HAND_CAP, converted)
+    if working is not None:
+        working.update((('assignment_coverage', float(assignment_coverage) * rate),
+                        ('re_access', float(re_access) * rate),
+                        ('hand_worth', float(hand_worth) * rate),
+                        ('slot_demand', -float(slot_demand) * rate),
+                        ('bound_adjustment', value - converted)))
+    return value
 
 
 def development(*, deploy_marginal: float, evolve_marginal: float, bench_slot_price: float,
-                line_topology: float) -> float:
+                line_topology: float, working: dict | None = None) -> float:
     """Board topology — bench and evolution lines, in prizes. ``bench_slot_price`` is a COST that
     escalates as slots deplete; the cap is on the SIGNED total, so an over-spent Bench scores negative."""
-    return min(_DEVELOPMENT_CAP,
-               float(deploy_marginal) + float(evolve_marginal) + float(line_topology)
-               - float(bench_slot_price))
+    deploy = float(deploy_marginal)
+    evolve = float(evolve_marginal)
+    topology = float(line_topology)
+    bench = float(bench_slot_price)
+    raw = deploy + evolve + topology - bench
+    value = min(_DEVELOPMENT_CAP, raw)
+    if working is not None:
+        working.update((('deploy_marginal', deploy), ('evolve_marginal', evolve),
+                        ('line_topology', topology), ('bench_slot_price', -bench),
+                        ('bound_adjustment', value - raw)))
+    return value
 
 
 # ── the terminal-action term ──────────────────────────────────────────────────────────────────────
@@ -1104,18 +1482,34 @@ def registry_gaps() -> list[str]:
 
 
 def double_counted() -> list[str]:
-    """Facts claimed by MORE than one family. Empty is the contract (ADR-0092 §4-T0)."""
+    """Consequence keys claimed by more than one family. Empty is the contract."""
     seen: dict[str, int] = {}
     for f in _all_families():
-        for fact in f.reads:
-            seen[fact] = seen.get(fact, 0) + 1
+        for consequence in f.consequences:
+            seen[consequence.key] = seen.get(consequence.key, 0) + 1
     return sorted(k for k, n in seen.items() if n > 1)
+
+
+def undeclared_shared_inputs() -> list[str]:
+    """Shared raw inputs lacking distinct, reasoned consequences."""
+    owners: dict[str, list[ConsequenceSpec]] = {}
+    for family in _all_families():
+        for consequence in family.consequences:
+            for input_name in consequence.inputs:
+                owners.setdefault(input_name, []).append(consequence)
+    return sorted(input_name for input_name, consequences in owners.items()
+                  if len(consequences) > 1 and
+                  (len({item.key for item in consequences}) != len(consequences)
+                   or any(not item.rationale for item in consequences)))
 
 
 __all__: Sequence[str] = (
     "LOSS_PRIZES", "WIN_PRIZES", "worth_to_prizes",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
-    "TermFamily", "ExposedBody", "ReadyBody", "AttackEV",
+    "TermFamily", "ConsequenceSpec", "BoundSpec", "ExposedBody", "ReadyBody", "AttackEV",
+    "PotentialStatus", "PotentialLeg", "PotentialResult", "ValueBreakdown",
+    "LegDifference", "FamilyDifference", "ValueDifference", "registry_identity",
     "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",
-    "attack_ev", "registry_gaps", "double_counted", "blind_spots",
+    "value_breakdown", "value_difference", "attack_ev", "registry_gaps", "double_counted",
+    "undeclared_shared_inputs", "blind_spots",
 )

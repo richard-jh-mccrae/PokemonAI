@@ -1356,9 +1356,10 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
     price two different CONSEQUENCES of it — `survival`'s own `_predicted_loss` precedent."""
     assert sv.double_counted() == []
     assert sv.registry_gaps() == []
-    assert sv.FAMILIES["readiness"].reads == ("body_payoff", "readiness_odds", "role_relevance")
+    assert sv.FAMILIES["readiness"].reads == (
+        "body_payoff", "readiness_odds", "role_relevance", "turns_to_ko_me")
+    assert sv.undeclared_shared_inputs() == []
     assert "turns_to_ko_me" in sv.FAMILIES["survival"].reads
-    assert "turns_to_ko_me" not in sv.FAMILIES["readiness"].reads
     # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
     assert "turns_to_ko_me" in sv.FAMILIES["readiness"].composition
     # …and the consultation is REAL: otherwise the contract describes something that never happens.

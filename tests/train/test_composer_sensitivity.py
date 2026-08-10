@@ -60,7 +60,9 @@ def test_report_and_case_schema_are_stable(report):
     for row in report["cases"]:
         assert set(row) == case_keys
         assert set(row["source"]) == {"kind", "fixture", "provenance"}
-        assert set(row["before"]) == set(row["after"]) == {"total", "workings", "legs"}
+        assert set(row["before"]) == set(row["after"]) == {
+            "total", "workings", "legs", "registry_identity", "statuses"}
+        assert row["before"]["registry_identity"].startswith("state-value/1:")
         assert set(row["before"]["workings"]) == set(row["after"]["workings"]) == set(lab.FAMILIES)
         assert set(row["deltas"]) == {"total", "families", "legs"}
         assert set(row["deltas"]["families"]) == set(lab.FAMILIES)
@@ -231,7 +233,8 @@ def test_evolution_heal_mobility_and_hand_controls(cases):
     unrepresented = cases["hand-spend-unrepresented-demand"]
     before = represented["local"]["working"]["before_legs"]
     after = represented["local"]["working"]["after_legs"]
-    assert before["assignment_coverage"] == before["slot_demand"] == 8.0
+    assert before["assignment_coverage"] == pytest.approx(0.066666666667)
+    assert before["slot_demand"] == pytest.approx(-0.066666666667)
     assert after["assignment_coverage"] == after["slot_demand"] == 0.0
     assert represented["local"]["working"]["equation"] == (
         "assignment_coverage + re_access + hand_worth - slot_demand")
@@ -248,8 +251,10 @@ def test_evolution_heal_mobility_and_hand_controls(cases):
     assert represented["positive_control"]["positive_hand_family_delta"] == pytest.approx(
         unrepresented["deltas"]["families"]["hand"])
     assert unrepresented["local"]["working"]["classification"] == "unrepresented-bench-demand"
-    assert unrepresented["local"]["working"]["before_legs"]["hand_worth"] == 8.0
-    assert unrepresented["local"]["working"]["raw_signed_worth_before"] == 8.0
+    assert unrepresented["local"]["working"]["before_legs"]["hand_worth"] == pytest.approx(
+        0.066666666667)
+    assert unrepresented["local"]["working"]["raw_signed_worth_before"] == pytest.approx(
+        0.066666666667)
     assert unrepresented["local"]["working"]["raw_signed_worth_after"] == 0.0
     assert unrepresented["local"]["before"] == pytest.approx(0.066666666667)
     assert unrepresented["local"]["after"] == 0.0
@@ -290,7 +295,8 @@ def test_information_case_names_structural_owner_not_a_value_gap(cases):
     contract_keys = {"label", "indices", "before", "actions", "after", "deltas", "local"}
     for order in working["ordered_sequences"]:
         assert set(order) == contract_keys
-        assert set(order["before"]) == set(order["after"]) == {"total", "workings", "legs"}
+        assert set(order["before"]) == set(order["after"]) == {
+            "total", "workings", "legs", "registry_identity", "statuses"}
         assert set(order["deltas"]) == {"total", "families", "legs"}
         assert set(order["local"]) == {"owner", "unit", "before", "after", "delta", "working"}
         assert len(order["actions"]) == 2
