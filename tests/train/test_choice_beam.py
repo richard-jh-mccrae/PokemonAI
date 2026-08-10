@@ -57,8 +57,10 @@ def test_the_item3_MARGIN_telemetry_at_every_width_the_frame_can_support(probes)
     assert f35["unexpanded"]["rank"] == 1 and f35["expanded"]["rank"] == 1, f35
 
     assert f35["expanded"]["scored"] == 2, f35
-    assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.001125, abs=1e-6)
-    assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.002985, abs=1e-6)
+    # Issue #495: exact typed attack realization widens both margins; pin the
+    # newly ruled telemetry rather than retaining the legacy proxy values.
+    assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.006, abs=1e-6)
+    assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.01344140625, abs=1e-6)
     assert f35["expanded"]["margin_by_k"][2] > f35["unexpanded"]["margin_by_k"][2] * 2
 
     f32 = probes["f32"]

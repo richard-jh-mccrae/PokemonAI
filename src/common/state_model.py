@@ -198,6 +198,14 @@ class ForwardPayoff(NamedTuple):
     reachable: bool
 
 
+class ForwardForm(NamedTuple):
+    """One form in my deck's forward closure, with mechanical distance and zone reachability."""
+
+    card_id: int
+    hops: int
+    reachable: bool
+
+
 class AttackPayoff(NamedTuple):
     """What a body can actually pay off with on THIS board — :meth:`_SideBase.attack_payoff`'s answer.
     Id and damage travel together: they are only sound as a pair, naming the same attack."""
@@ -895,20 +903,43 @@ class MySide(_SideBase):
                               lambda: self._forward_form_ids(card_id))
 
     def _forward_form_ids(self, card_id) -> frozenset:
+        return frozenset(form.card_id for form in self.forward_forms(card_id))
+
+    def forward_forms(self, card_id) -> tuple[ForwardForm, ...]:
+        """Every forward form once, ordered by ``(hops, card_id)``.
+
+        ``reachable`` is the zone-aware fact formerly embedded only in ``_forward_payoff``: every
+        evolution card along the route must still be held or unseen.  Mechanical discovery stays
+        independent of Roles and authored win-condition lines.
+        """
+        return self._memoized(("forward_forms", card_id), lambda: self._forward_forms(card_id))
+
+    def _forward_forms(self, card_id) -> tuple[ForwardForm, ...]:
         stat = self._combat._card_stat(card_id) if card_id is not None else None
         if stat is None:
-            return frozenset()
-        out: set = set()
-        frontier = [getattr(stat, "name", None)]
+            return ()
+        held = set(self.hand_ids)
+        unseen = self.unseen_counts
+        paths: dict[int, list[ForwardForm]] = {}
+        frontier = [(getattr(stat, "name", None), 0, True, frozenset({int(card_id)}))]
         while frontier:
-            for nxt in self.forward_index.get(frontier.pop() or "", ()):
-                if nxt in out:
+            name, hops, live, path = frontier.pop()
+            for nxt in self.forward_index.get(name or "", ()):
+                if int(nxt) in path:
                     continue
-                out.add(nxt)
                 nstat = self._combat._card_stat(nxt)
-                if nstat is not None:
-                    frontier.append(getattr(nstat, "name", None))
-        return frozenset(out)
+                if nstat is None:
+                    continue
+                nlive = bool(live and (unseen.get(nxt, 0) > 0 or nxt in held))
+                candidate = ForwardForm(int(nxt), hops + 1, nlive)
+                paths.setdefault(int(nxt), []).append(candidate)
+                frontier.append((getattr(nstat, "name", None), hops + 1, nlive,
+                                 path | {int(nxt)}))
+        # Prefer a reachable route even when an unreachable shortcut exists; within the same
+        # reachability class the shortest route is the timing authority.
+        forms = {cid: min(options, key=lambda form: (not form.reachable, form.hops))
+                 for cid, options in paths.items()}
+        return tuple(sorted(forms.values(), key=lambda f: (f.hops, f.card_id)))
 
     def forward_payoff(self, card_id) -> "ForwardPayoff":
         """:class:`ForwardPayoff` for ``card_id``'s line — what evolving it still OWES. Card knowledge
@@ -920,27 +951,14 @@ class MySide(_SideBase):
         if stat is None:
             return ForwardPayoff(0.0, 0, True)
         own = float(getattr(stat, "maxDamage", 0) or 0)
-        held = set(self.hand_ids)
-        unseen = self.unseen_counts
         best = ForwardPayoff(0.0, 0, True)
-        # `seen` guards a self-referential decklist: the rules cannot produce an evolution cycle,
-        # but a data slip must not hang a value equation on the grader.
-        frontier = [(card_id, getattr(stat, "name", None), 0, True)]
-        seen = {card_id}
-        while frontier:
-            _cid, name, hops, live = frontier.pop()
-            for nxt in self.forward_index.get(name or "", ()):
-                if nxt in seen:
-                    continue
-                seen.add(nxt)
-                nstat = self._combat._card_stat(nxt)
-                if nstat is None:
-                    continue
-                nlive = live and (unseen.get(nxt, 0) > 0 or nxt in held)
-                owed = max(0.0, float(getattr(nstat, "maxDamage", 0) or 0) - own)
-                if owed > best.owed_damage:
-                    best = ForwardPayoff(owed, hops + 1, nlive)
-                frontier.append((nxt, getattr(nstat, "name", None), hops + 1, nlive))
+        for form in self.forward_forms(card_id):
+            nstat = self._combat._card_stat(form.card_id)
+            if nstat is None:
+                continue
+            owed = max(0.0, float(getattr(nstat, "maxDamage", 0) or 0) - own)
+            if owed > best.owed_damage:
+                best = ForwardPayoff(owed, form.hops, form.reachable)
         return best
 
 
@@ -1273,6 +1291,44 @@ class StateModel(_Lazily):
         seam's telemetry can name a card without reaching into another object's privates."""
         return self.mine._combat._card_stat(card_id)
 
+    # -- canonical combat-value facade ---------------------------------------------------------
+    # Pilot deciders depend on the snapshot boundary, never on ``common.state_value`` directly
+    # (ADR-0069).  These deliberately thin methods keep that insulation while the implementation
+    # and immutable public contracts remain owned by ``common.state_value`` (ADR-0137).
+    def combat_build_profile(self, body, *, supply=None):
+        from common.state_value import combat_build_profile
+        return combat_build_profile(self, body, supply=supply)
+
+    def combat_realization(self, body, *, supply=None):
+        from common.state_value import combat_realization
+        return combat_realization(self, body, supply=supply)
+
+    def energy_supply_from_card(self, card_id):
+        from common.state_value import energy_supply_from_card
+        return energy_supply_from_card(self, card_id)
+
+    @staticmethod
+    def energy_supply_for_units(unit_codes, *, persistent=True):
+        from common.state_value import energy_supply_for_units
+        return energy_supply_for_units(unit_codes, persistent=persistent)
+
+    def readiness_supply_delta(self, body, supply):
+        from common.state_value import readiness_supply_delta
+        return readiness_supply_delta(self, body, supply)
+
+    def allocate_energy_units(self, recipients, unit_codes, *, persistent=True):
+        from common.state_value import allocate_energy_units
+        return allocate_energy_units(self, recipients, unit_codes, persistent=persistent)
+
+    def allocate_recovery_energy(self, scope, unit_codes):
+        from common.state_value import allocate_recovery_energy
+        return allocate_recovery_energy(self, scope, unit_codes)
+
+    @staticmethod
+    def prizes_to_worth(prizes):
+        from common.state_value import prizes_to_worth
+        return prizes_to_worth(prizes)
+
     # -- turn / quota facts: the per-turn ALLOWANCES, and the §3c contract's homes for them ------
     # A differencing system must see that a play SPENT one, or it prices the spend at 0.
     @property
@@ -1392,8 +1448,8 @@ class StateModel(_Lazily):
                      for cid, hp in bench_pairs if not self.combat.is_tera(cid))
 
     def _recover_units(self, stat) -> float:
-        """`Pilot._recover_units`' three bounds — printed ceiling, matching fuel in the rider's source
-        zone, recipients' need — re-derived from model facts. ⚠️ A SECOND copy; nothing stops drift."""
+        """Provider/source bounds capped by the shared exhaustive recipient allocation."""
+        import math
         ceiling = int(getattr(stat, "recoverN", 0) or 0)
         if not ceiling:
             return 0.0
@@ -1405,26 +1461,16 @@ class StateModel(_Lazily):
         else:
             by_type = self.mine.discard_energy_counts or {}
             fuel = float(sum(by_type.values()) if etype is None else by_type.get(etype, 0))
-        return max(0.0, min(float(ceiling), fuel,
-                            float(self._recover_need(getattr(stat, "recoverTarget", None)))))
-
-    def _recover_need(self, scope) -> int:
-        """Total Energy the rider's recipients still LACK to pay an attack — their own or their
-        forward form's, whichever is dearer. An unreadable attack contributes cost 0, never 99."""
-        pool = []
-        if scope in (None, "any", "bench"):
-            pool += list(self.mine.bench)
-        if scope in (None, "any", "self") and self.mine.active is not None:
-            pool.append(self.mine.active)
-        total = 0
-        for view in pool:
-            forms = {view.card_id} | set(self.mine.forward_form_ids(view.card_id))
-            costs = [self.combat.attack_cost(aid, default=0)
-                     for form in forms
-                     for aid in (getattr(self.card_stat(form), "attacks", None) or ())]
-            if costs:
-                total += max(0, max(costs) - view.energy_count)
-        return total
+        usable = max(0.0, min(float(ceiling), fuel))
+        if usable <= 0.0:
+            return 0.0
+        from common.state_value import allocate_recovery_energy
+        from common.strategy.combat_math.budget import WILD_CODE
+        code = etype if etype is not None else WILD_CODE
+        allocation = allocate_recovery_energy(
+            self, getattr(stat, "recoverTarget", None),
+            (code,) * int(math.ceil(usable)))
+        return min(usable, float(allocation.used_units))
 
     # -- the sharing guard ----------------------------------------------------------------------
     @lazy

@@ -23,7 +23,7 @@ def test_registry_is_the_six_state_families_and_one_terminal_family():
 
 def test_registry_identity_is_stable_and_json_projection_is_primitive():
     identity = sv.registry_identity()
-    assert identity.startswith("state-value/1:") and len(identity.rsplit(":", 1)[1]) == 64
+    assert identity.startswith("state-value/2:") and len(identity.rsplit(":", 1)[1]) == 64
     payload = sv.ValueBreakdown(0.0, (), identity).as_dict()
     assert json.loads(json.dumps(payload)) == payload
 

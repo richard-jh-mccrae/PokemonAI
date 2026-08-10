@@ -5,7 +5,7 @@ from common.cards import CardFunctions
 from common.strategy.baseline import SNIPE_HYPOTHESES
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Ready, Strategy
 from pilot_helpers import (
     ACTIVE, ATTACH, ATTACH_FROM, BENCH, DAMAGE, HAND, MAIN, MULLIGAN, NO, PLAY, SETUP_ACTIVE, YES,
@@ -72,10 +72,13 @@ def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     # on either side of the gate, and the pin would then pass on a coincidence rather than on the rule.
     stats = DictCardStatProvider({
         700: CardStat(700, synthetic=True, energyType=WATER, weakness=LIGHTNING, hp=70,    # my Active (Weak to L)
-                      maxDamage=60, maxDamageCost=2, minAttackCost=1),
+                      maxDamage=60, maxDamageCost=2, minAttackCost=1, attacks=(7001,)),
         900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120),           # opp Active: 120, Lightning
         800: CardStat(800, synthetic=True, energyType=WATER, hp=110,                       # my benched successor
-                      maxDamage=60, maxDamageCost=2, minAttackCost=1),
+                      maxDamage=60, maxDamageCost=2, minAttackCost=1, attacks=(8001,)),
+    }, attacks={
+        7001: AttackStat(7001, damage=60, cost=2, energyTypes=(WATER, WATER)),
+        8001: AttackStat(8001, damage=60, cost=2, energyTypes=(WATER, WATER)),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # ATTACH_FROM (pick Pokémon to attach to): opt0 = my Active (30 HP left, doomed — 120 x2

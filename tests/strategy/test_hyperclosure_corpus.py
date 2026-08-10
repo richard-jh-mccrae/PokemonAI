@@ -49,7 +49,6 @@ PINS = {
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
     # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
     # scoring the whole TURN.
-    "82525741-78": "poffin: don't play a fetch whose target class is exhausted",
     "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
                    "Ultra Ball fodder",
     "83457493-31": "keep: pitch dead cards BEFORE the symmetric shuffle (promoted by Issue #455)",
@@ -231,6 +230,12 @@ def test_correction_ranks_the_human_pick_top(cid):
     assert _replay_picks_correct(cid), (
         f"{cid}: expected {_record(cid).correct_label!r}, "
         f"got {_record(cid).chosen_label!r}")
+
+
+def test_issue_495_rules_the_82525741_multiattack_flip_explicitly():
+    """The shared envelope values the attach transition; this is no longer a fetch-closure pin."""
+    rec = _record("82525741-78")
+    assert _pilot(rec.agent).explain(rec.obs).chosen == [6]
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

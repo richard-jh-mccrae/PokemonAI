@@ -34,9 +34,6 @@ DELIBERATE = {
     #       `MySide` method per hypothetical would move the assembly rather than remove it.
     ("_evolve_income_delta", "attach_budget"):
         "hypothetical enabler Budget — the evolve income leg's target is a form not in play",
-    ("_promote_closure", "attach_budget"):
-        "hypothetical enabler Budget — the promote income leg's target is a body not yet Active",
-
     # ── 2. The EMPTY-Budget second leg: the model route always carries the FULL Budget, so the
     #       counterfactual's "with what it holds right now" leg has no model expression.
     ("_attach_value", "best_reachable_damage"):

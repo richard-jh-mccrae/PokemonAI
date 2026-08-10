@@ -10,8 +10,9 @@ from pathlib import Path
 import pytest
 
 from common.card_worth import ENERGY_TIER, TAG_TIER
-from common.pilot import (_ATTACH_ABILITY_FUEL, _ATTACH_PREEVO_DISCOUNT, _ATTACH_RESOURCE_TIEBREAK,
+from common.pilot import (_ATTACH_ABILITY_FUEL, _ATTACH_RESOURCE_TIEBREAK,
                           _ATTACH_RETREAT_EQUITY, _ATTACH_VALUE_SCALE)
+from common.grading import halve
 from common.scouting.provider import EngineCardStatProvider
 from common.strategy.baseline.baseline_energy import HYPOTHESES
 
@@ -56,8 +57,11 @@ def _build_steps():
                 continue
             raw = [((k + 1) ** 2 - k ** 2) / slots ** 2 * damage for k in range(slots)]
             steps.extend(raw)
-            discounted = [s * _ATTACH_PREEVO_DISCOUNT for s in raw]
-            if any(cid != line.payoff for cid in (line.path or ())):
+            path = tuple(line.path or ())
+            for index, cid in enumerate(path):
+                if cid == line.payoff:
+                    continue
+                discounted = [s * halve(max(1, len(path) - index - 1)) for s in raw]
                 steps.extend(discounted)
                 preevo_steps.extend(discounted)
     assert steps, "no shipped win-condition Line resolved a payoff attack — the bands are unchecked"

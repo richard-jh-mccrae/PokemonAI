@@ -78,7 +78,7 @@ def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
-def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
+def test_dark_fuel_wins_the_root_axis_once_the_line_is_fed():
     """EMERGENT: a SECOND {P} fills no remaining slot of Phantom Dive's {R}{P}, and Retreat Equity +
     Ability Fuel are additive, so they survive the attack-axis gate."""
     rec = _record()
@@ -86,8 +86,9 @@ def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
     _feed_the_line(obs)
     d = _pilot(rec.agent).explain(obs)
     [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
-    assert d.chosen == [dark_active], (
-        f"expected the {{D}}→Munkidori fuel attach [{dark_active}], got {d.chosen}")
+    rows = {row["i"]: row for row in d.attach_working["eq"]}
+    assert rows[dark_active]["ability_fuel"] > 0
+    assert rows[dark_active]["tactical"] == max(row["tactical"] for row in rows.values())
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

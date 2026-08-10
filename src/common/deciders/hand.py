@@ -158,9 +158,11 @@ class HandMixin:
         rows = self._needs_hand_rows(obs, board, exclude_cid=ctx.card_id)
         if not rows:
             return 0.0
-        slots, elig = self._resolve_needs(obs, board, rows)
+        resolved = self._resolve_needs(obs, board, rows)
+        slots, elig = resolved
         resupply = self._refresh_slot_resupply(slots, elig, rows, obs, board, draws)
-        return needs.set_keep_v2(slots, elig, resupply, range(len(rows)))
+        return needs.set_keep_v2(slots, elig, resupply, range(len(rows)),
+                                 edge_values=resolved.edge_values)
 
     def _discard_fuel_types(self) -> frozenset:
         """Energy types a DISCARD-SOURCE accel attack in this deck wants IN the discard (``None`` in the set =
@@ -293,16 +295,19 @@ class HandMixin:
                                      obs, board)
         if len(rows) < int(picks):
             return None
-        slots, elig = self._resolve_needs(obs, board, rows)
+        resolved = self._resolve_needs(obs, board, rows)
+        slots, elig = resolved
         resupply = [0.0] * len(slots)            # a forced discard has no redraw window (as `_needs_v2`)
         intrinsics = [0.0] * len(rows)           # no v1 post-gate hedge exists over the HAND rows
         candidates = None if eligible_hand_indices is None else tuple(
             i for i, row in enumerate(rows) if row["hand_i"] in eligible_hand_indices)
         pick = needs.cheapest_removal(slots, elig, resupply, intrinsics, int(picks),
-                                      candidates=candidates, **self._removal_ranking_legs(rows))
+                                      candidates=candidates, edge_values=resolved.edge_values,
+                                      **self._removal_ranking_legs(rows))
         if len(pick) != int(picks):
             return None
-        cost = needs.removal_score(slots, elig, resupply, intrinsics, pick)
+        cost = needs.removal_score(slots, elig, resupply, intrinsics, pick,
+                                   edge_values=resolved.edge_values)
         # `hand_i`, NOT `i`. The rows drop one copy of `exclude_cid`, so a row ordinal is short of the true
         # hand position for every card after it — reading `i` collides the picks with the played card's index.
         return ShedPlan(hand_indices=tuple(sorted(rows[k]["hand_i"] for k in pick)),

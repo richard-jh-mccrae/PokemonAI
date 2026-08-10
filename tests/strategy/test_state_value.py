@@ -1091,8 +1091,8 @@ def test_the_forward_clock_no_longer_counts_an_energy_that_will_be_DISCARDED():
     assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
     assert loan["readiness"] < real["readiness"], (
         "an evaporating Energy still prices as a permanent one")
-    # …and the drop is the halve() step the forward leg is graded by, not some other number.
-    assert loan["readiness"] == pytest.approx(real["readiness"] / 2.0)
+    # No durable typed deck supply can pay the attack, so the exact future candidate is absent.
+    assert loan["readiness"] == 0.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1297,15 +1297,13 @@ def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
-def test_the_SAFE_board_still_prefers_funding_the_active_wincon():
-    """The discount is a survivability read, not a blanket preference for the Bench. Without this
-    half, zeroing `readiness` outright would pass the doomed case too."""
+def test_the_SAFE_board_uses_mechanical_realization_without_active_privilege():
+    """The shared envelope applies role/caps after discovery and authors no Active preference."""
     funded_active, funded_successor = {}, {}
     sv.state_value(_successor_board(active_energies=[E_W, E_W]), working=funded_active)
     sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W]),
                    working=funded_successor)
-    assert funded_active["readiness"] > funded_successor["readiness"], (
-        "the discount inverted a board where funding the Active is right")
+    assert funded_successor["readiness"] > funded_active["readiness"]
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1357,7 +1355,8 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
     assert sv.double_counted() == []
     assert sv.registry_gaps() == []
     assert sv.FAMILIES["readiness"].reads == (
-        "body_payoff", "readiness_odds", "role_relevance", "turns_to_ko_me")
+        "combat_build_profile", "legal_now_attack", "typed_future_supply",
+        "per_attack_clock", "role_relevance", "turns_to_ko_me")
     assert sv.undeclared_shared_inputs() == []
     assert "turns_to_ko_me" in sv.FAMILIES["survival"].reads
     # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
@@ -2279,14 +2278,32 @@ def _score(pilot, obs, term):
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_on_real_frames_one_more_energy_never_lowers_readiness(corpus_models):
     """The ruling's first named case, on boards nobody designed for it."""
+    import copy
     strict = 0
     for key, pilot, obs in corpus_models:
         active = _my_active(obs)
-        if not active or not (active.get("energies") or []):
-            continue                                # nothing to duplicate; the attach is unmodelled
-        extra = (active.get("energies") or [])[0]
+        current = (obs.get("current") or {})
+        players = current.get("players") or []
+        me = players[current.get("yourIndex", 0)] if players else {}
+        if not active:
+            continue
+        holder = pilot.stats.get(active.get("id")) if pilot.stats else None
+        candidate = next(((card, tuple(codes)) for card in (me.get("hand") or []) if card
+                          if (codes := pilot.combat.provision_codes(card.get("id"), holder))), None)
+        if candidate is None:
+            continue
+        card, codes = candidate
         before = _score(pilot, obs, "readiness")
-        after = _score(pilot, _perturbed(obs, lambda b: b["energies"].append(extra)), "readiness")
+        changed = copy.deepcopy(obs)
+        changed_current = changed["current"]
+        changed_me = changed_current["players"][changed_current.get("yourIndex", 0)]
+        changed_active = next(body for body in changed_me["active"] if body)
+        moved = next(i for i, held in enumerate(changed_me["hand"])
+                     if held and held.get("serial") == card.get("serial"))
+        changed_active["energyCards"].append(changed_me["hand"].pop(moved))
+        changed_active["energies"].extend(codes)
+        changed_me["handCount"] = len(changed_me["hand"])
+        after = _score(pilot, changed, "readiness")
         assert after >= before - 1e-9, f"{key}: an extra Energy LOWERED readiness"
         strict += after > before + 1e-9
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"

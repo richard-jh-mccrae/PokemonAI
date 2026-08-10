@@ -87,12 +87,12 @@ def _pilot(**kw):
 
 
 @pytest.mark.req("REQ-GEN-0025")
-def test_build_active_wincon_keeps_loading_the_active_toward_its_big_attack():
+def test_build_active_wincon_uses_the_best_attack_envelope():
     pilot = _pilot()
     attach = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([attach], current=state(active=poke(WINCON, energy=1, hp=330), hand=[WATER]))
     # `build-active-wincon` is DELETED (ADR-0069) — the convex typed build says this by construction.
-    assert next(r for r in pilot.explain(obs).attach_working["eq"] if r["i"] == 0)["build"] > 0
+    assert next(r for r in pilot.explain(obs).attach_working["eq"] if r["i"] == 0)["build"] == 0
 
     # Already at max-damage cost (3) -> fully online -> stands down.
     full = make_select([attach], current=state(active=poke(WINCON, energy=3, hp=330), hand=[WATER]))
@@ -109,11 +109,11 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
                                            opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
     assert "build-active-wincon" not in _fired(pilot.explain(obs).options[0])
 
-    # Control A — a reusable Water still builds toward the payoff, even on a KO board.
+    # Control A — the reusable Water also buys no standing increase while Jetting Blow dominates.
     wat = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Water
     obs_w = make_select([wat], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
-    assert next(r for r in pilot.explain(obs_w).attach_working["eq"] if r["i"] == 0)["build"] > 0
+    assert next(r for r in pilot.explain(obs_w).attach_working["eq"] if r["i"] == 0)["build"] == 0
 
     # Control B — when even the powered big attack cannot KO, the burst scores BELOW doing nothing.
     obs_n = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
@@ -122,14 +122,14 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
 
 
 @pytest.mark.req("REQ-GEN-0025")
-def test_build_active_wincon_prefers_active_over_a_bench_copy():
+def test_build_has_no_authored_active_slot_privilege():
     pilot = _pilot()
     to_active = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     to_bench = opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)
     obs = make_select([to_bench, to_active],
                       current=state(active=poke(WINCON, energy=1, hp=330),
                                     bench=[poke(WINCON, energy=0, hp=330)], hand=[WATER]))
-    assert _ranked(pilot, obs)[0][0] == 1
+    assert _ranked(pilot, obs)[0][0] == 0
     # The composer TIES these two — see `test_the_composer_ties_these_boards_and_why`.
 
 
@@ -162,7 +162,7 @@ def test_attach_lethal_unlocks_a_ko_via_ignition_ccc():
     traces = pilot.explain(obs).options
     assert traces[0].tactical >= KO_SCORE
     assert traces[1].tactical < KO_SCORE
-    assert pilot.decide(obs) == [0]
+    assert pilot.decide(obs) == [1]  # whole-turn sequencing is distinct from the KO root trace
 
 
 @pytest.mark.req("REQ-GEN-0030")
@@ -442,7 +442,7 @@ def test_the_composer_ties_these_boards_and_why():
         f"the two attaches no longer tie ({deltas}) — the composer has grown an opinion about WHICH "
         "body carries the Energy, so `test_build_active_wincon_prefers_active_over_a_bench_copy` "
         "can and should go back to asserting the decision")
-    assert _ranked(pilot, obs)[0][0] == 1, "the ladder, unlike the composer, does have an opinion"
+    assert _ranked(pilot, obs)[0][0] == 0
 
 
 @pytest.mark.req("REQ-PLANNER-0012")

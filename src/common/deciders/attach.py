@@ -31,10 +31,6 @@ _ATTACH_ABILITY_FUEL = 3.0     # a dormant in-play Ability switched on
 # construction — 0.05 x (30 - 8) < one scaled build step — so it orders equals and overturns nothing.
 _ATTACH_RESOURCE_TIEBREAK = 0.05
 
-# A pre-evolution's Energy carries through evolution, but the body must EVOLVE before the payoff
-# fires, so its forward build is discounted below an already-evolved body's.
-_ATTACH_PREEVO_DISCOUNT = 0.25
-
 #: Every key an attach row carries, at its zero. Both channels build through :func:`_attach_row`, so
 #: the shape `_attach_working` and the wire depend on cannot drift between them.
 _ATTACH_ROW_ZEROS = {
@@ -58,18 +54,6 @@ def _attach_row(**legs) -> dict:
 class AttachMixin:
     """The attach marginal: what this Energy, on this body, buys."""
 
-    def _attach_readiness(self, cid, energy: int) -> float:
-        """Best printed damage ``cid`` affords with ``energy`` Energy — a 2-point `CardStat` model."""
-        st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None:
-            return 0.0
-        maxc, minc = getattr(st, "maxDamageCost", None), getattr(st, "minAttackCost", None)
-        if maxc is not None and energy >= maxc:
-            return float(getattr(st, "maxDamage", 0) or 0)
-        if minc is not None and energy >= minc:
-            return float(getattr(st, "minCostDamage", 0) or getattr(st, "maxDamage", 0) or 0)
-        return 0.0
-
     def _opp_body_hps(self, obs: dict) -> list:
         state = obs.get("current") or {}
         players = state.get("players") or []
@@ -80,51 +64,12 @@ class AttachMixin:
         bodies = list(opp.get("active") or []) + list(opp.get("bench") or [])
         return [m.get("hp", 0) for m in bodies if m]
 
-    def _line_payoff_stat(self, cid):
-        """The CardStat whose attack a body's Energy ultimately FUELS: a win-condition-Line
-        pre-evolution is priced by its line's PAYOFF attack, any other body by its own."""
-        st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if cid is None or not self.stats:
-            return st
-        for line in self._wincon_lines():
-            if cid in (line.path or []) and cid != line.payoff:
-                return self.stats.get(line.payoff) or st
-        return st
-
-    def _attach_progress(self, cid, energy: int) -> float:
-        """COUNT reading of convex build value — the fallback when the payoff's per-slot cost does not
-        resolve. The SQUARE makes the k-th Energy's marginal RISE with k, so concentration falls out."""
-        st = self._line_payoff_stat(cid)
-        maxc = getattr(st, "maxDamageCost", None) if st is not None else None
-        dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
-        if not maxc or maxc <= 0 or dmax <= 0:
-            return self._attach_readiness(cid, energy)
-        frac = min(energy, maxc) / maxc
-        value = frac * frac * dmax
-        if cid in self._line_preevo_set():
-            value *= _ATTACH_PREEVO_DISCOUNT
-        return value
-
-    def _payoff_attack_id(self, payoff_stat):
-        aids = tuple(getattr(payoff_stat, "attacks", None) or ())
-        return max(aids, key=self.combat.attack_damage) if aids else None
-
     def _build_standing(self, target: dict | None, extra_units=()) -> float:
-        """Build Standing: the LEVEL of ``target``'s convex typed build credit, over a body also carrying
-        ``extra_units`` (ADR-0070 §2). Same matcher as `reachable_attach`, so fits and reaches agree."""
-        if not target:
+        """Damage-currency adapter over the canonical multi-attack build profile."""
+        if not target or self._state_model is None:
             return 0.0
-        tcid = target.get("id")
-        st = self._line_payoff_stat(tcid)
-        dmax = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
-        aid = self._payoff_attack_id(st)
-        if aid is not None and dmax > 0:
-            matched, slots = self.combat.matched_slots(target, aid, extra_units=extra_units)
-            if slots:
-                value = ((matched / slots) ** 2) * dmax
-                return value * (_ATTACH_PREEVO_DISCOUNT if tcid in self._line_preevo_set() else 1.0)
-        have = len(target.get("energies") or [])          # no typed cost record -> the count reading
-        return self._attach_progress(tcid, have + len(extra_units))
+        supply = extra_units if hasattr(extra_units, "persistent") else None
+        return self._state_model.combat_build_profile(target, supply=supply).value_damage
 
     def _attach_build_delta(self, target: dict | None, extra_units) -> float:
         """Build progress ``extra_units`` buys on ``target`` (ADR-0069 §3). Both legs take the same
@@ -150,23 +95,25 @@ class AttachMixin:
                 return aid
         return None
 
-    def _accel_routed_value(self, obs: dict, board: Board, routed: int) -> float:
+    def _accel_routed_value(self, obs: dict, board: Board, routed: int, attack=None) -> float:
         """An attach that FIRES an accelerator is worth the forward build the ``routed`` Energy buys,
         not the accelerator's own face damage — concentrated on the Bench Line body that gains most."""
         if routed <= 0:
             return 0.0
-        me = self._my_player(obs)
-        line_ids = self._line_preevo_set() | self._wincon_set()
-        wild = self.combat.wild_units(routed)   # the routed colours aren't fixed by this pick — fail-open
-        best = 0.0
-        for b in (me.get("bench") or []):
-            if not b:
-                continue
-            cid = b.get("id")
-            if cid not in line_ids and self._is_utility_body(cid):
-                continue                                       # don't credit routing onto a utility body
-            best = max(best, self._attach_build_delta(b, wild))
-        return best
+        model = self._state_model
+        if model is None:
+            return 0.0
+        from common.strategy.combat_math.budget import WILD_CODE
+        scope = getattr(attack, "recoverTarget", "bench")
+        code = getattr(attack, "recoverEnergyType", None)
+        allocation = model.allocate_recovery_energy(
+            scope, ((WILD_CODE if code is None else code),) * routed)
+        return allocation.value_prizes * self._state_value_damage_rate()
+
+    @staticmethod
+    def _state_value_damage_rate() -> float:
+        from common.currency import PRIZE_DAMAGE_RATE
+        return PRIZE_DAMAGE_RATE
 
     def _attach_body_view(self, target: dict | None):
         """The :class:`BodyView` the affordability family is keyed on. None with no model."""
@@ -255,6 +202,12 @@ class AttachMixin:
         units = len(codes) if is_attach else 1
         provision = (self.combat.units_for_codes(codes) if is_attach
                      else self.combat.wild_units(units))
+        build_supply = None
+        if self._state_model is not None:
+            from common.strategy.combat_math.budget import WILD_CODE
+            build_supply = (self._state_model.energy_supply_from_card(ecid)
+                            if is_attach and ecid is not None else
+                            self._state_model.energy_supply_for_units((WILD_CODE,) * units))
         # A ready benched wincon I can pivot into dominates whatever the doomed Active could swing for.
         # The pivot must be LEGAL NOW — only the MENU can say so; `bench_wincon_ready` alone cannot.
         arm_dominated = (area == _ACTIVE and board.active_doomed and board.bench_wincon_ready
@@ -279,7 +232,7 @@ class AttachMixin:
         survives = not (area == _ACTIVE and board.active_doomed)
         # A `discard_eot` burst earns NO build, ever: build is FORWARD value and the card is discarded
         # at end of turn. Only `this_turn` — what it cashes before it goes — can credit a burst.
-        build = (self._attach_build_delta(target, provision)
+        build = (self._attach_build_delta(target, build_supply)
                  if (not burst and (survives or tcid in self._line_preevo_set())) else 0.0)
         accel_value = 0.0
         feeds_accel = (area == _ACTIVE and "accel_source" in self._roles_of(tcid)
@@ -292,7 +245,7 @@ class AttachMixin:
                 # EXPECTED routing for a VALUATION: printed ceiling capped by recipient need. The live
                 # COMMITMENT (`_recover_units`) also floors it by the prize-paranoid deck-fuel bound.
                 routed = min(getattr(ast, "recoverN", 0), self._recover_recipient_need(ast, board, obs))
-                accel_value = self._accel_routed_value(obs, board, routed)
+                accel_value = self._accel_routed_value(obs, board, routed, ast)
         # The bodies the deck's PLAN attacks with — ADR-0048's BROADENED set. The narrower sets stay
         # narrow on purpose: the pre-evo discount and evolution-escape read win-condition-only.
         line_ids = self._recognized_line_preevo_set() | self._wincon_set()

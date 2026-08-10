@@ -48,8 +48,8 @@ from common.strategy.context import (                                    # noqa:
 )
 
 
-SCHEMA_VERSION = 3
-AUDIT_BASE_SHA = "4fcafb6f68970701798d85e7798a50acf1b917c2"
+SCHEMA_VERSION = 4
+AUDIT_BASE_SHA = "0cb636c230e58113fe6b9dd1cc251c764fa4054e"
 DEFAULT_OUT = _ROOT / "docs" / "plans" / "composer-valuation-coverage.md"
 BEGIN = "<!-- BEGIN GENERATED: tools/composer_value_coverage.py -->"
 END = "<!-- END GENERATED -->"
@@ -474,6 +474,9 @@ _EXPLICIT_EQUATIONS = frozenset({
     "common.deciders.heal:HealMixin._heal_survival_gain",
     "common.deciders.deny:DenyMixin._lock_sequence_cost",
     "common.deciders.attach:AttachMixin._attach_build_delta",
+    "common.state_value:combat_build_profile",
+    "common.state_value:combat_realization",
+    "common.state_value:readiness_supply_delta",
     "common.deciders.heal:HealMixin._heal_bounce_cost",
     "common.hold_value:hold_price",
     "common.retreat_cost:effective_retreat_cost",
@@ -493,8 +496,8 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
         LOSSY_REEXPRESSION, _ALL_STATE_OWNERS, "#494",
         "probability-weighted aggregation over registered state_value outcomes recomposes all families"),
     "common.board_choice:_build_standing": (
-        LOSSY_REEXPRESSION, ("state:readiness",), "#495",
-        "board choice and readiness use different attack selection/granularity"),
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "board choice is a damage-currency adapter over combat_build_profile"),
     "common.board_choice:rank_retreat": (
         LOSSY_REEXPRESSION,
         ("state:prize_race", "state:readiness", "state:survival", "state:threat",
@@ -513,8 +516,17 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
         LOSSY_REEXPRESSION, ("state:development", "state:hand"), "#494",
         "local information expectation is not an end-state oracle"),
     "common.deciders.attach:AttachMixin._attach_build_delta": (
-        LOSSY_REEXPRESSION, ("state:readiness",), "#495",
-        "Build Standing prices typed partial progress differently from readiness"),
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "exact before/after combat_build_profile difference crossed only by PRIZE_DAMAGE_RATE"),
+    "common.state_value:combat_build_profile": (
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "canonical per-attack persistent build owner consumed by root and readiness"),
+    "common.state_value:combat_realization": (
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "canonical build/current/future envelope consumed by readiness and runtime adapters"),
+    "common.state_value:readiness_supply_delta": (
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "exact capped readiness-family marginal used by weighted Needs and dig/evolve consumers"),
     "common.deciders.attach:AttachMixin._attach_readiness": (
         LOSSY_REEXPRESSION, ("state:readiness",), "#495",
         "attach readiness is a local marginal over a separate leaf composition"),
@@ -774,12 +786,18 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
     "common.strategy.combat_math.clocks:ClockMixin.turns_to_afford": (
         LOSSY_REEXPRESSION, ("state:readiness",), "#495",
         "local integer arming clock is halved/composed by the absolute readiness family"),
+    "common.strategy.combat_math.clocks:ClockMixin.turns_to_afford_attack": (
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "one named attack's typed deficit and evolution hops feed its own future candidate"),
     "common.strategy.combat_math.clocks:ClockMixin.turns_to_ko": (
         LOCAL_ONLY, (), "#494",
         "local objective/snipe KO-race clock; no registered family consumes this target-side scalar"),
-    "common.strategy.combat_math.energy:EnergyMixin.matched_slots": (
-        LOSSY_REEXPRESSION, ("state:readiness",), "#495",
-        "local convex attach progress and readiness's arming clock consume matched slots differently"),
+    "common.strategy.combat_math.energy:EnergyMixin.match_attack_slots": (
+        SHARED_EXACT, ("state:readiness",), "#495",
+        "authoritative typed assignment used by build, future feasibility, and clocks"),
+    "common.strategy.combat_math.energy:EnergyMixin.attack_cost_slots": (
+        LEAF_ONLY, ("state:readiness", "terminal:attack_ev"), "#495",
+        "tri-state typed cost fact consumed by canonical combat owners"),
     "common.strategy.combat_math.energy:EnergyMixin.reachable_attach_p": (
         LOSSY_REEXPRESSION, ("state:readiness",), "#495",
         "local evolve delta and absolute readiness compose this probability through different horizons"),
@@ -969,9 +987,6 @@ EQUATION_CONSUMER_OVERRIDES: Mapping[
     "common.deciders.promote:PromoteRetreatMixin._attached_retreat_delta": (
         (), LOCAL_ONLY,
         "adapter to ADR-0135 attached mobility units; no independent value claim"),
-    "common.deciders.promote:PromoteRetreatMixin._promote_accel_units": (
-        ("state:readiness",), LOSSY_REEXPRESSION,
-        "usable acceleration-unit input consumed by PromoteBody.my_yield and readiness"),
     "common.deciders.snipe:SnipeMixin._target_threat_rank": (
         ("state:threat",), LOSSY_REEXPRESSION,
         "selection-filtering adapter to the classified body threat rank"),
@@ -995,6 +1010,9 @@ EQUATION_CONSUMER_OVERRIDES: Mapping[
         ("state:readiness", "terminal:attack_ev"),
         LEAF_ONLY,
         "typed-cost adapter consumed by readiness/terminal combat; computes slots, not economic value"),
+    "common.strategy.combat_math.energy:EnergyMixin.matched_slots": (
+        ("state:readiness",), LEAF_ONLY,
+        "compatibility adapter to match_attack_slots; defines no independent value"),
     "common.deciders.lethal:LethalMixin._best_affordable_ko_value": (
         (), "", "pure forwarding adapter to CombatMath.best_affordable_ko_value; no new value claim"),
     "common.deciders.order:OrderMixin._score_order": (
@@ -1242,7 +1260,7 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
 
 # These fingerprints are authored review gates, not the census itself.  The generated report lists
 # every member.  A changed digest stops generation until the new source row is dispositioned.
-EQUATION_BASELINE_SHA256 = "5d291dbb2367900251d7d8e6f426094bb9d74b7e0adf6c5cb654febc02df070d"
+EQUATION_BASELINE_SHA256 = "b58a66911797562c6856616a1ebbfe80f93e4d86fcba7b27ad877ac1c5b412d2"
 VOCABULARY_BASELINE_SHA256 = "22316ccf76a2319311586785d2dc3ede3b77e6e566c0a15530a2a660d68f5d9b"
 STAT_BASELINE_SHA256 = "0ab57ba9897807b8cfbfd97052126c35e6819b24a447ccc3a4b34acfd1eea637"
 
@@ -3146,7 +3164,7 @@ def _search_records(root: Path = _ROOT) -> list[AuditRecord]:
     return records
 
 
-SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/2"
+SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/3"
 
 
 def _load_sensitivity_summary(inventory: Inventory) -> Mapping:

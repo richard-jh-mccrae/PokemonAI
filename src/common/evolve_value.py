@@ -34,6 +34,8 @@ class EvolveBody:
     arm: int | None = None
     #: `turns_to_ko_me`, read at this body's AREA-AT-DAMAGE-TIME. Large = safe.
     ko: int = _HORIZON
+    #: Canonical shared realization in damage currency. None preserves the legacy pure-call adapter.
+    realization_damage: float | None = None
 
     def p_arrive(self) -> float:
         """P(the line arms) — the armed clock, halved per turn out. Fail-CLOSED at 0.0 on an
@@ -50,6 +52,8 @@ class EvolveBody:
     def deploy(self) -> float:
         """What having this body on the board is worth, in damage. `max` because the immediate and
         forward terms re-read ONE progress on ONE body (ADR-0069 §1)."""
+        if self.realization_damage is not None:
+            return max(0.0, float(self.realization_damage))
         return max(self.this_turn, self.payoff_damage * self.p_arrive() * self.p_survive())
 
 
@@ -75,6 +79,9 @@ class EvolveInputs:
     body_ability_oneshot: bool = False
     #: Turns B would remain un-ready; 0 once armed, which collapses the hold to nothing.
     hold_turns: int = 0
+    #: Direct shared readiness marginals; None keeps the legacy odds adapter for pure callers.
+    income_gain_damage: float | None = None
+    income_loss_damage: float | None = None
 
 
 @dataclass
@@ -91,13 +98,15 @@ def evolve_value(inp: EvolveInputs) -> EvolveValue:
     deploy = inp.result.deploy() - inp.body.deploy()
 
     # Income GAIN — immediate when R's Ability fires this turn, else one turn out.
-    gain = inp.result.payoff_damage * inp.ready_gain
+    gain = (float(inp.income_gain_damage) if inp.income_gain_damage is not None
+            else inp.result.payoff_damage * inp.ready_gain)
     if not inp.result_ability_now:
         gain *= _halve(1)
 
     # Income LOSS — a SPLIT horizon: this turn's use, forfeit only while still on the menu, plus the
     # future stream as the geometric sum of the halving (sum_{t=1..n} 2^-t == 1 - 2^-n).
-    per_use = inp.body.payoff_damage * inp.ready_loss
+    per_use = (float(inp.income_loss_damage) if inp.income_loss_damage is not None
+               else inp.body.payoff_damage * inp.ready_loss)
     loss = per_use if inp.body_ability_on_menu else 0.0
     if not inp.body_ability_oneshot:
         loss += per_use * (1.0 - _halve(max(0, int(inp.hold_turns))))

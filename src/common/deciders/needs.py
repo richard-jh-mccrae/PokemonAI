@@ -4,6 +4,7 @@ Supply priced without demand inverts every card play. `_resolve_needs` is the on
 site consumes it rather than re-deciding."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 
 from common.card_worth import ENERGY_TIER
 from common.deciders.facts import Board
@@ -19,6 +20,27 @@ _GENERAL_ILLIQUID_FLOOR = 0.15  # a general-worth card whose value needs board s
                            # keeps it above outright-dead cards in pitch order. Derived, never a card list.
 
 
+@dataclass(frozen=True)
+class _ResolvedNeeds:
+    """Backward-compatible two-value resolver result carrying weighted supply edges."""
+    slots: list
+    eligibility: list
+    edge_values: list
+    unknowns: tuple = ()
+
+    def __iter__(self):
+        yield self.slots
+        yield self.eligibility
+
+    @property
+    def graph(self):
+        from common.needs import CoverageEdge, NeedGraph
+        coverage = tuple(tuple(CoverageEdge(j, self.edge_values[i].get(j, self.slots[j].value))
+                               for j in sorted(row))
+                         for i, row in enumerate(self.eligibility))
+        return NeedGraph(tuple(self.slots), coverage, self.unknowns)
+
+
 class NeedsMixin:
     """The needs assignment: demand, coverage, and what a held card is worth."""
 
@@ -26,10 +48,14 @@ class NeedsMixin:
         """Per-row ``keep_v2`` plus the v2 decider's pick, hedged at v1's POST-GATE keep. **This DECIDES**,
         unflagged: the forced discard's pick IS `eq2_pick` (ADR-0065 / ADR-0127 hold the slot vocabulary)."""
         from common import needs
-        slots, elig = self._resolve_needs(obs, board, rows)
+        resolved = self._resolve_needs(obs, board, rows)
+        slots, elig = resolved
         resupply = [0.0] * len(slots)
-        keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
+        keeps = [round(needs.keep_v2(slots, elig, resupply, k,
+                                     edge_values=resolved.edge_values), 1)
+                 for k in range(len(rows))]
         pick = needs.cheapest_removal(slots, elig, resupply, [r["keep"] for r in rows], picks,
+                                      edge_values=resolved.edge_values,
                                       **self._removal_ranking_legs(rows))
         return keeps, sorted(rows[k]["i"] for k in pick)
 
@@ -42,12 +68,14 @@ class NeedsMixin:
         line_roles = {r for r, kinds in needs.SUPPLIES.items() if "line" in kinds and r in ROLE_TIER}
         slots: list = []
         elig: list = [set() for _ in rows]
+        edge_values: list = [{} for _ in rows]
+        unknowns: list[str] = []
 
         # The PLAYABILITY gate (ADR-0104): a card that can NEVER be played covers NOTHING. Applied to
         # ELIGIBILITY, not to any one slot's value — `deploy` only zeroes the slots keyed on the card itself.
         unplayable = self._unplayable_rows(obs, board, rows)
 
-        def _emit(slot, members) -> None:
+        def _emit(slot, members, values=None) -> None:
             suppliers = _playable_only(members)
             if not suppliers:
                 return                             # a need only its dead cards could fill is no need
@@ -55,6 +83,8 @@ class NeedsMixin:
             slots.append(slot)
             for m in suppliers:
                 elig[m].add(j)
+                if values is not None and m in values:
+                    edge_values[m][j] = float(values[m])
 
         def _playable_only(ks) -> list:
             """The candidate rows of a leg, minus the unplayable ones. Applied to EVERY leg rather than only
@@ -122,18 +152,30 @@ class NeedsMixin:
                     else _ENGINE_SUPPORTER_KEEP)
             _emit(needs.draw_engine_slot(engines_online=online, value=band), engines)
         active = next((p for p in (me.get("active") or []) if p), None)
-        if active is not None:
-            ast = self.stats.get(active.get("id")) if self.stats else None
-            remaining = max(0, (getattr(ast, "maxDamageCost", 0) or 0)
-                            - len(active.get("energies") or []))
-            funders = _playable_only([k for k, r in enumerate(rows)
-                             if getattr(self.stats.get(r["cid"]) if self.stats else None,
-                                        "is_basic_energy", False)
-                             or "discard_eot" in _tags(r["cid"])])
-            if remaining and funders:
-                for s in needs.fund_attack_slots("active", remaining,
-                                                 quota_spent=bool(board.energy_attached)):
-                    _emit(s, funders)
+        model = getattr(self, "_state_model", None)
+        if model is not None:
+            funders = _playable_only([
+                k for k, r in enumerate(rows)
+                if getattr(self.stats.get(r["cid"]) if self.stats else None, "is_energy", False)
+            ])
+            for body_index, body in enumerate(model.mine.bodies):
+                key = "active" if body.is_active else f"bench.{body_index - 1}"
+                marginals = {}
+                for k in funders:
+                    supply = model.energy_supply_from_card(rows[k]["cid"])
+                    profile = model.combat_realization(body, supply=supply)
+                    if profile.status.value == "unknown":
+                        unknowns.append(f"fund:{key}:card:{rows[k]['cid']}:provision_or_potential")
+                        continue
+                    worth = float(model.prizes_to_worth(
+                        model.readiness_supply_delta(body, supply)))
+                    if worth > 0.0:
+                        marginals[k] = worth
+                if marginals:
+                    slot = needs.Slot("fund_attack", max(marginals.values()),
+                                      1 if board.energy_attached else 0,
+                                      f"fund:{key}:next_attach")
+                    _emit(slot, marginals, values=marginals)
         if board.active_doomed:
             # The answer-doom slot is the SWITCH/HEAL rescue only (the successor rides the URGENT line slot),
             # VALUED at the doomed body's OWN preserved worth — not the clutch_heal tier, not the swap's worth.
@@ -214,7 +256,7 @@ class NeedsMixin:
                     continue
                 _emit(needs.general_worth_slot(f"general:{cid}",
                                                value=worth * deploy * _GENERAL_WORTH_W * liq), live)
-        return slots, elig
+        return _ResolvedNeeds(slots, elig, edge_values, tuple(unknowns))
 
     def _rare_candy_reachable(self, ids) -> bool | None:
         """Does any card in ``ids`` carry the `rare_candy` Function Tag? ``None`` when there is no tag table —
@@ -294,8 +336,10 @@ class NeedsMixin:
             rows = self._needs_hand_rows(obs, board)
             k = next((i for i, r in enumerate(rows) if r["cid"] == cid), None)
             if k is not None:
-                slots, elig = self._resolve_needs(obs, board, rows)
-                keep = needs.keep_v2(slots, elig, [0.0] * len(slots), k)
+                resolved = self._resolve_needs(obs, board, rows)
+                slots, elig = resolved
+                keep = needs.keep_v2(slots, elig, [0.0] * len(slots), k,
+                                     edge_values=resolved.edge_values)
         price = cache[cid] = hold_value.hold_price(keep)
         return price
 

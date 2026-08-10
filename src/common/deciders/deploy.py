@@ -10,7 +10,7 @@ import dataclasses
 from common.deciders.facts import Board, _slot_cid
 from common.deciders.hand import _ENGINE_KEEP_TAGS, _ENGINE_SUPPORTER_KEEP
 from common.grading import HORIZON as _HORIZON
-from common.strategy.context import ENERGY_RECOVER, _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _MAIN, _PLAY, _TO_BENCH
+from common.strategy.context import _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _MAIN, _PLAY, _TO_BENCH
 
 
 
@@ -135,16 +135,19 @@ class DeployMixin:
             return None
         # One resolve over BOTH sides so the slot indices line up; the READY rows are the SUPPLIERS
         # and the deck rows become per-slot RESUPPLY.
-        slots, elig_all = self._resolve_needs(obs, board, ready_rows + deck_rows,
-                                              include_general=False)
+        resolved = self._resolve_needs(obs, board, ready_rows + deck_rows,
+                                       include_general=False)
+        slots, elig_all = resolved
         elig = elig_all[:len(ready_rows)]
+        edge_values = resolved.edge_values[:len(ready_rows)]
         # Re-stamp each LINE slot with the deploy-path deadline before the resupply clamp reads it.
         # Scoped here so the discard and refresh sites are untouched.
         slots = [dataclasses.replace(s, deadline=self._deploy_line_deadline(me, _slot_cid(s)))
                  if _slot_cid(s) is not None else s for s in slots]
         resupply = self._deploy_resupply(board, slots, elig_all, len(ready_rows), deck_rows)
         capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
-        assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
+        assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity,
+                                           edge_values=edge_values)
 
         tags = set(self.functions.tags(cid)) if self.functions else set()
         # A CARD FACT, not a policy: every bench-drop Ability in the pool reads "when you play this
@@ -243,17 +246,14 @@ class DeployMixin:
             return 1.0
 
     def _deploy_accel_unlock(self, obs: dict, board: Board, cid) -> float:
-        """ADR-0086 decision 8's accel-unlock leg: `_recover_units` on the board WITH the candidate
-        benched, priced at `ENERGY_RECOVER` — damage-denominated, so it does NOT ride the deploy band."""
+        """Shared build-allocation value opened by adding this legal recipient."""
         if not board.accel_recipient_missing or not self.stats or cid is None:
             return 0.0
         stat = self.stats.get(cid)
         if stat is None or not getattr(stat, "is_pokemon", False):
             return 0.0
-        if cid not in self._line_member_set():        # only a Line member receives (the glossary term)
-            return 0.0
         active = self._my_active(obs)
-        aid, best = None, 0.0
+        aid = None
         for candidate in (getattr(self.stats.get((active or {}).get("id")), "attacks", None) or ()):
             st = self._attack_stat(candidate)
             if st is not None and getattr(st, "recoverN", 0) > 0:
@@ -261,14 +261,28 @@ class DeployMixin:
                 break
         if aid is None:
             return 0.0
-        # The hypothetical board: the candidate is on the Bench, so the rider has somewhere to land.
-        hypo = copy.deepcopy(obs)
-        me = hypo["current"]["players"][hypo["current"].get("yourIndex", 0)]
-        me["bench"] = list(me.get("bench") or []) + [{"id": cid, "hp": getattr(stat, "hp", 0),
-                                                      "energies": [], "appearThisTurn": True}]
-        units = self._recover_units(aid, {}, board, hypo)   # dmg_ctx unused by the fuel/need bounds
-        best = max(0.0, float(units)) * ENERGY_RECOVER
-        return best
+        attack = self._attack_stat(aid)
+        if attack is None or attack.recoverTarget not in (None, "any", "bench"):
+            return 0.0
+        if attack.recoverSource == "deck":
+            fuel = self._deck_basic_energy_fuel(attack.recoverEnergyType)
+        else:
+            counts = board.my_discard_basic_energy or {}
+            fuel = (counts.get(attack.recoverEnergyType, 0) if attack.recoverEnergyType is not None
+                    else sum(counts.values()))
+        count = max(0, min(int(attack.recoverN or 0), int(fuel)))
+        model = self._state_model
+        if model is None or count <= 0:
+            return 0.0
+        from common.strategy.combat_math.budget import WILD_CODE
+        code = attack.recoverEnergyType if attack.recoverEnergyType is not None else WILD_CODE
+        before_pool = tuple(model.mine.bench_raws)
+        candidate = {"id": cid, "hp": getattr(stat, "hp", 0), "maxHp": getattr(stat, "hp", 0),
+                     "energies": [], "energyCards": [], "appearThisTurn": True}
+        before = model.allocate_energy_units(before_pool, (code,) * count).value_prizes
+        after = model.allocate_energy_units(before_pool + (candidate,), (code,) * count).value_prizes
+        from common.currency import PRIZE_DAMAGE_RATE
+        return max(0.0, after - before) * PRIZE_DAMAGE_RATE
 
     def _deploy_exposure_prizes(self, obs: dict, select: dict, board: Board, option: dict,
                                 stat) -> float:
@@ -295,26 +309,14 @@ class DeployMixin:
         return max(0.0, min(float(st.recoverN), float(fuel), float(need)))
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
-        """Energy the rider's recipients still LACK to pay an attack — theirs or their forward form's,
-        whichever is dearest. 0 when the rider's target scope has no recipient at all."""
-        me = self._my_player(obs)
-        pool = []
-        if st.recoverTarget in (None, "any", "bench"):
-            pool += [p for p in (me.get("bench") or []) if p]
-        if st.recoverTarget in (None, "any", "self"):
-            pool += [p for p in (me.get("active") or []) if p]
-        total = 0
-        for p in pool:
-            cid = p.get("id")
-            forms = {cid} | set(self._forward_card_ids(cid) or ())
-            costs = [self._attack_cost(aid)
-                     for f in forms
-                     for aid in (getattr(self.stats.get(f), "attacks", None) or ())
-                     if self.stats and self.stats.get(f)]
-            if not costs:
-                continue
-            total += max(0, max(costs) - len(p.get("energies") or []))
-        return total
+        """Units an exact shared build allocation can use across the rider's legal recipients."""
+        model = self._state_model
+        if model is None:
+            return 0
+        from common.strategy.combat_math.budget import WILD_CODE
+        code = st.recoverEnergyType if st.recoverEnergyType is not None else WILD_CODE
+        result = model.allocate_recovery_energy(st.recoverTarget, (code,) * int(st.recoverN or 0))
+        return int(result.used_units)
 
     def _is_benchable_body(self, cid) -> bool:
         st = self.stats.get(cid) if (self.stats and cid is not None) else None

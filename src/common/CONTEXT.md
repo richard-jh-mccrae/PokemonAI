@@ -2143,3 +2143,15 @@ diagnostics cannot silently join different contracts. Terminal `attack_ev` remai
 absolute state potential. Ruled by **ADR-0136** (Issue #494).
 _Avoid_: private value extractor imports in diagnostics; hand-written family subtraction; treating
 every authored blind spot as a runtime unknown; folding terminal action conversion into state value.
+## Issue #495 — shared multi-attack combat realization
+
+ADR-0137 replaces the line-payoff/count-progress split with one mechanical profile in
+`common.state_value`. `CombatMath` owns typed payment/provision/restaging and per-attack clocks;
+`MySide.forward_forms` owns reachable topology. Persistent build is the maximum convex typed
+standing over all current/reachable attacks. Readiness is the maximum of that build, legal current
+reach, and typed future reach before the existing relevance/caps.
+
+Unattached Energy belongs to `common.needs.NeedGraph`: one next-attach demand per body, exact
+card-specific edges, one-card/one-slot assignment. Attach/retreat, acceleration, deploy, evolve,
+promote, and dig consume the shared profile/marginal. `attack_ev`, transitions, and search remain
+separate owners. See `docs/adr/0137-combat-realization-aligns-each-attack-and-energy-owner.md`.

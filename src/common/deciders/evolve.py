@@ -19,13 +19,18 @@ class EvolveMixin:
         swing tonight, and going first cannot attack on turn 1 (rules.md §2), so `this_turn` is 0."""
         from common.state_model import BodyView
         raw = raw or {}
-        st = self._line_payoff_stat(card_id)
-        payoff = float(getattr(st, "maxDamage", 0) or 0) if st is not None else 0.0
+        st = self.stats.get(card_id) if self.stats else None
+        payoff = 0.0
         this_turn = 0.0
         mine = self._state_model.mine if self._state_model is not None else None
-        if mine is not None and is_active and board.turn > 1:
-            this_turn = mine.best_reachable_damage(
-                BodyView(raw, combat=self.combat, is_active=True))
+        realization = None
+        if model := self._state_model:
+            from common.currency import PRIZE_DAMAGE_RATE
+            view = BodyView(raw, combat=self.combat, is_active=is_active)
+            realization = model.combat_realization(view)
+            payoff = realization.value_prizes * PRIZE_DAMAGE_RATE
+            if is_active and board.turn > 1:
+                this_turn = realization.now_prizes * PRIZE_DAMAGE_RATE
         opp = self._opp_player(obs) or {}
         model = self._state_model
         # `bench` is caller-supplied because the RESULT side reads a SUBSTITUTED bench, not the
@@ -39,6 +44,8 @@ class EvolveMixin:
             return EvolveBody(this_turn=float(this_turn), payoff_damage=payoff)
         return EvolveBody(
             this_turn=float(this_turn), payoff_damage=payoff,
+            realization_damage=(realization.value_prizes * PRIZE_DAMAGE_RATE
+                                if realization is not None else None),
             # ``exclude_expiring`` on BOTH sides (Issue #418 R4): a FORWARD clock counting an Energy
             # that will not be there is wrong, and excluding on the result alone PENALISES evolving.
             arm=model.mine.turns_to_afford(raw, exclude_expiring=True),
@@ -110,6 +117,23 @@ class EvolveMixin:
                 best = max(best, pay_p * draw_hit_probability(copies, pool, depth))
         return best
 
+    def _evolve_income_damage(self, raw: dict | None, card_id, *, is_active: bool) -> float:
+        """Expected shared readiness marginal bought by this body's remaining dig window."""
+        from common.currency import PRIZE_DAMAGE_RATE
+        from common.deck_odds import draw_hit_probability
+        model = self._state_model
+        depth = self.functions.dig_depth(card_id) if self.functions is not None else 0
+        if model is None or depth <= 0 or not raw:
+            return 0.0
+        best = 0.0
+        for etype, count in (model.mine.deck_energy_counts or {}).items():
+            copies = int(getattr(count, "expected", count) or 0)
+            probability = draw_hit_probability(copies, model.mine.deck_count, depth)
+            supply = model.energy_supply_for_units((etype,))
+            best = max(best, max(0.0, model.readiness_supply_delta(raw, supply))
+                       * PRIZE_DAMAGE_RATE * probability)
+        return best
+
     def _evolve_decision(self, obs: dict, board: Board, ctx, option: dict):
         """Price ONE evolve option (ADR-0070) as a legible TERM row, or None to abstain. While the
         kill-switch is OFF the `baseline_evolution` rungs decide alone (the ADR-0069 §8 swap protocol)."""
@@ -124,10 +148,14 @@ class EvolveMixin:
         body, result, result_raw = self._evolve_substitution(obs, board, raw, ctx.card_id,
                                                              is_active=is_active)
         btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
+        gain_damage = self._evolve_income_damage(result_raw, ctx.card_id, is_active=is_active)
+        loss_damage = self._evolve_income_damage(raw, body_cid, is_active=is_active)
         inp = EvolveInputs(
             body=body, result=result,
             ready_gain=self._evolve_income_delta(result_raw, ctx.card_id, is_active=is_active),
             ready_loss=self._evolve_income_delta(raw, body_cid, is_active=is_active),
+            income_gain_damage=gain_damage if gain_damage > 0.0 else None,
+            income_loss_damage=loss_damage if loss_damage > 0.0 else None,
             # An Ability the engine still OFFERS has not been used this turn — the menu is the fact
             # (ADR-0070 §7), never an assumption about what the tier-0 sequencer already fired.
             result_ability_now=self._ability_on_menu(obs, ctx.card_id),

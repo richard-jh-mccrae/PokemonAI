@@ -62,7 +62,7 @@ def test_report_and_case_schema_are_stable(report):
         assert set(row["source"]) == {"kind", "fixture", "provenance"}
         assert set(row["before"]) == set(row["after"]) == {
             "total", "workings", "legs", "registry_identity", "statuses"}
-        assert row["before"]["registry_identity"].startswith("state-value/1:")
+        assert row["before"]["registry_identity"].startswith("state-value/2:")
         assert set(row["before"]["workings"]) == set(row["after"]["workings"]) == set(lab.FAMILIES)
         assert set(row["deltas"]) == {"total", "families", "legs"}
         assert set(row["deltas"]["families"]) == set(lab.FAMILIES)
@@ -126,7 +126,7 @@ def test_energy_controls_separate_type_progress_unlock_and_inverse(cases):
 
     assert match["local"]["working"]["attack_shape"] == "single"
     assert match["local"]["delta"] == 120.0
-    assert match["deltas"]["total"] == 0.0
+    assert match["deltas"]["total"] == pytest.approx(0.018)
     assert match["local"]["working"]["single_attack_fully_unlocked"] is True
     assert match["positive_control"]["case"] == "energy-partial-cost"
     assert match["positive_control"]["positive_total_delta"] > 0
@@ -147,8 +147,11 @@ def test_energy_controls_separate_type_progress_unlock_and_inverse(cases):
     assert multi["local"]["working"]["cheaper_attack_fully_unlocked"]
     assert multi["local"]["working"]["best_reachable_damage_before"] == 0.0
     assert multi["local"]["working"]["best_reachable_damage_after"] == 120.0
-    assert multi["local"]["working"]["larger_attack_still_selected_by_readiness"]
-    assert multi["local"]["working"]["classification"] == "LOSSY-REEXPRESSION"
+    assert multi["local"]["working"]["legacy_payoff_selected_larger"]
+    assert multi["local"]["working"]["shared_winning_attack_id"] == \
+        multi["local"]["working"]["cheaper_attack_id"]
+    assert multi["local"]["working"]["classification"] == "SHARED-EXACT"
+    assert multi["local"]["working"]["root_shared_parity_error"] == 0.0
     assert multi["local"]["working"]["delta_prizes_equivalent"] > multi["deltas"]["total"] > 0
     assert "allowance_energy_attached" not in match["unknown"]["unread_dimensions"]
     assert removal["deltas"]["total"] < 0
@@ -163,9 +166,9 @@ def test_evolution_heal_mobility_and_hand_controls(cases):
     assert retain["local"]["owner"] == "common.evolve_value.evolve_value"
     assert retain["local"]["working"]["substitution_owner"] == (
         "common.deciders.evolve.EvolveMixin._evolve_substitution")
-    assert retain["local"]["before"] == -93.75
+    assert retain["local"]["before"] == -120.0
     assert retain["local"]["after"] == 0.0
-    assert retain["local"]["delta"] == 93.75
+    assert retain["local"]["delta"] == 120.0
     assert retain["local"]["working"]["isolated_from_same_evolution"] is True
     assert retain["local"]["working"]["retained_energy_serials"] == [100]
     equation = retain["local"]["working"]["equation"]
@@ -174,16 +177,16 @@ def test_evolution_heal_mobility_and_hand_controls(cases):
     assert equation["retained_result"]["arm"] == 2
     assert equation["bounced_result"]["arm"] == 3
     assert equation["retained_value"]["total"] == 0.0
-    assert equation["bounced_value"]["total"] == -93.75
-    assert retain["local"]["working"]["retained_vs_bounced_local_delta"] == 93.75
+    assert equation["bounced_value"]["total"] == -120.0
+    assert retain["local"]["working"]["retained_vs_bounced_local_delta"] == 120.0
     assert retain["local"]["working"]["retained_vs_bounced_leaf_delta"] == pytest.approx(
-        0.003922119141)
+        0.018)
     assert retain["local"]["working"]["retained_vs_bounced_leaf_delta"] != (
         retain["local"]["working"]["retained_vs_bounced_local_delta"])
     assert bounce["local"]["owner"] == "common.evolve_value.evolve_value"
     assert bounce["local"]["before"] == 0.0
-    assert bounce["local"]["after"] == -93.75
-    assert bounce["local"]["delta"] == -93.75
+    assert bounce["local"]["after"] == -120.0
+    assert bounce["local"]["delta"] == -120.0
     assert bounce["local"]["working"]["isolated_from_same_evolution"] is True
     assert bounce["local"]["working"]["retained_energy_serials"] == [100]
     assert bounce["local"]["working"]["bounced_to_hand_serial"] == 100
@@ -273,7 +276,7 @@ def test_information_case_names_structural_owner_not_a_value_gap(cases):
     assert working["structural_ordering_owner"] == "composer.canonical_tier:TIER_INFORMATIVE"
     assert row["local"]["before"] == cp.TIER_INFORMATIVE
     assert row["local"]["after"] == cp.TIER_COMMITMENT
-    assert row["deltas"]["total"] == 0.0
+    assert row["deltas"]["total"] == pytest.approx(0.018)
     assert [a["fate"] for a in row["actions"]] == [ao.MODELLED, ao.MODELLED]
     finding = working["finding"]
     assert finding == {
@@ -332,7 +335,7 @@ def test_pr490_fixture_is_self_contained_and_both_orders_survive_as_evidence(cas
     row = cases["mega-starmie-wally-attach"]
     one_ply = {entry["index"]: entry for entry in row["search"]["one_ply"]}
     assert one_ply[1]["rank"] == 2 and one_ply[1]["admission_reason"] == "hard-top-k"
-    assert one_ply[6]["rank"] == 4 and one_ply[6]["cutoff_margin"] == 0.0
+    assert one_ply[6]["rank"] == 5 and one_ply[6]["cutoff_margin"] == pytest.approx(-0.009)
     presence = {tuple(entry["sequence"]): entry for entry in row["search"]["candidate_presence"]}
     assert presence[(1, 6)]["generated_as_prefix"] is True
     assert presence[(6, 1)]["generated_as_prefix"] is False
@@ -340,20 +343,21 @@ def test_pr490_fixture_is_self_contained_and_both_orders_survive_as_evidence(cas
     assert orders[0]["local"]["working"]["final_target_energy_serials"] == [63]
     assert orders[1]["local"]["working"]["final_target_energy_serials"] == []
     assert orders[0]["after"]["total"] > orders[1]["after"]["total"]
-    assert orders[0]["local"]["delta"] == pytest.approx(23.333333333333)
-    assert orders[1]["local"]["delta"] == 70.0
+    assert orders[0]["local"]["delta"] == pytest.approx(120.0)
+    assert orders[1]["local"]["delta"] == 0.0
     assert all(len(order["actions"]) == 2 for order in orders)
     assert all(set(order["deltas"]) == {"total", "families", "legs"} for order in orders)
     isolated = row["local"]["working"]["isolated_attach_after_wally"]
     assert isolated["target_energy_serials_before"] == []
     assert isolated["target_energy_serials_after"] == [63]
     assert isolated["matches_full_forward_state"] is True
-    assert isolated["leaf_delta"] == pytest.approx(0.002443359375)
-    assert isolated["local_build_delta"] == pytest.approx(23.333333333333)
-    assert row["deltas"]["total"] == pytest.approx(0.002443359375)
-    assert row["local"]["delta"] == pytest.approx(23.333333333333)
+    assert isolated["leaf_delta"] == pytest.approx(0.02784375)
+    assert isolated["local_build_delta"] == pytest.approx(120.0)
+    assert row["deltas"]["total"] == pytest.approx(0.02784375)
+    assert row["local"]["delta"] == pytest.approx(120.0)
     assert row["local"]["working"]["root_target_energy_serials"] == [71]
-    assert row["local"]["working"]["root_attach_trace"]["build"] == 70.0
+    # The root already realizes its cheaper attack; the exact max-envelope gives no build credit.
+    assert row["local"]["working"]["root_attach_trace"]["build"] == 0.0
 
 
 @pytest.mark.req("REQ-COMPOSERSENS-0008")
@@ -389,8 +393,8 @@ def test_diagnostic_summary_is_derived_fail_closed_and_frequency_honest(report):
     disagreements = {row["case"]: row
                      for row in summary["findings"]["local_leaf_disagreement"]}
     f69 = disagreements["mega-starmie-wally-attach"]
-    assert f69["local_delta"] == pytest.approx(23.333333333333)
-    assert f69["leaf_total_delta_prizes"] == pytest.approx(0.002443359375)
+    assert f69["local_delta"] == pytest.approx(120.0)
+    assert f69["leaf_total_delta_prizes"] == pytest.approx(0.02784375)
     assert "attached_energy" in f69["declared_writes"]
     joins = {entry["mechanic_key"]: entry for entry in f69["static_join"]}
     assert "state-dimension:attached_energy" in joins
@@ -399,47 +403,47 @@ def test_diagnostic_summary_is_derived_fail_closed_and_frequency_honest(report):
     mega = proofs["mega_starmie_wally_attach"]
     assert mega["case"] == "mega-starmie-wally-attach"
     assert mega["key"] == "91393371-69"
-    assert mega["root_total_prizes"] == pytest.approx(1.017871774326)
+    assert mega["root_total_prizes"] == pytest.approx(1.045153024326)
     assert mega["root_one_ply"]["wally"] == {
-        "index": 1, "rank": 2, "ranked": 7, "chosen_delta": 0.321849609375,
+        "index": 1, "rank": 2, "ranked": 7, "chosen_delta": 0.30028125,
         "admitted": True, "in_beam": True, "admission_reason": "hard-top-k",
-        "kth_delta": 0.00871875, "cutoff_margin": 0.313130859375,
-        "margin_to_kth": 0.313130859375,
+        "kth_delta": 0.009, "cutoff_margin": 0.29128125,
+        "margin_to_kth": 0.29128125,
     }
     assert mega["root_one_ply"]["attach_mega_starmie"] == {
-        "index": 6, "rank": 4, "ranked": 7, "chosen_delta": 0.00871875,
-        "admitted": True, "in_beam": True, "admission_reason": "hard-top-k",
-        "kth_delta": 0.00871875, "cutoff_margin": 0.0, "margin_to_kth": 0.0,
+        "index": 6, "rank": 5, "ranked": 7, "chosen_delta": 0.0,
+        "admitted": False, "in_beam": False, "admission_reason": "cut",
+        "kth_delta": 0.009, "cutoff_margin": -0.009, "margin_to_kth": -0.009,
     }
     forward = mega["orders"]["wally_then_attach"]
     reverse = mega["orders"]["attach_then_wally"]
     assert forward["indices"] == [1, 6]
-    assert forward["after_total_prizes"] == pytest.approx(1.342164743076)
-    assert forward["total_delta_prizes"] == pytest.approx(0.32429296875)
+    assert forward["after_total_prizes"] == pytest.approx(1.373278024326)
+    assert forward["total_delta_prizes"] == pytest.approx(0.328125)
     assert forward["target_water_serials"] == [63]
     assert forward["target_water_count"] == 1
     assert forward["faithful_generated_as_prefix"] is True
     assert reverse["indices"] == [6, 1]
-    assert reverse["after_total_prizes"] == pytest.approx(1.330721383701)
-    assert reverse["total_delta_prizes"] == pytest.approx(0.312849609375)
+    assert reverse["after_total_prizes"] == pytest.approx(1.345434274326)
+    assert reverse["total_delta_prizes"] == pytest.approx(0.30028125)
     assert reverse["target_water_serials"] == []
     assert reverse["target_water_count"] == 0
     assert reverse["faithful_generated_as_prefix"] is False
     isolated = mega["isolated_attach_after_wally"]
-    assert isolated["local_delta_damage"] == pytest.approx(23.333333333333)
-    assert isolated["leaf_delta_prizes"] == pytest.approx(0.002443359375)
+    assert isolated["local_delta_damage"] == pytest.approx(120.0)
+    assert isolated["leaf_delta_prizes"] == pytest.approx(0.02784375)
     assert isolated["target_water_serials_before"] == []
     assert isolated["target_water_serials_after"] == [63]
     identity = proofs["identity_independent_attach"]
     assert identity["mechanic_signature"] == {
         "attached_energy_type": 3, "attack_energy_types": [[3], [3, 0, 0]]}
     assert identity["original"] == {
-        "body_id": 990001, "local_delta_damage": 23.333333333333,
-        "leaf_delta_prizes": 0.003922119141,
+        "body_id": 990001, "local_delta_damage": 120.0,
+        "leaf_delta_prizes": 0.018,
     }
     assert identity["clone"] == {
-        "body_id": 990002, "local_delta_damage": 23.333333333333,
-        "leaf_delta_prizes": 0.003922119141,
+        "body_id": 990002, "local_delta_damage": 120.0,
+        "leaf_delta_prizes": 0.018,
     }
     assert identity["local_delta_equal"] is True
     assert identity["leaf_delta_equal"] is True

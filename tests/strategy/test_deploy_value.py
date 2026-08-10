@@ -161,7 +161,8 @@ def test_accel_unlock_credits_the_energy_a_landing_spot_realises():
     riolu = pilot._option_card_id(obs, obs["select"], option)
     unlocked = pilot._deploy_accel_unlock(obs, board, riolu)
     assert unlocked > 0
-    assert unlocked == pytest.approx(2 * ENERGY_RECOVER)     # Riolu->Mega Brave {F}{F}, 3 in discard
+    # Exact shared build: two Fighting units complete Mega Brave's 270-damage, one-hop profile.
+    assert unlocked == pytest.approx(135.0)
 
 
 @pytest.mark.req("REQ-DEPLOY-0005")

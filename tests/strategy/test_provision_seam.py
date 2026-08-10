@@ -109,6 +109,24 @@ def test_ignition_is_one_colourless_on_a_basic_and_three_on_an_evolution():
     assert c.provision_codes(IGNITION, _stat(c, M_STARMIE)) == (COLORLESS,) * 3
 
 
+def test_restaging_is_exact_and_inconsistent_or_unreadable_state_is_unknown():
+    c = _combat(_REAL)
+    body = {"id": STARYU, "energies": [COLORLESS],
+            "energyCards": [{"id": IGNITION, "serial": 77}]}
+    assert c.restaged_unit_codes(body, _stat(c, M_STARMIE)) == (COLORLESS,) * 3
+    assert c.restaged_unit_codes(dict(body, energies=[WATER]), _stat(c, M_STARMIE)) is None
+    unreadable = _combat({IGNITION: ["discard_eot"]})
+    assert unreadable.restaged_unit_codes(body, _stat(unreadable, M_STARMIE)) is None
+
+
+def test_per_attack_clock_never_borrows_the_other_attacks_cost():
+    c = _combat(_REAL)
+    body = {"id": M_STARMIE, "energies": [WATER],
+            "energyCards": [{"id": WATER_ENERGY, "serial": 78}]}
+    assert c.turns_to_afford_attack(body, JETTING_BLOW, evolution_hops=2) == 2
+    assert c.turns_to_afford_attack(body, NEBULA_BEAM, evolution_hops=0) == 2
+
+
 def test_a_tool_claims_zero_units_rather_than_making_no_claim():
     """A Pokémon Tool rides ``OptionType.ATTACH`` as an Energy does. ``()`` is a CLAIM (provides
     nothing); ``None`` is *"I cannot read this"*."""

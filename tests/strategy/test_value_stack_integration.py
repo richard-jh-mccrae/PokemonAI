@@ -93,7 +93,7 @@ CONSUMED = frozenset({
     "model.mine", "model.theirs", "model.prize_race",
     # ── MySide (13) ──
     "model.mine.active", "model.mine.bench", "model.mine.bodies", "model.mine.bench_raws",
-    "model.mine.attack_payoff", "model.mine.readiness_p", "model.mine.turns_to_afford",
+    "model.mine.readiness_p", "model.mine.turns_to_afford",
     "model.mine.role_worth", "model.mine.needs", "model.mine.forward_payoff",
     "model.mine.best_reachable_damage_vs", "model.mine.best_reachable_bench_damage",
     # REVIEWED, and NOT a `RULED_COLLAPSES` case: `MySide.attack_blocked` reads an ABSENT turn as 0,
@@ -116,6 +116,10 @@ CONSUMED = frozenset({
     # `attack_profile` joined at Issue #384. REVIEWED: an unresolvable attack returns
     # `_EMPTY_ATTACK_PROFILE`, and `attack_ev_legs` FILTERS on `affordable` — no leg rather than a 0.
     "model.attack_profile",
+    # Issue #495: the combat profile owns these reads. Empty zones enumerate empty tuples/maps;
+    # absent bodies/stats return None and produce UNKNOWN/zero-compatible candidates.
+    "model.card_stat", "model.combat", "model.mine.active_raw", "model.mine.bench_names",
+    "model.mine.deck_energy_counts", "model.mine.forward_forms", "model.mine.view_of",
 })
 
 #: The three reads whose ABSENT value is INDISTINGUISHABLE from a measured zero — a ruling, not an

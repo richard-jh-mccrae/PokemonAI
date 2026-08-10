@@ -29,7 +29,11 @@ class PromoteRetreatMixin:
         view = BodyView(raw, combat=self.combat, is_active=True)
         # CARD RULE (`docs/rules.md` §2): no attack on turn 1, so a body promoted then earns NO yield.
         can_swing = board.turn > 1
-        reach = float(mine.best_reachable_damage(view)) if (mine is not None and can_swing) else 0.0
+        if mine is not None and can_swing:
+            from common.currency import PRIZE_DAMAGE_RATE
+            reach = model.combat_realization(view).now_prizes * PRIZE_DAMAGE_RATE
+        else:
+            reach = 0.0
         opp = self._opp_player(obs) or {}
         opp_active = (model.theirs.active_raw if model is not None
                       else next((p for p in (opp.get("active") or []) if p), None))
@@ -56,7 +60,7 @@ class PromoteRetreatMixin:
             reach=reach,
             # Same card rule: the race leg REPLACES `reach`, so ungated it re-introduces turn-1 damage.
             wall_progress=self._promote_wall_progress(obs, board, raw) if can_swing else None,
-            accel_units=self._promote_accel_units(obs, board, raw) if can_swing else 0.0,
+            accel_value=self._promote_accel_value(obs, board, raw) if can_swing else 0.0,
             closure=self._promote_closure(obs, raw, draws=draws if can_swing else 0),
             prizes=self._prize_value(raw),
             ko_active=ko_active, ko_bench=ko_bench,
@@ -93,56 +97,51 @@ class PromoteRetreatMixin:
             return None
         return hp / min(t_star for t_star, _chip in vals.values())
 
-    def _promote_accel_units(self, obs: dict, board: Board, raw: dict) -> float:
-        """Energy this body's accel rider would attach AND a recipient can USE (ADR-0100 §3b).
-        `max` over AFFORDABLE attacks: it commits to one and picks the best (ADR-0069 §1)."""
+    def _promote_accel_value(self, obs: dict, board: Board, raw: dict) -> float:
+        """Best affordable acceleration rider through the canonical exhaustive allocation."""
+        import math
+        model = self._state_model
         cid = (raw or {}).get("id")
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if not (stat and stat.attacks):
+        if model is None or not (stat and stat.attacks):
             return 0.0
-        energy = len(raw.get("energies") or [])
+        from common.currency import PRIZE_DAMAGE_RATE
+        from common.strategy.combat_math.budget import WILD_CODE
+        attached = len(raw.get("energies") or [])
         best = 0.0
-        for aid in (stat.attacks or ()):
-            if self.combat.attack_cost(aid) <= energy:
-                best = max(best, self._recover_units(aid, {}, board, obs))
+        for aid in stat.attacks or ():
+            attack = self._attack_stat(aid)
+            if attack is None or self.combat.attack_cost(aid) > attached:
+                continue
+            usable = self._recover_units(aid, {}, board, obs)
+            if usable <= 0.0:
+                continue
+            whole = max(1, int(math.ceil(usable)))
+            code = (attack.recoverEnergyType
+                    if attack.recoverEnergyType is not None else WILD_CODE)
+            allocation = model.allocate_recovery_energy(attack.recoverTarget, (code,) * whole)
+            best = max(best, allocation.value_prizes * min(1.0, usable / whole)
+                       * PRIZE_DAMAGE_RATE)
         return best
 
     def _promote_closure(self, obs: dict, raw: dict, *, draws: int) -> float:
         """``max`` over attacks of ``damage(a) x [readiness_p(a | enabler) - readiness_p(a)]`` — the odds
         this turn's dig readies an unready body (ADR-0100 §5). Fail-CLOSED at 0.0 throughout (ADR-0067)."""
-        from common.state_model import BodyView
+        from common.currency import PRIZE_DAMAGE_RATE
+        from common.deck_odds import draw_hit_probability
         model = self._state_model
         mine = model.mine if model is not None else None
         cid = (raw or {}).get("id")
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         if draws <= 0 or mine is None or not (raw and stat and stat.attacks):
             return 0.0
-        view = BodyView(raw, combat=self.combat, is_active=True)
         pool = mine.deck_count
         best = 0.0
-        for aid in (stat.attacks or ()):
-            dmg = float(self.combat.attack_damage(aid) or 0)
-            if dmg <= 0:
-                continue
-            base = mine.readiness_p(view, aid)
-            if base >= 1.0:
-                continue                              # already ready — no double credit
-            for etype, count in (mine.deck_energy_counts or {}).items():
-                # `expected`, not the raw CountTriple — that raises into a "bad input -> 0.0" guard (Issue #167).
-                copies = int(getattr(count, "expected", count) or 0)
-                # DELIBERATE CombatMath bypass (POC-T1's list; `test_combat_bypass_census`): the target
-                # is a HYPOTHETICAL body the board does not carry, so no `MySide` route can build it.
-                enabler = self.combat.attach_budget(
-                    raw, mine.hand_ids, energy_attached=mine.energy_attached,
-                    supporter_played=mine.supporter_played,
-                    deck_energy_types=mine.deck_energy_types,
-                    hand_energy_types=frozenset(mine.hand_energy_types) | {etype},
-                    discard_energy_counts=mine.discard_energy_counts,
-                    target_benched=False,             # it is being promoted INTO the Active Spot
-                    more_prizes_than_opp=mine.more_prizes_than_opp)
-                p = mine.readiness_p(view, aid, enabler_budget=enabler, copies=copies,
-                                     pool=pool, draws=draws)
-                best = max(best, dmg * max(0.0, p - base))
+        for etype, count in (mine.deck_energy_counts or {}).items():
+            copies = int(getattr(count, "expected", count) or 0)
+            probability = draw_hit_probability(copies, pool, draws)
+            delta = model.readiness_supply_delta(raw, model.energy_supply_for_units((etype,)))
+            best = max(best, max(0.0, delta) * PRIZE_DAMAGE_RATE * probability)
         return best
 
     def _promote_tempo_step(self, raw: dict) -> float:

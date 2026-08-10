@@ -42,6 +42,30 @@ class Slot:
     supplied_by_pitch: bool = False
 
 
+@dataclass(frozen=True)
+class CoverageEdge:
+    """One held-card → need edge with its card-specific realized Worth."""
+    slot_index: int
+    value: float
+
+
+@dataclass(frozen=True)
+class NeedGraph:
+    """Immutable demand graph; each hand row may cover at most one of its edges."""
+    slots: tuple = ()
+    coverage_by_hand: tuple = ()
+    unknowns: tuple[str, ...] = ()
+
+    @property
+    def eligibility(self) -> tuple:
+        return tuple(frozenset(edge.slot_index for edge in row) for row in self.coverage_by_hand)
+
+    @property
+    def edge_values(self) -> tuple:
+        return tuple({edge.slot_index: float(edge.value) for edge in row}
+                     for row in self.coverage_by_hand)
+
+
 # ─────────────────────────────────────────────────────────── my-side derivations
 def fund_attack_slots(body_key: str, cost_remaining: int, *, quota_spent: bool = False) -> list:
     """One slot per missing Energy unit; deadline = attach turns out (1 manual attach/turn,
@@ -217,7 +241,19 @@ SUPPLIES: dict = {
 _MAX_KEEP_SLOTS = 16    # bitmask-DP bound; beyond it lowest-weight slots drop (under-count, no crash)
 
 
-def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
+def _edge_value(edge_values, card_index: int, slot_index: int, default: float) -> float:
+    if edge_values and card_index < len(edge_values):
+        row = edge_values[card_index]
+        if isinstance(row, dict):
+            return float(row.get(slot_index, default))
+        for edge in row:
+            key, value = ((edge.slot_index, edge.value) if isinstance(edge, CoverageEdge) else edge)
+            if int(key) == int(slot_index):
+                return float(value)
+    return float(default)
+
+
+def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None, edge_values=None):
     """``(base, best)``: closure re-supply Σ_j v_j·r_j plus optimal held coverage; V = base + best.
     Cost is super-linear in per-card BREADTH, not slot count (ADR-0122); ``capacity`` caps popcount."""
     cap = None if capacity is None else max(0, int(capacity))
@@ -225,12 +261,13 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
     weighted = []
     for j, s in keep:
         r = min(1.0, max(0.0, float(resupply[j]) if j < len(resupply) else 0.0))
-        weighted.append((j, s.value * (1.0 - r), s.value * r))
+        weighted.append((j, s.value * (1.0 - r), s.value * r, r))
     weighted.sort(key=lambda t: -t[1])
     weighted = weighted[:_MAX_KEEP_SLOTS]
-    base = sum(b for _j, _w, b in weighted)
-    bit_of = {j: i for i, (j, _w, _b) in enumerate(weighted)}
-    weights = [w for _j, w, _b in weighted]
+    base = sum(b for _j, _w, b, _r in weighted)
+    bit_of = {j: i for i, (j, _w, _b, _r) in enumerate(weighted)}
+    bases = [b for _j, _w, b, _r in weighted]
+    defaults = [slots[j].value for j, _w, _b, _r in weighted]
     dp = {0: 0.0}
     for i, elig in enumerate(eligibility):
         if i in exclude:
@@ -249,7 +286,10 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
             while free:
                 low = free & -free
                 nm = mask | low
-                v = val + weights[low.bit_length() - 1]
+                bit = low.bit_length() - 1
+                j = weighted[bit][0]
+                edge = _edge_value(edge_values, i, j, defaults[bit])
+                v = val + max(0.0, edge - bases[bit])
                 if v > ndp.get(nm, -1.0):
                     ndp[nm] = v
                 free ^= low
@@ -258,22 +298,25 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
 
 
 def assignment_value(slots, eligibility, resupply, *, exclude=frozenset(),
-                     capacity=None) -> float:
+                     capacity=None, edge_values=None) -> float:
     """V(held \\ exclude): a covered slot counts full, an uncovered one counts value × its closure
     RESUPPLY odds; fuel slots never enter the keep side. Exact — no greedy order-dependence."""
-    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity)
+    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity,
+                               edge_values=edge_values)
     return base + best
 
 
-def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0) -> float:
+def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0,
+            edge_values=None) -> float:
     """``V(all) − V(all − index)`` with re-assignment. ``intrinsic`` is a transitional v1-tier floor;
     a FIRING floor is missing-slot telemetry."""
-    marginal = (assignment_value(slots, eligibility, resupply)
-                - assignment_value(slots, eligibility, resupply, exclude={index}))
+    marginal = (assignment_value(slots, eligibility, resupply, edge_values=edge_values)
+                - assignment_value(slots, eligibility, resupply, exclude={index},
+                                   edge_values=edge_values))
     return max(marginal, float(intrinsic))
 
 
-def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> float:
+def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity, edge_values=None) -> float:
     """WORTH-denominated, signed (ADR-0086): ``V(X deployed, cap=K) − V(C \\ X, cap=K)`` — gain nets
     displacement in ONE difference. The caller divides by `currency.DEPLOY_WORTH_SCALE`."""
     k = max(0, int(capacity))
@@ -283,24 +326,29 @@ def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> fl
         return 0.0
     without = frozenset({index})
     tight = max(0, k - 1)
-    v_without = assignment_value(slots, eligibility, resupply, exclude=without, capacity=k)
+    v_without = assignment_value(slots, eligibility, resupply, exclude=without, capacity=k,
+                                 edge_values=edge_values)
     # Deploying X eats one slot whether or not it covers anything, and may cover one of its own.
-    best = assignment_value(slots, eligibility, resupply, exclude=without, capacity=tight)
+    best = assignment_value(slots, eligibility, resupply, exclude=without, capacity=tight,
+                            edge_values=edge_values)
     for j in (eligibility[index] if 0 <= index < len(eligibility) else ()):
         if not (0 <= j < len(slots)) or slots[j].supplied_by_pitch:
             continue
         r = min(1.0, max(0.0, float(resupply[j]) if j < len(resupply) else 0.0))
         taken = [set(e) - {j} for e in eligibility]      # X took slot j; nobody else may cover it
-        best = max(best, slots[j].value * (1.0 - r)
-                   + assignment_value(slots, taken, resupply, exclude=without, capacity=tight))
+        edge = _edge_value(edge_values, index, j, slots[j].value)
+        best = max(best, max(0.0, edge - slots[j].value * r)
+                   + assignment_value(slots, taken, resupply, exclude=without, capacity=tight,
+                                      edge_values=edge_values))
     return best - v_without
 
 
 def assignment_split(slots, eligibility, resupply, *, exclude=frozenset(),
-                     capacity=None) -> tuple:
+                     capacity=None, edge_values=None) -> tuple:
     """:func:`assignment_value`'s two halves as ``(re_access, coverage)``. NOT recoverable by
     differencing: zeroing resupply changes WHICH assignment wins, not just its price."""
-    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity)
+    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity,
+                               edge_values=edge_values)
     return base, best
 
 
@@ -312,6 +360,8 @@ class Resolution:
     slots: tuple = ()
     #: Per held card, the slot indices it can supply. Index-aligned with :attr:`hand_ids`.
     eligibility: tuple = ()
+    #: Per held card, optional slot->realized Worth. Missing edges use the slot's demand value.
+    edge_values: tuple = ()
     #: Per slot, P(the closure re-supplies it inside its deadline). Index-aligned with `slots`.
     resupply: tuple = ()
     #: The held cards, in hand order.
@@ -321,33 +371,57 @@ class Resolution:
     #: Per-card contribution to ``latent_worth``. Optional for existing callers; discard projection
     #: uses it to keep the root demand ledger fixed while cards leave the hand.
     latent_by_hand: tuple = ()
+    #: State-specific unavailable funding edges, surfaced by the hand diagnostic owner.
+    unknowns: tuple = ()
+    #: Canonical immutable graph. Legacy field constructors are normalized into it.
+    graph: NeedGraph | None = None
+
+    def __post_init__(self) -> None:
+        if self.graph is not None:
+            object.__setattr__(self, "slots", tuple(self.graph.slots))
+            object.__setattr__(self, "eligibility", self.graph.eligibility)
+            object.__setattr__(self, "edge_values", self.graph.edge_values)
+            object.__setattr__(self, "unknowns", tuple(self.graph.unknowns))
+            return
+        edges = []
+        for index, eligible in enumerate(self.eligibility):
+            row_values = self.edge_values[index] if index < len(self.edge_values) else {}
+            edges.append(tuple(CoverageEdge(int(slot_index),
+                                            _edge_value((row_values,), 0, slot_index,
+                                                        self.slots[slot_index].value))
+                               for slot_index in sorted(eligible)))
+        object.__setattr__(self, "graph", NeedGraph(tuple(self.slots), tuple(edges),
+                                                    tuple(self.unknowns)))
 
     def split(self) -> tuple:
         """``(re_access, coverage)`` over the whole held hand."""
-        return assignment_split(list(self.slots), list(self.eligibility), list(self.resupply))
+        return assignment_split(list(self.slots), list(self.eligibility), list(self.resupply),
+                                edge_values=list(self.edge_values))
 
     def set_keep(self, indices) -> float:
-        return set_keep_v2(list(self.slots), list(self.eligibility), list(self.resupply), indices)
+        return set_keep_v2(list(self.slots), list(self.eligibility), list(self.resupply), indices,
+                           edge_values=list(self.edge_values))
 
 
-def set_keep_v2(slots, eligibility, resupply, indices) -> float:
+def set_keep_v2(slots, eligibility, resupply, indices, *, edge_values=None) -> float:
     """``V(all) − V(all − indices)``: two duplicate wincons solo-price 0 each (the sibling covers)
     but the PAIR prices full."""
-    return (assignment_value(slots, eligibility, resupply)
-            - assignment_value(slots, eligibility, resupply, exclude=frozenset(indices)))
+    return (assignment_value(slots, eligibility, resupply, edge_values=edge_values)
+            - assignment_value(slots, eligibility, resupply, exclude=frozenset(indices),
+                               edge_values=edge_values))
 
 
-def pitch_gain(slots, eligibility, index: int) -> float:
+def pitch_gain(slots, eligibility, index: int, *, edge_values=None) -> float:
     """The best fuel slot ``index`` fills by BEING discarded — it subtracts from removal cost."""
     best = 0.0
     for j in eligibility[index] if index < len(eligibility) else ():
         if j < len(slots) and slots[j].supplied_by_pitch:
-            best = max(best, slots[j].value)
+            best = max(best, _edge_value(edge_values, index, j, slots[j].value))
     return best
 
 
 def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
-                     deadness=None, tiebreak=None, candidates=None) -> list:
+                     deadness=None, tiebreak=None, candidates=None, edge_values=None) -> list:
     """The ``picks``-subset minimising :func:`removal_score`, ranked ``(score, −Σ deadness, Σ tiebreak,
     indices)``; ``deadness`` (0/1, ADR-0106) outranks ``tiebreak``, else a corpse's catalog tier wins."""
     from itertools import combinations
@@ -359,7 +433,8 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     dead = list(deadness) if deadness is not None else [0.0] * n
     best_set, best_key = None, None
     for combo in combinations(allowed, k):
-        score = removal_score(slots, eligibility, resupply, intrinsics, combo)
+        score = removal_score(slots, eligibility, resupply, intrinsics, combo,
+                              edge_values=edge_values)
         key = (score,
                -sum(dead[i] for i in combo if i < len(dead)),
                sum(tb[i] for i in combo if i < len(tb)))
@@ -368,13 +443,14 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     return sorted(best_set or ())
 
 
-def removal_score(slots, eligibility, resupply, intrinsics, indices) -> float:
+def removal_score(slots, eligibility, resupply, intrinsics, indices, *, edge_values=None) -> float:
     """Public because the discard decider and the fetch shed PREDICTOR must use the SAME formula, not
     just the same argmin (ADR-0103). ``<= 0`` = the shed is free or actively progress."""
     floor = max((float(intrinsics[i]) if i < len(intrinsics) else 0.0 for i in indices),
                 default=0.0)
-    return (max(set_keep_v2(slots, eligibility, resupply, indices), floor)
-            - sum(pitch_gain(slots, eligibility, i) for i in indices))
+    return (max(set_keep_v2(slots, eligibility, resupply, indices,
+                            edge_values=edge_values), floor)
+            - sum(pitch_gain(slots, eligibility, i, edge_values=edge_values) for i in indices))
 
 
 #: Every v1 keep_value gate → the slot kind that re-derives it. Retiring a gate not listed here (or

@@ -520,15 +520,10 @@ def target_space(model, option: dict, *, seat_index: int) -> tuple:
 # ── Target Rankers ────────────────────────────────────────────────────────────────────────────────
 
 
-def _build_standing(model, body: dict, payoff_id, damage: float) -> float:
-    """``(matched / slots)^2 × damage`` — the convex TYPED build credit against a FIXED payoff attack
-    (ADR-0070 §2). **0.0 when no cost record resolves**: a COUNT fallback would mix scales in one key."""
-    if payoff_id is None or damage <= 0:
-        return 0.0
-    matched, slots = model.combat.matched_slots(body, payoff_id)
-    if not slots:
-        return 0.0
-    return ((float(matched) / float(slots)) ** 2) * float(damage)
+def _build_standing(model, body: dict) -> float:
+    """Damage-currency projection of the canonical multi-attack build profile."""
+    from common.state_value import combat_build_profile
+    return combat_build_profile(model, body).value_damage if body else 0.0
 
 
 def _promote_body(model, raw: dict) -> PromoteBody:
@@ -551,9 +546,8 @@ def rank_retreat(model, candidate) -> float:
     active = _my_active(obs, seat)
     bench = list(_my_side(obs, seat).get("bench") or ())
     promo = promote_value(PromoteRetreatInputs(body=_promote_body(model, bench[promote_idx]))).total
-    payoff = model.mine.attack_payoff(model.mine.view_of(active))
     after, _went = _after_discard(model, active, discard_idx)
-    return float(promo) + _build_standing(model, after, payoff.attack_id, payoff.damage)
+    return float(promo) + _build_standing(model, after)
 
 
 #: The prefilters, keyed by :func:`choice_key`'s answer; sorted DESCENDING, and built from

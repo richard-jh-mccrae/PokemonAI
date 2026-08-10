@@ -151,6 +151,38 @@ class ClockMixin:
             return None
         return float(math.ceil(hp / best))
 
+    def turns_to_afford_attack(self, body: dict | None, attack_id, *, form_id=None,
+                               evolution_hops: int = 0, attaches_per_turn: int = 1,
+                               exclude_expiring: bool = False, extra_units=()) -> int | None:
+        """Earliest turn one exact attack is armed.
+
+        Payoff selection is deliberately absent: callers supply the attack whose payoff they are
+        pricing.  The energy and evolution clocks compose through the repository's sole
+        :func:`common.needs.turns_to_ready` convention.
+        """
+        from common import needs
+
+        raw = body
+        if raw is None:
+            return None
+        if exclude_expiring:
+            raw = self.without_expiring_energy(raw)
+        target_id = form_id if form_id is not None else raw.get("id")
+        holder = self._card_stat(target_id)
+        if holder is None:
+            return None
+        codes = self.restaged_unit_codes(raw, holder)
+        if codes is None:
+            return None
+        projected = dict(raw, id=target_id, energies=list(codes))
+        match = self.match_attack_slots(projected, attack_id, extra_units=extra_units)
+        if match is None:
+            return None
+        deficit = max(0, int(match.required) - int(match.matched))
+        return needs.turns_to_ready(energy_deficit=deficit,
+                                    evolve_hops=max(0, int(evolution_hops)),
+                                    attaches_per_turn=attaches_per_turn)
+
     def turns_to_afford(self, body: dict | None, *, forward_ids=None,
                         attaches_per_turn: int = 1, max_hops: int = 3,
                         typed: bool = False) -> int | None:

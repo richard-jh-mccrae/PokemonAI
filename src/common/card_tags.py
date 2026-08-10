@@ -170,7 +170,7 @@ TAG_REGISTRY: dict[str, Tag] = {
     "discard_eot": Tag(CURATED,
                        "An Energy DISCARDED at end of turn (Ignition Energy) — worth attaching "
                        "only if the holder attacks that same turn.",
-                       ("common.deciders.attach", "common.deciders.board_build", "common.deciders.hand", "common.deciders.lethal", "common.deciders.needs", "common.card_worth", "common.needs",
+                       ("common.deciders.attach", "common.deciders.board_build", "common.deciders.hand", "common.deciders.lethal", "common.card_worth", "common.needs",
                         "common.strategy.combat_math.energy", "common.strategy.planning.gamble", "common.strategy.planning.ladder", "common.strategy.planning.wins")),
     "tool": Tag(CURATED,
                 "A Pokémon Tool — an attachment whose static modifiers ride the holder. What "
