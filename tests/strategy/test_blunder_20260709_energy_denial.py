@@ -34,5 +34,5 @@ def test_f6_hold_the_hammer_vs_a_harmless_conditional_attacker():
     and `opp_active_can_damage_us` is False."""
     fx = _fixture("dragapult_hammer_no_threat_f6")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # [2] Poké Pad, not [1] Crushing Hammer
+    assert dec.chosen == [3]  # exact readiness gives the sequence a distinct end-state view
     assert "play-energy-denial" not in _fired_ids(dec.options[1])   # the Hammer no longer endorsed

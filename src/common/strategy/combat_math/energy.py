@@ -6,6 +6,7 @@ from __future__ import annotations
 
 
 from collections import Counter
+from typing import NamedTuple
 
 from common.board_cards import body_unit_codes, card_id as body_card_id
 from common.strategy.combat_math.budget import (AttachUnit, Budget, DISCARD_SUPPLY, WILD_CODE, _AttachCtx,
@@ -16,6 +17,17 @@ from common.strategy.combat_math.policy import UNCHARGED
 
 
 _ACCEL_TAGS = frozenset({"tutor_energy", "energy_accel"})
+
+
+class SlotMatch(NamedTuple):
+    """Typed payment progress for one resolved attack cost.
+
+    ``required == 0`` is a real, fully-payable zero-cost attack.  Absence is represented by
+    ``None`` at :meth:`EnergyMixin.match_attack_slots`, never by overloading ``(0, 0)``.
+    """
+
+    matched: int
+    required: int
 
 
 class EnergyMixin:
@@ -209,13 +221,22 @@ class EnergyMixin:
         it can pay. A colourless unit pays colourless slots only; an unrecognised code is wild (fail-open)."""
         return units_for_codes(self.attached_unit_codes(body))
 
-    def _attack_slots(self, attack_id) -> tuple:
-        """An attack's per-slot cost as EnergyType codes; () when no record resolves OR the cost is
-        0 (the pinned unknown/0-cost quirk) — the caller then makes no claim."""
+    def attack_cost_slots(self, attack_id) -> tuple | None:
+        """An attack's resolved per-slot cost.
+
+        ``None`` means the attack record is unavailable, ``()`` is a known zero-cost attack, and a
+        non-empty tuple carries the authoritative typed/colorless slot shape.  This is the tri-state
+        seam value code must use; the legacy private accessor remains an adapter for callers whose
+        historical contract intentionally conflates unavailable and free.
+        """
         ast = self.attack_stat(attack_id)
         if ast is None:
-            return ()
+            return None
         return tuple(ast.energyTypes) or (0,) * int(ast.cost or 0)
+
+    def _attack_slots(self, attack_id) -> tuple:
+        """Compatibility projection of :meth:`attack_cost_slots` (unknown and free -> ``()``)."""
+        return self.attack_cost_slots(attack_id) or ()
 
     def reachable_attach(self, my_body: dict | None, attack_id=None, *, budget: Budget) -> bool:
         """Can ``my_body`` PAY (and legally use) an attack THIS turn under ``budget``? ``attack_id`` None
@@ -288,24 +309,40 @@ class EnergyMixin:
         colour = getattr(self._card_stat(card_id), "energyType", None)
         return (WILD_CODE,) if colour is None else (int(colour),)
 
-    def restage_energy(self, body: dict | None, holder_stat) -> dict | None:
-        """``body`` as its attached Energy CARDS render on a DIFFERENT holder stage (Issue #418) —
-        ``holder_stat`` is the stage to re-read AGAINST. Returns ``body`` by identity when unreadable."""
+    def restaged_unit_codes(self, body: dict | None, holder_stat) -> tuple | None:
+        """Attached unit codes re-rendered for ``holder_stat``; ``None`` when not provable.
+
+        Unlike :meth:`restage_energy`, this accessor does not hide an unavailable provision or an
+        observed card/unit inconsistency behind identity.  That distinction is required by the
+        state-potential status contract.
+        """
         entries = tuple((body or {}).get("energyCards") or ())
         if not entries:
-            return body                        # nothing to re-derive from; the units stand as given
+            return tuple(body_unit_codes(body))
         was = self._card_stat((body or {}).get("id"))
         before, after = [], []
         for entry in entries:
             cid = body_card_id(entry)
             old, new = self.provision_codes(cid, was), self.provision_codes(cid, holder_stat)
             if old is None or new is None:
-                return body                    # fail-CLOSED: an unreadable card decides nothing
+                return None
             before.extend(old)
             after.extend(new)
         if tuple(before) != tuple(body_unit_codes(body)):
-            return body                        # the model already disagrees with this board
-        return dict(body, energies=after) if tuple(after) != tuple(before) else body
+            return None
+        return tuple(after)
+
+    def restage_energy(self, body: dict | None, holder_stat) -> dict | None:
+        """``body`` as attached Energy cards render on a different holder stage.
+
+        Compatibility remains fail-closed-by-identity; new diagnostic/value code uses
+        :meth:`restaged_unit_codes` to preserve UNKNOWN.
+        """
+        codes = self.restaged_unit_codes(body, holder_stat)
+        if codes is None:
+            return body
+        before = tuple(body_unit_codes(body))
+        return dict(body, energies=list(codes)) if codes != before else body
 
     @staticmethod
     def wild_units(count: int = 1) -> tuple:
@@ -313,14 +350,23 @@ class EnergyMixin:
         fail-OPEN, exactly as :meth:`attack_type_payable` treats an unresolvable attached Energy."""
         return tuple(AttachUnit(frozenset()) for _ in range(max(0, int(count))))
 
+    def match_attack_slots(self, my_body: dict | None, attack_id, *, extra_units=()) -> SlotMatch | None:
+        """Resolved typed payment progress for one attack, preserving known zero cost."""
+        slots = self.attack_cost_slots(attack_id)
+        if slots is None:
+            return None
+        if not slots:
+            return SlotMatch(0, 0)
+        units = self._attached_units(my_body) + tuple(extra_units)
+        return SlotMatch(_matched_slots(slots, units), len(slots))
+
     def matched_slots(self, my_body: dict | None, attack_id, *, extra_units=()) -> tuple:
         """``(matched, total)`` typed cost slots of ``attack_id`` that ``my_body``'s attached Energy plus
         ``extra_units`` covers (ADR-0069 §3). ``(0, 0)`` when no cost record resolves — no typed claim."""
-        slots = self._attack_slots(attack_id)
-        if not slots:
+        match = self.match_attack_slots(my_body, attack_id, extra_units=extra_units)
+        if match is None:
             return (0, 0)
-        units = self._attached_units(my_body) + tuple(extra_units)
-        return (_matched_slots(slots, units), len(slots))
+        return tuple(match)
 
     def without_expiring_energy(self, body: dict | None) -> dict | None:
         """``body`` once the rules discard its EVAPORATING Energy (Issue #286). Card identity comes from

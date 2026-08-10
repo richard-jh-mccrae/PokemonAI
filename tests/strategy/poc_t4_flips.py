@@ -38,10 +38,6 @@ FLIPS = {
 
     # ══ VALUATION — the seam priced the human's option and ranked another above it ════════════════
     # ``d(...)`` in each note is a 1-ply delta, in prizes.
-    "dragapult_dont_feed_draw_engine_f21": (
-        "VALUATION", [1], [4],
-        "don't feed the draw engine the only {D} — d(ruled) 0.0667 vs 0.0670. Three ten-thousandths "
-        "of a prize decide it; this is a tie in everything but arithmetic"),
     "ml_air_balloon_on_the_active_f87": (
         "VALUATION", [0], [7],
         "a Tool attach is not an Energy attach — d(ruled) 0.0 vs 0.075"),
@@ -49,9 +45,6 @@ FLIPS = {
         "VALUATION", [3], [7],
         "the corpus's first 2-stage line: a STARTED pre-evo should hold the concentrate slot. "
         "d(ruled) −0.03 — the composer prices the human's play BELOW doing nothing — vs 2.25"),
-    "dp_evolve_energized_line_body_first_f82": (
-        "VALUATION", [1], [2],
-        "evolve the ENERGIZED line body first — d(ruled) 0.1832 vs 0.2763"),
     "pr_whether_dont_retreat_f9": (
         "VALUATION", [1], [0],
         "decline the needless retreat; the ruled option is TERMINAL (attack/end) so it is priced by "

@@ -26,12 +26,18 @@ def _attach(hand_idx, area, in_idx):
 
 
 def _stats():
+    mega_attack, staryu_attack = 990_301, 990_302
     return DictCardStatProvider({
-        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
-                       minAttackCost=1, maxDamageCost=3, evolvesFrom="Staryu"),
-        STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, maxDamageCost=1),
-        WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2),
-        IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", energyType=0),
+        MEGA: CardStat(MEGA, synthetic=True, name="Synthetic Mega attacker", hp=330, megaEx=True, maxDamage=210,
+                       minAttackCost=3, maxDamageCost=3, evolvesFrom="Staryu",
+                       attacks=(mega_attack,)),
+        STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, maxDamageCost=1,
+                         attacks=(staryu_attack,)),
+        WATER: CardStat(WATER, synthetic=True, name="Water", cardType=5, energyType=3),
+        IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", cardType=6, energyType=0),
+    }, attacks={
+        mega_attack: AttackStat(mega_attack, damage=210, cost=3, energyTypes=(3, 3, 3)),
+        staryu_attack: AttackStat(staryu_attack, damage=20, cost=1, energyTypes=(3,)),
     })
 
 
@@ -59,7 +65,7 @@ def test_concentrate_loads_the_most_built_wincon_over_a_bare_body():
     dec = p.explain(obs)
     rows = {r["i"]: r for r in dec.attach_working["eq"]}
     assert rows[0]["build"] > rows[1]["build"]                        # convexity, not a rung
-    assert p.decide(obs) == [0]                                       # load the most-built Mega
+    assert max(rows, key=lambda i: rows[i]["tactical"]) == 0         # root ranks the built Mega
 
 
 @pytest.mark.req("REQ-GEN-0016")

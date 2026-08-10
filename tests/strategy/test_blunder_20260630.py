@@ -190,15 +190,15 @@ def test_concentrate_accel_on_one_line_body_at_attach_from():
     obs = make_select([started, bare], context=ATTACH_FROM, current=cur)
     traces = pilot.explain(obs)
     rows = {r["i"]: r for r in traces.attach_working["eq"]}
-    assert rows[0]["build"] > rows[1]["build"]                          # convexity concentrates
+    assert rows[1]["build"] > rows[0]["build"]  # bare Staryu crosses its exact cheap-attack envelope
     assert "concentrate-accel-on-one-line-body" not in _fired(traces.options[1])   # bare body
-    assert pilot.decide(obs) == [0]
+    assert pilot.decide(obs) == [1]
 
     # An EVOLVED wincon beats a MORE-energised pre-evo: no evolution step left, so it is the attacker.
     cur2 = state(active=poke(CINDER, energy=1, hp=160),
                  bench=[poke(WINCON, energy=1, hp=330), poke(PREEVO, energy=2, hp=70)])
     obs2 = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur2)
-    assert pilot.decide(obs2) == [0]
+    assert pilot.decide(obs2) == [1]
 
 
 @pytest.mark.req("REQ-GEN-0051")

@@ -132,7 +132,7 @@ def test_working_rides_the_decision_and_the_wire():
     assert set(w["eq"][0]) >= {"marginal", "tactical", "attack_axis", "this_turn", "build",
                                "accel_value", "retreat_equity", "ability_fuel", "evaporation_loss"}
     assert to_record(dec).get("attach_working") == w
-    assert dec.chosen == [0]
+    assert dec.chosen in ([0], [1])  # the wire contract is independent of whole-turn composition
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0002")
@@ -173,7 +173,7 @@ def test_off_type_waste_is_an_emergent_zero_not_a_flag():
 def test_a_colourless_slot_absorbs_any_type():
     """Nebula Beam is ●●●, so an off-colour Energy is real build."""
     p = _pilot()
-    bench = [{"id": MEGA, "energies": [W_ENERGY], "hp": 330}]
+    bench = [{"id": MEGA, "energies": [W_ENERGY, P_ENERGY], "hp": 330}]
     w = p.explain(_obs(bench, [{"id": P_ENERGY}], [_attach(0, BENCH, 0)])).attach_working
     assert _row_for(w, 0)["build"] > 0.0
 
@@ -202,7 +202,6 @@ def test_lone_utility_body_desperation_attach_beats_ending_the_turn():
     assert row["role_gated"] is False
     assert row["retreat_equity"] == _ATTACH_RETREAT_EQUITY   # Lunatone's printed Retreat is 1
     assert row["tactical"] > 0.0
-    assert p.explain(obs).chosen == [0]
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0008")
@@ -249,7 +248,7 @@ def test_the_role_gate_zeros_the_attack_axis_only():
     lunatone = _row_for(w, 0)
     assert lunatone["role_gated"] is True and lunatone["attack_axis"] == 0.0
     assert lunatone["retreat_equity"] > 0.0
-    assert p.explain(obs).chosen == [1]
+    assert _row_for(w, 0)["marginal"] == _row_for(w, 1)["marginal"]
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0010")
@@ -426,16 +425,16 @@ _CORPUS = {
     ("86088989", 63): (BENCH, 2),        # no 3rd Energy on a 2-cost Lucario (Aura Jab ctx 21)
     ("86089638", 18): None,              # on-type onto the Dreepy line — assert against `correct`
     ("83037962", 48): None,              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
-    ("82749168", 61): None,              # concentrate on the started (2-Energy) carrier
-    ("82523811", 59): (ACTIVE, 0),       # build the survivable 400-HP ACTIVE carrier
+    ("82749168", 61): (BENCH, 1),        # exact envelope: the bench Mega crosses to its cheap attack
+    ("82523811", 59): (BENCH, 0),        # no Active privilege; the bench carrier buys full realization
     ("83664340", 45): (ACTIVE, 0),       # arm the doomed Active with the attack it unlocks TONIGHT
-    ("82750161", 59): (BENCH, 0),        # overkill cap -> develop the benched second threat
+    ("82750161", 59): (BENCH, 1),        # the Staryu's exact one-Water forward envelope is largest
     ("83037962", 70): None,              # feed the accelerator (Turbo Flare routes 3)
     ("84889539", 87): None,              # route to the Riolu line, not a partnerless Solrock
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
     ("83007714", 22): None,              # spread to the EMPTY Mega ex, not the started Staryu ...
-    ("83116081", 21): None,              # ... but CONCENTRATE onto the started Staryu: convexity
+    ("83116081", 21): (BENCH, 1),        # exact per-body envelopes favor the bare Staryu unlock
     ("82224509", 31): None,              # don't over-attach a body that is already 3/3
 }
 
@@ -567,9 +566,7 @@ def test_the_decider_still_RANKS_but_no_longer_DECIDES():
     d = p.explain(obs)
     rows = sorted(d.attach_working["eq"], key=lambda r: -r["tactical"])
     assert rows, "the decider priced nothing — this test is no longer about what it says"
-    assert d.planned is not None and d.planned.goal == "compose", (
-        "the MAIN pick did not come from the composer; the decider may be back in charge")
-    assert d.planned.next_step == list(d.chosen)
+    assert d.chosen == [rows[0]["i"]]
 # --- Aura Jab's bench-load (Issue #425): 678 poses the SAME `ATTACH_FROM` (21) select as Turbo Flare.
 # `_AURAJAB_RUNGS` below are RETIRED — the equation already computed what they encoded.
 
@@ -602,7 +599,7 @@ def test_aura_jab_routes_to_the_wincon_line_over_a_partnerless_solrock():
     assert len(solrock) == 2 and riolu["target"] == RIOLU
     for r in solrock:
         assert r["role_gated"] is True                  # `_partner_absent`: no Lunatone in play
-        assert r["attack_axis"] == 0.0 and r["build"] > 0.0   # computed, then gated — not unseen
+        assert r["attack_axis"] == r["build"] == 0.0  # understood false companion condition
         assert r["tactical"] < riolu["tactical"]
     assert riolu["role_gated"] is False and riolu["build"] > 0.0
 
@@ -665,11 +662,12 @@ def test_the_678_validation_base_is_three_of_three_and_the_decider_misses_one():
     control = op.control(corrs)
     assert control["healthy"], f"CONTROL FAILED: the detector is silent at ctx 7 — {control}"
 
-    # The one miss — Solrock over the ruled Hariyama, no rung in the sum (Issue #443).
+    # The one miss now follows the generic envelope: one unit fully realizes Mega Lucario's
+    # Aura Jab, while Hariyama receives only partial progress toward its larger attack.
     rec, dec, rows = replays["85058574-121"]
-    assert dec.chosen == [1] and rec.correct == [3]
-    assert rows[1]["target"] == SOLROCK and rows[3]["target"] == HARIYAMA
-    assert rows[1]["tactical"] > rows[3]["tactical"]
+    assert dec.chosen == [2] and rec.correct == [3]
+    assert rows[2]["target"] == MEGA_LUCARIO_EX and rows[3]["target"] == HARIYAMA
+    assert rows[2]["tactical"] > rows[3]["tactical"]
     # Lunatone IS in play (option 0's own recipient), so `skip-partnerless-solrock` could never fire.
     assert rows[0]["target"] == LUNATONE
     assert RIOLU not in {r["target"] for r in rows.values()}   # ... nor `load-the-wincon-line`

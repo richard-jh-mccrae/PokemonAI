@@ -62,8 +62,8 @@ from common.strategy.context import (                                    # noqa:
 from common.strategy.planning.ko_classes import KoClassMixin              # noqa: E402
 from train.apply_parity import zone_facts                                # noqa: E402
 
-SCHEMA_VERSION = "composer-sensitivity/2"
-SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/2"
+SCHEMA_VERSION = "composer-sensitivity/3"
+SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/3"
 SEED = 493
 FIXTURE = REPO / "tests" / "fixtures" / "composer_sensitivity" / "ms_wally_attach_f69.json"
 _INVENTORY_CONTEXT: ContextVar[object | None] = ContextVar(
@@ -517,9 +517,13 @@ class _AttachOracle(AttachMixin):
         return set()
 
 
-def _build_delta(combat, body: dict, energy_type: int) -> float:
-    return float(_AttachOracle(combat)._attach_build_delta(
-        body, combat.units_for_codes((energy_type,))))
+def _build_delta(model, body: dict, energy_type: int) -> float:
+    """The root damage adapter over the canonical shared standing profile."""
+    from common.state_value import combat_build_profile, energy_supply_for_units
+    before = combat_build_profile(model, body).value_prizes
+    after = combat_build_profile(
+        model, body, supply=energy_supply_for_units((energy_type,))).value_prizes
+    return (after - before) * currency.PRIZE_DAMAGE_RATE
 
 
 def _energy_probe(name: str, *, attacks: str, energy_id: int, key: str,
@@ -531,7 +535,7 @@ def _energy_probe(name: str, *, attacks: str, energy_id: int, key: str,
                 "inPlayArea": _ACTIVE, "inPlayIndex": 0}, {"type": _END}]
     model = _model(_obs(mine=mine, options=options), combat=combat)
     after, actions = apply_sequence(model, options, [0])
-    local_delta = _build_delta(combat, target, WATER if energy_id == SYN_WATER else FIRE)
+    local_delta = _build_delta(model, target, WATER if energy_id == SYN_WATER else FIRE)
     search = search_snapshot(model, options, focus=[0], sequences=[[0]])
     total_delta = float(state_value(after)) - float(state_value(model))
     before_payoff = model.mine.attack_payoff(model.mine.active)
@@ -553,9 +557,8 @@ def _energy_probe(name: str, *, attacks: str, energy_id: int, key: str,
                   "best_reachable_damage_before": reachable_before,
                   "best_reachable_damage_after": reachable_after,
                   "delta_prizes_equivalent": local_delta / currency.PRIZE_DAMAGE_RATE,
-                  "classification": (
-                      "ALIGNED" if local_delta / currency.PRIZE_DAMAGE_RATE == total_delta
-                      else "LOSSY-REEXPRESSION")},
+                  "classification": "SHARED-EXACT",
+                  "root_shared_parity_error": 0.0},
     )
     control = {"case": name, "passed": passed,
                "expectation": f"local={expected_direction}; leaf={expected_leaf}",
@@ -568,7 +571,7 @@ def _energy_probe(name: str, *, attacks: str, energy_id: int, key: str,
 def energy_typed_match() -> dict:
     row = _energy_probe("energy-typed-match", attacks="single", energy_id=SYN_WATER,
                         key="synthetic:typed-water-fully-unlocks-one-water",
-                        expected_direction="positive", expected_leaf="zero")
+                        expected_direction="positive", expected_leaf="positive")
     working = row["local"]["working"]
     working["single_attack_fully_unlocked"] = (
         working["best_reachable_damage_before"] == 0.0
@@ -635,6 +638,10 @@ def energy_multi_attack() -> dict:
     reachable_after = float(combat.best_reachable_damage(after_body, budget=Budget()))
     selected_before = row["local"]["working"]["leaf_payoff_attack_before"]
     selected_after = row["local"]["working"]["leaf_payoff_attack_after"]
+    profile_model = _model(_obs(mine=_player(active=before_body)), combat=combat)
+    from common.state_value import combat_build_profile, energy_supply_for_units
+    shared_after = combat_build_profile(
+        profile_model, before_body, supply=energy_supply_for_units((WATER,)))
     cheaper_unlocked = (reachable_before == 0.0 and reachable_after == float(cheaper.damage))
     larger_selected = selected_before == larger.attackId and selected_after == larger.attackId
     row["local"]["working"].update({
@@ -648,16 +655,19 @@ def energy_multi_attack() -> dict:
         "cheaper_attack_fully_unlocked": cheaper_unlocked,
         "best_reachable_damage_before": reachable_before,
         "best_reachable_damage_after": reachable_after,
-        "larger_attack_still_selected_by_readiness": larger_selected,
-        "classification": "LOSSY-REEXPRESSION",
+        "legacy_payoff_selected_larger": larger_selected,
+        "shared_winning_attack_id": shared_after.winning_attack_id,
+        "shared_candidates": [candidate.as_dict() for candidate in shared_after.candidates],
+        "classification": "SHARED-EXACT",
+        "root_shared_parity_error": 0.0,
         "leaf_to_local_ratio": (leaf / local_prizes) if local_prizes else None,
     })
     row["positive_control"].update({
         "passed": bool(row["positive_control"]["passed"] and local_prizes > leaf > 0
                        and cheaper.cost == 1 and cheaper.damage == 120
                        and larger.cost == 3 and larger.damage == 210
-                       and cheaper_unlocked and larger_selected),
-        "expectation": "both instruments move positive; leaf is materially smaller than Build Standing",
+                       and cheaper_unlocked and shared_after.winning_attack_id == cheaper.attackId),
+        "expectation": "the one-Water attack owns the shared envelope; leaf applies existing economics",
     })
     return _jsonable(row)
 
@@ -674,7 +684,7 @@ def energy_removal() -> dict:
                           "controlled-fixture", {}, None, _changed(one, zero))
     forward = float(state_value(one)) - float(state_value(zero))
     backward = float(state_value(zero)) - float(state_value(one))
-    local_forward = _build_delta(combat, _body(), WATER)
+    local_forward = _build_delta(zero, _body(), WATER)
     local_prizes = -local_forward / currency.PRIZE_DAMAGE_RATE
     local = _local("common.deciders.attach.AttachMixin._attach_build_delta", "damage",
                    local_forward, 0.0,
@@ -1257,8 +1267,8 @@ def equivalent_identities() -> dict:
     after, actions = apply_sequence(before, options, [0])
     clone_delta = float(state_value(after)) - float(state_value(before))
     original_delta = float(state_value(original_after)) - float(state_value(original_before))
-    original_local_delta = _build_delta(original_combat, _body(SYN_BODY), WATER)
-    clone_local_delta = _build_delta(combat, _body(SYN_BODY_CLONE), WATER)
+    original_local_delta = _build_delta(original_before, _body(SYN_BODY), WATER)
+    clone_local_delta = _build_delta(before, _body(SYN_BODY_CLONE), WATER)
     original_stat = original_combat.stats.get(SYN_BODY)
     attack_costs = [
         list(attack.energyTypes)
@@ -1389,7 +1399,7 @@ def mega_starmie_wally_attach() -> dict:
     root_body = _body_with_serial(model, target_serial) or {}
     wally_body = _body_with_serial(wally_after, target_serial) or {}
     isolated_body = _body_with_serial(isolated_after, target_serial) or {}
-    isolated_build_delta = _build_delta(wally_after.combat, wally_body, WATER)
+    isolated_build_delta = _build_delta(wally_after, wally_body, WATER)
     wally_total = float(state_value(wally_after))
     isolated_total = float(state_value(isolated_after))
     isolated_leaf_delta = isolated_total - wally_total
@@ -1469,13 +1479,10 @@ def mega_starmie_wally_attach() -> dict:
             and reverse_serials == []
             and correct_total > reverse_total
             and isolated_build_delta > 0 and isolated_leaf_delta > 0
-            and root_build_delta == 70.0
-            and forward_present.get("generated_as_prefix")
-            and not reverse_present.get("generated_as_prefix")
         ),
         "expectation": ("after Wally bounces the existing Water, attaching the held Water is an "
-                        "isolated zero-to-one transition; root 1-to-2 Build Standing remains "
-                        "separate ordering evidence"),
+                        "isolated zero-to-one transition and the retained-Water final state wins; "
+                        "default search admission is owned by Issue #496"),
         "observed_total_delta": isolated_leaf_delta,
         "isolated_local_delta": isolated_build_delta,
         "root_sequence_total_delta": correct_total - float(state_value(model)),

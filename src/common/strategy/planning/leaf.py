@@ -130,14 +130,20 @@ class LeafValueMixin:
                 return None
             # A discard projection freezes this root ledger across removals, so general-worth belongs
             # in saturating slots (duplicates cover one slot). Other leaf states retain the latent form.
-            slots, elig = self._resolve_needs(mobs, board, rows,
-                                              include_general=discard_context)
+            resolved = self._resolve_needs(mobs, board, rows,
+                                           include_general=discard_context)
+            slots, elig = resolved
+            edge_values = resolved.edge_values
             if discard_context:
                 # A row already classified as discard fuel/fodder has no KEEP supply. Fuel slots remain
                 # eligible but are intentionally absent from state_value.hand's demand and coverage.
                 elig = [({j for j in row_elig if slots[j].supplied_by_pitch}
                          if rows[i].get("pitch", 0) else row_elig)
                         for i, row_elig in enumerate(elig)]
+                edge_values = [
+                    {j: value for j, value in row_edges.items() if j in elig[i]}
+                    for i, row_edges in enumerate(edge_values)
+                ]
             covered = {i for i, e in enumerate(elig) if e}
             if discard_context:
                 latent_by_hand = tuple(0.0 for _ in rows)
@@ -149,10 +155,12 @@ class LeafValueMixin:
                     if i not in covered else 0.0
                     for i, r in enumerate(rows))
             return needs.Resolution(slots=tuple(slots), eligibility=tuple(elig),
+                                    edge_values=tuple(edge_values),
                                     resupply=tuple([0.0] * len(slots)),
                                     hand_ids=tuple(r["cid"] for r in rows),
                                     latent_worth=float(sum(latent_by_hand)),
-                                    latent_by_hand=latent_by_hand)
+                                    latent_by_hand=latent_by_hand,
+                                    unknowns=resolved.unknowns)
         except Exception:
             return None
         finally:

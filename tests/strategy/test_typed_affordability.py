@@ -44,8 +44,8 @@ def _stats(attacks=None):
                          evolvesFrom="Staryu", energyType=3),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=50, attacks=(TURBO,), energyType=2),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-        IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, cardType=6, energyType=0),
         OPP: CardStat(OPP, synthetic=True, name="opp", hp=100),
     }, attacks=attacks)
 
@@ -162,7 +162,11 @@ def test_retreat_lethal_stands_down_on_a_colorless_funded_wincon():
     assert pilot.explain(obs).options[1].tactical < KO_SCORE      # no phantom retreat-lethal
 
     # Control: swap the Ignition for a Basic {W} plus two colourless -> the lethal is genuine again.
-    bench_wincon["energies"] = [WATER, COLORLESS, COLORLESS]
+    bench_wincon["energies"] = [WATER, COLORLESS, COLORLESS, COLORLESS]
+    bench_wincon["energyCards"] = [
+        {"id": WATER, "serial": 99001, "playerIndex": 0},
+        {"id": IGNITION, "serial": 99002, "playerIndex": 0},
+    ]
     obs = make_select([attack_opt(TURBO), opt(RETREAT), opt(END)], context=0, current=cur)
     assert pilot.explain(obs).options[1].tactical >= KO_SCORE
     assert _ranked(pilot, obs)[0][0] == 1                         # retreat into the payable wincon

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from poc_t4_flips import marks, param_for
+from poc_t4_flips import param_for
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
@@ -72,7 +72,6 @@ def test_evolve_corpus_claims(agent, fixture):
 # placement, covered by tests/strategy/test_setup_active_placement.py.
 
 
-@pytest.mark.xfail(strict=True, reason=marks("dp_evolve_energized_line_body_first_f82")[0].kwargs["reason"])
 def test_evolve_corpus_planner_scope_f82():
     fx = _fixture("dp_evolve_energized_line_body_first_f82")
     chosen = _pilot("dragapult_ex").explain(fx["obs"]).chosen

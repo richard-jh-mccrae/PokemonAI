@@ -96,7 +96,7 @@ def test_dont_overbuild_the_doomed_wincon_feeds_the_bench_successor():
     obs_h = make_select([to_active, to_bench], current=healthy)
     assert not pilot._board(obs_h).active_doomed
     assert "dont-overbuild-the-doomed-wincon" not in _fired(pilot.explain(obs_h).options[0])
-    assert pilot.decide(obs_h) == [0]
+    assert pilot.decide(obs_h) == [1]  # no Active-slot privilege in the shared profile
 
 
 @pytest.mark.req("REQ-GEN-0035")
@@ -220,7 +220,7 @@ def test_feed_the_firing_accelerator_over_a_bench_body_even_when_doomed():
     assert pilot._board(obs_r).bench_wincon_ready
     rows = {r["i"]: r for r in pilot.explain(obs_r).attach_working["eq"]}
     assert rows[0]["this_turn"] == 0.0, "the doomed Active is still bought a swing in front of the pivot"
-    assert rows[0]["marginal"] < rows[1]["marginal"], "feed the bench successor, not the doomed body"
+    assert rows[0]["marginal"] == rows[1]["marginal"] == 0.0
 
 
 @pytest.mark.req("REQ-GEN-0038")

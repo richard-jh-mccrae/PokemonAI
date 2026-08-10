@@ -60,7 +60,7 @@ from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 en
 
 # --- the families (`common/deciders/`) ---
 from common.deciders.attach import (AttachMixin, _ATTACH_VALUE_SCALE, _ATTACH_RETREAT_EQUITY,
-                                    _ATTACH_ABILITY_FUEL, _ATTACH_RESOURCE_TIEBREAK, _ATTACH_PREEVO_DISCOUNT)  # noqa: F401
+                                    _ATTACH_ABILITY_FUEL, _ATTACH_RESOURCE_TIEBREAK)  # noqa: F401
 from common.deciders.board_build import BoardMixin
 from common.deciders.context_build import ContextMixin
 from common.deciders.deck_view import DeckViewMixin
@@ -423,10 +423,13 @@ class Pilot(
                 projected_needs = needs.Resolution(
                     slots=root_needs.slots,
                     eligibility=tuple(root_needs.eligibility[index] for index in keep),
+                    edge_values=tuple(root_needs.edge_values[index] for index in keep)
+                    if len(root_needs.edge_values) == len(hand) else (),
                     resupply=root_needs.resupply,
                     hand_ids=tuple(root_needs.hand_ids[index] for index in keep),
                     latent_worth=sum(latent_by_hand),
-                    latent_by_hand=latent_by_hand)
+                    latent_by_hand=latent_by_hand,
+                    unknowns=root_needs.unknowns)
                 return model.rebuilt(after, needs_override=projected_needs)
 
             return leaf_pick_indices(model, minimum=int(select.get("minCount", 0)), maximum=maximum,

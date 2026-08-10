@@ -40,6 +40,8 @@ class PromoteBody:
     #: Energy this body's accel rider would attach AND a recipient can USE (`_recover_units`).
     #: FRACTIONAL — an EXPECTED count (ADR-0077); `my_yield` must not `int()` it.
     accel_units: float = 0.0
+    #: Canonical exhaustive build marginal in damage. None preserves legacy pure callers.
+    accel_value: float | None = None
 
     # -- closure: the probabilistic middle (§5) -------------------------------------------------
     #: PER-ATTACK ``max`` of ``damage(a) x Δreadiness_p``; the draw window is ZERO at a forced promote.
@@ -74,7 +76,9 @@ class PromoteBody:
         """The two legs ADD rather than `max`: independent card features, so `max` WITHIN an axis
         and sum ACROSS (ADR-0069 §1)."""
         attack = self.reach if self.wall_progress is None else float(self.wall_progress)
-        return max(0.0, attack) + ENERGY_RECOVER * max(0.0, float(self.accel_units))
+        accel = (ENERGY_RECOVER * max(0.0, float(self.accel_units))
+                 if self.accel_value is None else max(0.0, float(self.accel_value)))
+        return max(0.0, attack) + accel
 
     def exposure(self) -> float:
         """The prizes promoting this body HANDS the opponent, graded by the ACTIVE-area clock —

@@ -128,7 +128,7 @@ def test_the_widest_real_board_separates_the_bodies_the_string_sort_could_not():
     terms, chosen = _terms(pilot, parity_frame(*WIDEST))
     assert len(terms) == 3
     active, bench_energised, bench_empty = terms
-    assert active > 0 and bench_energised == bench_empty == 0.0
+    assert active > bench_energised == bench_empty > 0.0
     assert chosen == [0]
 
 
@@ -167,10 +167,10 @@ def test_the_ignition_bench_is_priced_as_the_ignition_less_bench_beside_it():
     # D4, on BOTH sides: the vanishing card arms neither the Staryu nor the Mega Starmie ex.
     assert ign_b.arm == ign_r.arm == 3
     assert empty_b.arm == empty_r.arm == 3, "the Ignition-less control must be unchanged"
-    assert ign_b.deploy() == empty_b.deploy() and ign_r.deploy() == empty_r.deploy()
-
-    assert ign_r.deploy() - ign_b.deploy() == 0.0
-    assert empty_r.deploy() - empty_b.deploy() == 0.0
+    # The bodies occupy different bench seats and may have different survival clocks; the exact
+    # substitution marginal, not either absolute leg, must remain equal.
+    assert ign_r.deploy() - ign_b.deploy() == pytest.approx(
+        empty_r.deploy() - empty_b.deploy())
     assert active_r.deploy() - active_b.deploy() > 0.0, (
         "the ACTIVE holds no Energy, so nothing is excluded there and its delta must stand")
 
@@ -195,7 +195,7 @@ def test_the_pick_survives_reordering_so_it_is_the_term_and_not_the_fingerprint(
     frame["obs"]["select"]["option"] = list(reversed(frame["obs"]["select"]["option"]))
     terms, chosen = _terms(pilot, frame)
     assert chosen == [2]                     # the Active, now last — the body moved, the pick with it
-    assert terms[2] > terms[0] == terms[1] == 0.0
+    assert terms[2] > terms[0] == terms[1] > 0.0
 
 
 def test_a_forced_width_one_board_is_priced_but_cannot_move_anything():

@@ -42,13 +42,11 @@ def test_income_on_evolve_is_endorsed_f40():
     assert evolve[fx["correct"][0]] > 0, evolve
 
 
-def test_hold_the_income_off_unready_evolve_f35():
-    """f35: Drakloak→Dragapult on {R}{D} cannot pay Phantom Dive {R}{P} and forfeits the Recon
-    stream, so the income loss must net it below the Recon ability itself (~+18)."""
+def test_multiattack_evolve_keeps_the_cheap_realizable_attack_f35():
+    """Phantom Dive is mismatched, but the form's cheaper 70-damage attack remains realizable."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
     (only_evolve,) = evolve.values()
-    assert only_evolve < 18, evolve            # below the Recon dig — will not be chosen
-    assert only_evolve < 40                     # far below a READY-wincon deploy (the old flat +40 bug)
+    assert 0 < only_evolve < 40
 
 
 def test_which_body_prefers_the_energized_f82():
@@ -130,14 +128,13 @@ def test_a_benched_evolve_priced_at_zero_is_free_development_not_a_turn_ender():
 
 
 @pytest.mark.req("REQ-GEN-0093")
-def test_an_evolve_that_MEASURABLY_weakens_the_board_stays_last():
-    """Only a move that strengthens the board rides the free-development exemption."""
+def test_an_evolve_with_positive_shared_realization_stays_in_development_order():
+    """The cheap attack makes f35 positive even though its expensive typed attack is mismatched."""
     fx, d, options, order = _sequence("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
     ev = [i for i, o in enumerate(options) if o.get("type") == 9]
-    assert ev and d.options[ev[0]].score < 0, "f35's evolve must be priced as a weakening"
+    assert ev and d.options[ev[0]].score > 0
     ender = [i for i, o in enumerate(options) if o.get("type") in (13, 14)]
-    assert order.index(ev[0]) >= min(order.index(e) for e in ender), (
-        "a board-weakening evolve must not ride the free-development exemption")
+    assert order.index(ev[0]) < min(order.index(e) for e in ender)
 
 
 # ── tie-break: among EQUAL evolves, arm the payoff soonest (ADR-0070 amendment M, #167) ───────────

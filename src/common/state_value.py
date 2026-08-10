@@ -15,7 +15,7 @@ Three standing constraints (reasoning in the ADRs):
   function separates them; a structural rule, not a gap (ADR-0095 decision 3)."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
 import json
@@ -26,6 +26,7 @@ from common import currency, needs as _needs
 from common.card_worth import ROLE_TIER, Worth
 from common.grading import HORIZON, halve
 from common.strategy.context import ENERGY_RECOVER, FOLLOWUP_W, _BENCH_MAX
+from common.strategy.damage_context import bench_gate_context
 from common.strategy.sequence import followup_damage
 
 if TYPE_CHECKING:                      # the seam, expressed without importing the Pilot's world at
@@ -39,6 +40,12 @@ _POC_WORTH_PRIZE_RATE: float | None = 1.0 / 120.0
 def worth_to_prizes(worth: Worth) -> float:
     """Cross card Worth into composer prize currency at the one authored rate."""
     return float(worth) * float(_POC_WORTH_PRIZE_RATE or 0.0)
+
+
+def prizes_to_worth(prizes: float) -> Worth:
+    """Cross composer prize currency back into card Worth at the same authored rate."""
+    rate = float(_POC_WORTH_PRIZE_RATE or 0.0)
+    return Worth(0.0 if rate <= 0.0 else float(prizes) / rate)
 
 # ── the positional band — every constant below is a SCALE anchor or a RUNAWAY GUARD ───────────────
 # Bound per-play, never as a family TOTAL: a saturated term has zero derivative and is never explored.
@@ -190,6 +197,133 @@ class PotentialResult:
 
 
 @dataclass(frozen=True)
+class EnergySupply:
+    """One hypothetical Energy supply at the value boundary.
+
+    A known card is re-provisioned for every candidate holder form.  ``unit_codes`` is reserved for
+    effects that author units without card identity (acceleration).  ``persistent`` says whether the
+    units survive end of turn; it never changes current-turn payment.
+    """
+
+    card_id: int | None = None
+    unit_codes: tuple[int, ...] = ()
+    persistent: bool = True
+
+    def __post_init__(self) -> None:
+        if self.card_id is not None and self.unit_codes:
+            raise ValueError("EnergySupply takes card identity or authored unit codes, not both")
+        if self.card_id is None and not self.unit_codes:
+            raise ValueError("EnergySupply requires a card or at least one unit code")
+
+
+@dataclass(frozen=True)
+class AttackBuildLeg:
+    form_id: int
+    attack_id: int
+    evolution_hops: int
+    status: PotentialStatus
+    reason: str = ""
+    payoff_prizes: float = 0.0
+    matched_slots: int = 0
+    required_slots: int = 0
+    progress: float = 0.0
+    hop_discount: float = 1.0
+    standing_prizes: float = 0.0
+    now_prizes: float = 0.0
+    future_prizes: float = 0.0
+    realization_prizes: float = 0.0
+
+    def __post_init__(self) -> None:
+        values = (self.payoff_prizes, self.progress, self.hop_discount, self.standing_prizes,
+                  self.now_prizes, self.future_prizes, self.realization_prizes)
+        if not all(math.isfinite(float(value)) for value in values):
+            raise ValueError("combat-build candidates require finite values")
+        if self.status is PotentialStatus.UNKNOWN and not self.reason:
+            raise ValueError("unknown combat-build candidates require a reason")
+
+    def as_dict(self) -> dict:
+        return {"form_id": self.form_id, "attack_id": self.attack_id,
+                "evolution_hops": self.evolution_hops, "status": self.status.value,
+                "reason": self.reason, "payoff_prizes": _plain_float(self.payoff_prizes),
+                "matched_slots": self.matched_slots, "required_slots": self.required_slots,
+                "progress": _plain_float(self.progress),
+                "hop_discount": _plain_float(self.hop_discount),
+                "standing_prizes": _plain_float(self.standing_prizes),
+                "now_prizes": _plain_float(self.now_prizes),
+                "future_prizes": _plain_float(self.future_prizes),
+                "realization_prizes": _plain_float(self.realization_prizes)}
+
+
+@dataclass(frozen=True)
+class CombatBuildProfile:
+    status: PotentialStatus
+    value_prizes: float
+    candidates: tuple[AttackBuildLeg, ...]
+    winning_form_id: int | None = None
+    winning_attack_id: int | None = None
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(float(self.value_prizes)):
+            raise ValueError("combat-build profile requires a finite value")
+        derived = (PotentialStatus.UNKNOWN
+                   if any(c.status is PotentialStatus.UNKNOWN for c in self.candidates)
+                   else PotentialStatus.KNOWN)
+        if self.status is not derived:
+            raise ValueError("combat-build status must derive from candidate status")
+
+    @property
+    def value_damage(self) -> float:
+        return float(self.value_prizes) * currency.PRIZE_DAMAGE_RATE
+
+    def as_dict(self) -> dict:
+        return {"status": self.status.value, "value_prizes": _plain_float(self.value_prizes),
+                "winning_form_id": self.winning_form_id,
+                "winning_attack_id": self.winning_attack_id,
+                "candidates": [candidate.as_dict() for candidate in self.candidates]}
+
+
+@dataclass(frozen=True)
+class CombatRealization:
+    status: PotentialStatus
+    value_prizes: float
+    build_prizes: float
+    now_prizes: float
+    future_prizes: float
+    candidates: tuple[AttackBuildLeg, ...]
+    winning_form_id: int | None = None
+    winning_attack_id: int | None = None
+
+    def __post_init__(self) -> None:
+        values = (self.value_prizes, self.build_prizes, self.now_prizes, self.future_prizes)
+        if not all(math.isfinite(float(value)) for value in values):
+            raise ValueError("combat realization requires finite values")
+        derived = (PotentialStatus.UNKNOWN
+                   if any(candidate.status is PotentialStatus.UNKNOWN
+                          for candidate in self.candidates)
+                   else PotentialStatus.KNOWN)
+        if self.status is not derived:
+            raise ValueError("combat realization status must derive from candidate status")
+
+    def as_dict(self) -> dict:
+        return {"status": self.status.value, "value_prizes": _plain_float(self.value_prizes),
+                "build_prizes": _plain_float(self.build_prizes),
+                "now_prizes": _plain_float(self.now_prizes),
+                "future_prizes": _plain_float(self.future_prizes),
+                "winning_form_id": self.winning_form_id,
+                "winning_attack_id": self.winning_attack_id,
+                "candidates": [candidate.as_dict() for candidate in self.candidates]}
+
+
+@dataclass(frozen=True)
+class EnergyAllocation:
+    """Best exact allocation of effect-authored Energy units across legal recipients."""
+    value_prizes: float
+    used_units: int
+    #: One tuple of unit codes per recipient, in caller order.
+    allocation: tuple[tuple[int, ...], ...]
+
+
+@dataclass(frozen=True)
 class ValueBreakdown:
     total: float
     families: tuple[PotentialResult, ...]
@@ -337,20 +471,63 @@ def _evaluate_threat(model: "StateModel", diagnostics: bool = False):
 
 
 def _evaluate_readiness(model: "StateModel", diagnostics: bool = False):
-    working = {} if diagnostics else None
-    if diagnostics:
-        rows = _ready_bodies(model, with_keys=True)
-        value = readiness((body for _key, body in rows),
-                          keys=(key for key, _body in rows), working=working)
-    else:
-        value = readiness(_ready_bodies(model))
-    return _potential_result("readiness", value, working) if diagnostics else value
+    if not diagnostics:
+        return readiness(_ready_bodies(model))
+    legs: list[PotentialLeg] = []
+    seen: set = set()
+    body_total = 0.0
+    bench_index = 0
+    for body in model.mine.bodies:
+        key = "active" if body.is_active else f"bench.{bench_index}"
+        bench_index += int(not body.is_active)
+        profile = combat_realization(model, body)
+        relevance = _body_relevance(model, body.card_id, seen)
+        build = _READINESS_W * profile.build_prizes
+        now = _READINESS_W * profile.now_prizes
+        future = _READINESS_W * profile.future_prizes
+        envelope = _READINESS_W * profile.value_prizes - build - now - future
+        role = _READINESS_W * profile.value_prizes * (relevance - 1.0)
+        raw = build + now + future + envelope + role
+        capped = min(_READINESS_BODY_CAP, raw)
+        values = (("build", build), ("now", now), ("future", future),
+                  ("envelope_adjustment", envelope), ("role_adjustment", role),
+                  ("body_cap_adjustment", capped - raw))
+        legs.extend(PotentialLeg(f"{key}.{name}", _plain_float(value))
+                    for name, value in values)
+        if profile.status is PotentialStatus.UNKNOWN:
+            reasons = "; ".join(dict.fromkeys(candidate.reason for candidate in profile.candidates
+                                               if candidate.status is PotentialStatus.UNKNOWN))
+            legs.append(PotentialLeg(f"{key}.unknown", 0.0, PotentialStatus.UNKNOWN,
+                                     reasons or "combat candidate unavailable"))
+        body_total += capped
+    value = min(_READINESS_CAP, body_total)
+    legs.append(PotentialLeg("board_cap_adjustment", _plain_float(value - body_total)))
+    unknowns = tuple(leg.key for leg in legs if leg.status is PotentialStatus.UNKNOWN)
+    return PotentialResult("readiness", value, tuple(legs),
+                           PotentialStatus.UNKNOWN if unknowns else PotentialStatus.KNOWN,
+                           unknowns=unknowns,
+                           applied_bounds=tuple(key for key, active in (
+                               ("body_cap", any(leg.key.endswith("body_cap_adjustment")
+                                                and leg.value_prizes for leg in legs)),
+                               ("board_cap", bool(value < body_total))) if active))
 
 
 def _evaluate_hand(model: "StateModel", diagnostics: bool = False):
     working = {} if diagnostics else None
     value = hand(**_hand_legs(model), working=working)
-    return _potential_result("hand", value, working) if diagnostics else value
+    if not diagnostics:
+        return value
+    result = _potential_result("hand", value, working)
+    resolution = model.mine.needs
+    unknown_reasons = tuple(getattr(resolution, "unknowns", ()) or ())
+    if not unknown_reasons:
+        return result
+    legs = result.legs + tuple(PotentialLeg(f"funding_unknown.{index}", 0.0,
+                                            PotentialStatus.UNKNOWN, reason)
+                               for index, reason in enumerate(unknown_reasons))
+    unknowns = tuple(leg.key for leg in legs if leg.status is PotentialStatus.UNKNOWN)
+    return PotentialResult("hand", value, legs, PotentialStatus.UNKNOWN, unknowns,
+                           result.applied_bounds)
 
 
 def _evaluate_development(model: "StateModel", diagnostics: bool = False):
@@ -393,7 +570,7 @@ REGISTRY: tuple[TermFamily, ...] = (
              "Prices ranked prize exposure of my bodies."),
             ("outcome.predicted_loss", ("predicted_loss", "their_prizes_remaining"),
              "Prices the terminal consequence of a reachable loss.")),
-        does_not_read=("my_prizes_remaining", "readiness_odds"),
+        does_not_read=("my_prizes_remaining", "combat_build_profile"),
         evaluator=_evaluate_survival,
         bounds=(BoundSpec("uncapped", None, None, "family", "Forecasts real prize loss."),),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
@@ -642,19 +819,20 @@ REGISTRY: tuple[TermFamily, ...] = (
         name="readiness",
         consequences=_consequences(
             ("readiness.attack_realization",
-             ("body_payoff", "readiness_odds", "role_relevance", "turns_to_ko_me"),
-             "Prices the probability that relevant bodies realize attack payoff."),),
+             ("combat_build_profile", "legal_now_attack", "typed_future_supply",
+              "per_attack_clock", "role_relevance", "turns_to_ko_me"),
+             "Prices the max persistent/current/future realization of each relevant body."),),
         does_not_read=("assignment_coverage", "bench_slot_price"),
         evaluator=_evaluate_readiness,
         bounds=(BoundSpec("body_cap", 0.0, _READINESS_BODY_CAP, "leg",
                           "Per-body runaway guard."),
                 BoundSpec("board_cap", 0.0, _READINESS_CAP, "family",
                           "Whole-board runaway guard.")),
-        composition="Per-body payoff x readiness odds x role relevance, composed from the existing "
-                    "Attach-Budget / readiness-odds / Needs machinery rather than a second opinion "
-                    "about any of them. The payoff is `StateModel.attack_payoff` — the best attack the "
-                    "body can pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` "
-                    "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
+        composition="Per body, max(build, legal now, typed future) across aligned per-attack "
+                    "candidates, then role relevance and the existing body/board caps. Persistent "
+                    "build uses exact typed convex progress; future uses that attack's own cost and "
+                    "clock. Held supply is excluded and owned by Needs. This makes payoff depend on "
+                    "MY Bench CONTENTS for a "
                     "bench-gated attack, which is not a second claim on `bench_slot_price`: "
                     "`development` prices how many slots are left, this prices what one attack can "
                     "land, and the two never read the same number. "
@@ -737,7 +915,7 @@ REGISTRY: tuple[TermFamily, ...] = (
             ("resources.hand_supply_demand",
              ("assignment_coverage", "re_access", "hand_worth", "slot_demand"),
              "Prices hand supply against the position's declared demand."),),
-        does_not_read=("body_payoff", "deploy_marginal"),
+        does_not_read=("combat_build_profile", "deploy_marginal"),
         evaluator=_evaluate_hand,
         bounds=(BoundSpec("family_cap", None, _HAND_CAP, "family",
                           "Upper runaway guard; unmet demand remains signed."),),
@@ -825,7 +1003,7 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             ("terminal.attack_riders", ("attack_riders",), "Prices snipe and spread conversion."),
             ("terminal.attack_economy", ("attack_economy",), "Prices attack economy effects."),
             ("terminal.next_turn_lock", ("next_turn_lock",), "Prices forfeited next-turn payoff.")),
-        does_not_read=("opponent_target_value", "readiness_odds"),
+        does_not_read=("opponent_target_value", "combat_build_profile"),
         evaluator=None,
         horizon="terminal_action",
         bounds=(BoundSpec("unbounded", None, None, "family", "Terminal conversion is not state potential."),),
@@ -935,7 +1113,7 @@ def _terms(model: "StateModel") -> dict:
     return {family.name: float(family.evaluator(model)) for family in REGISTRY}
 
 
-_VALUE_CONTRACT_SCHEMA = 1
+_VALUE_CONTRACT_SCHEMA = 2
 
 
 def registry_identity() -> str:
@@ -1083,27 +1261,298 @@ def _forward_credit(forward, *, relevance: float = 1.0) -> float:
             * halve(forward.hops) * relevance)
 
 
-def _ready_bodies(model: "StateModel", *, with_keys: bool = False) -> tuple:
-    """MY bodies as `readiness` reads them: `attack_payoff` on THIS board, not the printed roll-up
-    (ADR-0109), x odds asked about that SAME attack, x role relevance."""
+def energy_supply_from_card(model: "StateModel", card_id: int) -> EnergySupply:
+    """Build an Energy supply from the provider/effect vocabulary, including evaporation."""
+    effects = getattr(model.combat, "effects", None)
+    clauses = effects.clauses(card_id) if effects is not None else ()
+    persistent = not any(clause.get("rider") == "discard_eot" for clause in (clauses or ()))
+    return EnergySupply(card_id=int(card_id), persistent=persistent)
+
+
+def energy_supply_for_units(unit_codes: Iterable[int], *, persistent: bool = True) -> EnergySupply:
+    """Build an effect-authored supply whose Energy card identity does not exist at this seam."""
+    return EnergySupply(unit_codes=tuple(int(code) for code in unit_codes),
+                        persistent=bool(persistent))
+
+
+def _combat_view(model: "StateModel", body):
+    return model.mine.view_of(body)
+
+
+def _combat_forms(model: "StateModel", view) -> tuple:
+    if view is None or view.card_id is None:
+        return ()
+    forms = [(int(view.card_id), 0)]
+    forms.extend((int(form.card_id), int(form.hops))
+                 for form in model.mine.forward_forms(view.card_id) if form.reachable)
+    return tuple(forms)
+
+
+def _combat_bench_context(model: "StateModel", view, holder) -> dict:
+    names = list(model.mine.bench_names)
+    if view is not None and not view.is_active:
+        for index, candidate in enumerate(model.mine.bench):
+            same_serial = (view.body.get("serial") is not None
+                           and candidate.body.get("serial") == view.body.get("serial"))
+            if candidate is view or candidate.body is view.body or same_serial:
+                names[index] = getattr(holder, "name", "") or ""
+                break
+    return bench_gate_context(tuple(names))
+
+
+def _projected_combat_body(model: "StateModel", view, form_id: int, supply: EnergySupply | None,
+                           *, durable: bool) -> tuple[dict | None, tuple, str]:
+    """``(body, extra units, reason)`` for one holder form; reason is non-empty on UNKNOWN."""
+    holder = model.card_stat(form_id)
+    if view is None or holder is None:
+        return None, (), "body or holder stat unavailable"
+    raw = view.body
+    if durable:
+        raw = model.combat.without_expiring_energy(raw)
+    # Card identity and observed units must agree even on the current holder. Evolution then
+    # re-provisions the same cards for the requested holder stage.
+    codes = model.combat.restaged_unit_codes(raw, holder)
+    if codes is None:
+        return None, (), "attached Energy provision cannot be restaged"
+    projected = dict(raw, id=int(form_id), energies=list(codes))
+    extra = ()
+    if supply is not None and (not durable or supply.persistent):
+        supplied = (model.combat.provision_codes(supply.card_id, holder)
+                    if supply.card_id is not None else supply.unit_codes)
+        if supplied is None:
+            return None, (), "hypothetical Energy provision unavailable"
+        extra = model.combat.units_for_codes(tuple(supplied))
+    return projected, tuple(extra), ""
+
+
+def combat_build_profile(model: "StateModel", body, *,
+                         supply: EnergySupply | None = None) -> CombatBuildProfile:
+    """Absolute persistent typed build over every current/reachable attack.
+
+    The result is attack-payoff prize currency before the readiness scale.  Mutually exclusive
+    attacks/forms form a maximum envelope and remain available as diagnostic candidates.
+    """
+    view = _combat_view(model, body)
+    candidates: list[AttackBuildLeg] = []
+    best_value, winner = 0.0, None
+    for form_id, hops in _combat_forms(model, view):
+        holder = model.card_stat(form_id)
+        if holder is None:
+            continue
+        projected, extra, projection_reason = _projected_combat_body(
+            model, view, form_id, supply, durable=True)
+        for attack_id in tuple(getattr(holder, "attacks", None) or ()):
+            if projection_reason:
+                candidates.append(AttackBuildLeg(
+                    form_id, int(attack_id), hops, PotentialStatus.UNKNOWN,
+                    reason=projection_reason, hop_discount=halve(hops)))
+                continue
+            attack_stat = model.combat.attack_stat(attack_id)
+            match = model.combat.match_attack_slots(projected, attack_id, extra_units=extra)
+            if attack_stat is None or match is None:
+                reason = ("attack stat unavailable" if attack_stat is None
+                          else "attack cost unavailable")
+                candidates.append(AttackBuildLeg(
+                    form_id, int(attack_id), hops, PotentialStatus.UNKNOWN,
+                    reason=reason, hop_discount=halve(hops)))
+                continue
+            payoff = max(0.0, float(model.combat.predicted_damage(
+                form_id, attack_id, None, bound="exact",
+                context=_combat_bench_context(model, view, holder)))) / currency.PRIZE_DAMAGE_RATE
+            progress = (1.0 if match.required == 0 else
+                        (float(match.matched) / float(match.required)) ** 2)
+            discount = halve(hops)
+            standing = payoff * progress * discount
+            candidate = AttackBuildLeg(
+                form_id, int(attack_id), hops, PotentialStatus.KNOWN,
+                payoff_prizes=payoff, matched_slots=int(match.matched),
+                required_slots=int(match.required), progress=progress,
+                hop_discount=discount, standing_prizes=standing,
+                realization_prizes=standing)
+            candidates.append(candidate)
+            if standing > best_value:
+                best_value, winner = standing, candidate
+    status = (PotentialStatus.UNKNOWN
+              if any(c.status is PotentialStatus.UNKNOWN for c in candidates)
+              else PotentialStatus.KNOWN)
+    return CombatBuildProfile(status=status, value_prizes=best_value,
+                              candidates=tuple(candidates),
+                              winning_form_id=(winner.form_id if winner else None),
+                              winning_attack_id=(winner.attack_id if winner else None))
+
+
+def _deck_future_units(model: "StateModel") -> tuple:
+    codes = []
+    for energy_type, count in sorted((model.mine.deck_energy_counts or {}).items()):
+        codes.extend([int(energy_type)] * max(0, int(getattr(count, "ceiling", 0) or 0)))
+    return model.combat.units_for_codes(codes)
+
+
+def combat_realization(model: "StateModel", body, *,
+                       supply: EnergySupply | None = None) -> CombatRealization:
+    """Multi-attack envelope of persistent build, legal-now reach, and unseen future reach."""
+    view = _combat_view(model, body)
+    build = combat_build_profile(model, body, supply=supply)
+    deck_units = _deck_future_units(model)
+    realised: list[AttackBuildLeg] = []
+    winner, best_value = None, 0.0
+    best_build = best_now = best_future = 0.0
+    for candidate in build.candidates:
+        if candidate.status is PotentialStatus.UNKNOWN:
+            realised.append(candidate)
+            continue
+        holder = model.card_stat(candidate.form_id)
+        durable_body, durable_extra, reason = _projected_combat_body(
+            model, view, candidate.form_id, supply, durable=True)
+        if reason or durable_body is None or holder is None:
+            realised.append(replace(candidate, status=PotentialStatus.UNKNOWN,
+                                    reason=reason or "candidate form unavailable"))
+            continue
+
+        now = 0.0
+        if candidate.evolution_hops == 0 and _may_attack_now(model, view):
+            current_body, current_extra, now_reason = _projected_combat_body(
+                model, view, candidate.form_id, supply, durable=False)
+            now_match = (None if now_reason else model.combat.match_attack_slots(
+                current_body, candidate.attack_id, extra_units=current_extra))
+            if now_match is not None and now_match.matched == now_match.required:
+                now = candidate.payoff_prizes
+
+        future = 0.0
+        feasible = model.combat.match_attack_slots(
+            durable_body, candidate.attack_id,
+            extra_units=tuple(durable_extra) + tuple(deck_units))
+        future_possible = (feasible is not None and feasible.matched == feasible.required)
+        if future_possible:
+            arm = model.combat.turns_to_afford_attack(
+                view.body, candidate.attack_id, form_id=candidate.form_id,
+                evolution_hops=candidate.evolution_hops, exclude_expiring=True,
+                extra_units=durable_extra)
+            if arm is not None:
+                future = (candidate.payoff_prizes * halve(arm)
+                          * _survives_to_spend(model, view))
+
+        value = max(candidate.standing_prizes, now, future)
+        enriched = replace(candidate, now_prizes=now, future_prizes=future,
+                           realization_prizes=value)
+        realised.append(enriched)
+        best_build = max(best_build, candidate.standing_prizes)
+        best_now = max(best_now, now)
+        best_future = max(best_future, future)
+        if value > best_value:
+            best_value, winner = value, enriched
+    status = (PotentialStatus.UNKNOWN
+              if any(c.status is PotentialStatus.UNKNOWN for c in realised)
+              else PotentialStatus.KNOWN)
+    return CombatRealization(status=status, value_prizes=best_value,
+                             build_prizes=best_build, now_prizes=best_now,
+                             future_prizes=best_future, candidates=tuple(realised),
+                             winning_form_id=(winner.form_id if winner else None),
+                             winning_attack_id=(winner.attack_id if winner else None))
+
+
+def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
+                  supply_override: tuple[object, EnergySupply] | None = None,
+                  body_override: tuple[object, object] | None = None) -> tuple:
+    """MY bodies as readiness reads them, through the canonical multi-attack envelope."""
     out = []
     seen: set = set()
     bench_index = 0
+    override_body, override_supply = supply_override or (None, None)
+    replaced_body, replacement = body_override or (None, None)
     for b in model.mine.bodies:
         key = "active" if b.is_active else f"bench.{bench_index}"
         if not b.is_active:
             bench_index += 1
-        if b.stat is None:
+        evaluated = replacement if (b is replaced_body or b.body is replaced_body) else b
+        if evaluated.stat is None:
             continue                       # unknown card: make no claim (the oracle's own direction)
-        paying = model.mine.attack_payoff(b)
-        payoff = paying.damage / currency.PRIZE_DAMAGE_RATE
-        if payoff <= 0.0:
+        supplied = override_supply if (b is override_body or b.body is override_body) else None
+        realised = combat_realization(model, evaluated, supply=supplied)
+        if realised.value_prizes <= 0.0:
             continue                       # nothing this body can land: a condition it cannot meet
-        body = ReadyBody(payoff=payoff,
-                         readiness_odds=_readiness_odds(model, b, paying.attack_id),
-                         role_relevance=_body_relevance(model, b.card_id, seen))
+        body = ReadyBody(payoff=realised.value_prizes, readiness_odds=1.0,
+                         role_relevance=_body_relevance(model, evaluated.card_id, seen))
         out.append((key, body) if with_keys else body)
     return tuple(out)
+
+
+def readiness_supply_delta(model: "StateModel", body, supply: EnergySupply) -> float:
+    """Exact readiness-family marginal of attaching ``supply`` to one current body."""
+    view = model.mine.view_of(body)
+    if view is None:
+        return 0.0
+    existing = next((candidate for candidate in model.mine.bodies
+                     if candidate is view or candidate.body is view.body
+                     or (view.body.get("serial") is not None
+                         and candidate.body.get("serial") == view.body.get("serial"))), None)
+    if existing is None:
+        return 0.0
+    body_override = None if existing is view else (existing, view)
+    before = readiness(_ready_bodies(model, body_override=body_override))
+    after = readiness(_ready_bodies(model, supply_override=(existing, supply),
+                                    body_override=body_override))
+    return _plain_float(after - before)
+
+
+def allocate_energy_units(model: "StateModel", recipients: Iterable, unit_codes: Iterable[int],
+                          *, persistent: bool = True) -> EnergyAllocation:
+    """Exhaustively allocate a provider-authored small unit set by shared build marginal.
+
+    Units may remain unused.  This intentionally does not use a greedy marginal: convex attack
+    progress can make two units on one recipient worth more than their one-at-a-time gains.
+    """
+    bodies = tuple(recipients)
+    codes = tuple(int(code) for code in unit_codes)
+    if not bodies or not codes:
+        return EnergyAllocation(0.0, 0, tuple(() for _ in bodies))
+    before = tuple(combat_build_profile(model, body).value_prizes for body in bodies)
+    allocations = [[] for _ in bodies]
+    best = EnergyAllocation(0.0, 0, tuple(() for _ in bodies))
+
+    def visit(index: int) -> None:
+        nonlocal best
+        if index < len(codes):
+            visit(index + 1)                    # an effect need not waste an attach
+            for recipient in range(len(bodies)):
+                allocations[recipient].append(codes[index])
+                visit(index + 1)
+                allocations[recipient].pop()
+            return
+        value = 0.0
+        used = 0
+        frozen = []
+        for body, base, assigned in zip(bodies, before, allocations):
+            frozen.append(tuple(assigned))
+            used += len(assigned)
+            if assigned:
+                after = combat_build_profile(
+                    model, body,
+                    supply=energy_supply_for_units(assigned, persistent=persistent)).value_prizes
+                value += max(0.0, after - base)
+        candidate = EnergyAllocation(_plain_float(value), used, tuple(frozen))
+        if (candidate.value_prizes, -candidate.used_units) > (
+                best.value_prizes, -best.used_units):
+            best = candidate
+
+    visit(0)
+    return best
+
+
+def recovery_recipients(model: "StateModel", scope) -> tuple:
+    """Mechanically legal visible recipients for a provider recovery target scope."""
+    out = []
+    if scope in (None, "any", "bench"):
+        out.extend(model.mine.bench_raws)
+    if scope in (None, "any", "self") and model.mine.active_raw is not None:
+        out.append(model.mine.active_raw)
+    return tuple(body for body in out if body)
+
+
+def allocate_recovery_energy(model: "StateModel", scope,
+                             unit_codes: Iterable[int]) -> EnergyAllocation:
+    """Shared recovery capacity/allocation read for every combat consumer."""
+    return allocate_energy_units(model, recovery_recipients(model, scope), unit_codes)
 
 
 #: A repeated UTILITY body's discount — `planner._READINESS_SATURATED`, carried at the same value.
@@ -1504,10 +1953,14 @@ def undeclared_shared_inputs() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "LOSS_PRIZES", "WIN_PRIZES", "worth_to_prizes",
+    "LOSS_PRIZES", "WIN_PRIZES", "worth_to_prizes", "prizes_to_worth",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
     "TermFamily", "ConsequenceSpec", "BoundSpec", "ExposedBody", "ReadyBody", "AttackEV",
     "PotentialStatus", "PotentialLeg", "PotentialResult", "ValueBreakdown",
+    "EnergySupply", "AttackBuildLeg", "CombatBuildProfile", "CombatRealization",
+    "EnergyAllocation", "energy_supply_from_card", "energy_supply_for_units",
+    "combat_build_profile", "combat_realization", "readiness_supply_delta",
+    "allocate_energy_units", "recovery_recipients", "allocate_recovery_energy",
     "LegDifference", "FamilyDifference", "ValueDifference", "registry_identity",
     "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",
     "value_breakdown", "value_difference", "attack_ev", "registry_gaps", "double_counted",
