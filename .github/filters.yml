@@ -136,9 +136,21 @@ strategy:
   # without these lines the guard would never run on the change that breaks it. The report itself
   # is listed because a test asserts its generated markers, and `docs` alone plans NOTHING.
   - 'tools/apply_seam_coverage.py'
+  # Issue #493 joins that transition census to shared/terminal value ownership, local
+  # equations, provider mechanics, and Composer search survival.  Keep its freshness
+  # test reachable from both the root tool/report and its generated card-stat inputs.
+  - 'tools/composer_value_coverage.py'
+  - 'tools/meta_tracker/cards.json'
+  - 'src/common/card_effects.json'
+  # `attack_overrides.json` otherwise fires only `sim`; the Composer census reads it directly
+  # when deciding which non-default AttackStat fields are part of the shipped population.
+  - 'src/common/attack_overrides.json'
   - 'src/agents/*/deck.csv'
+  # The value census executes each shipped STRATEGY.roles mapping to derive win-condition exposure.
+  - 'src/agents/*/strategy.py'
   - 'src/agents/*/STRATEGY.md'
   - 'docs/plans/apply-seam-coverage.md'
+  - 'docs/plans/composer-valuation-coverage.md'
   # Issue #305's triggered-Ability measurement lives in tests/strategy but is DRIVEN by the probe
   # harness under tools/meta_tracker, which `meta` maps to tests/meta_tracker only. Without these
   # two lines an edit to the probe would never run the one test that re-drives it against the live
@@ -158,6 +170,11 @@ train:
   - 'tests/train/**'
   - 'tests/corrections_helpers.py'
   - 'tests/corpus_helpers.py'
+  # The Composer sensitivity lab imports the static census and pins its joined ownership schema.
+  - 'tools/composer_value_coverage.py'
+  - 'tools/apply_seam_coverage.py'
+  - 'src/common/card_effects.json'
+  - 'src/common/attack_overrides.json'
 label:
   - 'tests/label/**'
 
