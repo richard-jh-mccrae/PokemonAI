@@ -263,6 +263,8 @@ class PromoteRetreatMixin:
             return None
         from common import board_choice, currency, state_value
         before_position = state_value.position_state_value(self._state_model)
+        before_survival = state_value.survival(
+            state_value._exposed_bodies(self._state_model), predicted_loss=False)
         candidates = []
         if otype == _RETREAT:
             for outcome in board_choice.legal_manual_retreat_outcomes(self._state_model):
@@ -286,6 +288,14 @@ class PromoteRetreatMixin:
                 body=self._promote_body(obs, board, raw, draws=draws)))
             position = ((state_value.position_state_value(after) - before_position)
                         * currency.PRIZE_DAMAGE_RATE)
+            if not board.active_doomed:
+                # A retreat that discards its own Energy cannot claim a benefit merely because the
+                # discarded card is no longer exposed on the Active.  Survival is a real benefit
+                # only when the current Active is actually threatened next turn; otherwise retain
+                # readiness/position differences and charge the retreat allowance normally.
+                after_survival = state_value.survival(
+                    state_value._exposed_bodies(after), predicted_loss=False)
+                position -= ((after_survival - before_survival) * currency.PRIZE_DAMAGE_RATE)
             row = self._promote_row(val, site="whether", position_delta=position,
                                     resource_cost=resource_cost)
             if best_row is None or row["total"] > best_row["total"]:

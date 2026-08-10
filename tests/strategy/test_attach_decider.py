@@ -471,6 +471,17 @@ def test_82227388_cape_keeps_the_existing_refuted_ruling_and_records_the_new_bre
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0021")
+def test_82228640_25_uses_weakness_adjusted_damage_to_save_ignition():
+    """Water's Jetting Blow KOs the Water-weak Active; Ignition's extra printed damage then has no benefit."""
+    rec = _frame("82228640", 25)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    rows = {row["i"]: row for row in dec.attach_working["eq"]}
+    assert dec.chosen == rec.correct
+    assert rows[dec.chosen[0]]["energy"] == W_ENERGY
+    assert rows[dec.chosen[0]]["tactical"] > rows[0]["tactical"]
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0021")
 def test_83664340_45_spends_reusable_water_on_the_active_not_ignition():
     """Pattern 5: both cards buy the capped 120-damage swing, so transient retreat cash cannot turn
     Ignition into 311 damage of value. The reusable Water source is the corrected exact option."""

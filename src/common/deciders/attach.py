@@ -250,10 +250,11 @@ class AttachMixin:
         this_turn = base_dmg = committed_dmg = 0.0
         if (can_attack_tonight or can_pivot_tonight) and is_attach:
             mine = self._state_model.mine
-            base_dmg = mine.best_reachable_damage(view, manual_spent=True)
-            committed_dmg = mine.best_reachable_damage(view, extra_unit_codes=codes,
-                                                       manual_spent=True)
-            pivot_alternative = (max((mine.best_reachable_damage(body, manual_spent=True)
+            defender = self._state_model.theirs.active
+            base_dmg = mine.best_reachable_damage_vs(view, defender, manual_spent=True)
+            committed_dmg = mine.best_reachable_damage_vs(view, defender, extra_unit_codes=codes,
+                                                          manual_spent=True)
+            pivot_alternative = (max((mine.best_reachable_damage_vs(body, defender, manual_spent=True)
                                       for body in mine.bench if body is not view), default=0.0)
                                  if can_pivot_tonight else 0.0)
             this_turn = max(0.0, committed_dmg - max(base_dmg, pivot_alternative))
@@ -371,8 +372,9 @@ class AttachMixin:
         if reusable is None:
             return this_turn
         opp_hp = (self._opp_active(obs) or {}).get("hp", 0) or 0
-        reusable_dmg = self._state_model.mine.best_reachable_damage(
-            view, extra_unit_codes=self.combat.provision_codes_or_floor(reusable, target_stat),
+        reusable_dmg = self._state_model.mine.best_reachable_damage_vs(
+            view, self._state_model.theirs.active,
+            extra_unit_codes=self.combat.provision_codes_or_floor(reusable, target_stat),
             manual_spent=True)
         if committed_dmg >= opp_hp > reusable_dmg:
             return this_turn                                   # the burst converts a KO the Basic misses

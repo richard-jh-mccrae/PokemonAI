@@ -376,7 +376,7 @@ def _recycle_pilot(deck):
         WENERGY: CardStat(WENERGY, name="Basic {W} Energy", hp=0, energyType=3),
     })
     return Pilot(Strategy(), deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({NIGHTS: ["recycle"]}))
+                 functions=CardFunctions({NIGHTS: ["recycle"], STRANDED: ["opener"]}))
 
 
 

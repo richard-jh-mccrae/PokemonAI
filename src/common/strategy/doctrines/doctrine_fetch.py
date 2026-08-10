@@ -79,7 +79,13 @@ class FetchMixin:
                 live += 1                                # unknown facts: fail-open
             elif getattr(st, "hp", 0):                   # a Pokémon
                 pool += 1
-                if cid not in stranded:
+                tags = set(self.functions.tags(cid)) if self.functions else set()
+                # `opener` is a non-Basic that is legal only while choosing the
+                # initial Active.  Once a normal turn has begun, recovering it
+                # cannot create a playable body unless its ordinary evolution
+                # line is also present.  Keep unknown tags fail-open.
+                setup_only = "opener" in tags and bool(getattr(st, "evolvesFrom", None))
+                if cid not in stranded and not setup_only:
                     live += 1
             elif getattr(st, "energyType", 0) not in (None, 0):   # a (typed) Energy card
                 pool += 1
