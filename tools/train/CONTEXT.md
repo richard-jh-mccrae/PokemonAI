@@ -301,6 +301,13 @@ grader. Pointers and verdict-only rows stay outside this sequence population.
 Two readings it keeps deliberately apart, because collapsing them would report a pass it never
 measured: a first step that **earned** a scored top-k slot, versus one merely **admitted** — a
 terminal or refused option is admitted unconditionally at delta 0.0 (the always-expand contract).
+
+Issue #496 adds an exact frontier/reference pipeline and fixed calibration matrix. Its
+runtime and continuation-benefit gates remain follow-up work: the prior dedup-only corpus P95/max
+were 4.559/59.867 s, and continuation changed a real admission without improving its completed-
+reference plan. The accepted Mega identity result is 6→3 because duplicate Wally copies are
+interchangeable; see ADR-0138. `--frame` narrows replay before a matrix/reference run, and explicit
+reference caps report incomplete work as UNKNOWN.
 _Avoid_: composer gate (it reports and exits 0 — a metric nobody has ruled on must not fail `main`),
 shadow (ADR-0092 decision 4 forbids a runtime one; this is on demand), prose grader (the executable
 counterfactual grader compares engine states; Composer Lab still does not parse ideal-line prose)

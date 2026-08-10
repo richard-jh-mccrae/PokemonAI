@@ -378,7 +378,12 @@ WHITELIST: tuple[SoundRule, ...] = (
                "over {0.0 ... 0.1}) where before deferred-target expansion it did not move at all, "
                "which was a symptom — every option priced exactly 0.0, so nothing could be NEAR a "
                "tie. The reading is recorded on the constant.",
-        reconciliation="Re-measured on GRADER hardware post-POC (Issue #273, POC-B3) — the figures "
+        reconciliation="Issue #496's opt-in depth-wide exact-dedup replay was rejected for production: "
+                       "383-frame P50/P95/max = 0.328/4.559/59.867 s, so P95 exceeded both this "
+                       "rule's committed 0.40-0.43 s ceiling and the 3 s grader floor. Neither the "
+                       "ceiling nor the constants were raised; exact dedup and continuation remain "
+                       "disabled by default pending developer review. "
+                       "Re-measured on GRADER hardware post-POC (Issue #273, POC-B3) — the figures "
                        "above are a DEV-MACHINE number and Issue #291 §3a says so in as many "
                        "words. The derived per-decision P95 it rests on is additionally a LOWER "
                        "BOUND on the leaf half alone; the apply-seam transition cost joined the "

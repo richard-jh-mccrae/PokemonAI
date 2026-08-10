@@ -7,6 +7,10 @@ no engine boot, so it runs DLL-free on both platforms.
 """
 from __future__ import annotations
 
+import copy
+import os
+import subprocess
+import sys
 import pytest
 
 from common import apply_option as ao
@@ -863,7 +867,11 @@ def test_the_margin_telemetry_reports_rank_k_and_the_distance_to_the_cutoff():
     result = cp.compose(_model(obs), options, k=2)
     working = result.margin.working()
     assert set(working) == {"rank", "k", "ranked", "in_beam", "admitted", "always_expand",
-                            "chosen_delta", "kth_delta", "margin_to_kth"}
+                            "chosen_delta", "kth_delta", "margin_to_kth", "immediate_rank",
+                            "immediate_delta", "admission_rank", "admission_score",
+                            "kth_admission_score", "admission_margin", "admission_reason",
+                            "stop_score", "continuation_estimate", "continuation_gain",
+                            "continuation_action", "continuation_kind", "changed_admission"}
     assert working["k"] == 2 and working["rank"] is not None
 
 
@@ -1165,3 +1173,180 @@ def test_a_costed_search_needs_the_shed_seam_and_REFUSES_without_it():
     with_seam = cp.compose(model, [play, {"type": _END}], shed=shed)
     assert not any("shed" in gap for gap in with_seam.gaps), with_seam.gaps
     assert with_seam.bounds, "the costed search should now reach the expectation-node telemetry"
+
+
+# ── exact frontier identity and continuation-aware admission (Issue #496) ───────────────────────
+
+
+def _rename_serials(value, offset):
+    if isinstance(value, dict):
+        return {k: (_rename_serials(v, offset) if k != "serial" else v + offset)
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [_rename_serials(v, offset) for v in value]
+    return value
+
+
+def _run(*, k=1):
+    return cp._Run(k=k, epsilon=0.0, depth=4, search_api=None, deterministic=None,
+                   clauses_cover=None, canon=[], reps=[], stamped=[])
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_semantic_state_key_alpha_renames_visible_serials_but_keeps_relationships():
+    obs = _obs(_player(active=_body(RIOLU, serial=11),
+                       bench=[_body(MUNKIDORI, serial=12)], hand=[E_F]))
+    obs["current"]["firstBodySerial"] = 11
+    obs["current"]["secondBodySerial"] = 11
+    renamed = _rename_serials(copy.deepcopy(obs), 100)
+    renamed["current"]["firstBodySerial"] = 111
+    renamed["current"]["secondBodySerial"] = 111
+    assert cp.semantic_state_key(_model(obs)) == cp.semantic_state_key(_model(renamed))
+
+    split = copy.deepcopy(obs)
+    split["current"]["secondBodySerial"] = 12
+    assert cp.semantic_state_key(_model(obs)) != cp.semantic_state_key(_model(split))
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_semantic_state_key_keeps_damage_order_allowances_and_unknown_current_keys():
+    obs = _obs(_player(active=_body(RIOLU, serial=11), hand=[E_F, TOOL]))
+    baseline = cp.semantic_state_key(_model(obs))
+    variants = []
+    damaged = copy.deepcopy(obs)
+    damaged["current"]["players"][0]["active"][0]["hp"] -= 10
+    variants.append(damaged)
+    reordered = copy.deepcopy(obs)
+    reordered["current"]["players"][0]["hand"].reverse()
+    variants.append(reordered)
+    spent = copy.deepcopy(obs)
+    spent["current"]["energyAttached"] = True
+    variants.append(spent)
+    unknown = copy.deepcopy(obs)
+    unknown["current"]["futureEngineFact"] = {"x": 1}
+    variants.append(unknown)
+    assert all(cp.semantic_state_key(_model(v)) != baseline for v in variants)
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_unresolved_identity_fails_closed_and_frontier_includes_remaining_actions():
+    obs = _obs(_player(active=_body(RIOLU, serial=11), hand=[E_F]))
+    unresolved = copy.deepcopy(obs)
+    unresolved["current"]["targetBodySerial"] = 999
+    assert cp.semantic_state_key(_model(unresolved)) is None
+
+    model = _model(obs)
+    options = ({"type": _ATTACH, "area": HAND, "index": 0,
+                "inPlayArea": ACTIVE, "inPlayIndex": 0}, {"type": _END})
+    stamped = tuple((i, cp.stamp_origin(model, option)) for i, option in enumerate(options))
+    available = cp._Node(model=model, root_options=stamped)
+    consumed = cp._Node(model=model, used=frozenset({0}), root_options=stamped)
+    assert cp.frontier_key(available, remaining_depth=2) != cp.frontier_key(consumed, remaining_depth=2)
+
+
+@pytest.mark.req("REQ-COMPOSER-0011")
+def test_semantic_state_key_is_identical_across_python_hash_seeds():
+    script = """
+from types import SimpleNamespace
+from common.state_model import CarriedState, semantic_state_key
+obs={'current': {'yourIndex': 0, 'players': [
+    {'active': [{'id': 1, 'serial': 91}], 'bench': [], 'hand': [], 'discard': []},
+    {'active': [{'id': 2, 'serial': 37}], 'bench': [], 'hand': [], 'discard': []}],
+    'abilityUsedBodies': [91], 'unknown': {'b': 2, 'a': 1}}}
+side=SimpleNamespace(_turn_boosts=())
+model=SimpleNamespace(source_obs=obs, carried=CarriedState(), mine=side, theirs=side,
+                      _transient_generation=None)
+print(repr(semantic_state_key(model)))
+"""
+    outputs = []
+    for seed in ("1", "7", "123"):
+        env = {**os.environ, "PYTHONHASHSEED": seed,
+               "PYTHONPATH": str(__import__("pathlib").Path(cp.__file__).resolve().parents[1])}
+        outputs.append(subprocess.check_output([sys.executable, "-c", script], env=env, text=True))
+    assert len(set(outputs)) == 1
+
+
+@pytest.mark.req("REQ-COMPOSER-0012")
+def test_exact_dedup_happens_before_width_and_resets_conflicting_block_history():
+    obs = _obs(_player(active=_body(RIOLU, serial=11)))
+    same_a = cp._Node(model=_model(obs), leaf=1.0, origins=(("a",),),
+                      origin_indices=((0,),), block=((0,),))
+    same_b = cp._Node(model=_model(copy.deepcopy(obs)), leaf=1.0, origins=(("b",),),
+                      origin_indices=((1,),), block=((1,),))
+    distinct_obs = copy.deepcopy(obs)
+    distinct_obs["current"]["players"][0]["active"][0]["hp"] -= 10
+    distinct = cp._Node(model=_model(distinct_obs), leaf=0.9, origins=(("c",),),
+                        origin_indices=((2,),))
+    unique, row = cp._deduplicate_nodes(_run(), [same_a, same_b, distinct], remaining_depth=1)
+    assert row["generated"] == 3 and row["unique"] == 2 and row["merged"] == 1
+    merged = next(node for node in unique if len(node.origins) == 2)
+    assert merged.origins == (("a",), ("b",))
+    assert merged.block == () and merged.block_prints == ()
+
+
+@pytest.mark.req("REQ-COMPOSER-0012")
+def test_full_frontier_tuple_not_hash_collision_decides_equality(monkeypatch):
+    monkeypatch.setattr(cp.FrontierKey, "__hash__", lambda _self: 1)
+    first_obs = _obs(_player(active=_body(RIOLU, damage=0)))
+    second_obs = _obs(_player(active=_body(RIOLU, damage=10)))
+    nodes = [cp._Node(model=_model(first_obs), origins=(("a",),)),
+             cp._Node(model=_model(second_obs), origins=(("b",),))]
+    unique, row = cp._deduplicate_nodes(_run(), nodes, remaining_depth=1)
+    assert len(unique) == 2 and row["merged"] == 0
+
+
+@pytest.mark.req("REQ-COMPOSER-0013")
+def test_one_action_estimate_can_admit_a_low_immediate_high_second_value_node(monkeypatch):
+    model = _model(_obs(_player(active=_body(RIOLU))))
+    immediate = cp._Node(model=model, leaf=1.0, origins=(("immediate",),),
+                         origin_indices=((0,),))
+    enabler = cp._Node(model=model, leaf=0.9, origins=(("enabler",),),
+                       origin_indices=((1,),))
+    terminal = cp._Ranked(index=9, option={"type": _END}, key=(0, "", 9), delta=0.4,
+                          after=None, fate=ao.TERMINAL, footprint=ao.Footprint(), terminal=True,
+                          ev=0.4, semantic_key="payoff")
+
+    monkeypatch.setattr(cp, "_rank", lambda _state, node, **_kw: [terminal] if node is enabler else [])
+    without = cp._retain_nodes(_run(), [immediate, enabler], remaining_depth=2,
+                               continuation=False, exhaustive=False)
+    with_estimate = cp._retain_nodes(_run(), [immediate, enabler], remaining_depth=2,
+                                     continuation=True, exhaustive=False)
+    assert without == [immediate]
+    assert with_estimate == [enabler]
+
+
+@pytest.mark.req("REQ-COMPOSER-0013")
+def test_admission_rank_cache_reuses_the_transition_when_the_child_expands():
+    obs = _obs(_player(active=_body(RIOLU), hand=[E_F]))
+    model = _model(obs)
+    options = [{"type": _ATTACH, "area": HAND, "index": 0,
+                "inPlayArea": ACTIVE, "inPlayIndex": 0}, {"type": _END}]
+    stamped = [cp.stamp_origin(model, option) for option in options]
+    state = cp._Run(k=4, epsilon=0.005, depth=4, search_api=None, deterministic=None,
+                    clauses_cover=None, canon=cp.canonical_keys(options, obs),
+                    reps=[0, 1], stamped=stamped)
+    node = cp._Node(model=model, leaf=state_value(model),
+                    root_options=tuple(enumerate(stamped)))
+    first = cp._rank(state, node, remaining_depth=3)
+    evaluations = state.transition_evals
+    second = cp._rank(state, node, remaining_depth=3)
+    assert second is first
+    assert state.transition_evals == evaluations > 0
+
+
+@pytest.mark.req("REQ-COMPOSER-0014")
+def test_reference_mode_shares_the_production_core_and_reports_caps_unknown():
+    obs, options = _menu_obs()
+    model = _model(obs)
+    wide = cp.compose(model, options, k=99, depth=4)
+    reference = cp.compose_reference(
+        model, options, budget=cp.ReferenceBudget(max_depth=4,
+                                                  max_transition_evals=10000,
+                                                  max_unique_nodes=10000))
+    assert reference.composer.chosen.semantic_path == wide.chosen.semantic_path
+    capped = cp.compose_reference(
+        model, options, budget=cp.ReferenceBudget(max_depth=4,
+                                                  max_transition_evals=1,
+                                                  max_unique_nodes=10000))
+    assert capped.status == cp.REFERENCE_UNKNOWN
+    assert capped.cap_reason == "max_transition_evals"

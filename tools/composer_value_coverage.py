@@ -48,8 +48,8 @@ from common.strategy.context import (                                    # noqa:
 )
 
 
-SCHEMA_VERSION = 4
-AUDIT_BASE_SHA = "0cb636c230e58113fe6b9dd1cc251c764fa4054e"
+SCHEMA_VERSION = 5
+AUDIT_BASE_SHA = "5a7c8f696913379316bf6c3fcf82aca7f4d84d3b"
 DEFAULT_OUT = _ROOT / "docs" / "plans" / "composer-valuation-coverage.md"
 BEGIN = "<!-- BEGIN GENERATED: tools/composer_value_coverage.py -->"
 END = "<!-- END GENERATED -->"
@@ -410,15 +410,19 @@ EMPTY_CLAUSE_JOIN: Mapping[str, tuple[tuple[str, ...], tuple[str, ...], str]] = 
 
 
 COMPOSER_SEARCH_CONSUMERS: tuple[tuple[str, str, str], ...] = (
+    ("common.state_model:semantic_state_key", "exact modeled-state identity", DELIBERATE_ZERO),
+    ("common.composer:frontier_key", "exact frontier identity", DELIBERATE_ZERO),
     ("common.composer:canonical_tier", "structural ordering", DELIBERATE_ZERO),
     ("common.option_equivalence:option_equivalence", "sibling equivalence", DELIBERATE_ZERO),
     ("common.option_equivalence:class_representatives", "representative collapse", DELIBERATE_ZERO),
     ("common.composer:commutative_blocks", "commutative canonicalisation", DELIBERATE_ZERO),
     ("common.composer:_one_ply", "one-ply ordering", LEAF_ONLY),
     ("common.composer:_rank", "one-ply rank", LEAF_ONLY),
-    ("common.composer:_admit", "beam admission", LEAF_ONLY),
-    ("common.composer:_expand", "sequence expansion", LEAF_ONLY),
-    ("common.composer:_prune_nodes", "node pruning", LEAF_ONLY),
+    ("common.composer:_expand_all", "depth-wide sequence expansion", LEAF_ONLY),
+    ("common.composer:_deduplicate_nodes", "exact frontier deduplication", DELIBERATE_ZERO),
+    ("common.composer:_admission_score", "one-action admission estimate", LEAF_ONLY),
+    ("common.composer:_retain_nodes", "single depth-wide cutoff", LEAF_ONLY),
+    ("common.composer:compose_reference", "bounded reference search", LEAF_ONLY),
     ("common.composer:selection_key", "final tie ordering", LEAF_ONLY),
     ("common.composer:_selection_candidates", "terminal dominance and ties", LEAF_ONLY),
     ("common.composer:terminal_ev", "terminal value", LEAF_ONLY),
@@ -427,6 +431,10 @@ COMPOSER_SEARCH_CONSUMERS: tuple[tuple[str, str, str], ...] = (
 )
 
 SEARCH_ZERO_RULINGS: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "common.state_model:semantic_state_key": (
+        "ADR-0138: only full exact modeled-state equality may collapse a frontier node", "ADR-0138"),
+    "common.composer:frontier_key": (
+        "ADR-0138: remaining legal semantic actions and boundary context are part of equality", "ADR-0138"),
     "common.composer:canonical_tier": (
         "ADR-0095: information precedes commitment when equal end states cannot carry reveal value",
         "ADR-0095",
@@ -443,6 +451,8 @@ SEARCH_ZERO_RULINGS: Mapping[str, tuple[str, str]] = MappingProxyType({
         "Issue #385: canonical order is zero-valued only for footprint-proven commutativity",
         "Issue #385",
     ),
+    "common.composer:_deduplicate_nodes": (
+        "ADR-0138: proven-equal results merge only after every conflicting transition executes", "ADR-0138"),
     "common.composer:_stop_here": (
         "ADR-0129: a deliberate stop-here carries exactly zero terminal EV and no continuation",
         "ADR-0129",
@@ -456,9 +466,10 @@ _ALL_STATE_OWNERS = tuple(sorted(f"state:{family.name}" for family in state_valu
 SEARCH_CONSUMER_OWNERS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "common.composer:_one_ply": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
     "common.composer:_rank": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
-    "common.composer:_admit": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
-    "common.composer:_expand": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
-    "common.composer:_prune_nodes": _ALL_STATE_OWNERS,
+    "common.composer:_expand_all": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
+    "common.composer:_admission_score": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
+    "common.composer:_retain_nodes": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
+    "common.composer:compose_reference": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
     "common.composer:selection_key": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
     "common.composer:_selection_candidates": (*_ALL_STATE_OWNERS, "terminal:attack_ev"),
     "common.composer:terminal_ev": ("terminal:attack_ev",),
@@ -1260,7 +1271,7 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
 
 # These fingerprints are authored review gates, not the census itself.  The generated report lists
 # every member.  A changed digest stops generation until the new source row is dispositioned.
-EQUATION_BASELINE_SHA256 = "b58a66911797562c6856616a1ebbfe80f93e4d86fcba7b27ad877ac1c5b412d2"
+EQUATION_BASELINE_SHA256 = "bf08f7788822266ef93c392721e3a6fccd951e412f1fb15259eef57b6b567ba8"
 VOCABULARY_BASELINE_SHA256 = "22316ccf76a2319311586785d2dc3ede3b77e6e566c0a15530a2a660d68f5d9b"
 STAT_BASELINE_SHA256 = "0ab57ba9897807b8cfbfd97052126c35e6819b24a447ccc3a4b34acfd1eea637"
 
@@ -3164,7 +3175,7 @@ def _search_records(root: Path = _ROOT) -> list[AuditRecord]:
     return records
 
 
-SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/3"
+SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/4"
 
 
 def _load_sensitivity_summary(inventory: Inventory) -> Mapping:

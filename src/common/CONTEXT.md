@@ -2155,3 +2155,12 @@ Unattached Energy belongs to `common.needs.NeedGraph`: one next-attach demand pe
 card-specific edges, one-card/one-slot assignment. Attach/retreat, acceleration, deploy, evolve,
 promote, and dig consume the shared profile/marginal. `attack_ev`, transitions, and search remain
 separate owners. See `docs/adr/0137-combat-realization-aligns-each-attack-and-energy-owner.md`.
+
+## Issue #496 — exact frontier experiment (production-active)
+
+`semantic_state_key` and `composer.frontier_key` provide versioned, fail-closed exact identities;
+`compose_reference` shares the production transition/Candidate machinery under explicit work caps.
+The depth-wide exact-dedup and one-action admission pipeline is available only through explicit
+flags. ADR-0138 records the measured runtime and continuation tradeoffs. Both policy switches now
+default on by developer direction. The accepted alpha-normalized Mega identity result is 6→3
+because duplicate Wally copies are interchangeable; no raw-serial or frame exception is used.
