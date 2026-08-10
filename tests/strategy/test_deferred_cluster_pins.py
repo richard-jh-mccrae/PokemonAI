@@ -49,6 +49,7 @@ def test_dont_tutor_the_baseless_wincon_turn_one_f6(starmie):
     assert d.options[fx["chosen"][0]].score <= 0, "the baseless tutor must be driven <=0 (tier 4)"
 
 
+@marks("ml_lunar_cycle_over_inert_bench_attach_f16")[0]
 def test_lunar_cycle_beats_the_inert_bench_attach_f16(lucario):
     """Immutable human ruling retained for adjudication: the closed-form route is now scored, but
     the composer still prefers the attach. This is inherited from Issue #468, not a direct rung test."""
