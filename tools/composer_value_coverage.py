@@ -48,8 +48,8 @@ from common.strategy.context import (                                    # noqa:
 )
 
 
-SCHEMA_VERSION = 2
-AUDIT_BASE_SHA = "848c2dce77737c77e0e2e78cd504252efbc58417"
+SCHEMA_VERSION = 3
+AUDIT_BASE_SHA = "4fcafb6f68970701798d85e7798a50acf1b917c2"
 DEFAULT_OUT = _ROOT / "docs" / "plans" / "composer-valuation-coverage.md"
 BEGIN = "<!-- BEGIN GENERATED: tools/composer_value_coverage.py -->"
 END = "<!-- END GENERATED -->"
@@ -183,6 +183,7 @@ class Inventory:
     populations: tuple[tuple[str, int], ...]
     equation_candidates: tuple[EquationCandidate, ...]
     provider_fields: tuple[ProviderField, ...]
+    registry_identity: str = ""
 
     def records_by_written_dimension(self) -> Mapping[str, tuple[AuditRecord, ...]]:
         grouped: dict[str, list[AuditRecord]] = collections.defaultdict(list)
@@ -1241,7 +1242,7 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
 
 # These fingerprints are authored review gates, not the census itself.  The generated report lists
 # every member.  A changed digest stops generation until the new source row is dispositioned.
-EQUATION_BASELINE_SHA256 = "14972d4cb3c21a56609c08c12bcc313fae86787bae12d6e25b41b2d7d2063509"
+EQUATION_BASELINE_SHA256 = "5d291dbb2367900251d7d8e6f426094bb9d74b7e0adf6c5cb654febc02df070d"
 VOCABULARY_BASELINE_SHA256 = "22316ccf76a2319311586785d2dc3ede3b77e6e566c0a15530a2a660d68f5d9b"
 STAT_BASELINE_SHA256 = "0ab57ba9897807b8cfbfd97052126c35e6819b24a447ccc3a4b34acfd1eea637"
 
@@ -1767,6 +1768,11 @@ def _family_records() -> list[AuditRecord]:
                 search_path=(("composer:terminal_ev",) if terminal else ("composer:state_value leaf",)),
                 classification=LEAF_ONLY,
                 evidence=_ordered({
+                    f"registry_identity={state_value.registry_identity()}",
+                    f"unit={family.unit}",
+                    f"horizon={family.horizon}",
+                    f"consequences={','.join(item.key for item in family.consequences)}",
+                    f"bounds={','.join(item.key for item in family.bounds)}",
                     f"reads={','.join(family.reads)}",
                     f"does_not_read={','.join(family.does_not_read)}",
                     f"blind_to={','.join(family.blind_to)}",
@@ -3140,7 +3146,7 @@ def _search_records(root: Path = _ROOT) -> list[AuditRecord]:
     return records
 
 
-SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/1"
+SENSITIVITY_SUMMARY_SCHEMA = "composer-sensitivity-summary/2"
 
 
 def _load_sensitivity_summary(inventory: Inventory) -> Mapping:
@@ -3455,6 +3461,8 @@ def build_inventory(root: Path = _ROOT) -> Inventory:
         ("clause_selector_values", sum(len(values) for values in snapshots.CLAUSE_SELECTORS.values())),
         ("state_families", len(state_value.REGISTRY)),
         ("terminal_families", len(state_value.TERMINAL_REGISTRY)),
+        ("value_consequences", sum(len(family.consequences)
+                                   for family in state_value.REGISTRY + state_value.TERMINAL_REGISTRY)),
         ("provider_declared_members", len(provider_fields)),
         ("provider_observed_nondefault", sum(field.observed_nondefault
                                                for field in provider_fields)),
@@ -3468,6 +3476,7 @@ def build_inventory(root: Path = _ROOT) -> Inventory:
         populations=tuple(sorted(populations)),
         equation_candidates=equations,
         provider_fields=provider_fields,
+        registry_identity=state_value.registry_identity(),
     )
     problems = validate_inventory(inventory)
     if problems:
@@ -3605,6 +3614,7 @@ def render_generated(inventory: Inventory) -> str:
     add("")
     add(f"- Schema: `{inventory.schema_version}`")
     add(f"- Reviewed audit-base SHA: `{inventory.source_sha}`")
+    add(f"- State-value registry: `{inventory.registry_identity}`")
     add("- Command: `python tools/composer_value_coverage.py --out "
         "docs/plans/composer-valuation-coverage.md`")
     add(f"- Legacy positive control: **{'PASS' if control.matched else 'FAIL'}**, "

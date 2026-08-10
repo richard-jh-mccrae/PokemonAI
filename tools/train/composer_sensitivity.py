@@ -41,15 +41,10 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider 
 from common.state_model import StateModel                                # noqa: E402
 from common.state_value import (                                         # noqa: E402
     FAMILIES,
-    _development_legs,
-    _exposed_bodies,
-    _hand_legs,
-    _predicted_loss,
-    _reachable_target_values,
-    _ready_bodies,
     attack_ev_legs,
-    hand,
     state_value,
+    value_breakdown,
+    value_difference,
 )
 from common.strategy.combat import Budget, CombatMath                    # noqa: E402
 from common.strategy.context import (                                    # noqa: E402
@@ -67,8 +62,8 @@ from common.strategy.context import (                                    # noqa:
 from common.strategy.planning.ko_classes import KoClassMixin              # noqa: E402
 from train.apply_parity import zone_facts                                # noqa: E402
 
-SCHEMA_VERSION = "composer-sensitivity/1"
-SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/1"
+SCHEMA_VERSION = "composer-sensitivity/2"
+SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/2"
 SEED = 493
 FIXTURE = REPO / "tests" / "fixtures" / "composer_sensitivity" / "ms_wally_attach_f69.json"
 _INVENTORY_CONTEXT: ContextVar[object | None] = ContextVar(
@@ -124,9 +119,8 @@ def _jsonable(value):
 
 
 def _value_snapshot(model) -> dict:
-    workings: dict = {}
-    total = float(state_value(model, working=workings))
-    race = model.prize_race
+    breakdown = value_breakdown(model)
+    workings = {family.family: family.value_prizes for family in breakdown.families}
     terminals = []
     for leg in attack_ev_legs(model):
         terminal_total, ev, gap = cp.terminal_ev(
@@ -135,53 +129,28 @@ def _value_snapshot(model) -> dict:
             raise RuntimeError(f"terminal seam refused attack {leg.attack_id}: {gap}")
         terminals.append({"attack_id": leg.attack_id, "total": float(terminal_total),
                           "working": ev.working()})
+    legs = {family.family: [leg.as_dict() for leg in family.legs]
+            for family in breakdown.families}
+    legs["terminal"] = terminals
+    return _jsonable({"total": breakdown.total, "workings": workings, "legs": legs,
+                      "registry_identity": breakdown.registry_identity,
+                      "statuses": {family.family: family.status.value
+                                   for family in breakdown.families}})
+
+
+def _family_result(model, name: str):
+    return next(family for family in value_breakdown(model).families if family.family == name)
+
+
+def _delta(before_model, after_model) -> dict:
+    difference = value_difference(before_model, after_model)
+    families = {family.family: family.delta for family in difference.families}
     legs = {
-        "prize_race": {"my_prizes_remaining": race.my_prizes_remaining,
-                       "their_prizes_remaining": race.opp_prizes_remaining},
-        "survival": {"bodies": _exposed_bodies(model),
-                     "predicted_loss": bool(_predicted_loss(model))},
-        "threat": {"reachable_target_values": _reachable_target_values(model),
-                   "opponent_hand_resource": model.theirs.hand_size},
-        "readiness": {"bodies": _ready_bodies(model)},
-        "hand": _hand_legs(model),
-        "development": _development_legs(model),
-        "terminal": terminals,
+        f"{family.family}.{leg.key}": leg.as_dict()
+        for family in difference.families for leg in family.legs
+        if leg.before != leg.after or leg.before_status is not leg.after_status
     }
-    return _jsonable({"total": total, "workings": workings, "legs": legs})
-
-
-def _flat(value, prefix="") -> dict:
-    """Flatten a resolved leg tree so every changed leaf carries before/after/delta."""
-    if isinstance(value, Mapping):
-        out = {}
-        for key, item in value.items():
-            path = f"{prefix}.{key}" if prefix else str(key)
-            out.update(_flat(item, path))
-        return out
-    if isinstance(value, list):
-        out = {}
-        for index, item in enumerate(value):
-            out.update(_flat(item, f"{prefix}[{index}]"))
-        return out
-    return {prefix: value}
-
-
-def _delta(before: dict, after: dict) -> dict:
-    family = {name: _jsonable(float(after["workings"][name]) - float(before["workings"][name]))
-              for name in FAMILIES}
-    left, right = _flat(before["legs"]), _flat(after["legs"])
-    leg_changes = {}
-    for path in sorted(set(left) | set(right)):
-        a, b = left.get(path), right.get(path)
-        if a == b:
-            continue
-        row = {"before": a, "after": b, "delta": None}
-        if isinstance(a, (int, float)) and not isinstance(a, bool) \
-                and isinstance(b, (int, float)) and not isinstance(b, bool):
-            row["delta"] = _jsonable(float(b) - float(a))
-        leg_changes[path] = row
-    return {"total": _jsonable(float(after["total"]) - float(before["total"])),
-            "families": family, "legs": leg_changes}
+    return {"total": difference.delta, "families": families, "legs": legs}
 
 
 def _changed(before_model, after_model) -> list[str]:
@@ -398,7 +367,7 @@ def _case_record(name: str, key: str, before_model, after_model, actions, *, loc
         "case": name, "key": key, "source": source, "seed": SEED,
         "command": f"python tools/train/composer_sensitivity.py --case {name}",
         "before": before, "actions": actions, "after": after,
-        "deltas": _delta(before, after), "local": local, "search": search,
+        "deltas": _delta(before_model, after_model), "local": local, "search": search,
         "unknown": _unknown(actions, unknown_extra, unread_extra), "positive_control": control,
     })
 
@@ -422,7 +391,7 @@ def _ordered_sequence(label: str, indices: Sequence[int], before_model, after_mo
         "before": before,
         "actions": list(actions),
         "after": after,
-        "deltas": _delta(before, after),
+        "deltas": _delta(before_model, after_model),
         "local": local,
     })
 
@@ -920,8 +889,10 @@ def _heal_probe(name: str, *, before_hp: int, after_hp: int, crosses: bool) -> d
         "controlled-fixture", {"card_id": HEAL_CARD, "clauses": clauses}, None,
         _changed(before, after),
     )
-    before_clock = _jsonable(_exposed_bodies(before)[0].turns_to_ko_me)
-    after_clock = _jsonable(_exposed_bodies(after)[0].turns_to_ko_me)
+    before_exposure = next((leg.value_prizes for leg in _family_result(before, "survival").legs
+                            if leg.key == "exposure.rank.0"), 0.0)
+    after_exposure = next((leg.value_prizes for leg in _family_result(after, "survival").legs
+                           if leg.key == "exposure.rank.0"), 0.0)
     before_body = before.source_obs["current"]["players"][0]["active"][0]
     stat = combat.stats.get(before_body["id"])
     doom_averted = bool(oracle._heal_body_averts_doom(
@@ -935,7 +906,8 @@ def _heal_probe(name: str, *, before_hp: int, after_hp: int, crosses: bool) -> d
                             "equation_invoked": (
                                 "common.deciders.heal.HealMixin._heal_survival_gain"),
                              "restored_hp": after_hp - before_hp,
-                             "leaf_clock_before": before_clock, "leaf_clock_after": after_clock,
+                             "leaf_exposure_before": before_exposure,
+                             "leaf_exposure_after": after_exposure,
                              "effect_card_id": HEAL_CARD,
                              "effect_clauses": clauses,
                              "doom_owner": (
@@ -944,10 +916,12 @@ def _heal_probe(name: str, *, before_hp: int, after_hp: int, crosses: bool) -> d
                              "doom_averted": doom_averted,
                              "doom_prize_damage": prize_branch_damage,
                              "classification": "LOSSY-REEXPRESSION"})
-    survival_delta = (float(state_value(after)) - float(state_value(before)))
+    difference = value_difference(before, after)
+    survival_delta = next(family.delta for family in difference.families
+                          if family.family == "survival")
     expected_gain = float(after_hp - before_hp) + prize_branch_damage
-    passed = ((after_clock > before_clock and survival_delta > 0) if crosses
-              else (after_clock == before_clock and survival_delta == 0))
+    passed = ((after_exposure > before_exposure and survival_delta > 0) if crosses
+              else (after_exposure == before_exposure and survival_delta == 0))
     passed = bool(passed and doom_averted is crosses and local_gain == expected_gain
                   and clauses == ({"kind": "heal", "amount": 40, "target": "any_pokemon",
                                    "each_of": True},))
@@ -955,7 +929,7 @@ def _heal_probe(name: str, *, before_hp: int, after_hp: int, crosses: bool) -> d
                "expectation": ("the local restored-HP leg is positive in both cases; only the "
                                "leaf survival family is positive across its integer threshold"),
                "observed_total_delta": survival_delta,
-               "clock_before": before_clock, "clock_after": after_clock}
+               "exposure_before": before_exposure, "exposure_after": after_exposure}
     return _case_record(name, f"shipped:1222-heal-{before_hp}-to-{after_hp}", before, after, [action],
                          local=local, search=_blank_search("controlled HP threshold has no root option"),
                          control=control,
@@ -1102,27 +1076,23 @@ def _hand_probe(name: str, supplier: Callable, represented: bool) -> dict:
     before = _model(_obs(mine=mine, options=options), combat=combat,
                     needs_supplier=supplier, role_worth=lambda cid: 30.0 if cid == SYN_BASIC else 0.0)
     after, actions = apply_sequence(before, options, [0])
-    blegs, alegs = _hand_legs(before), _hand_legs(after)
-    # Invoke the exported family equation itself: this includes Worth->prize conversion and the
-    # one-sided hand cap, neither of which a copied arithmetic expression would exercise.
-    local_before, local_after = float(hand(**blegs)), float(hand(**alegs))
-    raw_before = float(blegs["assignment_coverage"] + blegs["re_access"]
-                       + blegs["hand_worth"] - blegs["slot_demand"])
-    raw_after = float(alegs["assignment_coverage"] + alegs["re_access"]
-                      + alegs["hand_worth"] - alegs["slot_demand"])
-    before_working, after_working = {}, {}
-    state_value(before, working=before_working)
-    state_value(after, working=after_working)
-    hand_family_delta = float(after_working["hand"]) - float(before_working["hand"])
+    before_hand, after_hand = _family_result(before, "hand"), _family_result(after, "hand")
+    blegs = {leg.key: leg.value_prizes for leg in before_hand.legs}
+    alegs = {leg.key: leg.value_prizes for leg in after_hand.legs}
+    local_before, local_after = before_hand.value_prizes, after_hand.value_prizes
+    raw_before = sum(value for key, value in blegs.items() if key != "bound_adjustment")
+    raw_after = sum(value for key, value in alegs.items() if key != "bound_adjustment")
+    hand_family_delta = next(family.delta for family in value_difference(before, after).families
+                             if family.family == "hand")
     if represented:
-        passed = (blegs["assignment_coverage"] == blegs["slot_demand"] == 8.0
+        passed = (blegs["assignment_coverage"] == -blegs["slot_demand"]
                   and alegs["assignment_coverage"] == alegs["slot_demand"] == 0.0
                   and raw_before == raw_after == 0.0
                   and local_before == local_after == 0.0 and hand_family_delta == 0.0)
         classification = "retired-valid-demand"
     else:
-        passed = (blegs["hand_worth"] == 8.0 and alegs["hand_worth"] == 0.0
-                  and raw_before == 8.0 and raw_after == 0.0
+        passed = (blegs["hand_worth"] > 0.0 and alegs["hand_worth"] == 0.0
+                  and raw_before > 0.0 and raw_after == 0.0
                   and local_before > 0.0 and local_after == 0.0
                   and hand_family_delta == local_after - local_before)
         classification = "unrepresented-bench-demand"

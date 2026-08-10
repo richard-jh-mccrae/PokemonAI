@@ -128,18 +128,23 @@ def test_the_leaf_report_carries_max_beside_the_tail():
     class _Pilot:
         def __init__(self, ms): self.ms = ms
         def _leaf_state_model(self, obs, my_index):
-            time.sleep(self.ms / 1000.0)
             return object()
 
-    def _score(model, *, working):
-        working.update(dict.fromkeys(FAMILIES, 0.0))     # every family, as the real scorer emits
+    def _score(model):
+        time.sleep(0.020)
         return 0.0
 
-    with mock.patch("train.value_lab.state_value", side_effect=_score):
+    breakdown = SimpleNamespace(
+        total=0.0, registry_identity="state-value/1:test",
+        families=tuple(SimpleNamespace(family=name, value_prizes=0.0,
+                                       status=SimpleNamespace(value="known")) for name in FAMILIES),
+        as_dict=lambda: {})
+    with mock.patch("train.value_lab.state_value", side_effect=_score), \
+            mock.patch("train.value_lab.value_breakdown", return_value=breakdown):
         rpt = value_lab_report(lambda agent: _Pilot(20), [_correction([], _frame([60]))])
     assert rpt["max_ms"] is not None
     assert rpt["max_ms"] >= rpt["p95_ms"], "max can never sit below the tail it is reported beside"
-    assert rpt["max_ms"] >= 20.0, "the stub slept 20ms; a max that misses it is not reading the rows"
+    assert rpt["max_ms"] >= 20.0, "the scorer slept 20ms; only scalar evaluation belongs in timing"
 
 
 def test_an_empty_corpus_reports_max_as_None_not_a_crash():

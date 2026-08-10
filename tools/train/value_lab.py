@@ -26,7 +26,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from common.state_value import FAMILIES, state_value            # noqa: E402
+from common.state_value import FAMILIES, state_value, value_breakdown  # noqa: E402
 
 #: In the ARTIFACT, not only here: a consumer reading `per_decision_p95_ms` off the JSON must meet
 #: the omission there rather than come back to this module to learn half the cost is missing.
@@ -107,14 +107,19 @@ def score_frame(pilot, correction) -> dict:
     my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
     row = {"key": frame_key(correction), "agent": getattr(correction, "agent", None),
            "episode_id": getattr(correction, "episode_id", None),
-           "value": None, "working": None, "ms": None, "error": None}
+           "value": None, "working": None, "breakdown": None,
+           "registry_identity": None, "statuses": None, "ms": None, "error": None}
     try:
-        t0 = time.perf_counter()
         model = pilot._leaf_state_model(obs, my_index)
-        working: dict = {}
-        row["value"] = float(state_value(model, working=working))
+        t0 = time.perf_counter()
+        row["value"] = float(state_value(model))
         row["ms"] = (time.perf_counter() - t0) * 1000.0
-        row["working"] = {k: round(v, 6) for k, v in working.items()}
+        breakdown = value_breakdown(model)
+        row["working"] = {family.family: round(family.value_prizes, 6)
+                          for family in breakdown.families}
+        row["breakdown"] = breakdown.as_dict()
+        row["registry_identity"] = breakdown.registry_identity
+        row["statuses"] = {family.family: family.status.value for family in breakdown.families}
     except Exception as exc:                     # noqa: BLE001 — the finding IS the exception
         row["error"] = f"{type(exc).__name__}: {exc}"
     return row

@@ -456,9 +456,9 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
 
 def test_equation_ast_population_is_dispositioned_and_drift_gated(inventory):
     candidates = inventory.equation_candidates
-    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 693
+    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 720
     assert collections.Counter(candidate.disposition for candidate in candidates) == {
-        "excluded": 433, "owner": 187, "consumer": 73}
+        "excluded": 460, "owner": 187, "consumer": 73}
     assert {candidate.disposition for candidate in candidates} == {"owner", "consumer", "excluded"}
     assert all(candidate.reason for candidate in candidates)
     assert all(candidate.classification in coverage.CLASSIFICATIONS
@@ -521,13 +521,13 @@ def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
             ("common.state_model:MySide.readiness_p@852",)),
         "common.state_model:MySide.readiness_p": (
             "consumer", coverage.LEAF_ONLY, ("state:readiness",),
-            ("common.state_value:_readiness_odds@793",)),
+            ("common.state_value:_readiness_odds@1129",)),
         "common.state_model:MySide._forward_payoff": (
             "owner", coverage.SHARED_EXACT, ("state:development",),
             ("common.state_model:MySide.forward_payoff@916",)),
         "common.state_model:MySide.forward_payoff": (
             "consumer", coverage.LEAF_ONLY, ("state:development",),
-            ("common.state_value:_development_legs@855",)),
+            ("common.state_value:_development_legs@1191",)),
         "common.strategy.combat_math.forward:ForwardLineMixin.forward_payoff_terms": (
             "owner", coverage.LOCAL_ONLY, (),
             ("common.state_model:TheirSide.forward_payoff@1140",
@@ -931,7 +931,8 @@ def test_inventory_is_deterministic_and_valid(inventory):
                   for record in inventory.records]
     assert len(identities) == len(set(identities))
     assert inventory.source_sha == coverage.AUDIT_BASE_SHA == (
-        "848c2dce77737c77e0e2e78cd504252efbc58417")
+        "4fcafb6f68970701798d85e7798a50acf1b917c2")
+    assert inventory.registry_identity == state_value.registry_identity()
 
 
 def test_sensitivity_summary_join_fails_closed_on_malformed_schema(inventory, monkeypatch):
