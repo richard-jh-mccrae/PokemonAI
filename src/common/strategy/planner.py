@@ -296,11 +296,21 @@ class PlannerMixin(
             # unrealizable known-card floor turn a pure-cost recycle into a composed first step.
             self._composer_trace["dead_recycle_refused"] = chosen.first_index
             return None
+        if ("cost_discard" in first_tags and traces[chosen.first_index].score <= 0.0
+                and len(chosen.steps) == 1 and chosen.terminal_ev <= 0.0):
+            # A costly fetch with neither a priced target nor a follow-on terminal has realised no
+            # benefit.  A tiny hand-ledger movement cannot pay its discard cost or outrank End.
+            self._composer_trace["pure_cost_fetch_refused"] = chosen.first_index
+            return None
         if options[chosen.first_index].get("type") == _ATTACH:
             attach_row = self._attach_value(obs, select, board, options[chosen.first_index])
             direct_kos = [i for i, trace in enumerate(traces)
                           if options[i].get("type") == _ATTACK and trace.tactical >= KO_SCORE]
-            if attach_row is not None and float(attach_row["tactical"]) <= 0.0 and direct_kos:
+            other_positive_setup = any(
+                options[i].get("type") not in (_ATTACH, _ATTACK, _END) and trace.score > 0.0
+                for i, trace in enumerate(traces))
+            if (attach_row is not None and float(attach_row["tactical"]) <= 0.0
+                    and direct_kos and not other_positive_setup):
                 winner = max(direct_kos, key=lambda i: (traces[i].tactical, -i))
                 self._composer_trace["pure_cost_attach_before_ko_refused"] = chosen.first_index
                 return TurnLine(next_step=[winner], goal="compose", value=float(traces[winner].score),

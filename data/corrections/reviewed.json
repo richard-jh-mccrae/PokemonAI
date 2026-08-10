@@ -797,5 +797,10 @@
     "disposition": "refuted",
     "reason": "The 10-HP Staryu is the correct expendable promotion into a lethal opposing attacker; Cinderace's free retreat has no value if it is simply Knocked Out before a later turn.",
     "round": "2026-08-11"
+  },
+  "83007714-8": {
+    "disposition": "covered",
+    "reason": "Ultra Ball is now refused as a pure-cost fetch; the current positive retreat differs from recorded End but satisfies the rationale's no-Ultra-Ball decision.",
+    "round": "2026-08-11"
   }
 }
