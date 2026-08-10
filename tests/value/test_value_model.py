@@ -137,4 +137,6 @@ def test_hypothetical_board_build_does_not_pollute_live_memory():
     # The same guarantee now extends to a full option re-score inside a simulated line (the second
     # site that used to carry its own hand-written save/restore pair).
     pilot._evaluate(dict(obs, select={"option": []}), carried=pilot.carried())
+
+# temp: paths-filter selective-testing diagnostic, single-file no-op change, safe to discard
     assert pilot.carried() == before
