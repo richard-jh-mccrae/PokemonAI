@@ -15,6 +15,15 @@ identical across OSes, and `PYTHONUTF8=1` gives Windows the same UTF-8 default a
 both platforms stay first-class because the Kaggle grader is Linux and dev/build is on
 Windows (the committed `cg/libcg.so` + `cg/cg.dll` let the engine load on either).
 
+The workflow is three jobs, not one: a cheap `plan` job computes the pytest target list
+(below) once, then the native test arm (`test`) and the cgpy twin arm (`test-cgpy`,
+[below](#determinism-gates-178-adr-0072-amendment-c)) both read that plan and run
+concurrently instead of one after the other. Each pytest invocation also passes
+`-n auto` ([pytest-xdist](https://pypi.org/project/pytest-xdist/)), spreading individual
+tests across the runner's cores instead of running them one at a time. Neither change
+drops a single test — see [Job budget and timeout-minutes](#job-budget-and-timeout-minutes)
+for why, and the measured effect.
+
 ## Selective testing (what runs on a PR)
 
 To keep pull-request feedback fast, a PR runs **only the test directories whose subsystem
@@ -54,13 +63,28 @@ test, that test runs.
 | `tools/meta_tracker/**`, root card/meta tool scripts | `tests/meta_tracker`, `tests/cards`, `tests/agents`, `tests/arena`, `tests/blunder`, `tests/label`, `tests/scouting`, `tests/sim`, `tests/submit`, `tests/train` | `cards`/`archetype`/`parse` are imported widely, but **not** by `tuner`, `strategy`, `value`, or `parity` — verified via the import graph (a real narrowing; the old mapping also under-counted `agents`/`label`/`scouting`, a gap this fixes) |
 | `src/common/cards.py`, `src/common/effects.py` (the `cards` filter) | `tests/cards` (plus `common_agent_core`'s broad set, since these two files are also in that glob) | `test_cards.py` imports `common.cards` directly; the rest of `tests/cards` exercises `tools/meta_tracker`'s independent card-parsing twin, already covered above |
 | `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json`, **the apply-seam sources** (`apply_option.py`, `apply_engine.py`, `board_delta.py`, `board_expectation.py`, `board_choice.py`, `retreat_cost.py`, `state_model.py`, `snapshot_coverage.py`, `tools/train/apply_parity.py`, `tools/train/choice_parity.py`) | `tests/parity` | The ADR-0050/59 pure-Python engine twin is self-contained — nothing else imports `src/cgpy` at runtime, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it). **The apply-seam rows were added by Issue #392 and close a gap rather than widen the filter**: `tests/parity` also holds the two trace-replay lanes that diff the seam against the recorded native engine — the point transition's (Issue #382) and the choice node's (Issue #392) — and neither was reachable from a source change, because `common_agent_core` matches `src/common/*.py` but adds `tests/agents`…`tests/value` and *not* `tests/parity`. A PR could rewrite a modelled transition without replaying a single trace. Pushes to `main` run everything, so this only ever bit on PRs — which is where a seam divergence is cheapest to catch |
-| global test infra (`tests/conftest.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
+| global test infra (`tests/conftest.py`, `tests/fixtures/**`, unconditionally — see the note below), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**`, unconditionally, root card-builder scripts | **full suite** | Can break anything |
 | test helpers | only their importing areas | `pilot_helpers` → agents/arena/blunder/scouting/strategy/tuner; `scouting_helpers` → scouting/strategy; `lethal_helpers` → sim/strategy; `seam_census_helpers` and `engine_admissibility` → strategy; `card_facts` → agents/strategy; `corrections_helpers` → blunder/train; `corpus_helpers` → strategy/train; `cgpy_state_helpers` → parity. These paths previously fell through to the full suite despite a bounded static import graph. |
 | `tools/apply_seam_coverage.py`, `tools/composer_value_coverage.py`, and their generated reports/direct inputs (`src/agents/*/deck.csv`, `src/agents/*/strategy.py`, `src/agents/*/STRATEGY.md`, `tools/meta_tracker/cards.json`, `src/common/card_effects.json`, `src/common/attack_overrides.json`, `docs/plans/apply-seam-coverage.md`, `docs/plans/composer-valuation-coverage.md`) on the `strategy` filter | `tests/strategy`; both census tools, `card_effects.json`, and `attack_overrides.json` also select `tests/train` | The Issue #269 apply-seam census and Issue #493 joined valuation census are root `tools/` scripts whose freshness and completeness tests live in `tests/strategy`. The Composer sensitivity lab imports the joined census, which imports the apply census; it also uses live effect clauses and pins the joined provider/ownership schema in `tests/train`, so changes anywhere on that import chain or to those two direct inputs select both suites. Their direct inputs are named too—including the executable `STRATEGY.roles` maps used for win-condition exposure—so a card/deck/report/override change that can stale a census cannot skip its guard through the narrower `meta`, `agents`, `sim`, or docs-only plans. The remaining Issue #493 inputs already select `tests/strategy`: `src/common/**/*.py` and `src/common/scouting/artifact.json` through `common_agent_core`; `tools/train/blunder/**` through `train_wide`; and `data/corrections/**` through `full`. |
 | `tools/meta_tracker/probe_cards.py`, `tools/meta_tracker/probe_triggered_ability.py` (also on the `strategy` filter) | `tests/strategy` (plus `meta`'s broad set, since both files are under `tools/meta_tracker/**`) | Issue #305's triggered-Ability measurement lives in `tests/strategy` but is *driven* by the probe harness, which `meta` maps to `tests/meta_tracker` only — so without these lines an edit to the probe would never run the one test that re-drives it against the live engine |
 | a single `tests/<area>/**` file with no matching source change | just `tests/<area>` | A pure test-file edit touches no source, so it stays narrow instead of paying for a broader filter's reverse-dependency add-list |
 | docs / any `*.md` | **nothing** (job passes green) | No runtime surface |
 | anything unmatched | **full suite** | A new top-level area is never silently skipped |
+
+**The `full` row's two exceptions never actually worked, and are gone as of this table.** The
+`filters.yml` source used to carve `tests/fixtures/parity/**` and `data/engine/coverage.json` out
+of `full` with a `!`-prefixed pattern, on the (reasonable-looking) assumption that it behaves like
+a `.gitignore` exception. It doesn't: `dorny/paths-filter` turns each list item into its own
+independent match rule and OR's them together, so `!tests/fixtures/parity/**` compiled alone into
+"true for every file *not* under that one path" — nearly everything — which alone made `full` fire
+on almost any diff regardless of the other, real patterns sitting next to it. This is *why*
+selective testing looked broken on nearly every real PR (confirmed with a throwaway PR that
+changed exactly one file under `tests/value/`, which the other filters correctly narrowed to
+`value` alone while `full` still, wrongly, said yes). Both excepted paths are independently and
+correctly covered by their own filter anyway (`parity`, above), so dropping the exception only
+costs the narrow routing for a PR that touches *only* those two paths — which gets the full suite
+now instead of just `tests/parity`, safe but not maximal. `filters.yml` documents the mechanism at
+the site.
 
 Every row above names test *directories*, which is why a selective run also appends the one
 root-level test **file**, `tests/test_import_hygiene.py`, unconditionally. That file bans
@@ -96,8 +120,9 @@ full suite):
 
 ### Determinism gates (#178, ADR-0072 amendment C)
 
-Both run on every non-docs change and remain gating. The twin now excludes tests that already invoke
-cgpy directly, avoiding a second run of the parity oracle without weakening either gate.
+Both run on every non-docs change and remain gating. They are now two separate jobs
+(`test`, `test-cgpy`) that both read the same plan and run at the same time, rather than
+two steps in one job — see [Job budget and timeout-minutes](#job-budget-and-timeout-minutes).
 
 - **Determinism backstop** — the seven live-native-engine modules, repeated **15×**. They are the
   only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
@@ -106,11 +131,16 @@ cgpy directly, avoiding a second run of the parity oracle without weakening eith
   is the cheap net *underneath* the real guard, which is
   `tests/strategy/test_engine_admissibility.py`: that one measures whether a drive consumed
   randomness at all, so a sampled frame fails the day it is added rather than 1 run in 30 later.
-- **cgpy twin arm** — selected behavioral tests again under `CG_ENGINE=py`. The native arm already
-  runs `tests/parity`, whose tests import cgpy directly; repeating that directory under an alias is
-  identical work. The twin therefore excludes it except for `test_compat_game.py`, which specifically
-  verifies the `cg.game` alias contract. cgpy's search is `SeededRng(0)`, so this arm is reproducible
-  *by construction* and any flap in it is a real bug.
+- **cgpy twin arm** — the SAME target list as the native arm, again under `CG_ENGINE=py`. This
+  includes `tests/parity`, whose tests import cgpy directly — running it a second time under the
+  alias is redundant work, and a prior revision of this doc claimed the twin excluded it except for
+  `test_compat_game.py` (which specifically verifies the `cg.game` alias contract). That exclusion
+  was never actually implemented in `ci.yml` or `tests/conftest.py` — checked directly while
+  splitting the arms into separate jobs — so this paragraph is the correction, not a behavior
+  change. `tests/parity` is small (63 test functions) next to the twin's full run, so the
+  redundant work costs low single-digit seconds, not minutes; worth fixing for cleanliness, not for
+  the time budget. cgpy's search is `SeededRng(0)`, so this arm is reproducible *by construction*
+  and any flap in it is a real bug.
 
   A test the twin cannot answer is marked in the diff, never waved through by making the step
   non-gating: `@needs_live_board_search` (`tests/conftest.py`) for one that needs a live-board
@@ -120,39 +150,80 @@ cgpy directly, avoiding a second run of the parity oracle without weakening eith
 
 ### Job budget and `timeout-minutes`
 
-The native arm runs the whole selected suite. The cgpy arm repeats only behavioral tests for which
-engine substitution changes the subject; the direct-cgpy parity oracle runs once. Before that
-narrowing, run `31275026627`, job `93150346764` measured this baseline (ubuntu-latest, py3.12):
+Through 2026-08-10 this was ONE job: plan, then the native arm, then the cgpy twin arm, one after
+another. Run `31374106056` (a full-suite push to `main`, ubuntu-latest, py3.12) measured it right
+before the split below landed:
 
 | Step | Cost |
 | --- | --- |
-| Run tests (native, JUnit + conditional coverage gate) | **18.5 min** |
-| cgpy twin arm | **9.6 min** |
+| Run tests (native, JUnit + conditional coverage gate) | **22.6 min** |
+| cgpy twin arm | **12.8 min** |
 | Determinism backstop (7 modules × 15 repeats) | 1.0 min |
 | Install dependencies | 1.1 min |
-| Everything else (checkout, Python, plan, guards, upload) | ~0.3 min |
-| **Old total** | **~30.5 min** |
+| Everything else (checkout, Python, plan, guards, upload) | ~0.2 min |
+| **Old total (one sequential job)** | **~37.6 min** |
 
-The next full CI run should replace this historical baseline with measured post-filter timings.
-Local collection after the narrowing is 5,091 native tests and 4,232 twin tests; runner timing is
-intentionally left to that CI measurement rather than inferred from collection counts.
+That grew from the ~30.5 min historical baseline this table used to cite (same shape, same two
+arms) purely because the suite itself grew — `timeout-minutes` had already been raised 30 → 45 for
+headroom, and real runs were landing close enough to that ceiling that several got cancelled at it:
+two `pull_request` runs in the same week measured 47.9 and 48.8 minutes end-to-end. **The failure
+mode a breached ceiling causes does not look like a failure**: the runner cancels the job at the
+ceiling, every test step still reads `success`, and the only casualty is the artifact-upload tail —
+but `gh pr checks` reports the check as red, so a PR whose tests all passed reads as broken. It has
+now happened at three different ceilings: 20 (the `ci.yml` comment's earlier revision), 30 (PR #461's
+branch cancelled four consecutive times; PR #471 died at 30m28s with a green suite behind it), and
+45 (the two runs above). Raising the ceiling again would only have moved the same wall further out.
 
-That is the whole reason for `timeout-minutes: 45`. **The failure mode this prevents does not look
-like a failure**: the runner cancels the job at the ceiling, every test step still reads `success`,
-and the only casualty is the artifact-upload tail — but `gh pr checks` reports the check as red, so a
-PR whose tests all passed reads as broken. It has now happened at two different ceilings: at 20
-(recorded in the `ci.yml` comment's earlier revision) and at 30, where PR #461's branch was cancelled
-four consecutive times and PR #471's job died at 30m28s with a green suite behind it.
+**The fix taken instead: split the one job into three, and parallelize each pytest invocation
+across the runner's cores.** `plan` computes the test-target list once (~10s of real work); `test`
+(native) and `test-cgpy` (the twin) both depend only on `plan`, not on each other, so they start
+together and run at the same time instead of the second waiting for the first. Both pytest
+invocations also gained `-n auto` (`pytest-xdist`), which hands individual tests to worker processes
+across the runner's cores rather than running the whole list on one core — verified beforehand that
+nothing in the suite writes to a fixed path or shares mutable state across tests (every write goes
+through `tmp_path`), so this changes wall-clock time and nothing else: the same tests, same
+assertions, same gates.
 
-**The 30 → 45 raise is headroom, not a licence to stop measuring.** The honest lever on this budget is
-the duplicated suite run; the determinism backstop, once suspected, is only 1 minute and is not worth
-touching. If the total approaches 45, re-measure per-step from the job JSON *before* raising it again —
+Measured on the first real run after the split (`31389233579`, `workflow_dispatch`, full suite,
+ubuntu-latest, py3.12 — same shape as the old baseline above, run right after this landed):
+
+| Job | Cost | vs. old |
+| --- | --- | --- |
+| `plan` | 8s | (new; was folded into the old job's first few steps) |
+| `test` (native): install | 67s | ~same |
+| `test` (native): run tests, `-n auto` | **13.1 min** | was 22.6 min — **1.7×** faster |
+| `test` (native): determinism backstop | 1.2 min | ~same |
+| `test` (native), job total | 15m51s | — |
+| `test-cgpy`: install | 70s | ~same |
+| `test-cgpy`: cgpy twin arm, `-n auto` | **9.0 min** | was 12.8 min — **1.4×** faster |
+| `test-cgpy`, job total | 10m26s | — |
+| **New wall-clock total** (`test`, `test-cgpy` run at the same time) | **~16 min** | was ~37.6 min — **2.35×** faster |
+
+**`-n auto` helped far less than a dev-box trial predicted, and that gap is itself informative.**
+A local trial (12 cores) suggested 3–4×; the real runner delivered 1.4–1.7×. That is evidence the
+hosted runner has meaningfully fewer usable cores than the dev box, and/or that a handful of
+tests running 60–140s each (`test_run_eval_cap_halts_the_run`, `test_run_battle_parallel_is_
+globally_seat_balanced`, …) form a tail that a small worker pool can't fully hide — spreading
+tests across ONE machine's cores has a ceiling that spreading them across SEVERAL machines (a
+matrix-sharded job) does not share, because each shard gets its own fresh core allocation. If the
+10-minute target still matters once selective testing (above) is fixed to actually narrow most PRs,
+sharding is the next lever, not another `-n` tweak.
+
+| Job | `timeout-minutes` | Why |
+| --- | --- | --- |
+| `plan` | 5 | Measured 8s |
+| `test` (native) | 20 | Measured 15m51s; loose headroom, not a floor |
+| `test-cgpy` | 15 | Measured 10m26s; loose headroom, not a floor |
+
+Re-measure per-step from the job JSON before trusting a new ceiling, not after the next raise —
 
 ```bash
+gh api repos/richard-jh-mccrae/PokemonAI/actions/runs/<run-id>/jobs --jq '.jobs[] | "\(.name): \(.started_at) -> \(.completed_at)"'
 gh api repos/richard-jh-mccrae/PokemonAI/actions/jobs/<job-id> --jq '.steps[] | "\(.name): \(.started_at) -> \(.completed_at)"'
 ```
 
-— because a raise that follows a real slowdown nobody diagnosed just moves the same wall further out.
+— because a number nobody re-measures just becomes the next stale baseline, the same way the
+~30.5 min one this table originally cited did.
 
 ### Line-ending guard
 
@@ -569,15 +640,19 @@ corpus reads 10/12. Ten of the eleven recovered frames were that vocabulary mism
 ```bash
 pip install -r requirements.txt
 
-# The full suite (what push-to-main runs):
-python -m pytest tests/ -q
+# The full suite (what push-to-main runs). Add `-n auto` to match CI's per-core split;
+# omit it for a slower but simpler single-process run when debugging a failure.
+python -m pytest tests/ -q -n auto
 
 # With the Scouting coverage gate (what a scouting/common change enforces):
-python -m pytest tests/ \
+python -m pytest tests/ -n auto \
   --cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing
 
 # A selective subset the way CI does — pytest.ini keeps the shared conftest loading:
-python -m pytest tests/arena tests/sim -q
+python -m pytest tests/arena tests/sim -q -n auto
+
+# The cgpy twin arm:
+CG_ENGINE=py python -m pytest tests/ -q -n auto -p no:cacheprovider --tb=line
 ```
 
 Consult the mapping table above to see which dirs a given diff would run; the CI decision
@@ -605,6 +680,7 @@ filesystem walk: an earlier `REPO.rglob("*.py")` reached `.venv/` and the siblin
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any
   reverse-dependency dirs). Until you do, changes there fall through to the fail-safe full
   run — correct, just not minimal.
-- **Cover more interpreters / OSes?** Extend the `matrix` in `ci.yml`.
+- **Cover more interpreters / OSes?** Extend the `matrix` in `ci.yml` — it is declared twice
+  (once on `test`, once on `test-cgpy`) since they are now separate jobs; keep both in sync.
 - **Run CI on feature branches without a PR?** Broaden `on.push.branches` (pushes always
   run the full suite).

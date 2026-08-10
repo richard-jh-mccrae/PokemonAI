@@ -19,12 +19,24 @@ full:
   - 'pytest.ini'
   - '.github/**'
   - 'tests/conftest.py'
-  # Fixtures + committed data trigger the full suite EXCEPT the cgpy-only ones, which route
-  # to the self-contained `parity` filter below (negation = "match all but these").
+  # Fixtures + committed data trigger the full suite, unconditionally -- INCLUDING the
+  # cgpy-only ones, which also independently match `parity` below (a file can and does
+  # match more than one filter; that's fine, the plan step unions them).
+  #
+  # There is NO exception carved out here for tests/fixtures/parity/** or
+  # data/engine/coverage.json, and there deliberately can't be: dorny/paths-filter
+  # evaluates every pattern in a filter's list as its OWN independent predicate, then
+  # OR's them (`predicate-quantifier: some`, the default). A leading `!` does not act
+  # like a `.gitignore` exception on the patterns before it -- picomatch compiles
+  # '!tests/fixtures/parity/**' on its own into "true for every file NOT under that one
+  # path", which is nearly every file in the repo. OR'd into this filter, that alone made
+  # `full` fire on almost any diff, native-engine or `.github/**` change or not -- verified
+  # by a diagnostic PR that touched only tests/value/test_value_model.py and by reading
+  # dorny/paths-filter's own source (parseFilterItemYaml maps each array item to its own
+  # picomatch call; there's no gitignore-style sequential exclusion). This is WHY selective
+  # testing looked broken on essentially every real PR before this fix.
   - 'tests/fixtures/**'
-  - '!tests/fixtures/parity/**'
   - 'data/**'
-  - '!data/engine/coverage.json'
   - 'tools/build_card_functions.py'
   - 'tools/build_card_effects.py'
   - 'tools/audit_card_functions.py'

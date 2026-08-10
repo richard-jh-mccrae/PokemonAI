@@ -18,22 +18,22 @@ env:
   PYTHONUTF8: "1"          # give Windows the same UTF-8 default Linux has (cards use é, ™, …)
 
 jobs:
-  test:
-    name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    # The job runs the whole suite TWICE (native + the cgpy twin), so its floor is ~30m and 30 left
-    # no headroom — it was breached with every test step green. Measured budget: `docs/ci.md`.
-    timeout-minutes: 45
-    # Run every step through bash (Git Bash on Windows runners) so the commands below are
-    # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
+  # PLAN. Everything that decides WHAT to run, computed once and shared by both test jobs below
+  # (via `needs: plan` + job outputs) instead of being duplicated per-job. Cheap (~1s of actual
+  # work) and does not need Python, so it stays off the two heavier jobs' critical path.
+  plan:
+    name: Determine test plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
-    strategy:
-      fail-fast: false       # report both OSes, don't cancel siblings
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.12"]   # most recent only (dev box runs 3.11)
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      paths: ${{ steps.plan.outputs.paths }}
+      coverage: ${{ steps.plan.outputs.coverage }}
+      audit: ${{ steps.plan.outputs.audit }}
+      empty: ${{ steps.plan.outputs.empty }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,13 +61,6 @@ jobs:
             exit 1
           fi
           echo "no CRLF blob under a text eol=lf rule ✅"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: requirements.txt
 
       # SELECTIVE TESTING. A pull request runs only the test dirs its diff can affect. The
       # declarative source->area map lives in .github/filters.yml; each filter is a boolean
@@ -213,8 +206,40 @@ jobs:
         if: steps.plan.outputs.empty == 'true'
         run: echo "Diff touches only docs / non-code paths — no test suites to run. ✅"
 
+  # NATIVE ARM. Used to run sequentially after the cgpy arm in one ~30-40 min job (see git history
+  # for the old single-job layout); split out so it runs concurrently with `test-cgpy` instead of
+  # after it, and each pytest invocation now passes `-n auto` (pytest-xdist) to spread individual
+  # tests across the runner's cores instead of one at a time. Neither change drops a single test —
+  # this job still runs the exact same pytest target list the plan step computed. Measured
+  # before/after + the remaining budget: docs/ci.md "Job budget and timeout-minutes".
+  test:
+    name: tests (native, ${{ matrix.os }}, py${{ matrix.python-version }})
+    needs: plan
+    if: needs.plan.outputs.empty != 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    # Run every step through bash (Git Bash on Windows runners) so the commands below are
+    # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false       # report both OSes, don't cancel siblings
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.12"]   # most recent only (dev box runs 3.11)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
       - name: Install dependencies
-        if: steps.plan.outputs.empty != 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
@@ -223,18 +248,20 @@ jobs:
       # Windows (sim.py picks by os.name). Engine-backed legality/playability tests depend on it.
       # Fail fast & clearly (and print which library loaded) if it can't.
       - name: Verify native engine loads
-        if: steps.plan.outputs.empty != 'true'
         run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
 
       # Runs the selected test dirs offline (native engine ships in-repo, kaggle-environments is a
       # pip dep, the Kaggle CLI is monkeypatched). pytest.ini anchors rootdir at the repo root so a
       # subset invocation still loads tests/conftest.py (the sys.path setup). The Scouting coverage
       # gate (.coveragerc, fail_under=80) only runs when the scouting tests are in scope.
+      # `-n auto` (pytest-xdist): the suite has no cross-test shared state or fixed-path file
+      # writes (checked repo-wide before adopting this — every write goes through tmp_path), so
+      # spreading tests across the runner's cores is safe and is the whole reason this arm no
+      # longer needs ~20 minutes to itself.
       - name: Run tests (JUnit + conditional Scouting coverage gate)
-        if: steps.plan.outputs.empty != 'true'
         env:
-          PYTEST_PATHS: ${{ steps.plan.outputs.paths }}
-          RUN_COVERAGE: ${{ steps.plan.outputs.coverage }}
+          PYTEST_PATHS: ${{ needs.plan.outputs.paths }}
+          RUN_COVERAGE: ${{ needs.plan.outputs.coverage }}
         run: |
           mkdir -p reports
           COV=""
@@ -242,7 +269,7 @@ jobs:
             COV="--cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml"
           fi
           echo "pytest targets: $PYTEST_PATHS  (coverage gate: $RUN_COVERAGE)"
-          python -m pytest $PYTEST_PATHS -q \
+          python -m pytest $PYTEST_PATHS -q -n auto \
             --junitxml=reports/junit-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
             $COV \
             --durations=10
@@ -254,10 +281,10 @@ jobs:
       # the real guard (deterministic: a sampled frame fails the day it lands); this is the cheap
       # backstop underneath them, for anything the probe cannot see.
       #
-      # All 41 live-engine tests run in ~4.9 s, so repeating them is close to free. A frame that
-      # answers differently between repeats is unstable BY DEFINITION — no interpretation needed.
+      # All 41 live-engine tests run in ~4.9 s, so repeating them is close to free — left running
+      # single-threaded on purpose; 15 repeats of a 5-second suite was never the expensive part of
+      # this job, so there is nothing here worth the added complexity of parallelising too.
       - name: Determinism backstop (repeat the live-engine tests)
-        if: steps.plan.outputs.empty != 'true'
         run: |
           ENGINE_TESTS="tests/parity/test_determinism_pins_engine.py
                         tests/sim/test_retreat_lock_engine.py
@@ -272,41 +299,12 @@ jobs:
           done
           echo "15/15 repeats agreed ✅"
 
-      # ADR-0050 M3 TWIN ARM: selected behavioral tests on cgpy, whose search is SeededRng(0) and
-      # therefore reproducible BY CONSTRUCTION — any flap here is a real bug rather than engine RNG.
-      # mode already existed (tests/conftest.py reads CG_ENGINE) but nothing ever ran it, and it
-      # did not merely fail: the native determinism pins reached past the alias and ABORTED the
-      # interpreter at ~24%, taking every later test with it (#178).
-      #
-      # GATING, because it is green: 3883 passed / 8 skipped / 0 failed on 2026-07-27. It was
-      # tempting to ship this `continue-on-error` while cgpy is parity-limited (~298/434) — but a
-      # non-gating step is one nobody reads, which is the same invisibility that let a silent
-      # `pytest.skip` retire a determinism pin and let f24 flap for weeks. If it can go red without
-      # anyone caring, it is not worth the minutes.
-      #
-      # The escape valve is explicit and reviewable, not a workflow flag: a test the twin cannot
-      # answer gets `@needs_live_board_search` or a module-level skip that says WHY (see
-      # tests/conftest.py). That way "cgpy can't do this yet" is a claim in the diff someone signs
-      # off, and it disappears on its own as parity grows.
-      # Keep the same ordered target list as the native arm. A hand-expanded directory list changes
-      # pytest's collection order and can expose state leaks between otherwise independent suites.
-      # `always()`, so a red backstop cannot hide this arm's result (it did on run 30303172709,
-      # where the backstop failed and this step was skipped — two signals, one of them lost).
-      # Still gating: `if:` controls whether a step RUNS, not whether it counts.
-      - name: cgpy twin arm (ADR-0050 M3)
-        if: always() && steps.plan.outputs.empty != 'true'
-        env:
-          CG_ENGINE: py
-          PYTEST_PATHS: ${{ steps.plan.outputs.paths }}
-        run: |
-          python -m pytest $PYTEST_PATHS -q -p no:cacheprovider --tb=line --durations=10
-
       # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
       # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
       # form promises that the engine won't deal = phantom-KO risk). Runs whenever attack/damage/
       # effect code is in scope (sim / meta_tracker / cards tests), and always on a full run.
       - name: Attack-audit soundness gate
-        if: steps.plan.outputs.audit == 'true'
+        if: needs.plan.outputs.audit == 'true'
         run: python tools/sim/ci_audit_gate.py
 
       # ADR-0050 cgpy parity gate (every committed trace replays through src/cgpy divergence-
@@ -315,9 +313,76 @@ jobs:
       # unrelated PR no longer pays for the heavy parity suite.
 
       - name: Upload test & coverage reports
-        if: ${{ !cancelled() && steps.plan.outputs.empty != 'true' }}
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: reports-${{ matrix.os }}-py${{ matrix.python-version }}
           path: reports/
           if-no-files-found: warn
+
+  # CGPY TWIN ARM (ADR-0050 M3). Selected behavioral tests re-run under the pure-Python engine
+  # twin (`CG_ENGINE=py`), whose search is SeededRng(0) and therefore reproducible BY
+  # CONSTRUCTION — any flap here is a real bug rather than engine RNG.
+  #
+  # THIS IS NOW ITS OWN JOB, not a step after the native arm. It depends only on `plan`, so it
+  # starts as soon as the plan is known and runs the whole time the `test` job is running, instead
+  # of after it. That is a strict improvement on the old same-job `if: always()` step guard (whose
+  # comment said "a red backstop cannot hide this arm's result") — job independence gives the same
+  # guarantee structurally, not via an `if:` condition someone could tighten by accident later.
+  #
+  # GATING, because it is green: 3883 passed / 8 skipped / 0 failed on 2026-07-27. It was tempting
+  # to ship this `continue-on-error` while cgpy is parity-limited (~298/434) — but a non-gating
+  # step is one nobody reads, which is the same invisibility that let a silent `pytest.skip` retire
+  # a determinism pin and let f24 flap for weeks. If it can go red without anyone caring, it is not
+  # worth the minutes.
+  #
+  # The escape valve is explicit and reviewable, not a workflow flag: a test the twin cannot answer
+  # gets `@needs_live_board_search` or a module-level skip that says WHY (see tests/conftest.py).
+  # Keep the same ordered target list as the native arm — a hand-expanded directory list changes
+  # pytest's collection order and can expose state leaks between otherwise independent suites.
+  test-cgpy:
+    name: cgpy twin (${{ matrix.os }}, py${{ matrix.python-version }})
+    needs: plan
+    if: needs.plan.outputs.empty != 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # The twin still builds each agent's real Pilot via the engine-backed CardStat provider, so
+      # the committed native library has to load here too. Same fail-fast check as the native arm.
+      - name: Verify native engine loads
+        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
+
+      # Runs the SAME pytest target list as the native arm (tests/parity included — nothing here
+      # currently excludes it, despite docs/ci.md's older claim to the contrary; see that file's
+      # "Determinism gates" section for the correction). `-n auto`: same rationale as the native
+      # arm's run — nothing in the suite depends on test order or shared mutable state, so cores
+      # replace wall-clock minutes for free.
+      - name: cgpy twin arm (ADR-0050 M3)
+        env:
+          CG_ENGINE: py
+          PYTEST_PATHS: ${{ needs.plan.outputs.paths }}
+        run: |
+          python -m pytest $PYTEST_PATHS -q -n auto -p no:cacheprovider --tb=line --durations=10
