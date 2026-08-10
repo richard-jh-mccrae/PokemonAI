@@ -324,8 +324,54 @@ class NeedsMixin:
                          "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
 
+    def _hypothetical_grab_value(self, obs: dict, board: Board, cid) -> float:
+        """Marginal Worth of adding one ``cid`` to hand, through the ONE needs assignment.
+
+        A non-Energy copy already held is not a need. Energy is fungible, so another copy is still
+        priced by the funding slots; an in-play body may retain succession value unless it is
+        currently doomed. This is the grab-side consumer of ADR-0127, not a second demand ladder.
+        """
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if cid is None or stat is None:
+            return 0.0
+        if getattr(stat, "evolvesFrom", None) and self._evolution_baseless(obs, cid):
+            return 0.0
+        if (getattr(stat, "is_pokemon", False) and not getattr(stat, "evolvesFrom", None)
+                and board.bench_full and cid not in set(board.in_play_ids)):
+            return 0.0
+        if not getattr(stat, "is_energy", False) and cid in set(board.hand_ids):
+            return 0.0
+        clauses = tuple(self.effects.clauses(cid)) if self.effects else ()
+        conditions = tuple(cl.get("condition") for cl in clauses if cl.get("condition"))
+        if (conditions and not any(not cl.get("condition") for cl in clauses)
+                and not any(self._condition_holds(condition, board) for condition in conditions)):
+            # A condition-locked card has no realizable grab benefit on this turn.  In particular,
+            # an unavailable Unfair Stamp must not beat a live draw Supporter merely because its
+            # ACE SPEC floor is larger; the future option is still worth preserving once held, but
+            # it does not satisfy today's fetch demand.
+            return 0.0
+
+        from common import needs
+        rows = self._needs_hand_rows(obs, board)
+        counts = self._unseen_deck_counts(self._my_player(obs), board)
+        fuel_types = self._discard_fuel_types()
+        fuel = bool(getattr(stat, "is_basic_energy", False)
+                    and (None in fuel_types or getattr(stat, "energyType", None) in fuel_types))
+        k = len(rows)
+        rows.append({"i": k, "hand_i": -1, "cid": cid,
+                     "worth": round(self._role_value(cid), 1),
+                     "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+        # A duplicate of the currently doomed body is not latent future value; only a concrete
+        # demand slot may rescue it.  Outside that deadline, a second body can still be succession.
+        include_general = not (cid in set(board.in_play_ids) and board.active_doomed)
+        resolved = self._resolve_needs(obs, board, rows, include_general=include_general)
+        slots, eligibility = resolved
+        return max(0.0, needs.keep_v2(
+            slots, eligibility, [0.0] * len(slots), k,
+            edge_values=resolved.edge_values))
+
     def _item_hold_price(self, obs: dict, board: Board, cid) -> float:
-        """What SPENDING held ``cid`` costs, in damage — the ONE hold price every free-Item decider subtracts
+        """What SPENDING held ``cid`` costs, in damage — the ONE hold price every quota-free Item decider subtracts
         (`common/hold_value.py`). Resupply is all-0.0 as POLICY: playing a card opens no draw window."""
         from common import hold_value, needs
         cache = self._item_hold_cache

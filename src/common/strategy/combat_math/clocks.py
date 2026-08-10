@@ -214,17 +214,20 @@ class ClockMixin:
                                     attaches_per_turn=attaches_per_turn)
 
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
+                       forward_ids=None,
                        max_t: int = 8, context: dict | None = None, my_benched: bool = False,
                        my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
                        opp_active: dict | None = None, switch_enabler: bool = False) -> int:
         """Earliest turn the opponent's board can KO ``my_body``, else ``max_t + 1``. Damage ACCUMULATES
         (ADR-0071 decision 4). Defined as :meth:`survival_clock`'s ``.turns``, so the two cannot disagree."""
         return self.survival_clock(
-            my_body, opp_bodies, charged=charged, max_t=max_t, context=context,
+            my_body, opp_bodies, charged=charged, forward_ids=forward_ids,
+            max_t=max_t, context=context,
             my_benched=my_benched, my_bench=my_bench, key_ids=key_ids, reading=reading,
             opp_active=opp_active, switch_enabler=switch_enabler).turns
 
     def survival_clock(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
+                       forward_ids=None,
                        max_t: int = 8, context: dict | None = None, my_benched: bool = False,
                        my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
                        opp_active: dict | None = None,
@@ -252,7 +255,8 @@ class ClockMixin:
             return SurvivalClock(turns, float(turns))
         dealt = 0
         for t in range(1, horizon + 1):
-            hit = self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
+            hit = self.incoming(my_body, opp_bodies, t, charged=charged,
+                                forward_ids=forward_ids, context=context,
                                 opp_active=opp_active, switch_enabler=switch_enabler)
             dealt += hit
             if dealt >= hp:

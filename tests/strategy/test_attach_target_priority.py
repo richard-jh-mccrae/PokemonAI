@@ -68,5 +68,24 @@ def test_prefer_active_stands_down_for_the_roleless_offline_active(decision):
     fired = {h.id for h, _ in active_p.fired}
     assert "prefer-active-attach-in-setup" not in fired, (
         "the prior still fires on the role-less off-Line Active — the stand-down is not live")
-    # Still PRICED: the tie-break went quiet, the option did not go dead.
-    assert next(r for r in d.attach_working["eq"] if r["i"] == active_p.index)["marginal"] > 0
+    # Still COSTED: the role gate may correctly find no benefit, but the Energy is never free.
+    active_row = next(r for r in d.attach_working["eq"] if r["i"] == active_p.index)
+    assert active_row["resource_cost"] > 0
+
+
+@pytest.mark.req("REQ-CORPUS-0001")
+def test_positive_attach_before_discard_line_keeps_every_cost_visible(decision):
+    """Ultra Ball is beneficial, but its best full line first banks the turn's one manual attach.
+    The target resolver compares real attach benefit minus the shared Energy Worth; neither card is
+    treated as free."""
+    rec, d = decision
+    chosen = d.chosen[0]
+    row = next(r for r in d.attach_working["eq"] if r["i"] == chosen)
+    ultra = next(t for t in d.options if t.card_id == 1121)
+    assert ultra.score > 0.0, "the temporal test no longer contains a beneficial costed search"
+    assert row["build"] > row["resource_cost"] > 0.0
+    override = d.composer["attach_cost_benefit_override"]
+    assert override["to"] == chosen and "benefit minus shared Energy worth" in override["reason"]
+    full = [c for c in d.composer["selection_candidates"]
+            if c["first_index"] == chosen and ultra.index in c["step_indices"][1:]]
+    assert full and max(c["score"] for c in full) > d.composer["root"]["value"]

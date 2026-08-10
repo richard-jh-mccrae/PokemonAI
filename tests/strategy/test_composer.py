@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from common import apply_option as ao
+from common import action_cost
 from common import board_delta as bd
 from common import composer as cp
 from common import sound_rules
@@ -547,9 +548,80 @@ def test_an_attack_is_priced_through_attack_ev_and_reads_TOTAL_not_the_dict_sum(
     model = _model(obs)
     ev, detail, gap = cp.terminal_ev(model, {"type": _ATTACK, "attackId": MEGA_BRAVE})
     assert gap == "" and detail is not None
-    assert ev == pytest.approx(detail.total)
+    assert ev == pytest.approx(detail.total - action_cost.ACTION_OPPORTUNITY_COST_PRIZES)
     if detail.next_turn_cost:
         assert ev != pytest.approx(sum(detail.working().values()))
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_no_benefit_attack_pays_for_ending_the_turn_and_loses_to_free_end():
+    """Issue #507: a modelled attack with no realised benefit is not an index-ordered zero tie."""
+    body_id, attack_id = 990_001, 990_002
+    body_stat = CardStat(body_id, synthetic=True, name="No-op attacker", hp=100,
+                         attacks=(attack_id,), minAttackCost=1, maxDamageCost=1)
+    attacks = {**_ATTACKS,
+               attack_id: AttackStat(attack_id, name="Do nothing", damage=0, cost=1,
+                                     energyTypes=(COLORLESS,))}
+    combat = CombatMath(
+        DictCardStatProvider({**_STATS, body_id: body_stat}, attacks=attacks),
+        functions=CardFunctions({}), transients=None, effects=CardEffects({}))
+    active = {"id": body_id, "serial": 99, "playerIndex": 0, "hp": 100, "maxHp": 100,
+              "energies": [FIGHTING],
+              "energyCards": [{"id": E_F, "serial": 199, "playerIndex": 0}],
+              "tools": [], "preEvolution": []}
+    attack = {"type": _ATTACK, "attackId": attack_id}
+    end = {"type": _END}
+    obs = _obs(_player(active=active), options=(attack, end))
+    model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+
+    attack_value, detail, gap = cp.terminal_ev(model, attack)
+    assert gap == "" and detail is not None and detail.total == 0.0
+    assert attack_value == -action_cost.ACTION_OPPORTUNITY_COST_PRIZES < 0.0
+    assert cp.terminal_ev(model, end) == (0.0, None, "")
+    assert cp.compose(model, [attack, end]).chosen.first_index == 1
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_no_benefit_ability_pays_its_allowance_once_and_loses_to_end():
+    """The closed-form Ability spends its per-body allowance even when an empty deck draws zero."""
+    body_id = 990_003
+    body_stat = CardStat(body_id, synthetic=True, name="Empty draw", hp=100, hasAbility=True)
+    effects = {
+        body_id: [{"kind": "draw", "amount": 1, "allowance": "body"}],
+        "_covers": {str(body_id): {"covers": "full", "reason": "synthetic complete effect"}},
+    }
+    combat = CombatMath(
+        DictCardStatProvider({**_STATS, body_id: body_stat}, attacks=_ATTACKS),
+        functions=CardFunctions({}), transients=None, effects=CardEffects(effects))
+    active = {"id": body_id, "serial": 103, "playerIndex": 0, "hp": 100, "maxHp": 100,
+              "energies": [], "energyCards": [], "tools": [], "preEvolution": []}
+    ability = {"type": _ABILITY, "area": ACTIVE, "index": 0}
+    end = {"type": _END}
+    obs = _obs(_player(active=active, deck_count=0), options=(ability, end))
+    model = StateModel.build(obs, combat=combat, deck=[])
+
+    result = cp.compose(model, [ability, end])
+
+    assert result.fanned[0] == pytest.approx(-action_cost.ACTION_OPPORTUNITY_COST_PRIZES)
+    ability_candidate = next(c for c in result.candidates if c.first_index == 0)
+    assert ability_candidate.score == pytest.approx(
+        state_value(model) - action_cost.ACTION_OPPORTUNITY_COST_PRIZES)
+    assert result.chosen.first_index == 1
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_no_benefit_attack_is_not_forced_into_a_continuation_when_end_is_reachable(monkeypatch):
+    """A cut line carries the best reachable terminal; it may End instead of paying for a no-op."""
+    # This boundary is pinned through the public extractor seam without constructing another board.
+    from common.state_value import AttackLegs
+    model = _model(_obs(_player(active=_body(RIOLU))))
+    fake = AttackLegs(990_004, {
+        "damage": 0.0, "target_hp": 100.0, "target_prizes": 1.0,
+        "ko_probability": 1.0, "rider_value": 0.0, "economy_value": 0.0,
+        "survival_relief": 0.0, "next_turn_cost": 0.0,
+    })
+    monkeypatch.setattr(cp, "attack_ev_legs", lambda _model: (fake,))
+    assert cp.continuation_ev(model) == 0.0
 
 
 @pytest.mark.req("REQ-COMPOSER-0004")

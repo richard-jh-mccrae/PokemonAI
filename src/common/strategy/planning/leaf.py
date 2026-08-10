@@ -144,15 +144,17 @@ class LeafValueMixin:
                     {j: value for j, value in row_edges.items() if j in elig[i]}
                     for i, row_edges in enumerate(edge_values)
                 ]
-            covered = {i for i, e in enumerate(elig) if e}
             if discard_context:
                 latent_by_hand = tuple(0.0 for _ in rows)
             else:
                 # deferred import: `common.pilot` imports THIS module, so a top-level import is a cycle
                 from common.pilot import _GENERAL_WORTH_W
+                resupply = [0.0] * len(slots)
                 latent_by_hand = tuple(
-                    _GENERAL_WORTH_W * self._role_value(r["cid"])
-                    if i not in covered else 0.0
+                    needs.option_floor_residual(
+                        slots, elig, resupply, i,
+                        floor=_GENERAL_WORTH_W * self._role_value(r["cid"]),
+                        edge_values=edge_values)
                     for i, r in enumerate(rows))
             return needs.Resolution(slots=tuple(slots), eligibility=tuple(elig),
                                     edge_values=tuple(edge_values),
@@ -302,7 +304,9 @@ class LeafValueMixin:
             roles,
             is_ace_spec=bool(st is not None and getattr(st, "aceSpec", False)),
             is_typed_basic_energy=bool(st is not None and getattr(st, "is_typed_basic_energy", False)),
-            tags=self.functions.tags(cid) if (self.functions and cid is not None) else ())
+            tags=self.functions.tags(cid) if (self.functions and cid is not None) else (),
+            is_known_card=st is not None,
+            worth_override=self.strategy.worth_overrides.get(cid, 0.0))
 
     def _keep_cost(self, cid, counts: dict, pool: int, draws: int, board=None,
                    shuffled_copies: int = 1, prizes_hidden: int = 0, deck_count=None) -> float:

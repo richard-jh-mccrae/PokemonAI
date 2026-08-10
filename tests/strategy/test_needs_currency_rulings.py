@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 
-from poc_t4_flips import record_reason
 
 from common import currency
 
@@ -117,7 +116,6 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     assert 4 in d.chosen                                        # plays Harlequin (correction [4])
 
 
-@pytest.mark.xfail(strict=True, reason=record_reason("83969481", 55))
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_a_heal_insuring_the_last_wincon_is_not_latent_worth():
     """A heal insuring the LAST playable wincon is the survival plan, not latent worth, so it takes

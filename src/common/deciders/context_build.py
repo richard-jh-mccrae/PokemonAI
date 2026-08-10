@@ -41,12 +41,12 @@ class ContextMixin:
         card_unplayable_this_turn = bool(
             select.get("context") == _TO_HAND and board.supporter_played
             and bool(stat and stat.is_supporter))
-        card_chain_value = (self._chain_grab_value(board, cid, plan)
+        card_chain_value = (self._chain_grab_value(board, cid, plan, obs=obs)
                             if select.get("context") == _TO_HAND and cid is not None else 0.0)
         card_spends_last_evolution_route = (
             card_chain_value > 0 and self._spends_last_evolution_route(select, board, cid))
         fetch_fills_a_need = (option.get("type") == _PLAY
-                              and self._fetch_fills_a_need(board, cid, plan))
+                              and self._fetch_fills_a_need(board, cid, plan, obs=obs))
         fetch_target_deferred = (fetch_fills_a_need
                                  and self._fetch_target_deferred(obs, cid, board, plan))
         refresh_shuffles_deferred = (option.get("type") == _PLAY and "shuffle_hand" in tags
@@ -104,7 +104,7 @@ class ContextMixin:
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
         search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
         search_unlikely = self._search_probable_whiff(option, cid, board)
-        search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
+        search_confirmed = self._search_confirmed_hit(option, cid, board, plan, obs=obs)
         sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
         refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)

@@ -14,9 +14,11 @@ from common.fetch_closure import (DEADNESS as _DEADNESS_READING, REACH as _REACH
                                   FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
                                   FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
 from common.option_equivalence import canonical_keys
-from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _CARD,
-                                      _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
-                                      _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
+from common.strategy.context import (KO_SCORE, _ATTACH_TO, _ATTACK, _BENCH_MAX,
+                                      _BENCH_PLACEMENT_CONTEXTS, _CARD, _DISCARD, _END,
+                                      _ENGINE_TAGS, _OPENER_TAG,
+                                      _MAIN, _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH,
+                                      _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
 
@@ -119,13 +121,13 @@ class FetchMixin:
         best = max(board.deck_contains_probability(c) for c in reachable)
         return best < _WHIFF_PROB_THRESHOLD
 
-    def _search_confirmed_hit(self, option: dict, cid, board, plan) -> bool:
+    def _search_confirmed_hit(self, option: dict, cid, board, plan, obs=None) -> bool:
         """The POSITIVE deck-knowledge signal (ADR-0029): a fetchable card is PROVABLY still in the deck
         AND fills a real need, on the SAME rungs the real grab scores. Sound-or-silent."""
         if option.get("type") != _PLAY or not board.deck_known_counts:
             return False
         fetch_set = self._search_deck_set(cid)
-        return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan) > 0
+        return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan, obs=obs) > 0
                    for c in fetch_set)
 
     def _fetch_target_matches(self, clause: dict, stat, *, reading: str = _REACH_READING) -> bool:
@@ -182,7 +184,7 @@ class FetchMixin:
             self._chain_target_cache[cid] = ids
         return self._chain_target_cache[cid]
 
-    def _chain_grab_value(self, board, cid, plan) -> float:
+    def _chain_grab_value(self, board, cid, plan, obs=None) -> float:
         """The discounted closure value of tutoring ``cid`` into hand. δ × the best reachable target's
         `_grab_value_of` (MAX, never a sum — a tutor fetches ONE card), through ITEM tutors only."""
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
@@ -190,9 +192,10 @@ class FetchMixin:
             return 0.0
         if stat.is_supporter and board.supporter_played:
             return 0.0
-        return self._chain_value_from(board, cid, plan, _CHAIN_MAX_HOPS, {cid}, {})
+        return self._chain_value_from(board, cid, plan, _CHAIN_MAX_HOPS, {cid}, {}, obs=obs)
 
-    def _chain_value_from(self, board, cid, plan, hops: int, seen: set, memo: dict) -> float:
+    def _chain_value_from(self, board, cid, plan, hops: int, seen: set, memo: dict,
+                          obs=None) -> float:
         """`_chain_grab_value`'s recursive leg. ``memo`` caches `_grab_value_of` per target for THIS call
         tree only — the value is board-bound and must never be cached across boards."""
         if hops <= 0:
@@ -205,10 +208,11 @@ class FetchMixin:
             if tid in board.hand_ids and not (tst is not None and tst.is_energy):
                 continue                                     # already held: not value you lack
             if tid not in memo:
-                memo[tid] = self._grab_value_of(board, tid, plan)
+                memo[tid] = self._grab_value_of(board, tid, plan, obs=obs)
             v = memo[tid]
             if tst is not None and tst.is_item:              # only an Item plays free the same turn
-                v = max(v, self._chain_value_from(board, tid, plan, hops - 1, seen | {tid}, memo))
+                v = max(v, self._chain_value_from(
+                    board, tid, plan, hops - 1, seen | {tid}, memo, obs=obs))
             best = max(best, v)
         return _CHAIN_HOP_DISCOUNT * best
 
@@ -245,7 +249,7 @@ class FetchMixin:
                 return True                           # no other free route to the wanted evolution
         return False
 
-    def _grab_value_of(self, board, cid: int, plan) -> float:
+    def _grab_value_of(self, board, cid: int, plan, *, obs=None) -> float:
         """The grab comparator's value for fetching card `cid` into hand right now — the sum of the positive
         TO_HAND grab Hypotheses that fire, on the SAME rungs as the real grab (ADR-0023)."""
         from common.pilot import Context, _fires   # lazy re-export; Context/Board own module is
@@ -264,16 +268,152 @@ class FetchMixin:
             card_is_redundant=cid is not None and cid in board.in_play_ids,   # f14 breadth stand-down
             roles=roles, tags=tags, stat=stat, board=board)
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
-        return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
+        declared = sum(self._weight(h) for h in hyps
+                       if _fires(h, ctx) and self._weight(h) > 0)
+        if obs is None:
+            return declared                 # compatibility for doctrine-level callers without a snapshot
+        return max(declared, self._hypothetical_grab_value(obs, board, cid))
 
-    def _fetch_fills_a_need(self, board, cid, plan) -> bool:
+    def _fetch_fills_a_need(self, board, cid, plan, obs=None) -> bool:
         """True iff the fetch ``cid`` can pull a card I currently LACK — any still-reachable candidate with
         positive grab value. The whether-to-play lookahead, estimated before the search reveals."""
         fetch_set = self._search_deck_set(cid)
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
-        return any(self._grab_value_of(board, c, plan) > 0 for c in reachable)
+        return any(self._grab_value_of(board, c, plan, obs=obs) > 0 for c in reachable)
+
+    def _fetch_play_value(self, obs: dict, board, ctx) -> float:
+        """Net value of a deterministic fetch PLAY: delivered demand minus the spent card/cost.
+
+        Clause combination comes from ``fetch_closure.reveal_legs``: conjunctions add one best
+        target per leg, while exclusive choices take one best branch.  Every target is priced by
+        :meth:`_grab_value_of`, hence by the shared needs ledger rather than a tutor-specific list.
+        Conditional reveal windows (for example dig-7) leave benefit to the composer while this
+        scorer still charges their certain card-consumption cost.
+        """
+        if ctx.option_type != _PLAY or ctx.card_id is None:
+            return 0.0
+        cost = self._role_value(ctx.card_id)
+        picks = self._cost_picks(ctx.card_id)
+        if picks:
+            shed = self._cost_shed(obs, board, exclude_cid=ctx.card_id, picks=picks)
+            if shed is not None:
+                cost += max(0.0, shed.cost)
+        if not self.effects:
+            return -cost if ({"search", "dig", "recycle"} & set(ctx.tags)) else 0.0
+        from common import fetch_closure
+        clauses = tuple(cl for cl in self.effects.clauses(ctx.card_id)
+                        if cl.get("kind") == "fetch")
+        if not clauses:
+            return 0.0
+        if any(not fetch_closure.fetch_is_unconditional(cl) for cl in clauses):
+            # Composer owns BOTH sides of a conditional window: it enumerates the delivered/whiff
+            # boards, each of which already removes the played card. Charging only the cost here
+            # would split one net across two layers and erase ADR-0095's structural information
+            # ordering whenever Composer abstains on equivalent first steps.
+            return 0.0
+        try:
+            relation, legs, _cap = fetch_closure.reveal_legs(clauses)
+        except ValueError:
+            return -cost
+
+        me = self._my_player(obs)
+        deck_ids = set(self.deck) - set(board.deck_empty_ids)
+        discard_ids = {c.get("id") for c in (me.get("discard") or []) if c}
+
+        def leg_value(clause) -> float:
+            zone = clause.get("zone")
+            pool = deck_ids if zone == "deck" else discard_ids if zone == "discard" else set()
+            values = [self._grab_value_of(board, tid, ctx.plan, obs=obs) for tid in pool
+                      if fetch_closure.fetch_target_matches(
+                          clause, self.stats.get(tid) if self.stats else None)
+                      and not (clause.get("dest") == "in_play"
+                               and self._evolution_baseless(obs, tid))]
+            return max(values, default=0.0)
+
+        per_leg = [leg_value(clause) for clause in legs]
+        benefit = sum(per_leg) if relation == "conjunction" else max(per_leg, default=0.0)
+        return benefit - cost
+
+    @staticmethod
+    def _composed_first_step_opportunity(composed_result, composed_index: int) -> float | None:
+        """The chosen first step's prize-equivalent edge over its best real alternative.
+
+        This is an opportunity cost, not the chosen line's absolute gain over the root: replacing a
+        first step forfeits only the margin by which it beat the next-best different first step.
+        Same-first-step continuations are excluded because they do not represent an alternative
+        action. End remains among the candidate/root alternatives at exactly zero continuation EV.
+        """
+        chosen = getattr(composed_result, "chosen", None)
+        if chosen is None or chosen.first_index != composed_index:
+            return None
+        alternatives = [float(getattr(composed_result, "root_value", 0.0))]
+        alternatives.extend(
+            float(candidate.score)
+            for candidate in getattr(composed_result, "selection_candidates", ())
+            if candidate.first_index != composed_index and not candidate.coverage_gap)
+        return max(0.0, float(chosen.score) - max(alternatives))
+
+    def _fetch_sequence_override(self, obs: dict, select: dict, board, options: list, traces: list,
+                                 composed_index: int, *, composed_result=None):
+        """Keep a positive deterministic fetch ahead of the composer's selected first step.
+
+        A quota-free Item can safely realize its already-netted benefit before any turn ender. A
+        Supporter is narrower: it replaces End (whose opportunity is exactly zero) or another
+        Supporter only when its net benefit beats Composer's converted first-step decision margin.
+        Costed Items remain composer-owned.
+        """
+        if (select or {}).get("context") != _MAIN or not (0 <= composed_index < len(options)):
+            return None
+        composed_option = options[composed_index]
+        if (composed_option.get("type") == _ATTACK
+                and traces[composed_index].tactical >= KO_SCORE and board.active_can_ko
+                and self._prize_value(self._opp_active(obs)) >= board.my_prizes_remaining):
+            return None                         # the game ends; no future fetched value can be realised
+        from common import fetch_closure
+
+        def fetch_kind(i):
+            option, trace = options[i], traces[i]
+            if option.get("type") != _PLAY or trace.score <= 0 or trace.card_id is None:
+                return None
+            clauses = tuple(cl for cl in (self.effects.clauses(trace.card_id) if self.effects else ())
+                            if cl.get("kind") == "fetch")
+            if not clauses or any(not fetch_closure.fetch_is_unconditional(cl) for cl in clauses):
+                return None
+            stat = self.stats.get(trace.card_id) if self.stats else None
+            if (stat is not None and getattr(stat, "is_item", False)
+                    and self._cost_picks(trace.card_id) is None):
+                return "quota-free-item"
+            if stat is not None and getattr(stat, "is_supporter", False):
+                return "supporter"
+            return None
+
+        composed = traces[composed_index]
+        composed_stat = self.stats.get(composed.card_id) if (self.stats and composed.card_id) else None
+        composed_supporter = bool(composed_stat and getattr(composed_stat, "is_supporter", False))
+        from common import currency
+        opportunity = self._composed_first_step_opportunity(composed_result, composed_index)
+        supporter_opportunity = (currency.prize_to_damage(opportunity)
+                                 if opportunity is not None else None)
+        candidates = []
+        for i in range(len(options)):
+            kind = fetch_kind(i)
+            if kind == "quota-free-item":
+                candidates.append(i)
+            elif (kind == "supporter"
+                  and (composed_option.get("type") == _END
+                       or (composed_supporter and supporter_opportunity is not None
+                           and traces[i].score > supporter_opportunity))):
+                candidates.append(i)
+        if not candidates:
+            return None
+        winner = max(candidates, key=lambda i: (traces[i].score, traces[i].tactical, -i))
+        if winner == composed_index:
+            return None
+        opportunity_label = 0.0 if supporter_opportunity is None else supporter_opportunity
+        return winner, (f"cost-benefit: fetch net {traces[winner].score:.1f} exceeds "
+                        f"the composed-action opportunity {opportunity_label:.1f}")
 
     def _fetched_playable_this_turn(self, obs: dict, cid, board) -> bool:
         """Could the fetched Pokémon ``cid`` be PLAYED this turn once in hand? An evolution needs a base in
@@ -328,7 +468,7 @@ class FetchMixin:
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
-        needed = [c for c in reachable if self._grab_value_of(board, c, plan) > 0]
+        needed = [c for c in reachable if self._grab_value_of(board, c, plan, obs=obs) > 0]
         if not needed:
             return False
         return all(not self._fetched_playable_this_turn(obs, c, board)

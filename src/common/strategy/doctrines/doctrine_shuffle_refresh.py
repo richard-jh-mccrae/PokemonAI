@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from math import comb
 
-from common.strategy.context import _PLAY
+from common.strategy.context import _ATTACK, _END, _MAIN, _PLAY
 from common.strategy.refresh import refresh_branches
 
 
@@ -27,7 +27,8 @@ class ShuffleRefreshMixin:
         branches = _draw_branches(cid, board)
         if not counts or branches is None:
             return False
-        k = sum(n for c2, n in counts.items() if n > 0 and self._grab_value_of(board, c2, plan) > 0)
+        k = sum(n for c2, n in counts.items()
+                if n > 0 and self._grab_value_of(board, c2, plan, obs=obs) > 0)
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -43,6 +44,36 @@ class ShuffleRefreshMixin:
             return 1.0 - comb(pool - k, n) / comb(pool, n)
 
         return sum(p_hit(n) for n in branches) / len(branches) < _MISS_PROB_THRESHOLD
+
+    def _refresh_sequence_override(self, obs: dict, select: dict, options: list, traces: list,
+                                   composed_index: int):
+        """Reject a cost-negative refresh whose only continuation already exists at the root.
+
+        A shuffle is a reveal boundary: the composer may value its unknown post-draw hand while
+        carrying the same root attack as continuation.  The live refresh oracle already prices the
+        known hand lost and expected draw.  When that net is non-positive, the refresh is pure cost;
+        take the available terminal action (or End) instead.
+        """
+        if ((select or {}).get("context") != _MAIN
+                or not (0 <= composed_index < len(options))):
+            return None
+        option, trace = options[composed_index], traces[composed_index]
+        cid = getattr(trace, "card_id", None)
+        tags = set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
+        if (option.get("type") != _PLAY or "shuffle_hand" not in tags
+                or float(getattr(trace, "score", 0.0) or 0.0) > 0.0):
+            return None
+        attacks = [i for i, candidate in enumerate(options)
+                   if candidate.get("type") == _ATTACK
+                   and float(getattr(traces[i], "tactical", 0.0) or 0.0) > 0.0]
+        if attacks:
+            winner = max(attacks, key=lambda i: (traces[i].tactical, traces[i].score, -i))
+        else:
+            winner = next((i for i, candidate in enumerate(options)
+                           if candidate.get("type") == _END), None)
+        if winner is None or winner == composed_index:
+            return None
+        return winner, "cost-benefit: decline non-positive refresh; take the existing turn ender"
 
 
 # Target-runtime shuffle valuations are composer-owned (Issue #459).

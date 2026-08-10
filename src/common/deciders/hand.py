@@ -75,10 +75,10 @@ class HandMixin:
         return self._stranded_cache
 
     def _refresh_swing_tactical(self, obs: dict, board: Board, ctx) -> float:
-        """`_refresh_swing`, gated to the PLAY of a known refresh (ADR-0060, SHED graded by ADR-0065)."""
+        """Card-flow benefit of a PLAY: deterministic fetch value plus any refresh swing."""
         if ctx.option_type != _PLAY:
             return 0.0
-        return self._refresh_swing(obs, board, ctx)
+        return self._fetch_play_value(obs, board, ctx) + self._refresh_swing(obs, board, ctx)
 
     def _refresh_swing(self, obs: dict, board: Board, ctx) -> float:
         """``CYCLE − SHED + STRIP + FRESH − GIFT`` for ``ctx.card_id``; 0.0 off a known refresh. The PLAY and
@@ -136,15 +136,18 @@ class HandMixin:
         return prize_to_damage(needs.survival_value(survival_shift=shift, phase=phase))
 
     def _grab_refresh_value(self, obs: dict, board: Board, ctx) -> float:
-        """`_refresh_swing` — the identical quantity the PLAY site scores — discounted only for WHEN it can be
-        cashed (ADR-0122): a Supporter fetched after the quota is spent takes `grading.halve(1)`."""
-        if (board.line_ready or ctx.select_context != _TO_HAND or "draw" not in ctx.tags
-                or not (ctx.stat and getattr(ctx.stat, "is_supporter", False))):
+        """Value of a TO_HAND grab, with an immediate draw Supporter's realised swing as a floor."""
+        if ctx.select_context != _TO_HAND:
             return 0.0
+        grab = max(self._grab_value_of(board, ctx.card_id, ctx.plan, obs=obs),
+                   float(ctx.card_chain_value or 0.0))
+        if (board.line_ready or "draw" not in ctx.tags
+                or not (ctx.stat and getattr(ctx.stat, "is_supporter", False))):
+            return grab
         swing = self._refresh_swing(obs, board, ctx)
         if (obs.get("current") or {}).get("supporterPlayed"):
             swing *= _halve(1)
-        return swing
+        return max(grab, swing)
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
         """The graded SHED (ADR-0101): ``set_keep_v2`` over every held row. **Sets, not sums** — a refresh sheds
@@ -216,9 +219,11 @@ class HandMixin:
                                     and (_ENGINE_KEEP_TAGS & set(tags)) and "hand_disruption" not in tags)
             if engine_supporter and worth < _ENGINE_SUPPORTER_KEEP:
                 worth = _ENGINE_SUPPORTER_KEEP
-                row_engine = True
-            else:
-                row_engine = False
+            # The marker describes the card's job, not whether this local floor happened to
+            # increase its Worth.  Shared function Worth can already put a draw Supporter at the
+            # same band, but discard diagnostics and downstream policy still need to distinguish
+            # the engine from a disruption card at that band.
+            row_engine = engine_supporter
             row = {"i": i, "cid": cid, "worth": round(worth, 1)}
             if row_engine:
                 row["engine_supporter"] = True

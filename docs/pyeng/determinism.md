@@ -54,12 +54,17 @@ card's index) — first-divergence diffs in M1 will correct any residue here.
 - **A shuffle INSIDE the line is not reproducible either — forking from MAIN does not save
   you** (added 2026-07-27, #178). The first bullet is narrower than it reads: `probe_fork`
   compares two back-to-back forks driven straight to `END`, which never shuffle. Let the line
-  play a Professor's-Research-class card (shuffle your hand into the deck, then draw) and every
-  draw *after* that shuffle varies call-to-call, from a plain MAIN fork, with one Pilot, in one
-  process. Measured on `ml_lethal_retreat_boost_to_ko_f24`: **0 draws before the in-line
-  shuffle, 11 after**, and five identical re-runs drew five different eights. The pre-shuffle
-  order is still byte-identical across processes and across intervening searches — so the
-  boundary is the in-line shuffle, not the fork.
+  play a Professor's-Research-class card (shuffle your hand into the deck, then draw) and the
+  native hidden deck order after that shuffle can differ across otherwise identical runs from a
+  plain MAIN fork, with one Pilot, in one process. The 2026-07-27
+  `ml_lethal_retreat_boost_to_ko_f24` probe historically recorded **0 draws before the in-line
+  shuffle, 11 after**, with five different eight-card results across five runs; that describes the
+  policy and drive used then, not every present-day visible draw. Remeasured under the current
+  policy, the visible post-shuffle own-draw sequence can repeat as `[1142]` because the line ends
+  before another own draw, while the native hidden deck orders still differ across identical runs.
+  A repeated visible prefix therefore does not make the in-line shuffle reproducible. The
+  pre-shuffle order remains byte-identical across processes and intervening searches — the
+  structural boundary is the in-line shuffle, not the fork.
 
   ⚠️ Reproducible ≠ knowable, and consumers must not conflate them. The seeded deck ORDER is a
   prediction (`_seed_zones` supplies a multiset; the engine picks the order), so a line whose

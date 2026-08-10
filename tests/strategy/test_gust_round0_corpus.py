@@ -89,14 +89,15 @@ def test_round0_boss_blunder_is_dead(cid):
     for o in boss:
         assert not o.fired, f"{cid}: {[h.id for h, _ in o.fired]} endorsed the refuted gust"
         assert o.score <= 0
+        assert o.index not in d.chosen, f"{cid}: still chose the tagged Boss's Orders blunder"
 
 
 @pytest.mark.req("REQ-CORPUS-0002")
-def test_zero_trace_score_boss_is_chosen_only_for_a_positive_composer_delta():
-    """82753102-109's zero tactical Boss needs a positive composed state delta."""
+def test_zero_trace_score_boss_keeps_its_closed_target_coverage_without_being_selected():
+    """82753102-109's refuted Boss stays expandable without becoming a cost-free action."""
     rec, d = _explain("82753102-109")
     boss = _boss_options(d)
-    assert len(boss) == 1 and boss[0].score == 0.0 and boss[0].index in d.chosen
+    assert len(boss) == 1 and boss[0].score == 0.0 and boss[0].index not in d.chosen
     from common import apply_option as ao
     pilot = _pilot(rec.agent)
     my_index = int((rec.obs.get("current") or {}).get("yourIndex") or 0)
@@ -106,8 +107,6 @@ def test_zero_trace_score_boss_is_chosen_only_for_a_positive_composer_delta():
     from corpus_helpers import opponent_active_ids
     assert isinstance(result, ao.Expectation)
     assert len(result.classes) == 4 and opponent_active_ids(result) == {66, 142, 305, 741}
-    assert d.composer and d.composer["first_index"] == boss[0].index
-    assert d.composer["margin"]["chosen_delta"] > 0.0
 
 
 @pytest.mark.req("REQ-CORPUS-0002")

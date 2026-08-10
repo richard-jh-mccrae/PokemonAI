@@ -10,7 +10,8 @@ from __future__ import annotations
 from common.card_worth import ENERGY_TIER
 from common.deciders.facts import Board
 from common.strategy.combat import Budget
-from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACKER_ROLES, _BENCH, _CARD, _RETREAT
+from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACK, _ATTACKER_ROLES,
+                                     _BENCH, _CARD, _END, _MAIN, _RETREAT, KO_SCORE)
 
 
 # Every constant below is pinned by an inequality in tests/strategy/test_attach_bands.py — change one
@@ -60,16 +61,46 @@ class AttachMixin:
         return [m.get("hp", 0) for m in bodies if m]
 
     def _build_standing(self, target: dict | None, extra_units=()) -> float:
-        """Damage-currency adapter over the canonical multi-attack build profile."""
+        """Damage-currency adapter over canonical multi-turn attack realization."""
         if not target or self._state_model is None:
             return 0.0
         supply = extra_units if hasattr(extra_units, "persistent") else None
-        return self._state_model.combat_build_profile(target, supply=supply).value_damage
+        profile = self._state_model.combat_realization(target, supply=supply)
+        return profile.value_prizes * self._state_value_damage_rate()
 
     def _attach_build_delta(self, target: dict | None, extra_units) -> float:
-        """Build progress ``extra_units`` buys on ``target`` (ADR-0069 §3). Both legs take the same
-        typed/count branch — the payoff's cost record is attach-invariant — so the difference is exact."""
-        return self._build_standing(target, extra_units) - self._build_standing(target)
+        """Forward realization ``extra_units`` buys on ``target`` (ADR-0069 §3). Both legs take the
+        same typed/count branch. The board marginal also saturates duplicate attackers, so progress
+        on the primary line beats reopening its cheap attack on every copy.
+
+        A first persistent step can be hidden when the future-realization clock already has enough
+        evolution turns to attach later.  That does not make this turn's expiring manual-attach
+        allowance worthless.  In that exact zero-delta case, retain the typed standing-build step
+        only while no stronger same-card copy has already established the primary.  Thus a pair of
+        bare Line bases may start either copy, but a bare duplicate cannot reopen progress beside an
+        already-started one.
+        """
+        if not target or self._state_model is None:
+            return 0.0
+        supply = extra_units if hasattr(extra_units, "persistent") else None
+        if supply is None:
+            return 0.0
+        canonical = self._state_model.readiness_supply_value_damage(target, supply)
+        if canonical != 0.0:
+            return canonical
+
+        before = self._state_model.combat_build_profile(target).value_damage
+        after = self._state_model.combat_build_profile(target, supply=supply).value_damage
+        if after <= before:
+            return canonical
+        view = self._state_model.mine.view_of(target)
+        if view is None:
+            return canonical
+        stronger_copy = any(
+            body is not view and body.body is not view.body and body.card_id == view.card_id
+            and self._state_model.combat_build_profile(body).value_damage > before
+            for body in self._state_model.mine.bodies)
+        return canonical if stronger_copy else after - before
 
     def _partner_absent(self, cid, obs: dict) -> bool:
         """A co-dependent ENGINE body with none of its declared partners in play — a dead attach
@@ -206,18 +237,29 @@ class AttachMixin:
         # The pivot must be LEGAL NOW — only the MENU can say so; `bench_wincon_ready` alone cannot.
         arm_dominated = (area == _ACTIVE and board.active_doomed and board.bench_wincon_ready
                          and any(o.get("type") == _RETREAT for o in (select.get("option") or ())))
+        visible_retreat = any(o.get("type") == _RETREAT for o in (select.get("option") or ()))
         # Only the ACTIVE fires this turn, and the player going FIRST cannot attack on its turn 1
-        # (rules.md §2 / rulebook L152), so on either of those there is no tonight to buy.
+        # (rules.md §2 / rulebook L152). A benched recipient can also fire tonight when the
+        # doomed Active has a legal retreat on the root menu; this is still an attach MARGINAL, not
+        # credit for the promoted body's whole attack.
         view = self._attach_body_view(target)
         can_attack_tonight = (area == _ACTIVE and board.turn > 1 and view is not None
                               and not arm_dominated)
+        can_pivot_tonight = (area == _BENCH and board.turn > 1 and view is not None
+                             and board.active_doomed and visible_retreat)
         this_turn = base_dmg = committed_dmg = 0.0
-        if can_attack_tonight and is_attach:
+        if (can_attack_tonight or can_pivot_tonight) and is_attach:
             mine = self._state_model.mine
             base_dmg = mine.best_reachable_damage(view, manual_spent=True)
             committed_dmg = mine.best_reachable_damage(view, extra_unit_codes=codes,
                                                        manual_spent=True)
-            this_turn = max(0.0, committed_dmg - base_dmg)
+            pivot_alternative = (max((mine.best_reachable_damage(body, manual_spent=True)
+                                      for body in mine.bench if body is not view), default=0.0)
+                                 if can_pivot_tonight else 0.0)
+            this_turn = max(0.0, committed_dmg - max(base_dmg, pivot_alternative))
+            opp_hp = (self._opp_active(obs) or {}).get("hp", 0) or 0
+            if can_pivot_tonight and base_dmg >= opp_hp > 0:
+                this_turn = 0.0                 # the pivot's existing attack already takes the KO
             if burst and this_turn > 0:
                 this_turn = self._burst_capped_tonight(obs, view, target_stat, this_turn,
                                                        base_dmg, committed_dmg)
@@ -270,7 +312,12 @@ class AttachMixin:
         evaporation_loss = resource_cost if evaporates else 0.0
         attack_axis = 0.0 if (gated_off or overkill or evaporates) else max(
             this_turn, build, accel_value, 0.0)
-        retreat_equity = (0.0 if spent_utility_gated
+        # A burst can cash out through an attack OR a manual retreat before it evaporates, never
+        # both. A doomed Active's newly unlocked Retreat is likewise absent from this root menu, so
+        # neither live ranking nor the root-option composer can commit the claimed continuation.
+        # Exact visible Retreat remains legal and is priced when actually chosen.
+        phantom_doomed_retreat = area == _ACTIVE and board.active_doomed and not visible_retreat
+        retreat_equity = (0.0 if (spent_utility_gated or burst or phantom_doomed_retreat)
                           else self._attach_position_delta(obs, option))
         ability_fuel = (_ATTACH_ABILITY_FUEL if (not spent_utility_gated and not burst and is_attach
                                                 and self._attach_fuels_dormant_ability(estat, target))
@@ -363,3 +410,91 @@ class AttachMixin:
             row["i"] = i
             rows.append(row)
         return {"eq": rows, "abstained": abstained} if rows else None
+
+    def _attach_sequence_override(self, obs: dict, select: dict, board: Board, options: list,
+                                  traces: list, composed_index: int, *, composed_result=None,
+                                  score_epsilon: float = 0.0, same_line_only: bool = False):
+        """Use a positive persistent setup attach before a non-winning turn ender.
+
+        The composer correctly charges the card leaving hand, but its one-board leaf has no value
+        for the manual-attach allowance that expires at turn end.  This boundary prices that tempo
+        only when the attach either unlocks an immediate attack or advances the already-started
+        primary line, and its benefit exceeds the shared card cost. Final-prize attacks already
+        available at the root remain outside it.
+
+        When the composer's positive line already starts with an attach before a discard-cost play,
+        the sequence has paid the whole line's costs. Resolve only the Energy/recipient subdecision
+        through this attach equation among near-best positive versions of that same temporal line.
+        This prevents the coarse state leaf from sending Energy to an off-role body, while every
+        candidate still carries both the Energy's shared Worth and the later discard costs.
+        """
+        if ((select or {}).get("context") != _MAIN or board.energy_attached
+                or not (0 <= composed_index < len(options))
+                or options[composed_index].get("type") not in (_ATTACH, _ATTACK, _END)):
+            return None
+        if options[composed_index].get("type") == _ATTACH:
+            chosen = getattr(composed_result, "chosen", None)
+            root = getattr(composed_result, "root_value", None)
+            candidates = (getattr(composed_result, "selection_candidates", ())
+                          or getattr(composed_result, "candidates", ()))
+            if chosen is not None and root is not None and candidates:
+                def _costed_play(index: int) -> bool:
+                    cid = traces[index].card_id if 0 <= index < len(traces) else None
+                    return bool(self.functions and cid is not None
+                                and "cost_discard" in self.functions.tags(cid))
+
+                eligible = set()
+                floor = float(chosen.score) - max(0.0, float(score_epsilon))
+                for candidate in candidates:
+                    first = candidate.first_index
+                    steps = tuple(getattr(candidate, "steps", ()) or ())
+                    if (candidate.coverage_gap or candidate.score < floor or candidate.score <= root
+                            or first is None or not (0 <= first < len(options))
+                            or options[first].get("type") != _ATTACH
+                            or not any(_costed_play(step.index) for step in steps[1:])):
+                        continue
+                    eligible.add(first)
+
+                ranked = []
+                for index in eligible:
+                    row = self._attach_value(obs, select, board, options[index])
+                    if row is None or float(row["tactical"]) <= 0.0:
+                        continue
+                    net = float(row["tactical"]) - float(row["resource_cost"])
+                    ranked.append((net, float(row["tactical"]), -index, index))
+                if ranked:
+                    winner = max(ranked)[-1]
+                    if winner != composed_index:
+                        return winner, ("cost-benefit: resolve the positive attach-before-discard line by "
+                                        "attach benefit minus shared Energy worth")
+            if same_line_only:
+                return None
+
+        if (options[composed_index].get("type") == _ATTACK
+                and traces[composed_index].tactical >= KO_SCORE and board.active_can_ko
+                and self._prize_value(self._opp_active(obs)) >= board.my_prizes_remaining):
+            return None                              # no later turn exists to realize setup value
+        priority = board.priority_wincon_slot
+
+        candidates = []
+        for index, option in enumerate(options):
+            if option.get("type") != _ATTACH:
+                continue
+            row = self._attach_value(obs, select, board, option)
+            if row is None:
+                continue
+            immediate = row["slot"][0] == _ACTIVE and row["this_turn"] > 0.0
+            focused = ((priority is None or tuple(row["slot"]) == tuple(priority))
+                       and not row["burst"] and row["build"] > 0.0
+                       and not (row["slot"][0] == _ACTIVE and board.active_doomed))
+            if not (immediate or focused):
+                continue
+            net = float(row["tactical"]) - float(row["resource_cost"])
+            if net > 0.0:
+                candidates.append((net, float(row["tactical"]), -index, index))
+        if not candidates:
+            return None
+        winner = max(candidates)[-1]
+        if winner == composed_index:
+            return None
+        return winner, "cost-benefit: realize positive attack/setup attach before ending the turn"

@@ -630,7 +630,8 @@ class MySide(_SideBase):
 
     def role_worth(self, card_id) -> float:
         """A card's **Worth** in `card_worth` points, via the caller's ``card_id -> Worth`` callable —
-        Roles are DECLARED, not card facts. Without a resolver this is 0 for any Pokémon."""
+        deck Roles are declared; function tags are portable card facts. Without a resolver, known
+        cards still receive their shared function/finiteness floor."""
         key = ("role_worth", card_id)
         return self._memoized(key, lambda: self._role_worth_of(card_id))
 
@@ -643,8 +644,11 @@ class MySide(_SideBase):
         stat = self._combat._card_stat(card_id)
         if stat is None:
             return 0.0
+        functions = getattr(self._combat, "functions", None)
         return card_worth.role_value(
-            (), is_typed_basic_energy=bool(getattr(stat, "is_typed_basic_energy", False)))
+            (), is_ace_spec=bool(getattr(stat, "aceSpec", False)),
+            is_typed_basic_energy=bool(getattr(stat, "is_typed_basic_energy", False)),
+            tags=functions.tags(card_id) if functions is not None else (), is_known_card=True)
 
     # -- deck availability (the Count Triple, ADR-0068 decision 4) ------------------------------
     @lazy
@@ -1096,6 +1100,7 @@ class TheirSide(_SideBase):
         return (cid,) + tuple(fwd(cid) or ())
 
     def turns_to_ko_me(self, my_body: dict | None, *, bodies=None, charged=_THREADED,
+                       forward_ids=_THREADED,
                        my_benched: bool = False, my_bench=(),
                        key_ids=frozenset(), reading: str | None = None,
                        opp_active: dict | None = None, switch_enabler: bool = False,
@@ -1103,11 +1108,13 @@ class TheirSide(_SideBase):
         """The ACTIVE-area survival clock — accumulating, per ADR-0071 decision 4. Every argument is
         in the memo key. Reads :meth:`survival_clock`'s ``.turns``, so both routes share ONE memo."""
         return self.survival_clock(
-            my_body, bodies=bodies, charged=charged, my_benched=my_benched, my_bench=my_bench,
+            my_body, bodies=bodies, charged=charged, forward_ids=forward_ids,
+            my_benched=my_benched, my_bench=my_bench,
             key_ids=key_ids, reading=reading, opp_active=opp_active,
             switch_enabler=switch_enabler, context=context).turns
 
     def survival_clock(self, my_body: dict | None, *, bodies=None, charged=_THREADED,
+                       forward_ids=_THREADED,
                        my_benched: bool = False, my_bench=(),
                        key_ids=frozenset(), reading: str | None = None,
                        opp_active: dict | None = None, switch_enabler: bool = False,
@@ -1116,12 +1123,13 @@ class TheirSide(_SideBase):
         the interpolated crossing point (ADR-0117), off ONE accumulation and ONE memo entry."""
         opp_bodies = self._bodies(bodies)
         policy = self._charged_policy(charged)
-        key = ("survival_clock", self._key(my_body), self._key(opp_bodies), self._key(policy),
+        fwd = self._forward_ids if forward_ids is _THREADED else forward_ids
+        key = ("survival_clock", self._key(my_body), self._key(opp_bodies), self._key(policy), fwd,
                bool(my_benched), self._key(tuple(my_bench or ())), frozenset(key_ids or ()),
                reading, self._key(opp_active), bool(switch_enabler), self._key(context))
         extra = {} if reading is None else {"reading": reading}
         return self._memoized(key, lambda: self._combat.survival_clock(
-            my_body, opp_bodies, charged=policy, my_benched=my_benched,
+            my_body, opp_bodies, charged=policy, forward_ids=fwd, my_benched=my_benched,
             my_bench=my_bench, key_ids=key_ids, opp_active=opp_active,
             switch_enabler=switch_enabler, context=context, **extra))
 
@@ -1336,6 +1344,10 @@ class StateModel(_Lazily):
     def readiness_supply_delta(self, body, supply):
         from common.state_value import readiness_supply_delta
         return readiness_supply_delta(self, body, supply)
+
+    def readiness_supply_value_damage(self, body, supply):
+        from common.state_value import readiness_supply_value_damage
+        return readiness_supply_value_damage(self, body, supply)
 
     def allocate_energy_units(self, recipients, unit_codes, *, persistent=True):
         from common.state_value import allocate_energy_units

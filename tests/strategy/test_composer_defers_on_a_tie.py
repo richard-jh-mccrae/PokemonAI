@@ -33,8 +33,8 @@ def anchor():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_shared_readiness_breaks_the_former_end_state_tie(anchor):
-    """Issue #495 gives this board a unique best end-state without changing tie policy."""
+def test_the_scored_options_tie_and_the_ruled_dig_prices_below_them(anchor):
+    """The dig has a real card cost, while ADR-0095 still owns contingent reveal sequencing."""
     fx, pilot, _dec = anchor
     from common import composer as cp
     obs, sel = fx["obs"], fx["obs"]["select"]
@@ -48,21 +48,27 @@ def test_shared_readiness_breaks_the_former_end_state_tie(anchor):
     top = max(order.values())
     assert order[ruled] < top, "the composer now claims a view it does not have on this frame"
     tied = [i for i, d in order.items() if d == top]
-    assert tied == [8]
+    assert len(tied) > 1, f"nothing ties here, so this frame does not exercise the defer: {order}"
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_the_planner_does_not_defer_when_shared_readiness_has_a_view(anchor):
+def test_the_planner_defers_and_says_so_in_the_trace(anchor):
+    """The end-state tie must remain an auditable abstention, not an invented composer view."""
     _fx, pilot, _dec = anchor
     trace = pilot._composer_trace or {}
-    assert not trace.get("tied_first_steps")
-    assert "chosen" in trace
+    assert trace.get("tied_first_steps"), (
+        "the planner committed a composer line on a frame where its own scores tie — or the trace "
+        "no longer records the abstention, which is the same problem one layer down")
+    assert "chosen" not in trace, (
+        "a deferred decision must not also publish a chosen line; a reader cannot tell which one "
+        "the agent acted on")
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_the_composer_gets_the_turn_after_the_tie_is_broken(anchor):
+def test_the_structural_sequencer_gets_the_turn_and_plays_the_ruled_dig(anchor):
+    """The human-authored fixture remains authoritative: reveal before blind commitment."""
     fx, _pilot, dec = anchor
-    assert list(dec.chosen) == [1]
+    assert list(dec.chosen) == list(fx["correct"])
 
 
 @pytest.mark.req("REQ-PLANNER-0012")

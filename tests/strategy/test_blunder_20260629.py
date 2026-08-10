@@ -91,8 +91,9 @@ def test_build_active_wincon_uses_the_best_attack_envelope():
     pilot = _pilot()
     attach = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
     obs = make_select([attach], current=state(active=poke(WINCON, energy=1, hp=330), hand=[WATER]))
-    # `build-active-wincon` is DELETED (ADR-0069) — the convex typed build says this by construction.
-    assert next(r for r in pilot.explain(obs).attach_working["eq"] if r["i"] == 0)["build"] == 0
+    # Reusable progress toward the stronger attack is a benefit, charged against Water's Worth.
+    row = next(r for r in pilot.explain(obs).attach_working["eq"] if r["i"] == 0)
+    assert row["build"] > row["resource_cost"]
 
     # Already at max-damage cost (3) -> fully online -> stands down.
     full = make_select([attach], current=state(active=poke(WINCON, energy=3, hp=330), hand=[WATER]))
@@ -109,11 +110,12 @@ def test_build_active_wincon_stands_down_for_a_discard_energy_when_the_cheap_att
                                            opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
     assert "build-active-wincon" not in _fired(pilot.explain(obs).options[0])
 
-    # Control A — the reusable Water also buys no standing increase while Jetting Blow dominates.
+    # Control A — reusable Water persists toward the stronger attack after Jetting Blow takes the KO.
     wat = opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)   # attach Water
     obs_w = make_select([wat], current=state(active=poke(WINCON, energy=1, hp=330),
                                              opp_active=poke(OPP, hp=120), hand=[WATER, IGNITION]))
-    assert next(r for r in pilot.explain(obs_w).attach_working["eq"] if r["i"] == 0)["build"] == 0
+    row_w = next(r for r in pilot.explain(obs_w).attach_working["eq"] if r["i"] == 0)
+    assert row_w["build"] > row_w["resource_cost"]
 
     # Control B — when even the powered big attack cannot KO, the burst scores BELOW doing nothing.
     obs_n = make_select([ign], current=state(active=poke(WINCON, energy=1, hp=330),
@@ -162,7 +164,10 @@ def test_attach_lethal_unlocks_a_ko_via_ignition_ccc():
     traces = pilot.explain(obs).options
     assert traces[0].tactical >= KO_SCORE
     assert traces[1].tactical < KO_SCORE
-    assert pilot.decide(obs) == [1]  # whole-turn sequencing is distinct from the KO root trace
+    rows = {r["i"]: r for r in pilot.explain(obs).attach_working["eq"]}
+    assert rows[0]["tactical"] - rows[0]["resource_cost"] > (
+        rows[1]["tactical"] - rows[1]["resource_cost"])
+    assert pilot.decide(obs) == [0]  # only Ignition's paid benefit unlocks the decisive attack
 
 
 @pytest.mark.req("REQ-GEN-0030")
@@ -340,7 +345,9 @@ def test_dont_search_stands_down_a_bench_fill_whose_only_target_is_gone():
     obs2 = make_select([play_poffin, opt(END)], current=maybe)
     assert not _ctx(pilot, obs2, 0).search_targets_exhausted
     assert "dont-search-an-empty-deck" not in _fired(pilot.explain(obs2).options[0])
-    assert _ranked(pilot, obs2)[0][0] == 0
+    dec2 = pilot.explain(obs2)
+    assert dec2.options[0].tactical == pytest.approx(2.25 - 10.0)
+    assert dec2.chosen == [1]
 
 
 @pytest.mark.req("REQ-GEN-0032")

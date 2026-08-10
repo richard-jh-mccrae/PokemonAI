@@ -220,7 +220,9 @@ def test_feed_the_firing_accelerator_over_a_bench_body_even_when_doomed():
     assert pilot._board(obs_r).bench_wincon_ready
     rows = {r["i"]: r for r in pilot.explain(obs_r).attach_working["eq"]}
     assert rows[0]["this_turn"] == 0.0, "the doomed Active is still bought a swing in front of the pivot"
-    assert rows[0]["marginal"] == rows[1]["marginal"] == 0.0
+    assert rows[0]["marginal"] == 0.0
+    assert rows[1]["build"] > rows[1]["resource_cost"], (
+        "the safe Mega's stronger-attack progress remains a positive alternative")
 
 
 @pytest.mark.req("REQ-GEN-0038")

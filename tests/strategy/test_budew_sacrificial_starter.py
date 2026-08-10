@@ -1,7 +1,7 @@
 """Budew IS the sacrificial item-lock starter — the declared identity (user doctrine 2026-07-19).
 
 Card facts (id 235, verified): 30 HP, free retreat, Itchy Pollen — NO cost, 10 damage, opponent
-can't play Items next turn. This file keeps the identity claims: worth 0, never funded, and the
+can't play Items next turn. This file keeps the identity claims: finite item-lock worth, never funded, and the
 declaration itself. The opener BEHAVIOUR is `test_setup_active_placement.py`'s.
 """
 from __future__ import annotations
@@ -38,11 +38,10 @@ def test_budew_is_the_decks_declared_rank_one_opener(pilot):
 
 
 @pytest.mark.req("REQ-WORTH-0003")
-def test_budew_stays_sacrificial_worth_zero(pilot):
-    """The lock body is SPENT, not kept, so the keep/discard/refresh machinery must never hoard it.
-    A future worth tier for `starter`/`item_lock` trips this deliberately — re-grill the doctrine."""
-    assert pilot._role_value(_BUDEW) == 0, (
-        f"Budew prices {pilot._role_value(_BUDEW)} — the sacrificial starter must stay worth 0")
+def test_budew_carries_the_shared_item_lock_worth(pilot):
+    """Sacrificial means its benefit can justify spending it, not that the finite card is free."""
+    from common.card_worth import FUNCTION_TIER
+    assert pilot._role_value(_BUDEW) == FUNCTION_TIER["item_lock"] == 10.0
 
 
 @pytest.mark.req("REQ-WORTH-0003")

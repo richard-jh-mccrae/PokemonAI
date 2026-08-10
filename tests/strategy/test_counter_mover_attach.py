@@ -63,8 +63,9 @@ def test_munkidori_declares_the_counter_mover_role():
 
 @pytest.mark.req("REQ-CORPUS-0001")
 def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
-    """The {D} fills Mind Bend's colourless slot AND wakes Adrena-Brain, so it out-prices the
-    same-build {P} on the SAME body outright."""
+    """Both colours advance a legal typed path, but shared future realization may distinguish
+    their build. The role gate zeros either attack-axis benefit; {D}'s independent Adrena-Brain
+    fuel therefore still out-prices {P} on this off-Line body."""
     rec = _record()
     obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
@@ -72,7 +73,7 @@ def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
     [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
     [psy_active] = _attach_options(rec, obs, card=_P_ENERGY, area=_ACTIVE_AREA)
     rows = {r["i"]: r for r in d.attach_working["eq"]}
-    assert rows[dark_active]["build"] == rows[psy_active]["build"] > 0   # both fill the ● slot
+    assert rows[dark_active]["build"] > 0 and rows[psy_active]["build"] > 0
     assert rows[dark_active]["ability_fuel"] > 0 and rows[psy_active]["ability_fuel"] == 0
     assert rows[dark_active]["tactical"] > rows[psy_active]["tactical"]
 

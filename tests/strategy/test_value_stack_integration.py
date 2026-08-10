@@ -93,6 +93,9 @@ CONSUMED = frozenset({
     "model.mine", "model.theirs", "model.prize_race",
     # ── MySide (13) ──
     "model.mine.active", "model.mine.bench", "model.mine.bodies", "model.mine.bench_raws",
+    # Issue #507's posture relief guards an absent Active before reading its BodyView. These two
+    # reads therefore occur only for a concrete body; absence returns no survival claim.
+    "model.mine.body", "model.mine.prize_value",
     "model.mine.readiness_p", "model.mine.turns_to_afford",
     "model.mine.role_worth", "model.mine.needs", "model.mine.forward_payoff",
     "model.mine.best_reachable_damage_vs", "model.mine.best_reachable_bench_damage",
@@ -100,7 +103,10 @@ CONSUMED = frozenset({
     # which is `<= 1`, which returns True == BLOCKED — so absence fails CLOSED, into no claim.
     "model.mine.attack_blocked",
     # ── TheirSide (7) — the newly-threaded half ──
-    "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
+    # Issue #507 survival relief compares the current attacker with every legal promoted attacker.
+    # Missing Bench/body zones are empty tuples, so absence contributes no invented survival benefit.
+    "model.theirs.active_raw", "model.theirs.bench_raws", "model.theirs.body_raws",
+    "model.theirs.bodies", "model.theirs.turns_to_ko_me",
     "model.theirs.reachable_incoming", "model.theirs.hand_size",
     # Issue #456: absent `handCount` intentionally equals an empty hand; the collapse test pins it.
 
@@ -118,7 +124,10 @@ CONSUMED = frozenset({
     "model.attack_profile",
     # Issue #495: the combat profile owns these reads. Empty zones enumerate empty tuples/maps;
     # absent bodies/stats return None and produce UNKNOWN/zero-compatible candidates.
-    "model.card_stat", "model.combat", "model.mine.active_raw", "model.mine.bench_names",
+    # Retreat potential rejects expiring payment Energy. This query is reached only for a concrete
+    # attached card id; no attached card means an empty payment walk, not a zero-Worth phantom card.
+    "model.card_stat", "model.combat", "model.energy_supply_from_card",
+    "model.mine.active_raw", "model.mine.bench_names",
     "model.mine.deck_energy_counts", "model.mine.forward_forms", "model.mine.view_of",
 })
 

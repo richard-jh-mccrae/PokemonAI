@@ -747,8 +747,11 @@ The ONE closed-form home for card keep/shed valuation — every equation is `val
 Seven modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
 for the five; **Playability** and the blind-draw composition helper add no glossary term):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
-probability; [deck_value.py](deck_value.py) gives one blind draw the copy-weighted mean Worth of the
-unseen deck-plus-prizes pool, capped by live deck size for multiple draws), **Odds**
+probability. Issue #507 resolves portable Worth as `max(shared function, declared deck role,
+ACE/Energy fact, known-card floor, upward-only deck override)`, so the same card function starts at
+the same Worth in every deck and every known card retains a finite floor;
+[deck_value.py](deck_value.py) gives one blind draw the copy-weighted mean Worth of the unseen
+deck-plus-prizes pool, capped by live deck size for multiple draws), **Odds**
 ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
@@ -1269,35 +1272,52 @@ prize-denominated marginal uses to enter a damage-scale score, so its home moves
 with it, since falsifiability is the point rather than an incidental.
 
 **Hold Price**:
-What SPENDING a held card costs, in the damage currency — the term every **free-Item decider**
+What SPENDING a held card costs, in the damage currency — the term every **quota-free Item decider**
 subtracts so it can reach a negative score and DECLINE (`common/hold_value.py`,
 `Pilot._item_hold_price`; Issue #261 item 2f, generalizing ADR-0062's deleted `_DENIAL_ITEM_COST`).
 `max(needs.keep_v2(card), ITEM_HOLD_FLOOR) × ITEM_HOLD_WORTH_RATE`. Two facts and both are
 load-bearing: the ASSIGNMENT leg is the card's exact counterfactual marginal against the board's
 resolved Needs (a card covering a live need is dear; one covering nothing is cheap), and the FLOOR is
-the finiteness the assignment cannot see. The floor is not decoration — a role-less Crushing Hammer's
-only slot is the `deny` slot, so its `keep_v2` measures 0.00 on exactly the boards where the strip
+the finiteness the assignment cannot see. The floor is not decoration — a Crushing Hammer's only
+live slot may be `deny`, so its `keep_v2` measures 0.00 on exactly the boards where the strip
 whiffs, and two copies solo-price 0 each against one slot; a pure keep reading would make the copy
 being spent look free precisely when the hand is richest in it. **`max`, not `+`** — the floor is a
 lower BOUND on what the card is worth, never a surcharge on top of it. Why it must be strictly
 positive at all is the sequencer, not the card: `_finish_turn_last` promotes on `score > 0` and ties
 End at exactly 0, so a hold of 0 is not "free", it is "played by option index" (ADR-0093 decision 4).
+Issue #507 generalizes the same lower-bound invariant through `card_worth.FUNCTION_TIER` and the
+hand ledger's option-floor residual: a known card never becomes a zero-cost action merely because
+no live assignment slot claims it. Only End Turn is the deliberate zero action.
 _Avoid_: keep price (the KEEP sites' own name for the assignment leg alone — the hold price is that
 leg **floored** and **crossed** into damage), `_DENIAL_ITEM_COST` (deleted; it was this price hard-gated
-to `energy_denial`), item cost (the card's catalog worth, which for a Hammer is 0)
+to `energy_denial`), zero as a synonym for no live demand
+
+**Action Opportunity Cost**:
+The strict residual for a non-card action whose consumed turn/allowance otherwise has no priced
+magnitude (`common/action_cost.py`, Issue #507). Attack and activated Ability each consume a real
+turn/allowance, so they pay one decimal order above the shared score-noise floor in both prize and
+damage currency.
+This is ORDINAL, not a tuned gameplay estimate: it cannot overturn a positive measured benefit, but a
+no-benefit Attack or Ability is strictly below End. Card plays already pay through the hand/leaf Worth
+ledger; manual Retreat already pays through the promote/retreat equation, including a strict
+once-per-turn allowance cost. Only End intentionally returns exactly zero.
+_Avoid_: applying the residual to every action in addition to its owned cost, calling a no-benefit
+Attack a tie with End, interpreting a layer-local zero as the final action net
 
 **Information Before Commitment**:
-The boundary inside `_finish_turn_last`'s FREE band: an option that ENLARGES the information set
-sequences strictly ahead of an endorsed free play that COMMITS a card at a target (ADR-0095
+The boundary inside `_finish_turn_last`'s quota-free band: an option that ENLARGES the information set
+sequences strictly ahead of an endorsed play that COMMITS a card at a target (ADR-0095
 decision 1, built by Issue #261 item 2f). Classification is `Pilot._informative_card` — a
 `draw`/`search`/`dig` Function Tag, or a Pokémon play (Bench fill) — and **untagged defaults to
 committing**, because a mis-classified commitment sequencing early spends a card before the dig that
 would have re-aimed it, while a mis-classified dig sequencing late costs only ordering. It is a TIER
 and not a score, and cannot become one: playing the dig first and playing it second reach the SAME
 end state, so no function of that state separates them. Hence `sound_rules`
-`information-before-commitment`, typed `structural`.
-_Avoid_: "free" as a synonym for informative (the conflation this boundary ends — a Crushing Hammer
-is free and reveals nothing), tier numbers as prose (`_TIER_*` are named constants; the band shifted
+`information-before-commitment`, typed `structural`. The zero-trace escape hatch is narrower than the
+classification: it admits only a quota-free non-Supporter PLAY with no fired rule or discard cost.
+An unmodelled Supporter remains late because its one-per-turn allowance is itself a commitment.
+_Avoid_: "free" as a synonym for informative or zero-value (a Crushing Hammer consumes a finite
+card even when playing it uses no turn quota), tier numbers as prose (`_TIER_*` are named constants; the band shifted
 once already)
 
 **Worth Damage Rate**:
@@ -1385,7 +1405,7 @@ spends a finite Item on a threat that has not arrived (measured — ms f21/f29 f
 Hammer the human ruled against). The Brief sharpener likewise applies to the rank/keep side only
 (`_DENIAL_BENCH` did too, until Issue #228 deleted it with the rest of the ADR-0062 magnitude path —
 its QUESTION, whether a benched body can reach the Active position at all, survives as ADR-0071's
-promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above the **free-Item
+promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above the **quota-free Item
 hold price** (`common/hold_value.py`, Issue #261 item 2f — the generalisation of the deleted
 `_DENIAL_ITEM_COST`), which is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
@@ -2126,7 +2146,18 @@ beam slot, taken by its best child, so it is an evaluation-time fan-out and beam
 pre-expansion meaning. **The follow-up select REPLANS** (D6): the same evaluator runs again on the
 real board rather than the first choice being committed, which is what makes *"retreat BECAUSE
 Cinderace is worth promoting, then promote Budew"* structurally impossible instead of a standing
-per-card proof obligation.
+per-card proof obligation. Issue #507 makes one shared evaluator rank each target on its complete
+reachable-turn value rather than the immediate leaf alone. It preserves immediate leaf and reachable
+continuation/terminal value as separate summands through target choice and Candidate construction, and
+both main-menu expansion and follow-up replanning consume that same result once. A reveal reached after
+a root Retreat is an ownership exception: Composer keeps the realized retreat leaf, while the
+promote/retreat equation keeps its payment/allowance cost and guarded replacement-Active attack;
+the reveal Candidate therefore carries zero synthesized terminal EV. The f109 dominance gate applies
+only when the root offers a deterministic one-prize Active Knock Out: a gust whose terminal EV does
+not exceed the best root attack terminal EV cannot claim transient target-swap leaf relief. The
+loaded-threat f30 gust and f119's higher-payoff gust-and-spread remain eligible controls. Hilda is also
+valid on f109: its realized leaf is +0.2625 over root and it preserves the same Nebula terminal EV, so
+the live choice is Hilda `[2]`; the historical attack-only `[5]` index is stale, while Boss stays dead.
 _Avoid_: beam admission (the REJECTED option — presence without comparability), target selection (the
 downstream act; expansion is what makes it comparable in the first place), chance node (a target
 choice is a CHOICE node — the player sees the space and picks, so the composer takes the **max**, not
@@ -2171,4 +2202,35 @@ because duplicate Wally copies are interchangeable; no raw-serial or frame excep
 physical Energy-card indices. `common.board_choice.legal_manual_retreat_outcomes` is the sole public
 manual-retreat board enumerator. `state_value.position_state_value` combines capped attack
 realization with nonterminal survival exposure; `active_position_potential` prices the best legal
-current-turn exchange under readiness. Attach and retreat ranking consume these shared APIs.
+current-turn exchange under readiness. Attach and retreat ranking consume these shared APIs. Issue
+#507 adds the missing allowance leg at the whether-to-retreat site: every manual Retreat subtracts
+`_RETREAT_ALLOWANCE_COST` in addition to its physical Energy/resource premium, even when the discard
+destroys no priced build. The state leaf still does not read `retreated`; this cost is owned once by
+the promote/retreat equation.
+
+## Issue #507 — total benefit minus opportunity cost
+
+Fetch uses the same Needs marginal as held-card valuation. A target whose every modeled clause is
+condition-locked now contributes zero *realized fetch benefit this turn*; that does not erase its
+future option Worth once held. For deterministic fetch plays, delivered benefit is net of the tutor
+and discard costs. A fetch Supporter may displace End, or another Supporter only when its net benefit
+beats Composer's chosen first-step edge over the best candidate with a different first action
+(`chosen.score - max(root, different-first-step scores)`, converted from prize to damage currency).
+Same-first-step continuations are excluded because they are not alternative decisions.
+
+A terminal Knock Out first computes ordinary future honest-promoter replacement relief. Its negative
+branch is authoritative: `ordinary < 0` returns ordinary unchanged, exactly cancelling survival value
+already banked by manipulating the Active that the attack removes. Only the nonnegative branch may be
+raised by immediate current-form Active-threat posture relief:
+`ordinary if ordinary < 0 else max(ordinary, posture)`. The readings are never summed, and `attack_ev`
+multiplies the selected result by KO probability once. The negative branch is what keeps f59's Hammer
+setup cancellation exact and leaves the Water attach as the beneficial action.
+
+Attach value may cash a benched recipient's same-turn attack only when the Active is doomed and a
+legal Retreat is visible on the root menu. The credited amount is incremental over both the target's
+unattached attack and the best other reachable pivot; if the target already Knocks Out the opposing
+Active, attaching adds zero. This is the f24 correction: the Energy goes to the benched attacker that
+can be promoted for the decisive attack. Persistent setup attaches can also outrank a non-winning
+Attack or End when their benefit exceeds shared Energy Worth, realizing the manual-attach allowance
+that would otherwise expire. One-shot Energy cannot add attack cash and retreat cash or bank either
+as durable position value.

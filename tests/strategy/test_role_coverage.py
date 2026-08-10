@@ -63,3 +63,12 @@ def test_every_worth_roled_card_prices_positive(agent):
     for cid, roles in pilot.strategy.roles.items():
         if any(r in ROLE_TIER for r in roles):
             assert pilot._role_value(cid) > 0, f"{agent}: card {cid} declares {roles} but prices 0"
+
+
+@pytest.mark.req("REQ-WORTH-0008")
+@pytest.mark.parametrize("agent", AGENTS)
+def test_every_known_card_in_every_shipped_deck_prices_positive(agent):
+    """A playable finite card always has option value; zero is reserved for an unknown fact / End."""
+    pilot = _shipped_pilot(agent)
+    zero = {cid for cid in set(pilot.deck) if pilot._role_value(cid) <= 0}
+    assert not zero, f"{agent}: known deck cards priced free: {sorted(zero)}"
