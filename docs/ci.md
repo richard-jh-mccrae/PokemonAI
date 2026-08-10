@@ -169,16 +169,38 @@ nothing in the suite writes to a fixed path or shares mutable state across tests
 through `tmp_path`), so this changes wall-clock time and nothing else: the same tests, same
 assertions, same gates.
 
+Measured on the first real run after the split (`31389233579`, `workflow_dispatch`, full suite,
+ubuntu-latest, py3.12 — same shape as the old baseline above, run right after this landed):
+
+| Job | Cost | vs. old |
+| --- | --- | --- |
+| `plan` | 8s | (new; was folded into the old job's first few steps) |
+| `test` (native): install | 67s | ~same |
+| `test` (native): run tests, `-n auto` | **13.1 min** | was 22.6 min — **1.7×** faster |
+| `test` (native): determinism backstop | 1.2 min | ~same |
+| `test` (native), job total | 15m51s | — |
+| `test-cgpy`: install | 70s | ~same |
+| `test-cgpy`: cgpy twin arm, `-n auto` | **9.0 min** | was 12.8 min — **1.4×** faster |
+| `test-cgpy`, job total | 10m26s | — |
+| **New wall-clock total** (`test`, `test-cgpy` run at the same time) | **~16 min** | was ~37.6 min — **2.35×** faster |
+
+**`-n auto` helped far less than a dev-box trial predicted, and that gap is itself informative.**
+A local trial (12 cores) suggested 3–4×; the real runner delivered 1.4–1.7×. That is evidence the
+hosted runner has meaningfully fewer usable cores than the dev box, and/or that a handful of
+tests running 60–140s each (`test_run_eval_cap_halts_the_run`, `test_run_battle_parallel_is_
+globally_seat_balanced`, …) form a tail that a small worker pool can't fully hide — spreading
+tests across ONE machine's cores has a ceiling that spreading them across SEVERAL machines (a
+matrix-sharded job) does not share, because each shard gets its own fresh core allocation. If the
+10-minute target still matters once selective testing (above) is fixed to actually narrow most PRs,
+sharding is the next lever, not another `-n` tweak.
+
 | Job | `timeout-minutes` | Why |
 | --- | --- | --- |
-| `plan` | 5 | Pure git + bash, no Python; was ~10s inside the old job |
-| `test` (native) | 20 | Was the 22.6 min line above; `-n auto` should cut it well below that, but the number is headroom until a real run confirms the new floor |
-| `test-cgpy` | 15 | Was the 12.8 min line above, same reasoning |
+| `plan` | 5 | Measured 8s |
+| `test` (native) | 20 | Measured 15m51s; loose headroom, not a floor |
+| `test-cgpy` | 15 | Measured 10m26s; loose headroom, not a floor |
 
-None of these are measured floors yet — they are the old per-arm cost as a ceiling, kept
-deliberately loose on the first run after a structural change, per the same rule the old single
-number followed: **re-measure per-step from the job JSON before trusting a new ceiling**, not after
-the next raise —
+Re-measure per-step from the job JSON before trusting a new ceiling, not after the next raise —
 
 ```bash
 gh api repos/richard-jh-mccrae/PokemonAI/actions/runs/<run-id>/jobs --jq '.jobs[] | "\(.name): \(.started_at) -> \(.completed_at)"'
@@ -186,7 +208,7 @@ gh api repos/richard-jh-mccrae/PokemonAI/actions/jobs/<job-id> --jq '.steps[] | 
 ```
 
 — because a number nobody re-measures just becomes the next stale baseline, the same way the
-~30.5 min one above did.
+~30.5 min one this table originally cited did.
 
 ### Line-ending guard
 
