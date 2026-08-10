@@ -1019,6 +1019,8 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
         name="attack_ev",
         consequences=_consequences(
             ("terminal.attack_damage", ("attack_damage",), "Prices KO and chip damage conversion."),
+            ("terminal.ko_survival_relief", ("turns_to_ko_me", "opponent_promotion"),
+             "Reconciles pre-attack exposure with the worst post-KO promoter."),
             ("terminal.attack_riders", ("attack_riders",), "Prices snipe and spread conversion."),
             ("terminal.attack_economy", ("attack_economy",), "Prices attack economy effects."),
             ("terminal.next_turn_lock", ("next_turn_lock",), "Prices forfeited next-turn payoff.")),
@@ -1032,7 +1034,9 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
                     "as an EXPECTATION rather than a printed floor, the target's prize value, "
                     "snipe/spread RIDER value priced against THEIR board, Effect-Clause economy "
                     "riders (energy recycle), and the next-turn clock cost an attacker-side lock "
-                    "imposes on ME — BOTH fields, `nextTurnSelfLock` ('can't use attacks') and "
+                    "imposes on ME. A KO also replaces the leaf's exposure to the dying Active with "
+                    "the worst exposure their honest promotion can create. BOTH lock fields, "
+                    "`nextTurnSelfLock` ('can't use attacks') and "
                     "`nextTurnSameAttackLock` ('can't use THIS attack'), which price differently "
                     "and which this line conflated until Issue #384. Readiness is deliberately "
                     "absent: whether I CAN "
@@ -1158,6 +1162,23 @@ def _active_position_evaluation(model: "StateModel") -> ActivePositionEvaluation
     if not outcomes:
         return ActivePositionEvaluation(
             0.0, PotentialStatus.KNOWN, "no usable legal current-turn manual retreat")
+
+    # ``state_value`` is the board left behind for a later action.  A payment carrying
+    # ``discard_eot`` is real current-turn cash, but it cannot become standing option value: the
+    # same one-shot Energy may instead be cashed by the terminal attack and will not survive either
+    # route.  Keep the retreat itself in ``board_choice``; filter only this nonterminal potential.
+    active = model.mine.active_raw or {}
+    cards = tuple(active.get("energyCards") or ())
+
+    def payment_persists(outcome) -> bool:
+        return all(model.energy_supply_from_card((cards[index] or {}).get("id")).persistent
+                   for index in outcome.discard_indices)
+
+    outcomes = tuple(outcome for outcome in outcomes if payment_persists(outcome))
+    if not outcomes:
+        return ActivePositionEvaluation(
+            0.0, PotentialStatus.KNOWN,
+            "legal manual retreats require expiring Energy; transient cash is not state potential")
 
     before_readiness = float(_evaluate_attack_readiness(model))
     before_survival = survival(_exposed_bodies(model), predicted_loss=False)
@@ -1292,11 +1313,81 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 def _survival_clock(model: "StateModel", body) -> int:
     """**THE** clock on one of my bodies (Issue #332) — the ONE call `survival` and `readiness` both
     read. `int` turns, deliberately NOT ADR-0117's fractional `TheirSide.survival_clock`."""
+    return _survival_clock_against(model, body, model.theirs.body_raws, model.theirs.active_raw)
+
+
+def _survival_clock_against(model: "StateModel", body, their_bodies, their_active) -> int:
+    """The canonical survival clock against an explicit opponent board and Active."""
     from common.option_equivalence import card_state_fingerprint
     canonical_bench = tuple(sorted(model.mine.bench_raws, key=card_state_fingerprint))
     return int(model.theirs.turns_to_ko_me(
-        body.body, my_benched=not body.is_active, my_bench=canonical_bench,
-        opp_active=model.theirs.active_raw, context=model.damage_context(attacker="theirs")))
+        body.body, bodies=their_bodies, my_benched=not body.is_active, my_bench=canonical_bench,
+        opp_active=their_active, context=model.damage_context(attacker="theirs")))
+
+
+def _survival_against(model: "StateModel", their_bodies, their_active) -> float:
+    """My ranked exposure against an explicit opponent board; no attackers means no exposure."""
+    if not their_bodies:
+        return 0.0
+    exposed = tuple(ExposedBody(float(body.prize_value),
+                                _survival_clock_against(model, body, their_bodies, their_active))
+                    for body in model.mine.bodies)
+    return survival(exposed)
+
+
+def _attack_survival_relief(model: "StateModel") -> float:
+    """Replace exposure to their dying Active with their worst-for-me legal promotion."""
+    def _compute():
+        before = survival(_exposed_bodies(model))
+        survivors = model.theirs.bench_raws
+        after = min((_survival_against(model, survivors, promoter) for promoter in survivors),
+                    default=0.0)
+        return float(after - before)
+
+    return float(model._memoized(("attack_survival_relief",), _compute))
+
+
+def _no_forward_forms(_card_id) -> tuple:
+    """Stable current-form-only clock policy; a named callable also makes memo keys reusable."""
+    return ()
+
+
+def _attack_posture_survival_relief(model: "StateModel") -> float:
+    """Immediate Active-threat tempo bought by a KO, against the worst current-form promoter.
+
+    The ordinary relief above deliberately sees future forms.  That can erase the real one-turn
+    benefit of removing an already-armed lethal Active when a bare multi-hop base is on the Bench.
+    This second reading asks the same survival equation about current forms only.  It remains a
+    terminal KO benefit, and :func:`attack_ev` probability-weights it exactly once.
+    """
+    mine = model.mine.active
+    active = model.theirs.active_raw
+    if mine is None or active is None:
+        return 0.0
+
+    def exposure(bodies, promoter) -> float:
+        clock = model.theirs.turns_to_ko_me(
+            mine.body, bodies=bodies, forward_ids=_no_forward_forms,
+            opp_active=promoter, context=model.damage_context(attacker="theirs"))
+        return survival((ExposedBody(float(mine.prize_value), int(clock)),))
+
+    before = exposure((active,), active)
+    survivors = model.theirs.bench_raws
+    after = min((exposure(survivors, promoter) for promoter in survivors), default=0.0)
+    return float(after - before)
+
+
+def _terminal_attack_survival_relief(model: "StateModel") -> float:
+    """One KO relief, retaining any ordinary replacement cost before posture supplementation.
+
+    A negative ordinary delta cancels survival value already banked by manipulating the Active that
+    this attack will remove.  The current-form posture reading may fill a missing positive benefit,
+    but its less-negative view must never erase that cost (the wasted pre-KO Hammer class).
+    """
+    ordinary = _attack_survival_relief(model)
+    if ordinary < 0.0:
+        return ordinary
+    return max(ordinary, _attack_posture_survival_relief(model))
 
 
 def _predicted_loss(model: "StateModel") -> bool:
@@ -1485,7 +1576,13 @@ def _deck_future_units(model: "StateModel") -> tuple:
 
 def combat_realization(model: "StateModel", body, *,
                        supply: EnergySupply | None = None) -> CombatRealization:
-    """Multi-attack envelope of persistent build, legal-now reach, and unseen future reach."""
+    """Multi-attack realization, including progress from a usable attack to a stronger one.
+
+    Face damage remains a maximum: mutually exclusive attacks are never added.  A body that can
+    already use a cheaper attack does, however, retain the *incremental* payoff it has built toward
+    a stronger attack.  Otherwise the cheap attack masks every intermediate attach until the
+    stronger attack crosses it, making the allocator spread Energy across fresh bodies.
+    """
     view = _combat_view(model, body)
     build = combat_build_profile(model, body, supply=supply)
     deck_units = _deck_future_units(model)
@@ -1536,6 +1633,26 @@ def combat_realization(model: "StateModel", body, *,
         best_future = max(best_future, future)
         if value > best_value:
             best_value, winner = value, enriched
+    # A ready/forward cheaper attack and progress toward a stronger attack describe different
+    # turns.  Credit only the stronger attack's payoff GAP, scaled by its typed build progress.  At
+    # zero progress this is exactly the cheaper realization; at full progress it is no more than
+    # the stronger payoff.  ``max`` with the ordinary envelope preserves whichever is honestly
+    # better and makes the construction continuous at both endpoints.
+    upgrade_survival = _survives_to_spend(model, view) if view is not None else 0.0
+    for stronger in realised:
+        if stronger.status is PotentialStatus.UNKNOWN:
+            continue
+        stronger_full = stronger.payoff_prizes * stronger.hop_discount
+        for cheaper in realised:
+            if cheaper.status is PotentialStatus.UNKNOWN:
+                continue
+            cheaper_full = cheaper.payoff_prizes * cheaper.hop_discount
+            if cheaper_full >= stronger_full:
+                continue
+            upgrade = (cheaper.realization_prizes
+                       + (stronger_full - cheaper_full) * stronger.progress * upgrade_survival)
+            best_value = max(best_value, upgrade)
+
     status = (PotentialStatus.UNKNOWN
               if any(c.status is PotentialStatus.UNKNOWN for c in realised)
               else PotentialStatus.KNOWN)
@@ -1547,8 +1664,9 @@ def combat_realization(model: "StateModel", body, *,
 
 
 def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
-                  supply_override: tuple[object, EnergySupply] | None = None,
-                  body_override: tuple[object, object] | None = None) -> tuple:
+                   supply_override: tuple[object, EnergySupply] | None = None,
+                   body_override: tuple[object, object] | None = None,
+                   saturate_duplicates: bool = False) -> tuple:
     """MY bodies as readiness reads them, through the canonical multi-attack envelope."""
     out = []
     rows = []
@@ -1568,7 +1686,8 @@ def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
             continue                       # nothing this body can land: a condition it cannot meet
         rows.append((b, evaluated, key, realised))
     relevance_by_body = _readiness_relevance(
-        model, tuple((evaluated, realised) for _b, evaluated, _key, realised in rows))
+        model, tuple((evaluated, realised) for _b, evaluated, _key, realised in rows),
+        saturate_duplicates=saturate_duplicates)
     for _b, evaluated, key, realised in rows:
         body = ReadyBody(payoff=realised.value_prizes, readiness_odds=1.0,
                          role_relevance=relevance_by_body[id(evaluated)])
@@ -1576,22 +1695,30 @@ def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
     return tuple(out)
 
 
-def _readiness_relevance(model: "StateModel", rows) -> dict[int, float]:
-    """Permutation-invariant utility-copy saturation: the strongest equal-ID build is primary."""
+def _readiness_relevance(model: "StateModel", rows, *,
+                         saturate_duplicates: bool = False) -> dict[int, float]:
+    """Permutation-invariant utility-copy relevance; attach marginals can force saturation.
+
+    Absolute board value preserves the established secondary-attacker tier. The attach comparator
+    forces saturation because one manual Energy cannot realize the same cheap attack on every copy;
+    that prevents spread without changing promotion or exposure value for built win conditions.
+    """
     groups: dict = {}
     for body, profile in rows:
         groups.setdefault(body.card_id, []).append((body, profile))
     out = {}
     for card_id, members in groups.items():
         base = _role_relevance(model, card_id)
-        saturated = model.mine.role_worth(card_id) < ROLE_TIER["secondary_attacker"]
+        saturated = (saturate_duplicates
+                     or model.mine.role_worth(card_id) < ROLE_TIER["secondary_attacker"])
         ordered = sorted(members, key=lambda row: -float(row[1].value_prizes))
         for rank, (body, _profile) in enumerate(ordered):
             out[id(body)] = base * (_SATURATED if saturated and rank else 1.0)
     return out
 
 
-def readiness_supply_delta(model: "StateModel", body, supply: EnergySupply) -> float:
+def readiness_supply_delta(model: "StateModel", body, supply: EnergySupply, *,
+                           saturate_duplicates: bool = False) -> float:
     """Exact readiness-family marginal of attaching ``supply`` to one current body."""
     view = model.mine.view_of(body)
     if view is None:
@@ -1603,10 +1730,26 @@ def readiness_supply_delta(model: "StateModel", body, supply: EnergySupply) -> f
     if existing is None:
         return 0.0
     body_override = None if existing is view else (existing, view)
-    before = readiness(_ready_bodies(model, body_override=body_override))
+    before = readiness(_ready_bodies(
+        model, body_override=body_override, saturate_duplicates=saturate_duplicates))
     after = readiness(_ready_bodies(model, supply_override=(existing, supply),
-                                    body_override=body_override))
+                                    body_override=body_override,
+                                    saturate_duplicates=saturate_duplicates))
     return _plain_float(after - before)
+
+
+def readiness_supply_value_damage(model: "StateModel", body, supply: EnergySupply) -> float:
+    """Canonical attach marginal in damage currency, before readiness' positional scale.
+
+    Unlike a per-body attack envelope, this retains duplicate-body saturation and board caps, so a
+    fresh cheap attacker cannot outrank progress on the primary copy merely by reopening the same
+    payoff.
+    """
+    if _READINESS_W <= 0.0:
+        return 0.0
+    return (_plain_float(readiness_supply_delta(
+                model, body, supply, saturate_duplicates=True))
+            * currency.PRIZE_DAMAGE_RATE / _READINESS_W)
 
 
 def allocate_energy_units(model: "StateModel", recipients: Iterable, unit_codes: Iterable[int],
@@ -1890,6 +2033,8 @@ class AttackEV:
     riders: float = 0.0
     #: Effect-Clause economy riders (energy recycling and its relatives).
     economy: float = 0.0
+    #: KO-gated replacement of pre-attack exposure with the worst promoted Active. Already weighted.
+    survival_relief: float = 0.0
     #: What an attacker-side next-turn lock costs ME next turn; `nextTurnSelfLock` and
     #: `nextTurnSameAttackLock` price differently. A COST — already subtracted.
     next_turn_cost: float = 0.0
@@ -1898,14 +2043,16 @@ class AttackEV:
 
     def working(self) -> dict:
         return {"knockout": self.knockout, "chip": self.chip, "riders": self.riders,
-                "economy": self.economy, "next_turn_cost": self.next_turn_cost}
+                "economy": self.economy, "survival_relief": self.survival_relief,
+                "next_turn_cost": self.next_turn_cost}
 
 
 def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
               ko_probability: float = 1.0, rider_value: float = 0.0,
-              economy_value: float = 0.0, next_turn_cost: float = 0.0) -> AttackEV:
+              economy_value: float = 0.0, survival_relief: float = 0.0,
+              next_turn_cost: float = 0.0) -> AttackEV:
     """**EV of the attack that ENDS the turn**, in prizes: `score = state_value(end board) + this`.
-    An EXPECTATION (`ko_probability`); chip is credited below the KO band; ``next_turn_cost`` SUBTRACTS."""
+    KO and relief are expectations; chip prices misses; ``next_turn_cost`` subtracts."""
     dmg, hp = max(0.0, float(damage)), max(0.0, float(target_hp))
     prizes, p_ko = max(0.0, float(target_prizes)), min(1.0, max(0.0, float(ko_probability)))
     if hp and dmg >= hp:
@@ -1916,9 +2063,11 @@ def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
     else:                                   # unreadable HP: fall back to the median crossing
         knockout = 0.0
         chip = min(prizes, dmg / currency.PRIZE_DAMAGE_RATE)
-    total = knockout + chip + float(rider_value) + float(economy_value) - float(next_turn_cost)
+    relief = float(survival_relief) * p_ko if hp and dmg >= hp else 0.0
+    total = knockout + chip + float(rider_value) + float(economy_value) + relief - float(next_turn_cost)
     return AttackEV(knockout=knockout, chip=chip, riders=float(rider_value),
-                    economy=float(economy_value), next_turn_cost=float(next_turn_cost),
+                    economy=float(economy_value), survival_relief=relief,
+                    next_turn_cost=float(next_turn_cost),
                     total=total)
 
 
@@ -1958,6 +2107,8 @@ def attack_ev_legs(model: "StateModel") -> tuple:
     # MATCHUP-FREE: the lock leg asks what this body could do NEXT turn, so it reads `printed`.
     followups = {p.attack_id: p.printed for p in profiles if p.attack_id is not None}
     costless = _lock_is_costless(model, body, followups)
+    survival_relief = (_terminal_attack_survival_relief(model)
+                       if hp and any(_attack_damage(p) >= hp for p in profiles) else 0.0)
     return tuple(AttackLegs(p.attack_id, {
         "damage": _attack_damage(p),
         "target_hp": hp,
@@ -1965,6 +2116,7 @@ def attack_ev_legs(model: "StateModel") -> tuple:
         "ko_probability": _attack_ko_probability(p, hp),
         "rider_value": _attack_rider_value(p),
         "economy_value": _attack_economy_value(p),
+        "survival_relief": survival_relief,
         "next_turn_cost": 0.0 if costless else _attack_next_turn_cost(p, followups),
     }) for p in profiles)
 
@@ -2075,6 +2227,7 @@ __all__: Sequence[str] = (
     "EnergySupply", "AttackBuildLeg", "CombatBuildProfile", "CombatRealization",
     "EnergyAllocation", "energy_supply_from_card", "energy_supply_for_units",
     "combat_build_profile", "combat_realization", "readiness_supply_delta",
+    "readiness_supply_value_damage",
     "allocate_energy_units", "recovery_recipients", "allocate_recovery_energy",
     "LegDifference", "FamilyDifference", "ValueDifference", "registry_identity",
     "state_value", "position_state_value", "active_position_potential", "active_position_delta",

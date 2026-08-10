@@ -3,9 +3,11 @@ both in the Pilot's Tactical layer (`_tactical`). Lib-free: per-attackId maps ar
 """
 import pytest
 
+from common import action_cost
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
+from common.strategy.context import _ABILITY, _END
 from pilot_helpers import ACTIVE, BENCH, HAND, attack_opt, card_opt, make_select, opt, poke, state
 
 MY_ATK = 920        # my Active attacker
@@ -57,6 +59,26 @@ def _gpilot(**kw):
     from common.strategy.general_strategy import GENERAL_STRATEGY
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=DictCardStatProvider(_CARDS), **kw)
+
+
+@pytest.mark.req("REQ-WORTH-0008")
+@pytest.mark.parametrize("action", [
+    attack_opt(A_PLAIN),
+    {"type": _ABILITY, "area": ACTIVE, "index": 0},
+])
+def test_a_no_benefit_non_card_action_has_strict_cost_while_end_is_free(action):
+    """Issue #507: Attack/Ability consume turn resources even when no benefit evaluator fires."""
+    pilot = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=0, cost=0)})
+    obs = make_select([action, opt(_END)],
+                      current=state(active=poke(MY_ATK, hp=100, max_hp=100),
+                                    opp_active=poke(OPP, hp=100, max_hp=100)))
+
+    decision = pilot.explain(obs)
+
+    assert decision.options[0].tactical == 0.0
+    assert decision.options[0].score == -action_cost.ACTION_OPPORTUNITY_COST_DAMAGE < 0.0
+    assert decision.options[1].score == 0.0
+    assert decision.chosen == [1]
 
 
 # --- Issue #289: known top-of-deck copy attack --------------------------------------------------

@@ -42,11 +42,21 @@ PINS = {
                    "TARGET by the tutor-chain grab-value build)",
     "83686860-33": "ft: fetch Munkidori over a redundant Drakloak",
     "85058051-13": "ft: fetch the Lunatone engine the wincon needs",
+    "82228640-9": "ft: the needs ledger values the live Staryu over the dead setup-only opener",
+    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex through marginal line demand",
     # whether-to-play / hold the fetch (deadline + whiff)
     "85045840-12": "hold: attach the {P} to Dreepy instead of a needless Ultra Ball",
     # Costed-search POC: 83967841-17/85163634-17 moved; composer plays Ultra Ball on both.
     # shuffle timing & keep-value (the refresh side)
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
+    "83686860-13": "keep: don't refresh a live hand — end the turn; the refresh's card and held-"
+                   "hand costs exceed its benefit",
+    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
+                   "covering an irreplaceable Active takes an insurance slot at its full tier "
+                   "instead of the 0.45 latency haircut, so Lillie's prices negative and the agent "
+                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
+    "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
+                   "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
     # discard-as-resource (zone-signed worth). No option-level valuation ranks these; what does is
     # scoring the whole TURN.
     "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as "
@@ -78,14 +88,8 @@ S5_REJECTED_GUSTS_PENDING = {
 # A THIRD category, deliberately NOT folded into TARGETS: behaviour that CHANGED under the swap and
 # that nobody has ruled on yet. Each keeps its ORIGINAL pin text verbatim.
 POC_T4_FLIPS = {
-    "83686860-13": "keep: don't refresh a live hand — end the turn (moved by Issue #456's scalar "
-                   "refresh valuation; pending human re-adjudication)",
     "83007714-8":  "hold: no need to Ultra Ball — end the turn, hold the outs",
     "85046350-79": "hold: Boss's Orders the KO rather than a dead Poffin",
-    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
-                   "covering an irreplaceable Active takes an insurance slot at its full tier "
-                   "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
-                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
     # Filed by the `shed` WIRING, not the swap: before it, every costed search REFUSED unpriced and
     # the composer had no opinion about an Ultra Ball.
     "83967841-17": "the composer plays Ultra Ball where the human ruled End turn; the costed "
@@ -97,14 +101,10 @@ POC_T4_FLIPS = {
     # Packeted in docs/plans/issue-sequence-466-wave3-packet.md as unruled Issue #466/#468 flips;
     # neither baseline was recaptured. Original PIN text kept verbatim.
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
-    "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
-                   "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
 }
 # Issue #459 retires shared valuations from every runtime.
 # Strict xfail preserves the immutable corpus label and makes composer recovery reviewable.
 ISSUE_459_GLOBAL_RUNTIME_FLIPS = {
-    "82228640-9": "recovered from the 40 dropped records — global shared setup valuation retired",
-    "81903490-8": "ft: Ultra Ball hunts Mega Starmie ex — global shared fetch valuation retired",
     "85045840-14": "dp: keep Dragapult ex — global shared discard valuation retired",
 }
 # The tagged blunder is DEAD but strict `correct`-equality cannot hold: the residue is a DIFFERENT,
@@ -233,9 +233,9 @@ def test_correction_ranks_the_human_pick_top(cid):
 
 
 def test_issue_495_rules_the_82525741_multiattack_flip_explicitly():
-    """The shared envelope values the attach transition; this is no longer a fetch-closure pin."""
+    """The corrected evolve play wins after the shared envelope reprices the attack alternatives."""
     rec = _record("82525741-78")
-    assert _pilot(rec.agent).explain(rec.obs).chosen == [6]
+    assert _pilot(rec.agent).explain(rec.obs).chosen == rec.correct
 
 
 @pytest.mark.req("REQ-CORPUS-0001")

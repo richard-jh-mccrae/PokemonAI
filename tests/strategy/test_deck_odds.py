@@ -254,7 +254,9 @@ def test_probable_whiff_stays_silent_when_the_target_is_plausibly_present():
                          obs["select"]["option"][0])
     assert not ctx.search_targets_unlikely
     assert "dont-search-a-probable-whiff" not in _fired(pilot.explain(obs).options[0])
-    assert _ranked(pilot, obs)[0][0] == 0                          # play bench-filler — probably hits
+    dec = pilot.explain(obs)
+    assert dec.options[0].tactical == pytest.approx(2.25 - 10.0)
+    assert dec.chosen == [1]       # a likely hit still loses when delivered benefit is below card cost
 
 
 @pytest.mark.req("REQ-GEN-0055")

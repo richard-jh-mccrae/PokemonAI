@@ -30,23 +30,23 @@ def probes():
 
 
 @pytest.mark.req("REQ-APPLY-0002")
-def test_an_unexpanded_retreat_prices_at_EXACTLY_zero_on_both_acceptance_frames(probes):
-    """Measured: a retreat's 1-ply delta is EXACTLY 0.0 on both acceptance frames, because `_retreat`
-    writes `allowance_retreat_used` alone and no `state_value` family reads the retreat allowance."""
+def test_an_unexpanded_retreat_pays_a_real_cost_on_both_acceptance_frames(probes):
+    """Issue #507: only End is free. Even before its target is expanded, a retreat consumes the
+    once-per-turn allowance, so its 1-ply benefit-minus-cost delta must be strictly negative."""
     for name, report in probes.items():
         assert report["deferred_target_option"] is not None, name
         assert report["unexpanded"]["shape"] == "point", name
-        assert report["unexpanded"]["delta"] == 0.0, (name, report["unexpanded"])
+        assert report["unexpanded"]["delta"] < 0.0, (name, report["unexpanded"])
 
 
 @pytest.mark.req("REQ-APPLY-0002")
-def test_expansion_makes_the_same_option_a_real_positive_comparable_number(probes):
-    """Armed, the option resolves to a choice node and its 1-ply delta is the MAX over the classes —
-    strictly positive where it was nothing, and a 0 is what the beam reads as *never explore this*."""
+def test_expansion_adds_target_benefit_to_the_same_costed_option(probes):
+    """Armed, the choice node's best legal target recovers the retreat cost. The net can be neutral,
+    but it must strictly improve on the cost-only point; this is benefit minus the same action cost."""
     for name, report in probes.items():
         assert report["expanded"]["shape"].startswith("choice["), name
-        assert report["expanded"]["delta"] > 0.0, (name, report["expanded"])
         assert report["expanded"]["delta"] > report["unexpanded"]["delta"], name
+        assert report["expanded"]["delta"] == 0.0, (name, report["expanded"])
 
 
 @pytest.mark.req("REQ-APPLY-0002")
@@ -57,11 +57,12 @@ def test_the_item3_MARGIN_telemetry_at_every_width_the_frame_can_support(probes)
     assert f35["unexpanded"]["rank"] == 1 and f35["expanded"]["rank"] == 1, f35
 
     assert f35["expanded"]["scored"] == 2, f35
-    # Issue #495: exact typed attack realization widens both margins; pin the
-    # newly ruled telemetry rather than retaining the legacy proxy values.
-    assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.006, abs=1e-6)
-    assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.01344140625, abs=1e-6)
-    assert f35["expanded"]["margin_by_k"][2] > f35["unexpanded"]["margin_by_k"][2] * 2
+    # Issue #507: the point pays retreat cost alone; target expansion adds enough position benefit
+    # to widen its margin over the second candidate. Pin both derived figures so either leg moving
+    # forces another review of the benefit-minus-cost equation.
+    assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.00309375, abs=1e-6)
+    assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.01053515625, abs=1e-6)
+    assert f35["expanded"]["margin_by_k"][2] > f35["unexpanded"]["margin_by_k"][2] * 3
 
     f32 = probes["f32"]
     assert f32["unexpanded"]["rank"] == 2 and f32["expanded"]["rank"] == 2, f32

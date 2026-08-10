@@ -234,13 +234,18 @@ class LineMixin:
     def _priority_wincon_slot(self, me: dict, active_lethal: bool,
                               active_doomed: bool = False) -> tuple | None:
         """(AreaType, index) of the ONE win-condition to concentrate Energy on — of those short of their biggest
-        attack, the one carrying the most. A BARE pre-evo is NOT a slot: nothing started, nothing to concentrate."""
+        attack, the one carrying the most. A BARE pre-evo is NOT a slot: nothing started, nothing to concentrate.
+
+        A cheap Active attack taking this turn's Knock Out does not finish that body's build.  Exclude
+        it only when it is doomed; otherwise spreading to a bare backup throws away progress toward
+        the stronger attack on the surviving primary.
+        """
         wincon = self._wincon_set()
         if not wincon:
             return None
         best = None                                  # (energy, area, index)
         active = (me.get("active") or [])
-        if not active_lethal and not active_doomed:
+        if not active_doomed:
             for i, p in enumerate(active):
                 if p and p.get("id") in wincon and self._attach_target_under_max(p):
                     e = len(p.get("energies") or [])
@@ -255,7 +260,7 @@ class LineMixin:
             return (best[1], best[2])
         # Pass 2 (multi-stage lines): no win-condition BODY is buildable, so concentrate on the LINE PRE-EVO
         # carrying the MOST Energy while still short of its payoff's biggest attack cost.
-        zones = ((_ACTIVE, active if not (active_lethal or active_doomed) else []),
+        zones = ((_ACTIVE, active if not active_doomed else []),
                  (_BENCH, me.get("bench") or []))
         best_pre = None                                    # (energy, area, index)
         for line in self._wincon_lines():

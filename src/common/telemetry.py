@@ -13,6 +13,21 @@ import sys
 TAG = "@T"
 
 
+def _wire_value(value):
+    """Return the JSON-stable shape ``emit`` writes, while keeping ``to_record`` pure.
+
+    Composer diagnostics contain tuples for immutable in-memory counters (notably per-depth
+    statistics).  A telemetry record is already a wire object, so exposing those tuples here made
+    ``to_record(decision)`` differ from the very record ``emit(decision)`` writes and collectors
+    read back.
+    """
+    if isinstance(value, dict):
+        return {key: _wire_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_wire_value(item) for item in value]
+    return value
+
+
 def _opt_record(o) -> dict:
     """One option's wire record. `deferred` = an attack-last held-back turn-ender; `needy` = the
     win-condition-Line attach preferred among EQUAL-score attaches. Both sparse."""
@@ -62,7 +77,7 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
                                                   # gone). `diverged` is now always False for pool lines.
     composer = getattr(decision, "composer", None)
     if composer is not None:                      # sparse: margin telemetry, run stats and coverage-gap
-        rec["composer"] = composer                # reasons — emitted whenever the composer RAN, INCLUDING
+        rec["composer"] = _wire_value(composer)   # reasons — emitted whenever the composer RAN, INCLUDING
                                                   # when it declined; a decline's reason is worth reading
     objectives = getattr(decision, "objectives", None)
     if objectives is not None:                    # sparse: the Tier-3 match-objective read (ADR-0040)

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from typing import Mapping, Sequence
 
 from common import apply_option as ao
+from common import action_cost
 from common import board_choice
 from common import board_delta
 from common import board_expectation as bx
@@ -95,8 +96,8 @@ def _bench_max(model) -> int:
 
 #: ADR-0095 decision 1's six tiers over StateModel facts. The two Pilot-side KO_SCORE nuances are
 #: deliberately NOT reproduced: both are score-conditional, and a canonical ORDER must not be.
-TIER_INFORMATIVE = 0     # free AND informative: a draw / search / dig, a Bench fill, an evolve
-TIER_COMMIT_FREE = 1     # free but COMMITTING: an Item / Stadium play that reveals nothing
+TIER_INFORMATIVE = 0     # informative/beneficial: a draw / search / dig, Bench fill, evolve
+TIER_COMMIT_FREE = 1     # quota-free but COMMITTING: an Item / Stadium play that reveals nothing
 TIER_SUPPORTER = 2       # the one-per-turn Supporter
 TIER_COMMITMENT = 3      # the blind / costly commitments: the Energy attach, a Tool equip
 TIER_SHUFFLE = 4         # a hand-SHUFFLE Supporter — it nukes the hand, so attach before it
@@ -507,15 +508,15 @@ def canonical_tier(model, option: Mapping, footprint=None) -> int:
     if fp.reveals_information:
         return TIER_INFORMATIVE
     if kind == _EVOLVE:
-        return TIER_INFORMATIVE                  # "evolve a benched Pokemon" rides the free band
+        return TIER_INFORMATIVE                  # "evolve a benched Pokemon" rides the quota-free band
     if kind == _ATTACH:
         return TIER_COMMITMENT                   # Energy AND Tool: a Tool is an `_ATTACH` (tier 3)
     if kind == _PLAY and card is not None:
         if getattr(card, "is_supporter", False):
             return TIER_SUPPORTER
         if getattr(card, "is_pokemon", False):
-            return TIER_INFORMATIVE              # a Bench fill is free and reveals a better target
-        return TIER_COMMIT_FREE                  # an Item / a Stadium: free but committing
+            return TIER_INFORMATIVE              # a Bench fill reveals a better target
+        return TIER_COMMIT_FREE                  # an Item / a Stadium: quota-free but committing
     return TIER_ENDER                            # uncharacterised: last, fail closed
 
 
@@ -567,7 +568,8 @@ def _admissible_in_block(key, block_keys) -> bool:
 
 def terminal_ev(model, option: Mapping) -> tuple:
     """``(EV in prizes, AttackEV or None, coverage-gap reason)`` for a TERMINAL option. ⚠️ Reads
-    `AttackEV.total`, never the working-dict sum, which is FROZEN ASYMMETRIC. No leg = a GAP, not 0."""
+    `AttackEV.total`, never the working-dict sum, which is FROZEN ASYMMETRIC, then charges the attack's
+    actual turn-ending opportunity. No leg = a GAP, not 0; only End is exactly free."""
     kind = ao.transition_kind(option)
     if kind == _END:
         return 0.0, None, ""
@@ -577,7 +579,7 @@ def terminal_ev(model, option: Mapping) -> tuple:
     for leg in attack_ev_legs(model):
         if leg.attack_id == attack_id:
             ev = attack_ev(**leg.kwargs)
-            return float(ev.total), ev, ""
+            return float(ev.total) - action_cost.residual_cost_prizes(kind), ev, ""
     return 0.0, None, (
         f"attack {attack_id!r} has no `attack_ev_legs` leg on this board — its EV is UNKNOWN, and "
         f"pricing it 0.0 would rank a real attack below every scored line")
@@ -586,27 +588,53 @@ def terminal_ev(model, option: Mapping) -> tuple:
 def continuation_ev(model) -> float:
     """The best terminal action still REACHABLE, in prizes — the second summand of a CUT line
     (ADR-0129). ⚠️ Answers from the BOARD, not the menu, so :func:`_stop_here` must not inherit it."""
-    return max((float(attack_ev(**leg.kwargs).total) for leg in attack_ev_legs(model)), default=0.0)
+    attacks = (float(attack_ev(**leg.kwargs).total)
+               - action_cost.residual_cost_prizes(_ATTACK)
+               for leg in attack_ev_legs(model))
+    return max(0.0, max(attacks, default=0.0))       # End remains reachable and costs exactly zero
+
+
+@dataclass(frozen=True)
+class DeferredTargetValue:
+    """A target's immediate leaf and reachable terminal kept separate for honest composition."""
+
+    leaf: float
+    terminal_ev: float
+
+    @property
+    def score(self) -> float:
+        return self.leaf + self.terminal_ev
+
+
+def deferred_target_value(model) -> DeferredTargetValue:
+    """The shared target/replan value: post-choice board plus its best reachable terminal."""
+    return DeferredTargetValue(float(state_value(model)), continuation_ev(model))
 
 
 @dataclass(frozen=True)
 class ScoredTarget:
-    """One instance of a deferred target, scored on the board it produces; ``rank`` is 1-based."""
+    """One deferred target; the separated summands prevent later terminal double-counting."""
 
     rank: int
     leaf: float
+    terminal_ev: float
     model: object
     fingerprint: tuple = ()
     probability: float = 0.0
 
+    @property
+    def score(self) -> float:
+        return self.leaf + self.terminal_ev
+
 
 @dataclass(frozen=True)
 class TargetChoice:
-    """``leaf`` is the score that ORDERS — the MAX over the enumeration — while ``expected`` is the
-    availability-weighted mean carried alongside as the reported lower bound."""
+    """``score`` orders classes; ``leaf`` and ``terminal_ev`` remain separate for Candidate math."""
 
     scored: tuple = ()
     leaf: float = 0.0
+    terminal_ev: float = 0.0
+    score: float = 0.0
     expected: float = 0.0
     truncated: int = 0
     total_probability: float = 0.0
@@ -617,29 +645,39 @@ class TargetChoice:
 
     @property
     def runner_up(self) -> float | None:
-        return self.scored[1].leaf if len(self.scored) > 1 else None
+        return self.scored[1].score if len(self.scored) > 1 else None
 
     def working(self) -> dict:
-        return {"classes": len(self.scored), "leaf": self.leaf, "expected": self.expected,
-                "gap": self.leaf - self.expected, "runner_up": self.runner_up,
+        return {"classes": len(self.scored), "leaf": self.leaf,
+                "terminal_ev": self.terminal_ev, "score": self.score,
+                "expected": self.expected, "gap": self.score - self.expected,
+                "runner_up": self.runner_up,
                 "truncated": self.truncated, "total_probability": self.total_probability}
 
 
 def rank_targets(model, expectation) -> TargetChoice:
     """**THE evaluator for a deferred target — one entry point, BOTH sites** (ADR-0121 decision 6):
     the MAIN menu and the follow-up select, which REPLANS rather than replaying a commitment."""
+    def scored_target(outcome) -> ScoredTarget:
+        value = deferred_target_value(outcome.model)
+        return ScoredTarget(rank=0, leaf=value.leaf, terminal_ev=value.terminal_ev,
+                            model=outcome.model, fingerprint=tuple(outcome.fingerprint or ()),
+                            probability=float(outcome.probability))
+
     scored = sorted(
-        (ScoredTarget(rank=0, leaf=float(state_value(c.model)), model=c.model,
-                      fingerprint=tuple(c.fingerprint or ()), probability=float(c.probability))
-         for c in expectation.classes),
-        key=lambda s: (-s.leaf, s.fingerprint))
-    ranked = tuple(ScoredTarget(rank=n + 1, leaf=s.leaf, model=s.model, fingerprint=s.fingerprint,
+        (scored_target(outcome) for outcome in expectation.classes),
+        key=lambda s: (-s.score, s.fingerprint))
+    ranked = tuple(ScoredTarget(rank=n + 1, leaf=s.leaf, terminal_ev=s.terminal_ev,
+                                model=s.model, fingerprint=s.fingerprint,
                                 probability=s.probability) for n, s in enumerate(scored))
     mass = float(expectation.total_probability)
+    best = ranked[0] if ranked else None
     return TargetChoice(
         scored=ranked,
-        leaf=ranked[0].leaf if ranked else 0.0,
-        expected=(sum(s.probability * s.leaf for s in ranked) / mass) if mass > 0.0 else 0.0,
+        leaf=best.leaf if best is not None else 0.0,
+        terminal_ev=best.terminal_ev if best is not None else 0.0,
+        score=best.score if best is not None else 0.0,
+        expected=(sum(s.probability * s.score for s in ranked) / mass) if mass > 0.0 else 0.0,
         truncated=int(expectation.truncated), total_probability=mass)
 
 
@@ -749,6 +787,20 @@ def _same_terminal_payoff(candidate: Candidate, direct: Candidate) -> bool:
             == round(float(direct.terminal_ev), ao.SCORE_PLACES))
 
 
+def _gust_has_no_terminal_gain(candidate: Candidate, direct_attacks: Sequence[Candidate]) -> bool:
+    """A gust cannot bank a transient Active swap when its attack gains nothing over the root.
+
+    Composer has no post-attack board: a direct Knock Out therefore cannot put the removed Active's
+    survival relief into its leaf, while a pre-attack gust can.  When the root already offers that
+    Knock Out and the gust line's terminal is no better than an available root attack, the apparent
+    leaf gain is not a realised benefit of spending the gust card.
+    """
+    if not direct_attacks:
+        return False
+    best = max(float(direct.terminal_ev) for direct in direct_attacks)
+    return round(float(candidate.terminal_ev), ao.SCORE_PLACES) <= round(best, ao.SCORE_PLACES)
+
+
 def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:
     """Apply only sound terminal dominance before the ordinary candidate ordering."""
     if not candidates:
@@ -758,12 +810,15 @@ def _selection_candidates(model, candidates: Sequence[Candidate]) -> tuple:
     if direct_wins and _direct_terminal_attack(ordinary):
         return direct_wins
     direct_kos = tuple(c for c in candidates if _one_prize_active_ko(model, c))
-    if not direct_kos or not _active_has_energy(model):
+    if not direct_kos:
         return tuple(candidates)
+    direct_attacks = tuple(c for c in candidates if _direct_terminal_attack(c))
     return tuple(
         candidate for candidate in candidates
         if not (_starts_with_gust(model, candidate)
-                and any(_same_terminal_payoff(candidate, direct) for direct in direct_kos))
+                and ((_active_has_energy(model)
+                      and any(_same_terminal_payoff(candidate, direct) for direct in direct_kos))
+                     or _gust_has_no_terminal_gain(candidate, direct_attacks)))
     )
 
 
@@ -1111,9 +1166,21 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                        delta=ev, after=None, fate=ao.TERMINAL, footprint=ao.Footprint(),
                        terminal=True, ev=ev, gap=gap, semantic_key=semantic,
                        outcome_kind="terminal")
+    kind = ao.transition_kind(option)
+    residual = action_cost.residual_cost_prizes(kind)
+    # ``node.leaf`` may already include an earlier residual while the model carries only board
+    # state. Deltas therefore compare with the raw current board so every consumed allowance stays
+    # in the sequence exactly once instead of being refunded by the next transition.
+    raw_current_leaf = float(state_value(node.model))
     cover = _ask(state.clauses_cover, option)
     footprint = ao.option_footprint(node.model, option, clauses_cover=cover)
     key = canonical_key(node.model, option, index, state.canon[index], footprint)
+    score = state_value
+    if {"attached_energy", "their_discard_contents"} <= footprint.writes:
+        root_terminal = continuation_ev(node.model)
+
+        def score(after):
+            return float(state_value(after)) + continuation_ev(after) - root_terminal
 
     def _refuse(reason: str) -> _Ranked:
         state.gaps.append(f"{_frame_of(option)}: {reason}")
@@ -1122,24 +1189,25 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                        semantic_key=semantic)
 
     try:
-        closed = bx.closed_form_transition(node.model, option, score=state_value,
+        closed = bx.closed_form_transition(node.model, option, score=score,
                                            clauses_cover=cover, shed=state.shed)
     except Unmodellable as gap:
         return _refuse(str(gap))
     if isinstance(closed, ao.Expectation):
         state.leaf_evals += len(closed.classes)
-        leaf = float(closed.ordering(state_value))
-        state.bounds.append(Bounds(index=index, best=float(closed.best(state_value)),
-                                   expected=float(closed.expected(state_value)),
+        leaf = float(closed.ordering(score)) - residual
+        state.bounds.append(Bounds(index=index, best=float(closed.best(score)) - residual,
+                                   expected=float(closed.expected(score)) - residual,
                                    classes=len(closed.classes), truncated=closed.truncated,
                                    total_probability=float(closed.total_probability)))
-        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+        return _Ranked(index=index, option=option, key=key, delta=leaf - raw_current_leaf, after=None,
                        fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf,
                        semantic_key=semantic, outcome_kind=str(closed.resolution))
     if isinstance(closed, ao.ScalarTransition):
         state.leaf_evals += 1
-        leaf = float(state_value(closed.model)) + closed.scalar
-        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+        leaf = float(score(closed.model)) + closed.scalar - residual
+        return _Ranked(index=index, option=option, key=key,
+                       delta=leaf - raw_current_leaf, after=None,
                        fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf,
                        semantic_key=semantic, outcome_kind="scalar-reveal")
 
@@ -1174,7 +1242,9 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
         state.bounds.append(Bounds(index=index, best=best, expected=lower,
                                     classes=len(result.classes), truncated=result.truncated,
                                     total_probability=float(result.total_probability)))
-        return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
+        leaf -= residual
+        return _Ranked(index=index, option=option, key=key,
+                       delta=leaf - raw_current_leaf, after=None,
                        fate=ao.MODELLED, footprint=footprint, reveals=True,
                        truncated=result.truncated, ev=leaf, semantic_key=semantic,
                        outcome_kind=str(result.resolution))
@@ -1194,21 +1264,24 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
         state.expanded_families += 1
         state.expansion_children += len(choice.scored)
         state.truncated += choice.truncated
-        state.bounds.append(Bounds(index=index, best=choice.leaf, expected=choice.expected,
+        state.bounds.append(Bounds(index=index, best=choice.score - residual,
+                                    expected=choice.expected - residual,
                                     classes=len(choice.scored), truncated=choice.truncated,
                                     total_probability=choice.total_probability))
         if choice.best is None:
             return _refuse(
                 "the deferred-target space enumerated to zero classes — an un-enumerated effect, "
                 "and pricing it 0.0 would rank a real play below every scored line")
-        return _Ranked(index=index, option=option, key=key, delta=choice.leaf - node.leaf,
+        return _Ranked(index=index, option=option, key=key,
+                       delta=choice.best.leaf - residual - raw_current_leaf,
                        after=choice.best.model, fate=ao.MODELLED, footprint=footprint,
-                       truncated=choice.truncated, ev=choice.leaf, choice=choice,
+                       truncated=choice.truncated, ev=choice.score - residual, choice=choice,
                        semantic_key=semantic, outcome_kind=str(result.resolution))
     after = ao.require_model(result)
     state.leaf_evals += 1
-    leaf = float(state_value(after))
-    return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=after,
+    leaf = float(state_value(after)) - residual
+    return _Ranked(index=index, option=option, key=key,
+                   delta=leaf - raw_current_leaf, after=after,
                    fate=ao.ENGINE_RESOLVED if isinstance(result, ao.EngineResolved) else ao.MODELLED,
                    footprint=footprint, ev=leaf, semantic_key=semantic)
 
@@ -1392,7 +1465,7 @@ def _retain_nodes(state: _Run, nodes: list, *, remaining_depth: int,
 def _continuation_candidate(node: _Node, entry: _Ranked) -> Candidate:
     """One committed CARD choice plus the best terminal action reachable on its after-board."""
     leaf = node.leaf + entry.delta
-    ev = continuation_ev(entry.after)
+    ev = deferred_target_value(entry.after).terminal_ev
     step = _step_of(entry)
     return Candidate(steps=(step,), terminal=None, leaf=leaf, terminal_ev=ev,
                      score=leaf + ev, truncated=node.truncated + entry.truncated,
@@ -1423,12 +1496,20 @@ def _terminal_candidate(node: _Node, entry: _Ranked) -> Candidate:
 
 def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
     """A line that STOPS at this option. A REVEAL keeps its `best()` and carries
-    :func:`continuation_ev`; a REFUSAL keeps the node's leaf — its value is UNKNOWN, not zero."""
+    :func:`continuation_ev`; a REFUSAL keeps the node's leaf — its value is UNKNOWN, not zero.
+
+    A root Retreat is the one exception: its replacement attack is not present in the root menu and
+    is already owned by Promote's guarded retreat-sequence override.  Keep the Retreat's realised
+    leaf/cost here, but do not synthesize that off-menu terminal a second time at a later reveal.
+    """
     step = _step_of(entry)
     if entry.refused:
         leaf, ev = node.leaf, 0.0
     else:
-        leaf, ev = node.leaf + entry.delta, continuation_ev(node.model)
+        first = node.steps[0].option if node.steps else entry.option
+        root_retreat = ao.transition_kind(first) == _RETREAT
+        leaf = node.leaf + entry.delta
+        ev = 0.0 if root_retreat else continuation_ev(node.model)
     return Candidate(steps=node.steps + (step,), terminal=None, leaf=leaf, terminal_ev=ev,
                      score=leaf + ev, coverage_gap=entry.gap,
                      truncated=node.truncated + entry.truncated,
@@ -1498,8 +1579,10 @@ __all__ = (
     "TIER_INFORMATIVE", "TIER_COMMIT_FREE", "TIER_SUPPORTER", "TIER_COMMITMENT", "TIER_SHUFFLE",
     "TIER_ENDER",
     "FrontierKey", "ReferenceBudget", "ReferenceResult",
-    "Step", "Candidate", "Margin", "Bounds", "ComposerResult", "ScoredTarget", "TargetChoice",
+    "Step", "Candidate", "Margin", "Bounds", "ComposerResult", "DeferredTargetValue",
+    "ScoredTarget", "TargetChoice",
     "compose", "compose_reference", "frontier_key", "selection_key", "terminal_ev", "continuation_ev",
+    "deferred_target_value",
     "canonical_tier", "canonical_key",
     "commutative_blocks", "subset_lattice", "resolve_against", "stamp_origin", "strip_origin",
     "rank_targets", "choose_target",

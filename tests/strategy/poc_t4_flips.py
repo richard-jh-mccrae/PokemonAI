@@ -86,14 +86,6 @@ FLIPS = {
         "33x gap in the ruling's favour at 1 ply. It plays the 0.075 anyway, so the whole decision "
         "is coming from what the sequence does AFTER the first step. The most expensive depth "
         "effect in this table and the one most worth a human eye"),
-    "ml_lethal_retreat_boost_to_ko_f24": (
-        "VALUATION", [5], [3],
-        "the retreat-boost lethal line. The TIE-DEFER fires here, so the composer abstains and the "
-        "tuned ladder answers [3] — this row's disagreement belongs to the ladder, not the composer, "
-        "and it was already failing before the defer landed. Historically the repo's determinism "
-        "tracer frame (#178): it answered [5] or [3] depending on the engine-RNG position, because "
-        "the develop rung ranked simmed leaf values that were samples of a seeded shuffle. That rung "
-        "is now deleted, so the answer is a property of the board again — just not the ruled one"),
     "ml_ppp_attack_transient_locked_f69": (
         "VALUATION", [1], [0],
         "**Re-classified from REFUSAL, and it is a TIE**: d(ruled) 0.0 and d(composer) 0.0. The "
@@ -107,14 +99,6 @@ FLIPS = {
         "compose returns no gaps) where it used to be refused, and the composer still ranks the "
         "bench attach above it. Packeted in docs/plans/issue-sequence-466-wave3-packet.md as an "
         "unruled flip; neither baseline was recaptured"),
-    "ml_dont_judge_away_the_bigger_hand_f111": (
-        "VALUATION", [6], [2],
-        "Issues #466-#469 (PR #483) make Judge newly structural/scorable (isolated compose returns "
-        "no gaps) where it used to be refused. The per-option decider still scores Judge at -36.5 "
-        "and would never choose it, but the composer's sequence-level valuation now outranks the "
-        "ruled option [6] with it anyway — the same 'a later step pays for the cheap first move' "
-        "shape this table already documents elsewhere. Pending developer ruling, docs/plans/"
-        "issue-sequence-466-wave3-packet.md"),
 }
 
 #: Rows RETIRED by the tie-defer (`planner._tied_first_steps`). Kept by name because a flip table
@@ -127,14 +111,6 @@ RETIRED_BY_THE_TIE_DEFER = ("ml0703_develop_riolu_not_shuffle_f40",
 #: CORPUS RECORD frames, keyed ``(episode, frame)`` — the key `decider_lab`'s gate already uses.
 #: A separate dict because `FLIPS`' guards resolve every key to a `tests/fixtures/corrections/` file.
 CORPUS_RECORD_FLIPS = {
-    ("83969481", 55): (
-        "VALUATION", 4, [0],
-        "ep83969481 f55 (wave-2 ruling): preserve the healer while a single wincon remains, then "
-        "ATTACK. The composer prices the ruled attack at **2.430** prizes and the option it plays at "
-        "**0.112** — the second specimen of `f88`'s shape, a 21x gap in the ruling's favour at one "
-        "ply that the sequence overturns. Everything this test asserts ABOVE the decision — the "
-        "insurance slot at 20.0 with deadline 1, no latency haircut, the refresh declined — still "
-        "holds; only the decision moved"),
     ("83457493", 31): (
         "VALUATION", 4, [0],
         "ep83457493 f31: Issue #456 closes Harlequin's scalar chance route, so the human play is now "

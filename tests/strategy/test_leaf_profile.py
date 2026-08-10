@@ -73,10 +73,16 @@ PER_DECISION_PROFILE = frozenset({
 #: empty because the famine read now pays the deck-availability chain on every decision.
 ATTACH_DECIDER_PROFILE = frozenset({
     "mine.best_reachable_damage",
+    # Issue #507: an attach's benefit includes the current position option it creates or destroys.
+    # These are the O(board-size) prize/readiness inputs to that benefit-minus-Energy-Worth delta;
+    # without them the attach decider can observe the Energy cost but not its positional benefit.
+    "mine.active.prize_value",
+    "mine.active_raw",
     "mine.active.damage_counters",
     "mine.active.is_ex",
     "mine.active.tool_ids",
     "mine.bench.damage_counters",
+    "mine.bench.prize_value",
     "mine.bench.is_ex",
     "mine.bench.is_stage2",
     "mine.bench.stat",
@@ -90,7 +96,10 @@ ATTACH_DECIDER_PROFILE = frozenset({
     "mine.in_play_attack_names",
     "mine.in_play_names",
     "mine.prizes_taken",
+    "mine.role_worth",
+    "model.active_position_potential",
     "model.damage_context",
+    "model.position_state_value",
     "theirs.active.damage_counters",
     "theirs.active.energy_count",
     "theirs.active.energy_key",
@@ -138,6 +147,9 @@ STATE_VALUE_PROFILE = frozenset({
     # `state_value` memoizes its own per-family dict on the model (Issue #262's incremental-eval
     # line), so the scalar itself appears as a cross-side memo key beside the fields it reads.
     "model.state_value",
+    # O(1) combat-generation key used to keep cached retreat-position benefit from surviving a
+    # transient-effect change. It is part of pricing that benefit, not another board traversal.
+    "model._transient_generation",
     "mine.active.attacks",
     "mine.active.hp_remaining",
     "mine.active.prize_value",

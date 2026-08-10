@@ -1267,7 +1267,7 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
 
 # These fingerprints are authored review gates, not the census itself.  The generated report lists
 # every member.  A changed digest stops generation until the new source row is dispositioned.
-EQUATION_BASELINE_SHA256 = "f4b6838d88200785175c9994cdef45031f3cc4fa1fb564858cea5e5d86fe7747"
+EQUATION_BASELINE_SHA256 = "3ef09639dc3905862ee04fa039f862a32c0392983ac90f8df1f72a9cab49d4bc"
 VOCABULARY_BASELINE_SHA256 = "22316ccf76a2319311586785d2dc3ede3b77e6e566c0a15530a2a660d68f5d9b"
 STAT_BASELINE_SHA256 = "0ab57ba9897807b8cfbfd97052126c35e6819b24a447ccc3a4b34acfd1eea637"
 

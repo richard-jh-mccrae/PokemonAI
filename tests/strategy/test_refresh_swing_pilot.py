@@ -11,8 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from poc_t4_flips import marks
-
 REPO = Path(__file__).resolve().parents[2]
 
 JUDGE, HARLEQUIN, LILLIES = 1213, 1223, 1227
@@ -57,7 +55,7 @@ def refresh_ctx():
 
 @pytest.mark.parametrize("agent,fixture,card,label", [
     pytest.param("mega_lucario", "ml_dont_judge_away_the_bigger_hand_f111.json", JUDGE,
-                 "Judge my8/opp1", marks=marks("ml_dont_judge_away_the_bigger_hand_f111")),
+                 "Judge my8/opp1"),
     ("mega_starmie", "ms_dont_harlequin_away_the_bigger_hand_f60.json", HARLEQUIN, "Harlequin my11/opp2"),
     ("mega_starmie", "ms_dont_lillies_away_the_bigger_hand_f94.json", LILLIES, "Lillie's my10/opp3"),
 ])

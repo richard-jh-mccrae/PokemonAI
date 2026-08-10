@@ -202,8 +202,8 @@ def test_fork_reshuffles_but_is_deterministic():
 
 
 def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
-    """The boundary the pin above does NOT cover (determinism.md §4): once the line plays a
-    shuffle-and-draw, every later draw varies call-to-call. Asserted as an INEQUALITY."""
+    """The boundary the pin above does NOT cover (determinism.md §4): an in-line shuffle makes
+    the fork's hidden deck order vary call-to-call, even when the policy later reveals equal cards."""
     fx = json.loads((REPO / "tests" / "fixtures" / "corrections" /
                      "ml_lethal_retreat_boost_to_ko_f24.json").read_text(encoding="utf-8"))
     obs = fx["obs"]
@@ -220,16 +220,21 @@ def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
     step = api.search_step
 
     def one_run():
-        """(draws before the first in-line SHUFFLE, draws after) for one identical sim."""
-        pre, post, shuffled = [], [], []
+        """(deck orders before the first in-line SHUFFLE, deck orders after) for one sim."""
+        pre, post = [], []
+        shuffled = False
 
         def spy(sid, chosen):
+            nonlocal shuffled
             st = step(sid, chosen)
-            for lg in (st.observation.logs or []):
-                if lg.type == api.LogType.SHUFFLE:
-                    shuffled.append(True)
-                elif lg.type == api.LogType.DRAW and lg.cardId:
-                    (post if shuffled else pre).append(lg.cardId)
+            saw_shuffle = any(lg.type == api.LogType.SHUFFLE
+                              for lg in (st.observation.logs or []))
+            select = st.observation.select
+            deck_order = tuple(getattr(card, "id", None)
+                               for card in ((getattr(select, "deck", None) or ()) if select else ()))
+            if deck_order:
+                (post if shuffled or saw_shuffle else pre).append(deck_order)
+            shuffled = shuffled or saw_shuffle
             return st
 
         api.search_step = spy
@@ -242,9 +247,10 @@ def test_a_shuffle_inside_the_line_breaks_the_fork_pin():
         return pre, post
 
     runs = [one_run() for _ in range(6)]   # 6, not 2: an inequality assertion wants margin
-    assert all(r[1] for r in runs), "this line must draw after an in-line shuffle, or it pins nothing"
+    assert all(r[0] for r in runs), "this line must expose a deck order before the shuffle"
+    assert all(r[1] for r in runs), "this line must expose a deck order after the shuffle"
     assert all(r[0] == runs[0][0] for r in runs), (
-        "draws BEFORE the in-line shuffle must still be reproducible — that is the fork pin above")
+        "deck state BEFORE the in-line shuffle must still be reproducible — that is the fork pin above")
     assert any(r[1] != runs[0][1] for r in runs), (
-        "draws AFTER an in-line shuffle varied call-to-call when measured (#178); if this now holds, "
-        "re-measure and re-rule planner._rng_probe rather than deleting it")
+        "hidden deck order AFTER an in-line shuffle varied call-to-call when measured (#178); if "
+        "this now holds, re-measure and re-rule planner._rng_probe rather than deleting it")

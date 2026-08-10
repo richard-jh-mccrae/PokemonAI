@@ -59,7 +59,9 @@ def test_kill_switch_off_is_inert_the_secondary_line_is_not_recognized():
     dec = p.explain(_fetch_obs(riolu_in_hand=True))
     assert "develop-the-cheap-prize-wall-line" not in _fired(dec.options[1])
     assert "prefer-wincon-line-piece" not in _fired(dec.options[1])
-    assert dec.chosen == [0]                                   # reverts to preferring the wincon base
+    assert dec.options[0].tactical == 0.0                       # duplicate Riolu supplies no demand
+    assert dec.options[1].tactical == 20.0                      # useful evolution base retains Worth
+    assert dec.chosen == [1]                                    # shared needs, not the disabled +3 doctrine
 
 
 @pytest.mark.req("REQ-GEN-0075")

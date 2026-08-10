@@ -43,7 +43,7 @@ def f11():
 @pytest.mark.req("REQ-INFOFIRST-0001")
 def test_the_dig_is_taken_before_the_committing_item_on_the_anchor_frame(f11):
     fx, _p, dec = f11
-    assert list(dec.chosen) == [1]  # shared readiness breaks the former end-state tie
+    assert list(dec.chosen) == list(fx["correct"]) == [0]
 
 
 @pytest.mark.req("REQ-INFOFIRST-0001")
@@ -100,13 +100,13 @@ def test_the_four_classification_cases_including_the_untagged_fail_direction(f11
     _fx, pilot, _dec = f11
     assert pilot._informative_card(POKEGEAR) is True, "a `dig` Item ENLARGES the information set"
     assert pilot._informative_card(STARYU) is True, "a Bench fill is tier-0 free development"
-    assert pilot._informative_card(HAMMER) is False, "a Hammer is free and reveals nothing"
+    assert pilot._informative_card(HAMMER) is False, "a Hammer reveals nothing"
     assert pilot._informative_card(UNKNOWN_CARD) is False, "an unknown card must read as COMMITTING"
     assert pilot._informative_card(None) is False, "and so must an option carrying no card at all"
 
 
 def _pool_trainers():
-    """Every card across the shipped decks that can reach the free `_PLAY` band the boundary splits;
+    """Every card across the shipped decks that can reach the quota-free `_PLAY` band the boundary splits;
     Supporters have their own tier, and Pokémon/Energy are classified structurally, not by tag."""
     out = {}
     for deck in ("mega_starmie", "mega_lucario", "dragapult_ex"):
@@ -143,7 +143,7 @@ def test_every_trainer_in_the_pool_classifies_and_the_informative_ones_are_exact
 @pytest.mark.req("REQ-INFOFIRST-0005")
 def test_the_two_committing_classes_that_never_reach_the_new_branch_anyway():
     """A Tool is played as an `_ATTACH`, and Ultra Ball hits the `cost_discard` branch first, so
-    neither reaches the free-band boundary despite being classified by it."""
+    neither reaches the quota-free boundary despite being classified by it."""
     pool = _pool_trainers()
     assert pool["Ultra Ball"][1] is True and "cost_discard" in pool["Ultra Ball"][2]
     assert all("tool" in pool[n][2] for n in ("Air Balloon", "Hero’s Cape"))
@@ -155,5 +155,5 @@ def test_the_boundary_does_not_touch_the_bands_above_or_below_it():
     from common import pilot as P
     assert (P._TIER_INFORMATIVE < P._TIER_COMMIT_FREE < P._TIER_SUPPORTER
             < P._TIER_COMMITMENT < P._TIER_SHUFFLE < P._TIER_ENDER), (
-        "development -> free commitment -> Supporter -> attach -> hand-shuffle -> attack is the "
-        "shipped sequence; ADR-0095 put the new boundary INSIDE the free band, not around it")
+        "development -> quota-free commitment -> Supporter -> attach -> hand-shuffle -> attack is "
+        "the shipped sequence; ADR-0095 put the new boundary INSIDE that band, not around it")

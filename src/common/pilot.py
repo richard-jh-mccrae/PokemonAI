@@ -15,8 +15,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
-from common import board_delta, needs         # the Stadium clause home (Issue #410/#424): its
-                                              # `stadium_hp_delta` + `applies_to` are never re-derived
+from common import action_cost, board_delta, needs  # Stadium clause home (Issue #410/#424): its
+                                                    # `stadium_hp_delta` + `applies_to` aren't re-derived
 from common import deck_odds
 from common.multi_pick import leaf_pick_indices
 from common import retreat_cost                # ADR-0100 §8's grant-aware cost
@@ -575,7 +575,11 @@ class Pilot(
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set: the rungs the attach decider replaced are DELETED (ADR-0069 §7), not
         # shadowed, so nothing on an attach option can double-count with `_attach_value_tactical`.
-        score = sum(w for _h, w in fired) + tactical
+        # Cards are costed by the shared hand/leaf Worth and Retreat by its dedicated equation.
+        # Only the two remaining non-card resources need this strict ordinal residual: an attack
+        # ends the turn and an activated Ability spends its allowance. End alone remains exact 0.
+        score = (sum(w for _h, w in fired) + tactical
+                 - action_cost.residual_cost_damage(option.get("type")))
         return OptionTrace(index=index, score=score, plan=ctx.plan, card_id=ctx.card_id,
                            fired=fired, tactical=tactical,
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
@@ -643,6 +647,7 @@ class Pilot(
             deck_empty = self._deck_empty_ids(me, prizes or None)
         self._state_model = model = StateModel.build(
             obs, combat=self.combat, my_index=mi, deck=self.deck, deck_empty=deck_empty,
+            role_worth=self._role_value,
             # THEIR half, fully threaded — the Read overlay (ADR-0026/0027/0047/0051) …
             read=read, brief=brief, matchup_plan=matchup_plan, posture_confidence=gamma,
             favorability=favorability, matchup_coverage=matchup_coverage, opponent=self.opponent,

@@ -63,11 +63,11 @@ def _by_cid(rows):
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_the_pitch_term_separates_dead_weight_from_a_live_spare_among_zero_keep():
-    """Keep-cost alone cannot RANK a discard — a dreg and a dead card both correctly price keep 0. The
-    filler sits at index 0, so a tie falling through to hand index would take the wrong card."""
-    pilot, obs = _setup([FILLER, CINDERACE], minc=1)              # both worth 0 -> both keep 0
+    """Deadness outranks the portable cost shared by two otherwise role-less known cards."""
+    pilot, obs = _setup([FILLER, CINDERACE], minc=1)
     by = _by_cid(_rows(pilot, obs))
-    assert by[FILLER]["keep"] == 0.0 and by[CINDERACE]["keep"] == 0.0   # keep cannot separate them
+    assert by[FILLER]["worth"] == 5.0 and by[CINDERACE]["worth"] == 5.0
+    assert by[FILLER]["keep"] == 5.0 and by[CINDERACE]["keep"] == 5.0
     assert by[CINDERACE].get("dead_opener") is True
     assert by[CINDERACE]["deadness"] > by[FILLER]["deadness"]           # deadness discriminates…
     assert pilot.explain(obs).chosen == [1]                             # …and the DECIDER acts on it
@@ -94,7 +94,7 @@ def test_the_lower_worth_duplicate_sheds_first():
     pilot, obs = _setup([SALVATORE, FILLER, SALVATORE, FILLER], minc=1)
     by = {r["i"]: r for r in _rows(pilot, obs)}
     assert by[0]["cid"] == SALVATORE and by[0]["keep"] == 0.0 and by[0]["worth"] == 10.0
-    assert by[1]["cid"] == FILLER and by[1]["keep"] == 0.0 and by[1]["worth"] == 0.0
+    assert by[1]["cid"] == FILLER and by[1]["keep"] == 0.0 and by[1]["worth"] == 5.0
     assert pilot.explain(obs).chosen == [1]
 
 
@@ -103,7 +103,7 @@ def test_an_engine_supporter_is_floored_over_disruption_filler():
     pilot, obs = _setup([LILLIES, HARLEQUIN], minc=1)
     by = _by_cid(_rows(pilot, obs))
     assert by[LILLIES]["engine_supporter"] is True and by[LILLIES]["keep"] > 0.0
-    assert by[HARLEQUIN]["keep"] == 0.0 and not by[HARLEQUIN].get("engine_supporter")
+    assert by[HARLEQUIN]["keep"] == 8.0 and not by[HARLEQUIN].get("engine_supporter")
     assert pilot.explain(obs).chosen == [1]            # pitch the disruption filler, keep the engine
 
 

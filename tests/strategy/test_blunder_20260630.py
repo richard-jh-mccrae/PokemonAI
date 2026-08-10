@@ -198,7 +198,10 @@ def test_concentrate_accel_on_one_line_body_at_attach_from():
     cur2 = state(active=poke(CINDER, energy=1, hp=160),
                  bench=[poke(WINCON, energy=1, hp=330), poke(PREEVO, energy=2, hp=70)])
     obs2 = make_select([card_opt(BENCH, 0), card_opt(BENCH, 1)], context=ATTACH_FROM, current=cur2)
-    assert pilot.decide(obs2) == [1]
+    rows2 = {r["i"]: r for r in pilot.explain(obs2).attach_working["eq"]}
+    assert rows2[0]["tactical"] > rows2[0]["resource_cost"]
+    assert rows2[1]["tactical"] == rows2[1]["resource_cost"] == 0.0
+    assert pilot.decide(obs2) == [0]
 
 
 @pytest.mark.req("REQ-GEN-0051")

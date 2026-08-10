@@ -79,3 +79,5 @@ class Strategy:
     partners: dict = field(default_factory=dict)       # cardId -> [partner cardIds]: an engine body whose
                                                         # value REQUIRES a listed partner in play (ADR-0034);
                                                         # the attach oracle zeroes a partnerless one
+    worth_overrides: dict = field(default_factory=dict)  # cardId -> Worth floor; deck doctrine may RAISE
+                                                         # the shared function value, never lower it

@@ -56,7 +56,7 @@ class DenyMixin:
         value = _DENY_RELEVANCE_K * self._deny_relevance_best(obs, board)
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
         # NO whiff short-circuit: declining needs a STRICTLY negative score. `_finish_turn_last`
-        # promotes on `score > 0`, so a bare 0.0 free Item ties with End and plays by option index.
+        # promotes on `score > 0`, so a bare 0.0 quota-free Item ties with End by option index.
         return (coin_odds(ctx.card_id) * weight * value
                 - self._item_hold_price(obs, board, ctx.card_id))
 

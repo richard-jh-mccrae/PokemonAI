@@ -10,12 +10,47 @@ from common.deciders.facts import Board
 from common.deciders.plan_choice import _min_attack_cost
 from common.grading import HORIZON as _HORIZON
 from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
-from common.strategy.context import _BENCH, _MAIN, _PLAY, _RETREAT, _SWITCH, _TO_ACTIVE
+from common.strategy.context import (_ATTACK, _BENCH, _END, _MAIN, _PLAY, _RETREAT, _SWITCH,
+                                     _TO_ACTIVE, KO_SCORE)
 
+
+# A manual retreat always spends its once-per-turn allowance, even when no valuable build is
+# discarded. One existing resource-tiebreak unit gives that real option a strict cost without
+# introducing another tuned magnitude.
+_RETREAT_ALLOWANCE_COST = _ATTACH_RESOURCE_TIEBREAK
 
 
 class PromoteRetreatMixin:
     """Board facts for the promote/retreat decider, plus the after-KO promote slot."""
+
+    def _retreat_sequence_override(self, select: dict, board: Board, options: list,
+                                   traces: list, composed_index: int):
+        """Take a positive retreat that is the only root route to a decisive attack.
+
+        Composer cannot enumerate the replacement Active's newly exposed attack menu from a live
+        MAIN snapshot.  The promote/retreat equation already prices the move's yield, position and
+        retreat payment, while ``_promote_ko_tactical`` proves the promoted body crosses the KO
+        line.  Use that complete benefit-minus-cost verdict over attacking or ending with an Active
+        that cannot itself Knock Out the target.
+        """
+        if ((select or {}).get("context") != _MAIN or board.active_can_ko
+                or not (0 <= composed_index < len(options))
+                or options[composed_index].get("type") not in (_ATTACK, _END)
+                or traces[composed_index].tactical >= KO_SCORE):
+            return None
+        candidates = []
+        for index, option in enumerate(options):
+            if option.get("type") != _RETREAT:
+                continue
+            row = traces[index].promote_retreat_working or {}
+            net = float(row.get("total") or 0.0)
+            if net <= 0.0 or traces[index].tactical < KO_SCORE:
+                continue
+            candidates.append((net, float(traces[index].tactical), -index, index))
+        if not candidates:
+            return None
+        winner = max(candidates)[-1]
+        return winner, "cost-benefit: retreat is the positive route to the decisive attack"
 
     def _promote_body(self, obs: dict, board: Board, raw: dict | None, *, draws: int = 0) -> PromoteBody:
         """Read one body as Active into the sub-lethal promote residual (ADR-0100 §3-§7)."""
@@ -232,7 +267,9 @@ class PromoteRetreatMixin:
         if otype == _RETREAT:
             for outcome in board_choice.legal_manual_retreat_outcomes(self._state_model):
                 candidates.append((outcome.bench_index, outcome.model,
-                                   self._retreat_resource_premium(active, outcome.discard_indices)))
+                                   _RETREAT_ALLOWANCE_COST
+                                   + self._retreat_resource_premium(
+                                       active, outcome.discard_indices)))
         else:
             worth = max(0.0, self._role_value(ctx.card_id))
             for index, raw in enumerate(self._my_bench_raws(obs)):

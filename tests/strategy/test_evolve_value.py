@@ -46,7 +46,8 @@ def test_multiattack_evolve_keeps_the_cheap_realizable_attack_f35():
     """Phantom Dive is mismatched, but the form's cheaper 70-damage attack remains realizable."""
     fx, d, evolve = _shadows("dragapult_ex", "dp_hold_evolve_until_typed_ready_f35")
     (only_evolve,) = evolve.values()
-    assert 0 < only_evolve < 40
+    working = next(o.evolve_working for o in d.options if o.evolve_working)
+    assert 0 < only_evolve < working["result"]["this_turn"]
 
 
 def test_which_body_prefers_the_energized_f82():

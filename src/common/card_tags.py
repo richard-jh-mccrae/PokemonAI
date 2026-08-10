@@ -95,7 +95,7 @@ TAG_REGISTRY: dict[str, Tag] = {
                       ("common.deciders.deploy",)),
     "cost_discard": Tag(CURATED,
                         "A fetch that COSTS a discard from hand (Ultra Ball class) — a blind, "
-                        "costly commitment the sequencer defers behind free development, and whose "
+                        "costly commitment the sequencer defers behind quota-free development, and whose "
                         "shed side `doctrine_fetch` prices.",
                         ("common.deciders.order", "common.strategy.doctrines.doctrine_fetch")),
     "rare_candy": Tag(CURATED,

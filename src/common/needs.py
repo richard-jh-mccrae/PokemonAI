@@ -316,6 +316,17 @@ def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0,
     return max(marginal, float(intrinsic))
 
 
+def option_floor_residual(slots, eligibility, resupply, index: int, *, floor: float,
+                          edge_values=None) -> float:
+    """Latent Worth needed to keep one held card's opportunity value at ``floor``.
+
+    Coverage already prices the card's assignment marginal. Returning only its shortfall avoids a
+    double charge on live demand while keeping redundant and no-demand copies strictly valuable.
+    """
+    covered = keep_v2(slots, eligibility, resupply, index, edge_values=edge_values)
+    return max(0.0, float(floor) - float(covered))
+
+
 def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity, edge_values=None) -> float:
     """WORTH-denominated, signed (ADR-0086): ``V(X deployed, cap=K) − V(C \\ X, cap=K)`` — gain nets
     displacement in ONE difference. The caller divides by `currency.DEPLOY_WORTH_SCALE`."""
