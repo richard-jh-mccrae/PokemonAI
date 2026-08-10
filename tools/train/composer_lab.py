@@ -17,6 +17,7 @@ The 41 verbatim ideal sequences are RENDERED, never parsed into option indices.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import statistics
@@ -229,7 +230,8 @@ def off_policy_control(corrections) -> dict:
 
 
 def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilon=None,
-                  depth=None) -> dict:
+                  depth=None, exact_dedup=True, continuation_admission=True,
+                  reference_budget=None) -> dict:
     """Builds through `pilot._leaf_state_model`, the SAME seam the planner leaf uses; a harness with
     its own model measures a board the agent never scores. A failure is CAPTURED, never raised."""
     from train.gates import correction_frame_key
@@ -253,6 +255,7 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
            "step_labels": [],
            "gaps": [], "bounds": [], "ms": None, "leaf_evals": None, "blocks": None,
            "coverage_gap": "", "expanded_families": None, "expansion_children": None,
+           "depths": [], "transition_evals": None, "changed_admission": None, "reference": None,
            "no_scorable": False, "error": None}
     if not options:
         row["error"] = "frame carries no select menu"
@@ -264,7 +267,27 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
         model = pilot._leaf_state_model(obs, my_index)
         # WHICH cards a cost takes is the live decider's answer, never the composer's invention;
         # without `shed` every costed search (every Ultra Ball) refuses unpriced.
-        result = cp.compose(model, options, shed=pilot.cost_shed_indices, **kwargs)
+        if reference_budget is None:
+            result = cp.compose(model, options, shed=pilot.cost_shed_indices,
+                                exact_dedup=exact_dedup,
+                                continuation_admission=continuation_admission, **kwargs)
+        else:
+            beam = cp.compose(model, options, shed=pilot.cost_shed_indices,
+                              exact_dedup=True, continuation_admission=True, **kwargs)
+            reference = cp.compose_reference(model, options, budget=reference_budget,
+                                             shed=pilot.cost_shed_indices, beam_result=beam)
+            result = reference.composer
+            row["reference"] = {
+                "status": reference.status, "cap_reason": reference.cap_reason,
+                "best_semantic_path": list(reference.best_semantic_path),
+                "best_score": reference.best_score,
+                "co_best_first_actions": list(reference.co_best_first_actions),
+                "transition_evals": reference.transition_evals,
+                "runtime_ms": reference.runtime_ms,
+                "beam_first_action_recall": reference.beam_first_action_recall,
+                "full_sequence_agreement": reference.full_sequence_agreement,
+                "score_regret": reference.score_regret,
+            }
         row["ms"] = (time.perf_counter() - t0) * 1000.0
     except Exception as exc:                     # noqa: BLE001 — the finding IS the exception
         row["error"] = f"{type(exc).__name__}: {exc}"
@@ -277,6 +300,9 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
     row["leaf_evals"] = result.stats["leaf_evals"]
     row["expanded_families"] = result.stats["expanded_families"]
     row["expansion_children"] = result.stats["expansion_children"]
+    row["depths"] = list(result.stats.get("depths", ()))
+    row["transition_evals"] = result.stats.get("transition_evals")
+    row["changed_admission"] = result.stats.get("changed_admission", 0)
     row["blocks"] = [list(b) for b in result.blocks]
     # The RULED option's rank, not the composer's: measuring its own pick passes by construction.
     # Best of the ruled picks, since any of them satisfies the ruling.
@@ -335,6 +361,9 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
                  "sequence_depth": kwargs.get("depth") or cp.SEQUENCE_DEPTH,
                  "epsilon": kwargs.get("epsilon") if kwargs.get("epsilon") is not None
                  else cp.EPSILON},
+        "policy": {"exact_dedup": kwargs.get("exact_dedup", False),
+                   "continuation_admission": kwargs.get("continuation_admission", False),
+                   "reference": kwargs.get("reference_budget") is not None},
         "n": len(rows), "ran": len(ran), "failed": sum(1 for r in rows if r["error"]),
         "skipped_agent": skipped,
         "agree_chosen": sum(1 for r in ran if _agrees(r, "chosen")),
@@ -366,6 +395,25 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
         "median_bound_gap": statistics.median([b["gap"] for b in bounds]) if bounds else None,
         "max_bound_gap": max((b["gap"] for b in bounds), default=None),
         "truncated_nodes": sum(1 for b in bounds if b["truncated"]),
+        "generated": sum(d.get("generated", 0) for r in ran for d in r.get("depths", ())),
+        "unique": sum(d.get("unique", 0) for r in ran for d in r.get("depths", ())),
+        "merged": sum(d.get("merged", 0) for r in ran for d in r.get("depths", ())),
+        "transition_evals": sum(r.get("transition_evals") or 0 for r in ran),
+        "changed_admission": sum(r.get("changed_admission") or 0 for r in ran),
+        "reference_complete": sum(1 for r in ran if (r.get("reference") or {}).get("status")
+                                  == cp.REFERENCE_COMPLETE),
+        "reference_unknown": sum(1 for r in rows if (r.get("reference") or {}).get("status")
+                                 == cp.REFERENCE_UNKNOWN),
+        "reference_first_action_comparable": sum(
+            1 for r in rows if (r.get("reference") or {}).get("beam_first_action_recall") is not None),
+        "reference_first_action_misses": sum(
+            1 for r in rows if (r.get("reference") or {}).get("beam_first_action_recall") is False),
+        "reference_full_sequence_agreement": sum(
+            1 for r in rows if (r.get("reference") or {}).get("full_sequence_agreement") is True),
+        "reference_positive_regret": sum(
+            1 for r in rows if ((r.get("reference") or {}).get("score_regret") or 0.0) > 0.0),
+        "reference_max_regret": max(
+            (((r.get("reference") or {}).get("score_regret") or 0.0) for r in rows), default=0.0),
         # Issue #412 — REPORTED, NOT filtered. Scoped to MAIN as well as reported whole, because
         # MAIN is the grading base and the only half where the doctrine is an unruled generalisation.
         "off_policy": sum(1 for r in rows if r["off_policy"]),
@@ -376,6 +424,45 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
         "off_policy_control": off_policy_control(corrections),
         "rows": rows,
     }
+
+
+def issue_496_holdout(key: str) -> bool:
+    """Predeclared frame split: first SHA-256 byte modulo five, independent of corpus order."""
+    return hashlib.sha256(key.encode("utf-8")).digest()[0] % 5 == 0
+
+
+def issue_496_matrix(pilot_for, corrections, *, reference_budget=None) -> dict:
+    """Fixed beam/dedup/continuation matrix plus the one-time predeclared holdout projection."""
+    configs = [
+        ("baseline", 4, 4, 0.005, False, False),
+        ("dedup", 4, 4, 0.005, True, False),
+        ("dedup-continuation", 4, 4, 0.005, True, True),
+        ("width-8", 8, 4, 0.005, True, True),
+        ("width-16", 16, 4, 0.005, True, True),
+        ("control-16-12", 16, 12, 0.005, True, True),
+    ]
+    configs.extend((f"depth-{depth}", 4, depth, 0.005, True, True)
+                   for depth in range(5, 13))
+    configs.extend((f"epsilon-{epsilon}", 4, 4, epsilon, True, True)
+                   for epsilon in (0.0, 0.001, 0.01))
+    reports = []
+    for name, width, depth, epsilon, dedup, continuation in configs:
+        report = composer_lab_report(
+            pilot_for, corrections, k=width, depth=depth, epsilon=epsilon,
+            exact_dedup=dedup, continuation_admission=continuation)
+        reports.append({"name": name, **{k: report[k] for k in (
+            "caps", "policy", "ran", "agree_ruled", "comparable_ruled", "median_ms", "p95_ms",
+            "max_ms", "generated", "unique", "merged", "transition_evals",
+            "changed_admission")}})
+    reference = None
+    if reference_budget is not None:
+        reference = composer_lab_report(pilot_for, corrections, reference_budget=reference_budget)
+    keys = [row["key"] for row in composer_lab_report(
+        pilot_for, corrections, exact_dedup=False, continuation_admission=False)["rows"]]
+    return {"schema_version": "composer-lab-issue-496/1", "matrix": reports,
+            "holdout": {"keys": sorted(key for key in keys if issue_496_holdout(key)),
+                        "count": sum(issue_496_holdout(key) for key in keys)},
+            "reference": reference}
 
 
 #: IMPORTED rather than re-spelled: the two labs' tails must be comparable, and a product of two
@@ -582,9 +669,16 @@ def main(argv=None) -> int:
                     help="render Issue #388's Mega Starmie full-sequence review packet")
     ap.add_argument("--epsilon-sweep", action="store_true",
                     help="how many frames each epsilon band rescues (the tuning measurement)")
+    ap.add_argument("--issue-496-matrix", action="store_true",
+                    help="run the fixed exact-dedup/continuation/reference calibration matrix")
+    ap.add_argument("--reference-transitions", type=int, default=0)
+    ap.add_argument("--reference-nodes", type=int, default=0)
+    ap.add_argument("--reference-depth", type=int, default=12)
     ap.add_argument("--beam-width", type=int, default=None)
     ap.add_argument("--depth", type=int, default=None)
     ap.add_argument("--epsilon", type=float, default=None)
+    ap.add_argument("--exact-dedup", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--continuation-admission", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--out", type=Path, default=None, help="write the report as JSON")
     args = ap.parse_args(argv)
 
@@ -599,7 +693,26 @@ def main(argv=None) -> int:
     corrs = load_corrections(args.store or DEFAULT_ROOT)
     if args.agent:
         corrs = [c for c in corrs if c.agent == args.agent]
+    if args.frame:
+        from train.gates import correction_frame_key
+        corrs = [c for c in corrs if correction_frame_key(c) == args.frame]
     builder = _cgpy_pilot_builder()
+
+    if args.issue_496_matrix:
+        reference_budget = None
+        if args.reference_transitions and args.reference_nodes:
+            reference_budget = cp.ReferenceBudget(
+                max_depth=args.reference_depth,
+                max_transition_evals=args.reference_transitions,
+                max_unique_nodes=args.reference_nodes)
+        matrix = issue_496_matrix(builder, corrs, reference_budget=reference_budget)
+        if args.out:
+            from train.gates import write_json_artifact
+            write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **matrix})
+            print(f"-> {args.out}")
+        else:
+            print(json.dumps(matrix, indent=2, sort_keys=True))
+        return 0
 
     if args.epsilon_sweep:
         sweep = epsilon_sweep(builder, corrs, [0.0, 0.001, 0.005, 0.01, 0.05, 0.1])
@@ -616,7 +729,8 @@ def main(argv=None) -> int:
         return 0
 
     rpt = composer_lab_report(builder, corrs, k=args.beam_width, epsilon=args.epsilon,
-                              depth=args.depth)
+                              depth=args.depth, exact_dedup=args.exact_dedup,
+                              continuation_admission=args.continuation_admission)
     _print_report(rpt, frame=args.frame, index=ideal_index(), verbatim=ideal_sequences())
     if args.acceptance:
         _print_acceptance(rpt)

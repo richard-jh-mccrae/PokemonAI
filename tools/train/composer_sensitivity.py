@@ -62,8 +62,8 @@ from common.strategy.context import (                                    # noqa:
 from common.strategy.planning.ko_classes import KoClassMixin              # noqa: E402
 from train.apply_parity import zone_facts                                # noqa: E402
 
-SCHEMA_VERSION = "composer-sensitivity/3"
-SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/3"
+SCHEMA_VERSION = "composer-sensitivity/4"
+SUMMARY_SCHEMA_VERSION = "composer-sensitivity-summary/4"
 SEED = 493
 FIXTURE = REPO / "tests" / "fixtures" / "composer_sensitivity" / "ms_wally_attach_f69.json"
 _INVENTORY_CONTEXT: ContextVar[object | None] = ContextVar(
@@ -292,13 +292,30 @@ def search_snapshot(model, options: Sequence[Mapping], *, focus=(), sequences=()
                     k=cp.BEAM_WIDTH, epsilon=cp.EPSILON, depth=1,
                     shed=None) -> dict:
     """Composer telemetry without a runtime hook: all fields come from ``ComposerResult``."""
-    result = cp.compose(model, options, k=k, epsilon=epsilon, depth=depth, shed=shed)
+    result = cp.compose(model, options, k=k, epsilon=epsilon, depth=depth, shed=shed,
+                        exact_dedup=False, continuation_admission=False)
+    production = cp.compose(model, options, k=k, epsilon=epsilon, depth=depth, shed=shed,
+                            exact_dedup=True, continuation_admission=True)
     equiv = option_equivalence(options, model.source_obs)
+    order = list(result.order)
+    terminal = {i for i, option in enumerate(options) if ao.is_terminal(option)}
+    refused = {i for i, value in enumerate(result.fanned) if value is None and i not in dict(order)}
+    free = terminal | refused
+    cutoff_rows = [(i, delta) for i, delta in order if i not in free]
+    cutoff = cutoff_rows[k - 1][1] - epsilon if len(cutoff_rows) > k else None
+    admitted = free | {i for i, delta in cutoff_rows if cutoff is None or delta >= cutoff}
     one_ply = []
     for index in focus:
         klass = sorted(class_of(equiv, int(index)))
         representative = min(klass)
-        margin = result.margin_for(representative)
+        rank = next((n + 1 for n, (i, _delta) in enumerate(order) if i == representative), None)
+        delta = next((delta for i, delta in order if i == representative), None)
+        kth = order[k - 1][1] if len(order) >= k else None
+        margin = cp.Margin(rank=rank, k=k, ranked=len(order),
+                           in_beam=rank is not None and rank <= k and representative not in free,
+                           admitted=representative in admitted, always_expand=representative in free,
+                           chosen_delta=delta, kth_delta=kth,
+                           margin_to_kth=None if delta is None or kth is None else delta - kth)
         one_ply.append({
             "index": int(index), "equivalence_class": klass, "representative": representative,
             **margin.working(), "admission_reason": _admission_reason(margin),
@@ -316,13 +333,26 @@ def search_snapshot(model, options: Sequence[Mapping], *, focus=(), sequences=()
             "faithful": not bool(chosen.coverage_gap),
         }),
         "gaps": list(result.gaps),
+        "issue_496": {
+            "one_ply": [production.margin_for(min(class_of(equiv, int(index)))).working()
+                        for index in focus],
+            "candidate_presence": [_candidate_row(production, sequence) for sequence in sequences],
+            "chosen": None if production.chosen is None else {
+                "sequence": [step.index for step in production.chosen.steps],
+                "score": production.chosen.score,
+            },
+            "depths": production.stats.get("depths", ()),
+            "transition_evals": production.stats.get("transition_evals", 0),
+        },
     })
 
 
 def _blank_search(reason: str) -> dict:
     return {"status": "not-run", "k": cp.BEAM_WIDTH, "epsilon": cp.EPSILON,
             "depth": cp.SEQUENCE_DEPTH, "one_ply": [], "candidate_presence": [],
-            "chosen": None, "gaps": [reason]}
+            "chosen": None, "gaps": [reason],
+            "issue_496": {"one_ply": [], "candidate_presence": [], "chosen": None,
+                          "depths": [], "transition_evals": 0}}
 
 
 def _unknown(actions: Sequence[dict], extra=(), unread_extra=()) -> dict:

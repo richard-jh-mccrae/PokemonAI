@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+import math
 from typing import NamedTuple
 
 from common import card_worth
@@ -1180,6 +1181,26 @@ class PrizeRace:
     # composes it with the simultaneous-draw guard (a recoil KO makes it a draw).
 
 
+SEMANTIC_STATE_KEY_SCHEMA = 1
+SEMANTIC_KEY_MAPPED_ZONES = frozenset({
+    "my_discard_contents", "their_discard_contents", "my_hand_ids", "their_hand_size",
+    "my_deck_count", "their_deck_count", "deck_odds", "my_prizes", "their_prizes", "stadium",
+    "bodies_in_play", "attached_energy", "damage_counters", "allowance_energy_attached",
+    "allowance_supporter_played", "allowance_ability_used", "attached_tools", "special_conditions",
+    "allowance_retreat_used", "transient_grants", "bench_occupancy", "allowance_stadium_played",
+    "this_turn_damage_boosts", "new_in_play", "deck_order",
+})
+
+
+@dataclass(frozen=True)
+class SemanticStateKey:
+    """Run-scoped exact modeled-state identity; equality is the full canonical tuple."""
+
+    schema: int
+    value_registry_identity: str
+    state: tuple
+
+
 class StateModel(_Lazily):
     """The snapshot. Build it with :meth:`build`; read fields off :attr:`mine` / :attr:`theirs` and
     the cross-side derivations here."""
@@ -1492,13 +1513,107 @@ class StateModel(_Lazily):
                 and self.opponent_fingerprint == other.opponent_fingerprint)
 
 
-def _canonical(value):
+def canonicalize(value):
     """A hashable, order-faithful projection of an engine zone/record. Order is MEANING here: which
     body sits in ``active`` versus ``bench`` is exactly what a gust changes."""
     if isinstance(value, dict):
-        return tuple((k, _canonical(v)) for k, v in sorted(value.items(), key=lambda kv: str(kv[0])))
+        return tuple((k, canonicalize(v)) for k, v in sorted(value.items(), key=lambda kv: str(kv[0])))
     if isinstance(value, (list, tuple)):
-        return tuple(_canonical(v) for v in value)
+        return tuple(canonicalize(v) for v in value)
     if isinstance(value, (set, frozenset)):
-        return tuple(sorted((str(v) for v in value)))
+        return tuple(sorted((canonicalize(v) for v in value), key=repr))
     return value
+
+
+# Compatibility for memo keys already named around the private helper.
+_canonical = canonicalize
+
+
+class _UnresolvedIdentity(ValueError):
+    pass
+
+
+def _serial_aliases(value, path=(), out=None):
+    out = {} if out is None else out
+    if isinstance(value, dict):
+        if "serial" in value:
+            serial = value.get("serial")
+            if serial is None:
+                raise _UnresolvedIdentity("a visible instance has no serial")
+            out.setdefault(serial, []).append(("visible", path))
+        for key, child in sorted(value.items(), key=lambda kv: str(kv[0])):
+            _serial_aliases(child, path + (str(key),), out)
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _serial_aliases(child, path + (index,), out)
+    return out
+
+
+def _identity_normalized(value, aliases, path=(), parent_key=""):
+    if isinstance(value, float) and not math.isfinite(value):
+        raise _UnresolvedIdentity("non-finite modeled state cannot form an exact key")
+    if isinstance(value, dict):
+        out = []
+        for key, child in sorted(value.items(), key=lambda kv: str(kv[0])):
+            child_path = path + (str(key),)
+            if key == "serial":
+                normalized = ("visible", path)
+            elif str(key).lower().endswith("serial"):
+                normalized = _identity_reference(child, aliases)
+            elif str(key).lower().endswith("serials"):
+                normalized = tuple(_identity_reference(v, aliases) for v in (child or ()))
+            else:
+                normalized = _identity_normalized(child, aliases, child_path, str(key))
+            out.append((key, normalized))
+        return tuple(out)
+    if isinstance(value, (list, tuple)):
+        if parent_key == "abilityUsedBodies":
+            return tuple(_identity_reference(v, aliases) for v in value)
+        return tuple(_identity_normalized(v, aliases, path + (i,), parent_key)
+                     for i, v in enumerate(value))
+    if isinstance(value, (set, frozenset)):
+        return tuple(sorted((_identity_normalized(v, aliases, path, parent_key) for v in value),
+                            key=repr))
+    return value
+
+
+def _identity_reference(value, aliases):
+    found = aliases.get(value, ())
+    if len(found) != 1:
+        raise _UnresolvedIdentity(f"serial reference {value!r} resolves to {len(found)} instances")
+    return found[0]
+
+
+def _carried_key(carried: CarriedState):
+    out = []
+    for name, value in carried.values:
+        if name == "known_top":
+            known = tuple(("known-top", i, canonicalize(tuple(item)[1:]))
+                          for i, item in enumerate(value or ()))
+            out.append((name, known))
+        else:
+            out.append((name, canonicalize(value)))
+    return tuple(out)
+
+
+def semantic_state_key(model: StateModel) -> SemanticStateKey | None:
+    """Exact modeled source state, alpha-normalized by visible location; unresolved identity fails closed."""
+    from common.state_value import registry_identity
+
+    current = (getattr(model, "source_obs", None) or {}).get("current")
+    if not isinstance(current, dict):
+        return None
+    try:
+        aliases = _serial_aliases(current)
+        normalized = _identity_normalized(current, aliases)
+        state = (
+            ("current", normalized),
+            ("own_prizes", canonicalize((model.source_obs or {}).get("own_prizes"))),
+            ("carried", _carried_key(model.carried)),
+            ("mine_turn_boosts", canonicalize(model.mine._turn_boosts)),
+            ("their_turn_boosts", canonicalize(model.theirs._turn_boosts)),
+            ("transient_generation", canonicalize(model._transient_generation)),
+        )
+    except (TypeError, ValueError, _UnresolvedIdentity):
+        return None
+    return SemanticStateKey(SEMANTIC_STATE_KEY_SCHEMA, registry_identity(), state)

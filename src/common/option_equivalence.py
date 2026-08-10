@@ -34,14 +34,17 @@ _PLAYER_ZONES = {AREA_HAND: "hand", AREA_DISCARD: "discard",
 _ZONE_REFS = (("area", "index"), ("inPlayArea", "inPlayIndex"))
 
 
-def _without_serial(obj):
+def without_engine_serial(obj):
     """Recursive because ``energyCards`` / ``tools`` / ``preEvolution`` carry their own serials —
     two bodies holding the same Energy must still compare equal."""
     if isinstance(obj, dict):
-        return {k: _without_serial(v) for k, v in sorted(obj.items()) if k != "serial"}
+        return {k: without_engine_serial(v) for k, v in sorted(obj.items()) if k != "serial"}
     if isinstance(obj, list):
-        return [_without_serial(v) for v in obj]
+        return [without_engine_serial(v) for v in obj]
     return obj
+
+
+_without_serial = without_engine_serial
 
 
 def _card_at(frame, seat, area, index):
@@ -78,10 +81,36 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
         card = _card_at(frame, seat, area, option.get(index_key))
         if card is None:
             return None                             # unresolvable ANYWHERE -> no class, whole option
-        cards.append([area, _without_serial(card)])
+        cards.append([area, without_engine_serial(card)])
     if not cards:
         return None
     return json.dumps([option.get("type"), seat, cards], sort_keys=True)
+
+
+def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:
+    """Exact serial-free action key; hidden references fail closed, while non-target actions key themselves."""
+    if not isinstance(option, dict):
+        return None
+    seat = option.get("playerIndex")
+    if seat is None:
+        seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
+    cards = []
+    referenced = set()
+    for area_key, index_key in _ZONE_REFS:
+        area = option.get(area_key)
+        if area is None:
+            continue
+        card = _card_at(frame, seat, area, option.get(index_key))
+        if card is None:
+            return None
+        referenced.update((area_key, index_key))
+        cards.append([area, without_engine_serial(card)])
+    fields = {k: without_engine_serial(v) for k, v in sorted(option.items())
+              if k not in referenced and k != "_composer_origin" and not str(k).startswith("_")}
+    try:
+        return json.dumps([seat, fields, cards], sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return None
 
 
 def option_equivalence(options, frame: dict | None) -> dict:

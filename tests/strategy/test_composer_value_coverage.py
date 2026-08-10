@@ -342,7 +342,7 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
     snipe = one(inventory, "provider-stat:attackstat:benchSnipe")
     assert snipe.classification == coverage.LOSSY_REEXPRESSION
     assert snipe.absolute_owners == ("state:threat", "terminal:attack_ev")
-    assert "common.state_model:StateModel._attack_profile@1421" in snipe.runtime_callers
+    assert "common.state_model:StateModel._attack_profile@1442" in snipe.runtime_callers
     assert "StateModel._attack_profile" in " ".join(snipe.evidence)
 
     recoil = one(inventory, "provider-stat:attackstat:recoil")
@@ -463,9 +463,9 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
 
 def test_equation_ast_population_is_dispositioned_and_drift_gated(inventory):
     candidates = inventory.equation_candidates
-    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 753
+    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 754
     assert collections.Counter(candidate.disposition for candidate in candidates) == {
-        "excluded": 475, "owner": 194, "consumer": 84}
+        "excluded": 475, "owner": 194, "consumer": 85}
     assert {candidate.disposition for candidate in candidates} == {"owner", "consumer", "excluded"}
     assert all(candidate.reason for candidate in candidates)
     assert all(candidate.classification in coverage.CLASSIFICATIONS
@@ -501,7 +501,7 @@ def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
             ("common.deciders.heal:HealMixin._heal_target_tactical@95",)),
         "common.strategy.combat_math.clocks:ClockMixin.survival_clock": (
             "consumer", coverage.LEAF_ONLY, ("state:survival",),
-            ("common.state_model:TheirSide.survival_clock@1122",
+            ("common.state_model:TheirSide.survival_clock@1123",
              "common.strategy.combat_math.clocks:ClockMixin.turns_to_ko_me@222")),
         "common.strategy.combat_math.energy:EnergyMixin._attack_slots": (
             "consumer", coverage.LEAF_ONLY, ("state:readiness", "terminal:attack_ev"),
@@ -524,19 +524,19 @@ def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
              "common.strategy.planning.ladder:GoalLadderMixin._ko_key_threat_lines@268")),
         "common.strategy.combat_math.reach:ReachMixin.readiness_p": (
             "owner", coverage.SHARED_EXACT, ("state:readiness",),
-            ("common.state_model:MySide.readiness_p@860",)),
+            ("common.state_model:MySide.readiness_p@861",)),
         "common.state_model:MySide.readiness_p": (
             "consumer", coverage.LEAF_ONLY, ("state:readiness",),
             ("common.state_value:_readiness_odds@1578",)),
         "common.state_model:MySide._forward_payoff": (
             "owner", coverage.SHARED_EXACT, ("state:development",),
-            ("common.state_model:MySide.forward_payoff@947",)),
+            ("common.state_model:MySide.forward_payoff@948",)),
         "common.state_model:MySide.forward_payoff": (
             "consumer", coverage.LEAF_ONLY, ("state:development",),
             ("common.state_value:_development_legs@1640",)),
         "common.strategy.combat_math.forward:ForwardLineMixin.forward_payoff_terms": (
             "owner", coverage.LOCAL_ONLY, (),
-            ("common.state_model:TheirSide.forward_payoff@1158",
+            ("common.state_model:TheirSide.forward_payoff@1159",
              "common.strategy.doctrines.doctrine_gust:GustMixin._gust_forward_denial@137")),
     }
     for key, (disposition, classification, owners, callers) in expected.items():
@@ -581,13 +581,13 @@ def test_live_numeric_equations_close_across_required_modules(inventory):
         "common.strategy.combat_math.reach:ReachMixin.best_reachable_damage": (
             "owner", coverage.LOCAL_ONLY, (),
             ("common.deciders.attach:AttachMixin._attach_value@269",
-             "common.state_model:MySide.best_reachable_damage._make@826")),
+             "common.state_model:MySide.best_reachable_damage._make@827")),
         "common.strategy.combat_math.reach:ReachMixin.best_reachable_damage_vs": (
             "consumer", coverage.LEAF_ONLY, ("state:threat",),
-            ("common.state_model:MySide.best_reachable_damage_vs@839",)),
+            ("common.state_model:MySide.best_reachable_damage_vs@840",)),
         "common.strategy.combat_math.reach:ReachMixin.best_reachable_bench_damage": (
             "consumer", coverage.LEAF_ONLY, ("state:threat",),
-            ("common.state_model:MySide.best_reachable_bench_damage@851",)),
+            ("common.state_model:MySide.best_reachable_bench_damage@852",)),
         "common.strategy.combat_math.reach:ReachMixin.best_affordable_damage": (
             "owner", coverage.LOCAL_ONLY, (),
             ("common.deciders.lethal:LethalMixin._best_affordable_damage@241",)),
@@ -595,11 +595,11 @@ def test_live_numeric_equations_close_across_required_modules(inventory):
         "common.strategy.combat_math.harvest:HarvestMixin.snipe_ko_prizes": (
             "owner", coverage.SHARED_EXACT, ("terminal:attack_ev",),
             ("common.deciders.tactical:TacticalMixin._snipe_ko_prizes@150",
-             "common.state_model:StateModel._attack_profile@1435")),
+             "common.state_model:StateModel._attack_profile@1456")),
         "common.strategy.combat_math.harvest:HarvestMixin.spread_ko_prizes": (
             "owner", coverage.SHARED_EXACT, ("terminal:attack_ev",),
             ("common.deciders.tactical:TacticalMixin._spread_ko_prizes@156",
-             "common.state_model:StateModel._attack_profile@1436")),
+             "common.state_model:StateModel._attack_profile@1457")),
         "common.strategy.combat_math.harvest:HarvestMixin.bench_snipe_bonus": (
             "owner", coverage.LOSSY_REEXPRESSION, ("terminal:attack_ev",),
             ("common.deciders.tactical:TacticalMixin._bench_snipe_bonus@195",
@@ -607,7 +607,7 @@ def test_live_numeric_equations_close_across_required_modules(inventory):
         # Clock/Energy values reach registered families but change units/horizon, hence LOSSY.
         "common.strategy.combat_math.clocks:ClockMixin.incoming": (
             "owner", coverage.LOSSY_REEXPRESSION, ("state:survival",),
-            ("common.state_model:TheirSide.incoming@1022",
+            ("common.state_model:TheirSide.incoming@1023",
              "common.strategy.combat_math.clocks:ClockMixin.doomed_incoming@31",
              "common.strategy.combat_math.clocks:ClockMixin.reachable_incoming@38",
              "common.strategy.combat_math.clocks:ClockMixin.survival_clock@255")),
@@ -618,8 +618,8 @@ def test_live_numeric_equations_close_across_required_modules(inventory):
              "common.strategy.objectives:ObjectivesMixin._my_turns_to_ko@226")),
         "common.strategy.combat_math.clocks:ClockMixin.turns_to_afford": (
             "owner", coverage.LOSSY_REEXPRESSION, ("state:readiness",),
-            ("common.state_model:MySide.turns_to_afford@874",
-             "common.state_model:TheirSide.turns_to_afford@1053")),
+            ("common.state_model:MySide.turns_to_afford@875",
+             "common.state_model:TheirSide.turns_to_afford@1054")),
         "common.strategy.combat_math.energy:EnergyMixin.reachable_attach_p": (
             "owner", coverage.LOSSY_REEXPRESSION, ("state:readiness",),
             ("common.deciders.evolve:EvolveMixin._evolve_income_delta@114",
@@ -723,9 +723,9 @@ def test_source_complete_term_tactical_and_expectation_equations_are_pinned(inve
     all_state = tuple(sorted(f"state:{name}" for name in state_value.FAMILIES))
     for method, callers in {
         "best": ("common.apply_option:Expectation.ordering@405",
-                 "common.composer:_one_ply@845", "common.composer:_one_ply@879"),
+                 "common.composer:_one_ply@1132", "common.composer:_one_ply@1168"),
         "expected": ("common.apply_option:Expectation.ordering@405",
-                     "common.composer:_one_ply@846", "common.composer:_one_ply@880"),
+                     "common.composer:_one_ply@1133", "common.composer:_one_ply@1169"),
     }.items():
         candidate = by_key[f"common.apply_option:Expectation.{method}"]
         assert candidate.absolute_owners == all_state
@@ -734,7 +734,7 @@ def test_source_complete_term_tactical_and_expectation_equations_are_pinned(inve
     assert ordering.disposition == "consumer"
     assert ordering.absolute_owners == all_state
     assert ordering.runtime_callers == (
-        "common.composer:_one_ply@844", "common.composer:_one_ply@881")
+        "common.composer:_one_ply@1131", "common.composer:_one_ply@1170")
 
     mobility = by_key["common.retreat_cost:attached_retreat_delta"]
     assert (mobility.disposition, mobility.classification, mobility.absolute_owners) == (
@@ -812,7 +812,7 @@ def test_source_index_resolves_nested_callers_without_bare_name_conflation():
 
 def test_composer_search_surfaces_join_derived_search_loss_without_invention(inventory):
     search = records(inventory, "composer-search-consumer")
-    assert len(search) == len(coverage.COMPOSER_SEARCH_CONSUMERS) == 14
+    assert len(search) == len(coverage.COMPOSER_SEARCH_CONSUMERS) == 18
     assert all("static search surface" in " ".join(record.evidence) for record in search)
     overlays = [record for record in inventory.records if record.search_overlay]
     assert [(record.mechanic_key, record.search_overlay) for record in overlays] == [
@@ -933,7 +933,7 @@ def test_inventory_is_deterministic_and_valid(inventory):
                   for record in inventory.records]
     assert len(identities) == len(set(identities))
     assert inventory.source_sha == coverage.AUDIT_BASE_SHA == (
-        "0cb636c230e58113fe6b9dd1cc251c764fa4054e")
+        "5a7c8f696913379316bf6c3fcf82aca7f4d84d3b")
     assert inventory.registry_identity == state_value.registry_identity()
 
 

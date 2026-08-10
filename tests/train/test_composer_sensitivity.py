@@ -68,7 +68,9 @@ def test_report_and_case_schema_are_stable(report):
         assert set(row["deltas"]["families"]) == set(lab.FAMILIES)
         assert set(row["local"]) == {"owner", "unit", "before", "after", "delta", "working"}
         assert set(row["search"]) == {"status", "k", "epsilon", "depth", "one_ply",
-                                      "candidate_presence", "chosen", "gaps"}
+                                      "candidate_presence", "chosen", "gaps", "issue_496"}
+        assert set(row["search"]["issue_496"]) == {
+            "one_ply", "candidate_presence", "chosen", "depths", "transition_evals"}
         assert set(row["unknown"]) == {"dimensions", "unread_dimensions", "reasons"}
         assert row["actions"] and all(set(action) == action_keys for action in row["actions"])
         assert isinstance(row["positive_control"]["passed"], bool)
@@ -358,6 +360,11 @@ def test_pr490_fixture_is_self_contained_and_both_orders_survive_as_evidence(cas
     assert row["local"]["working"]["root_target_energy_serials"] == [71]
     # The root already realizes its cheaper attack; the exact max-envelope gives no build credit.
     assert row["local"]["working"]["root_attach_trace"]["build"] == 0.0
+    experimental = row["search"]["issue_496"]
+    assert experimental["chosen"]["sequence"] == [1, 5, 3]
+    assert experimental["depths"][1]["generated"] == 6
+    assert experimental["depths"][1]["unique"] == 3
+    assert experimental["depths"][1]["merged"] == 3
 
 
 @pytest.mark.req("REQ-COMPOSERSENS-0008")

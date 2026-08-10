@@ -59,10 +59,14 @@ def _tied_first_steps(result, chosen, options, traces) -> list:
                     and left.get("playerIndex") == right.get("playerIndex")
                     and left_id is not None and left_id == right_id)
 
-    tied = {c.first_index for c in candidates
-            if c.first_index is not None and c.first_index != mine
-            and not c.coverage_gap and round(c.score, SCORE_PLACES) == key
-            and distinct(c.first_index)}
+    tied = set()
+    for candidate in candidates:
+        if candidate.coverage_gap or round(candidate.score, SCORE_PLACES) != key:
+            continue
+        indices = {candidate.first_index}
+        indices.update(path[0] for path in getattr(candidate, "origin_indices", ()) if path)
+        tied.update(index for index in indices
+                    if index is not None and index != mine and distinct(index))
     return sorted(tied)
 
 

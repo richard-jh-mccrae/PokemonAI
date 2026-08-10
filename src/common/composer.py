@@ -8,7 +8,7 @@ ADR-0092 / 0121 / 0129 / 0131; blind spots `data/leaf_lab/wave3-rulings.md` §3b
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Mapping, Sequence
 
 from common import apply_option as ao
@@ -19,10 +19,13 @@ from common import snapshot_coverage
 from common.board_delta import Unmodellable
 from common.option_equivalence import (
     AREA_ACTIVE, AREA_BENCH, AREA_HAND, canonical_keys, class_representatives, fan_out,
-    option_equivalence,
+    option_equivalence, semantic_option_fingerprint,
 )
-from common.state_model import ability_allowance_marker, ability_allowance_spent
-from common.state_value import attack_ev, attack_ev_legs, state_value
+from common.state_model import (
+    SEMANTIC_STATE_KEY_SCHEMA, SemanticStateKey, ability_allowance_marker, canonicalize,
+    ability_allowance_spent, semantic_state_key,
+)
+from common.state_value import attack_ev, attack_ev_legs, registry_identity, state_value
 from common.strategy.context import _ABILITY, _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RETREAT
 
 
@@ -37,6 +40,51 @@ SEQUENCE_DEPTH = 4
 #: Beam-admission band, **in prizes**: a candidate within this of the k-th survives. It IS
 #: `family_diag.DECIDER_FLOOR`, re-declared because `tools/` must never be a `src/` dependency.
 EPSILON = 0.005
+
+FRONTIER_KEY_SCHEMA = 1
+DIAGNOSTIC_SCHEMA = 2
+REFERENCE_COMPLETE = "COMPLETE"
+REFERENCE_UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class FrontierKey:
+    schema: int
+    state: SemanticStateKey
+    remaining_actions: tuple
+    remaining_depth: int
+    boundary: tuple
+
+
+@dataclass(frozen=True)
+class ReferenceBudget:
+    max_depth: int
+    max_transition_evals: int
+    max_unique_nodes: int
+    wall_ms: int | None = None
+
+
+@dataclass(frozen=True)
+class ReferenceResult:
+    status: str
+    cap_reason: str = ""
+    composer: object = None
+    best_semantic_path: tuple = ()
+    best_score: float | None = None
+    co_best_first_actions: tuple = ()
+    generated_by_depth: tuple = ()
+    mergeable_by_depth: tuple = ()
+    unique_by_depth: tuple = ()
+    unmergeable_by_depth: tuple = ()
+    merged_by_depth: tuple = ()
+    largest_merge_class: int = 0
+    block_resets: int = 0
+    transition_evals: int = 0
+    runtime_ms: float = 0.0
+    depth_reached: int = 0
+    beam_first_action_recall: bool | None = None
+    full_sequence_agreement: bool | None = None
+    score_regret: float | None = None
 
 def _bench_max(model) -> int:
     """The engine's own ``benchMax`` for my side, or `board_delta`'s fallback — so the two halves of
@@ -71,6 +119,7 @@ class Step:
     #: select RE-DECIDES on the real board through the same :func:`rank_targets` (ADR-0121 D6).
     chosen_target: tuple = ()
     target_classes: int = 0
+    semantic_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -86,6 +135,18 @@ class Candidate:
     score: float = 0.0
     coverage_gap: str = ""
     truncated: int = 0
+    origins: tuple = ()
+    origin_indices: tuple = ()
+    terminal_semantic_key: str = ""
+
+    @property
+    def semantic_path(self) -> tuple:
+        path = tuple(step.semantic_key for step in self.steps)
+        return path + ((self.terminal_semantic_key,) if self.terminal is not None else ())
+
+    @property
+    def first_semantic_actions(self) -> tuple:
+        return tuple(sorted({path[0] for path in self.origins if path}))
 
     @property
     def first_index(self):
@@ -96,7 +157,8 @@ class Candidate:
     def working(self) -> dict:
         return {"leaf": self.leaf, "terminal_ev": self.terminal_ev, "score": self.score,
                 "steps": len(self.steps), "truncated": self.truncated,
-                "coverage_gap": self.coverage_gap}
+                "coverage_gap": self.coverage_gap, "origin_count": len(self.origins),
+                "first_semantic_actions": list(self.first_semantic_actions)}
 
 
 @dataclass(frozen=True)
@@ -131,12 +193,36 @@ class Margin:
     chosen_delta: float | None = None
     kth_delta: float | None = None
     margin_to_kth: float | None = None
+    immediate_rank: int | None = None
+    immediate_delta: float | None = None
+    admission_rank: int | None = None
+    admission_score: float | None = None
+    kth_admission_score: float | None = None
+    admission_margin: float | None = None
+    admission_reason: str = ""
+    stop_score: float | None = None
+    continuation_estimate: float | None = None
+    continuation_gain: float | None = None
+    continuation_action: str = ""
+    continuation_kind: str = ""
+    changed_admission: bool = False
 
     def working(self) -> dict:
         return {"rank": self.rank, "k": self.k, "ranked": self.ranked, "in_beam": self.in_beam,
                 "admitted": self.admitted, "always_expand": self.always_expand,
                 "chosen_delta": self.chosen_delta, "kth_delta": self.kth_delta,
-                "margin_to_kth": self.margin_to_kth}
+                "margin_to_kth": self.margin_to_kth,
+                "immediate_rank": self.immediate_rank, "immediate_delta": self.immediate_delta,
+                "admission_rank": self.admission_rank, "admission_score": self.admission_score,
+                "kth_admission_score": self.kth_admission_score,
+                "admission_margin": self.admission_margin,
+                "admission_reason": self.admission_reason,
+                "stop_score": self.stop_score,
+                "continuation_estimate": self.continuation_estimate,
+                "continuation_gain": self.continuation_gain,
+                "continuation_action": self.continuation_action,
+                "continuation_kind": self.continuation_kind,
+                "changed_admission": self.changed_admission}
 
 
 @dataclass(frozen=True)
@@ -151,6 +237,9 @@ class ComposerResult:
     margin: Margin = field(default_factory=Margin)
     fanned: tuple = ()
     order: tuple = ()
+    admission: tuple = ()
+    admission_details: dict = field(default_factory=dict)
+    changed_admission: frozenset = frozenset()
     admitted: frozenset = frozenset()
     always_expanded: frozenset = frozenset()
     blocks: tuple = ()
@@ -167,7 +256,20 @@ class ComposerResult:
     def margin_for(self, index: int) -> Margin:
         """The margin telemetry for ANY depth-0 option — the acceptance claim is about the option the
         HUMAN ruled, and measuring the composer's own pick would pass by construction."""
-        return _margin_at(self.order, self.always_expanded, self.admitted, self.margin.k, index)
+        base = _margin_at(self.order, self.always_expanded, self.admitted, self.margin.k, index)
+        ordered = sorted(self.admission, key=lambda row: (-row[1], row[0]))
+        rank = next((n + 1 for n, (i, _score) in enumerate(ordered) if i == index), None)
+        score = next((score for i, score in ordered if i == index), None)
+        kth = ordered[self.margin.k - 1][1] if len(ordered) >= self.margin.k else None
+        reason = "always-expand" if index in self.always_expanded else \
+            "hard-top-k" if rank is not None and rank <= self.margin.k else \
+            "epsilon" if index in self.admitted else "cut"
+        return replace(base, immediate_rank=base.rank, immediate_delta=base.chosen_delta,
+                       admission_rank=rank, admission_score=score, kth_admission_score=kth,
+                       admission_margin=None if score is None or kth is None else score - kth,
+                       admission_reason=reason,
+                       changed_admission=index in self.changed_admission,
+                       **self.admission_details.get(index, {}))
 
     def working(self) -> dict:
         """Complete JSON-safe Composer working for decision telemetry.
@@ -179,12 +281,16 @@ class ComposerResult:
         def candidate(c):
             return {**c.working(), "first_index": c.first_index,
                     "step_indices": [s.index for s in c.steps],
-                    "terminal_index": c.terminal_index}
+                    "terminal_index": c.terminal_index,
+                    "semantic_path": list(c.semantic_path),
+                    "origins": [list(path) for path in c.origins],
+                    "origin_indices": [list(path) for path in c.origin_indices]}
 
         return {
             "root": {"value": self.root_value, "terms": self.root_terms},
             "differencing": [[i, delta] for i, delta in enumerate(self.fanned)],
             "ranked": [[i, delta] for i, delta in self.order],
+            "admission": [[i, score] for i, score in self.admission],
             "admitted": sorted(self.admitted),
             "always_expanded": sorted(self.always_expanded),
             "blocks": [list(block) for block in self.blocks],
@@ -561,7 +667,9 @@ def selection_key(model, candidate: Candidate) -> tuple:
             card_id = int(getattr(stat, "cardId", -1) or -1)
             worth = float(model.mine.role_worth(stat.cardId))
     index = candidate.first_index
+    semantic_path = candidate.semantic_path or ("\uffff",)
     return (bool(candidate.coverage_gap), -round(candidate.score, ao.SCORE_PLACES), -worth, card_id,
+            semantic_path,
             index if index is not None else 1 << 30)
 
 
@@ -668,14 +776,55 @@ class _Node:
     block_prints: tuple = ()     # their footprints, for the pairwise commutativity test
     truncated: int = 0
     leaf: float = 0.0
+    origins: tuple = ((),)
+    origin_indices: tuple = ((),)
+    root_options: tuple = ()
+    continuation_boundary: bool = False
+    required_pick: bool = False
+
+
+def frontier_key(node: _Node, *, remaining_depth: int) -> FrontierKey | None:
+    """Exact continuation identity: board, remaining legal semantic actions, depth and boundary."""
+    state_key = semantic_state_key(node.model)
+    if state_key is None:
+        return None
+    actions = []
+    for index, stamped in node.root_options:
+        if index in node.used:
+            continue
+        option = resolve_against(node.model, stamped)
+        if option is None or not _still_legal(node.model, option):
+            continue
+        fingerprint = semantic_option_fingerprint(strip_origin(option), node.model.source_obs)
+        if fingerprint is None:
+            return None
+        actions.append(fingerprint)
+    select = dict((node.model.source_obs or {}).get("select") or {})
+    select.pop("option", None)
+    boundary = (canonicalize(select), node.continuation_boundary, node.required_pick)
+    return FrontierKey(FRONTIER_KEY_SCHEMA, state_key, tuple(sorted(actions)),
+                       int(remaining_depth), boundary)
 
 
 def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: float = EPSILON,
             depth: int = SEQUENCE_DEPTH, search_api=None, deterministic=None,
             clauses_cover=None, shed=None, continuation_boundary: bool = False,
-            required_pick: bool = False) -> ComposerResult:
-    """``deterministic`` / ``clauses_cover`` / ``shed`` are caller-supplied per-option seams, each a
-    value or an ``option -> value`` callable. **Pure and bit-identical**; wall-clock is not enforced."""
+            required_pick: bool = False, exact_dedup: bool = True,
+            continuation_admission: bool = True) -> ComposerResult:
+    """Production beam; Issue #496's measured frontier policy remains opt-in after its runtime gate."""
+    result, _state = _compose_core(
+        model, options, k=k, epsilon=epsilon, depth=depth, search_api=search_api,
+        deterministic=deterministic, clauses_cover=clauses_cover, shed=shed,
+        continuation_boundary=continuation_boundary, required_pick=required_pick,
+        exact_dedup=exact_dedup, continuation_admission=continuation_admission)
+    return result
+
+
+def _compose_core(model, options: Sequence[Mapping], *, k: int, epsilon: float, depth: int,
+                  search_api=None, deterministic=None, clauses_cover=None, shed=None,
+                  continuation_boundary: bool = False, required_pick: bool = False,
+                  exact_dedup: bool = True, continuation_admission: bool = True,
+                  reference_budget: ReferenceBudget | None = None):
     if int(k) < 1 or int(depth) < 0:
         # Caller error, so it RAISES where a modelling gap refuses. Not pedantry: `k=0` indexes the
         # k-th as [-1] and admits the entire menu — a beam that silently stops being one.
@@ -695,48 +844,147 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
                  deterministic=deterministic, clauses_cover=clauses_cover, shed=shed,
                  canon=canon, reps=reps, stamped=stamped,
                  continuation_boundary=bool(continuation_boundary),
-                 required_pick=bool(required_pick))
+                 required_pick=bool(required_pick), reference_budget=reference_budget,
+                 started_at=t0)
 
     root_terms = {}
-    root = _Node(model=model, leaf=float(state_value(model, working=root_terms)))
+    root_options = tuple((i, stamped[i]) for i in reps)
+    root = _Node(model=model, leaf=float(state_value(model, working=root_terms)),
+                 root_options=root_options,
+                 continuation_boundary=bool(continuation_boundary),
+                 required_pick=bool(required_pick))
     frontier, root_ranked = [root], None
-    for ply in range(depth + 1):
-        expanded = []
-        for node in frontier:
-            ranked = _rank(state, node)
-            if node is root:
-                root_ranked = ranked
-            expanded.extend(_expand(state, node, ranked))
-        if not expanded:
-            break
-        if ply == depth:
-            state.depth_truncated += len(expanded)
-            break
-        frontier = _prune_nodes(state, expanded)
+    legacy = reference_budget is None and not exact_dedup and not continuation_admission
+    try:
+        for ply in range(depth + 1):
+            generated = []
+            for node in frontier:
+                ranked = _rank(state, node, remaining_depth=depth - ply)
+                if node is root:
+                    root_ranked = ranked
+                if legacy:
+                    admitted = _admit(state, ranked)
+                    if node is root:
+                        state.admitted_root.update(entry.index for entry in admitted)
+                    generated.extend(_expand_all(state, node, admitted))
+                else:
+                    generated.extend(_expand_all(state, node, ranked))
+            if not generated:
+                break
+            if ply == depth:
+                state.depth_truncated += len(generated)
+                break
+            if legacy:
+                frontier = _prune_nodes(state, generated)
+                continue
+            remaining = depth - ply - 1
+            unique, row = _deduplicate_nodes(state, generated, remaining_depth=remaining,
+                                             enabled=exact_dedup)
+            state.unique_nodes += len(unique)
+            if reference_budget is not None and state.unique_nodes > reference_budget.max_unique_nodes:
+                raise _ReferenceCap("max_unique_nodes")
+            frontier = _retain_nodes(state, unique, remaining_depth=remaining,
+                                     continuation=continuation_admission,
+                                     exhaustive=reference_budget is not None,
+                                     record_root=ply == 0)
+            row["retained"] = len(frontier)
+            row["epsilon_extras"] = max(0, len(frontier) - min(state.k, len(unique))) \
+                if reference_budget is None else 0
+            state.depth_stats.append(row)
+    except _ReferenceCap as cap:
+        state.cap_reason = str(cap)
 
     ranked0 = root_ranked or []
     selection_candidates = _selection_candidates(model, state.candidates)
     chosen = min(selection_candidates, key=lambda c: selection_key(model, c)) \
         if selection_candidates else None
-    return ComposerResult(
+    result = ComposerResult(
         chosen=chosen,
         candidates=tuple(sorted(state.candidates, key=lambda c: selection_key(model, c))),
         selection_candidates=tuple(sorted(selection_candidates, key=lambda c: selection_key(model, c))),
         margin=_margin(state, ranked0, chosen),
         fanned=tuple(fan_out([state.one_ply.get(i) for i in range(len(options))], equiv)),
         order=tuple((e.index, e.delta) for e in ranked0 if not e.refused),
+        admission=tuple(sorted(state.admission.items(), key=lambda row: (-row[1], row[0]))),
+        admission_details=dict(state.admission_details),
+        changed_admission=frozenset(state.changed_admission),
         admitted=_admitted_indices(state, ranked0), always_expanded=_free_indices(ranked0),
         blocks=commutative_blocks(model, stamped, reps),
         gaps=tuple(state.gaps),
         bounds=tuple(state.bounds),
-        stats={"leaf_evals": state.leaf_evals, "nodes": state.nodes,
+        stats={"schema": DIAGNOSTIC_SCHEMA, "leaf_evals": state.leaf_evals, "nodes": state.nodes,
                "candidates": len(state.candidates), "truncated": state.truncated,
                "depth_truncated": state.depth_truncated,
                "expectation_nodes": len(state.bounds),
                "expanded_families": state.expanded_families,
                "expansion_children": state.expansion_children,
+               "transition_evals": state.transition_evals,
+               "changed_admission": len(state.changed_admission),
+               "depths": tuple(state.depth_stats),
+               "block_resets": state.block_resets,
+               "largest_merge_class": state.largest_merge_class,
+               "state_key_schema": SEMANTIC_STATE_KEY_SCHEMA,
+               "frontier_key_schema": FRONTIER_KEY_SCHEMA,
+               "value_registry_identity": registry_identity(),
                "ms": (time.perf_counter() - t0) * 1000.0},
         root_value=root.leaf, root_terms=root_terms)
+    return result, state
+
+
+def compose_reference(model, options: Sequence[Mapping], *, budget: ReferenceBudget,
+                      search_api=None, deterministic=None, clauses_cover=None, shed=None,
+                      continuation_boundary: bool = False,
+                      required_pick: bool = False,
+                      beam_result: ComposerResult | None = None) -> ReferenceResult:
+    """Bounded exhaustive policy over the production transition/Candidate core; caps report UNKNOWN."""
+    if budget.max_depth < 0 or budget.max_transition_evals < 1 or budget.max_unique_nodes < 1:
+        raise ValueError("reference limits must allow non-negative depth and positive work caps")
+    result, state = _compose_core(
+        model, options, k=1, epsilon=0.0, depth=budget.max_depth,
+        search_api=search_api, deterministic=deterministic, clauses_cover=clauses_cover, shed=shed,
+        continuation_boundary=continuation_boundary, required_pick=required_pick,
+        exact_dedup=True, continuation_admission=False, reference_budget=budget)
+    reason = state.cap_reason
+    if not reason and state.depth_truncated:
+        reason = "max_depth"
+    if not reason and state.gaps:
+        reason = "refusal_or_coverage"
+    chosen = result.chosen
+    best = None if chosen is None else round(chosen.score, ao.SCORE_PLACES)
+    co_best = set()
+    if best is not None:
+        for candidate in result.selection_candidates:
+            if not candidate.coverage_gap and round(candidate.score, ao.SCORE_PLACES) == best:
+                co_best.update(candidate.first_semantic_actions)
+                if not candidate.first_semantic_actions and candidate.semantic_path:
+                    co_best.add(candidate.semantic_path[0])
+    complete = not reason
+    beam_chosen = None if beam_result is None else beam_result.chosen
+    beam_first = None
+    if beam_chosen is not None:
+        beam_first = next(iter(beam_chosen.first_semantic_actions), None)
+        if beam_first is None and beam_chosen.semantic_path:
+            beam_first = beam_chosen.semantic_path[0]
+    rows = tuple(state.depth_stats)
+    return ReferenceResult(
+        status=REFERENCE_UNKNOWN if reason else REFERENCE_COMPLETE, cap_reason=reason,
+        composer=result, best_semantic_path=() if chosen is None else chosen.semantic_path,
+        best_score=None if chosen is None else chosen.score,
+        co_best_first_actions=tuple(sorted(co_best)),
+        generated_by_depth=tuple(row["generated"] for row in rows),
+        mergeable_by_depth=tuple(row["mergeable"] for row in rows),
+        unique_by_depth=tuple(row["unique"] for row in rows),
+        unmergeable_by_depth=tuple(row["unmergeable"] for row in rows),
+        merged_by_depth=tuple(row["merged"] for row in rows),
+        largest_merge_class=state.largest_merge_class, block_resets=state.block_resets,
+        transition_evals=state.transition_evals, runtime_ms=result.stats["ms"],
+        depth_reached=len(rows),
+        beam_first_action_recall=(None if not complete or beam_chosen is None
+                                  else beam_first in co_best),
+        full_sequence_agreement=(None if not complete or beam_chosen is None or chosen is None
+                                 else beam_chosen.semantic_path == chosen.semantic_path),
+        score_regret=(None if not complete or beam_chosen is None or chosen is None
+                      else max(0.0, chosen.score - beam_chosen.score)))
 
 
 @dataclass
@@ -768,6 +1016,19 @@ class _Run:
     depth_truncated: int = 0
     expanded_families: int = 0        # §S7 D4: options whose deferred target was fanned out
     expansion_children: int = 0       # the instances scored across all of them
+    transition_evals: int = 0
+    rank_cache: dict = field(default_factory=dict)
+    admission: dict = field(default_factory=dict)
+    depth_stats: list = field(default_factory=list)
+    block_resets: int = 0
+    largest_merge_class: int = 1
+    reference_budget: ReferenceBudget | None = None
+    started_at: float = 0.0
+    unique_nodes: int = 0
+    cap_reason: str = ""
+    admitted_root: set = field(default_factory=set)
+    admission_details: dict = field(default_factory=dict)
+    changed_admission: set = field(default_factory=set)
 
 
 def _ask(resolver, option):
@@ -775,8 +1036,25 @@ def _ask(resolver, option):
     return resolver(option) if callable(resolver) else resolver
 
 
-def _rank(state: _Run, node: _Node) -> list:
+class _ReferenceCap(RuntimeError):
+    pass
+
+
+def _check_reference_budget(state: _Run):
+    budget = state.reference_budget
+    if budget is None:
+        return
+    if state.transition_evals >= budget.max_transition_evals:
+        raise _ReferenceCap("max_transition_evals")
+    if budget.wall_ms is not None and (time.perf_counter() - state.started_at) * 1000.0 >= budget.wall_ms:
+        raise _ReferenceCap("wall_ms")
+
+
+def _rank(state: _Run, node: _Node, *, remaining_depth: int | None = None) -> list:
     """Ordered by delta with a deterministic tail, never menu position. Availability is RE-checked."""
+    cache_key = None if remaining_depth is None else frontier_key(node, remaining_depth=remaining_depth)
+    if cache_key is not None and cache_key in state.rank_cache:
+        return state.rank_cache[cache_key]
     out = []
     for i in state.reps:
         if i in node.used:
@@ -793,6 +1071,8 @@ def _rank(state: _Run, node: _Node) -> list:
             state.one_ply[i] = entry.delta
         out.append(entry)
     out.sort(key=lambda e: (e.refused, -float(e.delta or 0.0), e.key))
+    if cache_key is not None:
+        state.rank_cache[cache_key] = out
     return out
 
 
@@ -813,10 +1093,15 @@ class _Ranked:
     gap: str = ""
     #: The deferred-target expansion this option resolved through, so the `Step` can name WHICH won.
     choice: object = None
+    semantic_key: str = ""
+    outcome_kind: str = "ordinary"
 
 
 def _one_ply(state: _Run, node: _Node, option: dict, index: int):
     """Apply and price one option. CHOSEN outcomes take max; DEALT outcomes take expectation."""
+    _check_reference_budget(state)
+    state.transition_evals += 1
+    semantic = semantic_option_fingerprint(strip_origin(option), node.model.source_obs) or ""
     if ao.is_terminal(option):
         ev, _detail, gap = terminal_ev(node.model, option)
         if gap:
@@ -824,7 +1109,8 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
         return _Ranked(index=index, option=option,
                        key=(TIER_ENDER, state.canon[index], index),
                        delta=ev, after=None, fate=ao.TERMINAL, footprint=ao.Footprint(),
-                       terminal=True, ev=ev, gap=gap)
+                       terminal=True, ev=ev, gap=gap, semantic_key=semantic,
+                       outcome_kind="terminal")
     cover = _ask(state.clauses_cover, option)
     footprint = ao.option_footprint(node.model, option, clauses_cover=cover)
     key = canonical_key(node.model, option, index, state.canon[index], footprint)
@@ -832,7 +1118,8 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
     def _refuse(reason: str) -> _Ranked:
         state.gaps.append(f"{_frame_of(option)}: {reason}")
         return _Ranked(index=index, option=option, key=key, delta=None, after=None,
-                       fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason)
+                       fate=ao.REFUSED, footprint=footprint, refused=True, gap=reason,
+                       semantic_key=semantic)
 
     try:
         closed = bx.closed_form_transition(node.model, option, score=state_value,
@@ -847,12 +1134,14 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                                    classes=len(closed.classes), truncated=closed.truncated,
                                    total_probability=float(closed.total_probability)))
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
-                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf,
+                       semantic_key=semantic, outcome_kind=str(closed.resolution))
     if isinstance(closed, ao.ScalarTransition):
         state.leaf_evals += 1
         leaf = float(state_value(closed.model)) + closed.scalar
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
-                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf)
+                       fate=ao.MODELLED, footprint=footprint, reveals=True, ev=leaf,
+                       semantic_key=semantic, outcome_kind="scalar-reveal")
 
     if footprint.reveals_information and ao.transition_kind(option) == _ABILITY:
         return _refuse(
@@ -887,7 +1176,8 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                                     total_probability=float(result.total_probability)))
         return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=None,
                        fate=ao.MODELLED, footprint=footprint, reveals=True,
-                       truncated=result.truncated, ev=leaf)
+                       truncated=result.truncated, ev=leaf, semantic_key=semantic,
+                       outcome_kind=str(result.resolution))
 
     result = ao.apply_option(node.model, option, depth=len(node.steps),
                              search_api=state.search_api,
@@ -913,13 +1203,14 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                 "and pricing it 0.0 would rank a real play below every scored line")
         return _Ranked(index=index, option=option, key=key, delta=choice.leaf - node.leaf,
                        after=choice.best.model, fate=ao.MODELLED, footprint=footprint,
-                       truncated=choice.truncated, ev=choice.leaf, choice=choice)
+                       truncated=choice.truncated, ev=choice.leaf, choice=choice,
+                       semantic_key=semantic, outcome_kind=str(result.resolution))
     after = ao.require_model(result)
     state.leaf_evals += 1
     leaf = float(state_value(after))
     return _Ranked(index=index, option=option, key=key, delta=leaf - node.leaf, after=after,
                    fate=ao.ENGINE_RESOLVED if isinstance(result, ao.EngineResolved) else ao.MODELLED,
-                   footprint=footprint, ev=leaf)
+                   footprint=footprint, ev=leaf, semantic_key=semantic)
 
 
 def _step_of(entry: _Ranked) -> Step:
@@ -927,10 +1218,12 @@ def _step_of(entry: _Ranked) -> Step:
     origin-stripping and the deferred-target attribution cannot drift between the two callers."""
     choice = entry.choice
     best = None if choice is None else choice.best
+    semantic = entry.semantic_key if best is None else f"{entry.semantic_key}|target={best.fingerprint!r}"
     return Step(option=strip_origin(entry.option), index=entry.index, tier=entry.key[0],
                 fate=entry.fate,
                 chosen_target=() if best is None else best.fingerprint,
-                target_classes=0 if choice is None else len(choice.scored))
+                target_classes=0 if choice is None else len(choice.scored),
+                semantic_key=semantic)
 
 
 def _frame_of(option: Mapping) -> str:
@@ -949,14 +1242,13 @@ def _admit(state: _Run, ranked: list) -> list:
     return free + [e for e in scored if e.delta >= cutoff]
 
 
-def _expand(state: _Run, node: _Node, ranked: list) -> list:
-    """Turn one node's admitted options into candidates and child nodes. The node ITSELF is always
-    emitted; a child that does NOT commute opens a FRESH block, so both orderings are explored."""
+def _expand_all(state: _Run, node: _Node, ranked: list) -> list:
+    """Emit non-frontier candidates and every continuable child; admission happens depth-wide."""
     state.nodes += 1
     children = []
     if not (state.required_pick and state.continuation_boundary and not node.steps):
         state.candidates.append(_stop_here(state, node))
-    for entry in _admit(state, ranked):
+    for entry in ranked:
         if entry.terminal:
             state.candidates.append(_terminal_candidate(node, entry))
             continue
@@ -970,28 +1262,151 @@ def _expand(state: _Run, node: _Node, ranked: list) -> list:
         if commutes and node.block and not _admissible_in_block(entry.key, node.block):
             continue                             # this subset already exists in canonical order
         step = _step_of(entry)
+        origins = tuple(sorted({path + (step.semantic_key,) for path in node.origins}))
+        origin_indices = tuple(sorted({path + (entry.index,) for path in node.origin_indices}))
         children.append(_Node(
             model=entry.after, steps=node.steps + (step,), used=node.used | {entry.index},
             block=(node.block + (entry.key,)) if commutes else (entry.key,),
             block_prints=(node.block_prints + (entry.footprint,)) if commutes
             else (entry.footprint,),
-            truncated=node.truncated + entry.truncated, leaf=node.leaf + entry.delta))
+            truncated=node.truncated + entry.truncated, leaf=node.leaf + entry.delta,
+            origins=origins, origin_indices=origin_indices, root_options=node.root_options,
+            continuation_boundary=node.continuation_boundary, required_pick=node.required_pick))
     return children
+
+
+def _expand(state: _Run, node: _Node, ranked: list) -> list:
+    """Compatibility helper for focused tests; production uses the depth-wide pipeline."""
+    return _expand_all(state, node, _admit(state, ranked))
+
+
+def _deduplicate_nodes(state: _Run, nodes: list, *, remaining_depth: int,
+                       enabled: bool = True):
+    groups = {}
+    unmergeable = []
+    if enabled:
+        for node in nodes:
+            key = frontier_key(node, remaining_depth=remaining_depth)
+            if key is None:
+                unmergeable.append(node)
+            else:
+                groups.setdefault(key, []).append(node)
+    else:
+        unmergeable = list(nodes)
+    unique = list(unmergeable)
+    mergeable = sum(len(group) for group in groups.values())
+    for group in groups.values():
+        state.largest_merge_class = max(state.largest_merge_class, len(group))
+        origins = tuple(sorted({path for node in group for path in node.origins}))
+        origin_indices = tuple(sorted({path for node in group for path in node.origin_indices}))
+        representative_path = origins[0]
+        representative = min((node for node in group if representative_path in node.origins),
+                             key=lambda n: tuple(step.index for step in n.steps))
+        blocks = {node.block for node in group}
+        if len(blocks) == 1:
+            block, block_prints = representative.block, representative.block_prints
+        else:
+            block, block_prints = (), ()
+            state.block_resets += 1
+        unique.append(_Node(
+            model=representative.model, steps=representative.steps, used=representative.used,
+            block=block, block_prints=block_prints, truncated=representative.truncated,
+            leaf=representative.leaf, origins=origins, origin_indices=origin_indices,
+            root_options=representative.root_options,
+            continuation_boundary=representative.continuation_boundary,
+            required_pick=representative.required_pick))
+    unique.sort(key=lambda n: (min(n.origins), tuple(step.index for step in n.steps)))
+    row = {"generated": len(nodes), "mergeable": mergeable,
+           "unmergeable": len(unmergeable), "unique": len(unique),
+           "merged": len(nodes) - len(unique),
+           "largest_merge_class": max((len(group) for group in groups.values()), default=1),
+           "block_resets": state.block_resets,
+           "origin_count": sum(len(node.origins) for node in unique),
+           "distinct_first_semantic_actions": len({path[0] for node in unique
+                                                    for path in node.origins if path})}
+    return unique, row
+
+
+def _admission_score(state: _Run, node: _Node, *, remaining_depth: int,
+                     continuation: bool):
+    best = node.leaf
+    best_entry = None
+    if continuation and remaining_depth > 0:
+        for entry in _rank(state, node, remaining_depth=remaining_depth):
+            if entry.refused:
+                continue
+            if entry.terminal:
+                score = node.leaf + entry.ev
+            elif entry.after is None:
+                score = _gap_or_reveal_candidate(node, entry).score
+            else:
+                score = node.leaf + float(entry.delta or 0.0)
+            if score > best or (score == best and best_entry is not None
+                                and entry.semantic_key < best_entry.semantic_key):
+                best, best_entry = score, entry
+    return best, best_entry
+
+
+def _retain_nodes(state: _Run, nodes: list, *, remaining_depth: int,
+                  continuation: bool, exhaustive: bool, record_root: bool = False):
+    scored = []
+    for node in nodes:
+        score, entry = _admission_score(state, node, remaining_depth=remaining_depth,
+                                        continuation=continuation)
+        scored.append((score, min(node.origins), node, entry))
+        if record_root:
+            for path in node.origin_indices:
+                if path:
+                    state.admission[path[0]] = max(score, state.admission.get(path[0], float("-inf")))
+                    detail = {"stop_score": node.leaf,
+                              "continuation_estimate": score,
+                              "continuation_gain": score - node.leaf,
+                              "continuation_action": "" if entry is None else entry.semantic_key,
+                              "continuation_kind": "stop" if entry is None else entry.outcome_kind}
+                    state.admission_details[path[0]] = detail
+    scored.sort(key=lambda row: (-row[0], row[1], tuple(step.index for step in row[2].steps)))
+
+    def cut(rows):
+        if exhaustive or len(rows) <= state.k:
+            return rows
+        cutoff = rows[state.k - 1][0] - state.epsilon
+        return [row for row in rows if row[0] >= cutoff]
+
+    retained = cut(scored)
+    if record_root:
+        baseline = sorted(((node.leaf, min(node.origins), node, None) for node in nodes),
+                          key=lambda row: (-row[0], row[1], tuple(step.index for step in row[2].steps)))
+        baseline_ids = {id(row[2]) for row in cut(baseline)}
+        retained_ids = {id(row[2]) for row in retained}
+        changed_ids = baseline_ids ^ retained_ids if continuation else set()
+        for _score, _path, node, _entry in retained:
+            for path in node.origin_indices:
+                if path:
+                    state.admitted_root.add(path[0])
+        for node in nodes:
+            if id(node) in changed_ids:
+                state.changed_admission.update(path[0] for path in node.origin_indices if path)
+    return [row[2] for row in retained]
 
 
 def _continuation_candidate(node: _Node, entry: _Ranked) -> Candidate:
     """One committed CARD choice plus the best terminal action reachable on its after-board."""
     leaf = node.leaf + entry.delta
     ev = continuation_ev(entry.after)
-    return Candidate(steps=(_step_of(entry),), terminal=None, leaf=leaf, terminal_ev=ev,
-                     score=leaf + ev, truncated=node.truncated + entry.truncated)
+    step = _step_of(entry)
+    return Candidate(steps=(step,), terminal=None, leaf=leaf, terminal_ev=ev,
+                     score=leaf + ev, truncated=node.truncated + entry.truncated,
+                     origins=tuple(sorted({path + (step.semantic_key,) for path in node.origins})),
+                     origin_indices=tuple(sorted({path + (entry.index,)
+                                                  for path in node.origin_indices})))
 
 
 def _stop_here(state: _Run, node: _Node) -> Candidate:
     """Take ``node``'s steps and stop — ``EV(terminal) = 0``. ⚠️ It does NOT carry
     :func:`continuation_ev`: crediting it would let *"commit nothing"* win a decision outright."""
     return Candidate(steps=node.steps, terminal=None, leaf=node.leaf, terminal_ev=0.0,
-                     score=node.leaf, truncated=node.truncated)
+                     score=node.leaf, truncated=node.truncated, origins=node.origins,
+                     origin_indices=node.origin_indices)
 
 
 def _terminal_candidate(node: _Node, entry: _Ranked) -> Candidate:
@@ -999,7 +1414,11 @@ def _terminal_candidate(node: _Node, entry: _Ranked) -> Candidate:
     return Candidate(steps=node.steps, terminal=strip_origin(entry.option),
                      terminal_index=entry.index, leaf=node.leaf, terminal_ev=entry.ev,
                      score=node.leaf + entry.ev, coverage_gap=entry.gap,
-                     truncated=node.truncated)
+                     truncated=node.truncated,
+                     origins=tuple(sorted({path + (entry.semantic_key,) for path in node.origins})),
+                     origin_indices=tuple(sorted({path + (entry.index,)
+                                                  for path in node.origin_indices})),
+                     terminal_semantic_key=entry.semantic_key)
 
 
 def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
@@ -1012,7 +1431,10 @@ def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
         leaf, ev = node.leaf + entry.delta, continuation_ev(node.model)
     return Candidate(steps=node.steps + (step,), terminal=None, leaf=leaf, terminal_ev=ev,
                      score=leaf + ev, coverage_gap=entry.gap,
-                     truncated=node.truncated + entry.truncated)
+                     truncated=node.truncated + entry.truncated,
+                     origins=tuple(sorted({path + (step.semantic_key,) for path in node.origins})),
+                     origin_indices=tuple(sorted({path + (entry.index,)
+                                                  for path in node.origin_indices})))
 
 
 def _prune_nodes(state: _Run, nodes: list) -> list:
@@ -1043,7 +1465,7 @@ def _free_indices(ranked0: list) -> frozenset:
 
 
 def _admitted_indices(state: _Run, ranked0: list) -> frozenset:
-    return frozenset(e.index for e in _admit(state, ranked0))
+    return frozenset(state.admitted_root) | _free_indices(ranked0)
 
 
 def _margin(state: _Run, ranked0: list, chosen: Candidate | None) -> Margin:
@@ -1051,17 +1473,34 @@ def _margin(state: _Run, ranked0: list, chosen: Candidate | None) -> Margin:
     (``admitted`` / ``always_expand``) and *"did it earn its place by score"* (``in_beam``) differ."""
     # Refusals are retained as free diagnostics, but are unscored unknowns rather than one-ply ranks.
     scored = tuple((e.index, e.delta) for e in ranked0 if not e.refused)
-    return _margin_at(scored, _free_indices(ranked0),
-                      _admitted_indices(state, ranked0), state.k,
-                      None if chosen is None else chosen.first_index)
+    index = None if chosen is None else chosen.first_index
+    base = _margin_at(scored, _free_indices(ranked0),
+                      _admitted_indices(state, ranked0), state.k, index)
+    ordered = sorted(state.admission.items(), key=lambda row: (-row[1], row[0]))
+    admission_rank = next((n + 1 for n, (i, _score) in enumerate(ordered) if i == index), None)
+    admission_score = state.admission.get(index)
+    kth = ordered[state.k - 1][1] if len(ordered) >= state.k else None
+    reason = "always-expand" if index in _free_indices(ranked0) else \
+        "hard-top-k" if admission_rank is not None and admission_rank <= state.k else \
+        "epsilon" if index in state.admitted_root else "cut"
+    return replace(base, immediate_rank=base.rank, immediate_delta=base.chosen_delta,
+                   admission_rank=admission_rank, admission_score=admission_score,
+                   kth_admission_score=kth,
+                   admission_margin=None if admission_score is None or kth is None
+                   else admission_score - kth, admission_reason=reason,
+                   changed_admission=index in state.changed_admission,
+                   **state.admission_details.get(index, {}))
 
 
 __all__ = (
     "BEAM_WIDTH", "SEQUENCE_DEPTH", "EPSILON",
+    "FRONTIER_KEY_SCHEMA", "DIAGNOSTIC_SCHEMA", "REFERENCE_COMPLETE", "REFERENCE_UNKNOWN",
     "TIER_INFORMATIVE", "TIER_COMMIT_FREE", "TIER_SUPPORTER", "TIER_COMMITMENT", "TIER_SHUFFLE",
     "TIER_ENDER",
+    "FrontierKey", "ReferenceBudget", "ReferenceResult",
     "Step", "Candidate", "Margin", "Bounds", "ComposerResult", "ScoredTarget", "TargetChoice",
-    "compose", "selection_key", "terminal_ev", "continuation_ev", "canonical_tier", "canonical_key",
+    "compose", "compose_reference", "frontier_key", "selection_key", "terminal_ev", "continuation_ev",
+    "canonical_tier", "canonical_key",
     "commutative_blocks", "subset_lattice", "resolve_against", "stamp_origin", "strip_origin",
     "rank_targets", "choose_target",
 )

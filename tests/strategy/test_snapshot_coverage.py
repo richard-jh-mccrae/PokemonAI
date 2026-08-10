@@ -705,3 +705,10 @@ def test_the_reserved_covers_key_is_never_read_as_a_clause_list():
     assert "_note" in payload[sc.COVERS_KEY] and "effect_overrides.json" in \
         payload[sc.COVERS_KEY]["_note"]
     assert not sc.is_card_key("_note") and not sc.is_card_key(sc.COVERS_KEY)
+
+
+def test_semantic_state_key_declares_every_writable_zone():
+    """A new zone must choose exact source coverage or an explicit fail-closed hidden boundary."""
+    from common.state_model import SEMANTIC_KEY_MAPPED_ZONES
+
+    assert SEMANTIC_KEY_MAPPED_ZONES == frozenset(zone.id for zone in sc.WRITABLE)
