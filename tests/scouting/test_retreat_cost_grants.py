@@ -174,10 +174,10 @@ def test_the_grant_predicate_reads_a_value_the_provider_actually_emits():
 
 
 @pytest.mark.req("REQ-GEN-0026")
-def test_a_free_retreat_destroys_no_build_and_so_costs_nothing():
-    """`retreat_cost` is the BUILD the discard destroys, so a body that discards nothing pays 0."""
+def test_a_free_retreat_pays_only_the_turn_allowance_cost():
+    """A zero-discard Retreat destroys no build but still spends the once-per-turn allowance."""
     p = _pilot()
     active = poke(WALKER, energy=2, hp=120)
     obs = _obs(active, [poke(LATIAS_EX, hp=210)])
     row = p.explain(obs).options[0].promote_retreat_working
-    assert row is not None and row["retreat_cost"] == 0.0
+    assert row is not None and row["retreat_cost"] == 0.05

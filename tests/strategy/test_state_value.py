@@ -258,6 +258,14 @@ def _on_main(model):
 def _pivot_board():
     return _on_main(_model(
         _player(active=_poke(MEGA_STARMIE, hp=330,
+                             energies=[WATER, WATER], energy_cards=[E_W, E_W]),
+                bench=[_poke(STARYU, hp=70, energies=[WATER], energy_cards=[E_W], serial=2)]),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[FIRE, PSYCHIC], serial=9))))
+
+
+def _burst_pivot_board():
+    return _on_main(_model(
+        _player(active=_poke(MEGA_STARMIE, hp=330,
                              energies=[COLORLESS, COLORLESS, COLORLESS],
                              energy_cards=[IGNITION]),
                 bench=[_poke(STARYU, hp=70, energies=[WATER], energy_cards=[E_W], serial=2)]),
@@ -300,6 +308,18 @@ def test_readiness_prices_the_option_before_exercise_and_the_realized_position_a
     left = next(family for family in before.families if family.family == "readiness")
     assert any(leg.key == "active_position" for leg in left.legs)
     assert before.total == pytest.approx(after.total)
+
+
+def test_expiring_retreat_cash_stays_legal_but_is_not_banked_as_state_potential():
+    """Ignition can pay the retreat now, but that one-shot route cannot be added to the attack it
+    alternatively funds. Direct retreat owns its realized board; the nonterminal leaf owns zero."""
+    model = _burst_pivot_board()
+    outcomes = bc.legal_manual_retreat_outcomes(model)
+    assert len(outcomes) == 1 and outcomes[0].discard_indices == (0,)
+    assert sv.position_state_value(outcomes[0].model) > sv.position_state_value(model)
+    result = sv.active_position_potential(model, diagnostics=True)
+    assert result.value_prizes == 0.0
+    assert "expiring Energy" in result.legs[0].reason
 
 
 def test_active_position_diagnostics_are_complete_and_memoized(monkeypatch):
@@ -760,7 +780,7 @@ def test_attack_ev_working_decomposes_the_total_rather_than_narrating_it():
 
 
 # ── the terminal-action term's EXTRACTOR (POC-T4/3, Issue #384) ───────────────────────────────────
-# `attack_ev` takes seven plain floats; `attack_ev_legs` is the model->kwargs bridge that makes them.
+# `attack_ev` takes plain floats; `attack_ev_legs` is the model->kwargs bridge that makes them.
 
 def _starmie_rider_board(*, bench_hp=50):
     """MY Mega Starmie ex against their Dragapult ex with a 3-prize body on THEIR Bench: Jetting Blow
@@ -1385,13 +1405,13 @@ def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
-def test_the_SAFE_board_uses_mechanical_realization_without_active_privilege():
-    """The shared envelope applies role/caps after discovery and authors no Active preference."""
+def test_the_SAFE_board_concentrates_on_the_started_primary_instead_of_reopening_a_duplicate_attack():
+    """A duplicate's cheap attack is insurance; stronger-attack progress on the primary is value."""
     funded_active, funded_successor = {}, {}
     sv.state_value(_successor_board(active_energies=[E_W, E_W]), working=funded_active)
     sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W]),
                    working=funded_successor)
-    assert funded_successor["readiness"] > funded_active["readiness"]
+    assert funded_active["readiness"] > funded_successor["readiness"]
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")

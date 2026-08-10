@@ -69,7 +69,7 @@ class BoardMixin:
                                matchup_plan=matchup_plan, gamma=gamma, favorability=fav,
                                matchup_coverage=cov, carried=carried)
         active_doomed = self._active_doomed(ma, oa, opp)
-        active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
+        active_lethal = self._active_cheap_attack_kos(ma, oa)
         # Energy my Active can PAY an attack with this turn: attached + the best unspent hand attach.
         payable = ((model.mine.active.energy_count if model.mine.active is not None else 0)
                    + (0 if model.energy_attached

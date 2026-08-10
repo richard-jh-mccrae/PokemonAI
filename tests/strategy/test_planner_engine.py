@@ -130,7 +130,9 @@ def _drive_committed(deck):
                 if d.planned.kind == "sequence":
                     assert d.planned.next_step == list(d.chosen)    # the scored line's first action IS the pick
             obs = battle_select(d.chosen)
-        assert all(ln.ranked_by in ("composer", None) for ln in committed)
+        assert all(ln.ranked_by in ("composer", "cost-benefit", None) for ln in committed)
+        assert all(ln.ranked_by != "cost-benefit" or "cost-benefit" in ln.rationale
+                   for ln in committed), "a cost-benefit boundary must expose why benefit exceeded cost"
         return committed
     finally:
         battle_finish()

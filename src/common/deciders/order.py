@@ -11,9 +11,9 @@ from common.strategy.context import (KO_SCORE, _ACTIVE, _ATTACH, _ATTACK, _END, 
 
 # `_finish_turn_last`'s bands (ADR-0095 decision 1, Issue #261 item 2f). NAMED because a renumbering
 # expressed in bare integers has invisible missed occurrences.
-_TIER_INFORMATIVE = 0   # free AND informative: digs, Bench fill, benched evolve; plus lethal/winning
+_TIER_INFORMATIVE = 0   # informative/beneficial first: digs, Bench fill, benched evolve; lethal/winning
 
-_TIER_COMMIT_FREE = 1   # free but COMMITTING: a free PLAY spending a card at a target, revealing nothing.
+_TIER_COMMIT_FREE = 1   # quota-free but COMMITTING: a PLAY spending a card at a target, revealing nothing.
                         # NOT a Tool — a Tool is an `_ATTACH`, so it takes _TIER_COMMITMENT instead.
 
 _TIER_SUPPORTER = 2     # the one-per-turn Supporter (non-shuffle)
@@ -149,13 +149,17 @@ class OrderMixin:
                 return _TIER_ENDER                                   # would forfeit an available KO
             if t == _PLAY and _is_gust_card(i) and board.active_can_ko:
                 return _TIER_ENDER   # a gust SWAPS the defender: never ahead of a KO of the Active it forfeits
-            if (t == _EVOLVE and o.get("inPlayArea") != _ACTIVE      # free development. `>= 0` not `> 0`: a
+            if (t == _EVOLVE and o.get("inPlayArea") != _ACTIVE      # quota-free development. `>= 0` not `> 0`: a
                     and traces[i].score >= 0):                       # same-line bench evolve nets exactly 0.0
                 return _TIER_INFORMATIVE                             # (the LINE payoff is pre-credited, #167)
-            # ADR-0131 decision 1: a free informative PLAY reaches the top band at score ZERO. `not fired`
-            # is the load-bearing fence — 0 means *nothing priced it*, never *a rung NEUTRALISED it*.
+            # A conditional reveal's local trace is deliberately 0: Composer owns its full
+            # benefit-minus-card-cost expectation, but cannot represent the contingent policy that
+            # re-aims later commitments after the reveal (ADR-0095/0133). This is sequencing, never
+            # a claim that the consumed card is free. An unmodelled Supporter cannot use this escape
+            # hatch: besides its card, it consumes the one-per-turn Supporter allowance.
             if (t == _PLAY and traces[i].score == 0 and not traces[i].fired
-                    and not _cost_discard(i) and self._informative_card(traces[i].card_id)):
+                    and not _cost_discard(i) and not _is_supporter(i)
+                    and self._informative_card(traces[i].card_id)):
                 return _TIER_INFORMATIVE
             if traces[i].score <= 0:                                 # only an endorsed action sequences early;
                 return _TIER_ENDER                                   # a zero-priced ATTACH is attach-anyway,
@@ -163,11 +167,11 @@ class OrderMixin:
             if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so
                 return _TIER_SHUFFLE                                 # held Energy placed before the shuffle
             if t == _PLAY and _is_supporter(i):                      # one-per-turn Supporter: after the
-                return _TIER_SUPPORTER                               # free Item digs, before the blind attach
-            if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # blind/costly commitment: after free dev.
+                return _TIER_SUPPORTER                               # Item digs, before the blind attach
+            if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # blind/costly commitment: after dev.
                 return _TIER_COMMITMENT                              # THIS is `attach-energy-last` (ADR-0069
                                                                      # §7), as an ORDERING with no score
-            if t == _PLAY and not self._informative_card(traces[i].card_id):  # ADR-0095 d1: an endorsed free
+            if t == _PLAY and not self._informative_card(traces[i].card_id):  # ADR-0095 d1: endorsed,
                 return _TIER_COMMIT_FREE                             # PLAY that commits a card and reveals
                                                                      # nothing sequences behind the digs
             return _TIER_INFORMATIVE

@@ -210,6 +210,17 @@ def test_hedge_floors_the_marginal_at_the_intrinsic_tier():
 
 
 @pytest.mark.req("REQ-NEEDS-0004")
+def test_option_floor_residual_prices_redundant_supply_without_double_charging_live_coverage():
+    """Issue #507: two cards covering one need retain option value; a unique supplier's existing
+    assignment marginal already satisfies the floor."""
+    slots = [needs.Slot("line", 10.0, 0, "line")]
+    assert needs.option_floor_residual(slots, [{0}], [0.0], 0, floor=4.5) == 0.0
+    duplicate = [{0}, {0}]
+    assert needs.option_floor_residual(slots, duplicate, [0.0], 0, floor=4.5) == 4.5
+    assert needs.option_floor_residual(slots, duplicate, [0.0], 1, floor=4.5) == 4.5
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
 def test_cheapest_removal_ties_break_by_residual_worth():
     """Among EQUAL-marginal removals the lower residual worth sheds first; raw index order never
     decides while a tiebreak discriminates."""

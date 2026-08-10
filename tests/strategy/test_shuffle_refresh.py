@@ -106,7 +106,12 @@ def _anchored_refresh_pilot(refresh_id, refresh_tags, *, opp_prizes=0):
 @pytest.mark.req("REQ-GEN-0046")
 def test_the_swing_oracle_owns_the_shuffle_refresh_and_a_plain_draw_gets_nothing():
     """ADR-0060 moved the cycling endorsement out of a hand-size-BLIND rung and into the swing
-    oracle, preserving `_REFRESH_CYCLE` exactly. The oracle stays SILENT on a plain draw."""
+    oracle. Its benefit remains `_REFRESH_CYCLE`, while the net tactical value pays for cards the
+    refresh shuffles away. The oracle stays SILENT on a plain draw."""
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY
+
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINDRAW: CardStat(PLAINDRAW, synthetic=True, hp=0),
                                   PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
@@ -117,7 +122,11 @@ def test_the_swing_oracle_owns_the_shuffle_refresh_and_a_plain_draw_gets_nothing
                                     hand=[LILLIES, PLAINDRAW]))
     refresh, plain = pilot.explain(obs).options[0], pilot.explain(obs).options[1]
 
-    assert refresh.tactical == 20.0                     # the cycling credit is preserved, exactly
+    board = pilot._board_hypothetical(obs)
+    held_cost = pilot._refresh_shed_keepcost(
+        obs, board, SimpleNamespace(card_id=LILLIES, option_type=_PLAY))
+    assert held_cost > 0.0                              # the plain draw remains a valuable option
+    assert refresh.tactical == pytest.approx(20.0 - held_cost)
     assert refresh.score > 0                            # ... so the refresh is still the strong line
     assert plain.tactical == 0.0                        # ... and the oracle stays SILENT on a plain draw
     assert refresh.tactical > plain.tactical, (         # the contrast, stated as one comparison so a

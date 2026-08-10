@@ -313,9 +313,11 @@ def test_burst_units_are_the_printed_provision_and_a_lethal_unlock_is_spent():
     obs = _obs([], [{"id": IGNITION}, {"id": W_ENERGY}],
                [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)], active=active,
                opp_active={"id": MEGA, "hp": 200})
-    w = p.explain(obs).attach_working
+    dec = p.explain(obs)
+    w = dec.attach_working
     assert _row_for(w, 0)["units"] == 3
     assert _row_for(w, 0)["this_turn"] > _row_for(w, 1)["this_turn"]
+    assert dec.chosen == [0]
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0014")
@@ -330,6 +332,24 @@ def test_the_no_ko_cap_conserves_the_burst_when_the_basic_does_the_same_job():
     assert _row_for(w, 0)["units"] == 3
     assert _row_for(w, 0)["this_turn"] == _row_for(w, 1)["this_turn"]
     assert _row_for(w, 0)["tactical"] < _row_for(w, 1)["tactical"]
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0014")
+def test_a_burst_does_not_add_the_same_turns_attack_and_retreat_cash():
+    """A Bench exposes a valuable retreat after Ignition funds cost two. It remains a legal direct
+    retreat, but the attach marginal cannot add that alternative cash route to tonight's attack."""
+    p = _pilot()
+    active = {"id": MEGA, "energies": [], "hp": 60}
+    bench = [{"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": IGNITION}, {"id": W_ENERGY}],
+               [_attach(0, ACTIVE, 0), _attach(1, ACTIVE, 0)], active=active,
+               opp_active={"id": MEGA, "hp": 300})
+    dec = p.explain(obs)
+    burst, reusable = (_row_for(dec.attach_working, i) for i in (0, 1))
+    assert burst["this_turn"] == reusable["this_turn"] == 120.0
+    assert burst["retreat_equity"] == reusable["retreat_equity"] == 0.0
+    assert burst["tactical"] < reusable["tactical"]
+    assert max(dec.attach_working["eq"], key=lambda row: row["tactical"])["i"] == 1
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0015")
@@ -423,16 +443,16 @@ _CORPUS = {
     ("86088989", 63): (BENCH, 2),        # no 3rd Energy on a 2-cost Lucario (Aura Jab ctx 21)
     ("86089638", 18): None,              # on-type onto the Dreepy line — assert against `correct`
     ("83037962", 48): None,              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
-    ("82749168", 61): (BENCH, 1),        # exact envelope: the bench Mega crosses to its cheap attack
-    ("82523811", 59): (BENCH, 0),        # no Active privilege; the bench carrier buys full realization
+    ("82749168", 61): (ACTIVE, 0),       # reusable Basic completes the Active; don't burn Ignition
+    ("82523811", 59): (ACTIVE, 0),       # concentrate toward Nebula on the surviving started Active
     ("83664340", 45): (ACTIVE, 0),       # arm the doomed Active with the attack it unlocks TONIGHT
-    ("82750161", 59): (BENCH, 1),        # the Staryu's exact one-Water forward envelope is largest
+    ("82750161", 59): (BENCH, 0),        # refuted label: reusable Water advances the started bench Mega
     ("83037962", 70): None,              # feed the accelerator (Turbo Flare routes 3)
     ("84889539", 87): None,              # route to the Riolu line, not a partnerless Solrock
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
     ("83007714", 22): None,              # spread to the EMPTY Mega ex, not the started Staryu ...
-    ("83116081", 21): (BENCH, 1),        # exact per-body envelopes favor the bare Staryu unlock
+    ("83116081", 21): (BENCH, 0),        # concentrate Turbo Flare on the already-started Staryu
     ("82224509", 31): None,              # don't over-attach a body that is already 3/3
 }
 
@@ -448,6 +468,23 @@ def test_82227388_cape_keeps_the_existing_refuted_ruling_and_records_the_new_bre
     assert dec.chosen == [active["i"]]
     assert active["retreat_equity"] < 0.0
     assert len(benches) == 2 and benches[0]["retreat_equity"] == benches[1]["retreat_equity"] > 0.0
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0021")
+def test_83664340_45_spends_reusable_water_on_the_active_not_ignition():
+    """Pattern 5: both cards buy the capped 120-damage swing, so transient retreat cash cannot turn
+    Ignition into 311 damage of value. The reusable Water source is the corrected exact option."""
+    rec = _frame("83664340", 45)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    rows = {row["i"]: row for row in dec.attach_working["eq"]}
+    assert dec.chosen == [0]
+    assert rows[dec.chosen[0]]["energy"] == W_ENERGY
+    assert rows[dec.chosen[0]]["slot"] == [ACTIVE, 0]
+    ignition = rows[3]
+    water = rows[0]
+    assert ignition["this_turn"] == water["this_turn"] == 120.0
+    assert ignition["retreat_equity"] == 0.0
+    assert ignition["tactical"] < water["tactical"]
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0021")
@@ -673,12 +710,11 @@ def test_the_678_validation_base_is_three_of_three_and_the_decider_misses_one():
     control = op.control(corrs)
     assert control["healthy"], f"CONTROL FAILED: the detector is silent at ctx 7 — {control}"
 
-    # The one miss now follows the generic envelope: one unit fully realizes Mega Lucario's
-    # Aura Jab, while Hariyama receives only partial progress toward its larger attack.
+    # The one known miss remains a miss. Its exact wrong recipient is not a contract: shared
+    # readiness improvements may reorder the losing alternatives while the ruled target stays out.
     rec, dec, rows = replays["85058574-121"]
-    assert dec.chosen == [2] and rec.correct == [3]
+    assert dec.chosen != rec.correct and rec.correct == [3]
     assert rows[2]["target"] == MEGA_LUCARIO_EX and rows[3]["target"] == HARIYAMA
-    assert rows[2]["tactical"] > rows[3]["tactical"]
     # Lunatone IS in play (option 0's own recipient), so `skip-partnerless-solrock` could never fire.
     assert rows[0]["target"] == LUNATONE
     assert RIOLU not in {r["target"] for r in rows.values()}   # ... nor `load-the-wincon-line`

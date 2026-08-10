@@ -1,4 +1,4 @@
-"""HOLD price: what SPENDING a held card costs, for every free-Item decider (ADR-0062, Issue #261).
+"""HOLD price: what SPENDING a held card costs, for every quota-free Item decider (ADR-0062, Issue #261).
 
     hold(card) = max( needs.keep_v2(card), ITEM_HOLD_FLOOR ) x currency rate
 
@@ -18,7 +18,7 @@ ITEM_HOLD_FLOOR = 10.0
 
 def hold_price(keep_worth: float) -> float:
     """`keep_worth` is Worth points (`needs.keep_v2`); the return is DAMAGE currency. Always strictly
-    positive, so a decider subtracting it can reach a negative score and DECLINE a free Item."""
+    positive, so a decider subtracting it can reach a negative score and DECLINE an Item."""
     worth = max(0.0, float(keep_worth), ITEM_HOLD_FLOOR)
     return currency.item_hold_to_damage(worth)
 

@@ -39,8 +39,8 @@ def test_role_value_derives_worth_for_an_undeclared_line_member():
     assert dx._role_value(120) == ROLE_TIER["win_condition_base"]   # DERIVED middle stage: was 0
     # the derivation is WORTH-ONLY — `c.roles` (what the rungs read) is untouched
     assert "win_condition_base" not in dx._roles_of(120)
-    # a non-Line card is still worth 0 (no spurious derivation)
-    assert dx._role_value(1120) == 0.0                             # Crushing Hammer: not a Line member
+    # A non-Line card gets only its shared function value: no spurious Line derivation.
+    assert dx._role_value(1120) == 6.0                             # Crushing Hammer: energy denial
 
 
 @pytest.mark.req("REQ-WORTH-0001")
@@ -91,6 +91,30 @@ def test_role_value_reads_tag_derived_worth():
         ROLE_TIER["accel_source"], TAG_TIER["discard_eot"])
     assert role_value(["win_condition"], tags=["gust"]) == ROLE_TIER["win_condition"]
     assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER            # 25 > engine 12
+
+
+@pytest.mark.req("REQ-WORTH-0008")
+def test_function_worth_is_shared_across_decks_and_only_end_may_be_free():
+    """Issue #507: card functions own the portable floor; deck roles need not repeat card facts."""
+    from common.card_worth import FUNCTION_TIER, KNOWN_CARD_FLOOR, role_value
+    ms = _shipped_pilot("mega_starmie")
+    dx = _shipped_pilot("dragapult_ex")
+    ml = _shipped_pilot("mega_lucario")
+    assert ms._role_value(1120) == dx._role_value(1120) == FUNCTION_TIER["energy_denial"] == 6.0
+    assert ms._role_value(1121) == dx._role_value(1121) == ml._role_value(1121) == 10.0
+    assert ms._role_value(1122) == 10.0                              # Pokégear: dig/search band
+    assert ms._role_value(1223) == ms._role_value(1227) == 8.0       # Harlequin / Lillie: refresh
+    assert role_value([], is_known_card=True) == KNOWN_CARD_FLOOR == 5.0
+    assert role_value([]) == 0.0                                     # unknown fact, not a free action
+
+
+@pytest.mark.req("REQ-WORTH-0008")
+def test_deck_override_can_raise_but_not_lower_the_shared_function_worth(monkeypatch):
+    ms = _shipped_pilot("mega_starmie")
+    monkeypatch.setitem(ms.strategy.worth_overrides, 1120, 14.0)
+    assert ms._role_value(1120) == 14.0
+    monkeypatch.setitem(ms.strategy.worth_overrides, 1120, 1.0)
+    assert ms._role_value(1120) == 6.0
 
 
 @pytest.mark.req("REQ-WORTH-0001")

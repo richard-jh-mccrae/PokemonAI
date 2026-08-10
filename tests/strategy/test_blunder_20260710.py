@@ -147,10 +147,10 @@ def test_a_ko_dominates_the_positional_snipe_stack(starmie, name):
     assert _decide(starmie, fx)[0] == fx["correct"]
 
 
-@pytest.mark.xfail(strict=True, reason=marks("ml_lethal_retreat_boost_to_ko_f24")[0].kwargs["reason"])
 def test_a_bare_preevo_is_never_the_concentrate_slot_f24(lucario):
     """With every pre-evo bare there is nothing to concentrate, so the attach stays free. Also the
-    repo's determinism tracer (Issue #178) — this frame once answered by engine-RNG position."""
+    repo's determinism tracer (Issue #178) — this frame once answered by engine-RNG position. The
+    cost-benefit planner now makes the ruled choice from the board itself."""
     fx = _fixture("ml_lethal_retreat_boost_to_ko_f24")
     assert _decide(lucario, fx)[0] == fx["correct"]
 

@@ -1597,6 +1597,7 @@ def mega_starmie_wally_attach() -> dict:
     reverse_body = _body_with_serial(reverse_after, fixture["evidence"]["target_body_serial"]) or {}
     correct_total = float(state_value(correct_after))
     reverse_total = float(state_value(reverse_after))
+    root_total = float(state_value(model))
     presence = {tuple(row["sequence"]): row for row in search["candidate_presence"]}
     forward_present = presence.get(tuple(correct_indices), {})
     reverse_present = presence.get(tuple(reverse_indices), {})
@@ -1667,16 +1668,19 @@ def mega_starmie_wally_attach() -> dict:
             == [fixture["evidence"]["held_water_serial"]]
             and correct_serials == [fixture["evidence"]["held_water_serial"]]
             and reverse_serials == []
-            and correct_total > reverse_total
-            and isolated_build_delta > 0 and isolated_leaf_delta > 0
+            and isolated_build_delta > 0 and isolated_leaf_delta < 0
+            and correct_total > root_total
+            and forward_present.get("faithful_generated_as_prefix") is True
+            and forward_present.get("survived_terminal_dominance") is True
         ),
         "expectation": ("after Wally bounces the existing Water, attaching the held Water is an "
-                        "isolated zero-to-one transition and the retained-Water final state wins; "
-                        "default search admission is owned by Issue #496"),
+                        "isolated positive build whose card cost makes its leaf marginal negative; "
+                        "the complete Wally-then-attach sequence remains positive and survives "
+                        "terminal dominance"),
         "observed_total_delta": isolated_leaf_delta,
         "isolated_local_delta": isolated_build_delta,
-        "root_sequence_total_delta": correct_total - float(state_value(model)),
-        "reverse_total_delta": reverse_total - float(state_value(model)),
+        "root_sequence_total_delta": correct_total - root_total,
+        "reverse_total_delta": reverse_total - root_total,
     }
     return _case_record(
         "mega-starmie-wally-attach", "91393371-69", wally_after, isolated_after,

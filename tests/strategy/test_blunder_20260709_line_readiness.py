@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from poc_t4_flips import marks
-
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -42,7 +40,6 @@ def test_f31_promote_item_lock_staller_over_bare_stage0_base():
 
 
 @pytest.mark.req("REQ-GEN-0073")
-@pytest.mark.xfail(strict=True, reason=marks("dragapult_concentrate_line_preevo_f85")[0].kwargs["reason"])
 def test_f85_concentrate_on_the_started_line_preevo():
     """With no wincon BODY buildable, `_priority_wincon_slot` Pass 2 points at the started pre-evo."""
     fx = _fixture("dragapult_concentrate_line_preevo_f85")
