@@ -15,6 +15,15 @@ identical across OSes, and `PYTHONUTF8=1` gives Windows the same UTF-8 default a
 both platforms stay first-class because the Kaggle grader is Linux and dev/build is on
 Windows (the committed `cg/libcg.so` + `cg/cg.dll` let the engine load on either).
 
+The workflow is three jobs, not one: a cheap `plan` job computes the pytest target list
+(below) once, then the native test arm (`test`) and the cgpy twin arm (`test-cgpy`,
+[below](#determinism-gates-178-adr-0072-amendment-c)) both read that plan and run
+concurrently instead of one after the other. Each pytest invocation also passes
+`-n auto` ([pytest-xdist](https://pypi.org/project/pytest-xdist/)), spreading individual
+tests across the runner's cores instead of running them one at a time. Neither change
+drops a single test — see [Job budget and timeout-minutes](#job-budget-and-timeout-minutes)
+for why, and the measured effect.
+
 ## Selective testing (what runs on a PR)
 
 To keep pull-request feedback fast, a PR runs **only the test directories whose subsystem
@@ -96,8 +105,9 @@ full suite):
 
 ### Determinism gates (#178, ADR-0072 amendment C)
 
-Both run on every non-docs change and remain gating. The twin now excludes tests that already invoke
-cgpy directly, avoiding a second run of the parity oracle without weakening either gate.
+Both run on every non-docs change and remain gating. They are now two separate jobs
+(`test`, `test-cgpy`) that both read the same plan and run at the same time, rather than
+two steps in one job — see [Job budget and timeout-minutes](#job-budget-and-timeout-minutes).
 
 - **Determinism backstop** — the seven live-native-engine modules, repeated **15×**. They are the
   only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
@@ -106,11 +116,16 @@ cgpy directly, avoiding a second run of the parity oracle without weakening eith
   is the cheap net *underneath* the real guard, which is
   `tests/strategy/test_engine_admissibility.py`: that one measures whether a drive consumed
   randomness at all, so a sampled frame fails the day it is added rather than 1 run in 30 later.
-- **cgpy twin arm** — selected behavioral tests again under `CG_ENGINE=py`. The native arm already
-  runs `tests/parity`, whose tests import cgpy directly; repeating that directory under an alias is
-  identical work. The twin therefore excludes it except for `test_compat_game.py`, which specifically
-  verifies the `cg.game` alias contract. cgpy's search is `SeededRng(0)`, so this arm is reproducible
-  *by construction* and any flap in it is a real bug.
+- **cgpy twin arm** — the SAME target list as the native arm, again under `CG_ENGINE=py`. This
+  includes `tests/parity`, whose tests import cgpy directly — running it a second time under the
+  alias is redundant work, and a prior revision of this doc claimed the twin excluded it except for
+  `test_compat_game.py` (which specifically verifies the `cg.game` alias contract). That exclusion
+  was never actually implemented in `ci.yml` or `tests/conftest.py` — checked directly while
+  splitting the arms into separate jobs — so this paragraph is the correction, not a behavior
+  change. `tests/parity` is small (63 test functions) next to the twin's full run, so the
+  redundant work costs low single-digit seconds, not minutes; worth fixing for cleanliness, not for
+  the time budget. cgpy's search is `SeededRng(0)`, so this arm is reproducible *by construction*
+  and any flap in it is a real bug.
 
   A test the twin cannot answer is marked in the diff, never waved through by making the step
   non-gating: `@needs_live_board_search` (`tests/conftest.py`) for one that needs a live-board
@@ -120,39 +135,58 @@ cgpy directly, avoiding a second run of the parity oracle without weakening eith
 
 ### Job budget and `timeout-minutes`
 
-The native arm runs the whole selected suite. The cgpy arm repeats only behavioral tests for which
-engine substitution changes the subject; the direct-cgpy parity oracle runs once. Before that
-narrowing, run `31275026627`, job `93150346764` measured this baseline (ubuntu-latest, py3.12):
+Through 2026-08-10 this was ONE job: plan, then the native arm, then the cgpy twin arm, one after
+another. Run `31374106056` (a full-suite push to `main`, ubuntu-latest, py3.12) measured it right
+before the split below landed:
 
 | Step | Cost |
 | --- | --- |
-| Run tests (native, JUnit + conditional coverage gate) | **18.5 min** |
-| cgpy twin arm | **9.6 min** |
+| Run tests (native, JUnit + conditional coverage gate) | **22.6 min** |
+| cgpy twin arm | **12.8 min** |
 | Determinism backstop (7 modules × 15 repeats) | 1.0 min |
 | Install dependencies | 1.1 min |
-| Everything else (checkout, Python, plan, guards, upload) | ~0.3 min |
-| **Old total** | **~30.5 min** |
+| Everything else (checkout, Python, plan, guards, upload) | ~0.2 min |
+| **Old total (one sequential job)** | **~37.6 min** |
 
-The next full CI run should replace this historical baseline with measured post-filter timings.
-Local collection after the narrowing is 5,091 native tests and 4,232 twin tests; runner timing is
-intentionally left to that CI measurement rather than inferred from collection counts.
+That grew from the ~30.5 min historical baseline this table used to cite (same shape, same two
+arms) purely because the suite itself grew — `timeout-minutes` had already been raised 30 → 45 for
+headroom, and real runs were landing close enough to that ceiling that several got cancelled at it:
+two `pull_request` runs in the same week measured 47.9 and 48.8 minutes end-to-end. **The failure
+mode a breached ceiling causes does not look like a failure**: the runner cancels the job at the
+ceiling, every test step still reads `success`, and the only casualty is the artifact-upload tail —
+but `gh pr checks` reports the check as red, so a PR whose tests all passed reads as broken. It has
+now happened at three different ceilings: 20 (the `ci.yml` comment's earlier revision), 30 (PR #461's
+branch cancelled four consecutive times; PR #471 died at 30m28s with a green suite behind it), and
+45 (the two runs above). Raising the ceiling again would only have moved the same wall further out.
 
-That is the whole reason for `timeout-minutes: 45`. **The failure mode this prevents does not look
-like a failure**: the runner cancels the job at the ceiling, every test step still reads `success`,
-and the only casualty is the artifact-upload tail — but `gh pr checks` reports the check as red, so a
-PR whose tests all passed reads as broken. It has now happened at two different ceilings: at 20
-(recorded in the `ci.yml` comment's earlier revision) and at 30, where PR #461's branch was cancelled
-four consecutive times and PR #471's job died at 30m28s with a green suite behind it.
+**The fix taken instead: split the one job into three, and parallelize each pytest invocation
+across the runner's cores.** `plan` computes the test-target list once (~10s of real work); `test`
+(native) and `test-cgpy` (the twin) both depend only on `plan`, not on each other, so they start
+together and run at the same time instead of the second waiting for the first. Both pytest
+invocations also gained `-n auto` (`pytest-xdist`), which hands individual tests to worker processes
+across the runner's cores rather than running the whole list on one core — verified beforehand that
+nothing in the suite writes to a fixed path or shares mutable state across tests (every write goes
+through `tmp_path`), so this changes wall-clock time and nothing else: the same tests, same
+assertions, same gates.
 
-**The 30 → 45 raise is headroom, not a licence to stop measuring.** The honest lever on this budget is
-the duplicated suite run; the determinism backstop, once suspected, is only 1 minute and is not worth
-touching. If the total approaches 45, re-measure per-step from the job JSON *before* raising it again —
+| Job | `timeout-minutes` | Why |
+| --- | --- | --- |
+| `plan` | 5 | Pure git + bash, no Python; was ~10s inside the old job |
+| `test` (native) | 20 | Was the 22.6 min line above; `-n auto` should cut it well below that, but the number is headroom until a real run confirms the new floor |
+| `test-cgpy` | 15 | Was the 12.8 min line above, same reasoning |
+
+None of these are measured floors yet — they are the old per-arm cost as a ceiling, kept
+deliberately loose on the first run after a structural change, per the same rule the old single
+number followed: **re-measure per-step from the job JSON before trusting a new ceiling**, not after
+the next raise —
 
 ```bash
+gh api repos/richard-jh-mccrae/PokemonAI/actions/runs/<run-id>/jobs --jq '.jobs[] | "\(.name): \(.started_at) -> \(.completed_at)"'
 gh api repos/richard-jh-mccrae/PokemonAI/actions/jobs/<job-id> --jq '.steps[] | "\(.name): \(.started_at) -> \(.completed_at)"'
 ```
 
-— because a raise that follows a real slowdown nobody diagnosed just moves the same wall further out.
+— because a number nobody re-measures just becomes the next stale baseline, the same way the
+~30.5 min one above did.
 
 ### Line-ending guard
 
@@ -569,15 +603,19 @@ corpus reads 10/12. Ten of the eleven recovered frames were that vocabulary mism
 ```bash
 pip install -r requirements.txt
 
-# The full suite (what push-to-main runs):
-python -m pytest tests/ -q
+# The full suite (what push-to-main runs). Add `-n auto` to match CI's per-core split;
+# omit it for a slower but simpler single-process run when debugging a failure.
+python -m pytest tests/ -q -n auto
 
 # With the Scouting coverage gate (what a scouting/common change enforces):
-python -m pytest tests/ \
+python -m pytest tests/ -n auto \
   --cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing
 
 # A selective subset the way CI does — pytest.ini keeps the shared conftest loading:
-python -m pytest tests/arena tests/sim -q
+python -m pytest tests/arena tests/sim -q -n auto
+
+# The cgpy twin arm:
+CG_ENGINE=py python -m pytest tests/ -q -n auto -p no:cacheprovider --tb=line
 ```
 
 Consult the mapping table above to see which dirs a given diff would run; the CI decision
@@ -605,6 +643,7 @@ filesystem walk: an earlier `REPO.rglob("*.py")` reached `.venv/` and the siblin
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any
   reverse-dependency dirs). Until you do, changes there fall through to the fail-safe full
   run — correct, just not minimal.
-- **Cover more interpreters / OSes?** Extend the `matrix` in `ci.yml`.
+- **Cover more interpreters / OSes?** Extend the `matrix` in `ci.yml` — it is declared twice
+  (once on `test`, once on `test-cgpy`) since they are now separate jobs; keep both in sync.
 - **Run CI on feature branches without a PR?** Broaden `on.push.branches` (pushes always
   run the full suite).
