@@ -752,5 +752,50 @@
     "disposition": "covered",
     "reason": "Agent uses the free evolution rather than spending a Supporter; this is at least as cheap as the rationale's Mega Signal line.",
     "round": "2026-08-11"
+  },
+  "82525101-14": {
+    "disposition": "covered",
+    "reason": "Current discard set keeps Ignition and uses the duplicate Wally as the rationale asks; the recorded singleton was incomplete.",
+    "round": "2026-08-11"
+  },
+  "82753746-11": {
+    "disposition": "covered",
+    "reason": "Current discard pair is Cinderace plus Harlequin, exactly the two cards the rationale identifies as dead/least valuable.",
+    "round": "2026-08-11"
+  },
+  "83053965-6": {
+    "disposition": "covered",
+    "reason": "Current line does not attach Ignition on player one's first turn; the rationale's prohibited action is absent.",
+    "round": "2026-08-11"
+  },
+  "83037962-49": {
+    "disposition": "covered",
+    "reason": "Current line does not take the criticised refresh gamble and preserves the needed hand resources.",
+    "round": "2026-08-11"
+  },
+  "83454549-36": {
+    "disposition": "covered",
+    "reason": "Current multi-pick set is identical to the rationale's two desired actions; only order differs.",
+    "round": "2026-08-11"
+  },
+  "91393371-t6s1": {
+    "disposition": "deferred",
+    "reason": "No rationale was supplied, so the recorded index cannot be soundly preferred over the current line.",
+    "round": "2026-08-11"
+  },
+  "91394270-12": {
+    "disposition": "deferred",
+    "reason": "The rationale ('Why our ideal starter?') does not identify an action or benefit-cost comparison.",
+    "round": "2026-08-11"
+  },
+  "91394270-t10s0": {
+    "disposition": "deferred",
+    "reason": "No rationale was supplied, so no action can be adjudicated from this record.",
+    "round": "2026-08-11"
+  },
+  "91394270-t11s0": {
+    "disposition": "refuted",
+    "reason": "The 10-HP Staryu is the correct expendable promotion into a lethal opposing attacker; Cinderace's free retreat has no value if it is simply Knocked Out before a later turn.",
+    "round": "2026-08-11"
   }
 }
