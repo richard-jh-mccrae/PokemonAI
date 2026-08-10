@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from common.cards import CardFunctions
-from common.pilot import Pilot, _ATTACH_RETREAT_EQUITY
+from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Line, Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -108,7 +108,7 @@ def test_a_tool_that_moves_no_retreat_cost_still_abstains():
     obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU)], [{"id": CAPE}, {"id": W_ENERGY}],
                [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0), _attach(1, ACTIVE, 0)])
     rows, abstained = _rows(p, obs)
-    assert abstained == 2 and set(rows) == {2}     # only the Energy earned a row
+    assert abstained == 1 and set(rows) == {0, 2}  # Active Cape may move mobility through HP
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0002")
@@ -118,9 +118,9 @@ def test_the_active_is_priced_and_every_benched_recipient_is_zero():
     obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU, energy=1), _poke(STARYU)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0), _attach(0, BENCH, 1)])
     rows, abstained = _rows(p, obs)
-    assert abstained == 0, "a retreat Tool is PRICED, not abstained — 0.0 and silence differ"
+    assert abstained == 2
     assert rows[0]["retreat_equity"] > 0.0
-    assert rows[1]["retreat_equity"] == 0.0 and rows[2]["retreat_equity"] == 0.0
+    assert set(rows) == {0}
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0002")
@@ -128,16 +128,10 @@ def test_the_benched_zero_is_arithmetic_and_not_an_area_gate():
     """The bench zero is not "this board prices nothing": the oracle DISCRIMINATES here — equipping
     the Active moves it — and a bench recipient still differences to 0, because both its legs read A."""
     p = _pilot()
-    obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": BALLOON}],
+    obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU, energy=1)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0), _attach(0, BENCH, 0)])
     rows, _ = _rows(p, obs)
-    active = p._my_active(obs)
-    board = p._board(obs, obs["select"])
-    equipped = dict(active, tools=[{"id": BALLOON}])
-    bare, armed = (p._retreat_option_value(obs, board, active),
-                   p._retreat_option_value(obs, board, equipped))
-    assert armed != bare, "the oracle is inert on this board, so the bench 0.0 would prove nothing"
-    assert rows[0]["retreat_equity"] > 0.0 and rows[1]["retreat_equity"] == 0.0
+    assert rows[0]["retreat_equity"] > 0.0 and 1 not in rows
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0003")
@@ -147,8 +141,8 @@ def test_a_holder_that_already_retreats_free_gains_nothing():
     p = _pilot()
     obs = _obs(_poke(FREE_RETREATER), [_poke(STARYU, energy=1)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0)])
-    rows, _ = _rows(p, obs)
-    assert rows[0]["retreat_equity"] == 0.0
+    rows, _abstained = _rows(p, obs)
+    assert rows == {}  # all-abstain decisions intentionally omit the empty working envelope
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0004")
@@ -158,11 +152,10 @@ def test_a_surcharge_tool_prices_negative():
     p = _pilot()
     # A destination worth retreating INTO, so the without-Gemstone leg is positive and there is
     # something for the surcharge to take away: Retreat 2 payable now, 3 once the Gemstone lands.
-    obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": GEMSTONE}],
+    obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU, energy=1)], [{"id": GEMSTONE}],
                [_attach(0, ACTIVE, 0)])
     rows, _ = _rows(p, obs)
     assert rows[0]["retreat_equity"] < 0.0 and rows[0]["tactical"] < 0.0
-    assert rows[0]["retreat_equity"] >= -_ATTACH_RETREAT_EQUITY     # signed, and inside the band
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0005")
@@ -174,26 +167,24 @@ def test_rescue_boards_conditional_grant_is_read_on_the_real_body():
                    [_attach(0, ACTIVE, 0)])
     damaged = _obs(_poke(MEGA, hp=30), [_poke(STARYU, energy=1)], [{"id": RESCUE_BOARD}],
                    [_attach(0, ACTIVE, 0)])
-    assert _rows(p, healthy)[0][0]["retreat_equity"] == 0.0        # still cannot pay the last {C}
+    assert _rows(p, healthy)[0] == {}                               # still cannot pay the last {C}
     assert _rows(_pilot(), damaged)[0][0]["retreat_equity"] > 0.0  # the clause grants a free retreat
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0006")
-def test_the_value_is_clamped_into_the_retreat_equity_band():
-    """ADR-0100's verdict says WHETHER; ADR-0069 §1's band says WHAT IT IS WORTH. Uncapped, an
-    unlocked retreat outbids a ruled Energy attach — the measurement is ADR-0135's."""
+def test_the_value_is_the_unclamped_canonical_position_marginal():
     p = _pilot()
-    obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": BALLOON}],
+    obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU, energy=1)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0)])
     rows, _ = _rows(p, obs)
-    assert 0.0 < rows[0]["retreat_equity"] <= _ATTACH_RETREAT_EQUITY
+    assert rows[0]["retreat_equity"] > 0.0
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0007")
 def test_both_kill_switches_reach_the_channel():
     """`attach_value` gates the decider; `promote_retreat_value` gates the equation it CONSUMES — a
     decider flag does not gate a shared-oracle swap, so the retreat decider's own flag must reach here."""
-    obs = _obs(_poke(MEGA, energy=2), [_poke(MEGA, energy=3)], [{"id": BALLOON}],
+    obs = _obs(_poke(MEGA, energy=2), [_poke(STARYU, energy=1)], [{"id": BALLOON}],
                [_attach(0, ACTIVE, 0), {"type": END}])
 
     def _tactical(pilot):
@@ -201,7 +192,7 @@ def test_both_kill_switches_reach_the_channel():
 
     assert _tactical(_pilot()) > 0.0                               # the channel is live by default
     assert _tactical(_pilot(attach_value=False)) == 0.0            # the decider's own flag
-    assert _tactical(_pilot(promote_retreat_value=False)) == 0.0   # the equation it CONSUMES
+    assert _tactical(_pilot(promote_retreat_value=False)) > 0.0    # shared state API owns it
 
 
 @pytest.mark.req("REQ-TOOL-ATTACH-0001")
@@ -251,8 +242,7 @@ def test_the_channel_does_not_take_over_a_frame_that_wants_another_play(_corpus_
     rec = corpus_records([(episode, frame)])[0]
     rows = {r["i"]: r for r in ((_corpus_pilot.explain(rec.obs).attach_working or {}).get("eq") or ())}
     balloons = [i for i, r in rows.items() if r["energy"] == BALLOON]
-    assert balloons, f"{episode}-{frame} no longer offers a Balloon — the guard has stopped guarding"
-    assert all(rows[i]["retreat_equity"] == 0.0 for i in balloons)
+    assert not balloons, f"{episode}-{frame} gained canonical Balloon mobility unexpectedly"
     assert _corpus_pilot.explain(rec.obs).chosen[0] not in balloons
 
 
@@ -263,7 +253,7 @@ def test_the_active_outscores_every_benched_recipient_on_the_ruled_frames(_corpu
         rec = corpus_records([(episode, frame)])[0]
         rows = {r["i"]: r for r in (_corpus_pilot.explain(rec.obs).attach_working or {})["eq"]}
         balloons = {i: r for i, r in rows.items() if r["energy"] == BALLOON}
-        assert len(balloons) > 1, f"{episode}-{frame} poses only one Balloon recipient"
+        assert balloons, f"{episode}-{frame} prices no Balloon recipient"
         on_active = [r for i, r in balloons.items() if i in rec.correct]
         assert len(on_active) == 1, f"{episode}-{frame}: the ruled option is not a Balloon"
         assert all(r["tactical"] < on_active[0]["tactical"]

@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import pytest
 
+from card_facts import IGNITION, ignition_tags
 from common import apply_option as ao
 from common import board_choice as bc
 from common import board_delta as bd
 from common import board_expectation as be
+from common import retreat_cost
 from common import snapshot_coverage as sc
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -36,6 +38,7 @@ BOSS, SALVATORE, CRISPIN, WALLY, SWITCH = 1182, 1189, 1198, 1229, 1123
 #   1118 Energy Retrieval  *"up to 2 Basic Energy"* from discard | 1125 Master Ball  a DECK search
 NIGHT_STRETCHER, ENERGY_RETRIEVAL, MASTER_BALL = 1097, 1118, 1125
 E_F, E_P, E_D = 6, 5, 7                 # Basic {F} / {P} / {D} Energy
+UNKNOWN_SPECIAL = 9002
 
 _BASIC_ENERGY, _SUPPORTER, _ITEM = 5, 3, 1
 
@@ -49,6 +52,9 @@ _STATS = {
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=_BASIC_ENERGY, energyType=FIGHTING),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=_BASIC_ENERGY, energyType=DARKNESS),
+    IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),
+    UNKNOWN_SPECIAL: CardStat(UNKNOWN_SPECIAL, synthetic=True, name="Unknown Special Energy",
+                              cardType=6, energyType=0),
     BOSS: CardStat(BOSS, name="Boss’s Orders", cardType=_SUPPORTER),   # U+2019 in the CSV
     SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=_SUPPORTER),
     CRISPIN: CardStat(CRISPIN, name="Crispin", cardType=_SUPPORTER),
@@ -78,7 +84,8 @@ _CLAUSES = {
 
 
 def _combat():
-    return CombatMath(DictCardStatProvider(_STATS), functions=CardFunctions({}), transients=None,
+    return CombatMath(DictCardStatProvider(_STATS),
+                      functions=CardFunctions({IGNITION: ignition_tags()}), transients=None,
                       effects=CardEffects(_CLAUSES))
 
 
@@ -136,6 +143,78 @@ def test_a_retreat_expands_BOTH_of_its_deferred_dimensions():
     assert len(space) == 6
     assert {d for d, _j in space} == {(0, 1), (0, 2)}          # {F,F} and {F,P}; (1,2) is {F,P} again
     assert {j for _d, j in space} == {0, 1, 2}
+
+
+def test_retreat_payment_uses_units_but_discards_whole_cards():
+    """One evolved-holder Ignition supplies three units, so its one physical card pays cost two."""
+    model = _board(active_energies=(IGNITION,), bench=[_body(RIOLU, serial=2)])
+    payments = retreat_cost.payment_options(
+        model.source_obs["current"]["players"][0]["active"][0], 2,
+        stat_of=model.card_stat, combat=model.combat)
+    assert [(payment.card_indices, payment.supplied_units) for payment in payments] == [((0,), (3,))]
+    assert bc.target_space(model, RETREAT, seat_index=0) == (((0,), 0),)
+
+
+def test_basic_holder_does_not_receive_ignitions_evolution_provision():
+    active = _body(RIOLU, serial=1, energies=(IGNITION,))
+    model = _model(_obs(_player(active=active, bench=[_body(MUNKIDORI, serial=2)])))
+    with pytest.raises(bd.Unmodellable, match="cannot fund"):
+        bc.target_space(model, RETREAT, seat_index=0)
+
+
+def test_mixed_retreat_payment_keeps_every_reachable_stop_set():
+    """A Basic may be chosen before a multi-unit card; nothing may be chosen after payment."""
+    model = _board(active_energies=(E_F, IGNITION, E_P), bench=[_body(RIOLU, serial=2)])
+    payments = retreat_cost.payment_options(
+        model.source_obs["current"]["players"][0]["active"][0], 2,
+        stat_of=model.card_stat, combat=model.combat)
+    assert {payment.card_indices for payment in payments} == {(1,), (0, 1), (1, 2), (0, 2)}
+    assert (0, 1, 2) not in {payment.card_indices for payment in payments}
+
+
+def test_public_manual_retreat_outcomes_reuse_the_registered_transition():
+    model = _board(active_energies=(IGNITION,), bench=[_body(RIOLU, serial=2)])
+    outcomes = bc.legal_manual_retreat_outcomes(model)
+    assert len(outcomes) == 1
+    assert outcomes[0].discard_indices == (0,)
+    assert outcomes[0].bench_index == 0
+    assert outcomes[0].model.retreated is True
+    assert outcomes[0].model.mine.active.card_id == RIOLU
+    assert outcomes[0].model.mine.bench[0].card_id == MEGA_LUC
+
+
+@pytest.mark.parametrize(("cost", "expected_sizes"), [
+    (0, [0]), (1, [1, 1, 1]), (2, [2, 2, 2]), (3, [3]),
+])
+def test_basic_energy_payment_matrix_is_monotone_and_card_exact(cost, expected_sizes):
+    model = _board(active_energies=(E_F, E_P, E_D), bench=[_body(RIOLU, serial=2)])
+    active = model.source_obs["current"]["players"][0]["active"][0]
+    payments = retreat_cost.payment_options(active, cost, stat_of=model.card_stat,
+                                             combat=model.combat)
+    assert sorted(len(payment.card_indices) for payment in payments) == expected_sizes
+    assert all(payment.total_units >= cost for payment in payments)
+
+
+def test_forced_promotion_materialization_handles_an_empty_active_and_preserves_slots():
+    model = _model(_obs(_player(bench=[_body(RIOLU, serial=2), _body(MUNKIDORI, serial=3)]),
+                        context=4))
+    after = bc.promoted_active_model(model, 1)
+    assert after.mine.active.card_id == MUNKIDORI
+    bench = after.source_obs["current"]["players"][0]["bench"]
+    assert [(body or {}).get("id") for body in bench] == [RIOLU, None]
+
+
+def test_switch_pick_materialization_matches_the_shared_board_primitive():
+    model = _board(bench=[_body(RIOLU, serial=2), _body(MUNKIDORI, serial=3)])
+    after = bc.promoted_active_model(model, 1)
+    assert after.mine.active.card_id == MUNKIDORI
+    assert after.mine.bench[1].card_id == MEGA_LUC
+
+
+def test_unknown_special_energy_provision_refuses_retreat_payment():
+    model = _board(active_energies=(UNKNOWN_SPECIAL,), bench=[_body(RIOLU, serial=2)])
+    with pytest.raises(bd.Unmodellable, match="provides:N"):
+        bc.target_space(model, RETREAT, seat_index=0)
 
 
 def test_identical_ENERGY_CARDS_are_one_choice_and_the_fingerprint_provably_cannot_say_so():

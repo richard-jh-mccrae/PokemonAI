@@ -86,16 +86,13 @@ class _Trace:
 
 
 @pytest.mark.req("REQ-PLANNER-0011")
-def test_the_active_slot_worth_gap_is_still_DECLARED_by_the_successor_family():
-    """Three deleted tests priced the Active slot's worth; `readiness` does not, by decision, and
-    says so in `blind_to`. A declared gap is a ruling — but only if something reads the declaration."""
+def test_the_active_slot_worth_is_owned_by_the_successor_family():
     from common.state_value import REGISTRY
     readiness = next(f for f in REGISTRY if f.name == "readiness")
     blind = " ".join(readiness.blind_to)
-    assert "VALUE of the Active slot" in blind
-    assert "promote_retreat_value" in blind, (
-        "the Active-slot worth gap no longer names the instrument that carries it — either the gap "
-        "closed (delete this test and assert the new behaviour) or the pointer rotted")
+    assert "VALUE of the Active slot" not in blind
+    assert "readiness.active_position_option" in {
+        consequence.key for consequence in readiness.consequences}
 
 
 # --- the line account (spend / ability-fire), reusing the live tuned weights ----------------------

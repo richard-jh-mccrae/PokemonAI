@@ -47,6 +47,11 @@ def without_engine_serial(obj):
 _without_serial = without_engine_serial
 
 
+def card_state_fingerprint(card) -> str:
+    """Stable semantic card/body key, recursively ignoring physical serial identity."""
+    return json.dumps(without_engine_serial(card), sort_keys=True, separators=(",", ":"))
+
+
 def _card_at(frame, seat, area, index):
     """None — face-down zone, unknown area, bad index, absent seat — must yield NO CLASS, not a
     guess."""

@@ -175,3 +175,10 @@ table: `ADR-0069`.
 - **A prize-race modifier now**: double-ownership with #145's scalar, zero in-scope corpus demand.
 - **Joint numeric optimization** of scale + bands + surviving weights: overfits 130 frames and
   returns the pile's illegibility with extra steps.
+
+## Amendment — Issue #500
+
+Retreat Equity is no longer the fixed printed-cost fraction recorded above. Energy and Tool attaches
+are applied through `board_delta.transition`; `state_value.active_position_delta` differences the one
+canonical legal-pivot potential, then crosses prize units once through `PRIZE_DAMAGE_RATE`. Burst
+Energy may fund a retreat this turn. Zero canonical mobility abstains. No local clamp remains.

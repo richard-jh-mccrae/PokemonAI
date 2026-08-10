@@ -2,10 +2,8 @@
 Fuel − evaporation loss — pricing every Energy attach and every accelerator recipient. The rungs it
 replaced are in `tools/rung_registry.py` (FOLDED, ADR-0069 group).
 
-A Pokémon TOOL takes its own channel (:meth:`AttachMixin._tool_attach_value`, Issue #423): it carries
-no Energy, so every axis above reads 0 and what it buys is Retreat Equity alone — differenced over
-ADR-0100's shipped retreat equation. A Tool that moves no Retreat Cost still abstains; the +HP class
-is ADR-0028's survival-turns math and has no owner since Issue #386 deleted the Tool doctrine."""
+A Pokémon TOOL takes its own channel (:meth:`AttachMixin._tool_attach_value`, Issue #423): its local
+value is only the canonical Active-position option marginal; direct HP stays in state survival."""
 from __future__ import annotations
 
 
@@ -21,10 +19,7 @@ from common.strategy.context import _ACTIVE, _ATTACH, _ATTACH_FROM, _ATTACKER_RO
 # 1.0 makes the marginal a DIRECT damage currency: one marginal point is one rung point.
 _ATTACH_VALUE_SCALE = 1.0
 
-# The two orthogonal CHANNELS, in DAMAGE units so they sum with the attack axis BEFORE the scale
-# (so raising the scale can never let a channel overtake a build step). 3.0 ≈ half the thinnest one.
-_ATTACH_RETREAT_EQUITY = 3.0   # FULL coverage of the printed Retreat cost (colourless -> type-agnostic)
-
+# Orthogonal channel in DAMAGE units, summed with the attack axis before the scale.
 _ATTACH_ABILITY_FUEL = 3.0     # a dormant in-play Ability switched on
 
 # Resource TIE-BREAK (ADR-0069 §5c): among equal marginals spend the RENEWABLE card. Sub-band by
@@ -157,20 +152,19 @@ class AttachMixin:
             return False
         return "supporter_tutor" in set(self.functions.tags(card_id))
 
-    def _attach_retreat_equity(self, target: dict | None, units: int, burst: bool) -> float:
-        """**Retreat Equity** — mobility bought by paying toward the printed Retreat cost (ADR-0069 §1).
-        TYPE-AGNOSTIC: Retreat slots are colourless (rules.md §3). Zero on a burst — it funds no pivot."""
-        if burst or not target:
+    def _attach_position_delta(self, obs: dict, option: dict) -> float:
+        """Canonical Active-position marginal, crossed once from prizes into damage currency."""
+        if self._state_model is None:
             return 0.0
-        st = self.stats.get(target.get("id")) if self.stats else None
-        cost = int(getattr(st, "retreatCost", 0) or 0)
-        if cost <= 0:
+        from common import board_delta, currency, state_value
+        try:
+            delta = board_delta.transition(
+                obs, option, seat_index=int(self._state_model.my_index), combat=self.combat,
+                context=((obs.get("select") or {}).get("context")))
+            after = self._state_model.rebuilt(delta.obs, reuse_their_side=delta.shares_opponent)
+        except board_delta.Unmodellable:
             return 0.0
-        have = len(target.get("energies") or [])
-        if have >= cost:
-            return 0.0                                     # already funded — the pivot is already paid
-        covered = min(have + units, cost) - min(have, cost)
-        return _ATTACH_RETREAT_EQUITY * covered / cost
+        return state_value.active_position_delta(self._state_model, after) * currency.PRIZE_DAMAGE_RATE
 
     def _attach_value(self, obs: dict, select: dict, board: Board, option: dict):
         """Price ONE attach option as an AXES-SUM (ADR-0069): MAX within the attack axis (its terms
@@ -276,7 +270,8 @@ class AttachMixin:
         evaporation_loss = resource_cost if evaporates else 0.0
         attack_axis = 0.0 if (gated_off or overkill or evaporates) else max(
             this_turn, build, accel_value, 0.0)
-        retreat_equity = 0.0 if spent_utility_gated else self._attach_retreat_equity(target, units, burst)
+        retreat_equity = (0.0 if spent_utility_gated
+                          else self._attach_position_delta(obs, option))
         ability_fuel = (_ATTACH_ABILITY_FUEL if (not spent_utility_gated and not burst and is_attach
                                                 and self._attach_fuels_dormant_ability(estat, target))
                         else 0.0)
@@ -301,23 +296,14 @@ class AttachMixin:
             resource_cost=round(resource_cost, 1))
 
     def _tool_attach_value(self, obs: dict, board: Board, option: dict, ecid, estat):
-        """Price a Pokémon TOOL attach on its own channel: what the Retreat Cost it moves buys, as a
-        difference over ADR-0100's shipped retreat equation. None ABSTAINS — no Retreat Cost moved."""
-        if not int(getattr(estat, "retreatReduction", 0) or 0):
-            return None                     # the +HP class: ADR-0028's survival-turns math, not this
+        """Price only the Tool's canonical mobility marginal; survival owns direct HP value."""
         target = self._attach_target(obs, option)
         if target is None:
             return None
-        # No area gate: only the Active pays a Retreat Cost, so a Tool landing anywhere else leaves
-        # BOTH legs the same object and the difference is 0.0 by arithmetic.
         active = self._my_active(obs)
-        equipped = (dict(active, tools=list(active.get("tools") or []) + [{"id": ecid}])
-                    if target is active else active)
-        delta = (self._retreat_option_value(obs, board, equipped)
-                 - self._retreat_option_value(obs, board, active))
-        # ADR-0100's verdict says WHETHER and which way; ADR-0069 §1's band says WHAT IT IS WORTH, and
-        # two claims about one Retreat Cost must not disagree. FLAT above the band — ADR-0135 §clamp.
-        marginal = max(-_ATTACH_RETREAT_EQUITY, min(_ATTACH_RETREAT_EQUITY, delta))
+        marginal = self._attach_position_delta(obs, option)
+        if marginal == 0.0:
+            return None
         resource_cost = self._role_value(ecid) if ecid is not None else 0.0
         tactical = (marginal * _ATTACH_VALUE_SCALE
                     - _ATTACH_RESOURCE_TIEBREAK * max(0.0, resource_cost - ENERGY_TIER))

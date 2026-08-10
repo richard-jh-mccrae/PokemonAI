@@ -150,3 +150,10 @@ A pre-existing defect was fixed in passing and is flagged rather than folded in 
 so the audit derived `hpBonus=0` and `retreatReduction=0` for **every Tool in the pool**, including
 Hero's Cape's unambiguous +100. Every Tool fixture in the tree had been marking itself
 `synthetic=True` to route around it. Both legs are now derived and genuinely checked against the CSV.
+
+## Superseded by Issue #500
+
+The local ADR-0100 counterfactual and ADR-0069 clamp are retired. The Composer can now price the
+current-turn legal-pivot option because `board_choice.legal_manual_retreat_outcomes` materializes the
+full swap, whole-card discard, condition clear, and allowance spend. Tool scoring consumes only the
+canonical Active-position marginal. Direct HP remains owned by `survival`; canonical zero abstains.

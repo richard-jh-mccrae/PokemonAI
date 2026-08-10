@@ -7,7 +7,6 @@ Three modules answer *"what board does this option produce?"*: `board_delta` for
 the MAIN menu offers. The Target Rankers only prefilter: `state_value` decides."""
 from __future__ import annotations
 
-import itertools
 from dataclasses import dataclass
 from typing import NamedTuple, NoReturn
 
@@ -16,7 +15,6 @@ from common import (board_delta, board_expectation, currency, needs, retreat_cos
 from common.board_delta import Unmodellable
 from common.fetch_closure import fetch_target_matches, multiset_classes, reveal_legs
 from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND, option_fingerprint
-from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
 from common.scouting.matchup_plan import ROLE_REGISTRY
 from common.strategy.context import _PLAY, _RETREAT
 
@@ -68,6 +66,20 @@ class ChoiceKind:
         if self.apply is None and not self.no_applier.strip():
             raise ValueError("a key with no board synthesis must say WHY — the message is destined "
                              "for the telemetry line and the modelling backlog, which groups by it")
+
+
+@dataclass(frozen=True)
+class ManualRetreatOutcome:
+    discard_indices: tuple[int, ...]
+    bench_index: int
+    model: object
+    fingerprint: tuple
+
+
+class _RetreatContext(NamedTuple):
+    active: dict
+    slots: tuple[int, ...]
+    discards: tuple[tuple[int, ...], ...]
 
 
 #: `needs.opponent_target_value`'s ceiling — the yardstick that reads a prize-denominated marginal as
@@ -311,9 +323,8 @@ def target_predicate(clause: dict):
 # ── target spaces ─────────────────────────────────────────────────────────────────────────────────
 
 
-def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
-    """A retreat's product space: ``((discarded energy-card indices), promoted bench index)`` (ADR-0121
-    §5). Identical Energy cards collapse on id HERE, because `option_fingerprint` compares BY ORDER."""
+def _retreat_context(model, *, seat_index: int, refuse_unpayable: bool = True) -> _RetreatContext | None:
+    """Resolve one side's holder-aware retreat destinations and semantic payment classes."""
     obs = model.source_obs
     me = _my_side(obs, seat_index)
     active = _my_active(obs, seat_index)
@@ -328,21 +339,30 @@ def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
         active, stat_of=model.card_stat, my_bodies=[b for b in ([active] + bench) if b],
         combat=model.combat)
     cards = list(active.get("energyCards") or ())
-    if cost > len(cards):
-        _no(f"retreat of {active.get('id')}",
-            f"its Retreat Cost reads {cost} but only {len(cards)} Energy cards are attached, so the "
-            f"engine that OFFERED this option is applying a free-retreat grant `common.retreat_cost` "
-            f"cannot see (measured: Ethan's Magcargo 356, *'If this Pokémon has no Energy attached, "
-            f"it has no Retreat Cost'* — a self-Ability shape nothing parses). Refuse rather than "
-            f"enumerate a space that cannot be paid")
+    payments = retreat_cost.payment_options(active, cost, stat_of=model.card_stat,
+                                             combat=model.combat)
+    if not payments:
+        if refuse_unpayable:
+            _no(f"retreat of {active.get('id')}",
+                f"its attached Energy cards cannot fund effective Retreat Cost {cost} by supplied units")
+        return None
     seen, discards = set(), []
-    for combo in itertools.combinations(range(len(cards)), cost):
-        ids = tuple(sorted((cards[i] or {}).get("id") for i in combo))
-        if ids in seen:
+    for payment in payments:
+        ids = tuple(sorted((cards[i] or {}).get("id") for i in payment.card_indices))
+        semantic = ids, tuple(sorted(payment.supplied_units))
+        if semantic in seen:
             continue
-        seen.add(ids)
-        discards.append(combo)
-    return tuple((d, j) for d in discards for j in slots)
+        seen.add(semantic)
+        discards.append(payment.card_indices)
+    return _RetreatContext(active, slots, tuple(discards))
+
+
+def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
+    """A retreat's product space: ``((discarded energy-card indices), promoted bench index)`` (ADR-0121
+    §5). Identical Energy cards collapse on id HERE, because `option_fingerprint` compares BY ORDER."""
+    context = _retreat_context(model, seat_index=seat_index)
+    assert context is not None
+    return tuple((d, j) for d in context.discards for j in context.slots)
 
 
 def _gust_space(model, option: dict, *, seat_index: int) -> tuple:
@@ -520,34 +540,12 @@ def target_space(model, option: dict, *, seat_index: int) -> tuple:
 # ── Target Rankers ────────────────────────────────────────────────────────────────────────────────
 
 
-def _build_standing(model, body: dict) -> float:
-    """Damage-currency projection of the canonical multi-attack build profile."""
-    from common.state_value import combat_build_profile
-    return combat_build_profile(model, body).value_damage if body else 0.0
-
-
-def _promote_body(model, raw: dict) -> PromoteBody:
-    """B's damage-currency reading from what a `StateModel` supplies — the Pilot-owned ADR-0100 terms
-    stay at their dataclass defaults, so this prices ``reach − exposure − fatal`` as a PREFILTER."""
-    view = model.mine.view_of(raw)
-    return PromoteBody(
-        reach=float(model.mine.best_reachable_damage(view)),
-        prizes=int(getattr(view, "prize_value", 1) or 1),
-        ko_active=int(model.theirs.turns_to_ko_me(raw)),
-        opp_prizes_remaining=int(getattr(model.theirs, "prizes_remaining", 6) or 6),
-    )
-
-
 def rank_retreat(model, candidate) -> float:
-    """A retreat candidate's prefilter score — ADR-0100's retreat equation with its A-side constants
-    dropped, which cannot change an ordering: ``promote_value(B) + build_after(A | discard set)``."""
-    discard_idx, promote_idx = candidate
-    obs, seat = model.source_obs, int(model.my_index)
-    active = _my_active(obs, seat)
-    bench = list(_my_side(obs, seat).get("bench") or ())
-    promo = promote_value(PromoteRetreatInputs(body=_promote_body(model, bench[promote_idx]))).total
-    after, _went = _after_discard(model, active, discard_idx)
-    return float(promo) + _build_standing(model, after)
+    """Exact synthesized post-state position score, before the choice-node target cap."""
+    from common.state_value import position_state_value
+    seat = int(model.my_index)
+    after_obs, _writes = _apply_retreat(model, candidate, seat_index=seat)
+    return position_state_value(model.rebuilt(after_obs, reuse_their_side=True))
 
 
 #: The prefilters, keyed by :func:`choice_key`'s answer; sorted DESCENDING, and built from
@@ -784,6 +782,42 @@ def realise(model, option: dict, candidate, *, seat_index: int) -> tuple:
                                         kind=int((option or {}).get("type", -1)))
 
 
+def legal_manual_retreat_outcomes(model) -> tuple[ManualRetreatOutcome, ...]:
+    """Every legal current-turn manual-retreat board, through the registered choice transition."""
+    obs = getattr(model, "source_obs", None) or {}
+    if ((obs.get("select") or {}).get("context")) != board_delta.CONTEXT_MAIN or model.retreated:
+        return ()
+    seat = int(model.my_index)
+    me = _my_side(obs, seat)
+    if _my_active(obs, seat) is None or not any(me.get("bench") or ()):
+        return ()
+    if bool(me.get("asleep")) or bool(me.get("paralyzed")):
+        return ()
+    context = _retreat_context(model, seat_index=seat, refuse_unpayable=False)
+    if context is None:
+        return ()
+    entry = CHOICE_REGISTRY[_RETREAT]
+    outcomes = []
+    for candidate in ((discard, slot) for discard in context.discards for slot in context.slots):
+        after_obs, _writes = entry.apply(model, candidate, seat_index=seat)
+        fingerprint = entry.fingerprint(after_obs, candidate, seat_index=seat, kind=_RETREAT)
+        outcomes.append(ManualRetreatOutcome(
+            candidate[0], candidate[1],
+            model.rebuilt(after_obs, reuse_their_side=entry.shares_opponent), fingerprint))
+    return tuple(outcomes)
+
+
+def promoted_active_model(model, bench_index: int):
+    """Exact forced/switch-pick board after the source effect resolved; move the body and clear
+    switching conditions only."""
+    seat = int(model.my_index)
+    new_obs, _current, players = board_delta.fork(model.source_obs)
+    me = board_delta.fork_player(players, seat)
+    board_delta.promote_from_bench(me, int(bench_index))
+    board_delta.clear_conditions(me)
+    return model.rebuilt(new_obs, reuse_their_side=True)
+
+
 def deferred_target(model, option: dict, *, seat_index=None, context=None,
                     cap: int = board_expectation.BRANCH_CAP, ranker=None):
     """The boards this option's deferred target can reach, as an `apply_option.Expectation`. The
@@ -848,4 +882,5 @@ __all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "FETCH_DISCARD", "FETCH_IN_PLAY", "
            "TARGET_VALUE_CEILING", "ChoiceKind",
            "CHOICE_REGISTRY", "TARGET_RANKERS", "role_span", "gust_rank_key", "choice_key", "target_space",
            "rank_retreat", "has_deferred_target", "candidate_class", "realise",
+           "ManualRetreatOutcome", "legal_manual_retreat_outcomes", "promoted_active_model",
            "deferred_target")

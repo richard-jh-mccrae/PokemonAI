@@ -284,24 +284,21 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
     assert "no runtime attribute reader" in " ".join(reduction.evidence)
 
     retreat = one(inventory, "provider-stat:cardstat:retreatReduction")
-    assert "common.retreat_cost:attached_retreat_delta@35" in retreat.runtime_callers
+    assert "common.retreat_cost:attached_retreat_delta@83" in retreat.runtime_callers
     assert not [caller for caller in retreat.runtime_callers if "plan.cost" in caller]
-    assert retreat.classification == coverage.LOCAL_ONLY
-    assert not retreat.absolute_owners
-    assert retreat.local_owners == (
-        "common.deciders.attach.AttachMixin._tool_attach_value",
-        "common.retreat_cost.effective_retreat_cost",
-    )
-    assert retreat.live_owner == "ADR-0135"
+    assert retreat.classification == coverage.SHARED_EXACT
+    assert retreat.absolute_owners == ("state:readiness",)
+    assert not retreat.local_owners
+    assert retreat.live_owner == "#500"
     free_at_hp = one(inventory, "provider-stat:cardstat:retreatFreeAtHp")
-    assert free_at_hp.runtime_callers == ("common.retreat_cost:effective_retreat_cost@65",)
+    assert free_at_hp.runtime_callers == ("common.retreat_cost:effective_retreat_cost@114",)
     for field in ("retreatFreeAtHp", "retreatFreeGrant"):
         mobility = one(inventory, f"provider-stat:cardstat:{field}")
-        assert mobility.classification == coverage.LOCAL_ONLY
-        assert not mobility.absolute_owners
-        assert mobility.local_owners == ("common.retreat_cost.effective_retreat_cost",)
-        assert mobility.live_owner == "ADR-0135"
-        assert "ADR-0135 accepted" in " ".join(mobility.evidence)
+        assert mobility.classification == coverage.SHARED_EXACT
+        assert mobility.absolute_owners == ("state:readiness",)
+        assert not mobility.local_owners
+        assert mobility.live_owner == "#500"
+        assert "Issue #500" in " ".join(mobility.evidence)
 
     hp_bonus = one(inventory, "provider-stat:cardstat:hpBonus")
     assert hp_bonus.classification == coverage.LOSSY_REEXPRESSION
@@ -444,13 +441,20 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
         if record.classification == coverage.SHARED_EXACT
     }
     assert shared == {
-        "equation:common-board-choice-build-standing",
+        "provider-stat:cardstat:retreatFreeAtHp",
+        "provider-stat:cardstat:retreatFreeGrant",
+        "provider-stat:cardstat:retreatReduction",
         "equation:common-deciders-attach-attachmixin-attach-build-delta",
+        "equation:common-retreat-cost-attached-retreat-delta",
+        "equation:common-retreat-cost-effective-retreat-cost",
         "equation:common-state-model-myside-forward-payoff",
         "equation:common-state-model-myside-role-worth-of",
         "equation:common-state-model-sidebase-attack-payoff",
         "equation:common-state-value-combat-build-profile",
         "equation:common-state-value-combat-realization",
+        "equation:common-state-value-active-position-delta",
+        "equation:common-state-value-active-position-potential",
+        "equation:common-state-value-position-state-value",
         "equation:common-state-value-readiness-supply-delta",
         "equation:common-strategy-combat-math-budget-budget-realising-p",
         "equation:common-strategy-combat-math-clocks-clockmixin-turns-to-afford-attack",
@@ -463,9 +467,9 @@ def test_provider_primary_rows_are_shipped_nondefault_and_declarations_stay_clos
 
 def test_equation_ast_population_is_dispositioned_and_drift_gated(inventory):
     candidates = inventory.equation_candidates
-    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 754
+    assert len(candidates) == dict(inventory.populations)["equation_candidates"] == 757
     assert collections.Counter(candidate.disposition for candidate in candidates) == {
-        "excluded": 475, "owner": 194, "consumer": 85}
+        "excluded": 476, "owner": 194, "consumer": 87}
     assert {candidate.disposition for candidate in candidates} == {"owner", "consumer", "excluded"}
     assert all(candidate.reason for candidate in candidates)
     assert all(candidate.classification in coverage.CLASSIFICATIONS
@@ -491,10 +495,10 @@ def test_equation_ast_population_is_dispositioned_and_drift_gated(inventory):
 def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
     by_key = {candidate.key: candidate for candidate in inventory.equation_candidates}
     expected = {
-        "common.retreat_cost:effective_retreat_cost": (
-            "owner", coverage.LOCAL_ONLY, (),
-            ("common.board_choice:_retreat_space@327",
-             "common.deciders.promote:PromoteRetreatMixin._effective_retreat_cost@322")),
+            "common.retreat_cost:effective_retreat_cost": (
+                "owner", coverage.SHARED_EXACT, ("state:readiness",),
+                ("common.board_choice:_retreat_context@338",
+                 "common.deciders.promote:PromoteRetreatMixin._effective_retreat_cost@294")),
         "common.deciders.heal:HealMixin._heal_bounce_cost": (
             "owner", coverage.LOSSY_REEXPRESSION,
             ("state:readiness", "terminal:attack_ev"),
@@ -527,13 +531,13 @@ def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
             ("common.state_model:MySide.readiness_p@861",)),
         "common.state_model:MySide.readiness_p": (
             "consumer", coverage.LEAF_ONLY, ("state:readiness",),
-            ("common.state_value:_readiness_odds@1578",)),
+            ("common.state_value:_readiness_odds@1692",)),
         "common.state_model:MySide._forward_payoff": (
             "owner", coverage.SHARED_EXACT, ("state:development",),
             ("common.state_model:MySide.forward_payoff@948",)),
         "common.state_model:MySide.forward_payoff": (
             "consumer", coverage.LEAF_ONLY, ("state:development",),
-            ("common.state_value:_development_legs@1640",)),
+            ("common.state_value:_development_legs@1754",)),
         "common.strategy.combat_math.forward:ForwardLineMixin.forward_payoff_terms": (
             "owner", coverage.LOCAL_ONLY, (),
             ("common.state_model:TheirSide.forward_payoff@1159",
@@ -547,11 +551,11 @@ def test_equation_semantics_and_qualified_callers_are_pinned(inventory):
 
     build = by_key["common.deciders.attach:AttachMixin._attach_build_delta"]
     assert build.classification == coverage.SHARED_EXACT
-    assert build.runtime_callers == ("common.deciders.attach:AttachMixin._attach_value@235",)
+    assert build.runtime_callers == ("common.deciders.attach:AttachMixin._attach_value@229",)
     tool = by_key["common.deciders.attach:AttachMixin._tool_attach_value"]
-    assert tool.classification == coverage.LOCAL_ONLY
-    assert not tool.absolute_owners
-    assert "ADR-0135" in tool.reason
+    assert tool.classification == coverage.LOSSY_REEXPRESSION
+    assert tool.absolute_owners == ("state:readiness",)
+    assert "canonical active-position" in tool.reason
     assert not [owner for candidate in by_key.values() for owner in candidate.absolute_owners
                 if owner in {"state:semantic-counterpart", "state:shared",
                              "state:registered-family", "state:composed-score"}]
@@ -580,7 +584,7 @@ def test_live_numeric_equations_close_across_required_modules(inventory):
         # Reach: printed local maximum versus the two registry-owned threat gates.
         "common.strategy.combat_math.reach:ReachMixin.best_reachable_damage": (
             "owner", coverage.LOCAL_ONLY, (),
-            ("common.deciders.attach:AttachMixin._attach_value@269",
+            ("common.deciders.attach:AttachMixin._attach_value@263",
              "common.state_model:MySide.best_reachable_damage._make@827")),
         "common.strategy.combat_math.reach:ReachMixin.best_reachable_damage_vs": (
             "consumer", coverage.LEAF_ONLY, ("state:threat",),
@@ -693,7 +697,7 @@ def test_source_complete_term_tactical_and_expectation_equations_are_pinned(inve
             ("common.evolve_value:evolve_value@98",)),
         "common.promote_retreat_value:PromoteBody.fatal": (
             ("state:prize_race", "terminal:attack_ev"),
-            ("common.promote_retreat_value:promote_value@160",)),
+            ("common.promote_retreat_value:promote_value@131",)),
         "common.needs:set_keep_v2": (
             ("state:hand",),
             ("common.deciders.hand:HandMixin._refresh_shed_keepcost@164",
@@ -738,8 +742,8 @@ def test_source_complete_term_tactical_and_expectation_equations_are_pinned(inve
 
     mobility = by_key["common.retreat_cost:attached_retreat_delta"]
     assert (mobility.disposition, mobility.classification, mobility.absolute_owners) == (
-        "owner", coverage.LOCAL_ONLY, ())
-    assert "ADR-0135" in mobility.reason
+        "owner", coverage.SHARED_EXACT, ("state:readiness",))
+    assert "canonical Tool mobility" in mobility.reason
     mobility_adapter = by_key[
         "common.deciders.promote:PromoteRetreatMixin._attached_retreat_delta"]
     assert (mobility_adapter.disposition, mobility_adapter.classification,
@@ -804,9 +808,8 @@ def test_source_index_resolves_nested_callers_without_bare_name_conflation():
     assert calls["common.deciders.lines:LineMixin._bench_wincon_prize_value"] == (
         "common.deciders.board_build:BoardMixin._board@169",
     )
-    assert calls["common.deciders.promote:PromoteRetreatMixin._retreat_option_value"] == (
-        "common.deciders.attach:AttachMixin._tool_attach_value@316",
-        "common.deciders.attach:AttachMixin._tool_attach_value@317",
+    assert calls["common.state_value:active_position_delta"] == (
+        "common.deciders.attach:AttachMixin._attach_position_delta@167",
     )
 
 
@@ -910,10 +913,6 @@ def test_ranked_findings_are_unique_aggregate_mechanics_with_measured_factors(in
     ):
         assert coverage._measured_factor(one(inventory, impact_key),
                                          "terminal_win_prize_impact") == 1.0
-    impact_wrapper_key = "equation:common-deciders-promote-promoteretreatmixin-retreat-option-value"
-    no_impact = next(row for row in findings if row[3] == impact_wrapper_key)
-    assert no_impact[0][0] == 1
-
     damage_rank = next(row for row in findings
                        if row[3] == "provider-stat:attackstat:damage")
     assert damage_rank[0][1:4] == (1181, "unmeasured", "unmeasured")

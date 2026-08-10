@@ -3,14 +3,13 @@ slot that promotes after a KO. Equation: `common/promote_retreat_value.py`. Cost
 from __future__ import annotations
 
 
-from common import retreat_cost
+from common import board_delta, retreat_cost
 from common.card_worth import ENERGY_TIER
 from common.deciders.attach import _ATTACH_RESOURCE_TIEBREAK
 from common.deciders.facts import Board
 from common.deciders.plan_choice import _min_attack_cost
 from common.grading import HORIZON as _HORIZON
-from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, RetreatSide, promote_value
-from common.strategy.combat import HARVEST_UNAVOIDABLE
+from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
 from common.strategy.context import _BENCH, _MAIN, _PLAY, _RETREAT, _SWITCH, _TO_ACTIVE
 
 
@@ -18,10 +17,8 @@ from common.strategy.context import _BENCH, _MAIN, _PLAY, _RETREAT, _SWITCH, _TO
 class PromoteRetreatMixin:
     """Board facts for the promote/retreat decider, plus the after-KO promote slot."""
 
-    def _promote_body(self, obs: dict, board: Board, raw: dict | None, *, draws: int = 0,
-                      bench_after=None) -> PromoteBody:
-        """Read ONE body AS THE ACTIVE into the decider's damage-currency view (ADR-0100 §3-§7).
-        ``bench_after`` (RETREATING Active only) arms `preservation`; without it that leg reads 0."""
+    def _promote_body(self, obs: dict, board: Board, raw: dict | None, *, draws: int = 0) -> PromoteBody:
+        """Read one body as Active into the sub-lethal promote residual (ADR-0100 §3-§7)."""
         from common.state_model import BodyView
         raw = raw or {}
         model = self._state_model
@@ -42,18 +39,10 @@ class PromoteRetreatMixin:
                      key_ids=self._harvest_key_ids(), opp_active=opp_active,
                      switch_enabler=self._opp_switch_enabler())
         if model is None:
-            ko_active = ko_bench = _HORIZON           # no snapshot: make NO claim (fail-safe)
+            ko_active = _HORIZON                       # no snapshot: make NO claim (fail-safe)
         else:
             ko_active = model.theirs.turns_to_ko_me(raw, my_benched=False,
                                                     my_bench=self._my_bench_raws(obs), **clock)
-            if bench_after is None:
-                ko_bench = ko_active                  # not asked — `preservation` reads 0, never a
-            else:                                     # phantom rescue credit
-                # A RESCUE read, so it declares UNAVOIDABLE (ADR-0071 decision 3): a redirectable
-                # benched KO denies nothing, and crediting it inflates every bench rescue.
-                ko_bench = model.theirs.turns_to_ko_me(raw, my_benched=True,
-                                                       my_bench=list(bench_after),
-                                                       reading=HARVEST_UNAVOIDABLE, **clock)
         cid = raw.get("id")
         tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
         return PromoteBody(
@@ -63,7 +52,7 @@ class PromoteRetreatMixin:
             accel_value=self._promote_accel_value(obs, board, raw) if can_swing else 0.0,
             closure=self._promote_closure(obs, raw, draws=draws if can_swing else 0),
             prizes=self._prize_value(raw),
-            ko_active=ko_active, ko_bench=ko_bench,
+            ko_active=ko_active,
             tempo_step=self._promote_tempo_step(raw),
             denies_items=("item_lock" in tags and self._opp_items_live()),
             opp_prizes_remaining=board.opp_prizes_remaining,
@@ -187,66 +176,17 @@ class PromoteRetreatMixin:
         return sum(self.functions.dig_depth(b.get("id")) for b in bodies
                    if b.get("id") is not None and self._ability_on_menu(obs, b.get("id")))
 
-    def _retreat_discard_choice(self, ma: dict, n: int) -> dict:
-        """``ma`` after a retreat discards ``n`` Energy — the GREEDY cheapest-to-lose typed choice
-        (ADR-0100 §8). A Retreat Cost slot is COLOURLESS, so which Energy goes is genuinely ours."""
-        energies = list(ma.get("energies") or [])
-        for _ in range(min(max(0, int(n)), len(energies))):
-            keep = max(range(len(energies)),
-                       key=lambda i: self._build_standing(
-                           dict(ma, energies=energies[:i] + energies[i + 1:])))
-            energies.pop(keep)
-        return dict(ma, energies=energies)
+    def _retreat_resource_premium(self, active: dict, discarded_indices) -> float:
+        """Tie-break cost of the physical Energy cards one exact payment discards."""
+        cards = list(active.get("energyCards") or ())
+        return _ATTACH_RESOURCE_TIEBREAK * sum(
+            max(0.0, self._role_value((cards[index] or {}).get("id")) - ENERGY_TIER)
+            for index in discarded_indices if 0 <= int(index) < len(cards))
 
-    def _retreat_cost_legs(self, obs: dict, card_worth: float = 0.0, *, active=None) -> dict:
-        """What LEAVING the Active Spot costs (ADR-0100 §8, ADR-0069 §5c). Computed ONCE per menu —
-        §9's claim is that it is CONSTANT across destinations. ``card_worth`` prices a switch ITEM (§11)."""
-        ma = self._my_active(obs) if active is None else active
-        if not ma:
-            return {}
-        if card_worth > 0.0:                          # a Switch Item pays a card, never a build
-            return {"card_worth": float(card_worth)}
-        after = self._retreat_discard_choice(ma, self._effective_retreat_cost(obs, ma))
-        discarded = list(ma.get("energies") or [])
-        for eid in (after.get("energies") or []):     # the multiset difference — what actually goes
-            if eid in discarded:
-                discarded.remove(eid)
-        # ADR-0069 §5c: charged on worth ABOVE a reusable Basic, so a plain Basic pays nothing.
-        # Sub-band — it orders equals.
-        premium = _ATTACH_RESOURCE_TIEBREAK * sum(
-            max(0.0, self._role_value(eid) - ENERGY_TIER) for eid in discarded)
-        return {"build_before": self._build_standing(ma),
-                "build_after": self._build_standing(after), "resource_premium": premium}
-
-    def _retreat_side(self, obs: dict, board: Board, *, promoted_raw, cost: dict,
-                      active=None) -> RetreatSide:
-        """The A-side of a voluntary swap, for ONE destination (ADR-0100 §4, §8). Only PRESERVATION is
-        per-destination: the Bench A lands on depends on which body left it."""
-        ma = self._my_active(obs) if active is None else active
-        bench_after = [b for b in self._my_bench_raws(obs) if b is not promoted_raw] + [ma]
-        return RetreatSide(body=self._promote_body(obs, board, ma, draws=0,
-                                                   bench_after=bench_after), **cost)
-
-    def _retreat_option_value(self, obs: dict, board: Board, active: dict | None) -> float:
-        """ADR-0100 §9's whether-site asked as a COUNTERFACTUAL: what retreating off ``active`` is
-        worth. 0.0 when unaffordable there — an option that does not exist buys nothing."""
-        if not (getattr(self, "promote_retreat_value", False) and active):
-            return 0.0
-        # NOT `_can_retreat`, which consults no board-level grant — the divergence `common.retreat_cost`
-        # records against Issue #149. This side must agree with the cost it then charges.
-        if self._effective_retreat_cost(obs, active) > len(active.get("energies") or []):
-            return 0.0
-        cost = self._retreat_cost_legs(obs, active=active)
-        draws = self._turn_dig_depth(obs)
-        best = 0.0
-        for raw in self._my_bench_raws(obs):
-            if not raw or raw.get("id") is None:
-                continue
-            val = promote_value(PromoteRetreatInputs(
-                body=self._promote_body(obs, board, raw, draws=draws),
-                retreat=self._retreat_side(obs, board, promoted_raw=raw, cost=cost, active=active)))
-            best = max(best, val.total)
-        return best                                   # floored at 0: a retreat you would not take
+    @staticmethod
+    def _persistent_residual(val) -> float:
+        """Consequences not owned by the canonical position projection."""
+        return val.my_yield + val.closure + val.tempo_denied - val.fatal
 
     def _promote_retreat_decision(self, obs: dict, select: dict, board: Board, ctx, option: dict):
         """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0100). Returns the TERM row, or None to
@@ -264,38 +204,70 @@ class PromoteRetreatMixin:
             # §5: at a FORCED promote no play window remains, so no dig can happen.
             draws = 0 if sctx == _TO_ACTIVE else self._turn_dig_depth(obs)
             body = self._promote_body(obs, board, raw, draws=draws)
-            return self._promote_row(promote_value(PromoteRetreatInputs(body=body)), site="pick")
+            val = promote_value(PromoteRetreatInputs(body=body))
+            position = 0.0
+            if self._state_model is not None:
+                from common import board_choice, currency, state_value
+                try:
+                    after = board_choice.promoted_active_model(
+                        self._state_model, int(option.get("index")))
+                    position = state_value.position_state_value(after) * currency.PRIZE_DAMAGE_RATE
+                except (TypeError, ValueError, board_delta.Unmodellable):
+                    position = 0.0
+            return self._promote_row(val, site="pick", position_delta=position)
         if sctx != _MAIN:
             return None
         is_switch_item = (otype == _PLAY and "switch" in (ctx.tags or []))
         if otype != _RETREAT and not is_switch_item:
             return None
-        # §11's rider: a switch-class ITEM takes the SAME equation as a manual retreat, at card Worth.
-        worth = self._role_value(ctx.card_id) if is_switch_item else 0.0
-        if self._my_active(obs) is None:
+        active = self._my_active(obs)
+        if active is None:
             return None                               # no readable Active — make no claim
-        cost = self._retreat_cost_legs(obs, worth)    # CONSTANT across destinations (§9)
         draws = self._turn_dig_depth(obs)
-        best = None
-        for raw in self._my_bench_raws(obs):
-            if not raw or raw.get("id") is None:
-                continue
+        if self._state_model is None:
+            return None
+        from common import board_choice, currency, state_value
+        before_position = state_value.position_state_value(self._state_model)
+        candidates = []
+        if otype == _RETREAT:
+            for outcome in board_choice.legal_manual_retreat_outcomes(self._state_model):
+                candidates.append((outcome.bench_index, outcome.model,
+                                   self._retreat_resource_premium(active, outcome.discard_indices)))
+        else:
+            worth = max(0.0, self._role_value(ctx.card_id))
+            for index, raw in enumerate(self._my_bench_raws(obs)):
+                if raw:
+                    try:
+                        candidates.append((index, board_choice.promoted_active_model(
+                            self._state_model, index), worth))
+                    except board_delta.Unmodellable:
+                        continue
+        best_row = None
+        for index, after, resource_cost in candidates:
+            raw = self._my_bench_raws(obs)[index]
             val = promote_value(PromoteRetreatInputs(
-                body=self._promote_body(obs, board, raw, draws=draws),
-                retreat=self._retreat_side(obs, board, promoted_raw=raw, cost=cost)))
-            if best is None or val.total > best.total:
-                best = val
-        return None if best is None else self._promote_row(best, site="whether")
+                body=self._promote_body(obs, board, raw, draws=draws)))
+            position = ((state_value.position_state_value(after) - before_position)
+                        * currency.PRIZE_DAMAGE_RATE)
+            row = self._promote_row(val, site="whether", position_delta=position,
+                                    resource_cost=resource_cost)
+            if best_row is None or row["total"] > best_row["total"]:
+                best_row = row
+        return best_row
 
     @staticmethod
-    def _promote_row(val, *, site: str) -> dict:
+    def _promote_row(val, *, site: str, position_delta: float = 0.0,
+                     resource_cost: float = 0.0) -> dict:
         """The decider's per-option working (ADR-0008/0019), rounded for the wire. No agreement bit:
         this DECIDES, so there is one emission path."""
-        return {"site": site, "tactical": val.total,
+        residual = PromoteRetreatMixin._persistent_residual(val)
+        total = residual + float(position_delta) - float(resource_cost)
+        return {"site": site, "tactical": total,
                 "my_yield": round(val.my_yield, 2), "closure": round(val.closure, 2),
-                "exposure": round(val.exposure, 2), "tempo_denied": round(val.tempo_denied, 2),
-                "fatal": round(val.fatal, 2), "preservation": round(val.preservation, 2),
-                "retreat_cost": round(val.retreat_cost, 2), "total": round(val.total, 2)}
+                "exposure": 0.0, "tempo_denied": round(val.tempo_denied, 2),
+                "fatal": round(val.fatal, 2), "preservation": 0.0,
+                "retreat_cost": round(resource_cost, 2),
+                "position_delta": round(position_delta, 2), "total": round(total, 2)}
 
     def _promote_ko_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for the body PICK that takes the prize (ADR-0100 §11) — the Solver and
@@ -336,9 +308,11 @@ class PromoteRetreatMixin:
         if stat is None:
             return False
         cost = max(0, getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(ma))
-        if cost == 0:
-            return True                                   # free retreat
-        return len(ma.get("energies") or []) >= cost
+        try:
+            return bool(retreat_cost.payment_options(
+                ma, cost, stat_of=self.stats.get, combat=self.combat))
+        except board_delta.Unmodellable:
+            return False
 
     def _promote_target_kos(self, obs: dict, select: dict, option: dict) -> bool:
         """At a TO_ACTIVE promote, can the body this option brings up Knock Out the opp Active this turn?

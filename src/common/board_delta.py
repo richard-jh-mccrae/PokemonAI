@@ -110,11 +110,23 @@ def replace_body(seat: dict, area: int, index: int, body: dict) -> None:
 def switch_active_with_bench(seat: dict, bench_index: int) -> None:
     """Swap my Active with one occupied Bench slot; callers own allowance and condition writes."""
     active = list(seat.get("active") or ())
-    bench = list(seat.get("bench") or ())
-    if not active or not active[0] or not isinstance(bench_index, int) \
-            or not 0 <= bench_index < len(bench) or not bench[bench_index]:
+    if not active or not active[0]:
         raise Unmodellable(f"switch names bench index {bench_index!r}, which is not an occupied slot")
-    active[0], bench[bench_index] = bench[bench_index], active[0]
+    promote_from_bench(seat, bench_index)
+
+
+def promote_from_bench(seat: dict, bench_index: int) -> None:
+    """Move one occupied Bench body Active; swap an existing Active or preserve its empty slot."""
+    active = list(seat.get("active") or ())
+    bench = list(seat.get("bench") or ())
+    if not isinstance(bench_index, int) or not 0 <= bench_index < len(bench) or not bench[bench_index]:
+        raise Unmodellable(f"promotion names bench index {bench_index!r}, which is not occupied")
+    promoted = bench[bench_index]
+    if active and active[0]:
+        active[0], bench[bench_index] = promoted, active[0]
+    else:
+        active = [promoted]
+        bench[bench_index] = None
     seat["active"], seat["bench"] = active, bench
 
 
@@ -633,5 +645,6 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
 
 __all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition",
            "fork", "fork_player", "take_from_hand", "card_clauses",
-           "clear_conditions", "units_for_cards", "replace_body", "switch_active_with_bench", "attach_energy_card",
+           "clear_conditions", "units_for_cards", "replace_body", "switch_active_with_bench",
+           "promote_from_bench", "attach_energy_card",
            "evolve_body")

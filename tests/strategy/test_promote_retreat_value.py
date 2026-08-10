@@ -13,8 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from common.grading import HORIZON
-from common.promote_retreat_value import (PRIZE_DAMAGE_RATE, PromoteBody, PromoteRetreatInputs,
+from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs,
                                           RetreatSide, promote_value)
 from common.strategy.combat import _EFFICIENCY
 from common.strategy.context import ENERGY_RECOVER, KO_SCORE
@@ -79,15 +78,6 @@ def test_energy_recover_sits_inside_the_bracket_two_rulings_impose():
     assert ENERGY_RECOVER < (174.70 + 37.84) / 3           # ep81904064 f44's attack-over-accel line
 
 
-# The Prize Damage Rate's RECOMPUTATION lives in tests/strategy/test_currency.py (ADR-0078 hoisted
-# the constant into `common/currency.py`); what stays here is the promote-side CONSEQUENCE.
-def test_a_prize_is_worth_a_hundred_damage_not_twelve():
-    """§3: exposing a 3-prize Mega ex costs 300 damage, not the 36 the superseded `_PRIZE_UNIT = 12`
-    charged — which is why the shipped equation fed the win condition away for a body that attacks."""
-    mega = PromoteBody(prizes=3, ko_active=1)
-    assert mega.exposure() == pytest.approx(300.0)
-
-
 def test_the_attack_leg_is_race_discounted_against_a_standing_wall():
     """§3a: vs a standing wall the single hit is fake value — price the SEQUENCE. With no wall
     reading the reachable damage stands unchanged."""
@@ -128,48 +118,6 @@ def test_a_fractional_dividend_below_one_unit_still_pays():
     provably empty. Zero stays zero only for a genuinely absent rider."""
     bare = PromoteBody(reach=100.0)
     assert replace(bare, accel_units=0.8).my_yield() > bare.my_yield()
-
-
-# ---- decision 4: exposure is PER-BODY, CLOCK-GRADED and AREA-CORRECT ------------------------------
-
-def test_exposure_is_continuous_in_the_clock_not_a_cliff():
-    """§4: the retired `opp_can_punish` was BOOLEAN — a 300-damage cliff. Exposure is graded by the
-    clock and strictly decreasing in it."""
-    grades = [PromoteBody(prizes=2, ko_active=t).exposure() for t in (1, 2, 3, 4)]
-    assert grades == sorted(grades, reverse=True)
-    assert len(set(grades)) == len(grades)                # strictly, not a plateau
-
-
-def test_exposure_is_read_per_body():
-    """§4: the retired read resolved ONE body and applied that verdict to every candidate. Two
-    candidates on one board with different prize values must price differently."""
-    on_the_same_board = dict(ko_active=1, opp_prizes_remaining=6)
-    mega = PromoteBody(prizes=3, **on_the_same_board)
-    chump = PromoteBody(prizes=1, **on_the_same_board)
-    assert mega.exposure() > chump.exposure()
-
-
-def test_preservation_is_the_clock_difference_between_the_areas():
-    """§4: what retreating BUYS is exposure standing minus exposure benched — B arrives ACTIVE, A
-    departs to the BENCH, whose leg is the Bench Harvest at the RESCUE reading."""
-    doomed = PromoteBody(prizes=3, ko_active=1, ko_bench=5)
-    assert doomed.preservation() == pytest.approx(
-        3 * PRIZE_DAMAGE_RATE * (1.0 - 0.5 ** 4))
-
-
-def test_a_bench_immune_tera_body_earns_full_preservation_credit():
-    """§4: card text, not tuning — a benched Tera can only be reached by a gust, so its bench clock
-    is the full HORIZON."""
-    tera = PromoteBody(prizes=2, ko_active=1, ko_bench=HORIZON)
-    assert tera.preservation() == pytest.approx(2 * PRIZE_DAMAGE_RATE * (1.0 - 0.5 ** (HORIZON - 1)))
-    assert tera.preservation() == pytest.approx(2 * PRIZE_DAMAGE_RATE, abs=1.0)
-
-
-def test_preservation_is_zero_for_a_body_no_safer_on_the_bench():
-    """A body reached just as fast benched is not RESCUED, and a bench clock SHORTER than the Active
-    one is a redirect artefact, never a cost of retreating."""
-    assert PromoteBody(prizes=3, ko_active=2, ko_bench=2).preservation() == 0.0
-    assert PromoteBody(prizes=3, ko_active=4, ko_bench=1).preservation() == 0.0
 
 
 # ---- decision 5: closure is a Δ`readiness_p` term, bounded by construction -------------------------
@@ -245,19 +193,17 @@ def test_walking_onto_their_path_is_not_taxed_separately():
     assert "on_their_path" not in fields
 
 
-# ---- decision 8: retreat cost is the BUILD it destroys ---------------------------------------------
+# ---- decision 8: build loss moved to the synthesized post-board -----------------------------------
 
-def test_retreat_costs_the_build_the_discard_destroys():
-    """§8: the exact mirror of the attach decider (an attach is `+build`, a retreat `-build`), so the
-    two cannot disagree about what an Energy is worth."""
-    built = RetreatSide(build_before=210.0, build_after=(1 / 3) ** 2 * 210.0)
-    assert built.retreat_cost() == pytest.approx(187.0, abs=0.5)
+def test_retreat_build_loss_is_owned_by_the_synthesized_post_board():
+    """Issue #500 retires the local build recomposition; this seam keeps only resource premium."""
+    assert RetreatSide().retreat_cost() == 0.0
 
 
 def test_a_free_retreat_body_pays_nothing():
     """An Air Balloon (or a printed free retreat) discards no Energy, so it destroys no build and
     the free-pivot line is genuinely available."""
-    assert RetreatSide(build_before=210.0, build_after=210.0).retreat_cost() == 0.0
+    assert RetreatSide().retreat_cost() == 0.0
 
 
 def test_a_switch_class_item_pays_a_card_not_energy():
@@ -270,7 +216,7 @@ def test_a_switch_class_item_pays_a_card_not_energy():
 def test_the_resource_premium_rides_on_top_of_the_build_loss():
     """ADR-0069 §5c's premium — charged on worth ABOVE a reusable Basic, so a plain Basic pays
     nothing and only a one-shot is nudged."""
-    plain = RetreatSide(build_before=100.0, build_after=40.0)
+    plain = RetreatSide()
     one_shot = replace(plain, resource_premium=1.5)
     assert one_shot.retreat_cost() > plain.retreat_cost()
 
@@ -288,8 +234,7 @@ def test_the_pick_site_carries_no_a_side_terms():
 def test_the_same_evaluator_answers_both_questions():
     """§9: with two paths the agent could retreat BECAUSE one body was worth promoting and then
     promote a different one. One evaluator makes the A-side terms a constant OFFSET, so no reorder."""
-    a = RetreatSide(body=PromoteBody(prizes=3, ko_active=1, ko_bench=HORIZON),
-                    build_before=90.0, build_after=10.0)
+    a = RetreatSide(resource_premium=1.0)
     bodies = [PromoteBody(reach=r, prizes=1, ko_active=2) for r in (40.0, 130.0, 75.0)]
     pick_order = sorted(range(3), key=lambda i: -pv(bodies[i]).total)
     whether_order = sorted(range(3), key=lambda i: -pv(bodies[i], a).total)
@@ -299,15 +244,11 @@ def test_the_same_evaluator_answers_both_questions():
 # ---- the two worked frames the user's counter-frames forced ----------------------------------------
 
 def test_frame_mega_starmie_into_cinderace_retreats():
-    """ADR-0100's first worked frame: in rung currency the 3 prizes preserved scored ZERO, so it said
-    stay; in damage the 300 preserved prizes dominate and the retreat is right."""
+    """Exposure/preservation moved to canonical position; the residual cannot price it again."""
     cinderace = PromoteBody(reach=100.0, accel_units=3, prizes=1, ko_active=2)
-    starmie = PromoteBody(prizes=3, ko_active=1, ko_bench=HORIZON)
-    retreat = pv(cinderace, RetreatSide(body=starmie))
-    # 3 prizes x 100, less the residue of a bench clock that is long but not infinite (2^-8).
-    assert retreat.preservation == pytest.approx(300.0, abs=2.0)
-    assert retreat.total > 0                                     # retreat, not stay
-    assert retreat.preservation > retreat.exposure               # and the prizes are WHY
+    retreat = pv(cinderace, RetreatSide())
+    assert retreat.preservation == retreat.exposure == 0.0
+    assert retreat.total == cinderace.my_yield()
 
 
 def test_frame_drakloak_into_budew_retreats():
@@ -315,17 +256,13 @@ def test_frame_drakloak_into_budew_retreats():
     credit and the race discount price both honestly, so the retreat wins."""
     budew = PromoteBody(reach=10.0, prizes=1, ko_active=1, tempo_step=100.0, denies_items=True)
     drakloak_stays = PromoteBody(reach=70.0, wall_progress=320.0 / 5, prizes=1, ko_active=1)
-    # Exposures cancel (both 1-prize bodies on the same clock), so the comparison is the yields.
-    assert budew.exposure() == drakloak_stays.exposure()
     assert budew.my_yield() + budew.tempo_denied() > drakloak_stays.my_yield()
 
 
 def test_frame_doomed_body_swapped_for_a_fresh_copy_of_itself():
-    """§4's consequence: the identical Knock Out cancels and the clock DIFFERENCE decides, so the
-    three prizes SAVED are the whole decision and no new term is needed to see it."""
+    """The pure residual is equal; exact candidate position owns the survival difference."""
     fresh = PromoteBody(reach=170.0, prizes=3, ko_active=2)
-    doomed = PromoteBody(reach=170.0, prizes=3, ko_active=1, ko_bench=HORIZON)
-    assert pv(fresh, RetreatSide(body=doomed)).total > pv(fresh).total
+    assert pv(fresh, RetreatSide()).total == pv(fresh).total
 
 
 # ---- legibility (ADR-0019 full working) ------------------------------------------------------------
@@ -333,9 +270,8 @@ def test_frame_doomed_body_swapped_for_a_fresh_copy_of_itself():
 def test_total_is_the_transparent_sum_of_its_terms():
     """A wrong answer must be diagnosable term by term rather than as one number."""
     v = pv(PromoteBody(reach=120.0, wall_progress=None, accel_units=2, closure=30.0, prizes=2,
-                       ko_active=2, ko_bench=6, tempo_step=40.0, denies_items=True,
+                       ko_active=2, tempo_step=40.0, denies_items=True,
                        opp_prizes_remaining=2),
-           RetreatSide(body=PromoteBody(prizes=3, ko_active=1, ko_bench=HORIZON),
-                       build_before=210.0, build_after=23.0, resource_premium=1.5))
+           RetreatSide(resource_premium=1.5))
     assert v.total == pytest.approx(v.my_yield + v.closure - v.exposure + v.tempo_denied
                                     - v.fatal + v.preservation - v.retreat_cost)
