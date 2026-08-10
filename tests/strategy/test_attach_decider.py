@@ -11,7 +11,7 @@ import pytest
 
 from card_facts import ignition_tags
 from common.cards import CardFunctions
-from common.pilot import (Pilot, _ATTACH_ABILITY_FUEL, _ATTACH_RETREAT_EQUITY, _ATTACH_VALUE_SCALE)
+from common.pilot import (Pilot, _ATTACH_ABILITY_FUEL, _ATTACH_VALUE_SCALE)
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -200,8 +200,7 @@ def test_lone_utility_body_desperation_attach_beats_ending_the_turn():
     w = p.explain(obs).attach_working
     row = _row_for(w, 0)
     assert row["role_gated"] is False
-    assert row["retreat_equity"] == _ATTACH_RETREAT_EQUITY   # Lunatone's printed Retreat is 1
-    assert row["tactical"] > 0.0
+    assert row["retreat_equity"] == 0.0                       # empty Bench: no legal pivot exists
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0008")
@@ -247,7 +246,7 @@ def test_the_role_gate_zeros_the_attack_axis_only():
     w = p.explain(obs).attach_working
     lunatone = _row_for(w, 0)
     assert lunatone["role_gated"] is True and lunatone["attack_axis"] == 0.0
-    assert lunatone["retreat_equity"] > 0.0
+    assert lunatone["retreat_equity"] == 0.0
     assert _row_for(w, 0)["marginal"] == _row_for(w, 1)["marginal"]
 
 
@@ -421,7 +420,6 @@ def _agent(rec) -> str:
 # The ATTACH the decider must RANK first at each frame; "none" = it declines to attach at all.
 # Targets compare by resolved SLOT — raw option indexes read as false disagreements on duplicates.
 _CORPUS = {
-    ("82227388", 7): "none",             # an all-Tool menu: nothing here is Energy
     ("86088989", 63): (BENCH, 2),        # no 3rd Energy on a 2-cost Lucario (Aura Jab ctx 21)
     ("86089638", 18): None,              # on-type onto the Dreepy line — assert against `correct`
     ("83037962", 48): None,              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
@@ -437,6 +435,19 @@ _CORPUS = {
     ("83116081", 21): (BENCH, 1),        # exact per-body envelopes favor the bare Staryu unlock
     ("82224509", 31): None,              # don't over-attach a body that is already 3/3
 }
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0021")
+def test_82227388_cape_keeps_the_existing_refuted_ruling_and_records_the_new_breakdown():
+    """The full Pilot still equips Active; the mobility-only rows expose equal Staryu pivots."""
+    rec = _frame("82227388", 7)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    rows = dec.attach_working["eq"]
+    active = next(row for row in rows if row["slot"] == [ACTIVE, 0])
+    benches = [row for row in rows if row["slot"][0] == BENCH]
+    assert dec.chosen == [active["i"]]
+    assert active["retreat_equity"] < 0.0
+    assert len(benches) == 2 and benches[0]["retreat_equity"] == benches[1]["retreat_equity"] > 0.0
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0021")

@@ -93,9 +93,14 @@ _MAX_PRIZE_VALUE = 3.0
 #: The Prize count both sides race down from (`docs/rulebook.txt` L57). One fact, one home (ADR-0087).
 _PRIZES_START = _needs._PRIZES_START
 
-#: The four positional runaway guards, summed. :data:`LOSS_PRIZES` is DERIVED from this plus the
+#: Largest possible legal Active-position exchange: readiness swing plus ranked exposure swing.
+ACTIVE_POSITION_MAX = _READINESS_CAP + _MAX_PRIZE_VALUE * sum(
+    halve(rank) for rank in range(_MAX_BODIES))
+
+#: The positional runaway guards, summed. :data:`LOSS_PRIZES` is DERIVED from this plus the
 #: prize-denominated maxima plus a prize of headroom, so it dominates by construction, not by taste.
-POSITIONAL_MAX = _THREAT_CAP + _READINESS_CAP + _HAND_CAP + _DEVELOPMENT_CAP
+POSITIONAL_MAX = (_THREAT_CAP + _READINESS_CAP + ACTIVE_POSITION_MAX
+                  + _HAND_CAP + _DEVELOPMENT_CAP)
 
 LOSS_PRIZES = (
     _MAX_BODIES * _MAX_PRIZE_VALUE
@@ -470,18 +475,18 @@ def _evaluate_threat(model: "StateModel", diagnostics: bool = False):
     return _potential_result("threat", value, working) if diagnostics else value
 
 
-def _evaluate_readiness(model: "StateModel", diagnostics: bool = False):
+def _evaluate_attack_readiness(model: "StateModel", diagnostics: bool = False):
     if not diagnostics:
         return readiness(_ready_bodies(model))
     legs: list[PotentialLeg] = []
-    seen: set = set()
     body_total = 0.0
     bench_index = 0
-    for body in model.mine.bodies:
+    rows = tuple((body, combat_realization(model, body)) for body in model.mine.bodies)
+    relevance_by_body = _readiness_relevance(model, rows)
+    for body, profile in rows:
         key = "active" if body.is_active else f"bench.{bench_index}"
         bench_index += int(not body.is_active)
-        profile = combat_realization(model, body)
-        relevance = _body_relevance(model, body.card_id, seen)
+        relevance = relevance_by_body[id(body)]
         build = _READINESS_W * profile.build_prizes
         now = _READINESS_W * profile.now_prizes
         future = _READINESS_W * profile.future_prizes
@@ -510,6 +515,19 @@ def _evaluate_readiness(model: "StateModel", diagnostics: bool = False):
                                ("body_cap", any(leg.key.endswith("body_cap_adjustment")
                                                 and leg.value_prizes for leg in legs)),
                                ("board_cap", bool(value < body_total))) if active))
+
+
+def _evaluate_readiness(model: "StateModel", diagnostics: bool = False):
+    if not diagnostics:
+        return float(_evaluate_attack_readiness(model)) + float(active_position_potential(model))
+    attack = _evaluate_attack_readiness(model, diagnostics=True)
+    option = active_position_potential(model, diagnostics=True)
+    legs = attack.legs + option.legs
+    unknowns = tuple(leg.key for leg in legs if leg.status is PotentialStatus.UNKNOWN)
+    return PotentialResult(
+        "readiness", attack.value_prizes + option.value_prizes, legs,
+        PotentialStatus.UNKNOWN if unknowns else PotentialStatus.KNOWN,
+        unknowns=unknowns, applied_bounds=attack.applied_bounds)
 
 
 def _evaluate_hand(model: "StateModel", diagnostics: bool = False):
@@ -821,13 +839,19 @@ REGISTRY: tuple[TermFamily, ...] = (
             ("readiness.attack_realization",
              ("combat_build_profile", "legal_now_attack", "typed_future_supply",
               "per_attack_clock", "role_relevance", "turns_to_ko_me"),
-             "Prices the max persistent/current/future realization of each relevant body."),),
+             "Prices the max persistent/current/future realization of each relevant body."),
+            ("readiness.active_position_option",
+             ("legal_manual_retreat_outcomes", "readiness_attack_realization",
+              "survival_body_exposure"),
+             "Prices current-turn access to a better already-canonical Active position.")),
         does_not_read=("assignment_coverage", "bench_slot_price"),
         evaluator=_evaluate_readiness,
         bounds=(BoundSpec("body_cap", 0.0, _READINESS_BODY_CAP, "leg",
                           "Per-body runaway guard."),
                 BoundSpec("board_cap", 0.0, _READINESS_CAP, "family",
-                          "Whole-board runaway guard.")),
+                          "Whole-board attack-realization guard."),
+                BoundSpec("active_position", 0.0, ACTIVE_POSITION_MAX, "leg",
+                          "Derived readiness-plus-ranked-exposure exchange bound.")),
         composition="Per body, max(build, legal now, typed future) across aligned per-attack "
                     "candidates, then role relevance and the existing body/board caps. Persistent "
                     "build uses exact typed convex progress; future uses that attack's own cost and "
@@ -852,15 +876,10 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "`predicted_loss` while consulting `prize_race`'s counts: splitting the clock "
                     "into a second fact string to make the read visible would make "
                     "`double_counted()` pass VACUOUSLY, which is the answer "
-                    "`sound_rules.SCHEDULED_PAIRS` already records for the same temptation.",
+                    "`sound_rules.SCHEDULED_PAIRS` already records for the same temptation. "
+                    "The capped attack realization is followed by the best legal current-turn "
+                    "Active-position exchange, evaluated through the registered retreat outcomes.",
         blind_to=(
-            "the VALUE of the Active slot — narrowed by Issue #351, which took the legality half. "
-            "`_may_attack_now` now gates the now-leg on the area and on `attack_blocked`, so a "
-            "benched body no longer claims it can attack this turn; what stays unpriced is the "
-            "slot's WORTH, so a retreat that puts the right body in front still moves this family "
-            "only through the Attach Budget and the gate's on/off step. `promote_retreat_value` is "
-            "the instrument and composes into `survival`; the retreat allowance itself is an OWED "
-            "snapshot zone (T1).",
             "a board condition that is NOT a bench-partner condition — ADR-0109 routed the payoff "
             "through the damage oracle, which reads the one condition family the card-text parser "
             "extracts (`AttackStat.requiresBench`). Walking the whole set for *\"this attack does "
@@ -1107,13 +1126,87 @@ def state_value(model: "StateModel", *, working: dict | None = None) -> float:
     return float(sum(terms.values()))
 
 
+def position_state_value(model: "StateModel") -> float:
+    """Attack realization plus nonterminal body exposure; no retreat option and no terminal loss."""
+    return float(model._memoized(
+        ("position_state_value",),
+        lambda: (float(_evaluate_attack_readiness(model))
+                 + survival(_exposed_bodies(model), predicted_loss=False))))
+
+
+@dataclass(frozen=True)
+class ActivePositionEvaluation:
+    value: float
+    status: PotentialStatus
+    reason: str
+    fingerprint: tuple | None = None
+    before_readiness: float = 0.0
+    after_readiness: float = 0.0
+    before_survival: float = 0.0
+    after_survival: float = 0.0
+    delta: float = 0.0
+
+
+def _active_position_evaluation(model: "StateModel") -> ActivePositionEvaluation:
+    from common import board_choice
+    from common.board_delta import Unmodellable
+
+    try:
+        outcomes = board_choice.legal_manual_retreat_outcomes(model)
+    except Unmodellable as gap:
+        return ActivePositionEvaluation(0.0, PotentialStatus.UNKNOWN, str(gap))
+    if not outcomes:
+        return ActivePositionEvaluation(
+            0.0, PotentialStatus.KNOWN, "no usable legal current-turn manual retreat")
+
+    before_readiness = float(_evaluate_attack_readiness(model))
+    before_survival = survival(_exposed_bodies(model), predicted_loss=False)
+    rows = []
+    before = before_readiness + before_survival
+    for outcome in outcomes:
+        after_readiness = float(_evaluate_attack_readiness(outcome.model))
+        after_survival = survival(_exposed_bodies(outcome.model), predicted_loss=False)
+        rows.append((after_readiness + after_survival - before, repr(outcome.fingerprint), outcome,
+                     after_readiness, after_survival))
+    delta, _order, outcome, after_readiness, after_survival = max(rows, key=lambda row: (row[0], row[1]))
+    value = max(0.0, float(delta))
+    reason = json.dumps({
+        "fingerprint": repr(outcome.fingerprint),
+        "discard": list(outcome.discard_indices), "destination": outcome.bench_index,
+        "before_readiness": before_readiness, "after_readiness": after_readiness,
+        "before_survival": before_survival, "after_survival": after_survival,
+        "delta": float(delta), "status": PotentialStatus.KNOWN.value,
+    }, sort_keys=True, separators=(",", ":"))
+    return ActivePositionEvaluation(
+        value, PotentialStatus.KNOWN, reason, outcome.fingerprint, before_readiness,
+        after_readiness, before_survival, after_survival, float(delta))
+
+
+def active_position_potential(model: "StateModel", *, diagnostics: bool = False):
+    """Current-turn value of owning the best legal manual-retreat option."""
+    result = model._memoized(("active_position_potential",),
+                             lambda: _active_position_evaluation(model))
+    if not diagnostics:
+        return float(result.value)
+    leg = PotentialLeg("active_position", float(result.value), result.status, result.reason)
+    unknowns = (leg.key,) if leg.status is PotentialStatus.UNKNOWN else ()
+    return PotentialResult("readiness", leg.value_prizes, (leg,), leg.status, unknowns=unknowns,
+                           applied_bounds=("active_position",)
+                           if leg.value_prizes >= ACTIVE_POSITION_MAX else ())
+
+
+def active_position_delta(before: "StateModel", after: "StateModel") -> float:
+    """Marginal current-turn pivot ownership acquired or lost between two boards."""
+    return _plain_float(active_position_potential(after) - active_position_potential(before))
+
+
 def _terms(model: "StateModel") -> dict:
     """The six families, evaluated once. **Insertion order is REGISTRY order and that is a contract**
     — float addition is not associative, so a reorder moves the sum's last bits (Issue #262)."""
     return {family.name: float(family.evaluator(model)) for family in REGISTRY}
 
 
-_VALUE_CONTRACT_SCHEMA = 2
+_VALUE_CONTRACT_SCHEMA = 3
 
 
 def registry_identity() -> str:
@@ -1199,8 +1292,10 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 def _survival_clock(model: "StateModel", body) -> int:
     """**THE** clock on one of my bodies (Issue #332) — the ONE call `survival` and `readiness` both
     read. `int` turns, deliberately NOT ADR-0117's fractional `TheirSide.survival_clock`."""
+    from common.option_equivalence import card_state_fingerprint
+    canonical_bench = tuple(sorted(model.mine.bench_raws, key=card_state_fingerprint))
     return int(model.theirs.turns_to_ko_me(
-        body.body, my_benched=not body.is_active, my_bench=model.mine.bench_raws,
+        body.body, my_benched=not body.is_active, my_bench=canonical_bench,
         opp_active=model.theirs.active_raw, context=model.damage_context(attacker="theirs")))
 
 
@@ -1456,7 +1551,7 @@ def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
                   body_override: tuple[object, object] | None = None) -> tuple:
     """MY bodies as readiness reads them, through the canonical multi-attack envelope."""
     out = []
-    seen: set = set()
+    rows = []
     bench_index = 0
     override_body, override_supply = supply_override or (None, None)
     replaced_body, replacement = body_override or (None, None)
@@ -1471,10 +1566,29 @@ def _ready_bodies(model: "StateModel", *, with_keys: bool = False,
         realised = combat_realization(model, evaluated, supply=supplied)
         if realised.value_prizes <= 0.0:
             continue                       # nothing this body can land: a condition it cannot meet
+        rows.append((b, evaluated, key, realised))
+    relevance_by_body = _readiness_relevance(
+        model, tuple((evaluated, realised) for _b, evaluated, _key, realised in rows))
+    for _b, evaluated, key, realised in rows:
         body = ReadyBody(payoff=realised.value_prizes, readiness_odds=1.0,
-                         role_relevance=_body_relevance(model, evaluated.card_id, seen))
+                         role_relevance=relevance_by_body[id(evaluated)])
         out.append((key, body) if with_keys else body)
     return tuple(out)
+
+
+def _readiness_relevance(model: "StateModel", rows) -> dict[int, float]:
+    """Permutation-invariant utility-copy saturation: the strongest equal-ID build is primary."""
+    groups: dict = {}
+    for body, profile in rows:
+        groups.setdefault(body.card_id, []).append((body, profile))
+    out = {}
+    for card_id, members in groups.items():
+        base = _role_relevance(model, card_id)
+        saturated = model.mine.role_worth(card_id) < ROLE_TIER["secondary_attacker"]
+        ordered = sorted(members, key=lambda row: -float(row[1].value_prizes))
+        for rank, (body, _profile) in enumerate(ordered):
+            out[id(body)] = base * (_SATURATED if saturated and rank else 1.0)
+    return out
 
 
 def readiness_supply_delta(model: "StateModel", body, supply: EnergySupply) -> float:
@@ -1953,7 +2067,8 @@ def undeclared_shared_inputs() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "LOSS_PRIZES", "WIN_PRIZES", "worth_to_prizes", "prizes_to_worth",
+    "LOSS_PRIZES", "WIN_PRIZES", "ACTIVE_POSITION_MAX", "POSITIONAL_MAX",
+    "worth_to_prizes", "prizes_to_worth",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
     "TermFamily", "ConsequenceSpec", "BoundSpec", "ExposedBody", "ReadyBody", "AttackEV",
     "PotentialStatus", "PotentialLeg", "PotentialResult", "ValueBreakdown",
@@ -1962,7 +2077,8 @@ __all__: Sequence[str] = (
     "combat_build_profile", "combat_realization", "readiness_supply_delta",
     "allocate_energy_units", "recovery_recipients", "allocate_recovery_energy",
     "LegDifference", "FamilyDifference", "ValueDifference", "registry_identity",
-    "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",
+    "state_value", "position_state_value", "active_position_potential", "active_position_delta",
+    "prize_race", "survival", "threat", "readiness", "hand", "development",
     "value_breakdown", "value_difference", "attack_ev", "registry_gaps", "double_counted",
     "undeclared_shared_inputs", "blind_spots",
 )

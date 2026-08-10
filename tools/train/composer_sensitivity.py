@@ -16,7 +16,7 @@ import json
 import subprocess
 import sys
 from contextvars import ContextVar
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,7 +28,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from common import apply_option as ao                                    # noqa: E402
 from common import board_expectation as bx                               # noqa: E402
 from common import composer as cp                                        # noqa: E402
-from common import currency, needs, retreat_cost                         # noqa: E402
+from common import board_choice, currency, needs, retreat_cost           # noqa: E402
 from common.cards import CardFunctions                                   # noqa: E402
 from common.deciders.attach import AttachMixin                           # noqa: E402
 from common.deciders.evolve import EvolveMixin                           # noqa: E402
@@ -41,7 +41,9 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider 
 from common.state_model import StateModel                                # noqa: E402
 from common.state_value import (                                         # noqa: E402
     FAMILIES,
+    active_position_potential,
     attack_ev_legs,
+    position_state_value,
     state_value,
     value_breakdown,
     value_difference,
@@ -80,6 +82,7 @@ SYN_TOOL = 990_012
 SYN_FETCH = 990_013
 SYN_BASIC = 990_020
 SYN_EVOLUTION = 990_021
+SYN_MULTI_ENERGY = 990_022
 REFUSED_CARD = 1153  # Lumiose Galette: heal is carried; condition removal remains unmodelled.
 HEAL_CARD = 1222     # Fennel: shipped, full clause; heal 40 from each of my Pokemon.
 SYN_ATTACK_CHEAP = 991_001
@@ -1011,14 +1014,14 @@ def mobility_retreat_tool() -> dict:
     local = _local("common.retreat_cost.effective_retreat_cost", "energy-units",
                    cost_before, cost_after,
                    working={"benefit": cost_before - cost_after,
-                            "classification": "LOCAL-ONLY"})
+                            "classification": "DELIBERATE-ZERO"})
     leaf_delta = float(state_value(after)) - float(state_value(before))
     positive = mobility_retreat_enables_modeled_retreat()
     control = {"case": positive["case"],
                "passed": bool(cost_after < cost_before
                               and positive["positive_control"]["passed"]
-                              and positive["positive_control"]["observed_retreat_leaf_delta"] > 0),
-               "expectation": "shipped retreat oracle moves even if the absolute leaf is blind",
+                              and positive["positive_control"]["option_before"] > 0),
+               "expectation": "cost reduction without a legal better destination has canonical zero",
                "observed_total_delta": leaf_delta, "observed_local_delta": cost_after - cost_before,
                "positive_total_delta": positive["deltas"]["total"],
                "positive_local_delta": positive["local"]["delta"],
@@ -1027,12 +1030,11 @@ def mobility_retreat_tool() -> dict:
     return _case_record("mobility-retreat-tool", "synthetic:retreat-2-to-0", before, after, actions,
                         local=local, search=search_snapshot(before, options, focus=[0], sequences=[[0]]),
                         control=control,
-                        unread_extra=(("attached_tools",
-                                       "ADR-0135: retreatReduction mobility has no absolute owner"),))
+                        )
 
 
 def mobility_retreat_enables_modeled_retreat() -> dict:
-    """Same-instrument control: cost reduction enables a resolved, leaf-positive retreat."""
+    """Same-instrument control: cost reduction enables a resolved, canonically owned retreat."""
     combat = synthetic_combat("single", opponent_damage=100)
     target = _body(hp=80, max_hp=220)
     promoted = _body(SYN_BODY_CLONE, serial=2, hp=220, max_hp=220,
@@ -1059,6 +1061,9 @@ def mobility_retreat_enables_modeled_retreat() -> dict:
     energy_after = len(after_body.get("energyCards") or after_body.get("energies") or ())
     affordable_before, affordable_after = energy_before >= cost_before, energy_after >= cost_after
     retreat_leaf_delta = float(state_value(after)) - float(state_value(after_tool))
+    option_before = active_position_potential(after_tool)
+    option_after = active_position_potential(after)
+    exercise_identity = position_state_value(after) - position_state_value(after_tool)
     promoted_serial = after.source_obs["current"]["players"][0]["active"][0].get("serial")
     local = _local(
         "common.retreat_cost.effective_retreat_cost", "energy-units", cost_before, cost_after,
@@ -1069,16 +1074,22 @@ def mobility_retreat_enables_modeled_retreat() -> dict:
                  "retreat_allowance_spent": bool(after.retreated),
                  "promoted_active_serial": promoted_serial,
                  "retreat_leaf_delta": retreat_leaf_delta,
+                 "option_before": option_before, "option_after": option_after,
+                 "exercise_identity": exercise_identity,
                  "classification": "MODELED-POSITIVE-CONTROL"},
     )
     control = {
         "case": "mobility-retreat-enables-modeled-retreat",
         "passed": bool(all(row["fate"] == ao.MODELLED for row in actions)
                        and not affordable_before and affordable_after and after.retreated
-                       and promoted_serial == 2 and retreat_leaf_delta > 0.0),
-        "expectation": "the same live cost oracle enables a resolved retreat whose resulting board moves the leaf positively",
+                       and promoted_serial == 2 and option_before > 0.0 and option_after == 0.0
+                       and abs(retreat_leaf_delta) < 1e-12
+                       and abs(exercise_identity - option_before) < 1e-12),
+        "expectation": "the enabled option is owned before exercise and realized after allowance spend",
         "observed_total_delta": float(state_value(after)) - float(state_value(before)),
         "observed_retreat_leaf_delta": retreat_leaf_delta,
+        "option_before": option_before, "option_after": option_after,
+        "exercise_identity": exercise_identity,
         "observed_local_delta": cost_after - cost_before,
     }
     return _case_record(
@@ -1087,6 +1098,155 @@ def mobility_retreat_enables_modeled_retreat() -> dict:
         search=search_snapshot(before, attach_options, focus=[0], sequences=[[0]]),
         control=control,
     )
+
+
+def active_position_control_matrix() -> dict:
+    """Issue #500's payment, legality, destination, attach-area, anonymity, and exercise proofs."""
+    combat = synthetic_combat("single", opponent_damage=100)
+    opponent = _player(active=_body(
+        SYN_OPP, serial=50, hp=220, max_hp=220, energies=(WATER,),
+        energy_ids=(SYN_WATER,), seat=1), seat=1)
+
+    def retreat_model(*, active_energy_ids, bench_energy_ids=(SYN_WATER,), serial=1):
+        active = _body(
+            serial=serial, hp=80, max_hp=220,
+            energies=(WATER,) * len(active_energy_ids), energy_ids=active_energy_ids)
+        bench = _body(
+            serial=serial + 1, hp=220, max_hp=220,
+            energies=(WATER,) * len(bench_energy_ids), energy_ids=bench_energy_ids)
+        return _model(_obs(
+            mine=_player(active=active, bench=[bench]),
+            theirs=opponent, options=[{"type": _RETREAT}]), combat=combat)
+
+    insufficient = retreat_model(active_energy_ids=(SYN_WATER,))
+    sufficient_weak = retreat_model(
+        active_energy_ids=(SYN_WATER, SYN_WATER), bench_energy_ids=())
+    sufficient_armed = retreat_model(
+        active_energy_ids=(SYN_WATER, SYN_WATER), bench_energy_ids=(SYN_WATER,))
+    insufficient_value = active_position_potential(insufficient)
+    weak_value = active_position_potential(sufficient_weak)
+    armed_value = active_position_potential(sufficient_armed)
+
+    active = sufficient_armed.source_obs["current"]["players"][0]["active"][0]
+    payment_counts = {
+        cost: sorted(len(payment.card_indices) for payment in retreat_cost.payment_options(
+            active, cost, stat_of=sufficient_armed.card_stat, combat=combat))
+        for cost in range(4)
+    }
+
+    multi_stats, multi_attacks = _stats(attacks="single")
+    multi_stats[SYN_EVOLUTION] = replace(
+        multi_stats[SYN_EVOLUTION], retreatCost=3, stage="stage1")
+    multi_stats[SYN_MULTI_ENERGY] = CardStat(
+        SYN_MULTI_ENERGY, name="Anonymous Multi Energy", cardType=6,
+        energyType=COLORLESS, synthetic=True)
+    multi_combat = CombatMath(
+        DictCardStatProvider(multi_stats, attacks=multi_attacks),
+        CardFunctions({SYN_MULTI_ENERGY: ["provides:1", "provides_evo:3", "discard_eot"]}),
+        transients=None, effects=CardEffects({}))
+    mixed_active = _body(
+        SYN_EVOLUTION, hp=280, max_hp=280,
+        energies=(WATER, COLORLESS, COLORLESS, COLORLESS, WATER),
+        energy_ids=(SYN_WATER, SYN_MULTI_ENERGY, SYN_WATER))
+    mixed_model = _model(_obs(
+        mine=_player(active=mixed_active, bench=[_body(serial=2)]),
+        theirs=opponent, options=[{"type": _RETREAT}]), combat=multi_combat)
+    mixed_payments = retreat_cost.payment_options(
+        mixed_active, 3, stat_of=mixed_model.card_stat, combat=multi_combat)
+    mixed_outcomes = board_choice.legal_manual_retreat_outcomes(mixed_model)
+    mixed_best = max(mixed_outcomes, key=lambda outcome: position_state_value(outcome.model))
+    duplicate_active = _body(
+        SYN_EVOLUTION, hp=280, max_hp=280, energies=(WATER,) * 4,
+        energy_ids=(SYN_WATER,) * 4)
+    duplicate_model = _model(_obs(
+        mine=_player(active=duplicate_active, bench=[_body(serial=2)]),
+        theirs=opponent, options=[{"type": _RETREAT}]), combat=multi_combat)
+    duplicate_classes = board_choice.target_space(
+        duplicate_model, {"type": _RETREAT}, seat_index=0)
+
+    outcomes = board_choice.legal_manual_retreat_outcomes(sufficient_armed)
+    best_after = max(outcomes, key=lambda outcome: position_state_value(outcome.model)).model
+    exercise_gain = position_state_value(best_after) - position_state_value(sufficient_armed)
+    after_value = active_position_potential(best_after)
+    leaf_exercise_delta = state_value(best_after) - state_value(sufficient_armed)
+
+    def changed_model(mutator):
+        obs = copy.deepcopy(sufficient_armed.source_obs)
+        mutator(obs)
+        return sufficient_armed.rebuilt(obs)
+
+    legality_zeros = {
+        "allowance_spent": active_position_potential(changed_model(
+            lambda obs: obs["current"].__setitem__("retreated", True))),
+        "non_main": active_position_potential(changed_model(
+            lambda obs: obs["select"].__setitem__("context", 3))),
+        "empty_bench": active_position_potential(changed_model(
+            lambda obs: obs["current"]["players"][0].__setitem__("bench", []))),
+        "asleep": active_position_potential(changed_model(
+            lambda obs: obs["current"]["players"][0].__setitem__("asleep", True))),
+    }
+
+    attach_hand = [_card(SYN_WATER, 90)]
+    attach_base = _model(_obs(
+        mine=_player(
+            active=_body(hp=80, max_hp=220, energies=(WATER,), energy_ids=(SYN_WATER,)),
+            bench=[_body(serial=2, energies=(), energy_ids=())], hand=attach_hand),
+        theirs=opponent,
+        options=[
+            {"type": _ATTACH, "area": 2, "index": 0,
+             "inPlayArea": _ACTIVE, "inPlayIndex": 0},
+            {"type": _ATTACH, "area": 2, "index": 0,
+             "inPlayArea": _BENCH, "inPlayIndex": 0},
+        ]), combat=combat)
+    active_after, active_actions = apply_sequence(attach_base, attach_base.source_obs["select"]["option"], [0])
+    bench_after, _bench_actions = apply_sequence(attach_base, attach_base.source_obs["select"]["option"], [1])
+    attach_deltas = {
+        "active": active_position_potential(active_after) - active_position_potential(attach_base),
+        "bench": active_position_potential(bench_after) - active_position_potential(attach_base),
+    }
+
+    anonymous = retreat_model(
+        active_energy_ids=(SYN_WATER, SYN_WATER), bench_energy_ids=(SYN_WATER,), serial=101)
+    anonymous_equal = active_position_potential(anonymous) == armed_value
+    checks = {
+        "insufficient_then_sufficient": insufficient_value == 0.0 and armed_value > 0.0,
+        "weak_then_armed_destination": armed_value > weak_value,
+        "cost_0_1_2_3_card_payments": payment_counts == {
+            0: [0], 1: [1, 1], 2: [2], 3: []},
+        "multi_unit_and_mixed_whole_cards": (
+            {payment.card_indices for payment in mixed_payments}
+            == {(1,), (0, 1), (1, 2), (0, 1, 2)}),
+        "best_retained_build_and_duplicate_collapse": (
+            mixed_best.discard_indices == (1,) and len(duplicate_classes) == 1),
+        "best_destination_is_max": abs(exercise_gain - armed_value) < 1e-12,
+        "allowance_context_bench_condition_zeros": all(value == 0.0 for value in legality_zeros.values()),
+        "attach_area_follows_legal_outcomes": attach_deltas["active"] > attach_deltas["bench"],
+        "anonymous_serials_are_equal": anonymous_equal,
+        "resolved_option_identity": after_value == 0.0 and abs(leaf_exercise_delta) < 1e-12,
+    }
+    local = _local(
+        "common.state_value.active_position_potential", "prizes",
+        insufficient_value, armed_value,
+        working={"checks": checks, "payment_counts": payment_counts,
+                 "mixed_payments": [payment.card_indices for payment in mixed_payments],
+                 "mixed_best": [mixed_best.discard_indices, mixed_best.bench_index],
+                 "duplicate_classes": len(duplicate_classes),
+                 "weak_value": weak_value, "armed_value": armed_value,
+                 "legality_zeros": legality_zeros, "attach_deltas": attach_deltas,
+                 "exercise_gain": exercise_gain, "leaf_exercise_delta": leaf_exercise_delta,
+                 "classification": "SHARED-EXACT"})
+    control = {
+        "case": "active-position-control-matrix", "passed": all(checks.values()),
+        "expectation": "all canonical pivot counterfactuals and the resolved-option identity pass",
+        "observed_total_delta": float(state_value(active_after)) - float(state_value(attach_base)),
+        "checks": checks,
+    }
+    return _case_record(
+        "active-position-control-matrix", "synthetic:active-position-matrix",
+        attach_base, active_after, active_actions, local=local,
+        search=search_snapshot(
+            attach_base, attach_base.source_obs["select"]["option"], focus=[0], sequences=[[0]]),
+        control=control)
 
 
 def _represented_needs(obs: dict, seat: int):
@@ -1540,6 +1700,7 @@ CASE_BUILDERS: Mapping[str, Callable[[], dict]] = {
     "healing-not-across-threshold": healing_not_across_threshold,
     "mobility-retreat-tool": mobility_retreat_tool,
     "mobility-retreat-enables-modeled-retreat": mobility_retreat_enables_modeled_retreat,
+    "active-position-control-matrix": active_position_control_matrix,
     "hand-spend-retires-demand": hand_spend_retires_demand,
     "hand-spend-unrepresented-demand": hand_spend_unrepresented_demand,
     "information-ordering": information_ordering,

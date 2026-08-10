@@ -14,7 +14,53 @@ this module on a board with Latias ex benched. Both are owed to Issue #149.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from itertools import combinations
+
 from common.strategy.context import _METAL
+
+
+@dataclass(frozen=True)
+class RetreatPayment:
+    """One reachable payment: physical card indices and each card's supplied-unit count."""
+
+    card_indices: tuple[int, ...]
+    supplied_units: tuple[int, ...]
+
+    @property
+    def total_units(self) -> int:
+        return sum(self.supplied_units)
+
+
+def payment_options(active: dict | None, cost: int, *, stat_of, combat) -> tuple[RetreatPayment, ...]:
+    """Reachable unit-funded payments, stopping the instant a chosen card covers the remainder."""
+    from common.board_delta import Unmodellable, units_for_cards
+
+    required = max(0, int(cost))
+    if required == 0:
+        return (RetreatPayment((), ()),)
+    if not active or stat_of is None or combat is None:
+        raise Unmodellable("retreat payment lacks a readable Active, Stat Provider, or combat provider")
+    holder = stat_of(active.get("id"))
+    if holder is None:
+        raise Unmodellable(f"{active.get('id')}: no holder stat for retreat payment")
+    cards = tuple(active.get("energyCards") or ())
+    counts = []
+    for card in cards:
+        units = units_for_cards(combat, (card,), holder_stat=holder)
+        counts.append(len(units))
+
+    reachable = []
+    usable = tuple(index for index, count in enumerate(counts) if count > 0)
+    for size in range(1, len(usable) + 1):
+        for selected in combinations(usable, size):
+            total = sum(counts[index] for index in selected)
+            if total < required:
+                continue
+            if not any(total - counts[last] < required for last in selected):
+                continue
+            reachable.append(RetreatPayment(selected, tuple(counts[index] for index in selected)))
+    return tuple(reachable)
 
 
 def attached_tool_stats(body: dict | None, stat_of):
@@ -32,7 +78,10 @@ def attached_tool_stats(body: dict | None, stat_of):
 def attached_retreat_delta(body: dict | None, stat_of) -> int:
     """The amount to SUBTRACT from a printed Retreat Cost. SIGNED (Issue #306): the sum can be
     negative, so this is not a subtraction of non-negatives."""
-    return sum(getattr(t, "retreatReduction", 0) for t in attached_tool_stats(body, stat_of))
+    total = 0
+    for tool in attached_tool_stats(body, stat_of):
+        total += tool.retreatReduction
+    return total
 
 
 def retreat_free_granted(active: dict | None, stat, *, my_bodies=(), stat_of, combat) -> bool:
@@ -72,5 +121,5 @@ def effective_retreat_cost(active: dict | None, *, stat_of, my_bodies=(), combat
     return max(0, cost)
 
 
-__all__ = ("attached_tool_stats", "attached_retreat_delta", "retreat_free_granted",
-           "effective_retreat_cost")
+__all__ = ("RetreatPayment", "payment_options", "attached_tool_stats", "attached_retreat_delta",
+           "retreat_free_granted", "effective_retreat_cost")

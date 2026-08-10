@@ -11,7 +11,7 @@ import pytest
 
 from common.card_worth import ENERGY_TIER, TAG_TIER
 from common.pilot import (_ATTACH_ABILITY_FUEL, _ATTACH_RESOURCE_TIEBREAK,
-                          _ATTACH_RETREAT_EQUITY, _ATTACH_VALUE_SCALE)
+                          _ATTACH_VALUE_SCALE)
 from common.grading import halve
 from common.scouting.provider import EngineCardStatProvider
 from common.strategy.baseline.baseline_energy import HYPOTHESES
@@ -74,19 +74,13 @@ def steps():
 
 
 @pytest.mark.req("REQ-ATTACH-BANDS-0001")
-def test_the_desperation_floor_clears_ending_the_turn(steps):
-    """End scores 0, so the floor is the mobility channel: scaled Retreat Equity minus the worst
-    tie-break a reusable Basic can pay (zero — the tie-break charges only worth ABOVE a Basic)."""
-    basic_penalty = _ATTACH_RESOURCE_TIEBREAK * max(0.0, ENERGY_TIER - ENERGY_TIER)
-    assert _ATTACH_RETREAT_EQUITY * _ATTACH_VALUE_SCALE - basic_penalty > 0
+def test_no_negative_surviving_rung_reintroduces_a_desperation_floor(steps):
     assert all(h.weight >= 0 for h in HYPOTHESES), \
         "a NEGATIVE surviving rung would put the desperation floor back in competition"
 
 
 @pytest.mark.req("REQ-ATTACH-BANDS-0002")
-def test_the_channels_sit_below_one_real_build_step(steps):
-    """Both channels are in DAMAGE units BEFORE the scale, so the constraint is scale-invariant."""
-    assert 0 < _ATTACH_RETREAT_EQUITY < steps["min"]
+def test_the_authored_ability_channel_sits_below_one_real_build_step(steps):
     assert 0 < _ATTACH_ABILITY_FUEL < steps["min"]
 
 

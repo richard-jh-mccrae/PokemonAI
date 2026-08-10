@@ -538,6 +538,15 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
     "common.state_value:readiness_supply_delta": (
         SHARED_EXACT, ("state:readiness",), "#495",
         "exact capped readiness-family marginal used by weighted Needs and dig/evolve consumers"),
+    "common.state_value:position_state_value": (
+        SHARED_EXACT, ("state:readiness", "state:survival"), "#500",
+        "canonical attack-realization plus nonterminal body-exposure position projection"),
+    "common.state_value:active_position_potential": (
+        SHARED_EXACT, ("state:readiness",), "#500",
+        "canonical best legal current-turn pivot option owned by readiness"),
+    "common.state_value:active_position_delta": (
+        SHARED_EXACT, ("state:readiness",), "#500",
+        "exact before/after marginal of canonical pivot-option ownership"),
     "common.deciders.attach:AttachMixin._attach_readiness": (
         LOSSY_REEXPRESSION, ("state:readiness",), "#495",
         "attach readiness is a local marginal over a separate leaf composition"),
@@ -551,8 +560,8 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
         LOSSY_REEXPRESSION, ("state:readiness",), "#495",
         "Build Standing selects and scales attack progress differently from readiness"),
     "common.deciders.attach:AttachMixin._tool_attach_value": (
-        LOCAL_ONLY, (), "#492 backlog",
-        "ADR-0135: Tool mobility is a local-only oracle; the absolute leaf does not read Tools"),
+        LOSSY_REEXPRESSION, ("state:readiness",), "#500",
+        "Tool tactical projects the canonical active-position readiness delta"),
     "common.deciders.heal:HealMixin._heal_survival_gain": (
         LOSSY_REEXPRESSION, ("state:survival",), "#492 backlog",
         "continuous restored-HP/prize denial versus the leaf's integer survival clock"),
@@ -728,18 +737,11 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
         "local removal price spans hand and readiness with different units"),
     "common.promote_retreat_value:promote_value": (
         LOSSY_REEXPRESSION,
-        ("state:prize_race", "state:readiness", "state:survival", "state:threat",
-         "terminal:attack_ev"), "#494",
-        "local yield, exposure, preservation, tempo, and fatal terms recompose absolute families"),
+        ("state:prize_race", "state:readiness", "state:threat", "terminal:attack_ev"), "#500",
+        "sub-lethal yield, closure, tempo, and fatal residual excludes canonical position terms"),
     "common.promote_retreat_value:PromoteBody.my_yield": (
         LOSSY_REEXPRESSION, ("state:readiness", "state:threat"), "#495",
         "local reachable-damage/acceleration yield recomposes readiness and threat"),
-    "common.promote_retreat_value:PromoteBody.exposure": (
-        LOSSY_REEXPRESSION, ("state:survival", "terminal:attack_ev"), "#494",
-        "local continuous prize exposure differs from survival and terminal KO composition"),
-    "common.promote_retreat_value:PromoteBody.preservation": (
-        LOSSY_REEXPRESSION, ("state:survival",), "#494",
-        "local active-versus-bench clock difference is not the absolute survival clock"),
     "common.promote_retreat_value:PromoteBody.tempo_denied": (
         LOSSY_REEXPRESSION, ("state:threat",), "#494",
         "local item-lock tempo ceiling is one projection of the absolute threat curve"),
@@ -750,11 +752,11 @@ EQUATION_SEMANTICS: Mapping[str, tuple[str, tuple[str, ...], str, str]] = Mappin
         LOCAL_ONLY, (), "#492 backlog",
         "ADR-0135 mobility cost has no absolute Tool/retreat-marker owner"),
     "common.retreat_cost:effective_retreat_cost": (
-        LOCAL_ONLY, (), "#492 backlog",
-        "ADR-0135: effective mobility/retreat cost is intentionally local-only"),
+        SHARED_EXACT, ("state:readiness",), "#500",
+        "canonical legal-retreat input consumed by active-position readiness"),
     "common.retreat_cost:attached_retreat_delta": (
-        LOCAL_ONLY, (), "#492 backlog",
-        "ADR-0135: attached Tool retreat reduction is intentionally local-only"),
+        SHARED_EXACT, ("state:readiness",), "#500",
+        "canonical Tool mobility input consumed by effective_retreat_cost"),
     "common.currency:target_value_to_worth": (
         LOCAL_ONLY, (), "#494",
         "explicit prize-to-Worth seam conversion used by the local Needs resolver; no absolute "
@@ -991,10 +993,6 @@ EQUATION_CONSUMER_OVERRIDES: Mapping[
     "common.deciders.hand:HandMixin._hand_size_relief_tactical": (
         ("state:survival",), LOSSY_REEXPRESSION,
         "local hand-size relief is a delta of the registered survival clock"),
-    "common.deciders.promote:PromoteRetreatMixin._retreat_option_value": (
-        ("state:prize_race", "state:readiness", "state:survival", "state:threat",
-         "terminal:attack_ev"), LOSSY_REEXPRESSION,
-        "maximum of classified promote_value results; wrapper defines no independent oracle"),
     "common.deciders.promote:PromoteRetreatMixin._attached_retreat_delta": (
         (), LOCAL_ONLY,
         "adapter to ADR-0135 attached mobility units; no independent value claim"),
@@ -1201,12 +1199,10 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
         "uses a KO_SCORE floor and copied KO/prize score"),
     "common.needs:line_prize_advance": (
         "computes line-level prize advance"),
-    "common.promote_retreat_value:PromoteBody.exposure": (
-        "computes continuous prize exposure"),
     "common.promote_retreat_value:PromoteBody.fatal": (
         "returns KO_SCORE at a fatal prize boundary"),
     "common.promote_retreat_value:promote_value": (
-        "includes fatal KO_SCORE and prize exposure"),
+        "includes the fatal KO_SCORE residual"),
     "common.snipe_relevance:target_relevance": (
         "includes prize-route share in the target score"),
     "common.snipe_relevance:ko_delta": (
@@ -1271,7 +1267,7 @@ TERMINAL_WIN_PRIZE_EQUATIONS: Mapping[str, str] = MappingProxyType({
 
 # These fingerprints are authored review gates, not the census itself.  The generated report lists
 # every member.  A changed digest stops generation until the new source row is dispositioned.
-EQUATION_BASELINE_SHA256 = "bf08f7788822266ef93c392721e3a6fccd951e412f1fb15259eef57b6b567ba8"
+EQUATION_BASELINE_SHA256 = "f4b6838d88200785175c9994cdef45031f3cc4fa1fb564858cea5e5d86fe7747"
 VOCABULARY_BASELINE_SHA256 = "22316ccf76a2319311586785d2dc3ede3b77e6e566c0a15530a2a660d68f5d9b"
 STAT_BASELINE_SHA256 = "0ab57ba9897807b8cfbfd97052126c35e6819b24a447ccc3a4b34acfd1eea637"
 
@@ -2750,18 +2746,12 @@ def _stat_records(ledger: tuple[ProviderField, ...], exposure: _ExposureIndex,
         semantic_evidence: set[str] = set()
         if cls_name == "CardStat" and field in {
                 "retreatReduction", "retreatFreeAtHp", "retreatFreeGrant"}:
-            # ADR-0135 is the canonical exception to transitive call-graph propagation: a local
-            # mobility equation may eventually call readiness helpers, but no absolute family reads
-            # the retreat fact itself.  Do not turn that implementation reachability into ownership.
-            absolute = ()
-            local = (("common.deciders.attach.AttachMixin._tool_attach_value",
-                      "common.retreat_cost.effective_retreat_cost")
-                     if field == "retreatReduction" else
-                     ("common.retreat_cost.effective_retreat_cost",))
-            forced_classification = LOCAL_ONLY
-            forced_owner = "ADR-0135"
+            absolute = ("state:readiness",)
+            local = ()
+            forced_classification = SHARED_EXACT
+            forced_owner = "#500"
             semantic_evidence.add(
-                "ADR-0135 accepted: mobility is local-only; no state_value/terminal family reads "
+                "Issue #500: active-position readiness consumes canonical retreat legality from "
                 f"CardStat.{field}")
         elif cls_name == "CardStat" and field == "hpBonus":
             # This is a distinct Tool class from mobility.  The transition is represented, but the
@@ -3824,16 +3814,97 @@ def write_json(path: Path, inventory: Inventory) -> None:
     path.write_bytes(payload.encode("utf-8"))
 
 
+def deck_ownership_manifest(agent: str, inventory: Inventory) -> dict:
+    """Deck-scoped evidence over the generic audit; policy remains card/deck anonymous."""
+    decks = apply_census.load_our_decks()
+    if agent not in decks:
+        raise CoverageError(f"unknown shipped agent {agent!r}; expected one of {sorted(decks)}")
+    card_ids = set(decks[agent])
+    cards = apply_census.load_cards()
+    sites = source_sites(card_ids)
+    site_records = _site_records(sites, _exposure_index(cards))
+    rows = []
+    for site, record in zip(sites, site_records):
+        status = ("REFUSED" if site.fate == seam.REFUSED else
+                  "TERMINAL" if site.fate == seam.TERMINAL else
+                  "STRUCTURAL" if not site.has_effect else "MODELED")
+        persistent = ("SHARED-EXACT" if record.absolute_owners else
+                      "NOT-PERSISTENT" if status in {"STRUCTURAL", "TERMINAL"} else
+                      "DELIBERATE-ZERO" if record.classification == DELIBERATE_ZERO else
+                      "LEAF-ONLY" if record.classification == LEAF_ONLY else record.classification)
+        rows.append({
+            "card_id": site.card_id, "card_name": site.name,
+            "effect_provider": site.family or site.kind_name.lower(),
+            "parsed_clauses": json.loads(site.clauses_json),
+            "transition_owner": "common.board_delta/common.board_choice/common.board_expectation",
+            "transition_status": status,
+            "persistent_owners": list(record.absolute_owners),
+            "persistent_classification": persistent,
+            "local_consumers": list(record.local_owners),
+            "calls_canonical_api": bool(record.absolute_owners) or any(
+                owner in {"common.deciders.attach.AttachMixin._tool_attach_value",
+                          "common.board_choice.rank_retreat"}
+                for owner in record.local_owners),
+            "search_owner": "Issue #496",
+            "evidence": list(record.evidence),
+            "explained": bool(record.evidence),
+        })
+    for card_id in sorted(card_ids):
+        card = cards[card_id]
+        for ordinal, attack in enumerate(card.get("attacks") or ()):
+            rows.append({
+                "card_id": card_id, "card_name": card.get("name", "?"),
+                "effect_provider": f"attack.{ordinal}", "parsed_clauses": attack,
+                "transition_owner": "terminal attack resolution", "transition_status": "TERMINAL",
+                "persistent_owners": ["state:readiness"],
+                "persistent_classification": "LEAF-ONLY",
+                "local_consumers": ["terminal:attack_ev"], "calls_canonical_api": True,
+                "search_owner": "Issue #496", "evidence": ["combat profile plus terminal attack_ev"],
+                "explained": True,
+            })
+        if not any(row["card_id"] == card_id for row in rows):
+            rows.append({
+                "card_id": card_id, "card_name": card.get("name", "?"),
+                "effect_provider": card.get("category", "card"), "parsed_clauses": [],
+                "transition_owner": "structural card transport", "transition_status": "STRUCTURAL",
+                "persistent_owners": [], "persistent_classification": "NOT-PERSISTENT",
+                "local_consumers": [], "calls_canonical_api": True, "search_owner": "Issue #496",
+                "evidence": ["deck card covered; no independent persistent mechanic"],
+                "explained": True,
+            })
+    forbidden = {LOCAL_ONLY, LOSSY_REEXPRESSION, UNVALUED_MODELLED, UNKNOWN_REFUSED}
+    unexplained = [row for row in rows
+                   if row["persistent_classification"] in forbidden and not row["explained"]]
+    return {"schema_version": "composer-deck-ownership/1", "audit_schema": inventory.schema_version,
+            "agent": agent, "source_sha": inventory.source_sha,
+            "registry_identity": inventory.registry_identity,
+            "cards": [{"card_id": card_id, "name": cards[card_id].get("name", "?"),
+                       "copies": decks[agent][card_id]} for card_id in sorted(card_ids)],
+            "rows": rows, "unexplained_forbidden": unexplained}
+
+
+def write_manifest(path: Path, agent: str, inventory: Inventory) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(deck_ownership_manifest(agent, inventory), ensure_ascii=False,
+                               indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--out", type=Path)
     group.add_argument("--check", type=Path)
     parser.add_argument("--json", type=Path)
+    parser.add_argument("--agent")
     args = parser.parse_args(argv)
     try:
         inventory = build_inventory()
-        if args.check:
+        if args.agent and args.check:
+            raise CoverageError("--agent cannot be combined with --check")
+        if args.agent and args.out:
+            write_manifest(args.out, args.agent, inventory)
+            print(f"wrote {args.out}")
+        elif args.check:
             if not check_report(args.check, inventory):
                 print(f"STALE: {args.check}; rerun composer_value_coverage.py --out {args.check}",
                       file=sys.stderr)

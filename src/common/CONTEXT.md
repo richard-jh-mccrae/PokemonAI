@@ -2164,3 +2164,11 @@ The depth-wide exact-dedup and one-action admission pipeline is available only t
 flags. ADR-0138 records the measured runtime and continuation tradeoffs. Both policy switches now
 default on by developer direction. The accepted alpha-normalized Mega identity result is 6→3
 because duplicate Wally copies are interchangeable; no raw-serial or frame exception is used.
+
+## Issue #500 — unit-funded retreat and Active-position option
+
+`common.retreat_cost.payment_options` enumerates reachable supplied-unit payments while returning
+physical Energy-card indices. `common.board_choice.legal_manual_retreat_outcomes` is the sole public
+manual-retreat board enumerator. `state_value.position_state_value` combines capped attack
+realization with nonterminal survival exposure; `active_position_potential` prices the best legal
+current-turn exchange under readiness. Attach and retreat ranking consume these shared APIs.

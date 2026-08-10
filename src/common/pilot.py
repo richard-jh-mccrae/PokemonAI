@@ -59,7 +59,7 @@ from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 ho
 from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 energy denial)
 
 # --- the families (`common/deciders/`) ---
-from common.deciders.attach import (AttachMixin, _ATTACH_VALUE_SCALE, _ATTACH_RETREAT_EQUITY,
+from common.deciders.attach import (AttachMixin, _ATTACH_VALUE_SCALE,
                                     _ATTACH_ABILITY_FUEL, _ATTACH_RESOURCE_TIEBREAK)  # noqa: F401
 from common.deciders.board_build import BoardMixin
 from common.deciders.context_build import ContextMixin

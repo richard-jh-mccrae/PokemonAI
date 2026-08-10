@@ -37,6 +37,7 @@ def test_case_population_covers_every_locked_control():
         "evolution-bounces-attachments", "healing-crosses-threshold",
         "healing-not-across-threshold", "mobility-retreat-tool",
         "mobility-retreat-enables-modeled-retreat",
+        "active-position-control-matrix",
         "hand-spend-retires-demand", "hand-spend-unrepresented-demand",
         "information-ordering", "equivalent-identities", "refused-effect",
         "mega-starmie-wally-attach",
@@ -62,7 +63,7 @@ def test_report_and_case_schema_are_stable(report):
         assert set(row["source"]) == {"kind", "fixture", "provenance"}
         assert set(row["before"]) == set(row["after"]) == {
             "total", "workings", "legs", "registry_identity", "statuses"}
-        assert row["before"]["registry_identity"].startswith("state-value/2:")
+        assert row["before"]["registry_identity"].startswith("state-value/3:")
         assert set(row["before"]["workings"]) == set(row["after"]["workings"]) == set(lab.FAMILIES)
         assert set(row["deltas"]) == {"total", "families", "legs"}
         assert set(row["deltas"]["families"]) == set(lab.FAMILIES)
@@ -218,21 +219,27 @@ def test_evolution_heal_mobility_and_hand_controls(cases):
 
     mobility = cases["mobility-retreat-tool"]
     assert mobility["local"]["working"]["benefit"] == 2
-    assert mobility["local"]["working"]["classification"] == "LOCAL-ONLY"
+    assert mobility["local"]["working"]["classification"] == "DELIBERATE-ZERO"
     assert mobility["deltas"]["total"] == 0.0
-    assert mobility["unknown"]["unread_dimensions"] == ["attached_tools"]
-    assert any("ADR-0135" in reason for reason in mobility["unknown"]["reasons"])
+    assert mobility["unknown"]["unread_dimensions"] == []
     enabled = cases["mobility-retreat-enables-modeled-retreat"]
     assert enabled["local"]["working"]["affordable_before"] is False
     assert enabled["local"]["working"]["affordable_after"] is True
     assert enabled["local"]["working"]["retreat_allowance_spent"] is True
     assert enabled["local"]["working"]["promoted_active_serial"] == 2
-    assert enabled["local"]["working"]["retreat_leaf_delta"] > 0
-    assert enabled["positive_control"]["observed_retreat_leaf_delta"] > 0
+    assert enabled["local"]["working"]["option_before"] > 0
+    assert enabled["local"]["working"]["option_after"] == 0
+    assert enabled["local"]["working"]["retreat_leaf_delta"] == pytest.approx(0.0)
+    assert enabled["positive_control"]["observed_retreat_leaf_delta"] == pytest.approx(0.0)
     assert enabled["deltas"]["total"] > 0
     assert mobility["positive_control"]["positive_retreat_leaf_delta"] == (
         enabled["positive_control"]["observed_retreat_leaf_delta"])
     assert [action["fate"] for action in enabled["actions"]] == [ao.MODELLED, ao.MODELLED]
+    matrix = cases["active-position-control-matrix"]
+    assert matrix["positive_control"]["passed"] is True
+    assert all(matrix["local"]["working"]["checks"].values())
+    assert matrix["local"]["working"]["payment_counts"] == {
+        "0": [0], "1": [1, 1], "2": [2], "3": []}
 
     represented = cases["hand-spend-retires-demand"]
     unrepresented = cases["hand-spend-unrepresented-demand"]

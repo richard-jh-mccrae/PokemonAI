@@ -1,25 +1,21 @@
-"""Promote/retreat DECIDER (ADR-0100, Issue #141) — the **Sub-lethal Residual**: what remains once
-the Knock-Outs available on both sides of the swap have cancelled, in the DAMAGE currency.
+"""Promote/retreat DECIDER (ADR-0100): the damage-currency **Sub-lethal Residual** beside the
+shared exact post-board position projection.
 
-    promote_value(B) = my_yield(B) + closure(B) - exposure(B) + tempo_denied(B) - fatal(B)
-    retreat_option   = max over bench B of promote_value(B)  +  preservation(A) - retreat_cost(A)
+    promote_value(B) = my_yield(B) + closure(B) + tempo_denied(B) - fatal(B) - resource_cost(A)
     pick_option(B)   = promote_value(B)
 
-ONE evaluator, three call sites (§9): only the whether-to-retreat question at MAIN carries the
-A-side terms, since they are CONSTANT across destinations and could change no ordering at a pick.
+ONE evaluator serves pick and whether sites. Body position belongs to the shared projection; this
+residual owns immediate yield, closure, denied tempo, fatality, and non-position resource cost.
 
-The layers SUM; nothing recuses (§1). The residual is strictly sub-lethal BY CONSTRUCTION — there is
-no lethal input to pass — so it cannot double-pay the tactical layer's Knock-Out delta.
-
-Pure over MEASUREMENTS: the Pilot fills :class:`PromoteBody` / :class:`RetreatSide`, so the equation
-makes no oracle calls and every ADR-0100 ruling is assertable without constructing a board.
+Pure over measurements: the Pilot fills :class:`PromoteBody` / :class:`RetreatSide`; this equation
+makes no oracle calls, so each ruling remains testable without constructing a board.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from common.currency import PRIZE_DAMAGE_RATE as _PRIZE_DAMAGE_RATE
-from common.grading import HORIZON, halve
+from common.grading import HORIZON
 from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 
 #: Re-exported from `common.currency`, which owns the derivation and its recomputing test (ADR-0078).
@@ -52,9 +48,6 @@ class PromoteBody:
     prizes: int = 1
     #: `turns_to_ko_me` at the ACTIVE area — where a promoted body ARRIVES and a retreating one STANDS.
     ko_active: int = HORIZON
-    #: `turns_to_ko_me` at the BENCH area, at the `HARVEST_UNAVOIDABLE` (RESCUE) reading — a benched
-    #: KO the opponent can redirect denies nothing. Bench-immune Tera bodies read the full HORIZON.
-    ko_bench: int = HORIZON
 
     # -- tempo_denied: the Threat-Clock delta (§6) -----------------------------------------------
     #: ``incoming(t=2) - incoming(t=1)`` — ONE development step's threat growth off the live curve.
@@ -80,17 +73,6 @@ class PromoteBody:
                  if self.accel_value is None else max(0.0, float(self.accel_value)))
         return max(0.0, attack) + accel
 
-    def exposure(self) -> float:
-        """The prizes promoting this body HANDS the opponent, graded by the ACTIVE-area clock —
-        continuous and per-body, never a boolean cliff."""
-        return self.prizes * PRIZE_DAMAGE_RATE * halve(self.ko_active - 1)
-
-    def preservation(self) -> float:
-        """The clock DIFFERENCE, Active minus Bench, is the whole term. Floored at 0: a bench clock
-        shorter than the Active one is a redirect artefact, not a cost of retreating."""
-        return max(0.0, self.prizes * PRIZE_DAMAGE_RATE
-                   * (halve(self.ko_active - 1) - halve(self.ko_bench - 1)))
-
     def tempo_denied(self) -> float:
         """A CEILING, not an identity: the lock denies ITEMS while the curve delta measures a WHOLE
         development step. The live-Items gate is what bounds the over-credit."""
@@ -106,27 +88,16 @@ class PromoteBody:
 
 @dataclass
 class RetreatSide:
-    """The A-side of a VOLUNTARY swap. Present only at the whether-to-retreat question; absent at a
-    body pick and at a forced promote."""
+    """Stable Pilot/equation wire for non-position costs of leaving Active."""
 
-    #: A itself, for :meth:`PromoteBody.preservation`.
-    body: PromoteBody = field(default_factory=PromoteBody)
-    #: **Build Standing** of A as it stands — `(matched/slots)^2 x maxDamage` on its payoff attack.
-    build_before: float = 0.0
-    #: Build Standing after the retreat discards its N Energy — the greedy cheapest-to-lose typed
-    #: choice, retreat slots being colourless so the set is ours to pick.
-    build_after: float = 0.0
     #: ADR-0069 §5c resource premium: worth ABOVE a reusable Basic, so only a one-shot is charged.
     resource_premium: float = 0.0
-    #: A switch-class ITEM pays a CARD and no Energy (§11), so its cost is the card's Worth rather
-    #: than a build delta. Mutually exclusive with the build legs in practice.
+    #: A switch-class ITEM pays a CARD and no Energy (§11).
     card_worth: float = 0.0
 
     def retreat_cost(self) -> float:
-        """The exact mirror of the attach decider (an attach is `+build`, a retreat pays `-build`).
-        NOT refunded for recursion decks: `_recover_units` already credits that on the attack."""
-        return max(0.0, self.build_before - self.build_after) + \
-            max(0.0, self.resource_premium) + max(0.0, self.card_worth)
+        """Only non-position resource cost; destroyed build is already present in the post-board."""
+        return max(0.0, self.resource_premium) + max(0.0, self.card_worth)
 
 
 @dataclass
@@ -134,7 +105,7 @@ class PromoteRetreatInputs:
     """The board facts a promote/retreat option's value reads, so the equation stays pure."""
     #: B — the body being brought to the Active Spot.
     body: PromoteBody = field(default_factory=PromoteBody)
-    #: A — the body leaving it. None at a body PICK and at a forced promote (§9).
+    #: Non-position resource cost; None at a body PICK and at a forced promote (§9).
     retreat: RetreatSide | None = None
 
 
@@ -144,6 +115,7 @@ class PromoteRetreatValue:
     diagnosable term by term rather than as one number."""
     my_yield: float = 0.0
     closure: float = 0.0
+    # Stable working-schema fields. Position owns them, so this residual always reports zero.
     exposure: float = 0.0
     tempo_denied: float = 0.0
     fatal: float = 0.0
@@ -153,17 +125,14 @@ class PromoteRetreatValue:
 
 
 def promote_value(inp: PromoteRetreatInputs) -> PromoteRetreatValue:
-    """ONE evaluator for all three sites: ``retreat=None`` for a body PICK or a forced promote, a
-    :class:`RetreatSide` for the whether-to-retreat question at MAIN."""
+    """Pure specialized residual; exposure/preservation remain zero wire fields owned by position."""
     b = inp.body
     my, clos = b.my_yield(), max(0.0, float(b.closure))
-    expo, tempo, fatal = b.exposure(), b.tempo_denied(), b.fatal()
+    tempo, fatal = b.tempo_denied(), b.fatal()
 
-    # Constant across destinations, so ONLY on the whether-site: at a pick they change no order (§9).
-    preserved = inp.retreat.body.preservation() if inp.retreat is not None else 0.0
     cost = inp.retreat.retreat_cost() if inp.retreat is not None else 0.0
 
-    total = my + clos - expo + tempo - fatal + preserved - cost
-    return PromoteRetreatValue(my_yield=my, closure=clos, exposure=expo, tempo_denied=tempo,
-                               fatal=fatal, preservation=preserved, retreat_cost=cost,
+    total = my + clos + tempo - fatal - cost
+    return PromoteRetreatValue(my_yield=my, closure=clos, exposure=0.0, tempo_denied=tempo,
+                               fatal=fatal, preservation=0.0, retreat_cost=cost,
                                total=total)

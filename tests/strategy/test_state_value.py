@@ -7,12 +7,15 @@ composer differences half-finished turns far more often than finished ones. Cons
 """
 from __future__ import annotations
 
+import json
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
 
 from card_facts import ignition_tags                    # the committed tags, ONE copy
 from common import currency, needs as _needs, state_value as sv
+from common import board_choice as bc
 from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -70,7 +73,8 @@ _STATS = {
     MEGA_STARMIE: CardStat(MEGA_STARMIE, synthetic=True, name='Mega Starmie ex', hp=330, megaEx=True,
                            energyType=WATER, weakness=LIGHTNING, evolvesFrom="Staryu",
                            maxDamage=210, maxDamageCost=3, minAttackCost=1, minCostDamage=120,
-                           benchSnipeDamage=50, attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
+                           benchSnipeDamage=50, retreatCost=2,
+                           attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
     GOUGING_FIRE: CardStat(GOUGING_FIRE, synthetic=True, name='Gouging Fire ex', hp=230, ex=True,
                            energyType=FIRE, weakness=WATER, maxDamage=260, maxDamageCost=3,
                            minAttackCost=2, minCostDamage=60,
@@ -243,6 +247,90 @@ def _model(me, opp, *, energy_attached=False, turn=5, needs=None, boosts=None, d
     return StateModel.build(obs, combat=_combat(), deck=DECK if deck is None else deck,
                             needs=needs, role_worth=_ROLE_WORTH.get,
                             turn_boosts=None if boosts is None else _Boosts(boosts))
+
+
+def _on_main(model):
+    obs = deepcopy(model.source_obs)
+    obs["select"] = {"context": 0, "option": [{"type": 12}]}
+    return model.rebuilt(obs)
+
+
+def _pivot_board():
+    return _on_main(_model(
+        _player(active=_poke(MEGA_STARMIE, hp=330,
+                             energies=[COLORLESS, COLORLESS, COLORLESS],
+                             energy_cards=[IGNITION]),
+                bench=[_poke(STARYU, hp=70, energies=[WATER], energy_cards=[E_W], serial=2)]),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[FIRE, PSYCHIC], serial=9))))
+
+
+def test_active_position_potential_is_the_best_legal_retreat_gain():
+    model = _pivot_board()
+    outcomes = bc.legal_manual_retreat_outcomes(model)
+    before = sv.position_state_value(model)
+    best = max(outcomes, key=lambda outcome: sv.position_state_value(outcome.model))
+    assert sv.active_position_potential(model) > 0.0
+    assert sv.active_position_potential(model) == pytest.approx(
+        sv.position_state_value(best.model) - before)
+    assert sv.active_position_potential(best.model) == 0.0
+
+
+def test_active_position_potential_is_zero_without_a_usable_main_retreat():
+    model = _pivot_board()
+    spent_obs = deepcopy(model.source_obs)
+    spent_obs["current"]["retreated"] = True
+    spent = model.rebuilt(spent_obs)
+    effect_obs = deepcopy(model.source_obs)
+    effect_obs["select"]["context"] = 3
+    resolving = model.rebuilt(effect_obs)
+    asleep_obs = deepcopy(model.source_obs)
+    asleep_obs["current"]["players"][0]["asleep"] = True
+    asleep = model.rebuilt(asleep_obs)
+    assert sv.active_position_potential(spent) == 0.0
+    assert sv.active_position_potential(resolving) == 0.0
+    assert sv.active_position_potential(asleep) == 0.0
+
+
+def test_readiness_prices_the_option_before_exercise_and_the_realized_position_after():
+    model = _pivot_board()
+    best = max(bc.legal_manual_retreat_outcomes(model),
+               key=lambda outcome: sv.position_state_value(outcome.model)).model
+    before = sv.value_breakdown(model)
+    after = sv.value_breakdown(best)
+    left = next(family for family in before.families if family.family == "readiness")
+    assert any(leg.key == "active_position" for leg in left.legs)
+    assert before.total == pytest.approx(after.total)
+
+
+def test_active_position_diagnostics_are_complete_and_memoized(monkeypatch):
+    model = _pivot_board()
+    calls = 0
+    original = bc.legal_manual_retreat_outcomes
+
+    def counted(candidate):
+        nonlocal calls
+        calls += 1
+        return original(candidate)
+
+    monkeypatch.setattr(bc, "legal_manual_retreat_outcomes", counted)
+    first = sv.active_position_potential(model, diagnostics=True)
+    second = sv.active_position_potential(model, diagnostics=True)
+    detail = json.loads(first.legs[0].reason)
+    assert calls == 1 and second == first
+    assert {"fingerprint", "discard", "destination", "before_readiness", "after_readiness",
+            "before_survival", "after_survival", "delta", "status"} <= set(detail)
+
+
+def test_unknown_retreat_payment_is_an_unknown_zero_diagnostic():
+    model = _pivot_board()
+    obs = deepcopy(model.source_obs)
+    active = obs["current"]["players"][0]["active"][0]
+    active["energyCards"] = [{"id": UNREADABLE_CARD, "serial": 987, "playerIndex": 0}]
+    unknown = model.rebuilt(obs)
+    result = sv.active_position_potential(unknown, diagnostics=True)
+    assert result.value_prizes == 0.0
+    assert result.status.value == "unknown"
+    assert result.unknowns == ("active_position",)
 
 
 def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_prizes=4,
@@ -497,7 +585,7 @@ def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
         "non-vacuity: the sweep must contain a board the family actually charges for")
 
     # …and the literal, so a moved summand fails legibly rather than tautologically.
-    assert sv.WIN_PRIZES == 10.9
+    assert sv.WIN_PRIZES == 17.10625
     assert sv.WIN_PRIZES == pytest.approx(sv.LOSS_PRIZES - sv._MAX_BODIES * sv._MAX_PRIZE_VALUE), (
         "the two terminal constants are ONE construction differing by exactly the survival summand")
 
@@ -1356,7 +1444,9 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
     assert sv.registry_gaps() == []
     assert sv.FAMILIES["readiness"].reads == (
         "combat_build_profile", "legal_now_attack", "typed_future_supply",
-        "per_attack_clock", "role_relevance", "turns_to_ko_me")
+        "per_attack_clock", "role_relevance", "turns_to_ko_me",
+        "legal_manual_retreat_outcomes", "readiness_attack_realization",
+        "survival_body_exposure")
     assert sv.undeclared_shared_inputs() == []
     assert "turns_to_ko_me" in sv.FAMILIES["survival"].reads
     # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
@@ -1703,8 +1793,9 @@ def test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved():
     """`LOSS_PRIZES` is derived from `POSITIONAL_MAX`, so folding the anchor INTO `_THREAT_CAP` would
     have moved the terminal band silently. Pinned as literals so the failure is legible."""
     assert sv._THREAT_CAP == 0.1
-    assert sv.POSITIONAL_MAX == 3.4
-    assert sv.LOSS_PRIZES == 28.9
+    assert sv.ACTIVE_POSITION_MAX == 6.20625
+    assert sv.POSITIONAL_MAX == 9.60625
+    assert sv.LOSS_PRIZES == 35.10625
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
