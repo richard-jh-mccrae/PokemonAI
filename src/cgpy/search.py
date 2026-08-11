@@ -18,7 +18,7 @@ from typing import Any
 from .cards import CardDB
 from .engine import Engine
 from .rng import SeededRng
-from .schema import SelectContext, SelectType
+from .schema import LogType, SelectContext, SelectType
 from .state import (SERIAL_BASE, CardInstance, EffectFrame, GameState, PendingSelect,
                     PlayerBoard, PokemonInPlay)
 
@@ -187,37 +187,64 @@ _OP_POSES = {
     "effectSwitchEnemy": {(int(SelectType.CARD), int(SelectContext.SWITCH))},
     "trashEnergyEnemy": {(int(SelectType.ENERGY), int(SelectContext.DISCARD_ENERGY))},
     "xHealMegaBounceEnergy": {(int(SelectType.CARD), int(SelectContext.HEAL))},
+    # Turbo Flare's rider asks for the Basic Energies before it asks where each one goes.  A live
+    # CABT observation carries a native (not cgpy) search token, so this first rider ask must be
+    # reconstructible from the public attack log just like a trainer's first ask.
+    "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
+    "xDeckEvolveInPlayAndShuffle": {
+        (int(SelectType.CARD), int(SelectContext.EVOLVES_TO)),
+        (int(SelectType.CARD), int(SelectContext.EVOLVES_FROM)),
+    },
 }
 
 
-def _reconstruct_trainer_frame(gs: GameState, select: dict, seat: int) -> None:
-    """Rebuild the EffectFrame stack for a select posed mid-trainer. The observation already
-    reflects every earlier op, so ``pc`` with empty vars resumes identically. RAISES on ambiguity."""
+def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list[dict]) -> None:
+    """Rebuild a first-ask EffectFrame when the opaque token is not a cgpy token.
+
+    The observation already reflects everything before the pending ask.  Trainer programs and an
+    attack rider whose posing op is its first stateful operation can therefore resume at that op
+    with empty vars.  Anything ambiguous still fails closed.
+    """
     from .chain import def_for
     eff = gs.pending.effect_card
     if eff is None:
         raise ValueError(
             f"state_from_obs: cannot seed a non-MAIN select with no effect card "
             f"(context {select['context']})")
-    for s in (0, 1):
-        for p in gs.in_play(s):
-            if p.top == eff:
-                raise ValueError(
-                    "state_from_obs: only trainer play programs can seed mid-effect "
-                    "(the effect card is in play — an ability or attack rider)")
-    cdef = def_for(gs.card_id(eff)) or {}
-    program = cdef.get("play")
+    in_play = any(p.top == eff for s in (0, 1) for p in gs.in_play(s))
+    kind = "play"
+    if in_play:
+        attacks = [entry for entry in reversed(logs or [])
+                   if int(entry.get("type", -1)) == int(LogType.ATTACK)
+                   and int(entry.get("playerIndex", -1)) == seat
+                   and int(entry.get("serial", -1)) == eff
+                   and entry.get("attackId") is not None]
+        if len(attacks) != 1:
+            raise ValueError(
+                "state_from_obs: cannot identify the attack that posed the mid-effect select")
+        attack_id = int(attacks[0]["attackId"])
+        program = (def_for(f"attack:{attack_id}") or {}).get("rider")
+        kind = "attack"
+    else:
+        program = (def_for(gs.card_id(eff)) or {}).get("play")
     if not program:
-        raise ValueError(f"state_from_obs: card {gs.card_id(eff)} has no play program "
-                         f"to reconstruct")
+        raise ValueError(f"state_from_obs: effect source {gs.card_id(eff)} has no {kind} program "
+                         "to reconstruct")
     key = (int(select["type"]), int(select["context"]))
     pcs = [i for i, op in enumerate(program) if key in _OP_POSES.get(op["op"], ())]
     if len(pcs) != 1:
         raise ValueError(
-            f"state_from_obs: cannot locate the posing op unambiguously for card "
+            f"state_from_obs: cannot locate the posing op unambiguously for effect source "
             f"{gs.card_id(eff)} (context {select['context']}: {len(pcs)} candidates)")
-    gs.frames = [EffectFrame(program=list(program), pc=pcs[0], vars={}, seat=seat,
-                             source=eff, kind="play")]
+    frame_vars = {}
+    op_name = program[pcs[0]]["op"]
+    if (op_name == "xDeckEvolveInPlayAndShuffle"
+            and int(select["context"]) == int(SelectContext.EVOLVES_FROM)):
+        if gs.pending.context_card is None:
+            raise ValueError("state_from_obs: evolution target ask has no chosen evolution card")
+        frame_vars["evo"] = gs.pending.context_card
+    gs.frames = [EffectFrame(program=list(program), pc=pcs[0], vars=frame_vars, seat=seat,
+                             source=eff, kind=kind)]
 
 
 def _ingest_pending(gs: GameState, select: dict, seat: int) -> None:
@@ -329,12 +356,31 @@ def state_from_obs(obs: dict,
         b = gs.players[seat]
         base = SERIAL_BASE[seat]
         unseen = [s for s in range(base, base + 60) if s not in gs.cards]
+        visible_serials = set(b.hand) | set(b.discard)
+        for pokemon in gs.in_play(seat):
+            visible_serials.update(pokemon.stack)
+            visible_serials.update(pokemon.energy)
+            visible_serials.update(pokemon.tools)
+        visible_serials.update(gs.stadium)
+        visible_serials.update(gs.looking or ())
+        # Some multi-ask effects keep a card in its source deck while exposing it as contextCard
+        # for the next target ask (Salvatore: evolution, then Pokémon).  _ingest_pending has already
+        # registered that serial, so reserve its hidden deck slot instead of counting it as unseen.
+        reserved_deck = []
+        context_card = gs.pending.context_card if gs.pending is not None else None
+        if (not revealed_deck and context_card is not None and gs.owner(context_card) == seat
+                and context_card not in visible_serials):
+            reserved_deck.append(context_card)
+            context_id = gs.card_id(context_card)
+            if context_id in deck_ids:
+                deck_ids.remove(context_id)
         prize_n = len(pdict["prize"] or [])
         deck_n = pdict["deckCount"]
         hand_n = pdict["handCount"] if hand_ids is not None else 0
         facedown_n = 1 if (seat != yi and opp_facedown) else 0
         deck_from_listing = seat == yi and revealed_deck
-        need = prize_n + hand_n + facedown_n + (0 if deck_from_listing else deck_n)
+        need = prize_n + hand_n + facedown_n + (0 if deck_from_listing
+                                                 else deck_n - len(reserved_deck))
         if len(unseen) != need:
             raise ValueError(
                 f"observation does not account for seat {seat}'s cards "
@@ -362,9 +408,10 @@ def state_from_obs(obs: dict,
         if deck_from_listing:
             b.deck = list(gs.pending.deck_listing)   # revealed: true order, no reshuffle
         else:
-            b.deck = unseen[cursor:cursor + deck_n]
-            cursor += deck_n
-            for s, cid in zip(b.deck, deck_ids):
+            hidden_deck_n = deck_n - len(reserved_deck)
+            b.deck = list(reserved_deck) + unseen[cursor:cursor + hidden_deck_n]
+            cursor += hidden_deck_n
+            for s, cid in zip(b.deck[len(reserved_deck):], deck_ids):
                 _register(gs, s, cid, seat)
             rng.shuffle(b.deck, seat=seat)   # the fork reshuffles predictions (pin §4)
 
@@ -378,7 +425,7 @@ def state_from_obs(obs: dict,
         gs.phase_data = {"seat": yi}
         if not (int(select["type"]) == int(SelectType.MAIN)
                 and int(select["context"]) == int(SelectContext.MAIN)):
-            _reconstruct_trainer_frame(gs, select, yi)
+            _reconstruct_effect_frame(gs, select, yi, obs.get("logs") or [])
     return Engine(gs)
 
 

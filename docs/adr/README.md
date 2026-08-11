@@ -151,7 +151,7 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0001](0001-data-source.md) | Source the deck Meta from Simulation-competition replays | accepted |
 | [0002](0002-extracts-only-retention.md) | Extracts-only retention — discard raw replays | accepted |
 | [0003](0003-scouting-knowledge-is-a-shipped-artifact.md) | Scouting knowledge is an offline-compiled, shipped artifact | Accepted and BUILT — `tools/build_scouting_artifact.py` compiles the committed |
-| [0004](0004-shared-common-packaged-per-submission.md) | Shared `common/` + `cg/`, assembled into a self-contained submission at package time | Accepted and BUILT — the repo ships the `src/common/` + `src/cg/` + thin |
+| [0004](0004-shared-common-packaged-per-submission.md) | Shared runtime packages, assembled into a self-contained submission at package time | Accepted and BUILT — the repo ships `src/common/`, native `src/cg/`, Bellman |
 | [0005](0005-deck-stealer-source.md) | deck_stealer copies decks from a replay file, not the leaderboard or meta store | Accepted and BUILT — `tools/deck_stealer.py` is the shipped tool and sources decks from |
 | [0006](0006-function-tags-single-source-of-structural-facts.md) | Function Tags are the single source of structural card facts; roles are tags-in-context | Accepted, then **partially reversed 2026-06-24** (the revision note below): Depth 1 (the |
 | [0007](0007-learning-is-one-offline-value-model.md) | Learning enters as one offline, replay-trained general value model gated by the Read | Accepted — the one-learned-seam principle holds and the seam was built as |
