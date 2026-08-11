@@ -16,6 +16,8 @@ from .algebra import Actor, Chance, Choice, Deterministic, Ledger, Terminal, Unk
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
+from .solver import ReferenceSolver, SearchLimits, TransitionProvider
+from .engine import CgpyTransitionProvider
 
 __all__ = (
     "END_VALUE",
@@ -41,4 +43,8 @@ __all__ = (
     "ValueOracle",
     "ValueRegistry",
     "WorthSeeds",
+    "ReferenceSolver",
+    "SearchLimits",
+    "TransitionProvider",
+    "CgpyTransitionProvider",
 )

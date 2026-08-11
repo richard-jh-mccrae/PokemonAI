@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations
 import json
 from typing import Mapping
 
@@ -52,31 +53,49 @@ def _fingerprint(observation: Mapping, option: Mapping) -> str:
 @dataclass(frozen=True)
 class LegalAction:
     identity: ActionIdentity
-    menu_indices: tuple[int, ...]
+    selection: tuple[int, ...]
+    equivalent_selections: tuple[tuple[int, ...], ...]
     options: tuple[tuple, ...]
 
     @property
     def representative(self) -> int:
-        return self.menu_indices[0]
+        if len(self.selection) != 1:
+            raise ValueError("multi-pick actions have no scalar representative")
+        return self.selection[0]
+
+    @property
+    def menu_indices(self) -> tuple[int, ...]:
+        """Compatibility name: the exact engine selection, not an equivalence class."""
+        return self.selection
 
 
 def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     """Group semantically interchangeable physical copies; cover every offered index exactly once."""
     options = ((observation.get("select") or {}).get("option") or ())
-    groups: dict[tuple[str, str], list[tuple[int, Mapping]]] = {}
-    for index, option in enumerate(options):
-        kind = _KIND_NAMES.get(option.get("type"), f"option_{option.get('type')}")
-        key = (kind, _fingerprint(observation, option))
-        groups.setdefault(key, []).append((index, option))
+    select = observation.get("select") or {}
+    minimum, maximum = int(select.get("minCount", 1)), int(select.get("maxCount", 1))
+    maximum = min(maximum, len(options))
+    groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, ...]]] = {}
+    for count in range(max(0, minimum), maximum + 1):
+        for selection in combinations(range(len(options)), count):
+            kinds = tuple(_KIND_NAMES.get(options[index].get("type"),
+                                          f"option_{options[index].get('type')}")
+                          for index in selection)
+            kind = "decline" if not selection else kinds[0] if len(set(kinds)) == 1 else "selection"
+            fingerprints = tuple(sorted(_fingerprint(observation, options[index])
+                                        for index in selection))
+            groups.setdefault((kind, fingerprints), []).append(selection)
     actions = []
-    for (kind, fingerprint), members in groups.items():
+    for (kind, fingerprints), selections in groups.items():
+        representative = min(selections)
         actions.append(LegalAction(
-            identity=ActionIdentity(kind, (fingerprint,)),
-            menu_indices=tuple(index for index, _option in members),
-            options=tuple(tuple(sorted(without_engine_serial(dict(option)).items()))
-                          for _index, option in members),
+            identity=ActionIdentity(kind, fingerprints),
+            selection=representative,
+            equivalent_selections=tuple(sorted(selections)),
+            options=tuple(tuple(sorted(without_engine_serial(dict(options[index])).items()))
+                          for index in representative),
         ))
-    return tuple(sorted(actions, key=lambda action: (action.identity, action.menu_indices)))
+    return tuple(sorted(actions, key=lambda action: (action.identity, action.selection)))
 
 
 def end_action(actions: tuple[LegalAction, ...]) -> LegalAction | None:

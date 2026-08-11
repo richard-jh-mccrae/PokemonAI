@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M3 — deterministic recursive solver.**
+**CURRENT: M4 — chance, information, Needs, and Scouting belief.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -97,7 +97,7 @@ Deliverables:
 Exit: synthetic conservation tests prove no duplicated consequence and no free non-End action; all
 seed constants are centralized and diagnostic.
 
-### M3 — deterministic recursive solver — CURRENT
+### M3 — deterministic recursive solver — DONE
 
 Deliverables:
 
@@ -111,7 +111,7 @@ Deliverables:
 Exit: reference solver finds complete deterministic turns without any legacy chooser; stopping is
 chosen whenever all actions are negative.
 
-### M4 — chance, information, Needs, and Scouting belief — PENDING
+### M4 — chance, information, Needs, and Scouting belief — CURRENT
 
 Deliverables:
 
@@ -263,3 +263,23 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - Checkpoint: Bellman + existing card-Worth/state-value suites: 162 passed, 3 expected xfails.
 - M3 exact next action: implement deterministic reference recursion over engine-observation branches,
   max/min continuation, memoization/cycle prevention, commit-first-action diagnostics, and fixtures.
+
+### 2026-08-11 — M3 deterministic recursion
+
+- Added exhaustive reference recursion over one transition provider: our choices maximize, opponent
+  choices minimize, Chance nodes expect, Terminal states stop, and Unknown/cap/cycle states remain
+  incomplete instead of becoming numeric zero.
+- Added memoization by full semantic state, cycle prevention, explicit depth/node caps, deterministic
+  ordering, commit-only-the-first-selection output, and root diagnostics containing exact-zero End,
+  chosen ledger, all rejected alternatives, branch values, node count, and cache hits.
+- Legal enumeration now generates every combination from `minCount..maxCount`, grouping only truly
+  equivalent physical selections; optional decline is a real empty selection.
+- Added a cgpy transition provider which reconstructs a neutral engine state, forks every selection,
+  preserves exact own prizes, identifies whose choice it is, and terminates only after complete attack
+  resolution passes the turn. Engine errors become reasoned Unknown nodes.
+- Deterministic complete-line tests cover attach, evolve, retreat, heal, fetch, gust, Supporter/card
+  costs, opponent min, known chance, stop-at-End, and a real corpus MAIN-menu reconstruction.
+- Checkpoint: 23 Bellman tests pass; one intended M0 xfail; live routing remains unchanged.
+- M4 exact next action: turn manual coins and hidden draw/search windows into normalized outcome
+  distributions, add causal Turbo-Flare demand and immutable Scouting belief, then pass the 60-HP
+  attach-Water -> Lillie's expected-policy fixture with actual-state replan semantics.

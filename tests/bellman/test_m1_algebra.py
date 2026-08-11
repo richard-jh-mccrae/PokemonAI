@@ -60,10 +60,19 @@ def test_every_corpus_menu_index_is_covered_once_with_stable_identity():
         obs = correction.obs
         actions = enumerate_legal_actions(obs)
         offered = len(((obs.get("select") or {}).get("option") or ()))
-        flattened = [index for action in actions for index in action.menu_indices]
-        assert sorted(flattened) == list(range(offered))
+        select = obs.get("select") or {}
+        if select.get("minCount", 1) == select.get("maxCount", 1) == 1:
+            flattened = [selection[0] for action in actions
+                         for selection in action.equivalent_selections]
+            assert sorted(flattened) == list(range(offered))
+        else:
+            from math import comb
+            want = sum(comb(offered, count) for count in range(
+                max(0, int(select.get("minCount", 1))),
+                min(offered, int(select.get("maxCount", 1))) + 1))
+            assert sum(len(action.equivalent_selections) for action in actions) == want
         again = enumerate_legal_actions(deepcopy(obs))
-        assert [(action.identity, action.menu_indices) for action in actions] == [
-            (action.identity, action.menu_indices) for action in again]
+        assert [(action.identity, action.selection) for action in actions] == [
+            (action.identity, action.selection) for action in again]
         seen += offered
     assert seen > 500
