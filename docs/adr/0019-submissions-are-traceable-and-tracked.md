@@ -27,7 +27,10 @@ only zips a **Bundle**; nothing records what an agent *was* or how it *did*.
 - **A submit tool (`tools/submit/`) wraps packaging with `build` / `submit` / `collect`.** It
   uploads to the **Simulation** competition (`pokemon-tcg-ai-battle`) — the agent's graded track —
   while the records it produces are the evidence base for the **Strategy** Writeup. `submit` is
-  **never implicit** and is gated: it runs the Deployability / Playability harness ([ADR-0010](0010-local-agent-verification-on-cabt-env.md)),
+  **never implicit** and is gated: it extracts and runs the exact prior-build zip once through
+  the Deployability harness ([ADR-0010](0010-local-agent-verification-on-cabt-env.md)); broader
+  multi-match source Playability remains an explicit developer check rather than three silent
+  mirror matches during every upload, and a failed artifact Match is retained under `reports/`,
   refuses a `-dirty` work tree by default (override required — so every leaderboard point maps to
   an exact commit), and is quota-aware (5/day).
 - **A monotonic Submission Id** (overridable) is baked into the Manifest and the upload message;

@@ -4,6 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import sim.check_agent as checkmod
+import submit.submit as submitmod
 
 from submit.build import build
 from submit.history import read_history
@@ -62,6 +64,38 @@ def test_submit_can_target_a_specific_build_id(tmp_path):
     row = submit(1, out=out, builds=builds, history=tmp_path / "h.jsonl", allow_dirty=True,
                  check_fn=_ok, upload_fn=lambda z, m: uploads.append(z))
     assert row["submission_id"] == 1                            # honored the explicit id, not the latest
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_default_gate_checks_the_exact_prior_artifact_not_current_source(tmp_path, monkeypatch):
+    out, builds, built = _built(tmp_path)
+    checked = []
+
+    def exact(zip_path, name):
+        checked.append((Path(zip_path), name))
+        return SimpleNamespace(ok=True, failed_stage=None)
+
+    monkeypatch.setattr(submitmod, "_default_check", exact)
+    submit(None, out=out, builds=builds, history=tmp_path / "h.jsonl", allow_dirty=True,
+           upload_fn=lambda _z, _m: None)
+
+    assert checked == [(out / f"{built['artifact']}.zip", "mega_starmie")]
+
+
+@pytest.mark.req("REQ-SUB-0010")
+def test_default_gate_preserves_a_failed_artifact_replay(tmp_path, monkeypatch):
+    checked = []
+
+    def exact(zip_path, work_dir, reports_dir=None, *, label="bundle"):
+        checked.append((Path(zip_path), Path(reports_dir), label))
+        return SimpleNamespace(ok=True, stage="deployability")
+
+    monkeypatch.setattr(checkmod, "check_artifact", exact)
+    report = submitmod._default_check(tmp_path / "prior.zip", "mega_starmie")
+
+    assert report.ok
+    assert checked == [
+        (tmp_path / "prior.zip", submitmod.DEFAULT_REPORTS, "mega_starmie")]
 
 
 @pytest.mark.req("REQ-SUB-0010")

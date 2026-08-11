@@ -14,6 +14,7 @@ from submit.build import DEFAULT_BUILDS, DEFAULT_HISTORY, DEFAULT_OUT
 from submit.history import append_history, read_history
 
 COMPETITION = "pokemon-tcg-ai-battle"   # the Simulation track — agent's graded slug (ADR-0019)
+DEFAULT_REPORTS = Path(__file__).resolve().parents[2] / "reports"
 
 
 def compose_message(row: dict) -> str:
@@ -25,9 +26,15 @@ def compose_message(row: dict) -> str:
     return msg + (f" · {row['label']}" if row.get("label") else "")
 
 
-def _default_check(name, agents_root):
-    from sim.check_agent import check_agent
-    return check_agent(name, agents_root=agents_root, matches=2)
+def _default_check(zip_path: Path, name: str):
+    import tempfile
+    from sim.check_agent import Report, check_artifact
+
+    print(f"checking exact artifact {zip_path.name} (one mirror match)...", flush=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        stage = check_artifact(
+            zip_path, Path(tmp), reports_dir=DEFAULT_REPORTS, label=name)
+    return Report(name, [stage])
 
 
 def _default_upload(zip_path: Path, message: str) -> None:
@@ -59,7 +66,8 @@ def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILD
     if "-dirty" in row["git_hash"] and not allow_dirty:
         raise SystemExit(f"refusing to submit a dirty build ({row['git_hash']}); "
                          "rebuild on a clean commit, or pass allow_dirty=True")
-    report = (check_fn or _default_check)(row["agent"], agents_root)
+    report = (check_fn(row["agent"], agents_root) if check_fn is not None
+              else _default_check(zip_path, row["agent"]))
     if not report.ok:
         bad = next((s for s in getattr(report, "stages", []) if not s.ok), None)
         detail = f" — {bad.detail}" if bad and bad.detail else ""
