@@ -20,6 +20,9 @@ class BoardSeeds:
     readiness: float = 0.85
     future_threat: float = 0.18
     line_base: float = 0.18
+    # A spare Staryu behind an already-evolved Mega is insurance for the three-prize line, not
+    # generic bench filler. Price it before committing the turn-ending attack.
+    line_backup: float = 0.40
     line_top: float = 0.32
     accelerator: float = 0.12
     turbo_recipient: float = 0.24
@@ -59,11 +62,15 @@ def _pay_fraction(codes, required) -> float:
 class MegaStarmiePotential:
     """Single, inexpensive absolute potential. Consequences are differenced once by ValueOracle."""
 
-    def __init__(self, stats, *, functions=None, seeds: BoardSeeds = BoardSeeds(), threat_roles=None):
+    def __init__(self, stats, *, functions=None, seeds: BoardSeeds = BoardSeeds(), threat_roles=None,
+                 root_seat: int | None = None):
         self.stats = stats
         self.functions = functions
         self.seeds = seeds
         self.threat_roles = {int(key): str(value) for key, value in (threat_roles or {}).items()}
+        # ``current.yourIndex`` is the player whose turn the *successor* observation describes.
+        # It changes after our attack; the value function must stay from the root Pilot's view.
+        self.root_seat = None if root_seat is None else int(root_seat)
 
     def _stat(self, card_id):
         return self.stats.get(int(card_id)) if self.stats and card_id is not None else None
@@ -234,6 +241,7 @@ class MegaStarmiePotential:
         mega_count = ids.count(MEGA_STARMIE)
         cinderace_count = ids.count(CINDERACE)
         value = ((self.seeds.line_base if staryu_count and not mega_count else 0.0)
+                 + (self.seeds.line_backup if staryu_count and mega_count else 0.0)
                  + max(0, staryu_count - (0 if mega_count else 1)) * 0.025
                  + (self.seeds.line_top if mega_count else 0.0)
                  + max(0, mega_count - 1) * 0.06
@@ -349,7 +357,8 @@ class MegaStarmiePotential:
 
     def __call__(self, observation) -> Potential:
         current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
+        seat = (int(current.get("yourIndex", 0)) if self.root_seat is None
+                else self.root_seat)
         players = current.get("players") or ()
         me = players[seat] if len(players) > seat and players[seat] else {}
         opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}

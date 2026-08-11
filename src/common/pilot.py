@@ -438,7 +438,8 @@ class Pilot(
             family_evaluator=MegaStarmiePotential(
                 self.stats, functions=self.functions,
                 threat_roles={card_id: assignment.role for card_id, assignment
-                                          in matchup_plan.assignments.items()}),
+                                          in matchup_plan.assignments.items()},
+                root_seat=seat),
             belief=belief).decide(
                 PlanRequest(obs, tuple(self.deck), self.strategy.name))
         select = obs.get("select") or {}
