@@ -102,6 +102,34 @@ def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():
     assert pilot.decide(_obs(engine)) == [0]
 
 
+def test_post_attack_potential_keeps_the_root_players_perspective():
+    """A passed turn must not value our attacker as the opponent's threat."""
+    pilot = _build_pilot("mega_starmie")[0]
+    observation = _obs(_fixture(60))
+    observation["current"]["yourIndex"] = 1
+    potential = MegaStarmiePotential(
+        pilot.stats, functions=pilot.functions, root_seat=0)
+
+    assert potential(observation).total == pytest.approx(
+        MegaStarmiePotential(pilot.stats, functions=pilot.functions)(
+        {**observation, "current": {**observation["current"], "yourIndex": 0}}).total)
+
+
+def test_bellman_batch_establishes_the_starmie_line_before_attacking():
+    pilot = _build_pilot("mega_starmie")[0]
+    records = [json.loads(line) for line in (
+        REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
+        "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
+    expected = {
+        "eb4fb1f19691": [2],  # Bench Staryu before the hand refresh.
+        "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
+        "3730b43d89a5": [3],  # Attach to Cinderace to enable Turbo Flare.
+    }
+    for record in records:
+        if record["id"] in expected:
+            assert pilot.decide(record["obs"]) == expected[record["id"]]
+
+
 def test_atomic_route_never_calls_legacy_strategic_choosers(monkeypatch):
     pilot = _build_pilot("mega_starmie")[0]
     engine = _fixture(60)
