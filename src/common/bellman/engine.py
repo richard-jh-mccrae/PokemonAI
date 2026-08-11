@@ -31,7 +31,8 @@ def _own_prize_export(engine, seat: int) -> dict[int, int]:
 class CgpyTransitionProvider:
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 
-    def __init__(self, root: DecisionState, *, registry=None, needs: CausalNeeds | None = None):
+    def __init__(self, root: DecisionState, *, registry=None, needs: CausalNeeds | None = None,
+                 engine=None):
         self.root = root
         self.registry = registry
         self.needs = needs or CausalNeeds()
@@ -40,6 +41,10 @@ class CgpyTransitionProvider:
         self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
         self._error = ""
         try:
+            if engine is not None:
+                self._engines[root.semantic_key] = engine
+                self._attack_committed[root.semantic_key] = False
+                return
             from cgpy.rng import SeededRng
             from cgpy.search import state_from_obs
 
@@ -100,7 +105,10 @@ class CgpyTransitionProvider:
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
 
     def _state_from_engine(self, state, child, *, adjustments=()):
-        observation = child.observation(viewer=state.root_seat, sbi_token="cgpy")
+        from cgpy.search import export_token
+
+        observation = child.observation(
+            viewer=state.root_seat, sbi_token=export_token(child.gs))
         observation["own_prizes"] = _own_prize_export(child, state.root_seat)
         return state.with_observation(observation).with_adjustments(adjustments)
 

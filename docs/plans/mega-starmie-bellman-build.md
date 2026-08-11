@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M5 — complete attack-resolution trees.**
+**CURRENT: M6 — complete Mega Starmie mechanic coverage.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -126,7 +126,7 @@ Deliverables:
 Exit: probability mass is exactly one; expected policy and actual replan share one evaluator; the
 60-HP Lillie's fixture passes without a card/frame exception.
 
-### M5 — complete attack-resolution trees — CURRENT
+### M5 — complete attack-resolution trees — DONE
 
 Deliverables:
 
@@ -140,7 +140,7 @@ Deliverables:
 Exit: attacks are never valued on the pre-attack board; every Mega Starmie attack/nested option has
 reference coverage; the 50-HP Boss/KO boundary fixture passes economically.
 
-### M6 — complete Mega Starmie mechanic coverage — PENDING
+### M6 — complete Mega Starmie mechanic coverage — CURRENT
 
 Deliverables:
 
@@ -303,3 +303,17 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - M5 exact next action: prove cgpy's complete attack tree as the Bellman transition, including attack
   payment, Turbo Flare allocation, Jetting target, all KOs/prizes/game results, and opponent min
   promotion before post-attack value.
+
+### 2026-08-11 — M5 complete attack resolution
+
+- The cgpy provider now carries its exported internal search token in semantic state. Distinct
+  in-progress attack allocations can no longer collide merely because their visible boards match.
+- Reference search resolves attack payment, deterministic damage, Active/Bench KOs, prizes, game
+  result, Turbo Flare's zero-to-three Energy count and per-Energy recipients, Jetting Blow's snipe
+  target, and the opponent's legal promotion before a terminal board is valued.
+- Exact fixtures prove Turbo Flare can allocate three persistent Water, Jetting Blow takes the
+  fragile Bench KO, and Nebula Beam collects three prizes before the opponent minimizes by promoting
+  its stronger Mega Starmie.
+- Checkpoint: 34 Bellman tests pass, one intended M0 xfail; runtime remains unchanged.
+- M6 exact next action: run every M0 mechanic family and all 259 correction observations through the
+  engine adapter, close every named Unknown, and add useful/redundant/harmful benefit-cost fixtures.
