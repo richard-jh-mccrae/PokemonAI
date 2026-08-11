@@ -52,6 +52,7 @@ test, that test runs.
 | --- | --- | --- |
 | `src/cg/**` | **full suite** | The native engine underlies everything except `meta_tracker` (which only ever parses recorded replay JSON, no live engine calls) |
 | `src/common/*.py`, `src/common/scouting/**`, `src/common/strategy/**`, `src/common/value/**` (the `common_agent_core` filter) | `tests/agents`, `tests/arena`, `tests/blunder`, `tests/label`, `tests/scouting`, `tests/sim`, `tests/strategy`, `tests/submit`, `tests/train`, `tests/tuner`, `tests/value` | `common.pilot`/`common.runtime` import scouting+strategy+value directly, and `common.runtime.make_agent` is imported by every agent `main.py` — real ones AND the fixture agents dynamically loaded into sim/arena/submit matches. Narrower than the old blanket `src/common/**` only in that it skips `tests/meta_tracker`, `tests/cards` (folded into `cards` below), and the self-contained cgpy/parity twin |
+| `src/common/bellman/**`, `tests/bellman/**` (the `bellman` filter) | `tests/bellman`; Bellman source also reaches `common_agent_core`'s integration blast radius | The focused suite owns the immutable state, transition, value, chance, attack, mechanic, runtime-cutover, corpus-freshness, and adjudication-closure contracts. The separate filter prevents a Bellman test-only change from falling through the fail-safe, while source changes still run every live-Pilot consumer through `common_agent_core`. |
 | `src/agents/**` | `tests/agents` | Nothing imports agents at module load (sim battles use *fixture* agents, not `src/agents`) |
 | `tools/arena/**` | `tests/arena` | Pure leaf — nothing imports arena |
 | `tools/sim/**`, `src/common/attack_overrides.json`, `src/common/attack_overrides.provenance.json` | `tests/sim`, `tests/arena`, `tests/label`, `tests/submit`; `attack_overrides.json` additionally selects `tests/strategy` and `tests/train` | `arena` imports `sim.selfplay`; `label`'s corpus fixture and `submit`'s `check_agent` import sim modules too. The two override stores are named here because `common_agent_core` matches `src/common/*.py` — **`.py` only** — so a table-only diff matched no filter and reached the suite via the `any` fail-safe. It ran, but by accident; `tests/sim` owns their generator and provenance gate (ADR-0108). Issue #493 additionally routes the value-bearing override table—not its provenance-only companion—to the Composer coverage freshness test and joined sensitivity schema in `tests/strategy` and `tests/train`. |
@@ -212,8 +213,12 @@ sharding is the next lever, not another `-n` tweak.
 | Job | `timeout-minutes` | Why |
 | --- | --- | --- |
 | `plan` | 5 | Measured 8s |
-| `test` (native) | 20 | Measured 15m51s; loose headroom, not a floor |
-| `test-cgpy` | 15 | Measured 10m26s; loose headroom, not a floor |
+| `test` (native) | 45 | The Mega Starmie Bellman live cutover made the broad historical Pilot population exceed the old 20-minute budget on 2026-08-11; full scope is retained while search/runtime tuning remains explicit debt. |
+| `test-cgpy` | 45 | The same cutover reached the old 15-minute ceiling in PR #510; the job was cancelled by timeout while still in pytest, not by a failing assertion. |
+
+The 45-minute ceilings are provisional capacity, not a new performance target. Re-measure the first
+completed PR #510 jobs and tighten them after Bellman search/runtime work; do not restore a shorter
+number by dropping suites from `common_agent_core`.
 
 Re-measure per-step from the job JSON before trusting a new ceiling, not after the next raise —
 

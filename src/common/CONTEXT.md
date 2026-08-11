@@ -9,6 +9,25 @@ Shared game/meta vocabulary (`Archetype`, `Main-line` / `Sub-line` / `Engine Pok
 
 ## Language
 
+### Bellman turn planning
+
+**Bellman Turn Planner** (ADR-0139):
+Mega Starmie's post-Set-Up strategic owner. It generates every legal action and nested selection,
+simulates deterministic/choice/chance/opponent consequences, differences one shared board potential,
+subtracts consumed resources and allowances, recursively continues valuable same-turn sequences,
+and compares them against End at exactly zero. It commits only the first real choice and replans from
+the next observation. Other decks remain on the legacy planner.
+
+**Portable Worth**:
+The cross-deck opportunity cost of consuming a known card, resolved from shared card functions and
+facts with upward-only deck overrides. Zero means no claim only at the raw catalog boundary; a known
+play still pays the Bellman action residual and any resolved held-card Worth.
+
+**Bellman Ledger**:
+The diagnostic identity `immediate benefits - consumed costs + expected continuation = Q`. Every
+root action, Chance branch, opponent `min` response, End, and best rejected alternative exposes this
+decomposition. The ledger explains selection but never selects through a separate rule.
+
 ### Opponent Model
 
 **Opponent Model** (ADR-0047):

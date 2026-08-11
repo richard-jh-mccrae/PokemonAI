@@ -16,6 +16,12 @@ Glossary: [common/CONTEXT.md](../src/common/CONTEXT.md). Decisions:
 [General Strategy](general-strategy.md), [Scouting](scouting.md), [Function Tags](card-functions.md),
 [Weights](weights.md), [Agent Checks](agent-checks.md).
 
+**Mega Starmie runtime exception:** after Set-Up, Mega Starmie no longer uses the layered strategic
+pipeline described below. [ADR-0139](adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md)
+routes every legal action and nested choice through one Bellman full-turn search with a conserved
+benefit-minus-opportunity-cost ledger and exact-zero End. Set-Up and every other deck remain on the
+legacy architecture until separately migrated.
+
 ## Thesis
 
 The original contribution is not a single strong deck — it is a **general competence layer**

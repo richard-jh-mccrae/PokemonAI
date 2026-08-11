@@ -85,7 +85,6 @@ def _whether_row(dec, obs):
     return idx, dec.options[idx].promote_retreat_working
 
 
-@pytest.mark.xfail(strict=True, reason=marks("pr_whether_dont_retreat_f9")[0].kwargs["reason"])
 def test_whether_declines_the_needless_retreat_f9():
     """`stay_forgone` is DELETED (ADR-0100 §2) — the Active's attack is its OWN option, so the
     comparison IS the differential — and the retreat now pays the build its discard destroys (§8)."""

@@ -36,6 +36,7 @@ STRATEGY = Strategy(
     # the BENCH, evolving behind the Cinderace wall rather than sitting in the most-exposed slot.
     starter_priority=[CINDERACE, STARYU],
     params={"setup_energy_target": 3,    # Nebula Beam's CCC
+            "bellman_turn_planner": True,  # Atomic post-setup cutover; synthetic strategies stay legacy.
             "leaf_followups": True,      # Issue #387: validated first deck for leaf-owned follow-ups
             "search_budget": 0,           # INERT since ADR-0064 deleted Tier-6 escalation, its only
                                           # consumer; held at 0 to keep the manifest Tier-0 (test-pinned).

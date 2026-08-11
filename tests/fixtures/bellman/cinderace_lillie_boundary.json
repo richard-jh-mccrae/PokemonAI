@@ -1,0 +1,20 @@
+{
+  "deck": "mega_starmie",
+  "root": {
+    "mine": {"active": "Cinderace", "energy": [], "bench": []},
+    "hand": ["Boss's Orders", "Basic {W} Energy", "Lillie's Determination"],
+    "theirs": {"active_role": "non_threatening_support", "bench_role": "fragile_preevo_wincon"}
+  },
+  "cases": [
+    {
+      "bench_hp": 60,
+      "expected_prefix": ["attach Basic {W} Energy to Cinderace", "play Lillie's Determination"],
+      "rationale": "Staryu draw outcomes create the missing Turbo Flare recipient and future Mega Starmie line."
+    },
+    {
+      "bench_hp": 50,
+      "competing_prefix": ["play Boss's Orders", "attack Turbo Flare"],
+      "rationale": "Immediate KO and threat removal compete economically with the setup gamble."
+    }
+  ]
+}

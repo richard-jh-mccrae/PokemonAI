@@ -288,6 +288,7 @@ class Pilot(
         self._composer_trace = None                     # POC-T4/5: the last composer run's margin + stats
         self._planning = False                          # reentrancy guard: True while an engine sim re-runs
                                                         # policy, so plan_turn stays closed-form
+        self._bellman_registry = None                   # Mega Starmie's atomic post-setup planner boundary
 
     def decide(self, obs: dict) -> list[int]:
         """The highest-scoring legal selection (the grader hot path): the deck on the initial
@@ -309,6 +310,10 @@ class Pilot(
             self._observe_known_top(obs)         # Issue #289: live, self-verifying top-deck belief
             self._transients.observe(obs)        # engine-sim future must never mutate match state
             self._turn_boosts.observe(obs)
+        if (self.strategy.params.get("bellman_turn_planner") is True
+                and int(select.get("context", -1))
+                not in (_SETUP_ACTIVE, _SETUP_BENCH, _IS_FIRST, _MULLIGAN)):
+            return self._bellman_evaluate(obs, carried=carried)
         options = select.get("option") or []
         board = self._board(obs, select, carried=carried)
         traces = [self._option_trace(obs, select, board, o, i) for i, o in enumerate(options)]
@@ -392,6 +397,64 @@ class Pilot(
                         composer=getattr(self, "_composer_trace", None),
                         attach_working=self._attach_working(obs, select, board, options),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
+
+    def _bellman_evaluate(self, obs: dict, *, carried=None) -> Decision:
+        """The isolated Mega Starmie route. No legacy score, planner, or chooser is consulted."""
+        from common.bellman import (
+            MegaStarmiePotential, MegaStarmieTurnPlanner, PlanRequest, ValueRegistry,
+            opponent_belief,
+        )
+
+        read = self.opponent.observe(obs) if self.scout is not None else None
+        gamma = _posture_gamma(read) if (self.posture and read is not None) else 0.0
+        my_arch = self.strategy.params.get("my_archetype")
+        favorability, coverage = (
+            matchup_favorability(self.scout.artifact, my_arch, read.candidates)
+            if self.posture and self.scout is not None and read is not None and my_arch
+            else (0.5, 0.0)
+        )
+        brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
+        state = obs.get("current") or {}
+        seat = int(state.get("yourIndex", 0))
+        players = state.get("players") or ()
+        opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
+        ids_for_name = getattr(self.stats, "ids_for_name", None)
+        brief_roles = (resolve_brief_cards(brief, ids_for_name)[1]
+                       if brief is not None and ids_for_name is not None else {})
+        matchup_plan = self._matchup_plan(opponent, brief_roles, read, gamma)
+        belief = opponent_belief(
+            obs, candidates=(read.candidates if read is not None else ()),
+            properties=(brief.opponent_properties if brief is not None else None),
+        )
+        if self._bellman_registry is None:
+            self._bellman_registry = ValueRegistry.from_strategy(
+                strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
+        planned = MegaStarmieTurnPlanner(
+            registry=self._bellman_registry,
+            family_evaluator=MegaStarmiePotential(
+                self.stats, functions=self.functions,
+                threat_roles={card_id: assignment.role for card_id, assignment
+                                          in matchup_plan.assignments.items()}),
+            belief=belief).decide(
+                PlanRequest(obs, tuple(self.deck), self.strategy.name))
+        select = obs.get("select") or {}
+        menu = select.get("option") or ()
+        chosen = list(planned.chosen)
+        traces = [OptionTrace(
+            index=index, score=(planned.value if index in chosen else 0.0), plan=Plan.RACE,
+            card_id=None, fired=[], tactical=(planned.value if index in chosen else 0.0),
+        ) for index, _option in enumerate(menu)]
+        telemetry = {
+            "bellman": True,
+            "action": dataclasses.asdict(planned.action),
+            "value": planned.value,
+            "complete": planned.complete,
+            "ledger": planned.diagnostics.get("ledger"),
+            "production": planned.diagnostics.get("production"),
+            "root": dataclasses.asdict(planned.diagnostics["root"]),
+        }
+        return Decision(chosen=chosen, options=traces, read=read,
+                        posture={"gamma": gamma, "source": "scouting"}, composer=telemetry)
 
     def _leaf_discard_picks(self, obs: dict, select: dict, options: list, maximum: int) -> list[int] | None:
         """Mandatory discard picks, repriced after each removed visible hand card."""
