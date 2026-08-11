@@ -16,10 +16,16 @@ from common.state_value import worth_to_prizes
 from .algebra import Ledger
 from .api import ActionIdentity
 from .state import DecisionState
+from common.strategy.context import _HEAL
 
 
 ALLOWANCE_COST_WORTH = 0.01
 DECISION_COST_PRIZES = 1e-12
+WORTH_PER_PRIZE = 120.0
+TYPED_ENERGY_HAND_MULTIPLIERS = (1.0, 1.0, 1.0)
+TYPED_ENERGY_DUPLICATE_MULTIPLIER = 0.60
+CARD_HAND_MULTIPLIERS = (1.0, 0.55, 0.25)
+CARD_DUPLICATE_MULTIPLIER = 0.15
 
 FAMILY_OWNERS = {
     "prize_race": ("game", "prizes", "prize proximity"),
@@ -50,7 +56,7 @@ class WorthSeeds:
     energy: float = ENERGY_TIER
     ace_spec: float = ACE_SPEC_TIER
     known_floor: float = KNOWN_CARD_FLOOR
-    prize_rate: float = 1.0 / 120.0
+    prize_rate: float = 1.0 / WORTH_PER_PRIZE
     allowance: float = ALLOWANCE_COST_WORTH
 
 
@@ -61,7 +67,7 @@ class ValueRegistry:
                  functions: Mapping[int, tuple[str, ...]] | None = None,
                  facts: Mapping[int, CardFacts] | None = None,
                  overrides: Mapping[int, float] | None = None,
-                 line_bases=(), line_pairs=(), seeds: WorthSeeds = WorthSeeds()):
+                 line_bases=(), line_pairs=(), lines=(), seeds: WorthSeeds = WorthSeeds()):
         self.roles = {int(key): tuple(value) for key, value in (roles or {}).items()}
         for card_id in line_bases:
             self.roles[int(card_id)] = (*self.roles.get(int(card_id), ()), "win_condition_base")
@@ -69,6 +75,7 @@ class ValueRegistry:
         self.facts = {int(key): value for key, value in (facts or {}).items()}
         self.overrides = {int(key): max(0.0, float(value)) for key, value in (overrides or {}).items()}
         self.line_parents = {int(top): int(base) for base, top in line_pairs}
+        self.lines = tuple(tuple(int(card_id) for card_id in line) for line in lines)
         self.seeds = seeds
 
     @classmethod
@@ -90,12 +97,12 @@ class ValueRegistry:
                 prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
                 energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
             )
-        line_bases = tuple(line.path[0] for line in getattr(strategy, "lines", ()) if line.path)
-        line_pairs = tuple((line.path[0], line.path[-1]) for line in getattr(strategy, "lines", ())
-                           if len(line.path) >= 2)
+        lines = tuple(tuple(line.path) for line in getattr(strategy, "lines", ()) if line.path)
+        line_bases = tuple(line[0] for line in lines)
+        line_pairs = tuple((line[0], line[-1]) for line in lines if len(line) >= 2)
         return cls(roles=roles, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
-                   line_bases=line_bases, line_pairs=line_pairs)
+                   line_bases=line_bases, line_pairs=line_pairs, lines=lines)
 
     def worth(self, card_id: int) -> float:
         card_id = int(card_id)
@@ -123,11 +130,11 @@ class ValueRegistry:
         for card_id, count in Counter(int(card_id) for card_id in card_ids).items():
             facts = self.facts.get(card_id, CardFacts(known=False))
             if facts.typed_basic_energy:
-                multipliers = (1.0, 1.0, 1.0)
-                tail = 0.60
+                multipliers = TYPED_ENERGY_HAND_MULTIPLIERS
+                tail = TYPED_ENERGY_DUPLICATE_MULTIPLIER
             else:
-                multipliers = (1.0, 0.55, 0.25)
-                tail = 0.15
+                multipliers = CARD_HAND_MULTIPLIERS
+                tail = CARD_DUPLICATE_MULTIPLIER
             worth = self.held_worth(card_id, observation)
             total += worth * (sum(multipliers[:count]) + max(0, count - len(multipliers)) * tail)
         return total
@@ -138,7 +145,7 @@ class ValueRegistry:
             "roles": self.roles, "functions": self.functions,
             "facts": {key: vars(value) for key, value in self.facts.items()},
             "overrides": self.overrides, "seeds": vars(self.seeds),
-            "line_parents": self.line_parents,
+            "line_parents": self.line_parents, "lines": self.lines,
         }, sort_keys=True, separators=(",", ":"), default=list).encode("utf-8")
         return "bellman-worth/1:" + hashlib.sha256(payload).hexdigest()
 
@@ -226,7 +233,7 @@ class ValueOracle:
         context = int(((before.obs.get("select") or {}).get("context", -1)))
         for family in tuple(left) + tuple(key for key in right if key not in left):
             delta = float(right.get(family, 0.0) - left.get(family, 0.0))
-            if family == "pressure" and context == 17:
+            if family == "pressure" and context == _HEAL:
                 # Heal-target selection owns HP and returned-Energy consequences. The reachable
                 # attack is priced by its continuation; charging its temporary disappearance here
                 # makes healing the exposed Active lose to healing a safe Bench body.
@@ -235,6 +242,14 @@ class ValueOracle:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
+        # Passive potential values the standing board.  A resolved attack additionally removes
+        # opponent capacity in proportion to the attacks it makes unreachable; attaching,
+        # promoting and nested target menus must not collect that credit pre-emptively.
+        attack_threat = getattr(self._families, "attack_threat", None)
+        if action.kind == "attack" and callable(attack_threat):
+            removed_threat = float(attack_threat(before.obs) - attack_threat(after.obs))
+            if removed_threat > 0.0:
+                benefits.append(("attack_threat", removed_threat))
         removed = _consumed_hand_ids(before.obs, after.obs, before.root_seat)
         if removed:
             held = list(_hand_ids(before.obs, before.root_seat))

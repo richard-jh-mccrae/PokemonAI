@@ -7,12 +7,28 @@ from enum import IntEnum
 from math import comb
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
-from .information import CausalNeeds, hypergeometric_classes
+from .information import BellmanDeckProfile, CausalNeeds, hypergeometric_classes
 from .options import enumerate_legal_actions
+from .value import WORTH_PER_PRIZE
+from common.strategy.context import (
+    _HEAL, _MAIN, _MOVE_CARD, _NO, _SUPPORTER, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES,
+)
 
 
-LILLIE, POKEGEAR, HARLEQUIN = 1227, 1122, 1223
-_COIN_HEAD = 46
+MANUAL_COIN_CONTEXT = 46
+SHORT_HAND_REFRESH_LIMIT = 2
+EXPANDED_PREVIEW_MAIN_STEPS = 2
+SINGLE_PREVIEW_MAIN_STEP = 1
+HEAL_PREVIEW_BUDGET = 80
+FULL_PRIZE_COUNT = 6
+REFRESH_DRAW_WITH_FULL_PRIZES = 8
+REFRESH_DRAW_AFTER_PRIZE = 6
+COIN_HEADS_DRAW = 5
+COIN_TAILS_DRAW = 3
+COIN_BRANCH_PROBABILITY = 0.5
+REVEAL_DEPTH = 7
+AREA_PRIZE = 6
+DRAW_RESULT_CODE = 2
 
 
 def _expand(counts) -> list[int]:
@@ -47,7 +63,8 @@ class NativeTransitionProvider:
                  search_api=None, production_chance: bool = True):
         self.root = root
         self.registry = registry
-        self.needs = needs or CausalNeeds()
+        self.profile = BellmanDeckProfile.from_registry(registry) if registry else BellmanDeckProfile()
+        self.needs = needs or CausalNeeds(profile=self.profile)
         self.production_chance = bool(production_chance)
         self._states = {}
         self._attack_committed = {}
@@ -152,6 +169,13 @@ class NativeTransitionProvider:
             return None
         return int(hand[hand_index]["id"])
 
+    def _tags(self, card_id) -> frozenset[str]:
+        return frozenset((self.registry.functions.get(int(card_id), ())
+                          if self.registry is not None and card_id is not None else ()))
+
+    def _played_tags(self, state, action) -> frozenset[str]:
+        return self._tags(self._played_card_id(state, action))
+
     def preview_actions(self, state, actions, *, main_steps: int):
         players = (state.obs.get("current") or {}).get("players") or ()
         mine = players[state.root_seat] if len(players) > state.root_seat else {}
@@ -159,33 +183,39 @@ class NativeTransitionProvider:
         active_id = int(active["id"]) if active else None
         bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
         in_play = {int(body["id"]) for body in bodies if body}
-        allow_lillie = ((active_id == 666 and not in_play.intersection({1030, 1031}))
-                        or len(mine.get("hand") or ()) <= 2)
+        allow_refresh = ((active_id in self.profile.accelerators
+                          and not in_play.intersection(self.profile.line_cards))
+                         or len(mine.get("hand") or ()) <= SHORT_HAND_REFRESH_LIMIT)
         return tuple(action for action in actions
                      if action.identity.kind != "play"
-                     or self._played_card_id(state, action) == POKEGEAR
-                     or (self._played_card_id(state, action) == LILLIE and allow_lillie))
+                     or "dig" in self._played_tags(state, action)
+                     or ("shuffle_hand" in self._played_tags(state, action)
+                         and "hand_disruption" not in self._played_tags(state, action)
+                         and allow_refresh))
 
     def preview_main_steps(self, state, action, default: int) -> int:
         context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context in (7, 17):
-            return max(default, 2)
-        if context in (3, 4) or action.identity.kind in ("attach", "evolve", "retreat"):
-            return max(default, 1)
+        if context in (_TO_HAND, _HEAL):
+            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
+        if context in (_SWITCH, _TO_ACTIVE) or action.identity.kind in ("attach", "evolve", "retreat"):
+            return max(default, SINGLE_PREVIEW_MAIN_STEP)
         card_id = self._played_card_id(state, action)
-        if card_id in (1182, 1229):
-            return max(default, 2)
-        return max(default, 1) if card_id in (1030, 1086, 1120) else default
+        tags = self._tags(card_id)
+        if tags.intersection({"gust", "heal"}):
+            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
+        return max(default, SINGLE_PREVIEW_MAIN_STEP) if (card_id in self.profile.line_bases
+                                   or tags.intersection({"bench_fill", "energy_denial"})) else default
 
     def preview_budget(self, state, action, default: int) -> int:
         context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context == 17 or self._played_card_id(state, action) == 1229:
-            return max(default, 80)
+        if context == _HEAL or "heal" in self._played_tags(state, action):
+            return max(default, HEAL_PREVIEW_BUDGET)
         return default
 
     def chance_replan_steps(self, state, action, default: int) -> int:
-        return max(default, 1) if self._played_card_id(state, action) in (
-            POKEGEAR, HARLEQUIN, LILLIE) else default
+        tags = self._played_tags(state, action)
+        return max(default, SINGLE_PREVIEW_MAIN_STEP) if tags.intersection(
+            {"dig", "hand_disruption", "shuffle_hand"}) else default
 
     def transition(self, state, action):
         native = self._states.get(state.semantic_key)
@@ -196,18 +226,22 @@ class NativeTransitionProvider:
             child = self._api.search_step(native.searchId, list(action.selection))
             context = int(getattr(child.observation.select, "context", -1)
                           if child.observation.select is not None else -1)
-            if context == _COIN_HEAD:
+            if context == MANUAL_COIN_CONTEXT:
                 return self._coin_transition(state, child, action, card_id)
             node = self._register_successor(state, child, action)
-            if card_id == LILLIE and isinstance(node, Deterministic):
+            tags = self._tags(card_id)
+            if ("shuffle_hand" in tags and "hand_disruption" not in tags
+                    and isinstance(node, Deterministic)):
                 players = (state.obs.get("current") or {}).get("players") or ()
                 mine = players[state.root_seat] if len(players) > state.root_seat else {}
                 hand = [int(card["id"]) for card in (mine.get("hand") or ())]
-                hand.remove(LILLIE)
+                hand.remove(card_id)
                 pool = _expand(state.deck_counts) + hand
-                draws = 8 if len(mine.get("prize") or ()) == 6 else 6
+                draws = (REFRESH_DRAW_WITH_FULL_PRIZES
+                         if len(mine.get("prize") or ()) == FULL_PRIZE_COUNT
+                         else REFRESH_DRAW_AFTER_PRIZE)
                 return Chance(self._draw_edges(state, node.state, pool, draws, "lillie"))
-            if card_id == POKEGEAR and isinstance(node, Deterministic):
+            if "dig" in tags and isinstance(node, Deterministic):
                 return Chance(self._pokegear_edges(node.state, _expand(state.deck_counts)))
             return node
         except Exception as exc:  # noqa: BLE001 - engine gaps are explicit, never zero
@@ -217,9 +251,9 @@ class NativeTransitionProvider:
         observation = _plain(asdict(child.observation))
         prizes = Counter(self._prizes.get(state.semantic_key, ()))
         for log in observation.get("logs") or ():
-            if (int(log.get("type", -1)) == 6
+            if (int(log.get("type", -1)) == _MOVE_CARD
                     and int(log.get("playerIndex", -1)) == state.root_seat
-                    and int(log.get("fromArea", -1)) == 6):
+                    and int(log.get("fromArea", -1)) == AREA_PRIZE):
                 card_id = int(log.get("cardId", 0))
                 if prizes[card_id] > 0:
                     prizes[card_id] -= 1
@@ -243,11 +277,11 @@ class NativeTransitionProvider:
         current = observation.get("current") or {}
         result = int(current.get("result", -1))
         if result != -1:
-            label = "draw" if result == 2 else "win" if result == state.root_seat else "loss"
+            label = "draw" if result == DRAW_RESULT_CODE else "win" if result == state.root_seat else "loss"
             return Terminal(successor, label)
         passed_turn = (committed and int(current.get("turn", self._root_turn)) != self._root_turn
                        and int(current.get("yourIndex", state.root_seat)) != state.root_seat
-                       and int(((observation.get("select") or {}).get("context", -1))) == 0)
+                       and int(((observation.get("select") or {}).get("context", -1))) == _MAIN)
         return Terminal(successor, "attack resolved") if passed_turn else Deterministic(successor)
 
     def _coin_transition(self, state, coin_state, action, card_id):
@@ -255,23 +289,23 @@ class NativeTransitionProvider:
         edges = []
         for index, option in enumerate(options):
             option_type = int(option.type)
-            if option_type not in (1, 2):
+            if option_type not in (_YES, _NO):
                 continue
             branch = self._api.search_step(coin_state.searchId, [index])
             node = self._register_successor(state, branch, action)
-            label = "heads" if option_type == 1 else "tails"
-            if card_id == HARLEQUIN and isinstance(node, Deterministic):
+            label = "heads" if option_type == _YES else "tails"
+            if "hand_disruption" in self._tags(card_id) and isinstance(node, Deterministic):
                 players = (state.obs.get("current") or {}).get("players") or ()
                 mine = players[state.root_seat] if len(players) > state.root_seat else {}
                 hand = [int(card["id"]) for card in (mine.get("hand") or ())]
-                hand.remove(HARLEQUIN)
+                hand.remove(card_id)
                 pool = _expand(state.deck_counts) + hand
-                draws = 5 if option_type == 1 else 3
+                draws = COIN_HEADS_DRAW if option_type == _YES else COIN_TAILS_DRAW
                 for outcome in self._draw_edges(state, node.state, pool, draws, label):
-                    edges.append(WeightedEdge(0.5 * outcome.probability,
+                    edges.append(WeightedEdge(COIN_BRANCH_PROBABILITY * outcome.probability,
                                               outcome.label, outcome.node))
             else:
-                edges.append(WeightedEdge(0.5, label, node))
+                edges.append(WeightedEdge(COIN_BRANCH_PROBABILITY, label, node))
         try:
             self._api.search_release(coin_state.searchId)
         except Exception:  # noqa: BLE001
@@ -313,7 +347,7 @@ class NativeTransitionProvider:
         rows = []
         for probability, label, benefit_worth in self._grouped_draws(state, pool, draws):
             adjusted = successor.with_adjustments(
-                (("chance.hand", float(benefit_worth) / 120.0),))
+                (("chance.hand", float(benefit_worth) / WORTH_PER_PRIZE),))
             rows.append(WeightedEdge(probability, f"{prefix}:{label}",
                                      Terminal(adjusted, "actual-state replan")))
         return tuple(rows)
@@ -328,11 +362,11 @@ class NativeTransitionProvider:
                 int(card.cardId): int(card.cardType) for card in self._api.all_card_data()
             }
         supporter_ids = sorted({card_id for card_id in pool
-                                if self._card_types.get(card_id) == 3},
+                                if self._card_types.get(card_id) == _SUPPORTER},
                                key=lambda card_id: (self.registry.worth(card_id)
                                                     if self.registry else 0.0, -card_id),
                                reverse=True)
-        draws, total = min(7, len(pool)), len(pool)
+        draws, total = min(REVEAL_DEPTH, len(pool)), len(pool)
         denominator = comb(total, draws)
         counts, preceding, edges = Counter(pool), 0, []
         for card_id in supporter_ids:
@@ -344,7 +378,7 @@ class NativeTransitionProvider:
             preceding += copies
             if probability <= 0.0:
                 continue
-            benefit = (self.registry.worth(card_id) / 120.0) if self.registry else 0.0
+            benefit = (self.registry.worth(card_id) / WORTH_PER_PRIZE) if self.registry else 0.0
             adjusted = successor.with_adjustments((("chance.hand", benefit),))
             edges.append(WeightedEdge(probability, f"best-supporter:{card_id}",
                                       Terminal(adjusted, "actual-state replan")))

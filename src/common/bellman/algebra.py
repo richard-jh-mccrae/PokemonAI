@@ -10,6 +10,11 @@ if TYPE_CHECKING:
     from .state import DecisionState
 
 
+PROBABILITY_MIN = 0.0
+PROBABILITY_MAX = 1.0
+CHANCE_MASS_TOLERANCE = 1e-12
+
+
 class Actor(str, Enum):
     OURS = "ours"
     OPPONENT = "opponent"
@@ -58,7 +63,7 @@ class WeightedEdge:
     node: object
 
     def __post_init__(self) -> None:
-        if not self.label or not (0.0 <= float(self.probability) <= 1.0):
+        if not self.label or not (PROBABILITY_MIN <= float(self.probability) <= PROBABILITY_MAX):
             raise ValueError("chance edge needs a label and probability in [0, 1]")
 
 
@@ -84,8 +89,8 @@ class Chance:
     def __post_init__(self) -> None:
         if not self.children:
             raise ValueError("chance nodes cannot be empty")
-        if not math.isclose(sum(edge.probability for edge in self.children), 1.0,
-                            rel_tol=0.0, abs_tol=1e-12):
+        if not math.isclose(sum(edge.probability for edge in self.children), PROBABILITY_MAX,
+                            rel_tol=PROBABILITY_MIN, abs_tol=CHANCE_MASS_TOLERANCE):
             raise ValueError("chance probabilities must sum to one")
 
 

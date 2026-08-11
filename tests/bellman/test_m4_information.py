@@ -9,13 +9,15 @@ from common.bellman import (
     ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver, Terminal,
 )
 from common.bellman.algebra import WeightedEdge
-from common.bellman.information import CausalNeeds, hypergeometric_classes, opponent_belief
+from common.bellman.information import BellmanDeckProfile, CausalNeeds, hypergeometric_classes, opponent_belief
 from common.bellman.options import LegalAction
 from common.bellman.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
 STARYU, CINDERACE, BOSS, WATER, LILLIE = 1030, 666, 1182, 3, 1227
 DECK = (STARYU,) * 4 + (CINDERACE,) * 4 + (BOSS,) + (WATER,) * 9 + (LILLIE,)
+PROFILE = BellmanDeckProfile(lines=((STARYU, 1031),), accelerators=(CINDERACE,),
+                             reusable_energy=(WATER,))
 
 
 def _board(*, node="root", hand=(), energy=0, bench=(), value=0.0):
@@ -58,17 +60,17 @@ class Graph:
 
 def test_causal_turbo_need_transfers_as_dependency_not_tactic():
     obs = _board(hand=(BOSS, WATER, LILLIE))
-    needs = CausalNeeds().derive(obs, deck_counts=Counter({STARYU: 4, WATER: 8}))
+    needs = CausalNeeds(profile=PROFILE).derive(obs, deck_counts=Counter({STARYU: 4, WATER: 8}))
     assert [(need.key, need.card_ids) for need in needs] == [
-        ("turbo-recipient", (STARYU,)), ("typed-attack-energy", (WATER,))]
+        ("accelerator-recipient", (STARYU,)), ("typed-attack-energy", (WATER,))]
     benched = ({"id": STARYU, "serial": 22, "playerIndex": 0},)
-    needs = CausalNeeds().derive(_board(bench=benched),
+    needs = CausalNeeds(profile=PROFILE).derive(_board(bench=benched),
                                  deck_counts=Counter({STARYU: 3, WATER: 8}))
-    assert "turbo-recipient" not in {need.key for need in needs}
+    assert "accelerator-recipient" not in {need.key for need in needs}
 
 
 def test_hypergeometric_classes_are_mutually_exclusive_with_explicit_whiff():
-    need = CausalNeeds().derive(_board(), deck_counts=Counter({STARYU: 4}))[0]
+    need = CausalNeeds(profile=PROFILE).derive(_board(), deck_counts=Counter({STARYU: 4}))[0]
     pool = [STARYU] * 4 + [999] * 16
     outcomes = hypergeometric_classes(pool, 6, (need,))
     assert sum(outcome.probability for outcome in outcomes) == pytest.approx(1.0)
@@ -132,6 +134,14 @@ def test_real_engine_information_and_coin_plays_become_chance_nodes(card_id):
     repo = Path(__file__).resolve().parents[2]
     deck = tuple(int(line) for line in (repo / "src" / "agents" / "mega_starmie" /
                                         "deck.csv").read_text().split())
+    from common.cards import CardFunctions
+    tags = CardFunctions.load()
+    registry = ValueRegistry(
+        roles={CINDERACE: ("accel_source",)},
+        functions={known: tuple(tags.tags(known)) for known in set(deck)},
+        facts={CINDERACE: CardFacts(pokemon=True)},
+        lines=((STARYU, 1031),),
+    )
     found = None
     for correction in load_corrections(repo / "data" / "corrections"):
         if correction.agent != "mega_starmie" or correction.obs is None:
@@ -140,7 +150,7 @@ def test_real_engine_information_and_coin_plays_become_chance_nodes(card_id):
             continue
         state = DecisionState.from_observation(correction.obs, deck=deck,
                                                deck_name="mega_starmie")
-        provider = CgpyTransitionProvider(state)
+        provider = CgpyTransitionProvider(state, registry=registry)
         if not provider.available:
             continue
         for action in provider.actions(state):

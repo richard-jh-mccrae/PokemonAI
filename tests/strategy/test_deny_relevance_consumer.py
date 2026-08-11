@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from common.strategy.denial import coin_odds
+
 REPO = Path(__file__).resolve().parents[2]
 
 RIOLU, MEGA_LUCARIO, SOLROCK = 677, 678, 676
@@ -30,10 +32,17 @@ PLAY, ENERGY, END = 7, 6, 14               # OptionType
 ACTIVE, BENCH = 4, 5                       # AreaType
 
 
+def _coin_odds(card_id):
+    from common.cards import CardFunctions
+    return coin_odds(CardFunctions.load().tags(card_id))
+
+
 def _pilot(deck="dragapult_ex", *, armed=True):
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
     p = _build_pilot(deck)[0]
+    # This file isolates the legacy Deny consumer; Bellman policy coverage lives in tests/bellman.
+    p.strategy.params = {**p.strategy.params, "bellman_turn_planner": False}
     p._planning = False
     p.deny_relevance = armed
     # Set EXPLICITLY rather than inherited from PROFILE, so these tests keep meaning the same thing
@@ -104,12 +113,12 @@ def test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units():
     from common.strategy.denial import coin_odds
 
     class _Ctx:
-        option_type, tags, card_id = PLAY, ["energy_denial"], HAMMER
+        option_type, tags, card_id = PLAY, ["energy_denial", "coin"], HAMMER
 
     assert _DENY_RELEVANCE_K == MAX_ATTACK_DAMAGE, (
         "K must BE the normalizer, not a copy of its current value")
     MEGA_BRAVE = 270                               # Mega Lucario ex, {F}{F} — the attack denied
-    by_hand = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K \
+    by_hand = _coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K \
         * (MEGA_BRAVE / MAX_ATTACK_DAMAGE) - ITEM_HOLD_FLOOR
     assert by_hand == pytest.approx(125.0), (
         f"the documented arithmetic must price this board at +125.00 (got {by_hand})")
@@ -255,7 +264,7 @@ def test_the_fire_rung_prices_only_what_they_can_afford_right_now():
         f"the banked reading must exceed the affordable one on this board ({row['relevance']} vs "
         f"{row['relevance_fire']}) — if they were equal the gate would be untested")
     p._unfavored = lambda _b: False
-    priced = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K
+    priced = _coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K
     assert _scores(p, obs)[0] == pytest.approx(priced * row["relevance_fire"] - ITEM_HOLD_FLOOR), (
         "the fire rung must price the AFFORDABLE reading")
     assert priced * row["relevance"] > priced * row["relevance_fire"], (
@@ -316,7 +325,7 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
         "below pass even if the Brief did reach the fire leg")
     assert _BRIEF_THREAT_BOOST > 1.0, "the sharpener must actually be a boost, or nothing is at risk"
     p._unfavored = lambda _b: False
-    raw = (coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K * row["relevance_fire"]
+    raw = (_coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K * row["relevance_fire"]
            - ITEM_HOLD_FLOOR)
     assert _scores(p, obs)[0] == pytest.approx(raw), (
         f"the fire rung must price the RAW affordable reading even though this body is Brief-named — "
@@ -331,13 +340,13 @@ def test_off_is_documented_DEGRADED_MODE_and_emits_ABSENT_not_a_measured_zero():
     from common.strategy.denial import coin_odds
 
     class _Ctx:
-        option_type, tags, card_id = PLAY, ["energy_denial"], HAMMER
+        option_type, tags, card_id = PLAY, ["energy_denial", "coin"], HAMMER
 
     p = _pilot("mega_lucario", armed=False)
     obs = _play_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))
     board = p._board(obs, obs["select"])
     p._unfavored = lambda _b: False
-    assert coin_odds(HAMMER) > 0, "the fixture's card must be a real coin-flip denier"
+    assert _coin_odds(HAMMER) > 0, "the fixture's card must be a real coin-flip denier"
     assert p._denial_play_tactical(obs, board, _Ctx()) == 0.0, (
         "OFF is DEGRADED MODE: the fire rung stands down at exactly 0.0, ahead of the keep price — "
         "a board this loaded (Mega Brave's own {F}{F}) prices +125.00 armed")

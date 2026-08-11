@@ -7,9 +7,34 @@ from dataclasses import replace
 from math import comb
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
-from .information import CausalNeeds, DrawClass, Need, OutcomeRng, hypergeometric_classes
+from .information import BellmanDeckProfile, CausalNeeds, DrawClass, Need, OutcomeRng, hypergeometric_classes
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState
+from .value import WORTH_PER_PRIZE
+from common.strategy.context import (
+    _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
+    _HEAL, _LOOKING, _MAIN, _MOVE_CARD, _SUPPORTER, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
+)
+
+
+DEFAULT_RNG_SEED = 0
+SHORT_HAND_REFRESH_LIMIT = 2
+EXPANDED_PREVIEW_MAIN_STEPS = 2
+SINGLE_PREVIEW_MAIN_STEP = 1
+HEAL_PREVIEW_BUDGET = 80
+MANUAL_COIN_CONTEXT = 46
+BENCH_DAMAGE_CONTEXT = _DAMAGE
+BENCH_DAMAGE_AMOUNT = 50
+AREA_PRIZE = 6
+FULL_PRIZE_COUNT = 6
+REFRESH_DRAW_WITH_FULL_PRIZES = 8
+REFRESH_DRAW_AFTER_PRIZE = 6
+REVEAL_DEPTH = 7
+COIN_HEADS_DRAW = 5
+COIN_TAILS_DRAW = 3
+COIN_BRANCH_PROBABILITY = 0.5
+CHANCE_MASS_TOLERANCE = 1e-12
+ENERGY_REMOVAL_INDEX_SLOT = 2
 
 
 def _expand(counts) -> list[int]:
@@ -37,7 +62,8 @@ class CgpyTransitionProvider:
                  engine=None, production_chance: bool = False):
         self.root = root
         self.registry = registry
-        self.needs = needs or CausalNeeds()
+        self.profile = BellmanDeckProfile.from_registry(registry) if registry else BellmanDeckProfile()
+        self.needs = needs or CausalNeeds(profile=self.profile)
         self.production_chance = bool(production_chance)
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
@@ -70,13 +96,13 @@ class CgpyTransitionProvider:
                 _take(filler, int(opp.get("deckCount", 0))),
                 _take(filler, len(opp.get("prize") or ())),
                 _take(filler, int(opp.get("handCount", 0))), [],
-                manual_coin=True, rng=SeededRng(0),
+                manual_coin=True, rng=SeededRng(DEFAULT_RNG_SEED),
             )
             self._engines[root.semantic_key] = engine
             self._attack_committed[root.semantic_key] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
             context = int(((root.obs.get("select") or {}).get("context", -1)))
-            if context != 0:
+            if context != _MAIN:
                 self._local_nested = True
                 self._error = ""
             else:
@@ -112,6 +138,10 @@ class CgpyTransitionProvider:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
+    def _tags(self, card_id) -> frozenset[str]:
+        return frozenset((self.registry.functions.get(int(card_id), ())
+                          if self.registry is not None and card_id is not None else ()))
+
     def preview_actions(self, state, actions, *, main_steps: int):
         """Cheap rollout menu: preserve commitments/terminal moves and one causal refresh.
 
@@ -127,48 +157,54 @@ class CgpyTransitionProvider:
         board = engine.gs.players[state.root_seat]
         active_id = engine.gs.card_id(board.active.top) if board.active is not None else None
         in_play = {engine.gs.card_id(body.top) for body in engine.gs.in_play(state.root_seat)}
-        allow_lillie = ((active_id == 666 and not in_play.intersection({1030, 1031}))
-                        or len(board.hand) <= 2)
+        allow_refresh = ((active_id in self.profile.accelerators
+                          and not in_play.intersection(self.profile.line_cards))
+                         or len(board.hand) <= SHORT_HAND_REFRESH_LIMIT)
         kept = []
         for action in actions:
             if action.identity.kind != "play":
                 kept.append(action)
                 continue
             card_id, _serial = self._played_card_id(engine, action)
-            if card_id == 1030 or (card_id == 1227 and allow_lillie):
+            tags = self._tags(card_id)
+            if (card_id in self.profile.line_bases
+                    or ("shuffle_hand" in tags and "hand_disruption" not in tags
+                        and allow_refresh)):
                 kept.append(action)
         return tuple(kept)
 
     def preview_main_steps(self, state, action, default: int) -> int:
         engine = self._engines.get(state.semantic_key)
         context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context in (7, 17):
-            return max(default, 2)
-        if context in (3, 4):
-            return max(default, 1)
+        if context in (_TO_HAND, _HEAL):
+            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
+        if context in (_SWITCH, _TO_ACTIVE):
+            return max(default, SINGLE_PREVIEW_MAIN_STEP)
         if action.identity.kind in ("attach", "evolve", "retreat"):
-            return max(default, 1)
+            return max(default, SINGLE_PREVIEW_MAIN_STEP)
         if engine is None or action.identity.kind != "play":
             return default
         card_id, _serial = self._played_card_id(engine, action)
+        tags = self._tags(card_id)
         # Gust/heal can require target -> attach -> attack before their payoff is realized.
-        if card_id in (1182, 1229):
-            return max(default, 2)
+        if tags.intersection({"gust", "heal"}):
+            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
         # A denial/deploy play is useful before an otherwise terminal attack only if the full
         # play-then-attack line still beats attacking now.
-        return max(default, 1) if card_id in (1030, 1086, 1120) else default
+        return max(default, SINGLE_PREVIEW_MAIN_STEP) if (card_id in self.profile.line_bases
+                                   or tags.intersection({"bench_fill", "energy_denial"})) else default
 
     def preview_budget(self, state, action, default: int) -> int:
         """Local mechanics depth, independent of strategic payoff."""
         context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context == 17:
-            return max(default, 80)
+        if context == _HEAL:
+            return max(default, HEAL_PREVIEW_BUDGET)
         engine = self._engines.get(state.semantic_key)
         if engine is None or action.identity.kind != "play":
             return default
         card_id, _serial = self._played_card_id(engine, action)
-        # Wally resolves a target, returned stack/Energy, a replacement attachment, then attack.
-        return max(default, 80) if card_id == 1229 else default
+        # Heal resolves a target, returned stack/Energy, a replacement attachment, then attack.
+        return max(default, HEAL_PREVIEW_BUDGET) if "heal" in self._tags(card_id) else default
 
     def chance_replan_steps(self, state, action, default: int) -> int:
         """Only revealed information earns an additional actual-state replan horizon."""
@@ -176,7 +212,8 @@ class CgpyTransitionProvider:
         if engine is None or action.identity.kind != "play":
             return default
         card_id, _serial = self._played_card_id(engine, action)
-        return max(default, 1) if card_id in (1122, 1223, 1227) else default
+        return max(default, SINGLE_PREVIEW_MAIN_STEP) if self._tags(card_id).intersection(
+            {"dig", "hand_disruption", "shuffle_hand"}) else default
 
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:
@@ -190,7 +227,7 @@ class CgpyTransitionProvider:
                 return information
             child = engine.fork()
             child.step(list(action.selection))
-            if child.gs.pending is not None and int(child.gs.pending.context) == 46:
+            if child.gs.pending is not None and int(child.gs.pending.context) == MANUAL_COIN_CONTEXT:
                 return self._coin_transition(state, child, action)
             return self._register_successor(state, child, action)
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
@@ -200,7 +237,7 @@ class CgpyTransitionProvider:
     def _body(players, seat, area, index):
         if not 0 <= seat < len(players):
             return None
-        zone = "active" if int(area) == 4 else "bench" if int(area) == 5 else None
+        zone = "active" if int(area) == _ACTIVE else "bench" if int(area) == _BENCH else None
         bodies = players[seat].get(zone) if zone else None
         return bodies[index] if bodies and 0 <= index < len(bodies) else None
 
@@ -220,7 +257,7 @@ class CgpyTransitionProvider:
             current = obs.get("current") or {}
             players = current.get("players") or []
             context = int(select.get("context", -1))
-            if context == 15:  # Jetting Blow's 50 Bench damage
+            if context == BENCH_DAMAGE_CONTEXT:
                 for option in picked:
                     target_seat = int(option["playerIndex"])
                     target_index = int(option["index"])
@@ -228,15 +265,15 @@ class CgpyTransitionProvider:
                                       int(option["area"]), target_index)
                     if body is None:
                         raise ValueError("damage target is absent")
-                    body["hp"] = max(0, int(body.get("hp", 0)) - 50)
-                    if body["hp"] == 0 and int(option["area"]) == 5:
+                    body["hp"] = max(0, int(body.get("hp", 0)) - BENCH_DAMAGE_AMOUNT)
+                    if body["hp"] == 0 and int(option["area"]) == _BENCH:
                         card_id = int(body.get("id", 0))
                         facts = self.registry.facts.get(card_id) if self.registry else None
                         prizes = max(1, int(getattr(facts, "prize_value", 1)))
                         players[target_seat]["bench"].pop(target_index)
                         mine = players[state.root_seat].get("prize") or []
                         del mine[:min(prizes, len(mine))]
-            elif context == 21:  # Turbo Flare / generic visible Energy placement
+            elif context == _ATTACH_FROM:  # generic visible Energy placement
                 card = copy.deepcopy(select.get("contextCard"))
                 if not card:
                     raise ValueError("attach-from menu has no context Energy")
@@ -250,7 +287,7 @@ class CgpyTransitionProvider:
                     energy_type = card.get("energyType", getattr(facts, "energy_type", None))
                     if energy_type is not None:
                         body.setdefault("energies", []).append(int(energy_type))
-            elif context == 30:  # mandatory attached-Energy payment / denial target
+            elif context == _DISCARD_ENERGY:  # mandatory attached-Energy payment / denial target
                 removals = []
                 for option in picked:
                     body = self._body(players, int(option["playerIndex"]),
@@ -261,7 +298,7 @@ class CgpyTransitionProvider:
                                      int(option["energyIndex"])))
                 # Multiple picks can name the same holder; remove high indices first so every
                 # option keeps the engine menu's original Energy-card indexing.
-                removals.sort(key=lambda row: row[2], reverse=True)
+                removals.sort(key=lambda row: row[ENERGY_REMOVAL_INDEX_SLOT], reverse=True)
                 for body, seat, energy_index in removals:
                     cards = body.get("energyCards") or []
                     if not 0 <= energy_index < len(cards):
@@ -271,7 +308,7 @@ class CgpyTransitionProvider:
                     if energy_index < len(units):
                         units.pop(energy_index)
                     players[seat].setdefault("discard", []).append(card)
-            elif context == 4:  # forced promotion
+            elif context == _TO_ACTIVE:  # forced promotion
                 for option in picked:
                     seat = int(option["playerIndex"])
                     index = int(option["index"])
@@ -280,7 +317,7 @@ class CgpyTransitionProvider:
                     players[seat]["active"] = [promoted]
                     if old and int(old.get("hp", 0)) > 0:
                         players[seat].setdefault("bench", []).append(old)
-            elif context == 3:  # an ordinary switch/retreat target
+            elif context == _SWITCH:  # an ordinary switch/retreat target
                 for option in picked:
                     seat = int(option["playerIndex"])
                     index = int(option["index"])
@@ -289,19 +326,19 @@ class CgpyTransitionProvider:
                     players[seat]["active"] = [promoted]
                     if old:
                         players[seat].setdefault("bench", []).append(old)
-            elif context == 7:  # visible deck/discard/looking card to hand
+            elif context == _TO_HAND:  # visible deck/discard/looking card to hand
                 deck_listing = select.get("deck") or ()
                 prize_picks = []
                 for option in picked:
                     seat = int(option["playerIndex"])
                     area, index = int(option["area"]), int(option["index"])
-                    if area == 1:
+                    if area == _DECK:
                         card = copy.deepcopy(deck_listing[index])
-                    elif area == 12:
+                    elif area == _LOOKING:
                         card = copy.deepcopy((current.get("looking") or ())[index])
-                    elif area == 3:
+                    elif area == _DISCARD:
                         card = copy.deepcopy(players[seat]["discard"][index])
-                    elif area == 6:
+                    elif area == AREA_PRIZE:
                         # A post-KO prize menu exposes only interchangeable card backs.  Credit the
                         # observable prize progress now; the revealed card enters the real next
                         # observation and is valued after the mandatory replan.
@@ -348,7 +385,7 @@ class CgpyTransitionProvider:
             pending = child.gs.pending
             passed_turn = (pending is not None and pending.seat != state.root_seat
                            and int(child.gs.turn) != self._root_turn
-                           and int(pending.context) == 0)
+                           and int(pending.context) == _MAIN)
             if committed and passed_turn:
                 return Terminal(successor, "attack resolved")
             return Deterministic(successor)
@@ -359,18 +396,18 @@ class CgpyTransitionProvider:
         source_id = None
         if child.gs.frames:
             source_id = child.gs.card_id(child.gs.frames[-1].source)
-        if source_id == 1223:
+        if "hand_disruption" in self._tags(source_id):
             return self._harlequin_coin_transition(state, child, action)
         edges = []
         for index, option in enumerate(child.gs.pending.options):
-            if int(option.get("type", -1)) not in (1, 2):
+            if int(option.get("type", -1)) not in (_YES, _NO):
                 continue
             branch = child.fork()
             branch.step([index])
             node = self._register_successor(state, branch, action)
-            label = "heads" if int(option.get("type")) == 1 else "tails"
-            edges.append(WeightedEdge(0.5, label, node))
-        if len(edges) != 2:
+            label = "heads" if int(option.get("type")) == _YES else "tails"
+            edges.append(WeightedEdge(COIN_BRANCH_PROBABILITY, label, node))
+        if len(edges) != len((_YES, _NO)):
             return Unknown("manual coin menu malformed", repr(child.gs.pending.options))
         return Chance(tuple(edges))
 
@@ -395,9 +432,9 @@ class CgpyTransitionProvider:
         edges = []
         for index, option in enumerate(child.gs.pending.options):
             option_type = int(option.get("type", -1))
-            if option_type not in (1, 2):
+            if option_type not in (_YES, _NO):
                 continue
-            draws = 5 if option_type == 1 else 3
+            draws = COIN_HEADS_DRAW if option_type == _YES else COIN_TAILS_DRAW
             for outcome, expected_adjustment in self._outcome_classes(pool_ids, draws, needs):
                 draw_ids, adjustment = self._representative_ids(pool_ids, needs, outcome,
                                                                 self.registry)
@@ -408,8 +445,8 @@ class CgpyTransitionProvider:
                 branch.step([index])
                 node = self._register_successor(
                     state, branch, action, adjustments=(("chance.hand", adjustment),))
-                label = ("heads" if option_type == 1 else "tails") + ":" + outcome.label
-                edges.append(WeightedEdge(0.5 * outcome.probability, label, node))
+                label = ("heads" if option_type == _YES else "tails") + ":" + outcome.label
+                edges.append(WeightedEdge(COIN_BRANCH_PROBABILITY * outcome.probability, label, node))
         if not edges:
             return Unknown("Harlequin coin menu malformed", repr(child.gs.pending.options))
         return Chance(tuple(edges))
@@ -455,7 +492,7 @@ class CgpyTransitionProvider:
         selected.extend(chosen_other)
         expected_worth += mean * outcome.remainder
         actual = sum(registry.worth(card_id) for card_id in selected) if registry else 0.0
-        return selected, (expected_worth - actual) / 120.0
+        return selected, (expected_worth - actual) / WORTH_PER_PRIZE
 
     def _outcome_classes(self, pool, draws, needs):
         exact = hypergeometric_classes(pool, draws, needs)
@@ -494,19 +531,21 @@ class CgpyTransitionProvider:
                 expected_worth += complement_mean * (draws - sum(conditional))
             actual = (sum(self.registry.worth(card_id) for card_id in selected)
                       if self.registry else 0.0)
-            rows.append((representative, (expected_worth - actual) / 120.0))
+            rows.append((representative, (expected_worth - actual) / WORTH_PER_PRIZE))
         return tuple(rows)
 
     def _information_transition(self, state, engine, action):
         card_id, source = self._played_card_id(engine, action)
-        if card_id == 1122:
+        tags = self._tags(card_id)
+        if "dig" in tags:
             return self._pokegear_transition(state, engine, action)
-        if card_id != 1227:
+        if not ("shuffle_hand" in tags and "hand_disruption" not in tags):
             return None
         board = engine.gs.players[state.root_seat]
         pool_serials = list(board.deck) + [serial for serial in board.hand if serial != source]
         pool_ids = [engine.gs.card_id(serial) for serial in pool_serials]
-        draws = 8 if len(board.prize) == 6 else 6
+        draws = (REFRESH_DRAW_WITH_FULL_PRIZES if len(board.prize) == FULL_PRIZE_COUNT
+                 else REFRESH_DRAW_AFTER_PRIZE)
         counts = Counter(pool_ids)
         needs = self.needs.derive(state.obs, deck_counts=counts)
         edges = []
@@ -528,7 +567,7 @@ class CgpyTransitionProvider:
         board = engine.gs.players[state.root_seat]
         pool_ids = [engine.gs.card_id(serial) for serial in board.deck]
         supporter_ids = sorted({engine.gs.card_id(serial) for serial in board.deck
-                                if int(engine.gs.stat(serial).cardType) == 3})
+                                if int(engine.gs.stat(serial).cardType) == _SUPPORTER})
         if self.production_chance:
             return self._pokegear_precedence_transition(
                 state, engine, action, pool_ids, supporter_ids)
@@ -538,7 +577,7 @@ class CgpyTransitionProvider:
                       for card_id in supporter_ids)
         edges = []
         for outcome, _adjustment in self._outcome_classes(
-                pool_ids, min(7, len(pool_ids)), needs):
+                pool_ids, min(REVEAL_DEPTH, len(pool_ids)), needs):
             top_ids, _adjustment = self._representative_ids(pool_ids, needs, outcome, self.registry)
             branch = engine.fork()
             self._force_top_ids(branch, state.root_seat, top_ids)
@@ -553,7 +592,7 @@ class CgpyTransitionProvider:
         Lower identities inside the same reveal cannot improve this bounded branch's first pick;
         the real reveal is replanned without this compression.
         """
-        draws, total = min(7, len(pool_ids)), len(pool_ids)
+        draws, total = min(REVEAL_DEPTH, len(pool_ids)), len(pool_ids)
         denominator = comb(total, draws) if total >= draws else 1
         ordered = sorted(supporter_ids,
                          key=lambda card_id: (self.registry.worth(card_id)
@@ -591,7 +630,7 @@ class CgpyTransitionProvider:
             node = self._register_successor(state, branch, action)
             edges.append(WeightedEdge(none_probability, "no-supporter", node))
         mass = sum(edge.probability for edge in edges)
-        if not edges or abs(mass - 1.0) > 1e-12:
+        if not edges or abs(mass - 1.0) > CHANCE_MASS_TOLERANCE:
             return Unknown("Pokégear precedence mass malformed", str(mass))
         return Chance(tuple(edges))
 

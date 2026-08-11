@@ -10,8 +10,65 @@ from typing import Mapping
 from .state import OpponentBelief, freeze
 
 
-STARYU, MEGA_STARMIE, CINDERACE = 1030, 1031, 666
-WATER, IGNITION = 3, 17
+DEFAULT_SEAT = 0
+DEFAULT_BENCH_CAPACITY = 5
+ACCELERATOR_RECIPIENT_WORTH = 32.0
+LINE_EVOLUTION_WORTH = 30.0
+TYPED_ENERGY_WORTH = 12.0
+BURST_ENERGY_WORTH = 12.0
+PROBABILITY_MIN = 0.0
+PROBABILITY_MAX = 1.0
+HYPERGEOMETRIC_MASS_TOLERANCE = 1e-12
+OUTCOME_RNG_SEED = 0
+CANDIDATE_PAIR_SIZE = 2
+
+
+@dataclass(frozen=True)
+class BellmanDeckProfile:
+    """Deck declarations consumed by the neutral Bellman kernel.
+
+    Card identity is allowed at the deck boundary, never in the planner.  The profile is inferred
+    from a strategy's declared evolution lines, roles, card facts, and function tags so another
+    deck supplies data rather than another branch of core logic.
+    """
+
+    lines: tuple[tuple[int, ...], ...] = ()
+    accelerators: tuple[int, ...] = ()
+    reusable_energy: tuple[int, ...] = ()
+    burst_energy: tuple[int, ...] = ()
+
+    @classmethod
+    def from_registry(cls, registry) -> "BellmanDeckProfile":
+        lines = tuple(getattr(registry, "lines", ()) or ())
+        if not lines:
+            lines = tuple((base, top) for top, base in
+                          sorted(getattr(registry, "line_parents", {}).items()))
+        functions = getattr(registry, "functions", {})
+        facts = getattr(registry, "facts", {})
+        roles = getattr(registry, "roles", {})
+        accelerators = tuple(sorted(
+            card_id for card_id, card_roles in roles.items()
+            if "accel_source" in card_roles and bool(getattr(facts.get(card_id), "pokemon", False))))
+        reusable_energy = tuple(sorted(
+            card_id for card_id, fact in facts.items()
+            if bool(getattr(fact, "typed_basic_energy", False))))
+        burst_energy = tuple(sorted(
+            card_id for card_id, tags in functions.items()
+            if "discard_eot" in tags and any(str(tag).startswith("provides_evo:") for tag in tags)))
+        return cls(tuple(tuple(int(card_id) for card_id in line) for line in lines),
+                   accelerators, reusable_energy, burst_energy)
+
+    @property
+    def line_bases(self) -> frozenset[int]:
+        return frozenset(line[0] for line in self.lines if line)
+
+    @property
+    def line_tops(self) -> frozenset[int]:
+        return frozenset(line[-1] for line in self.lines if line)
+
+    @property
+    def line_cards(self) -> frozenset[int]:
+        return frozenset(card_id for line in self.lines for card_id in line)
 
 
 @dataclass(frozen=True)
@@ -25,12 +82,8 @@ class Need:
 class CausalNeeds:
     """Deck declaration translated into legal dependency demand; never an action chooser."""
 
-    def __init__(self, *, line=(STARYU, MEGA_STARMIE), accelerator=CINDERACE,
-                 reusable_energy=WATER, burst_energy=IGNITION):
-        self.line = tuple(int(card_id) for card_id in line)
-        self.accelerator = int(accelerator)
-        self.reusable_energy = int(reusable_energy)
-        self.burst_energy = int(burst_energy)
+    def __init__(self, *, profile: BellmanDeckProfile = BellmanDeckProfile()):
+        self.profile = profile
 
     @staticmethod
     def _ids(player) -> list[int]:
@@ -39,36 +92,43 @@ class CausalNeeds:
 
     def derive(self, observation: Mapping, *, deck_counts: Mapping[int, int]) -> tuple[Need, ...]:
         current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
+        seat = int(current.get("yourIndex", DEFAULT_SEAT))
         players = current.get("players") or ()
         me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
         bodies = self._ids(me)
-        bench_space = len(me.get("bench") or ()) < int(me.get("benchMax", 5))
+        bench_space = len(me.get("bench") or ()) < int(me.get("benchMax", DEFAULT_BENCH_CAPACITY))
         needs = []
-        if (self.accelerator in bodies and self.line[0] not in bodies
-                and self.line[1] not in bodies and bench_space
-                and deck_counts.get(self.line[0], 0) > 0):
+        bases = self.profile.line_bases
+        tops = self.profile.line_tops
+        if (set(self.profile.accelerators).intersection(bodies) and not set(bodies).intersection(bases)
+                and not set(bodies).intersection(tops) and bench_space
+                and any(deck_counts.get(card_id, 0) > 0 for card_id in bases)):
             needs.append(Need(
-                "turbo-recipient", (self.line[0],), 32.0,
-                "Staryu supplies a Bench recipient for Turbo Flare and the Mega Starmie line",
+                "accelerator-recipient", tuple(sorted(bases)), ACCELERATOR_RECIPIENT_WORTH,
+                "A declared evolution-line base supplies a Bench recipient for acceleration",
             ))
-        if (self.line[0] in bodies and self.line[1] not in bodies
-                and deck_counts.get(self.line[1], 0) > 0):
+        missing_tops = tuple(card_id for card_id in tops if card_id not in bodies
+                             and deck_counts.get(card_id, 0) > 0)
+        if set(bodies).intersection(bases) and missing_tops:
             needs.append(Need(
-                "line-evolution", (self.line[1],), 30.0,
-                "Mega Starmie converts the established Staryu dependency into the win condition",
+                "line-evolution", missing_tops, LINE_EVOLUTION_WORTH,
+                "A declared top evolution converts the established dependency into a win condition",
             ))
         active = next((body for body in (me.get("active") or ()) if body), None)
         active_energy = len((active or {}).get("energyCards") or (active or {}).get("energies") or ())
-        if active is not None and active_energy == 0 and deck_counts.get(self.reusable_energy, 0) > 0:
+        reusable = tuple(card_id for card_id in self.profile.reusable_energy
+                         if deck_counts.get(card_id, 0) > 0)
+        if active is not None and active_energy == 0 and reusable:
             needs.append(Need(
-                "typed-attack-energy", (self.reusable_energy,), 12.0,
-                "reusable Water funds the current attack and persists",
+                "typed-attack-energy", reusable, TYPED_ENERGY_WORTH,
+                "A reusable typed Energy funds the current attack and persists",
             ))
-        if (self.line[1] in bodies and deck_counts.get(self.burst_energy, 0) > 0):
+        burst = tuple(card_id for card_id in self.profile.burst_energy
+                      if deck_counts.get(card_id, 0) > 0)
+        if set(bodies).intersection(tops) and burst:
             needs.append(Need(
-                "burst-energy", (self.burst_energy,), 12.0,
-                "Ignition can fund the evolved body's colorless burst this turn",
+                "burst-energy", burst, BURST_ENERGY_WORTH,
+                "Burst Energy can fund the evolved body's colourless attack this turn",
             ))
         return tuple(needs)
 
@@ -111,7 +171,7 @@ def hypergeometric_classes(pool_ids, draws: int, needs: tuple[Need, ...]) -> tup
         outcomes.append(DrawClass(numerator / denominator, tuple(counts), remainder,
                                   ",".join(labels)))
     mass = sum(outcome.probability for outcome in outcomes)
-    if abs(mass - 1.0) > 1e-12:
+    if abs(mass - PROBABILITY_MAX) > HYPERGEOMETRIC_MASS_TOLERANCE:
         raise ValueError(f"hypergeometric outcome mass {mass} != 1")
     return tuple(outcomes)
 
@@ -123,26 +183,26 @@ def opponent_belief(observation: Mapping, *, candidates=(), properties=None) -> 
         if isinstance(candidate, Mapping):
             name = str(candidate.get("name") or candidate.get("slug") or "unknown")
             probability = float(candidate.get("probability", candidate.get("p", 0.0)) or 0.0)
-        elif isinstance(candidate, (tuple, list)) and len(candidate) == 2:
+        elif isinstance(candidate, (tuple, list)) and len(candidate) == CANDIDATE_PAIR_SIZE:
             name, probability = str(candidate[0]), float(candidate[1])
         else:
             name = str(getattr(candidate, "name", getattr(candidate, "slug", "unknown")))
             probability = float(getattr(candidate, "probability", getattr(candidate, "p", 0.0)) or 0.0)
-        if probability > 0.0:
+        if probability > PROBABILITY_MIN:
             rows.append((name, probability))
     claimed = sum(probability for _name, probability in rows)
-    if claimed > 1.0:
+    if claimed > PROBABILITY_MAX:
         rows = [(name, probability / claimed) for name, probability in rows]
-        claimed = 1.0
+        claimed = PROBABILITY_MAX
     current = observation.get("current") or {}
-    seat = int(current.get("yourIndex", 0))
+    seat = int(current.get("yourIndex", DEFAULT_SEAT))
     players = current.get("players") or ()
     visible = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
     return OpponentBelief(
         visible=freeze(visible), archetypes=tuple(sorted(rows)),
         properties=tuple(sorted((str(key), freeze(value))
                                 for key, value in (properties or {}).items())),
-        unknown_mass=max(0.0, 1.0 - claimed),
+        unknown_mass=max(PROBABILITY_MIN, PROBABILITY_MAX - claimed),
     )
 
 
@@ -151,7 +211,7 @@ class OutcomeRng:
 
     def __init__(self, *, seat: int, serial_to_card: Mapping[int, int], draw_ids):
         from cgpy.rng import SeededRng
-        self._fallback = SeededRng(0)
+        self._fallback = SeededRng(OUTCOME_RNG_SEED)
         self.seat = int(seat)
         self.serial_to_card = dict(serial_to_card)
         self.draw_ids = list(int(card_id) for card_id in draw_ids)
@@ -195,6 +255,6 @@ class OutcomeRng:
 
 
 __all__ = (
-    "CausalNeeds", "DrawClass", "Need", "OutcomeRng", "hypergeometric_classes",
+    "BellmanDeckProfile", "CausalNeeds", "DrawClass", "Need", "OutcomeRng", "hypergeometric_classes",
     "opponent_belief",
 )

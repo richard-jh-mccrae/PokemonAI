@@ -57,7 +57,7 @@ class DenyMixin:
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
         # NO whiff short-circuit: declining needs a STRICTLY negative score. `_finish_turn_last`
         # promotes on `score > 0`, so a bare 0.0 quota-free Item ties with End by option index.
-        return (coin_odds(ctx.card_id) * weight * value
+        return (coin_odds(ctx.tags) * weight * value
                 - self._item_hold_price(obs, board, ctx.card_id))
 
     def _denial_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:

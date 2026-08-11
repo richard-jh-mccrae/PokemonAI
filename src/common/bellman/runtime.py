@@ -2,11 +2,23 @@
 from __future__ import annotations
 
 from .api import BellmanUnavailable, PlanRequest, RootDecision
-from .information import CausalNeeds
+from .information import BellmanDeckProfile, CausalNeeds
 from .native_engine import NativeTransitionProvider
 from .solver import ProductionLimits, ProductionSolver
 from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
+
+
+RUNTIME_MAX_DEPTH = 4
+RUNTIME_MAX_NODES = 300
+RUNTIME_BEAM_WIDTH = 2
+RUNTIME_PREVIEW_MAIN_STEPS = 0
+RUNTIME_PREVIEW_CAP_PER_ACTION = 24
+
+DEFAULT_PRODUCTION_LIMITS = ProductionLimits(
+    max_depth=RUNTIME_MAX_DEPTH, max_nodes=RUNTIME_MAX_NODES, beam_width=RUNTIME_BEAM_WIDTH,
+    preview_main_steps=RUNTIME_PREVIEW_MAIN_STEPS, max_preview_per_action=RUNTIME_PREVIEW_CAP_PER_ACTION,
+)
 
 
 class MegaStarmieTurnPlanner:
@@ -14,9 +26,10 @@ class MegaStarmieTurnPlanner:
 
     def __init__(self, *, registry: ValueRegistry, family_evaluator,
                  belief: OpponentBelief | None = None,
-                 limits: ProductionLimits = ProductionLimits(4, 300, 2, 0, 24)):
+                 limits: ProductionLimits = DEFAULT_PRODUCTION_LIMITS):
         self.registry = registry
         self.family_evaluator = family_evaluator
+        self.profile = BellmanDeckProfile.from_registry(registry)
         self.belief = belief
         self.limits = limits
 
@@ -31,11 +44,11 @@ class MegaStarmieTurnPlanner:
             # with the native grader token.
             from .engine import CgpyTransitionProvider
             provider = CgpyTransitionProvider(
-                state, registry=self.registry, needs=CausalNeeds(), production_chance=True)
+                state, registry=self.registry, needs=CausalNeeds(profile=self.profile), production_chance=True)
             backend = "cgpy-offline"
         else:
             provider = NativeTransitionProvider(
-                state, registry=self.registry, needs=CausalNeeds(), production_chance=True)
+                state, registry=self.registry, needs=CausalNeeds(profile=self.profile), production_chance=True)
             backend = "native-cg"
         if not provider.available:
             if hasattr(provider, "close"):

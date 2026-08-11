@@ -8,6 +8,12 @@ from functools import cached_property
 import hashlib
 
 
+PROBABILITY_MIN = 0.0
+PROBABILITY_MAX = 1.0
+BELIEF_MASS_TOLERANCE = 1e-6
+DEFAULT_ROOT_SEAT = 0
+
+
 def freeze(value):
     # Observations are built-in containers.  Test exact types first: ``typing.Mapping`` performs
     # an expensive ABC/subclass walk at every leaf, and a single search freezes millions of leaves.
@@ -67,13 +73,13 @@ class OpponentBelief:
     visible: tuple
     archetypes: tuple[tuple[str, float], ...] = ()
     properties: tuple[tuple[str, object], ...] = ()
-    unknown_mass: float = 1.0
+    unknown_mass: float = PROBABILITY_MAX
 
     def __post_init__(self) -> None:
-        if not 0.0 <= float(self.unknown_mass) <= 1.0:
+        if not PROBABILITY_MIN <= float(self.unknown_mass) <= PROBABILITY_MAX:
             raise ValueError("unknown belief mass must be in [0, 1]")
         total = self.unknown_mass + sum(float(prob) for _name, prob in self.archetypes)
-        if not 0.999999 <= total <= 1.000001:
+        if not PROBABILITY_MAX - BELIEF_MASS_TOLERANCE <= total <= PROBABILITY_MAX + BELIEF_MASS_TOLERANCE:
             raise ValueError("belief probability mass must sum to one")
 
 
@@ -115,7 +121,7 @@ class DecisionState:
                          belief: OpponentBelief | None = None,
                          value_registry_identity: str = "bellman-seeds-v1") -> "DecisionState":
         current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
+        seat = int(current.get("yourIndex", DEFAULT_ROOT_SEAT))
         raw_prizes = observation.get("own_prizes") or {}
         prizes = Counter({int(card_id): int(count) for card_id, count in raw_prizes.items()})
         remaining = Counter(int(card_id) for card_id in deck)
@@ -125,7 +131,7 @@ class DecisionState:
         players = current.get("players") or ()
         opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
         if belief is None:
-            belief = OpponentBelief(visible=freeze(opponent), unknown_mass=1.0)
+            belief = OpponentBelief(visible=freeze(opponent), unknown_mass=PROBABILITY_MAX)
         return cls(
             observation=freeze(dict(observation)), root_seat=seat, deck_name=str(deck_name),
             deck=tuple(int(card_id) for card_id in deck), deck_counts=tuple(sorted(remaining.items())),

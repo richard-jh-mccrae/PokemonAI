@@ -11,7 +11,19 @@ from .algebra import (
 from .api import ActionIdentity, RootDecision
 from .options import LegalAction
 from .state import DecisionState
+from common.strategy.context import _MAIN, _SKILL, _TO_ACTIVE
 from .value import ValueOracle
+
+
+REFERENCE_MAX_DEPTH = 20
+REFERENCE_MAX_NODES = 100_000
+PRODUCTION_MAX_DEPTH = 12
+PRODUCTION_MAX_NODES = 4_000
+PRODUCTION_BEAM_WIDTH = 4
+PRODUCTION_PREVIEW_MAIN_STEPS = 1
+PRODUCTION_PREVIEW_CAP_PER_ACTION = 300
+FORCED_RESOLUTION_DEPTH_LIMIT = 24
+MULTI_PRIZE_GAIN_THRESHOLD = 2
 
 
 class TransitionProvider(Protocol):
@@ -27,17 +39,17 @@ class TransitionProvider(Protocol):
 
 @dataclass(frozen=True)
 class SearchLimits:
-    max_depth: int = 20
-    max_nodes: int = 100_000
+    max_depth: int = REFERENCE_MAX_DEPTH
+    max_nodes: int = REFERENCE_MAX_NODES
 
 
 @dataclass(frozen=True)
 class ProductionLimits:
-    max_depth: int = 12
-    max_nodes: int = 4_000
-    beam_width: int = 4
-    preview_main_steps: int = 1
-    max_preview_per_action: int = 300
+    max_depth: int = PRODUCTION_MAX_DEPTH
+    max_nodes: int = PRODUCTION_MAX_NODES
+    beam_width: int = PRODUCTION_BEAM_WIDTH
+    preview_main_steps: int = PRODUCTION_PREVIEW_MAIN_STEPS
+    max_preview_per_action: int = PRODUCTION_PREVIEW_CAP_PER_ACTION
 
 
 @dataclass(frozen=True)
@@ -231,7 +243,7 @@ class ProductionSolver(ReferenceSolver):
 
     def _forced_win(self, node, *, seen: frozenset[str], depth: int = 0) -> bool:
         """Resolve only mandatory post-attack menus to prove an immediate game win."""
-        if depth > 24 or isinstance(node, Unknown):
+        if depth > FORCED_RESOLUTION_DEPTH_LIMIT or isinstance(node, Unknown):
             return False
         if isinstance(node, Terminal):
             return node.result == "win"
@@ -276,7 +288,7 @@ class ProductionSolver(ReferenceSolver):
         return tuple(winners)
 
     def _prize_gain(self, node, *, root_count: int, seen: frozenset[str], depth: int = 0):
-        if depth > 24 or isinstance(node, Unknown):
+        if depth > FORCED_RESOLUTION_DEPTH_LIMIT or isinstance(node, Unknown):
             return None
         if isinstance(node, Terminal):
             players = (node.state.obs.get("current") or {}).get("players") or ()
@@ -323,7 +335,8 @@ class ProductionSolver(ReferenceSolver):
             if gain is not None:
                 rows.append((gain, action))
         best = max((gain for gain, _action in rows), default=0)
-        return tuple(action for gain, action in rows if gain == best) if best >= 2 else ()
+        return (tuple(action for gain, action in rows if gain == best)
+                if best >= MULTI_PRIZE_GAIN_THRESHOLD else ())
 
     def _immediate_prize_choices(self, state, actions):
         players = (state.obs.get("current") or {}).get("players") or ()
@@ -347,7 +360,7 @@ class ProductionSolver(ReferenceSolver):
 
     @staticmethod
     def _main(state: DecisionState) -> bool:
-        return int(((state.obs.get("select") or {}).get("context", -1))) == 0
+        return int(((state.obs.get("select") or {}).get("context", -1))) == _MAIN
 
     def decide(self, state: DecisionState) -> RootDecision:
         self.previewed = self.pruned = self.preview_caps = 0
@@ -561,13 +574,18 @@ class ProductionSolver(ReferenceSolver):
         self.nodes += 1
         self._active.add(key)
         actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
-        if (int(((state.obs.get("select") or {}).get("context", -1))) == 15
+        if (int(((state.obs.get("select") or {}).get("context", -1))) == _SKILL
                 and self.provider.actor(state) is Actor.OURS):
             immediate_prizes = self._immediate_prize_choices(state, actions)
             if immediate_prizes:
                 actions = immediate_prizes
-        if (not self._main(state) and self.provider.actor(state) is Actor.OURS
-                and len(actions) > 1):
+        context = int(((state.obs.get("select") or {}).get("context", -1)))
+        # Forced promotion determines the attacker's entire next turn.  Retain every promotion
+        # candidate for its full board-value evaluation; broader nested menus retain the bounded
+        # preview policy below.
+        exact_nested_context = context == _TO_ACTIVE
+        if (not exact_nested_context and not self._main(state)
+                and self.provider.actor(state) is Actor.OURS and len(actions) > 1):
             ranked_nested = []
             for action in actions:
                 budget = self.production_limits.max_preview_per_action

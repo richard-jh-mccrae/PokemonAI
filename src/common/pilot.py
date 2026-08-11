@@ -405,7 +405,7 @@ class Pilot(
     def _bellman_evaluate(self, obs: dict, *, carried=None) -> Decision:
         """The isolated Mega Starmie route. No legacy score, planner, or chooser is consulted."""
         from common.bellman import (
-            MegaStarmiePotential, MegaStarmieTurnPlanner, PlanRequest, ValueRegistry,
+            BellmanDeckProfile, MegaStarmiePotential, MegaStarmieTurnPlanner, PlanRequest, ValueRegistry,
             opponent_belief,
         )
 
@@ -433,10 +433,11 @@ class Pilot(
         if self._bellman_registry is None:
             self._bellman_registry = ValueRegistry.from_strategy(
                 strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
+        profile = BellmanDeckProfile.from_registry(self._bellman_registry)
         planned = MegaStarmieTurnPlanner(
             registry=self._bellman_registry,
             family_evaluator=MegaStarmiePotential(
-                self.stats, functions=self.functions,
+                self.stats, functions=self.functions, profile=profile,
                 threat_roles={card_id: assignment.role for card_id, assignment
                                           in matchup_plan.assignments.items()},
                 root_seat=seat),

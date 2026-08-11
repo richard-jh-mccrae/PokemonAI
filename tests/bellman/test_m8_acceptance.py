@@ -36,6 +36,10 @@ def _correction(episode, frame):
     (81785223, 39, [2]),        # visible Energy makes Clefairy the immediate snipe threat
     (81785223, 45, [2]),        # the same threat rule survives a different Bench ordering
     (82225138, 46, [0]),        # current Scouting overrides the stale Dwebble target label
+    (92102433, 41, [1]),        # resolving Jetting Blow removes the live opposing line
+    (92102433, 44, [0]),        # reachable stage-two line outranks a lower-value draw body
+    (92102433, 89, [0]),        # Cinderace preserves the attach -> Turbo -> Nebula line
+    (92104376, 86, [0]),        # promotion keeps the deliberate seven-prize route available
 ))
 def test_rationale_led_hard_gates(episode, frame, expected):
     pilot = _build_pilot("mega_starmie")[0]

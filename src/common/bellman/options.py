@@ -7,15 +7,22 @@ import json
 from typing import Mapping
 
 from common.option_equivalence import semantic_option_fingerprint, without_engine_serial
+from common.strategy.context import (
+    _ABILITY, _ATTACH, _ATTACHED_TOOL, _ATTACK, _CARD, _DECK, _DISCARD_IN_PLAY, _END, _ENERGY,
+    _ENERGY_CARD, _EVOLVE, _HAND, _LOOKING, _NO, _NUMBER, _PLAY, _RETREAT, _SKILL,
+    _SPECIAL_CONDITION, _YES,
+)
 
 from .api import ActionIdentity
 
 
 _KIND_NAMES = {
-    0: "number", 1: "yes", 2: "no", 3: "card", 4: "tool_card", 5: "energy_card",
-    6: "energy", 7: "play", 8: "attach", 9: "evolve", 10: "ability", 11: "discard",
-    12: "retreat", 13: "attack", 14: "end", 15: "skill", 16: "special_condition",
+    _NUMBER: "number", _YES: "yes", _NO: "no", _CARD: "card", _ATTACHED_TOOL: "tool_card",
+    _ENERGY_CARD: "energy_card", _ENERGY: "energy", _PLAY: "play", _ATTACH: "attach",
+    _EVOLVE: "evolve", _ABILITY: "ability", _DISCARD_IN_PLAY: "discard", _RETREAT: "retreat",
+    _ATTACK: "attack", _END: "end", _SKILL: "skill", _SPECIAL_CONDITION: "special_condition",
 }
+DEFAULT_PICK_COUNT = 1
 
 
 def _card_from_select(observation: Mapping, option: Mapping, area_key: str, index_key: str):
@@ -23,9 +30,9 @@ def _card_from_select(observation: Mapping, option: Mapping, area_key: str, inde
     if not isinstance(index, int) or index < 0:
         return None
     select = observation.get("select") or {}
-    if area == 1:
+    if area == _DECK:
         cards = select.get("deck") or []
-    elif area == 12:
+    elif area == _LOOKING:
         cards = ((observation.get("current") or {}).get("looking") or [])
     else:
         return None
@@ -37,16 +44,16 @@ def _fingerprint(observation: Mapping, option: Mapping) -> str:
     # MAIN PLAY options identify a card by its hand index but omit the redundant HAND area.  Add
     # that structural reference for identity only, so two physical copies cannot consume two beam
     # slots.  The representative still submits the engine's original index.
-    if (semantic.get("type") == 7 and "area" not in semantic
+    if (semantic.get("type") == _PLAY and "area" not in semantic
             and isinstance(semantic.get("index"), int)):
-        semantic["area"] = 2
+        semantic["area"] = _HAND
     found = semantic_option_fingerprint(semantic, dict(observation))
     if found is not None:
         return found
     enriched = []
     referenced = set()
     for area_key, index_key in (("area", "index"), ("inPlayArea", "inPlayIndex")):
-        if option.get(area_key) not in (1, 12):
+        if option.get(area_key) not in (_DECK, _LOOKING):
             continue
         card = _card_from_select(observation, option, area_key, index_key)
         if card is not None:
@@ -80,7 +87,8 @@ def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     """Group semantically interchangeable physical copies; cover every offered index exactly once."""
     options = ((observation.get("select") or {}).get("option") or ())
     select = observation.get("select") or {}
-    minimum, maximum = int(select.get("minCount", 1)), int(select.get("maxCount", 1))
+    minimum, maximum = (int(select.get("minCount", DEFAULT_PICK_COUNT)),
+                        int(select.get("maxCount", DEFAULT_PICK_COUNT)))
     maximum = min(maximum, len(options))
     groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, ...]]] = {}
     for count in range(max(0, minimum), maximum + 1):
