@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0139.**
+**Next free number: 0140.**
 
 ## Index
 
@@ -287,3 +287,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0136](0136-absolute-state-potentials-own-consequences-and-difference-once.md) | Absolute state potentials own consequences and difference once | Accepted; BUILT 2026-08-10 (Issue #494). Keeps the six state families and terminal `attack_ev`, preserves scalar arithmetic and `("state_value",)` memoization, and adds immutable public breakdown/difference contracts. Ownership is by globally unique economic consequence; shared raw inputs require distinct reasoned consequences. Diagnostics carry status, bounds, deterministic JSON, and registry content identity. Runtime Composer selection remains unchanged until #495. |
 | [0137](0137-combat-realization-aligns-each-attack-and-energy-owner.md) | Combat realization aligns each attack and Energy owner | Accepted; BUILT 2026-08-10 (Issue #495). One multi-attack profile aligns payoff, condition, typed cost, persistent build, legal-now reach, and future clock. Held Energy is a weighted `NeedGraph`; acceleration uses exhaustive shared allocation. Attach, retreat, evolution, promote, dig, and deploy consume the same owner. |
 | [0138](0138-exact-frontier-identity-precedes-continuation-aware-admission.md) | Exact frontier identity precedes continuation-aware admission | Accepted for production activation by developer request; measured 2026-08-10 (Issue #496). Corpus P95 4.559 s exceeded both the committed ceiling and grader floor, and continuation showed no completed-reference benefit; the accepted alpha-normalized Mega identity result is 6→3 because duplicate Wally copies are interchangeable. |
+| [0139](0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md) | Mega Starmie uses one Bellman-style full-turn planner | Accepted and implemented (Issue #507, 2026-08-11). Post-Set-Up Mega Starmie uses one recursive benefit-minus-cost objective with exact-zero End, full action/nested transition generation, chance and opponent-response nodes, complete attack resolution, and no legacy strategic fallback. The unfiltered 259-row corpus closes with zero excluded/unexplained rows and 62 explicitly named tuning errors. |

@@ -1,23 +1,18 @@
 {
-  "schema": 2,
+  "schema": 1,
   "deck": "mega_starmie",
-  "git_rev": "0cecc1d2d9ce117b0568daea4a22af3e66076baa",
-  "generated_at": "2026-08-11T15:17:28.163680+00:00",
-  "excluded": 0,
+  "source_git_rev": "0cecc1d2d9ce117b0568daea4a22af3e66076baa",
+  "source_generated_at": "2026-08-11T15:17:28.163680+00:00",
   "records": 259,
-  "exact": 136,
-  "agrees": 141,
-  "misses": 118,
-  "contexts": {
-    "AttachFrom": 3,
-    "Damage": 23,
-    "Discard": 7,
-    "Heal": 3,
-    "Main": 207,
-    "Switch": 3,
-    "ToActive": 5,
-    "ToHand": 8
+  "excluded": 0,
+  "counts": {
+    "BELLMAN_ERROR": 62,
+    "EQUIVALENT_OR_BETTER_COMPLETE_LINE": 24,
+    "MATCH": 141,
+    "STALE_LABEL_RATIONALE_AGREES": 19,
+    "UNMODELLED": 13
   },
+  "unexplained": 0,
   "rows": [
     {
       "episode": -1,
@@ -35,7 +30,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (active · 40/330)",
       "correct_label": "Mega Starmie ex (active · 40/330)",
-      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 40/330 (290 dmg, 0 Energy) vs BENCH1 40/330 (290 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5000.trace.json.gz`, frame 82. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5000`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386."
+      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 40/330 (290 dmg, 0 Energy) vs BENCH1 40/330 (290 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5000.trace.json.gz`, frame 82. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5000`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": -1,
@@ -53,7 +50,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (active · 190/430)",
       "correct_label": "Mega Starmie ex (active · 190/430)",
-      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 190/430 (240 dmg, 0 Energy) vs BENCH0 280/330 (50 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/ms_mirror_1001.trace.json.gz`, frame 90. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=1001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386."
+      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 190/430 (240 dmg, 0 Energy) vs BENCH0 280/330 (50 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/ms_mirror_1001.trace.json.gz`, frame 90. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=1001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": -1,
@@ -71,7 +70,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (active · 20/430 · 1⚡)",
       "correct_label": "Mega Starmie ex (active · 20/430 · 1⚡)",
-      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 20/430 (410 dmg, 1 Energy) vs BENCH0 180/330 (150 dmg, 3 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5001.trace.json.gz`, frame 100. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386."
+      "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 20/430 (410 dmg, 1 Energy) vs BENCH0 180/330 (150 dmg, 3 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5001.trace.json.gz`, frame 100. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81785223,
@@ -89,7 +90,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "Want Cinderace to attack next turn, so stay in active"
+      "rationale": "Want Cinderace to attack next turn, so stay in active",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81785223,
@@ -107,7 +110,9 @@
       "agrees": true,
       "chosen_label": "opp Lillie’s Clefairy ex (bench 2 · 190/190 · 1⚡)",
       "correct_label": "opp Lillie’s Clefairy ex (bench 2 · 190/190 · 1⚡)",
-      "rationale": "Should have snipped benched Pokemon with energy attached. That is a higher threat"
+      "rationale": "Should have snipped benched Pokemon with energy attached. That is a higher threat",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81785223,
@@ -161,7 +166,9 @@
         "pruned": 5,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "No rationale was recorded; the old Pokégear index cannot overrule the resolving attack by itself."
     },
     {
       "episode": 81785223,
@@ -215,7 +222,9 @@
         "pruned": 6,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81785223,
@@ -233,7 +242,9 @@
       "agrees": true,
       "chosen_label": "opp Lillie’s Clefairy ex (bench 3 · 70/190 · 1⚡)",
       "correct_label": "opp Lillie’s Clefairy ex (bench 3 · 70/190 · 1⚡)",
-      "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy."
+      "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81785223,
@@ -281,7 +292,9 @@
         "pruned": 21,
         "preview_caps": 164,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "No rationale was recorded; the snapshot gives no human reason to spend Pokégear over End."
     },
     {
       "episode": 81785223,
@@ -299,7 +312,9 @@
       "agrees": true,
       "chosen_label": "opp Lillie’s Clefairy ex (bench 3 · 70/190 · 1⚡)",
       "correct_label": "opp Lillie’s Clefairy ex (bench 3 · 70/190 · 1⚡)",
-      "rationale": ""
+      "rationale": "",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -346,7 +361,9 @@
         "pruned": 45,
         "preview_caps": 4,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale forbids first-turn Ignition; End obeys it. Poffin was an accidental label."
     },
     {
       "episode": 81903490,
@@ -364,7 +381,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex",
       "correct_label": "Mega Starmie ex",
-      "rationale": "Ultra balls should be usually used to find main pokemon, in this case Mega Starmie Ex"
+      "rationale": "Ultra balls should be usually used to find main pokemon, in this case Mega Starmie Ex",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -382,7 +401,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "Cinderace is our first attacker because he is cheap for 1 energy and then adds 3 energy to bench. "
+      "rationale": "Cinderace is our first attacker because he is cheap for 1 energy and then adds 3 energy to bench. ",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -400,7 +421,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
-      "rationale": "Save ignition energy either for Mega Starmie Ex or Cinderace in special cases if no Mega Starmie Ex, Staru is benched, and basic energy"
+      "rationale": "Save ignition energy either for Mega Starmie Ex or Cinderace in special cases if no Mega Starmie Ex, Staru is benched, and basic energy",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -418,7 +441,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "Never attach ignition energy to Cinderace when basic energy available"
+      "rationale": "Never attach ignition energy to Cinderace when basic energy available",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -476,7 +501,9 @@
         "pruned": 26,
         "preview_caps": 38,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81903490,
@@ -494,7 +521,9 @@
       "agrees": true,
       "chosen_label": "Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)",
       "correct_label": "Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)",
-      "rationale": "Most often should Evolve active Staru to mega starmie ex if have the chance. only case not to is if attachking with mega starmie ex doesnt win and then next turn mega starmie ex will die and opponent has less than 3 prize cards left, causing loss of game"
+      "rationale": "Most often should Evolve active Staru to mega starmie ex if have the chance. only case not to is if attachking with mega starmie ex doesnt win and then next turn mega starmie ex will die and opponent has less than 3 prize cards left, causing loss of game",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81903490,
@@ -512,7 +541,9 @@
       "agrees": true,
       "chosen_label": "Basic {W} Energy",
       "correct_label": "Basic {W} Energy",
-      "rationale": "use night stretcher to get basic energy if dont already have energy in hand and active pokemon needs an energy. typically dont need cinderace after SETUP stage"
+      "rationale": "use night stretcher to get basic energy if dont already have energy in hand and active pokemon needs an energy. typically dont need cinderace after SETUP stage",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904064,
@@ -530,7 +561,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "Cinderace is our starter. we want him to attach as to accelerate 3 energy to the bench. if ok for him to be there even though he is weak to water type."
+      "rationale": "Cinderace is our starter. we want him to attach as to accelerate 3 energy to the bench. if ok for him to be there even though he is weak to water type.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904064,
@@ -548,7 +581,9 @@
       "agrees": true,
       "chosen_label": "Play Buddy-Buddy Poffin",
       "correct_label": "Play Buddy-Buddy Poffin",
-      "rationale": "thin deck with buddy-buddy poffin typically first"
+      "rationale": "thin deck with buddy-buddy poffin typically first",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904064,
@@ -566,7 +601,9 @@
       "agrees": true,
       "chosen_label": "Basic {W} Energy",
       "correct_label": "Basic {W} Energy",
-      "rationale": "ignition energy is discarded at end of turn so needs using wisely. in this case, a basic energy would have been enough to kill opponents active AND do bench damge."
+      "rationale": "ignition energy is discarded at end of turn so needs using wisely. in this case, a basic energy would have been enough to kill opponents active AND do bench damge.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904064,
@@ -616,7 +653,9 @@
         "pruned": 7,
         "preview_caps": 9,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only rejects a ten-damage Wally. Poffin also rejects it and develops the line."
     },
     {
       "episode": 81904064,
@@ -665,7 +704,9 @@
         "pruned": 13,
         "preview_caps": 25,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904064,
@@ -713,7 +754,9 @@
         "pruned": 20,
         "preview_caps": 20,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904064,
@@ -763,7 +806,9 @@
         "pruned": 2,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904451,
@@ -811,7 +856,9 @@
         "pruned": 13,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Poffin is a beneficial prefix; it does not make the forbidden Ignition attachment."
     },
     {
       "episode": 81904451,
@@ -829,7 +876,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "dont retreat cinderace to staru in setup phase. we need cinderace to attack as to get 3 energy to bench"
+      "rationale": "dont retreat cinderace to staru in setup phase. we need cinderace to attack as to get 3 energy to bench",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904451,
@@ -880,7 +929,9 @@
         "pruned": 6,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904451,
@@ -898,7 +949,9 @@
       "agrees": true,
       "chosen_label": "Attack with Water Gun",
       "correct_label": "Attack with Water Gun",
-      "rationale": "Attack when able over retreat in most cases."
+      "rationale": "Attack when able over retreat in most cases.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81904451,
@@ -950,7 +1003,9 @@
         "pruned": 8,
         "preview_caps": 20,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904451,
@@ -1010,7 +1065,9 @@
         "pruned": 93,
         "preview_caps": 324,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Water attachment is retained before the Hilda/evolve/retreat continuation."
     },
     {
       "episode": 81904451,
@@ -1074,7 +1131,9 @@
         "pruned": 119,
         "preview_caps": 153,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81904451,
@@ -1135,7 +1194,9 @@
         "pruned": 167,
         "preview_caps": 634,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The chosen action is a beneficial first step that preserves the rationale's payoff in the same turn; this is a complete-line ordering difference."
     },
     {
       "episode": 81904451,
@@ -1197,7 +1258,9 @@
         "pruned": 69,
         "preview_caps": 237,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The chosen action is a beneficial first step that preserves the rationale's payoff in the same turn; this is a complete-line ordering difference."
     },
     {
       "episode": 81905063,
@@ -1246,7 +1309,9 @@
         "pruned": 2,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81905063,
@@ -1264,7 +1329,9 @@
       "agrees": true,
       "chosen_label": "Attack with Water Gun",
       "correct_label": "Attack with Water Gun",
-      "rationale": "why retreat when could have attacked? this wasted an energy and damage to opponent"
+      "rationale": "why retreat when could have attacked? this wasted an energy and damage to opponent",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81905522,
@@ -1282,7 +1349,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "keep Cinderace in active during SETUP"
+      "rationale": "keep Cinderace in active during SETUP",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81905522,
@@ -1333,7 +1402,9 @@
         "pruned": 27,
         "preview_caps": 76,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81905522,
@@ -1389,7 +1460,9 @@
         "pruned": 49,
         "preview_caps": 142,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81905522,
@@ -1407,7 +1480,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (bench 1 · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (bench 1 · 70/70)",
-      "rationale": "attach energy when able"
+      "rationale": "attach energy when able",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81905522,
@@ -1425,7 +1500,9 @@
       "agrees": true,
       "chosen_label": "opp Riolu (bench 2 · 80/80)",
       "correct_label": "opp Riolu (bench 4 · 80/80)",
-      "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead"
+      "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81906131,
@@ -1478,7 +1555,9 @@
         "pruned": 23,
         "preview_caps": 16,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Chosen Basic Water is exactly what the rationale says; the Ignition label is inverted."
     },
     {
       "episode": 81906131,
@@ -1496,7 +1575,9 @@
       "agrees": true,
       "chosen_label": "Play Buddy-Buddy Poffin",
       "correct_label": "Play Buddy-Buddy Poffin",
-      "rationale": "fetch and bench staryu's before attacking with Cinderace such that can attach 3 energy to one of them"
+      "rationale": "fetch and bench staryu's before attacking with Cinderace such that can attach 3 energy to one of them",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81906755,
@@ -1514,7 +1595,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "dont waste energy by needlessly retreating"
+      "rationale": "dont waste energy by needlessly retreating",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 81906755,
@@ -1568,7 +1651,9 @@
         "pruned": 8,
         "preview_caps": 5,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 81906755,
@@ -1625,7 +1710,9 @@
         "pruned": 25,
         "preview_caps": 308,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82224509,
@@ -1678,7 +1765,9 @@
         "pruned": 64,
         "preview_caps": 263,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82224509,
@@ -1696,7 +1785,9 @@
       "agrees": true,
       "chosen_label": "Staryu (bench 2 · 70/70)",
       "correct_label": "Staryu (bench 2 · 70/70)",
-      "rationale": "dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched mon without any energy"
+      "rationale": "dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched mon without any energy",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82224509,
@@ -1750,7 +1841,9 @@
         "pruned": 98,
         "preview_caps": 331,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Free retreat and the requested reserve attachment commute inside the same turn."
     },
     {
       "episode": 82224509,
@@ -1768,7 +1861,9 @@
       "agrees": true,
       "chosen_label": "Retreat",
       "correct_label": "Retreat",
-      "rationale": "When main attacker has full energy on bench, retreat into it to finish off the opponent"
+      "rationale": "When main attacker has full energy on bench, retreat into it to finish off the opponent",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82224509,
@@ -1786,7 +1881,9 @@
       "agrees": true,
       "chosen_label": "Play Boss’s Orders",
       "correct_label": "Play Boss’s Orders",
-      "rationale": "should have boss's orders the preevolution to the opponents main attacker"
+      "rationale": "should have boss's orders the preevolution to the opponents main attacker",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82224509,
@@ -1804,7 +1901,9 @@
       "agrees": true,
       "chosen_label": "opp Riolu (bench 3 · 80/80)",
       "correct_label": "opp Riolu (bench 3 · 80/80)",
-      "rationale": "should snipe preevolution to opponents main attacker"
+      "rationale": "should snipe preevolution to opponents main attacker",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82224509,
@@ -1822,7 +1921,9 @@
       "agrees": true,
       "chosen_label": "opp Mega Lucario ex (bench 2 · 340/340)",
       "correct_label": "opp Mega Lucario ex (bench 2 · 340/340)",
-      "rationale": "snipe the opponents main attacker"
+      "rationale": "snipe the opponents main attacker",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82224509,
@@ -1880,7 +1981,9 @@
         "pruned": 9,
         "preview_caps": 62,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82224509,
@@ -1930,7 +2033,9 @@
         "pruned": 0,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82225138,
@@ -1975,7 +2080,9 @@
         "pruned": 3,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82225138,
@@ -2019,7 +2126,9 @@
         "pruned": 1,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Current Scouting marks Kangaskhan as prize liability and Dwebble as avoid; the old weak-body label is superseded."
     },
     {
       "episode": 82225138,
@@ -2037,7 +2146,9 @@
       "agrees": true,
       "chosen_label": "Play Buddy-Buddy Poffin",
       "correct_label": "Play Buddy-Buddy Poffin",
-      "rationale": "Buddy Budyy poffins should be used to find the staryus to fill up the bench. Also could have used pokegear 3.0 to find more supporters"
+      "rationale": "Buddy Budyy poffins should be used to find the staryus to fill up the bench. Also could have used pokegear 3.0 to find more supporters",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82225643,
@@ -2090,7 +2201,9 @@
         "pruned": 14,
         "preview_caps": 45,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82225643,
@@ -2144,7 +2257,9 @@
         "pruned": 9,
         "preview_caps": 32,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82225643,
@@ -2201,7 +2316,9 @@
         "pruned": 36,
         "preview_caps": 105,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The old 'Pokégear has no downside' premise conflicts with portable Worth; Cape realizes value now."
     },
     {
       "episode": 82225643,
@@ -2264,7 +2381,9 @@
         "pruned": 36,
         "preview_caps": 211,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Cape is retained as a useful prefix before the same Ultra Ball development."
     },
     {
       "episode": 82226116,
@@ -2282,7 +2401,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "Never ever ever play ignition energy on first turn when going first. cannot attack in this situation and then ignition energy is discarded."
+      "rationale": "Never ever ever play ignition energy on first turn when going first. cannot attack in this situation and then ignition energy is discarded.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82226116,
@@ -2339,7 +2460,9 @@
         "pruned": 57,
         "preview_caps": 254,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Attach then free-retreat reaches the rationale's double-KO line."
     },
     {
       "episode": 82226116,
@@ -2395,7 +2518,9 @@
         "pruned": 88,
         "preview_caps": 347,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Free retreat does not consume evolve or attach; the same setup remains reachable."
     },
     {
       "episode": 82226116,
@@ -2413,7 +2538,9 @@
       "agrees": true,
       "chosen_label": "Staryu (bench 2 · 70/70)",
       "correct_label": "Staryu (bench 2 · 70/70)",
-      "rationale": "Should have advanced staryu because we have mega starmie in hand ready to evolve it plus energy to attach."
+      "rationale": "Should have advanced staryu because we have mega starmie in hand ready to evolve it plus energy to attach.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82226116,
@@ -2471,7 +2598,9 @@
         "pruned": 20,
         "preview_caps": 23,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The chosen attachment is the first step stated by the rationale, before retreat and KO."
     },
     {
       "episode": 82226759,
@@ -2521,7 +2650,9 @@
         "pruned": 19,
         "preview_caps": 74,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82226759,
@@ -2572,7 +2703,9 @@
         "pruned": 17,
         "preview_caps": 102,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82226759,
@@ -2590,7 +2723,9 @@
       "agrees": true,
       "chosen_label": "opp Abra (bench 4 · 50/50)",
       "correct_label": "opp Abra (bench 4 · 50/50)",
-      "rationale": "Should kill the 50HP benched Abra for an additional prize card. "
+      "rationale": "Should kill the 50HP benched Abra for an additional prize card. ",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82226759,
@@ -2641,7 +2776,9 @@
         "pruned": 16,
         "preview_caps": 48,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82227388,
@@ -2692,7 +2829,9 @@
         "pruned": 3,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Staryu is the deck's main-attacker base and retains Cape when it evolves."
     },
     {
       "episode": 82227388,
@@ -2750,7 +2889,9 @@
         "pruned": 29,
         "preview_caps": 109,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82227388,
@@ -2768,7 +2909,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70)",
-      "rationale": "Attch energy to benched pokemon when able and they need it. also should use Pokegear 3.0 to potentially find a useful supporter."
+      "rationale": "Attch energy to benched pokemon when able and they need it. also should use Pokegear 3.0 to potentially find a useful supporter.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82227388,
@@ -2786,7 +2929,9 @@
       "agrees": true,
       "chosen_label": "Play Wally's Compassion",
       "correct_label": "Play Wally's Compassion",
-      "rationale": "Here, we could have played Wally's Compassion to fully heal our active. then played ignition energy to attack with Nebula Beam again."
+      "rationale": "Here, we could have played Wally's Compassion to fully heal our active. then played ignition energy to attack with Nebula Beam again.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82227388,
@@ -2841,7 +2986,9 @@
         "pruned": 10,
         "preview_caps": 8,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82228017,
@@ -2859,7 +3006,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "When no staryus on board that need evolving and already 2 mega starmies in hand, dont waste the mega signal."
+      "rationale": "When no staryus on board that need evolving and already 2 mega starmies in hand, dont waste the mega signal.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228017,
@@ -2877,7 +3026,9 @@
       "agrees": true,
       "chosen_label": "Play Buddy-Buddy Poffin",
       "correct_label": "Play Buddy-Buddy Poffin",
-      "rationale": "Cinderace's attack give 3 energy to benched pokemon, therefor we should lay down a bench and at any cost when its empty before attacking. thus we should have payed buddy buddy poffin first."
+      "rationale": "Cinderace's attack give 3 energy to benched pokemon, therefor we should lay down a bench and at any cost when its empty before attacking. thus we should have payed buddy buddy poffin first.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228640,
@@ -2895,7 +3046,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
-      "rationale": "attach energy first. ultra ball is saved to find mega starmie, which we already have in hand. also dont use ultra ball and discard hilda, when hilda can find mega starmie AND an energy card, far better than ultra ball."
+      "rationale": "attach energy first. ultra ball is saved to find mega starmie, which we already have in hand. also dont use ultra ball and discard hilda, when hilda can find mega starmie AND an energy card, far better than ultra ball.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228640,
@@ -2913,7 +3066,9 @@
       "agrees": true,
       "chosen_label": "Staryu",
       "correct_label": "Staryu",
-      "rationale": "In this deck, never ever ever use ultra ball to find Cinderace. its useless as Cinderace can only be played to active when setting up."
+      "rationale": "In this deck, never ever ever use ultra ball to find Cinderace. its useless as Cinderace can only be played to active when setting up.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228640,
@@ -2931,7 +3086,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 280/330)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 280/330)",
-      "rationale": "Should have attached basic energy instead of ignition energy to active mega starmie, as its Jetting Blow is enough to KO opponents active while also sniping bench. Plus, Ignition Energy discards at end of turn, so should be saved for only when needed."
+      "rationale": "Should have attached basic energy instead of ignition energy to active mega starmie, as its Jetting Blow is enough to KO opponents active while also sniping bench. Plus, Ignition Energy discards at end of turn, so should be saved for only when needed.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228640,
@@ -2949,7 +3106,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 310/430 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 310/430 · 1⚡)",
-      "rationale": "attach energy when able and a pokemon needs it before attacking."
+      "rationale": "attach energy when able and a pokemon needs it before attacking.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82228640,
@@ -2967,7 +3126,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 190/430 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 190/430 · 1⚡)",
-      "rationale": "attach energy when able and needed prior to attacking."
+      "rationale": "attach energy when able and needed prior to attacking.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82229122,
@@ -3022,7 +3183,9 @@
         "pruned": 56,
         "preview_caps": 135,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82229122,
@@ -3040,7 +3203,9 @@
       "agrees": true,
       "chosen_label": "Play Buddy-Buddy Poffin",
       "correct_label": "Play Buddy-Buddy Poffin",
-      "rationale": "play useful cards in hand first before attacking."
+      "rationale": "play useful cards in hand first before attacking.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82229122,
@@ -3058,7 +3223,9 @@
       "agrees": true,
       "chosen_label": "Retreat",
       "correct_label": "Retreat",
-      "rationale": "This requires Posture and Tier 1 search. Crustle is immune to Ex attackers, thus should retreat to Cinderace who would have KO'd it. Also, when playing Crustle deck, will need to rely on Staryu and Cinderace almost fully."
+      "rationale": "This requires Posture and Tier 1 search. Crustle is immune to Ex attackers, thus should retreat to Cinderace who would have KO'd it. Also, when playing Crustle deck, will need to rely on Staryu and Cinderace almost fully.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82522698,
@@ -3112,7 +3279,9 @@
         "pruned": 13,
         "preview_caps": 24,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82522698,
@@ -3130,7 +3299,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "When the choice is present to win the game, always take that choice immediately"
+      "rationale": "When the choice is present to win the game, always take that choice immediately",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82522726,
@@ -3148,7 +3319,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
-      "rationale": "Attach energy prior to throwing away hand"
+      "rationale": "Attach energy prior to throwing away hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82522726,
@@ -3166,7 +3339,9 @@
       "agrees": true,
       "chosen_label": "Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)",
       "correct_label": "Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)",
-      "rationale": "Could have evolved active to mega starmie and attacked to win the game. always look for game winning move first."
+      "rationale": "Could have evolved active to mega starmie and attacked to win the game. always look for game winning move first.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523164,
@@ -3184,7 +3359,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "If there is basic energy in hand, a pokemon in play who needs an energy, always play that energy before throwing away hand with either Lillie's Determination or Harleguin"
+      "rationale": "If there is basic energy in hand, a pokemon in play who needs an energy, always play that energy before throwing away hand with either Lillie's Determination or Harleguin",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523164,
@@ -3227,7 +3404,9 @@
         "pruned": 23,
         "preview_caps": 47,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "Historical Switch target frames omit the parent attack continuation needed to prove the double KO."
     },
     {
       "episode": 82523164,
@@ -3245,7 +3424,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Attcking with Nebula Beam would have been a win, always take the winning move when able first"
+      "rationale": "Attcking with Nebula Beam would have been a win, always take the winning move when able first",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523811,
@@ -3298,7 +3479,9 @@
         "pruned": 4,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82523811,
@@ -3316,7 +3499,9 @@
       "agrees": true,
       "chosen_label": "opp Riolu (bench 5 · 80/80)",
       "correct_label": "opp Riolu (bench 5 · 80/80)",
-      "rationale": "Rioulu becomes Mega Lucario who needs only a single energy to deal significant damge, thus Rioulu is the snipe target."
+      "rationale": "Rioulu becomes Mega Lucario who needs only a single energy to deal significant damge, thus Rioulu is the snipe target.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523811,
@@ -3367,7 +3552,9 @@
         "pruned": 22,
         "preview_caps": 89,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The ruled label says Bench, while its rationale says Active; Wally is a valued heal prefix."
     },
     {
       "episode": 82523811,
@@ -3385,7 +3572,9 @@
       "agrees": true,
       "chosen_label": "opp Riolu (bench 4 · 180/180)",
       "correct_label": "opp Riolu (bench 4 · 180/180)",
-      "rationale": "Riolu > Mega Lucario = Scary"
+      "rationale": "Riolu > Mega Lucario = Scary",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523811,
@@ -3435,7 +3624,9 @@
         "pruned": 3,
         "preview_caps": 5,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "No rationale was recorded, so the old Hammer label has no rationale-led authority."
     },
     {
       "episode": 82523811,
@@ -3491,7 +3682,9 @@
         "pruned": 19,
         "preview_caps": 29,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82523811,
@@ -3509,7 +3702,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
-      "rationale": "Attach energy in hand to mon who needs it before throwing away hand"
+      "rationale": "Attach energy in hand to mon who needs it before throwing away hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523811,
@@ -3527,7 +3722,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
-      "rationale": "Always attach energy in hand to a mon who needs it before ending turn with attack"
+      "rationale": "Always attach energy in hand to a mon who needs it before ending turn with attack",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82523811,
@@ -3545,7 +3742,9 @@
       "agrees": true,
       "chosen_label": "Attach Ignition Energy → Mega Starmie ex (active · 60/330 · 1⚡)",
       "correct_label": "Attach Ignition Energy → Mega Starmie ex (active · 60/330 · 1⚡)",
-      "rationale": "Attaching Ignition Energy then attack with nebula beam would have one the game. before using cards that throw away hand like Harelquin or lillie's determination, a full review of possible moves must be made."
+      "rationale": "Attaching Ignition Energy then attack with nebula beam would have one the game. before using cards that throw away hand like Harelquin or lillie's determination, a full review of possible moves must be made.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82524455,
@@ -3563,7 +3762,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
-      "rationale": "I had just played Buddy-buddy poffin and received no Staryu's back, thus i know that non are in my deck. therefor its a waste to play a second buddy'buddy poffin. that extra card in hand might come in useful later with an Ultra Ball. This requires a knowledge of what is in our deck, that should become fully known once we search it the first time. our prize cards can then be deduced from this."
+      "rationale": "I had just played Buddy-buddy poffin and received no Staryu's back, thus i know that non are in my deck. therefor its a waste to play a second buddy'buddy poffin. that extra card in hand might come in useful later with an Ultra Ball. This requires a knowledge of what is in our deck, that should become fully known once we search it the first time. our prize cards can then be deduced from this.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82524455,
@@ -3581,7 +3782,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 280/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 280/330 · 1⚡)",
-      "rationale": "Attach available energy before ending turn"
+      "rationale": "Attach available energy before ending turn",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82524455,
@@ -3599,7 +3802,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 120/330)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 120/330)",
-      "rationale": "Could have attached energy, attacked, and won"
+      "rationale": "Could have attached energy, attacked, and won",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525101,
@@ -3644,7 +3849,9 @@
         "pruned": 33,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82525101,
@@ -3662,7 +3869,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)",
-      "rationale": "Attach available energy to a mon who needs it prior to throwing away hand. Cards that throw away hands need a through review."
+      "rationale": "Attach available energy to a mon who needs it prior to throwing away hand. Cards that throw away hands need a through review.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525101,
@@ -3680,7 +3889,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)",
-      "rationale": "attach energy before throwing away hand"
+      "rationale": "attach energy before throwing away hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525101,
@@ -3732,7 +3943,9 @@
         "pruned": 9,
         "preview_caps": 12,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82525101,
@@ -3782,7 +3995,9 @@
         "pruned": 2,
         "preview_caps": 1,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82525101,
@@ -3800,7 +4015,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330 · 1⚡)",
-      "rationale": "Salvatore is worthless when no Staryu in play"
+      "rationale": "Salvatore is worthless when no Staryu in play",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525741,
@@ -3818,7 +4035,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 1⚡)",
-      "rationale": "Boss's up Staryu will KO the Staryu, but we could have just done more damage to the main threat active starmie instead. that main threat will now just return to active will more HP than it otherwise would have had."
+      "rationale": "Boss's up Staryu will KO the Staryu, but we could have just done more damage to the main threat active starmie instead. that main threat will now just return to active will more HP than it otherwise would have had.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525741,
@@ -3836,7 +4055,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 310/430 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 310/430 · 1⚡)",
-      "rationale": "Attach before throwing away hand"
+      "rationale": "Attach before throwing away hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525741,
@@ -3854,7 +4075,9 @@
       "agrees": true,
       "chosen_label": "Evolve Mega Starmie ex → Staryu (bench 1 · 70/70)",
       "correct_label": "Evolve Mega Starmie ex → Staryu (bench 1 · 70/70)",
-      "rationale": "From previous deck scans, we should have known that there are no Staryus left in deck, therefor save buddy buddy for possible ultra ball discard"
+      "rationale": "From previous deck scans, we should have known that there are no Staryus left in deck, therefor save buddy buddy for possible ultra ball discard",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82525741,
@@ -3908,7 +4131,9 @@
         "pruned": 4,
         "preview_caps": 3,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Chosen Active attachment exactly matches the rationale; the recorded Bench index is stale."
     },
     {
       "episode": 82525741,
@@ -3926,7 +4151,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "Attack for the win when able"
+      "rationale": "Attack for the win when able",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82717711,
@@ -3944,7 +4171,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "Cinderace already had a single basic energy. thus zero reason to waste ignition energy on it"
+      "rationale": "Cinderace already had a single basic energy. thus zero reason to waste ignition energy on it",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82717711,
@@ -3962,7 +4191,9 @@
       "agrees": true,
       "chosen_label": "Retreat",
       "correct_label": "Retreat",
-      "rationale": "Should have free retreated to fully powered mega starmie for a Jetting Block attack."
+      "rationale": "Should have free retreated to fully powered mega starmie for a Jetting Block attack.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82748422,
@@ -4014,7 +4245,9 @@
         "pruned": 17,
         "preview_caps": 23,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only forbids wasted Hammer. Wally avoids Hammer and preserves a positive heal line."
     },
     {
       "episode": 82748422,
@@ -4032,7 +4265,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "could have just attacked for the win"
+      "rationale": "could have just attacked for the win",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82748522,
@@ -4086,7 +4321,9 @@
         "pruned": 12,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Attach before Lillie's preserves the exact gamble requested by the rationale."
     },
     {
       "episode": 82749168,
@@ -4104,7 +4341,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "Opponents active has no energy, therefor NEVER play crushing hammer."
+      "rationale": "Opponents active has no energy, therefor NEVER play crushing hammer.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749168,
@@ -4161,7 +4400,9 @@
         "pruned": 20,
         "preview_caps": 13,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82749168,
@@ -4179,7 +4420,9 @@
       "agrees": true,
       "chosen_label": "opp Dragapult ex (bench 1 · 320/320)",
       "correct_label": "opp Dragapult ex (bench 1 · 320/320)",
-      "rationale": "Dargapult is the real threat here, snipe that."
+      "rationale": "Dargapult is the real threat here, snipe that.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749168,
@@ -4197,7 +4440,9 @@
       "agrees": true,
       "chosen_label": "opp Noctowl (bench 2 · 50/100)",
       "correct_label": "opp Noctowl (bench 2 · 50/100)",
-      "rationale": "snipe for the kill if you can generally"
+      "rationale": "snipe for the kill if you can generally",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749168,
@@ -4215,7 +4460,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 2⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 2⚡)",
-      "rationale": "Pokemon needed only single energy more to be fully powered and we had an energy in our hand. should have attached that one. the ignition energy was wasted."
+      "rationale": "Pokemon needed only single energy more to be fully powered and we had an energy in our hand. should have attached that one. the ignition energy was wasted.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749168,
@@ -4268,7 +4515,9 @@
         "pruned": 5,
         "preview_caps": 7,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale compares a three-turn Jetting/Nebula policy; the prototype turn boundary cannot prove it."
     },
     {
       "episode": 82749168,
@@ -4316,7 +4565,9 @@
         "pruned": 11,
         "preview_caps": 50,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82749168,
@@ -4334,7 +4585,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Could have just attacked for the win"
+      "rationale": "Could have just attacked for the win",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749656,
@@ -4353,7 +4606,9 @@
       "agrees": true,
       "chosen_label": "Basic {W} Energy, Salvatore",
       "correct_label": "Salvatore",
-      "rationale": "Discarding Hero's Cape, our ACE SPEC, is typically not ideal. Discarding Wally's Compassion was a good choice. Given that we have a Mega Starmie in hand, i would have given back Salvatore."
+      "rationale": "Discarding Hero's Cape, our ACE SPEC, is typically not ideal. Discarding Wally's Compassion was a good choice. Given that we have a Mega Starmie in hand, i would have given back Salvatore.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749656,
@@ -4371,7 +4626,9 @@
       "agrees": true,
       "chosen_label": "Staryu",
       "correct_label": "Staryu",
-      "rationale": "When we start with Cinderace, it is critical to fill our bench with at least a single Staryu as to take advange of Cinderace's energy acceleration via Turbo Flare"
+      "rationale": "When we start with Cinderace, it is critical to fill our bench with at least a single Staryu as to take advange of Cinderace's energy acceleration via Turbo Flare",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82749656,
@@ -4429,7 +4686,9 @@
         "pruned": 21,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Wally's resolving continuation wins this turn and is valued above the bare attack, not instead of a win."
     },
     {
       "episode": 82750161,
@@ -4486,7 +4745,9 @@
         "pruned": 26,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Attach is a persistent prefix before Mega Signal; no allowance conflict exists."
     },
     {
       "episode": 82750161,
@@ -4504,7 +4765,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Crushing Hammer here is useless as we are about to kill his active"
+      "rationale": "Crushing Hammer here is useless as we are about to kill his active",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82750161,
@@ -4564,7 +4827,9 @@
         "pruned": 37,
         "preview_caps": 73,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Ignition on the Bench evaporates after the attack; persistent Water is the better retained resource."
     },
     {
       "episode": 82750161,
@@ -4582,7 +4847,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "This is a HUGE blunder, HUGE! We have 11 cards in our hand, opponent has 2. Harlequin shuffles all of our cards back in exchange for either 2 or 5.  a terrible deal."
+      "rationale": "This is a HUGE blunder, HUGE! We have 11 cards in our hand, opponent has 2. Harlequin shuffles all of our cards back in exchange for either 2 or 5.  a terrible deal.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82751468,
@@ -4630,7 +4897,9 @@
         "pruned": 9,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Free retreat and attachment commute; the KO continuation remains reachable."
     },
     {
       "episode": 82751468,
@@ -4686,7 +4955,9 @@
         "pruned": 20,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale depends on earlier private deck-search history absent from this snapshot."
     },
     {
       "episode": 82751468,
@@ -4704,7 +4975,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Attacking with Nebula Beam would have won the game."
+      "rationale": "Attacking with Nebula Beam would have won the game.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82751468,
@@ -4722,7 +4995,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Gusting up bench brought up a main line attacker who we could no longer KO for the win. We could have just attacked their active to win. This blunder is CRITICAL and must never happen again."
+      "rationale": "Gusting up bench brought up a main line attacker who we could no longer KO for the win. We could have just attacked their active to win. This blunder is CRITICAL and must never happen again.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752045,
@@ -4740,7 +5015,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "playing Hilda here did not help us at all, so best just not to play her."
+      "rationale": "playing Hilda here did not help us at all, so best just not to play her.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752045,
@@ -4797,7 +5074,9 @@
         "pruned": 81,
         "preview_caps": 290,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82752045,
@@ -4856,7 +5135,9 @@
         "pruned": 28,
         "preview_caps": 90,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only rejects hand refresh; Jetting is a legal resolving attack and preserves the hand."
     },
     {
       "episode": 82752045,
@@ -4914,7 +5195,9 @@
         "pruned": 17,
         "preview_caps": 54,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Unused Ignition would discard at end of turn; persistent Water dominates the stale concentration label."
     },
     {
       "episode": 82752045,
@@ -4932,7 +5215,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Attacking will win the game, so just attack. Every turn there needs to be a complete scan of decisions to decide if the game can be won at that particular moment. if so, that decision must be taken."
+      "rationale": "Attacking will win the game, so just attack. Every turn there needs to be a complete scan of decisions to decide if the game can be won at that particular moment. if so, that decision must be taken.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -4950,7 +5235,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "a crushing hammer must never ever ever be played when opponents active pokemon has no energy attached"
+      "rationale": "a crushing hammer must never ever ever be played when opponents active pokemon has no energy attached",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -4968,7 +5255,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "Shuffling here is a critial blunder. we have two staryus on the bench and two mega starmies in the hand. one staryu is about to receive 3 water energy. absolute critical blunder."
+      "rationale": "Shuffling here is a critial blunder. we have two staryus on the bench and two mega starmies in the hand. one staryu is about to receive 3 water energy. absolute critical blunder.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -4986,7 +5275,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70 · 1⚡)",
-      "rationale": "Should have first attached water energy, then play Mega Signal to fetch a Mega Starmie, then evolve the staryu to mega starmie, then attack"
+      "rationale": "Should have first attached water energy, then play Mega Signal to fetch a Mega Starmie, then evolve the staryu to mega starmie, then attack",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -5004,7 +5295,9 @@
       "agrees": true,
       "chosen_label": "opp Drakloak (bench 1 · 90/90 · 1⚡)",
       "correct_label": "opp Drakloak (bench 1 · 90/90 · 1⚡)",
-      "rationale": "The Drakloak with a single energy is our greatest present threat on their bench, therefor snipe that one."
+      "rationale": "The Drakloak with a single energy is our greatest present threat on their bench, therefor snipe that one.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -5022,7 +5315,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (bench 2 · 270/330 · 1⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (bench 2 · 270/330 · 1⚡)",
-      "rationale": "attach energy to pokemon who need it prior to attacking\n\nAlso, the opponetns active has 320 HP. one Jetting Blow + Nebula Beam = 320. thus we could have done jetting blow this turn and knocked out their benched dreepy, then performed a nebula beam the following turn to KO the Dragapult, winning the game."
+      "rationale": "attach energy to pokemon who need it prior to attacking\n\nAlso, the opponetns active has 320 HP. one Jetting Blow + Nebula Beam = 320. thus we could have done jetting blow this turn and knocked out their benched dreepy, then performed a nebula beam the following turn to KO the Dragapult, winning the game.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82752604,
@@ -5040,7 +5335,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "Attaching energy was meaningless that we could just attach and win the game."
+      "rationale": "Attaching energy was meaningless that we could just attach and win the game.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82753102,
@@ -5091,7 +5388,9 @@
         "pruned": 46,
         "preview_caps": 159,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82753102,
@@ -5136,7 +5435,9 @@
         "pruned": 29,
         "preview_caps": 44,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82753102,
@@ -5154,7 +5455,9 @@
       "agrees": true,
       "chosen_label": "Staryu",
       "correct_label": "Staryu",
-      "rationale": "CRITICAL BLUNDER. we have a Cinderace ready to attack, thus we must do everything that we can to fill our bench with a Staryu for the Turbo Flare energy acceleration. also, we already had a mega starmie in hand"
+      "rationale": "CRITICAL BLUNDER. we have a Cinderace ready to attack, thus we must do everything that we can to fill our bench with a Staryu for the Turbo Flare energy acceleration. also, we already had a mega starmie in hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82753102,
@@ -5207,7 +5510,9 @@
         "pruned": 7,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The rationale forbids Hammer; the chosen persistent attachment is a beneficial pre-attack step."
     },
     {
       "episode": 82753102,
@@ -5225,7 +5530,9 @@
       "agrees": true,
       "chosen_label": "opp Abra (bench 2 · 50/50)",
       "correct_label": "opp Abra (bench 2 · 50/50)",
-      "rationale": "reading posture will help this, but opponents main attacker is Alakazam, with abra as basic. should therefor do all possible to kill off the exposed abra on the bench.\n\nThis is a critical blunder where awareness of opponents pokemon evolution lines is a must during early game. our agent must scan opponents revealed pokemon to decide in early game who the main targets shall be."
+      "rationale": "reading posture will help this, but opponents main attacker is Alakazam, with abra as basic. should therefor do all possible to kill off the exposed abra on the bench.\n\nThis is a critical blunder where awareness of opponents pokemon evolution lines is a must during early game. our agent must scan opponents revealed pokemon to decide in early game who the main targets shall be.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82753102,
@@ -5243,7 +5550,9 @@
       "agrees": true,
       "chosen_label": "opp Kadabra (bench 1 · 80/80)",
       "correct_label": "opp Kadabra (bench 1 · 80/80)",
-      "rationale": "another critical blunder when sniping. must snipe opponents main attackers when they are able. math must exist here. a 70HP dunsparce requires just as many Jetting Blow snipes as a 80 HP kadabra, but the dunsparce is just a support pokemon, not a treat."
+      "rationale": "another critical blunder when sniping. must snipe opponents main attackers when they are able. math must exist here. a 70HP dunsparce requires just as many Jetting Blow snipes as a 80 HP kadabra, but the dunsparce is just a support pokemon, not a treat.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82753102,
@@ -5297,7 +5606,9 @@
         "pruned": 23,
         "preview_caps": 46,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82753102,
@@ -5315,7 +5626,9 @@
       "agrees": true,
       "chosen_label": "Cinderace (bench 1 · 60/160 · 1⚡)",
       "correct_label": "Cinderace (bench 1 · 60/160 · 1⚡)",
-      "rationale": "Given that we do not have Ignition Energy in hand to OHKO the opponents active, i would have promoted Cinderace first. If we did draw Ignition Energy, retreat to win the game. if we didnt get ignition, we can attack to stall, powering up Mega Starmie to win next turn.\n\nAlso, given that this Alakazam deck deals damage based on number of cards in hand, we should have played Harequin to disrput them."
+      "rationale": "Given that we do not have Ignition Energy in hand to OHKO the opponents active, i would have promoted Cinderace first. If we did draw Ignition Energy, retreat to win the game. if we didnt get ignition, we can attack to stall, powering up Mega Starmie to win next turn.\n\nAlso, given that this Alakazam deck deals damage based on number of cards in hand, we should have played Harequin to disrput them.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82753746,
@@ -5334,7 +5647,9 @@
       "agrees": true,
       "chosen_label": "Lillie's Determination, Cinderace",
       "correct_label": "Cinderace",
-      "rationale": "Cinderace is worthless in hand after our opening turn, therefor get rid of it. id also rather have both lillies determinatino and hilda in hand over harlequin. harelequin and cinderace are typically the cards to discard with ultra ball in this deck. not always, but typically."
+      "rationale": "Cinderace is worthless in hand after our opening turn, therefor get rid of it. id also rather have both lillies determinatino and hilda in hand over harlequin. harelequin and cinderace are typically the cards to discard with ultra ball in this deck. not always, but typically.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82754241,
@@ -5372,7 +5687,9 @@
         "pruned": 2,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82754241,
@@ -5421,7 +5738,9 @@
         "pruned": 22,
         "preview_caps": 50,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale depends on an earlier exact deck census absent from this historical snapshot."
     },
     {
       "episode": 82754241,
@@ -5469,7 +5788,9 @@
         "pruned": 21,
         "preview_caps": 61,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The chosen retreat never spends the condemned Hammer and preserves a better resolving line."
     },
     {
       "episode": 82754241,
@@ -5487,7 +5808,9 @@
       "agrees": true,
       "chosen_label": "opp Applin (bench 1 · 40/40)",
       "correct_label": "opp Applin (bench 1 · 40/40)",
-      "rationale": "Should have sniped for the easy KO"
+      "rationale": "Should have sniped for the easy KO",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82754875,
@@ -5539,7 +5862,9 @@
         "pruned": 9,
         "preview_caps": 27,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Both indices are interchangeable physical copies of Lillie's Determination."
     },
     {
       "episode": 82754875,
@@ -5557,7 +5882,9 @@
       "agrees": true,
       "chosen_label": "Play Boss’s Orders",
       "correct_label": "Play Boss’s Orders",
-      "rationale": "Here is the perfect example of gusting to stall the opponent. They have Psyduck or fezandipiti that can be gusted up, both require single energy to retreat, which could have prevented an attack by the opponent during their following turn. stalling is important for us here because we have no bench."
+      "rationale": "Here is the perfect example of gusting to stall the opponent. They have Psyduck or fezandipiti that can be gusted up, both require single energy to retreat, which could have prevented an attack by the opponent during their following turn. stalling is important for us here because we have no bench.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82756021,
@@ -5575,7 +5902,9 @@
       "agrees": true,
       "chosen_label": "opp Mega Lucario ex (bench 3 · 340/340 · 1⚡)",
       "correct_label": "opp Mega Lucario ex (bench 3 · 340/340 · 1⚡)",
-      "rationale": "Benched Mega Lucario with single energy is our next threat. should be sniping that right away. need to build in awareness of prize card math. with this opponent, we must kill 2 mega lucarios for 6 prizr cards and the win. attacking any other pokemon is a waste."
+      "rationale": "Benched Mega Lucario with single energy is our next threat. should be sniping that right away. need to build in awareness of prize card math. with this opponent, we must kill 2 mega lucarios for 6 prizr cards and the win. attacking any other pokemon is a waste.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82756021,
@@ -5593,7 +5922,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "just attack for the win and be done"
+      "rationale": "just attack for the win and be done",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82756664,
@@ -5611,7 +5942,9 @@
       "agrees": true,
       "chosen_label": "Attach Hero’s Cape → Staryu (bench 1 · 70/70)",
       "correct_label": "Attach Hero’s Cape → Staryu (bench 1 · 70/70)",
-      "rationale": "best not to shuffle back a heros cape when we are able to use it. plus, next turn we can evolve to mega starmie with 3 energy due to Turbo Flare energy acceleration. this, albeit small, is a very good opening hand."
+      "rationale": "best not to shuffle back a heros cape when we are able to use it. plus, next turn we can evolve to mega starmie with 3 energy due to Turbo Flare energy acceleration. this, albeit small, is a very good opening hand.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82756664,
@@ -5670,7 +6003,9 @@
         "pruned": 91,
         "preview_caps": 309,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82756664,
@@ -5725,7 +6060,9 @@
         "pruned": 42,
         "preview_caps": 124,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82756664,
@@ -5777,7 +6114,9 @@
         "pruned": 20,
         "preview_caps": 64,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82756664,
@@ -5839,7 +6178,9 @@
         "pruned": 37,
         "preview_caps": 184,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only rejects Hilda and does not justify Ignition over persistent Water."
     },
     {
       "episode": 82756664,
@@ -5857,7 +6198,9 @@
       "agrees": true,
       "chosen_label": "Cinderace (bench 1 · 30/130 · 1⚡)",
       "correct_label": "Cinderace (bench 1 · 30/130 · 1⚡)",
-      "rationale": "Here is a great example of more nuanced play strategy. the opponents active has less than 50HP and our benched Mega Starmie has less than 3 energy. perfect situation to promote Cinderace, KO opponents active for 3 prize cards, and energy accelerate our mega starmie. This requires forward search i imagine. but we need to be able to spot moves like this."
+      "rationale": "Here is a great example of more nuanced play strategy. the opponents active has less than 50HP and our benched Mega Starmie has less than 3 energy. perfect situation to promote Cinderace, KO opponents active for 3 prize cards, and energy accelerate our mega starmie. This requires forward search i imagine. but we need to be able to spot moves like this.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82756664,
@@ -5875,7 +6218,9 @@
       "agrees": true,
       "chosen_label": "opp Mega Lucario ex (bench 2 · 290/340 · 5⚡)",
       "correct_label": "opp Mega Lucario ex (bench 2 · 290/340 · 5⚡)",
-      "rationale": "Benched mega lucario is the largest imediate threat. we must snipe that"
+      "rationale": "Benched mega lucario is the largest imediate threat. we must snipe that",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82866415,
@@ -5932,7 +6277,9 @@
         "pruned": 14,
         "preview_caps": 21,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 82866415,
@@ -5950,7 +6297,9 @@
       "agrees": true,
       "chosen_label": "Attach Hero’s Cape → Staryu (bench 1 · 70/70 · 1⚡)",
       "correct_label": "Attach Hero’s Cape → Staryu (bench 1 · 70/70 · 1⚡)",
-      "rationale": "There is a clear bug with our ACE-SPEC Hero's Cape. here it should be attached to the benched Staryu with a single energy as to protect it from Jetting Blow"
+      "rationale": "There is a clear bug with our ACE-SPEC Hero's Cape. here it should be attached to the benched Staryu with a single energy as to protect it from Jetting Blow",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82867148,
@@ -5998,7 +6347,9 @@
         "pruned": 15,
         "preview_caps": 29,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Cinderace attachment is retained before Ultra Ball, Bench deployment, and Turbo Flare."
     },
     {
       "episode": 82867148,
@@ -6017,7 +6368,9 @@
       "agrees": true,
       "chosen_label": "Lillie's Determination, Mega Starmie ex",
       "correct_label": "Lillie's Determination",
-      "rationale": "CRITICAL: gave away boss's orders and Harlequin, key disruptors when we had two copies of lillie's and three mega starmies. discarding should weigh discarding duplicate hards more heavily"
+      "rationale": "CRITICAL: gave away boss's orders and Harlequin, key disruptors when we had two copies of lillie's and three mega starmies. discarding should weigh discarding duplicate hards more heavily",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82867148,
@@ -6035,7 +6388,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "CRITICAL: shuffled away a mega starmie when next turn we will have a benched staryu with 3 energy. save lillie's for future turn."
+      "rationale": "CRITICAL: shuffled away a mega starmie when next turn we will have a benched staryu with 3 energy. save lillie's for future turn.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 82867148,
@@ -6088,7 +6443,9 @@
         "pruned": 59,
         "preview_caps": 193,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Poffin develops recipients before Turbo Flare and avoids the retreat condemned by the rationale."
     },
     {
       "episode": 82867148,
@@ -6143,7 +6500,9 @@
         "pruned": 29,
         "preview_caps": 19,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The chosen action is a beneficial first step that preserves the rationale's payoff in the same turn; this is a complete-line ordering difference."
     },
     {
       "episode": 83007714,
@@ -6198,7 +6557,9 @@
         "pruned": 32,
         "preview_caps": 23,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83007714,
@@ -6216,7 +6577,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "We have the Mega Starmie that we need and a Staryu on the bench, thus tossing the supporters is a poor trade. should simply not have played Ultra Ball in this instance."
+      "rationale": "We have the Mega Starmie that we need and a Staryu on the bench, thus tossing the supporters is a poor trade. should simply not have played Ultra Ball in this instance.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83007714,
@@ -6234,7 +6597,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (bench 2 · 330/330)",
       "correct_label": "Mega Starmie ex (bench 2 · 330/330)",
-      "rationale": "CRITICAL: you attached 3 energy to Staryu instead of making sure that our Mega Starmie had 3 energy. attach the energy to our evolved mainline attacker as priority over the preevolution"
+      "rationale": "CRITICAL: you attached 3 energy to Staryu instead of making sure that our Mega Starmie had 3 energy. attach the energy to our evolved mainline attacker as priority over the preevolution",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83007714,
@@ -6252,7 +6617,9 @@
       "agrees": true,
       "chosen_label": "Retreat",
       "correct_label": "Retreat",
-      "rationale": "CRITICAL: played ignition energy just to \"attach energy\", but we are retreating Cinderace right after, thus this wasted a precious special energy card. only play special energy cards when the moment requires. need own doctrine for this i think"
+      "rationale": "CRITICAL: played ignition energy just to \"attach energy\", but we are retreating Cinderace right after, thus this wasted a precious special energy card. only play special energy cards when the moment requires. need own doctrine for this i think",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83007714,
@@ -6270,7 +6637,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (bench 2 · 430/430 · 3⚡)",
       "correct_label": "Mega Starmie ex (bench 2 · 430/430 · 3⚡)",
-      "rationale": "CRITICAL: Retreating was the right move, but not into the unpowered Cinderace when we had a fully powered wincon on the bench. This Mega Starmie could have KO'd the opponents active AND it had Heros Cape. the obvious choice."
+      "rationale": "CRITICAL: Retreating was the right move, but not into the unpowered Cinderace when we had a fully powered wincon on the bench. This Mega Starmie could have KO'd the opponents active AND it had Heros Cape. the obvious choice.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83007714,
@@ -6288,7 +6657,9 @@
       "agrees": true,
       "chosen_label": "Mega Starmie ex (bench 2 · 430/430 · 3⚡)",
       "correct_label": "Mega Starmie ex (bench 2 · 430/430 · 3⚡)",
-      "rationale": "CRITICAL: Seems that pilot only wants to promote the 1st bench position instead of considering which benched pokemon is best to become our new active. i imagine that we need a bench_promote baseline or doctrine created."
+      "rationale": "CRITICAL: Seems that pilot only wants to promote the 1st bench position instead of considering which benched pokemon is best to become our new active. i imagine that we need a bench_promote baseline or doctrine created.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83007714,
@@ -6306,7 +6677,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Again, many other corrections state this, we need a hard rule that every single turn begins by analyzing if there is a match winning decision present. if there is, take it immediately to win the match."
+      "rationale": "Again, many other corrections state this, we need a hard rule that every single turn begins by analyzing if there is a match winning decision present. if there is, take it immediately to win the match.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83037962,
@@ -6360,7 +6733,9 @@
         "pruned": 9,
         "preview_caps": 6,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83037962,
@@ -6378,7 +6753,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "CRITICAL: shuffle logic needs work. here we disrupt our opponent, which is good. however we also give back a Mega Starmie AND an energy that we need next turn. poor gamble in my opinion"
+      "rationale": "CRITICAL: shuffle logic needs work. here we disrupt our opponent, which is good. however we also give back a Mega Starmie AND an energy that we need next turn. poor gamble in my opinion",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83037962,
@@ -6396,7 +6773,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "CRITICAL: playing Wallys Compassion has a COST that must be considered. we remove all energy from our wincon and heal them. but now we are no longer able to KO the opponent and win the match. huge blunder. Wallys Compassion usage cost must be considered along with whether or not we have an Ignition Energy in hand."
+      "rationale": "CRITICAL: playing Wallys Compassion has a COST that must be considered. we remove all energy from our wincon and heal them. but now we are no longer able to KO the opponent and win the match. huge blunder. Wallys Compassion usage cost must be considered along with whether or not we have an Ignition Energy in hand.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83038055,
@@ -6449,7 +6828,9 @@
         "pruned": 25,
         "preview_caps": 107,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Persistent attachment is retained before the same low-hand Lillie's replan."
     },
     {
       "episode": 83038055,
@@ -6467,7 +6848,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "Here our hand is quite strong for next turn, would not have shuffled it back. Shuffling requires an awareness of our hand strength for the following turn"
+      "rationale": "Here our hand is quite strong for next turn, would not have shuffled it back. Shuffling requires an awareness of our hand strength for the following turn",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83053965,
@@ -6513,7 +6896,9 @@
         "pruned": 9,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only forbids unusable first-turn Ignition; End obeys it. Mega Signal was an accidental label."
     },
     {
       "episode": 83053965,
@@ -6565,7 +6950,9 @@
         "pruned": 2,
         "preview_caps": 6,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83053965,
@@ -6613,7 +7000,9 @@
         "pruned": 13,
         "preview_caps": 6,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Free retreat before the requested attachment preserves the KO continuation."
     },
     {
       "episode": 83053965,
@@ -6631,7 +7020,9 @@
       "agrees": true,
       "chosen_label": "Retreat",
       "correct_label": "Retreat",
-      "rationale": "CRITICAL: This is another multi decision example showing that we need a turn planner system. it would have been better to retreat cinderance into mega starmie, attach 3rd energy, KO fezandipiti for 2 prize cards. "
+      "rationale": "CRITICAL: This is another multi decision example showing that we need a turn planner system. it would have been better to retreat cinderance into mega starmie, attach 3rd energy, KO fezandipiti for 2 prize cards. ",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83054602,
@@ -6649,7 +7040,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "CRITICAL: This requires knowledge of our attack's text as well as the opponents ability. 1) Jetting Blow does not do enough dmg to KO opponent. 2) Nebula Beam is not hindered by effects of opponent, thus the Crustle's ability would have no avoided the 210 dmg and the KO for the win."
+      "rationale": "CRITICAL: This requires knowledge of our attack's text as well as the opponents ability. 1) Jetting Blow does not do enough dmg to KO opponent. 2) Nebula Beam is not hindered by effects of opponent, thus the Crustle's ability would have no avoided the 210 dmg and the KO for the win.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83054602,
@@ -6667,7 +7060,9 @@
       "agrees": true,
       "chosen_label": "End turn",
       "correct_label": "End turn",
-      "rationale": "CRITICAL: Attachng energy and then playing wallys compassion is never to be allowed. wallys has a cost of returning all energy to hand, losing our initiative."
+      "rationale": "CRITICAL: Attachng energy and then playing wallys compassion is never to be allowed. wallys has a cost of returning all energy to hand, losing our initiative.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83116081,
@@ -6719,7 +7114,9 @@
         "pruned": 7,
         "preview_caps": 12,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83116081,
@@ -6737,7 +7134,9 @@
       "agrees": true,
       "chosen_label": "Staryu (bench 1 · 70/70 · 1⚡)",
       "correct_label": "Staryu (bench 1 · 70/70 · 1⚡)",
-      "rationale": "Fill up one wincons energy before spreading to other mons. Thus here, specific for this deck, with Cinderace's Turbo Flare, place all three energy on a single staryu if that staryu had 0 energy."
+      "rationale": "Fill up one wincons energy before spreading to other mons. Thus here, specific for this deck, with Cinderace's Turbo Flare, place all three energy on a single staryu if that staryu had 0 energy.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83116081,
@@ -6755,7 +7154,9 @@
       "agrees": true,
       "chosen_label": "Play Wally's Compassion",
       "correct_label": "Play Wally's Compassion",
-      "rationale": "CRITICAL: Our active wincon was low on health and opponent could possibly KO it next turn. also, opponents active was KO'able with our Jetting Blow. Should have healed with Wally, attached single energy, KO opponent"
+      "rationale": "CRITICAL: Our active wincon was low on health and opponent could possibly KO it next turn. also, opponents active was KO'able with our Jetting Blow. Should have healed with Wally, attached single energy, KO opponent",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83116501,
@@ -6808,7 +7209,9 @@
         "pruned": 6,
         "preview_caps": 31,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale compares a three-turn attack schedule outside this prototype's one-turn horizon."
     },
     {
       "episode": 83116501,
@@ -6826,7 +7229,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 330/330)",
-      "rationale": "Here, 120 dmg with Jetting Blow + 50 dmg to benched rioulu is perferrable given that Nebula Beam will not KO Mega Lucario anyways"
+      "rationale": "Here, 120 dmg with Jetting Blow + 50 dmg to benched rioulu is perferrable given that Nebula Beam will not KO Mega Lucario anyways",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83116501,
@@ -6883,7 +7288,9 @@
         "pruned": 27,
         "preview_caps": 7,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83117367,
@@ -6937,7 +7344,9 @@
         "pruned": 5,
         "preview_caps": 16,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale depends on earlier deck-search history and exact prize inference absent from this snapshot."
     },
     {
       "episode": 83117367,
@@ -6955,7 +7364,9 @@
       "agrees": true,
       "chosen_label": "Play Lillie's Determination",
       "correct_label": "Play Lillie's Determination",
-      "rationale": "CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.\n\nPLUS, we need energy! CRITICAL CRITICAL"
+      "rationale": "CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.\n\nPLUS, we need energy! CRITICAL CRITICAL",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83454549,
@@ -7001,7 +7412,9 @@
         "pruned": 38,
         "preview_caps": 80,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83455356,
@@ -7057,7 +7470,9 @@
         "pruned": 14,
         "preview_caps": 29,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Attachment is a commutative first step before Salvatore/evolve/free-retreat/game-win."
     },
     {
       "episode": 83456015,
@@ -7075,7 +7490,9 @@
       "agrees": true,
       "chosen_label": "Play Wally's Compassion",
       "correct_label": "Play Wally's Compassion",
-      "rationale": "CRITICAL: This is critical because of sequencing. Our opponent has mega starmie that can do 210 dmg. our active has 210 HP. the opponent's deck commonly runs ignition energy, thus we should prepare ourselves for that by healing first, then attaching Ignition Energy ourselves, then attacking for KO. Also might as well play the pokegear 3.0 before attaching."
+      "rationale": "CRITICAL: This is critical because of sequencing. Our opponent has mega starmie that can do 210 dmg. our active has 210 HP. the opponent's deck commonly runs ignition energy, thus we should prepare ourselves for that by healing first, then attaching Ignition Energy ourselves, then attacking for KO. Also might as well play the pokegear 3.0 before attaching.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83456015,
@@ -7128,7 +7545,9 @@
         "pruned": 55,
         "preview_caps": 108,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83456015,
@@ -7179,7 +7598,9 @@
         "pruned": 43,
         "preview_caps": 20,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Wally is stale here: the manual attach was already spent, so bounce forfeits the KO; Poffin preserves it."
     },
     {
       "episode": 83457493,
@@ -7228,7 +7649,9 @@
         "pruned": 22,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83457493,
@@ -7246,7 +7669,9 @@
       "agrees": true,
       "chosen_label": "Play Harlequin",
       "correct_label": "Play Harlequin",
-      "rationale": "CRITICAL: We need energy here and we need to disrupt opponent. Should play our two Buddy-buddy poffins to discard them (do not want them shuffled back into deck), then play Harlequin"
+      "rationale": "CRITICAL: We need energy here and we need to disrupt opponent. Should play our two Buddy-buddy poffins to discard them (do not want them shuffled back into deck), then play Harlequin",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83457493,
@@ -7293,7 +7718,9 @@
         "pruned": 7,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "The rationale only forbids recycling Cinderace; Poffin does not recycle it."
     },
     {
       "episode": 83661649,
@@ -7311,7 +7738,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "Jetting Blow is better here to do some bench sniping because Nebula Beam will not KO them anyway. and one jetting blow + one nebula beam will KO them. also, worth anticipating that they will use wally compassion to fully heal."
+      "rationale": "Jetting Blow is better here to do some bench sniping because Nebula Beam will not KO them anyway. and one jetting blow + one nebula beam will KO them. also, worth anticipating that they will use wally compassion to fully heal.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83661649,
@@ -7329,7 +7758,9 @@
       "agrees": true,
       "chosen_label": "opp Mega Starmie ex (bench 2 · 430/430)",
       "correct_label": "opp Mega Starmie ex (bench 2 · 430/430)",
-      "rationale": "wasteful attacking staryu when we know that they will promote mega starmie next."
+      "rationale": "wasteful attacking staryu when we know that they will promote mega starmie next.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83661649,
@@ -7385,7 +7816,9 @@
         "pruned": 20,
         "preview_caps": 15,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83662396,
@@ -7435,7 +7868,9 @@
         "pruned": 17,
         "preview_caps": 30,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Deck thinning without live demand is pure cost under the accepted value invariant."
     },
     {
       "episode": 83663053,
@@ -7453,7 +7888,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "Clear win path here in single decision, just attack with jetting blow"
+      "rationale": "Clear win path here in single decision, just attack with jetting blow",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83664340,
@@ -7507,7 +7944,9 @@
         "pruned": 9,
         "preview_caps": 12,
         "cap_reached": false
-      }
+      },
+      "classification": "STALE_LABEL_RATIONALE_AGREES",
+      "adjudication": "Nebula Beam is the known KO described by the rationale; the Lillie's label contradicts it."
     },
     {
       "episode": 83664340,
@@ -7525,7 +7964,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)",
-      "rationale": "This conflicts with dont-feed-the-doomed but is still the better option. we need to keep pressure on our opponent by attacking and bench sniping. next turn we have both basic and ignition energy, thus we can keep attacking with our follow up Starmie. in this case, its better to feed the dammed."
+      "rationale": "This conflicts with dont-feed-the-doomed but is still the better option. we need to keep pressure on our opponent by attacking and bench sniping. next turn we have both basic and ignition energy, thus we can keep attacking with our follow up Starmie. in this case, its better to feed the dammed.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83664991,
@@ -7580,7 +8021,9 @@
         "pruned": 12,
         "preview_caps": 70,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83664991,
@@ -7598,7 +8041,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "CRITICAL: This was a missed opportunity for prize math in our favor. save the ignition energy for next turn and chip them a bit with Cinderace. Also, opponent has 8 cards in hand, a perfect time to play Harlequin."
+      "rationale": "CRITICAL: This was a missed opportunity for prize math in our favor. save the ignition energy for next turn and chip them a bit with Cinderace. Also, opponent has 8 cards in hand, a perfect time to play Harlequin.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83665798,
@@ -7616,7 +8061,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "CRITICAL: Our Cinderace is not in danger here, therefor using Heros Cape here was a waste."
+      "rationale": "CRITICAL: Our Cinderace is not in danger here, therefor using Heros Cape here was a waste.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83665798,
@@ -7634,7 +8081,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "no reason to play lillies here, just attack for win. i think that the lethal line needs to be able to consider multiple decisions to a victory, then to take the shortest path."
+      "rationale": "no reason to play lillies here, just attack for win. i think that the lethal line needs to be able to consider multiple decisions to a victory, then to take the shortest path.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83666442,
@@ -7688,7 +8137,9 @@
         "pruned": 5,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83667237,
@@ -7739,7 +8190,9 @@
         "pruned": 39,
         "preview_caps": 105,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83667237,
@@ -7783,7 +8236,9 @@
         "pruned": 4,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale requires a multi-turn prize-route commitment beyond the current turn tree."
     },
     {
       "episode": 83667237,
@@ -7836,7 +8291,9 @@
         "pruned": 42,
         "preview_caps": 211,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83966968,
@@ -7891,7 +8348,9 @@
         "pruned": 17,
         "preview_caps": 46,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83966968,
@@ -7946,7 +8405,9 @@
         "pruned": 29,
         "preview_caps": 57,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 83966968,
@@ -7964,7 +8425,9 @@
       "agrees": true,
       "chosen_label": "opp Mega Starmie ex (bench 2 · 230/330)",
       "correct_label": "opp Mega Starmie ex (bench 2 · 230/330)",
-      "rationale": "CRITICAL: Concerning prize math, KO'ing a Cinderace does not help us. we still need to KO 2 mega starmies. "
+      "rationale": "CRITICAL: Concerning prize math, KO'ing a Cinderace does not help us. we still need to KO 2 mega starmies. ",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83967840,
@@ -7983,7 +8446,9 @@
       "agrees": true,
       "chosen_label": "Cinderace, Lillie's Determination",
       "correct_label": "Lillie's Determination",
-      "rationale": "i would have discarded one of our lillie's given that we have 2 in hand"
+      "rationale": "i would have discarded one of our lillie's given that we have 2 in hand",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 83968638,
@@ -8038,7 +8503,9 @@
         "pruned": 26,
         "preview_caps": 86,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "The rationale only rejects wasted Hammer; attach then attack is the valuable continuation."
     },
     {
       "episode": 83969481,
@@ -8056,7 +8523,9 @@
       "agrees": true,
       "chosen_label": "Attack with Jetting Blow",
       "correct_label": "Attack with Jetting Blow",
-      "rationale": "During the end game where we have a single mega starmie against their two, id rather not shuffle back our wallys compassion. he can really save us against a nebula beam"
+      "rationale": "During the end game where we have a single mega starmie against their two, id rather not shuffle back our wallys compassion. he can really save us against a nebula beam",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 84897262,
@@ -8109,7 +8578,9 @@
         "pruned": 2,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 84897262,
@@ -8127,7 +8598,9 @@
       "agrees": true,
       "chosen_label": "Basic {W} Energy",
       "correct_label": "Basic {W} Energy",
-      "rationale": "Grab energy first, attach to active, attack, win match"
+      "rationale": "Grab energy first, attach to active, attack, win match",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85163079,
@@ -8145,7 +8618,9 @@
       "agrees": true,
       "chosen_label": "Play Boss’s Orders",
       "correct_label": "Play Boss’s Orders",
-      "rationale": "Should have gusted up their future wincon and KO it"
+      "rationale": "Should have gusted up their future wincon and KO it",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85163079,
@@ -8163,7 +8638,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 2⚡)",
       "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 2⚡)",
-      "rationale": "Too conservative to attach energy to Cinderace. Our Mega Starmie is lost next turn, so be it, hit the opponent with everything we got and hope for an opportunity next turn."
+      "rationale": "Too conservative to attach energy to Cinderace. Our Mega Starmie is lost next turn, so be it, hit the opponent with everything we got and hope for an opportunity next turn.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85163634,
@@ -8181,7 +8658,9 @@
       "agrees": true,
       "chosen_label": "Attack with Turbo Flare",
       "correct_label": "Attack with Turbo Flare",
-      "rationale": "Only issue with this blunder is that this move was taken one turn too early. we dont need the Starmie now. fetching it now risks enticing our opponent to disrupt us with a judge or harlequin or something. there is no cost to just wait a turn and fetch our Starmie then."
+      "rationale": "Only issue with this blunder is that this move was taken one turn too early. we dont need the Starmie now. fetching it now risks enticing our opponent to disrupt us with a judge or harlequin or something. there is no cost to just wait a turn and fetch our Starmie then.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85163634,
@@ -8232,7 +8711,9 @@
         "pruned": 8,
         "preview_caps": 17,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 85164131,
@@ -8250,7 +8731,9 @@
       "agrees": true,
       "chosen_label": "opp Staryu (bench 2 · 70/70)",
       "correct_label": "opp Staryu (bench 2 · 70/70)",
-      "rationale": "CRITICAL: We dont care at all about the benched Cinderace. Our Starmie can OHKO it whenever its promoted. we need to stomp out the next big threat, the opponents eventual win condition.\n\nOur matchup Posture feature should have caught this. needs review!"
+      "rationale": "CRITICAL: We dont care at all about the benched Cinderace. Our Starmie can OHKO it whenever its promoted. we need to stomp out the next big threat, the opponents eventual win condition.\n\nOur matchup Posture feature should have caught this. needs review!",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85164131,
@@ -8268,7 +8751,9 @@
       "agrees": true,
       "chosen_label": "Attack with Nebula Beam",
       "correct_label": "Attack with Nebula Beam",
-      "rationale": "CRITICAL: Why oh why attach an ignitin energy and then NOT attack with Nebula Beam? We will lose those 3 special energies next turn so cannot use Nebula Beam. Do the heavy damage especially when facing off against opponents wincon.\n\nAgain, match posturing needs review."
+      "rationale": "CRITICAL: Why oh why attach an ignitin energy and then NOT attack with Nebula Beam? We will lose those 3 special energies next turn so cannot use Nebula Beam. Do the heavy damage especially when facing off against opponents wincon.\n\nAgain, match posturing needs review.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85164605,
@@ -8286,7 +8771,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
       "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-      "rationale": "fetching a Mega Starmie here doesnt help us, rather just not do it."
+      "rationale": "fetching a Mega Starmie here doesnt help us, rather just not do it.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85164605,
@@ -8341,7 +8828,9 @@
         "pruned": 55,
         "preview_caps": 130,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 85164605,
@@ -8359,7 +8848,9 @@
       "agrees": true,
       "chosen_label": "opp Abra (bench 1 · 50/50)",
       "correct_label": "opp Abra (bench 1 · 50/50)",
-      "rationale": "CRITICAL: Instead of KOing one of their benched wincon lines, you went for the draw engine. This shows that match posturing is not functioning properly (or at all). a must fix."
+      "rationale": "CRITICAL: Instead of KOing one of their benched wincon lines, you went for the draw engine. This shows that match posturing is not functioning properly (or at all). a must fix.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 85164605,
@@ -8411,7 +8902,9 @@
         "pruned": 45,
         "preview_caps": 147,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Boss is a positive prefix before the attack and avoids the empty Ultra Ball condemned by the rationale."
     },
     {
       "episode": 85164605,
@@ -8429,7 +8922,9 @@
       "agrees": true,
       "chosen_label": "opp Abra (bench 3 · 50/50)",
       "correct_label": "opp Abra (bench 3 · 50/50)",
-      "rationale": "Our Mega Starmie can OHKO their strongest attacker, Alakazam, which pilot should know immediatly upon match start when matchup reads opponent. Thus go for the snipe-KO on Abra."
+      "rationale": "Our Mega Starmie can OHKO their strongest attacker, Alakazam, which pilot should know immediatly upon match start when matchup reads opponent. Thus go for the snipe-KO on Abra.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 91393233,
@@ -8447,7 +8942,9 @@
       "agrees": true,
       "chosen_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
       "correct_label": "Attach Basic {W} Energy → Staryu (active · 70/70)",
-      "rationale": "CRITICAL: Play \"free\" cards that give us more information and a better board state, thus buddy buddy poffin and pokegear.\n\nAlso a failed calculation by PLANNED gamble. it states 71% chance to get a Mega Starmie to win the game. but it forgot that Mega Starmie also requires energy AND we can only evolve our Staryu via Salvatore this turn. Thus fetching Salvatore is our only win possibility."
+      "rationale": "CRITICAL: Play \"free\" cards that give us more information and a better board state, thus buddy buddy poffin and pokegear.\n\nAlso a failed calculation by PLANNED gamble. it states 71% chance to get a Mega Starmie to win the game. but it forgot that Mega Starmie also requires energy AND we can only evolve our Staryu via Salvatore this turn. Thus fetching Salvatore is our only win possibility.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 91393371,
@@ -8499,7 +8996,9 @@
         "pruned": 27,
         "preview_caps": 72,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 91393371,
@@ -8550,7 +9049,9 @@
         "pruned": 10,
         "preview_caps": 38,
         "cap_reached": false
-      }
+      },
+      "classification": "EQUIVALENT_OR_BETTER_COMPLETE_LINE",
+      "adjudication": "Lillie's expected-value prefix retains the same Nebula Beam continuation; the attack is not lost."
     },
     {
       "episode": 91393371,
@@ -8604,7 +9105,9 @@
         "pruned": 15,
         "preview_caps": 9,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "No rationale was recorded for Pokégear over the selected heal line."
     },
     {
       "episode": 91393371,
@@ -8622,7 +9125,9 @@
       "agrees": true,
       "chosen_label": "Play Wally's Compassion",
       "correct_label": "Play Wally's Compassion",
-      "rationale": "CRITICAL: Do not attach energy and then play Wally's Compassion, which discards all energy. Wally's Compassion should have cost, which is the number of energies that will be discarded."
+      "rationale": "CRITICAL: Do not attach energy and then play Wally's Compassion, which discards all energy. Wally's Compassion should have cost, which is the number of energies that will be discarded.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     },
     {
       "episode": 91394270,
@@ -8669,7 +9174,9 @@
         "pruned": 12,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "BELLMAN_ERROR",
+      "adjudication": "The planner currently ranks the recorded live choice over the rationale's action; this remains an explicit value/horizon tuning error, not a covered exemption."
     },
     {
       "episode": 91394270,
@@ -8714,7 +9221,9 @@
         "pruned": 5,
         "preview_caps": 0,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "The rationale discusses starter identity, not the offered Pokégear-versus-End decision."
     },
     {
       "episode": 91394270,
@@ -8766,7 +9275,9 @@
         "pruned": 76,
         "preview_caps": 72,
         "cap_reached": false
-      }
+      },
+      "classification": "UNMODELLED",
+      "adjudication": "Neither a correct selection nor an actionable rationale was recorded."
     },
     {
       "episode": 91394270,
@@ -8784,7 +9295,9 @@
       "agrees": true,
       "chosen_label": "Cinderace (bench 2 · 160/160)",
       "correct_label": "Cinderace (bench 2 · 160/160)",
-      "rationale": "Promote Cinderace. we can always retreat him from free during turn depending on the card that we draw."
+      "rationale": "Promote Cinderace. we can always retreat him from free during turn depending on the card that we draw.",
+      "classification": "MATCH",
+      "adjudication": "Equivalent-aware live choice agrees with the correction."
     }
   ]
 }

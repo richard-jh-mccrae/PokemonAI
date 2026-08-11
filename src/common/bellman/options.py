@@ -33,7 +33,14 @@ def _card_from_select(observation: Mapping, option: Mapping, area_key: str, inde
 
 
 def _fingerprint(observation: Mapping, option: Mapping) -> str:
-    found = semantic_option_fingerprint(dict(option), dict(observation))
+    semantic = dict(option)
+    # MAIN PLAY options identify a card by its hand index but omit the redundant HAND area.  Add
+    # that structural reference for identity only, so two physical copies cannot consume two beam
+    # slots.  The representative still submits the engine's original index.
+    if (semantic.get("type") == 7 and "area" not in semantic
+            and isinstance(semantic.get("index"), int)):
+        semantic["area"] = 2
+    found = semantic_option_fingerprint(semantic, dict(observation))
     if found is not None:
         return found
     enriched = []

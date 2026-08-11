@@ -84,6 +84,16 @@ def test_every_known_non_end_decision_is_strictly_costly_without_benefit():
         assert oracle.transition_ledger(state, state, ActionIdentity(kind)).total < 0.0
 
 
+def test_duplicate_hand_options_diminish_but_never_become_free():
+    registry = _registry()
+    first = registry.hand_worth([LILLIE], _obs([LILLIE]))
+    second = registry.hand_worth([LILLIE, LILLIE], _obs([LILLIE, LILLIE]))
+    third = registry.hand_worth([LILLIE, LILLIE, LILLIE], _obs([LILLIE] * 3))
+    assert first < second < third
+    assert second - first == pytest.approx(registry.worth(LILLIE) * 0.55)
+    assert third - second == pytest.approx(registry.worth(LILLIE) * 0.25)
+
+
 def test_every_required_consequence_has_one_named_family_owner():
     flattened = [fact for facts in FAMILY_OWNERS.values() for fact in facts]
     for required in ("game", "prizes", "post-attack safety", "opponent threat removal",

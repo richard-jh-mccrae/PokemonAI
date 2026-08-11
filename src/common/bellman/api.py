@@ -1,4 +1,4 @@
-"""Stable public types for the isolated planner boundary (ADR-TEMP-507, M0).
+"""Stable public types for the isolated planner boundary (ADR-0139, M0).
 
 M0 deliberately exposes no strategic implementation.  Later milestones fill this boundary without
 changing callers or permitting a temporary legacy fallback.

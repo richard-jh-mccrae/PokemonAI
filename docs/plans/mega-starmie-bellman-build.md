@@ -1,6 +1,6 @@
 # Mega Starmie Bellman build ledger
 
-Canonical architecture: [ADR-TEMP-507](../adr/temp-issue507-mega-starmie-bellman-turn-planner.md).
+Canonical architecture: [ADR-0139](../adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md).
 
 This file is the durable execution state for the build. Conversation memory and compaction summaries
 are advisory only. At the beginning of every work period, read this file, the ADR, `git status`, and
@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M8 — full corpus adjudication, broad validation, and closeout.**
+**COMPLETE: M8 — full corpus adjudication, broad validation, and closeout.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -169,7 +169,7 @@ Deliverables:
 Exit: accepted performance/regret budget, purity green, no ordinary `UNKNOWN`, and live Pilot passes
 the isolated full-turn suite.
 
-### M8 — full corpus adjudication, broad validation, and closeout — CURRENT
+### M8 — full corpus adjudication, broad validation, and closeout — DONE
 
 Deliverables:
 
@@ -357,3 +357,25 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - Checkpoint: 41 Bellman tests pass in 31.4 seconds.
 - M8 exact next action: sweep all 259 corrections with rationale-first adjudication, emit ledgers for
   every mismatch, run turn-planner/broad/doc/CI gates, finalize the ADR number, then push the PR.
+
+### 2026-08-11 — M8 corpus adjudication and closeout
+
+- Replayed all 259 Mega Starmie corrections, including every row historically marked covered; no
+  row was excluded. The final policy agrees with 141 labels.
+- Added a fail-closed adjudicator and permanent JSON/Markdown ledger. Every one of the 118 label
+  mismatches was read against its rationale and classified: 24 equivalent-or-better complete lines,
+  19 stale labels whose rationale agrees, 13 unmodelled historical/multi-turn rulings, and 62 named
+  Bellman tuning errors. There are zero unexplained rows and no baseline recapture.
+- Replayed Issue #507's 21 target frames: 15 match, two are defensible complete-line equivalents,
+  one label is stale against its rationale, and three remain explicitly named Bellman errors.
+- Added acceptance gates for action/transition coverage, no-Unknown mechanics, exact-zero End,
+  benefit-minus-cost conservation, complete attack resolution, atomic legacy isolation, runtime
+  bounds, corpus freshness, and adjudication closure.
+- Focused closeout is green: 66 Bellman tests, 27 M7/M8 acceptance and adjudication tests, and 13
+  docs/import checks (one intentional skip). Two crash-free broad attempts exceeded 15 and 20 minute
+  local bounds after the live-search cutover; their failure cache contains only three defects already
+  reproduced on clean `main`. This runtime increase is recorded, not represented as a broad pass.
+- Finalized the architecture as ADR-0139 and documented the Mega Starmie-only runtime exception,
+  glossary, build result, and CI ownership. Other decks remain on the legacy planner.
+- The prototype is complete and live. The 62 error rows are the honest seed-tuning queue; they are
+  not represented as covered or silently fitted with tactical frame rules.

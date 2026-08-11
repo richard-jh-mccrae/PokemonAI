@@ -14,7 +14,7 @@ class MegaStarmieTurnPlanner:
 
     def __init__(self, *, registry: ValueRegistry, family_evaluator,
                  belief: OpponentBelief | None = None,
-                 limits: ProductionLimits = ProductionLimits(4, 1_000, 1, 0)):
+                 limits: ProductionLimits = ProductionLimits(4, 300, 2, 0, 24)):
         self.registry = registry
         self.family_evaluator = family_evaluator
         self.belief = belief

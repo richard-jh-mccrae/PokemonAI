@@ -310,7 +310,7 @@ class Pilot(
             self._observe_known_top(obs)         # Issue #289: live, self-verifying top-deck belief
             self._transients.observe(obs)        # engine-sim future must never mutate match state
             self._turn_boosts.observe(obs)
-        if (self.strategy.name == "mega_starmie"
+        if (self.strategy.params.get("bellman_turn_planner") is True
                 and int(select.get("context", -1))
                 not in (_SETUP_ACTIVE, _SETUP_BENCH, _IS_FIRST, _MULLIGAN)):
             return self._bellman_evaluate(obs, carried=carried)
@@ -432,7 +432,8 @@ class Pilot(
         planned = MegaStarmieTurnPlanner(
             registry=self._bellman_registry,
             family_evaluator=MegaStarmiePotential(
-                self.stats, threat_roles={card_id: assignment.role for card_id, assignment
+                self.stats, functions=self.functions,
+                threat_roles={card_id: assignment.role for card_id, assignment
                                           in matchup_plan.assignments.items()}),
             belief=belief).decide(
                 PlanRequest(obs, tuple(self.deck), self.strategy.name))

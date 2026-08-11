@@ -76,3 +76,19 @@ def test_every_corpus_menu_index_is_covered_once_with_stable_identity():
             (action.identity, action.selection) for action in again]
         seen += offered
     assert seen > 500
+
+
+def test_identical_playable_hand_copies_are_one_action_and_cover_both_indices():
+    obs = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 1120, "serial": 10}, {"id": 1120, "serial": 11}]},
+            {},
+        ]},
+        "select": {"minCount": 1, "maxCount": 1, "option": [
+            {"type": 7, "index": 0}, {"type": 7, "index": 1},
+        ]},
+    }
+    actions = enumerate_legal_actions(obs)
+    assert len(actions) == 1
+    assert actions[0].selection == (0,)
+    assert actions[0].equivalent_selections == ((0,), (1,))

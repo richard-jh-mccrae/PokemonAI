@@ -1,6 +1,6 @@
-# ADR-TEMP-507 — Mega Starmie uses one Bellman-style full-turn planner
+# ADR-0139 — Mega Starmie uses one Bellman-style full-turn planner
 
-Status: Accepted for a pure Mega Starmie prototype; implementation not started.
+Status: Accepted and implemented for Mega Starmie.
 
 ## Context
 
@@ -316,3 +316,26 @@ for Mega Starmie only when the atomic activation gate passes. Structural game ru
 card facts, Needs, CombatMath, Scouting evidence, semantic identity, and ADR-TEMP-507's action-cost
 invariant remain authoritative substrate.
 
+## Implementation outcome
+
+The atomic Mega Starmie cutover is complete. After Set-Up, every offered action and nested choice is
+generated and transitioned through `common.bellman`; no legacy strategic chooser or fallback can
+select the move. The bounded production solver and exhaustive reference solver share the same
+state, transition, Worth, potential, chance, belief, and ledger contracts. Production currently
+uses depth 4, 300 nodes, beam width 2, and exact current-action expansion before bounded
+continuation.
+
+The unfiltered final corpus audit contains 259 corrections, zero exclusions, and zero unexplained
+rows: 141 `MATCH`, 24 `EQUIVALENT_OR_BETTER_COMPLETE_LINE`, 19
+`STALE_LABEL_RATIONALE_AGREES`, 13 `UNMODELLED`, and 62 explicitly named `BELLMAN_ERROR` tuning
+rows. Issue #507's 21 target frames finish as 15 matches, two complete-line equivalents, one stale
+label whose rationale agrees, and three named Bellman errors. These counts are the prototype's
+honest tuning baseline; they are not recaptured as correctness.
+
+All 1,989 offered corpus selection indices are covered by 1,623 semantic actions and transition
+without `Unknown`. End remains exactly zero,
+benefitless non-End actions remain negative, attacks resolve through nested riders and forced
+promotion before terminal value, and the two Cinderace/Lillie's/Boss boundary fixtures pass. This
+ADR establishes the complete architecture and live cutover, not a claim that the initial human
+seeds are already a competitive policy. The adjudication ledger is the queue for subsequent
+economic tuning without restoring rules-based strategic owners.

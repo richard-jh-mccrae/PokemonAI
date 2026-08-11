@@ -9,15 +9,21 @@ import hashlib
 
 
 def freeze(value):
+    # Observations are built-in containers.  Test exact types first: ``typing.Mapping`` performs
+    # an expensive ABC/subclass walk at every leaf, and a single search freezes millions of leaves.
+    value_type = type(value)
+    if value_type is dict:
+        return ("__map__", tuple((str(key), freeze(child)) for key, child in
+                                 sorted(value.items(), key=lambda item: str(item[0]))))
+    if value_type is list:
+        return ("__list__", tuple(freeze(child) for child in value))
+    if value_type is tuple:
+        return ("__tuple__", tuple(freeze(child) for child in value))
+    if value_type is set or value_type is frozenset:
+        return ("__set__", tuple(sorted((freeze(child) for child in value), key=repr)))
     if isinstance(value, Mapping):
         return ("__map__", tuple((str(key), freeze(child)) for key, child in
                                  sorted(value.items(), key=lambda item: str(item[0]))))
-    if isinstance(value, list):
-        return ("__list__", tuple(freeze(child) for child in value))
-    if isinstance(value, tuple):
-        return ("__tuple__", tuple(freeze(child) for child in value))
-    if isinstance(value, (set, frozenset)):
-        return ("__set__", tuple(sorted((freeze(child) for child in value), key=repr)))
     return value
 
 

@@ -91,6 +91,19 @@ class CgpyTransitionProvider:
             return ()
         return enumerate_legal_actions(state.obs)
 
+    def preview_checkpoint(self):
+        """Opaque engine-key snapshot used to release speculative forks after one root preview."""
+        return frozenset(self._engines), frozenset(self._attack_committed)
+
+    def preview_restore(self, checkpoint) -> None:
+        engine_keys, attack_keys = checkpoint
+        for key in tuple(self._engines):
+            if key not in engine_keys:
+                del self._engines[key]
+        for key in tuple(self._attack_committed):
+            if key not in attack_keys:
+                del self._attack_committed[key]
+
     def actor(self, state: DecisionState) -> Actor:
         if self._local_nested:
             return Actor.OURS
@@ -128,6 +141,11 @@ class CgpyTransitionProvider:
 
     def preview_main_steps(self, state, action, default: int) -> int:
         engine = self._engines.get(state.semantic_key)
+        context = int(((state.obs.get("select") or {}).get("context", -1)))
+        if context in (7, 17):
+            return max(default, 2)
+        if context in (3, 4):
+            return max(default, 1)
         if action.identity.kind in ("attach", "evolve", "retreat"):
             return max(default, 1)
         if engine is None or action.identity.kind != "play":
@@ -139,6 +157,26 @@ class CgpyTransitionProvider:
         # A denial/deploy play is useful before an otherwise terminal attack only if the full
         # play-then-attack line still beats attacking now.
         return max(default, 1) if card_id in (1030, 1086, 1120) else default
+
+    def preview_budget(self, state, action, default: int) -> int:
+        """Local mechanics depth, independent of strategic payoff."""
+        context = int(((state.obs.get("select") or {}).get("context", -1)))
+        if context == 17:
+            return max(default, 80)
+        engine = self._engines.get(state.semantic_key)
+        if engine is None or action.identity.kind != "play":
+            return default
+        card_id, _serial = self._played_card_id(engine, action)
+        # Wally resolves a target, returned stack/Energy, a replacement attachment, then attack.
+        return max(default, 80) if card_id == 1229 else default
+
+    def chance_replan_steps(self, state, action, default: int) -> int:
+        """Only revealed information earns an additional actual-state replan horizon."""
+        engine = self._engines.get(state.semantic_key)
+        if engine is None or action.identity.kind != "play":
+            return default
+        card_id, _serial = self._played_card_id(engine, action)
+        return max(default, 1) if card_id in (1122, 1223, 1227) else default
 
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:
@@ -175,6 +213,7 @@ class CgpyTransitionProvider:
         """
         try:
             obs = copy.deepcopy(state.obs)
+            adjustments = []
             select = obs.get("select") or {}
             options = select.get("option") or ()
             picked = [options[index] for index in action.selection]
@@ -183,11 +222,20 @@ class CgpyTransitionProvider:
             context = int(select.get("context", -1))
             if context == 15:  # Jetting Blow's 50 Bench damage
                 for option in picked:
-                    body = self._body(players, int(option["playerIndex"]),
-                                      int(option["area"]), int(option["index"]))
+                    target_seat = int(option["playerIndex"])
+                    target_index = int(option["index"])
+                    body = self._body(players, target_seat,
+                                      int(option["area"]), target_index)
                     if body is None:
                         raise ValueError("damage target is absent")
                     body["hp"] = max(0, int(body.get("hp", 0)) - 50)
+                    if body["hp"] == 0 and int(option["area"]) == 5:
+                        card_id = int(body.get("id", 0))
+                        facts = self.registry.facts.get(card_id) if self.registry else None
+                        prizes = max(1, int(getattr(facts, "prize_value", 1)))
+                        players[target_seat]["bench"].pop(target_index)
+                        mine = players[state.root_seat].get("prize") or []
+                        del mine[:min(prizes, len(mine))]
             elif context == 21:  # Turbo Flare / generic visible Energy placement
                 card = copy.deepcopy(select.get("contextCard"))
                 if not card:
@@ -198,6 +246,10 @@ class CgpyTransitionProvider:
                     if body is None:
                         raise ValueError("Energy recipient is absent")
                     body.setdefault("energyCards", []).append(card)
+                    facts = self.registry.facts.get(int(card.get("id", 0))) if self.registry else None
+                    energy_type = card.get("energyType", getattr(facts, "energy_type", None))
+                    if energy_type is not None:
+                        body.setdefault("energies", []).append(int(energy_type))
             elif context == 4:  # forced promotion
                 for option in picked:
                     seat = int(option["playerIndex"])
@@ -235,7 +287,9 @@ class CgpyTransitionProvider:
                                f"select context {context}")
             current["turnActionCount"] = int(current.get("turnActionCount", 0)) + 1
             obs["select"] = None
-            successor = state.with_observation(obs)
+            obs["bellmanHistoricalMain"] = True
+            obs["bellmanHistoricalContext"] = context
+            successor = state.with_observation(obs).with_adjustments(adjustments)
             return Terminal(successor, "isolated historical nested selection")
         except Exception as exc:  # noqa: BLE001 - stays explicit
             return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")

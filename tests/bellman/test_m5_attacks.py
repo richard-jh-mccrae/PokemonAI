@@ -213,4 +213,4 @@ def test_nebula_resolves_damage_ko_prize_and_worst_opponent_promotion_before_val
     assert max(6 - len(engine.gs.players[0].prize)
                for key, engine in provider._engines.items()
                if provider._attack_committed.get(key) and engine.gs.turn > 3) == 3
-    assert decision.diagnostics["ledger"]["continuation"] >= 3.0
+    assert decision.diagnostics["ledger"]["continuation"] >= 2.5

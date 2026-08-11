@@ -86,12 +86,15 @@ def test_60hp_policy_attaches_then_commits_lillie_and_replans():
     assert engine.gs.card_id(engine.gs.players[0].hand[selected["index"]]) == LILLIE
 
 
-def test_50hp_policy_spends_boss_for_the_reachable_ko_line():
+def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():
     pilot = _build_pilot("mega_starmie")[0]
     engine = _fixture(50)
     decision = pilot.explain(_obs(engine))
-    assert decision.chosen == [0]
+    assert decision.chosen == [1]
     assert decision.composer["value"] > 0.0
+    engine.step(decision.chosen)
+    decision = pilot.explain(_obs(engine))
+    assert pilot.decide(_obs(engine)) == [0]
     engine.step(decision.chosen)
     assert pilot.decide(_obs(engine)) == [0]
 
@@ -148,3 +151,18 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
                                     beam_width=1, preview_main_steps=0)).decide(state)
         assert production.action == reference.action
         assert production.value == pytest.approx(reference.value)
+
+
+def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
+    pilot = _build_pilot("mega_starmie")[0]
+    potential = MegaStarmiePotential(pilot.stats, functions=pilot.functions)
+    engine = _fixture(50)
+    before = _obs(engine)
+    won = _obs(engine)
+    won["current"]["result"] = 0
+    won["current"]["players"][0]["hand"] = []
+    won["current"]["players"][0]["active"][0]["energyCards"] = [
+        {"id": WATER, "playerIndex": 0} for _ in range(8)]
+    won["current"]["players"][0]["active"][0]["energies"] = [3] * 8
+    assert potential(won).families == (("game", potential.seeds.game),)
+    assert potential(won).total > potential(before).total

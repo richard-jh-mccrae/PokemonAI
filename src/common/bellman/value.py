@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+from collections import Counter
 import math
 from typing import Callable, Mapping
 
@@ -35,6 +36,10 @@ class CardFacts:
     known: bool = True
     ace_spec: bool = False
     typed_basic_energy: bool = False
+    pokemon: bool = False
+    stage: str | None = None
+    prize_value: int = 1
+    energy_type: int | None = None
 
 
 @dataclass(frozen=True)
@@ -56,13 +61,14 @@ class ValueRegistry:
                  functions: Mapping[int, tuple[str, ...]] | None = None,
                  facts: Mapping[int, CardFacts] | None = None,
                  overrides: Mapping[int, float] | None = None,
-                 line_bases=(), seeds: WorthSeeds = WorthSeeds()):
+                 line_bases=(), line_pairs=(), seeds: WorthSeeds = WorthSeeds()):
         self.roles = {int(key): tuple(value) for key, value in (roles or {}).items()}
         for card_id in line_bases:
             self.roles[int(card_id)] = (*self.roles.get(int(card_id), ()), "win_condition_base")
         self.functions = {int(key): tuple(value) for key, value in (functions or {}).items()}
         self.facts = {int(key): value for key, value in (facts or {}).items()}
         self.overrides = {int(key): max(0.0, float(value)) for key, value in (overrides or {}).items()}
+        self.line_parents = {int(top): int(base) for base, top in line_pairs}
         self.seeds = seeds
 
     @classmethod
@@ -79,11 +85,17 @@ class ValueRegistry:
                 ace_spec=bool(stat is not None and getattr(stat, "aceSpec", False)),
                 typed_basic_energy=bool(stat is not None and
                                         getattr(stat, "is_typed_basic_energy", False)),
+                pokemon=bool(stat is not None and getattr(stat, "is_pokemon", False)),
+                stage=(getattr(stat, "stage", None) if stat is not None else None),
+                prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
+                energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
             )
         line_bases = tuple(line.path[0] for line in getattr(strategy, "lines", ()) if line.path)
+        line_pairs = tuple((line.path[0], line.path[-1]) for line in getattr(strategy, "lines", ())
+                           if len(line.path) >= 2)
         return cls(roles=roles, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
-                   line_bases=line_bases)
+                   line_bases=line_bases, line_pairs=line_pairs)
 
     def worth(self, card_id: int) -> float:
         card_id = int(card_id)
@@ -98,12 +110,35 @@ class ValueRegistry:
     def prizes(self, card_id: int) -> float:
         return float(worth_to_prizes(self.worth(card_id)))
 
+    def held_worth(self, card_id: int, observation: Mapping) -> float:
+        facts = self.facts.get(int(card_id), CardFacts(known=False))
+        if (facts.pokemon and facts.stage not in (None, "basic")
+                and int(card_id) not in self.line_parents):
+            return self.seeds.known_floor
+        return self.worth(card_id)
+
+    def hand_worth(self, card_ids, observation: Mapping) -> float:
+        """Marginal option value of a hand; every duplicate stays positive, never free."""
+        total = 0.0
+        for card_id, count in Counter(int(card_id) for card_id in card_ids).items():
+            facts = self.facts.get(card_id, CardFacts(known=False))
+            if facts.typed_basic_energy:
+                multipliers = (1.0, 1.0, 1.0)
+                tail = 0.60
+            else:
+                multipliers = (1.0, 0.55, 0.25)
+                tail = 0.15
+            worth = self.held_worth(card_id, observation)
+            total += worth * (sum(multipliers[:count]) + max(0, count - len(multipliers)) * tail)
+        return total
+
     @property
     def identity(self) -> str:
         payload = json.dumps({
             "roles": self.roles, "functions": self.functions,
             "facts": {key: vars(value) for key, value in self.facts.items()},
             "overrides": self.overrides, "seeds": vars(self.seeds),
+            "line_parents": self.line_parents,
         }, sort_keys=True, separators=(",", ":"), default=list).encode("utf-8")
         return "bellman-worth/1:" + hashlib.sha256(payload).hexdigest()
 
@@ -125,11 +160,38 @@ def _hand_ids(observation: Mapping, seat: int) -> tuple[int, ...]:
     return tuple(int(card["id"]) for card in (player.get("hand") or ()) if card)
 
 
+def _consumed_hand_ids(before: Mapping, after: Mapping, seat: int) -> tuple[int, ...]:
+    """Cards that ceased to be held, matched by physical serial when observations expose it."""
+    players_before = ((before.get("current") or {}).get("players") or ())
+    players_after = ((after.get("current") or {}).get("players") or ())
+    left = list((players_before[seat] if 0 <= seat < len(players_before) else {}).get("hand") or ())
+    right = list((players_after[seat] if 0 <= seat < len(players_after) else {}).get("hand") or ())
+    right_serials = Counter((int(card.get("id", 0)), int(card["serial"]))
+                            for card in right if card and card.get("serial") is not None)
+    right_unserialled = Counter(int(card.get("id", 0)) for card in right
+                                if card and card.get("serial") is None)
+    removed = []
+    for card in left:
+        if not card:
+            continue
+        card_id = int(card.get("id", 0))
+        if card.get("serial") is not None:
+            token = (card_id, int(card["serial"]))
+            if right_serials[token]:
+                right_serials[token] -= 1
+                continue
+        elif right_unserialled[card_id]:
+            right_unserialled[card_id] -= 1
+            continue
+        removed.append(card_id)
+    return tuple(removed)
+
+
 class ValueOracle:
     """Converts one neutral family evaluator into the conserved Bellman ledger.
 
-    ``family_evaluator`` returns legacy-neutral board families.  Its hand term is replaced by the
-    portable Worth sum, making the card's shared opportunity cost explicit and deck-transferable.
+    ``family_evaluator`` returns legacy-neutral board families. Portable Worth is charged when a
+    held card is actually consumed; merely moving a higher-Worth card into hand is not a benefit.
     """
 
     def __init__(self, registry: ValueRegistry,
@@ -150,9 +212,7 @@ class ValueOracle:
     def potential(self, state: DecisionState, *, model=None) -> Potential:
         base = self._families(model if model is not None else state.obs)
         families = [(name, float(value)) for name, value in base.families if name != "hand"]
-        hand = sum(self.registry.prizes(card_id)
-                   for card_id in _hand_ids(state.obs, state.root_seat))
-        families.append(("hand", hand))
+        families.append(("hand", 0.0))
         families.extend(state.value_adjustments)
         return Potential(sum(value for _name, value in families), tuple(families), base.unknowns)
 
@@ -163,12 +223,28 @@ class ValueOracle:
         left = dict(self.potential(before, model=before_model).families)
         right = dict(self.potential(after, model=after_model).families)
         benefits, costs = [], []
+        context = int(((before.obs.get("select") or {}).get("context", -1)))
         for family in tuple(left) + tuple(key for key in right if key not in left):
             delta = float(right.get(family, 0.0) - left.get(family, 0.0))
+            if family == "pressure" and context == 17:
+                # Heal-target selection owns HP and returned-Energy consequences. The reachable
+                # attack is priced by its continuation; charging its temporary disappearance here
+                # makes healing the exposed Active lose to healing a safe Bench body.
+                continue
             if delta > 0.0:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
+        removed = _consumed_hand_ids(before.obs, after.obs, before.root_seat)
+        if removed:
+            held = list(_hand_ids(before.obs, before.root_seat))
+            remaining = list(held)
+            for card_id in removed:
+                remaining.remove(card_id)
+            consumed = (self.registry.hand_worth(held, before.obs)
+                        - self.registry.hand_worth(remaining, before.obs))
+            if consumed > 0.0:
+                costs.append(("hand", worth_to_prizes(consumed)))
         for name, available in vars(before.budgets).items():
             if name == "ability":
                 spent = len(after.budgets.ability) > len(available)

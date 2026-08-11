@@ -26,8 +26,8 @@ def _board(*, node="root", hand=(), energy=0, bench=(), value=0.0):
     return {"node": node, "current": {"yourIndex": 0, "board": value,
             "supporterPlayed": False, "energyAttached": bool(energy), "retreated": False,
             "stadiumPlayed": False, "players": [
-                {"hand": [{"id": cid, "serial": 40 + i, "playerIndex": 0}
-                          for i, cid in enumerate(hand)], "active": [active],
+                {"hand": [{"id": cid, "serial": 10_000 + cid, "playerIndex": 0}
+                          for cid in hand], "active": [active],
                  "bench": list(bench), "benchMax": 5, "discard": [], "prize": [None] * 6},
                 {"hand": None, "handCount": 0, "active": [], "bench": [], "discard": [],
                  "prize": [None] * 6},
@@ -98,7 +98,7 @@ def test_60hp_fixture_attaches_then_takes_lillie_expectation_and_replans():
         (("board", float(obs["current"].get("board", 0.0))),)))
     root = _state(node="root", hand=(BOSS, WATER, LILLIE), value=0.0)
     attached = _state(node="attached", hand=(BOSS, LILLIE), energy=1, value=0.08)
-    hit = _state(node="hit", hand=(STARYU,), energy=1, value=0.40)
+    hit = _state(node="hit", hand=(STARYU,), energy=1, value=0.50)
     whiff = _state(node="whiff", hand=(), energy=1, value=0.05)
     direct_hit = _state(node="direct_hit", hand=(STARYU,), value=0.22)
     direct_whiff = _state(node="direct_whiff", hand=(), value=0.0)

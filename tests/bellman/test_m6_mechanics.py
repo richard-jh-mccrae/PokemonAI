@@ -30,7 +30,7 @@ def _source_key(obs, option):
 
 
 def test_every_unfiltered_correction_action_has_a_declared_transition():
-    actions = unknowns = unavailable = 0
+    actions = covered = unknowns = unavailable = 0
     for correction in _rows():
         state = DecisionState.from_observation(
             correction.obs, deck=DECK, deck_name="mega_starmie")
@@ -38,9 +38,11 @@ def test_every_unfiltered_correction_action_has_a_declared_transition():
         unavailable += not provider.available
         for action in provider.actions(state):
             actions += 1
+            covered += len(action.equivalent_selections)
             unknowns += isinstance(provider.transition(state, action), Unknown)
     assert len(_rows()) == 259
-    assert actions == 1692
+    assert actions == 1623
+    assert covered == 1989
     assert unavailable == unknowns == 0
 
 

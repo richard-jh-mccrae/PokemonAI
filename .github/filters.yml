@@ -58,9 +58,16 @@ common_agent_core:
   # `src/common/*.py` matches ONE directory level, so the Pilot's families need naming: without
   # this line a change to any decider reached the suite only via the `any` fail-safe.
   - 'src/common/deciders/**'
+  - 'src/common/bellman/**'
   - 'src/common/scouting/**'
   - 'src/common/strategy/**'
   - 'src/common/value/**'
+
+# Bellman owns Mega Starmie's complete post-Set-Up policy. Keep its focused contract suite explicit
+# even though live Pilot integration also makes these source files part of common-agent blast radius.
+bellman:
+  - 'src/common/bellman/**'
+  - 'tests/bellman/**'
 
 # Leaf/tool source areas + their own tests (reverse deps applied in the ci.yml plan step).
 agents:
