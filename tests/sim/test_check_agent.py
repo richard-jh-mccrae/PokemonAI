@@ -1,9 +1,11 @@
 """Agent Check harness (tools/sim): contents -> legality -> playability -> deployability."""
 from pathlib import Path
+import zipfile
 
 import pytest
 
-from sim.check_agent import check_contents, check_legality
+import sim.check_agent as checkmod
+from sim.check_agent import check_artifact, check_contents, check_legality
 
 from conftest import require_kaggle_environments
 
@@ -33,11 +35,40 @@ def test_contents_passes_when_main_and_deck_present(tmp_path):
 def test_contents_bundle_requires_engine_and_common(tmp_path):
     (tmp_path / "main.py").write_text("")
     (tmp_path / "deck.csv").write_text("3\n")
-    # extracted Bundle must also carry both engines and the shared agent runtime
+    # extracted Bundle carries the native engine and shared runtime; cgpy stays source-only
     result = check_contents(
-        tmp_path, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
+        tmp_path, required=("main.py", "deck.csv", "cg", "common"))
     assert not result.ok
-    assert "cg" in result.detail and "cgpy" in result.detail and "common" in result.detail
+    assert "cg" in result.detail and "common" in result.detail
+    assert "cgpy" not in result.detail
+
+
+@pytest.mark.req("REQ-SIM-0004")
+def test_exact_artifact_gate_extracts_and_runs_the_given_zip(tmp_path, monkeypatch):
+    stage = tmp_path / "stage"
+    (stage / "cg").mkdir(parents=True)
+    (stage / "common").mkdir()
+    (stage / "main.py").write_text("MARKER = 'exact-artifact'\n")
+    (stage / "deck.csv").write_text(LEGAL_DECK.read_text())
+    (stage / "cg" / "__init__.py").write_text("")
+    (stage / "common" / "__init__.py").write_text("")
+    artifact = tmp_path / "prior-build.zip"
+    with zipfile.ZipFile(artifact, "w") as bundle:
+        for path in stage.rglob("*"):
+            if path.is_file():
+                bundle.write(path, path.relative_to(stage))
+
+    seen = []
+
+    def run_exact(extracted, reports_dir=None, label="bundle"):
+        seen.append(((extracted / "main.py").read_text(), label))
+        return 0, "", None
+
+    monkeypatch.setattr(checkmod, "_run_bundle", run_exact)
+    result = check_artifact(artifact, tmp_path / "work", label="mega_starmie")
+
+    assert result.ok, result.detail
+    assert seen == [("MARKER = 'exact-artifact'\n", "mega_starmie")]
 
 
 @pytest.mark.req("REQ-SIM-0002")

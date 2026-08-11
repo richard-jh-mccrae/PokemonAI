@@ -34,6 +34,10 @@ extracted — contains exactly what it should (and no stray files) and still pla
 match. Verified on the **extracted** artifact, never the source tree.
 _Avoid_: packaged, shippable, valid
 
+The developer-facing Agent Check builds a fresh Bundle after several source Playability
+matches. The upload command instead applies Deployability once to the exact prior-build zip it
+will send; it neither reruns source matches nor silently packages a different working tree.
+
 **Bundle**:
 The self-contained submission `submit.package` produces: `main.py` + `deck.csv` + the shared
 native `cg/` engine + `common/` runtime, and nothing else. The source-only `cgpy/` twin is never

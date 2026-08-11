@@ -225,14 +225,12 @@ def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle"):
     return proc.returncode, (proc.stdout + proc.stderr).strip(), replay
 
 
-def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_root=None) -> StageResult:
-    """Package the agent, extract it, verify the Bundle's contents, and run it once."""
+def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="bundle") -> StageResult:
+    """Extract and run the exact immutable Bundle that would be uploaded."""
     import zipfile
 
-    from submit.package import package  # lazy; tools/ is on sys.path
-
     work_dir = Path(work_dir)
-    zip_path = package(name, work_dir / "dist", agents_root=agents_root)
+    zip_path = Path(zip_path)
 
     size = zip_path.stat().st_size  # archive is what Kaggle receives
     if size > MAX_SUBMISSION_BYTES:
@@ -249,14 +247,29 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
         extracted, required=("main.py", "deck.csv", "cg", "common"))
     if not contents.ok:
         return StageResult(False, "deployability", f"bundle {contents.detail}")
+    legality = check_legality(extracted / "deck.csv")
+    if not legality.ok:
+        return StageResult(False, "deployability", f"bundle deck is illegal: {legality.detail}")
 
-    rc, output, replay = _run_bundle(extracted, reports_dir, name)
+    rc, output, replay = _run_bundle(extracted, reports_dir, label)
     if rc != 0:
         detail = f"bundle match failed: {output}"
         if replay and replay.exists():
             detail += f"; replay -> {replay}"
         return StageResult(False, "deployability", detail)
-    return StageResult(True, "deployability", "packaged, extracted, and ran clean")
+    return StageResult(True, "deployability", "exact artifact extracted and ran clean")
+
+
+def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_root=None) -> StageResult:
+    """Package the current source, then delegate to the exact-artifact gate."""
+    from submit.package import package  # lazy; tools/ is on sys.path
+
+    work_dir = Path(work_dir)
+    zip_path = package(name, work_dir / "dist", agents_root=agents_root)
+    checked = check_artifact(zip_path, work_dir, reports_dir, label=name)
+    if checked.ok:
+        return StageResult(True, "deployability", "packaged, extracted, and ran clean")
+    return checked
 
 
 def _agent_name(raw: str) -> str:

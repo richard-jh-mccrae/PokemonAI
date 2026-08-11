@@ -26,7 +26,9 @@ env via `kaggle-environments==1.30.1` (the ladder's pinned version).
 - **Deployability** instead runs the extracted Bundle in a fresh **subprocess** (cwd = the
   Bundle): once `cg`/`common` are imported from `src/` they are cached in
   `sys.modules`, so only a clean interpreter can prove the *Bundle's own* copies load and
-  run — i.e. that the shipped artifact is self-contained.
+  run — i.e. that the shipped artifact is self-contained. The upload path applies this once
+  to the exact immutable zip selected from the Build Ledger; it does not repackage the current
+  tree or repeat the source Playability matches.
 - Deck **legality** is pre-checked by calling `cg.game.battle_start` directly — the same
   engine verdict the env uses, but it exposes the precise `errorType` (invalid id / >4
   copies / no Basic Pokémon / >1 ACE SPEC) that the env collapses into a generic message.

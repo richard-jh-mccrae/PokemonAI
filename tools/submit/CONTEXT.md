@@ -47,6 +47,13 @@ by id, or the most recent by default — uploading that build's *exact* zip. `su
 promotes the chosen build into Agent History.
 _Avoid_: Agent History (the committed *submitted* record), history
 
+Before upload, `submit` extracts that exact immutable zip and runs one full mirror Match in a
+fresh process. It does not rebuild the current source or repeat the source Playability matches;
+the explicit developer Agent Check owns those broader checks. The command prints the artifact
+name before this slower gate so the wait is visible and attributable.
+If that Match fails, its replay is retained under `reports/` and the command names it instead of
+discarding the only reproduction of a nondeterministic Playability failure.
+
 **Agent History**:
 The committed, durable record of *what each agent was* — one entry per Submission actually
 uploaded (state summary + join keys + lineage + experiment intent).
