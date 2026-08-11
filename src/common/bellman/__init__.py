@@ -12,6 +12,9 @@ from .api import (
     PlanRequest,
     RootDecision,
 )
+from .algebra import Actor, Chance, Choice, Deterministic, Ledger, Terminal, Unknown
+from .options import LegalAction, enumerate_legal_actions
+from .state import DecisionState, OpponentBelief, TurnBudgets
 
 __all__ = (
     "END_VALUE",
@@ -20,4 +23,16 @@ __all__ = (
     "BellmanUnavailable",
     "PlanRequest",
     "RootDecision",
+    "Actor",
+    "Chance",
+    "Choice",
+    "DecisionState",
+    "Deterministic",
+    "Ledger",
+    "LegalAction",
+    "OpponentBelief",
+    "Terminal",
+    "TurnBudgets",
+    "Unknown",
+    "enumerate_legal_actions",
 )

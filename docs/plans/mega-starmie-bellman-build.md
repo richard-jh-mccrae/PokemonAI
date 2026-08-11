@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M1 — canonical state, budgets, and transition algebra.**
+**CURRENT: M2 — one benefit/cost ledger and terminal board value.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -69,7 +69,7 @@ Deliverables:
 Exit: inventory has no silent “other” bucket; all gaps are named; package boundary and failing
 contracts import cleanly; no runtime routing change.
 
-### M1 — canonical state, budgets, and transition algebra — CURRENT
+### M1 — canonical state, budgets, and transition algebra — DONE
 
 Deliverables:
 
@@ -83,7 +83,7 @@ Deliverables:
 Exit: every sampled Mega Starmie root option appears once with stable identity; End is exact zero;
 allowances persist through successors; no tactical score is imported.
 
-### M2 — one benefit/cost ledger and terminal board value — PENDING
+### M2 — one benefit/cost ledger and terminal board value — CURRENT
 
 Deliverables:
 
@@ -230,3 +230,18 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
   inventory freshness and `git diff --check` pass. Runtime routing is unchanged.
 - M1 exact next action: define immutable Bellman state/action/budget/node/diagnostic algebra, then
   adapt engine menus to stable identities without reading any legacy score or chooser.
+
+### 2026-08-11 — M1 state and transition algebra
+
+- Added immutable `DecisionState`, visible opponent belief with conserved probability mass, exact
+  own-deck/prize counts when anchored, and explicit Supporter/attach/retreat/Ability/attack/Stadium
+  budgets. Semantic identity includes every allowance, belief, hidden-zone fact, and value registry.
+- Added deterministic, our-choice max, opponent-choice min, normalized Chance, Terminal, and reasoned
+  Unknown node types plus stable ledger/diagnostic schemas.
+- Added serial-free legal-menu enumeration. Interchangeable physical copies form one action while
+  every engine menu index is covered exactly once; unresolved enum growth stays named by its number.
+- Corpus parity contract walks all 259 Mega Starmie records and proves every offered root/nested index
+  appears once with stable identity after a deep copy. No legacy score/chooser is imported.
+- Checkpoint: M0+M1 Bellman tests pass (7 passed, one intended M0 xfail); runtime remains unchanged.
+- M2 exact next action: centralize portable Worth/deck overrides, build one differenced board potential
+  and consumed-resource ledger, then prove conservation and strict negativity for benefitless actions.
