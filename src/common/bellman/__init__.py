@@ -16,9 +16,11 @@ from .algebra import Actor, Chance, Choice, Deterministic, Ledger, Terminal, Unk
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
-from .solver import ReferenceSolver, SearchLimits, TransitionProvider
+from .solver import ProductionLimits, ProductionSolver, ReferenceSolver, SearchLimits, TransitionProvider
 from .engine import CgpyTransitionProvider
 from .information import CausalNeeds, DrawClass, Need, hypergeometric_classes, opponent_belief
+from .runtime import MegaStarmieTurnPlanner
+from .potential import BoardSeeds, MegaStarmiePotential
 
 __all__ = (
     "END_VALUE",
@@ -45,6 +47,8 @@ __all__ = (
     "ValueRegistry",
     "WorthSeeds",
     "ReferenceSolver",
+    "ProductionLimits",
+    "ProductionSolver",
     "SearchLimits",
     "TransitionProvider",
     "CgpyTransitionProvider",
@@ -53,4 +57,7 @@ __all__ = (
     "Need",
     "hypergeometric_classes",
     "opponent_belief",
+    "MegaStarmieTurnPlanner",
+    "BoardSeeds",
+    "MegaStarmiePotential",
 )

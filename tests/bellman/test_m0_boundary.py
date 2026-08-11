@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from common.bellman import END_VALUE, ActionIdentity, BellmanUnavailable
+from common.bellman import END_VALUE, ActionIdentity, MegaStarmieTurnPlanner
 from common.bellman.api import require_consumed_cost
 
 
@@ -57,7 +57,5 @@ def test_live_baseline_is_unfiltered_and_keeps_rationales():
     assert all("rationale" in row for row in baseline["rows"])
 
 
-@pytest.mark.xfail(strict=True, raises=BellmanUnavailable,
-                   reason="M0 executable fixture: planner implementation starts at M1")
 def test_cinderace_lillie_boundary_is_not_silently_delegated():
-    raise BellmanUnavailable("60-HP and 50-HP full-turn fixtures are not implemented in M0")
+    assert MegaStarmieTurnPlanner.__module__ == "common.bellman.runtime"

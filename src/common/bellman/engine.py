@@ -4,9 +4,10 @@ from __future__ import annotations
 from collections import Counter
 import copy
 from dataclasses import replace
+from math import comb
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
-from .information import CausalNeeds, Need, OutcomeRng, hypergeometric_classes
+from .information import CausalNeeds, DrawClass, Need, OutcomeRng, hypergeometric_classes
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState
 
@@ -33,10 +34,11 @@ class CgpyTransitionProvider:
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 
     def __init__(self, root: DecisionState, *, registry=None, needs: CausalNeeds | None = None,
-                 engine=None):
+                 engine=None, production_chance: bool = False):
         self.root = root
         self.registry = registry
         self.needs = needs or CausalNeeds()
+        self.production_chance = bool(production_chance)
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
         self._local_nested = False
@@ -96,6 +98,47 @@ class CgpyTransitionProvider:
         if engine is None:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
+
+    def preview_actions(self, state, actions, *, main_steps: int):
+        """Cheap rollout menu: preserve commitments/terminal moves and one causal refresh.
+
+        Root admission still simulates every action. This filter applies only inside bounded
+        lookahead, preventing a newly drawn Pokégear/Harlequin from recursively opening another
+        information tree merely to estimate whether the preceding attach should happen first.
+        """
+        if self._local_nested:
+            return actions
+        engine = self._engines.get(state.semantic_key)
+        if engine is None:
+            return actions
+        board = engine.gs.players[state.root_seat]
+        active_id = engine.gs.card_id(board.active.top) if board.active is not None else None
+        in_play = {engine.gs.card_id(body.top) for body in engine.gs.in_play(state.root_seat)}
+        allow_lillie = ((active_id == 666 and not in_play.intersection({1030, 1031}))
+                        or len(board.hand) <= 2)
+        kept = []
+        for action in actions:
+            if action.identity.kind != "play":
+                kept.append(action)
+                continue
+            card_id, _serial = self._played_card_id(engine, action)
+            if card_id == 1030 or (card_id == 1227 and allow_lillie):
+                kept.append(action)
+        return tuple(kept)
+
+    def preview_main_steps(self, state, action, default: int) -> int:
+        engine = self._engines.get(state.semantic_key)
+        if action.identity.kind in ("attach", "evolve", "retreat"):
+            return max(default, 1)
+        if engine is None or action.identity.kind != "play":
+            return default
+        card_id, _serial = self._played_card_id(engine, action)
+        # Gust/heal can require target -> attach -> attack before their payoff is realized.
+        if card_id in (1182, 1229):
+            return max(default, 2)
+        # A denial/deploy play is useful before an otherwise terminal attack only if the full
+        # play-then-attack line still beats attacking now.
+        return max(default, 1) if card_id in (1030, 1086, 1120) else default
 
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:
@@ -268,9 +311,11 @@ class CgpyTransitionProvider:
             if option_type not in (1, 2):
                 continue
             draws = 5 if option_type == 1 else 3
-            for outcome in hypergeometric_classes(pool_ids, draws, needs):
-                draw_ids, adjustment = self._representative_ids(
-                    pool_ids, needs, outcome, self.registry)
+            for outcome, expected_adjustment in self._outcome_classes(pool_ids, draws, needs):
+                draw_ids, adjustment = self._representative_ids(pool_ids, needs, outcome,
+                                                                self.registry)
+                if expected_adjustment is not None:
+                    adjustment = expected_adjustment
                 branch = child.fork()
                 self._force_top_ids(branch, state.root_seat, draw_ids)
                 branch.step([index])
@@ -325,6 +370,46 @@ class CgpyTransitionProvider:
         actual = sum(registry.worth(card_id) for card_id in selected) if registry else 0.0
         return selected, (expected_worth - actual) / 120.0
 
+    def _outcome_classes(self, pool, draws, needs):
+        exact = hypergeometric_classes(pool, draws, needs)
+        if not self.production_chance or not needs:
+            return tuple((outcome, None) for outcome in exact)
+        grouped = {}
+        for outcome in exact:
+            key = tuple(bool(count) for count in outcome.counts)
+            grouped.setdefault(key, []).append(outcome)
+        rows = []
+        pool = list(pool)
+        claimed = {card_id for need in needs for card_id in need.card_ids}
+        complement = [card_id for card_id in pool if card_id not in claimed]
+        complement_mean = (sum(self.registry.worth(card_id) for card_id in complement) /
+                           len(complement) if self.registry and complement else 0.0)
+        for presence, members in sorted(grouped.items()):
+            probability = sum(member.probability for member in members)
+            conditional = [sum(member.probability * member.counts[index]
+                               for member in members) / probability
+                           for index in range(len(needs))]
+            counts = tuple(int(flag) for flag in presence)
+            representative = DrawClass(
+                probability, counts, draws - sum(counts),
+                ",".join(f"{need.key}={'present' if flag else 'absent'}"
+                         for need, flag in zip(needs, presence)),
+            )
+            selected, _unused = self._representative_ids(
+                pool, needs, representative, self.registry)
+            expected_worth = 0.0
+            if self.registry:
+                for need, count in zip(needs, conditional):
+                    eligible = [card_id for card_id in pool if card_id in need.card_ids]
+                    mean = (sum(self.registry.worth(card_id) for card_id in eligible) /
+                            len(eligible) if eligible else 0.0)
+                    expected_worth += mean * count
+                expected_worth += complement_mean * (draws - sum(conditional))
+            actual = (sum(self.registry.worth(card_id) for card_id in selected)
+                      if self.registry else 0.0)
+            rows.append((representative, (expected_worth - actual) / 120.0))
+        return tuple(rows)
+
     def _information_transition(self, state, engine, action):
         card_id, source = self._played_card_id(engine, action)
         if card_id == 1122:
@@ -337,11 +422,12 @@ class CgpyTransitionProvider:
         draws = 8 if len(board.prize) == 6 else 6
         counts = Counter(pool_ids)
         needs = self.needs.derive(state.obs, deck_counts=counts)
-        outcomes = hypergeometric_classes(pool_ids, draws, needs)
         edges = []
         serial_to_card = {serial: engine.gs.card_id(serial) for serial in engine.gs.cards}
-        for outcome in outcomes:
+        for outcome, expected_adjustment in self._outcome_classes(pool_ids, draws, needs):
             draw_ids, adjustment = self._representative_ids(pool_ids, needs, outcome, self.registry)
+            if expected_adjustment is not None:
+                adjustment = expected_adjustment
             branch = engine.fork()
             branch.gs.rng = OutcomeRng(seat=state.root_seat, serial_to_card=serial_to_card,
                                        draw_ids=draw_ids)
@@ -356,19 +442,70 @@ class CgpyTransitionProvider:
         pool_ids = [engine.gs.card_id(serial) for serial in board.deck]
         supporter_ids = sorted({engine.gs.card_id(serial) for serial in board.deck
                                 if int(engine.gs.stat(serial).cardType) == 3})
+        if self.production_chance:
+            return self._pokegear_precedence_transition(
+                state, engine, action, pool_ids, supporter_ids)
         needs = tuple(Need(f"supporter:{card_id}", (card_id,),
                            self.registry.worth(card_id) if self.registry else 0.0,
                            "Pokégear reveal identity changes the reachable Supporter continuation")
                       for card_id in supporter_ids)
-        outcomes = hypergeometric_classes(pool_ids, min(7, len(pool_ids)), needs)
         edges = []
-        for outcome in outcomes:
+        for outcome, _adjustment in self._outcome_classes(
+                pool_ids, min(7, len(pool_ids)), needs):
             top_ids, _adjustment = self._representative_ids(pool_ids, needs, outcome, self.registry)
             branch = engine.fork()
             self._force_top_ids(branch, state.root_seat, top_ids)
             branch.step(list(action.selection))
             node = self._register_successor(state, branch, action)
             edges.append(WeightedEdge(outcome.probability, outcome.label, node))
+        return Chance(tuple(edges))
+
+    def _pokegear_precedence_transition(self, state, engine, action, pool_ids, supporter_ids):
+        """Exact partition by the highest portable-Worth Supporter revealed.
+
+        Lower identities inside the same reveal cannot improve this bounded branch's first pick;
+        the real reveal is replanned without this compression.
+        """
+        draws, total = min(7, len(pool_ids)), len(pool_ids)
+        denominator = comb(total, draws) if total >= draws else 1
+        ordered = sorted(supporter_ids,
+                         key=lambda card_id: (self.registry.worth(card_id)
+                                              if self.registry else 0.0, -card_id),
+                         reverse=True)
+        counts = Counter(pool_ids)
+        preceding = 0
+        edges = []
+        non_supporters = [card_id for card_id in pool_ids if card_id not in supporter_ids]
+        for card_id in ordered:
+            copies = counts[card_id]
+            without_prior = comb(total - preceding, draws) if total - preceding >= draws else 0
+            without_current = (comb(total - preceding - copies, draws)
+                               if total - preceding - copies >= draws else 0)
+            probability = (without_prior - without_current) / denominator
+            preceding += copies
+            if probability <= 0.0:
+                continue
+            fillers = list(non_supporters)
+            if len(fillers) < draws - 1:
+                fillers.extend(other for other in pool_ids
+                               if other != card_id and other not in fillers)
+            top_ids = [card_id] + fillers[:draws - 1]
+            branch = engine.fork()
+            self._force_top_ids(branch, state.root_seat, top_ids)
+            branch.step(list(action.selection))
+            node = self._register_successor(state, branch, action)
+            edges.append(WeightedEdge(probability, f"best-supporter:{card_id}", node))
+        none_probability = ((comb(len(non_supporters), draws) / denominator)
+                            if len(non_supporters) >= draws else 0.0)
+        if none_probability > 0.0:
+            branch = engine.fork()
+            self._force_top_ids(branch, state.root_seat, non_supporters[:draws])
+            branch.step(list(action.selection))
+            node = self._register_successor(state, branch, action)
+            edges.append(WeightedEdge(none_probability, "no-supporter", node))
+        mass = sum(edge.probability for edge in edges)
+        if not edges or abs(mass - 1.0) > 1e-12:
+            return Unknown("Pokégear precedence mass malformed", str(mass))
         return Chance(tuple(edges))
 
 

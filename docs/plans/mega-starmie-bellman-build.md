@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M7 — bounded production search and atomic cutover.**
+**CURRENT: M8 — full corpus adjudication, broad validation, and closeout.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -154,7 +154,7 @@ Deliverables:
 Exit: isolated reference planner completes every reachable Mega Starmie correction state and scenario
 without strategic legacy calls. Exact legacy agreement is reported, not fitted blindly.
 
-### M7 — bounded production search and atomic cutover — CURRENT
+### M7 — bounded production search and atomic cutover — DONE
 
 Deliverables:
 
@@ -169,7 +169,7 @@ Deliverables:
 Exit: accepted performance/regret budget, purity green, no ordinary `UNKNOWN`, and live Pilot passes
 the isolated full-turn suite.
 
-### M8 — full corpus adjudication, broad validation, and closeout — PENDING
+### M8 — full corpus adjudication, broad validation, and closeout — CURRENT
 
 Deliverables:
 
@@ -334,3 +334,26 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - M7 exact next action: add bounded search over the same contracts, measure against the reference on
   tractable states, retain live engine sessions across nested decisions, and atomically route every
   post-setup Mega Starmie selection through Bellman with raising legacy chooser stubs.
+
+### 2026-08-11 — M7 bounded search and atomic cutover
+
+- Added production search over the reference engine/value contracts: every root action is generated
+  and simulated, nested mechanics resolve before admission, semantic memoization is exact, and a
+  bounded beam continues the best complete line. Caps choose reachable End only; mandatory choices
+  never receive fabricated zero.
+- Known information uses exact probability partitions with presence-class compression, followed by
+  actual-state replanning. Pokégear uses an exact highest-portable-Worth Supporter partition.
+- Added a direct, centralized Mega Starmie board potential with documented human seeds for prizes,
+  chip, survival, typed readiness, threat, line development, Turbo dependencies, and actionable
+  hand Needs. ValueRegistry continues to own portable held-card cost.
+- Cached immutable observation/key projections removed repeated full-tree canonicalization. A
+  worst multi-fetch sample dropped from 25.8 profiled seconds to 1.8 seconds at zero lookahead;
+  selective causal lookahead is retained for attach/evolve/retreat, denial/deploy, gust, and heal.
+- Atomically routed every post-setup Mega Starmie selection through Bellman. Set-Up, starter order,
+  and hard no optional setup Bench remain legacy-owned. No strategic fallback exists.
+- Live fixtures pass: at 60 HP the policy attaches Water then plays Lillie's; at 50 HP it plays Boss,
+  selects the target, and continues the KO line. A raising-stub purity test covers all legacy chooser
+  entry points. Production has zero regret against reference on 12 terminal attack states.
+- Checkpoint: 41 Bellman tests pass in 31.4 seconds.
+- M8 exact next action: sweep all 259 corrections with rationale-first adjudication, emit ledgers for
+  every mismatch, run turn-planner/broad/doc/CI gates, finalize the ADR number, then push the PR.

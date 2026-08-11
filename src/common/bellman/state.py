@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from functools import cached_property
 import hashlib
-import json
-from typing import Mapping
 
 
 def freeze(value):
@@ -128,15 +128,15 @@ class DecisionState:
             value_adjustments=(),
         )
 
-    @property
+    @cached_property
     def obs(self) -> dict:
         return thaw(self.observation)
 
-    @property
+    @cached_property
     def semantic_key(self) -> str:
-        payload = freeze((self.observation, self.root_seat, self.deck_name, self.deck_counts,
-                          self.prize_counts, self.budgets, self.belief,
-                          self.value_registry_identity, self.value_adjustments))
+        payload = (self.observation, self.root_seat, self.deck_name, self.deck_counts,
+                   self.prize_counts, self.budgets, self.belief,
+                   self.value_registry_identity, self.value_adjustments)
         return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
     def with_observation(self, observation: Mapping) -> "DecisionState":

@@ -123,6 +123,8 @@ def opponent_belief(observation: Mapping, *, candidates=(), properties=None) -> 
         if isinstance(candidate, Mapping):
             name = str(candidate.get("name") or candidate.get("slug") or "unknown")
             probability = float(candidate.get("probability", candidate.get("p", 0.0)) or 0.0)
+        elif isinstance(candidate, (tuple, list)) and len(candidate) == 2:
+            name, probability = str(candidate[0]), float(candidate[1])
         else:
             name = str(getattr(candidate, "name", getattr(candidate, "slug", "unknown")))
             probability = float(getattr(candidate, "probability", getattr(candidate, "p", 0.0)) or 0.0)
