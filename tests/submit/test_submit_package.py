@@ -23,7 +23,7 @@ def test_package_produces_self_contained_zip(tmp_path):
 
     assert "main.py" in names and "deck.csv" in names
     assert any(n.startswith("cg/") for n in names)              # shared engine bundled
-    assert any(n.startswith("cgpy/") for n in names)            # Bellman transition engine bundled
+    assert not any(n.startswith("cgpy/") for n in names)        # offline twin never ships
     assert any(n.startswith("common/scouting/") for n in names)  # shared scouting bundled
     assert not any("__pycache__" in n for n in names)            # pruned
     # build card now ships as brief.html (ADR-0019); all .md (CONTEXT.md, README.md, ...) pruned

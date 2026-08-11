@@ -18,6 +18,7 @@ from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 from .solver import ProductionLimits, ProductionSolver, ReferenceSolver, SearchLimits, TransitionProvider
 from .engine import CgpyTransitionProvider
+from .native_engine import NativeTransitionProvider
 from .information import CausalNeeds, DrawClass, Need, hypergeometric_classes, opponent_belief
 from .runtime import MegaStarmieTurnPlanner
 from .potential import BoardSeeds, MegaStarmiePotential
@@ -52,6 +53,7 @@ __all__ = (
     "SearchLimits",
     "TransitionProvider",
     "CgpyTransitionProvider",
+    "NativeTransitionProvider",
     "CausalNeeds",
     "DrawClass",
     "Need",

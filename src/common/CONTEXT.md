@@ -16,7 +16,9 @@ Mega Starmie's post-Set-Up strategic owner. It generates every legal action and 
 simulates deterministic/choice/chance/opponent consequences, differences one shared board potential,
 subtracts consumed resources and allowances, recursively continues valuable same-turn sequences,
 and compares them against End at exactly zero. It commits only the first real choice and replans from
-the next observation. Other decks remain on the legacy planner.
+the next observation. Live transitions use the authoritative native `cg` fork API; the `cgpy` twin
+is offline-only for tokenless correction frames and is not shipped. Other decks remain on the
+legacy planner.
 
 **Portable Worth**:
 The cross-deck opportunity cost of consuming a known card, resolved from shared card functions and

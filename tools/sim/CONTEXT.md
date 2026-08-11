@@ -36,8 +36,8 @@ _Avoid_: packaged, shippable, valid
 
 **Bundle**:
 The self-contained submission `submit.package` produces: `main.py` + `deck.csv` + the shared
-native `cg/` engine + Bellman `cgpy/` transition engine + `common/` runtime, and nothing else. The
-unit uploaded and graded;
+native `cg/` engine + `common/` runtime, and nothing else. The source-only `cgpy/` twin is never
+packaged. The unit uploaded and graded;
 **Deployability** is a statement about it. (ADR-0004 also calls this the "submission
 directory" — same thing.)
 _Avoid_: Submission (the Bundle **plus** its Manifest and tracking — a distinct term owned by [Submission & Tracking](../submit/CONTEXT.md)), package, zip, dist

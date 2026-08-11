@@ -61,7 +61,8 @@ def aggregate_matches(matches: list[dict]) -> dict:
     matchups: dict[str, dict] = {}
     tier: Counter = Counter()
     decisions = 0
-    for m in matches:
+    diagnostics = []
+    for match_index, m in enumerate(matches):
         tally[{"win": "wins", "loss": "losses", "draw": "draws"}[m["result"]]] += 1
         row = matchups.setdefault(m["opponent_archetype"],
                                   {"archetype": m["opponent_archetype"], "wins": 0, "losses": 0})
@@ -71,6 +72,9 @@ def aggregate_matches(matches: list[dict]) -> dict:
             row["losses"] += 1
         decisions += m["telemetry"]["decisions"]
         tier.update(m["telemetry"]["tier_mix"])
+        diagnostics.extend({**record, "match": match_index, "decision": decision_index}
+                           for decision_index, record in enumerate(
+                               m["telemetry"].get("diagnostics") or ()))
     meds = [m["decision_ms"]["median_ms"] for m in matches if m["decision_ms"].get("count")]
     maxes = [m["decision_ms"]["max_ms"] for m in matches if m["decision_ms"].get("count")]
     return {
@@ -79,7 +83,8 @@ def aggregate_matches(matches: list[dict]) -> dict:
         "efficiency": {"matches": len(matches),
                        "median_ms": round(median(meds), 1) if meds else 0,
                        "max_ms": max(maxes) if maxes else 0},
-        "telemetry": {"decisions": decisions, "tier_mix": dict(tier)},
+        "telemetry": {"decisions": decisions, "tier_mix": dict(tier),
+                      "diagnostics": diagnostics},
     }
 
 
@@ -193,6 +198,9 @@ def parse_match(replay: dict, log, *, seat: int = 0, cards: dict | None = None) 
         "telemetry": {
             "decisions": len(records),
             "tier_mix": dict(Counter(str(r.get("tier")) for r in records)),
+            # Preserve the actual per-decision evidence. Raw episode logs remain canonical, but
+            # performance.jsonl must not collapse Bellman ledgers/branches into a count.
+            "diagnostics": records,
         },
     }
 

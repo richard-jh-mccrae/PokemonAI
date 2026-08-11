@@ -233,6 +233,13 @@ may prune for time but may not change the equation, fabricate a terminal value, 
 choice to legacy logic. Its budget and approximation regret are measured against reference states
 before activation. Budget constants and stopping reasons appear in telemetry.
 
+The live production transition provider uses the authoritative native `cg` fork API and releases
+every speculative state/search session. `cgpy` remains an offline correction/parity twin for frames
+that do not carry the native opaque search token; it is not included in submission bundles and is
+never a live ladder fallback. Known hidden outcomes are still classified by the shared
+hypergeometric/Needs model. An information action ends the speculative line at an expected
+actual-state-replan boundary; the next real engine observation starts a fresh native plan.
+
 Search continues while a legal successor has positive value over stopping. It stops at End, a fully
 resolved attack, a game result, or an explicit budget/unknown result. Cycles are prevented by semantic
 state identity plus remaining allowances, not action-name blacklists.
@@ -339,3 +346,7 @@ promotion before terminal value, and the two Cinderace/Lillie's/Boss boundary fi
 ADR establishes the complete architecture and live cutover, not a claim that the initial human
 seeds are already a competitive policy. The adjudication ledger is the queue for subsequent
 economic tuning without restoring rules-based strategic owners.
+
+Submission collection preserves every emitted Bellman root ledger, branch diagnostic, cap, and
+alternative in `performance.jsonl` under `telemetry.diagnostics`, indexed by match and decision.
+The count/tier summary remains for dashboards, and raw Kaggle agent logs remain canonical.

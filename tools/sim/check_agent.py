@@ -246,7 +246,7 @@ def check_deployability(name: str, work_dir: Path, reports_dir=None, *, agents_r
         zf.extractall(extracted)
 
     contents = check_contents(
-        extracted, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
+        extracted, required=("main.py", "deck.csv", "cg", "common"))
     if not contents.ok:
         return StageResult(False, "deployability", f"bundle {contents.detail}")
 
