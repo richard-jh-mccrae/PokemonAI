@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from common.bellman import END_VALUE, ActionIdentity, MegaStarmieTurnPlanner
+from common.bellman import (
+    END_VALUE, ActionIdentity, DecisionState, MegaStarmieTurnPlanner, NativeTransitionProvider,
+)
 from common.bellman.api import require_consumed_cost
 
 
@@ -59,3 +61,45 @@ def test_live_baseline_is_unfiltered_and_keeps_rationales():
 
 def test_cinderace_lillie_boundary_is_not_silently_delegated():
     assert MegaStarmieTurnPlanner.__module__ == "common.bellman.runtime"
+
+
+def test_native_provider_owns_one_live_search_and_closes_it_exactly_once():
+    class Api:
+        def __init__(self):
+            self.begins = self.ends = 0
+
+        @staticmethod
+        def to_observation_class(observation):
+            return observation
+
+        def search_begin(self, *_args, **kwargs):
+            self.begins += 1
+            assert kwargs["manual_coin"] is True
+            return type("Search", (), {"searchId": 1})()
+
+        def search_end(self):
+            self.ends += 1
+
+    observation = {
+        "search_begin_input": "native-token", "logs": [],
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 14}]},
+        "current": {"turn": 1, "yourIndex": 0, "supporterPlayed": False,
+                    "stadiumPlayed": False, "energyAttached": False, "retreated": False,
+                    "players": [
+                        {"active": [], "bench": [], "deckCount": 1, "prize": [],
+                         "hand": [], "handCount": 0},
+                        {"active": [], "bench": [], "deckCount": 1, "prize": [],
+                         "handCount": 0},
+                    ]},
+        "own_prizes": {},
+    }
+    state = DecisionState.from_observation(
+        observation, deck=(3,), deck_name="mega_starmie")
+    api = Api()
+    provider = NativeTransitionProvider(state, search_api=api)
+
+    assert provider.available and api.begins == 1
+    provider.close()
+    provider.close()
+    assert api.ends == 1

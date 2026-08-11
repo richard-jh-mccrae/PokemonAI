@@ -453,6 +453,7 @@ class Pilot(
             "action": dataclasses.asdict(planned.action),
             "value": planned.value,
             "complete": planned.complete,
+            "backend": planned.diagnostics.get("backend"),
             "ledger": planned.diagnostics.get("ledger"),
             "production": planned.diagnostics.get("production"),
             "root": dataclasses.asdict(planned.diagnostics["root"]),

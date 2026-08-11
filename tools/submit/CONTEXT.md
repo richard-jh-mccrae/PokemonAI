@@ -54,8 +54,8 @@ _Avoid_: log, changelog, Build Ledger (that is the local pre-submit pool)
 
 **Performance Log**:
 The committed record of *how each agent performed over time* — time-stamped samples per
-Submission (score, rank, win/loss, per-Archetype matchups, **Efficiency**, **Decision
-Telemetry** aggregates). Separate from Agent History because performance varies with time
+Submission (score, rank, win/loss, per-Archetype matchups, **Efficiency**, aggregate telemetry,
+and the full indexed **Decision Telemetry** records). Separate from Agent History because performance varies with time
 while state does not.
 _Avoid_: results, scores, metrics
 
@@ -67,8 +67,10 @@ _Avoid_: report, Brief (that is per-Submission)
 ### Signals
 
 **Decision Telemetry**:
-The per-decision trace the agent emits at runtime — for each decision, every legal option's
-score and the Hypotheses that fired — the as-run record of *how it chose*.
+The per-decision trace the agent emits at runtime — legacy option scores/fired Hypotheses or the
+Bellman chosen action, ledger, chance branches, production caps, and rejected root alternatives.
+`collect` preserves these records under `telemetry.diagnostics` with match/decision coordinates;
+raw episode agent logs remain canonical.
 _Avoid_: log, debug output, trace
 
 **Efficiency**:

@@ -82,6 +82,7 @@ def test_60hp_policy_attaches_then_commits_lillie_and_replans():
     first = pilot.explain(_obs(engine))
     assert first.chosen == [1]
     assert first.composer["bellman"] is True
+    assert first.composer["backend"] == "cgpy-offline"
     engine.step(first.chosen)
     second = pilot.explain(_obs(engine))
     selected = engine.gs.pending.options[second.chosen[0]]

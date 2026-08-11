@@ -32,6 +32,7 @@ def test_collect_extracts_result_matchup_timing_and_telemetry_from_a_real_match(
     assert m["decision_ms"]["count"] > 0                      # per-decision timing from log
     assert m["telemetry"]["decisions"] > 0                    # @T telemetry parsed out of stderr
     assert set(m["telemetry"]["tier_mix"]) == {"0"}           # this agent runs Tier-0 closed-form
+    assert len(m["telemetry"]["diagnostics"]) == m["telemetry"]["decisions"]
 
 
 @pytest.mark.req("REQ-SUB-0007")
@@ -55,6 +56,23 @@ def test_aggregate_matches_builds_record_and_per_archetype_matchups():
     assert sample["efficiency"]["matches"] == 3
     assert sample["efficiency"]["max_ms"] == 12.0
     assert sample["telemetry"]["decisions"] == 9
+    assert sample["telemetry"]["diagnostics"] == []
+
+
+def test_aggregate_preserves_full_decision_diagnostics_with_match_coordinates():
+    from submit.collect import aggregate_matches
+
+    matches = [{"result": "win", "opponent_archetype": "A",
+                "decision_ms": {"count": 1, "median_ms": 1.0, "max_ms": 1.0},
+                "telemetry": {"decisions": 1, "tier_mix": {"0": 1},
+                              "diagnostics": [{"tier": 0, "composer": {
+                                  "bellman": True, "ledger": {"total": 0.25},
+                                  "root": {"alternatives": [{"action_key": "end"}]}}}]}}]
+
+    diagnostics = aggregate_matches(matches)["telemetry"]["diagnostics"]
+    assert diagnostics == [{"match": 0, "decision": 0, "tier": 0, "composer": {
+        "bellman": True, "ledger": {"total": 0.25},
+        "root": {"alternatives": [{"action_key": "end"}]}}}]
 
 
 @pytest.mark.req("REQ-SUB-0011")
