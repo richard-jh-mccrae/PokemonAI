@@ -250,6 +250,27 @@ class CgpyTransitionProvider:
                     energy_type = card.get("energyType", getattr(facts, "energy_type", None))
                     if energy_type is not None:
                         body.setdefault("energies", []).append(int(energy_type))
+            elif context == 30:  # mandatory attached-Energy payment / denial target
+                removals = []
+                for option in picked:
+                    body = self._body(players, int(option["playerIndex"]),
+                                      int(option["area"]), int(option["index"]))
+                    if body is None:
+                        raise ValueError("Energy holder is absent")
+                    removals.append((body, int(option["playerIndex"]),
+                                     int(option["energyIndex"])))
+                # Multiple picks can name the same holder; remove high indices first so every
+                # option keeps the engine menu's original Energy-card indexing.
+                removals.sort(key=lambda row: row[2], reverse=True)
+                for body, seat, energy_index in removals:
+                    cards = body.get("energyCards") or []
+                    if not 0 <= energy_index < len(cards):
+                        raise ValueError("attached Energy index is absent")
+                    card = cards.pop(energy_index)
+                    units = body.get("energies") or []
+                    if energy_index < len(units):
+                        units.pop(energy_index)
+                    players[seat].setdefault("discard", []).append(card)
             elif context == 4:  # forced promotion
                 for option in picked:
                     seat = int(option["playerIndex"])
@@ -270,6 +291,7 @@ class CgpyTransitionProvider:
                         players[seat].setdefault("bench", []).append(old)
             elif context == 7:  # visible deck/discard/looking card to hand
                 deck_listing = select.get("deck") or ()
+                prize_picks = []
                 for option in picked:
                     seat = int(option["playerIndex"])
                     area, index = int(option["area"]), int(option["index"])
@@ -279,9 +301,20 @@ class CgpyTransitionProvider:
                         card = copy.deepcopy((current.get("looking") or ())[index])
                     elif area == 3:
                         card = copy.deepcopy(players[seat]["discard"][index])
+                    elif area == 6:
+                        # A post-KO prize menu exposes only interchangeable card backs.  Credit the
+                        # observable prize progress now; the revealed card enters the real next
+                        # observation and is valued after the mandatory replan.
+                        prize_picks.append((seat, index))
+                        continue
                     else:
                         raise ValueError(f"unsupported to-hand source area {area}")
                     players[seat].setdefault("hand", []).append(card)
+                for seat, index in sorted(prize_picks, reverse=True):
+                    prizes = players[seat].get("prize") or []
+                    if not 0 <= index < len(prizes):
+                        raise ValueError("prize index is absent")
+                    prizes.pop(index)
             else:
                 return Unknown("historical nested frame unavailable",
                                f"select context {context}")

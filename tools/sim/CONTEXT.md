@@ -35,8 +35,9 @@ match. Verified on the **extracted** artifact, never the source tree.
 _Avoid_: packaged, shippable, valid
 
 **Bundle**:
-The self-contained submission `submit.package` produces: `main.py` + `deck.csv` + the
-shared `cg/` engine + `common/` runtime, and nothing else. The unit uploaded and graded;
+The self-contained submission `submit.package` produces: `main.py` + `deck.csv` + the shared
+native `cg/` engine + Bellman `cgpy/` transition engine + `common/` runtime, and nothing else. The
+unit uploaded and graded;
 **Deployability** is a statement about it. (ADR-0004 also calls this the "submission
 directory" — same thing.)
 _Avoid_: Submission (the Bundle **plus** its Manifest and tracking — a distinct term owned by [Submission & Tracking](../submit/CONTEXT.md)), package, zip, dist

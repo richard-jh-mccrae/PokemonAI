@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -12,8 +13,8 @@ from cgpy.state import PokemonInPlay
 
 from common.bellman.engine import _own_prize_export
 from common.bellman import (
-    DecisionState, MegaStarmiePotential, ProductionLimits, ProductionSolver, ReferenceSolver,
-    ValueOracle, ValueRegistry,
+    DecisionState, Deterministic, MegaStarmiePotential, ProductionLimits, ProductionSolver,
+    ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.bellman.engine import CgpyTransitionProvider
 from train.blunder.store import load_corrections
@@ -24,6 +25,7 @@ REPO = Path(__file__).resolve().parents[2]
 DECK = [int(line) for line in (REPO / "src" / "agents" / "mega_starmie" /
                                "deck.csv").read_text().split()]
 CINDERACE, STARYU, BOSS, WATER, LILLIE = 666, 1030, 1182, 3, 1227
+SALVATORE, MEGA_STARMIE = 1189, 1031
 
 
 def _fixture(hp):
@@ -110,6 +112,138 @@ def test_atomic_route_never_calls_legacy_strategic_choosers(monkeypatch):
                  "_finish_turn_last", "_greedy_grab"):
         monkeypatch.setattr(pilot, name, legacy_called)
     assert pilot.decide(_obs(engine)) == [1]
+
+
+def test_atomic_route_leaves_every_turn_zero_pregame_choice_to_legacy(monkeypatch):
+    pilot = _build_pilot("mega_starmie")[0]
+    observation = _obs(_fixture(60))
+    observation["current"]["turn"] = 0
+    observation["select"] = {
+        "type": 8, "context": 38, "minCount": 1, "maxCount": 1,
+        "remainDamageCounter": 0, "remainEnergyCost": 0,
+        "option": [{"type": 0, "number": 0}, {"type": 0, "number": 1}],
+        "deck": None, "contextCard": None, "effect": None,
+    }
+
+    def bellman_called(*_args, **_kwargs):
+        raise AssertionError("pregame DRAW_COUNT reached Bellman")
+
+    monkeypatch.setattr(pilot, "_bellman_evaluate", bellman_called)
+    assert pilot.decide(observation) in ([0], [1])
+
+
+def test_native_turbo_flare_energy_menu_reconstructs_the_attack_rider():
+    records = json.loads((REPO / "tests" / "fixtures" / "continuation_parity" /
+                          "seeded_continuations.json").read_text(encoding="utf-8"))["records"]
+    observation = next(record["seed_observation"] for record in records
+                       if record["context"] == 22)
+    state = DecisionState.from_observation(
+        observation, deck=tuple(DECK), deck_name="mega_starmie")
+    provider = CgpyTransitionProvider(state)
+
+    assert provider.available and not provider._local_nested
+    action = next(action for action in provider.actions(state) if len(action.selection) == 3)
+    resolved = provider.transition(state, action)
+    assert isinstance(resolved, Deterministic)
+    # This recorded board has no legal Bench recipient, so the selected cards correctly stay in
+    # deck and the reconstructed rider completes the attack instead of fabricating placements.
+    assert resolved.state.obs["select"]["context"] == 0
+    assert resolved.state.obs["current"]["turn"] > observation["current"]["turn"]
+
+
+def test_native_mandatory_prize_and_retreat_cost_menus_replan_without_unknown():
+    observation = _obs(_fixture(60))
+    observation["search_begin_input"] = "native-token"
+    seat = observation["current"]["yourIndex"]
+    before_prizes = len(observation["current"]["players"][seat]["prize"])
+    observation["select"] = {
+        "type": 1, "context": 7, "minCount": 3, "maxCount": 3,
+        "remainDamageCounter": 0, "remainEnergyCost": 0,
+        "option": [{"type": 3, "area": 6, "index": index, "playerIndex": seat}
+                   for index in range(4)],
+        "deck": None, "contextCard": None, "effect": None,
+    }
+    prize_state = DecisionState.from_observation(
+        observation, deck=tuple(DECK), deck_name="mega_starmie")
+    prize_provider = CgpyTransitionProvider(prize_state)
+    prize_action = next(action for action in prize_provider.actions(prize_state)
+                        if action.selection == (1, 2, 3))
+    prize_result = prize_provider.transition(prize_state, prize_action)
+    assert isinstance(prize_result, Terminal)
+    assert len(prize_result.state.obs["current"]["players"][seat]["prize"]) == before_prizes - 3
+
+    observation = _obs(_fixture(60))
+    observation["search_begin_input"] = "native-token"
+    player = observation["current"]["players"][seat]
+    energy = next(card for card in player["hand"] if card["id"] == WATER)
+    player["hand"].remove(energy)
+    player["handCount"] = len(player["hand"])
+    player["active"][0]["energyCards"] = [energy]
+    player["active"][0]["energies"] = [3]
+    observation["select"] = {
+        "type": 4, "context": 30, "minCount": 1, "maxCount": 1,
+        "remainDamageCounter": 0, "remainEnergyCost": 1,
+        "option": [{"type": 6, "area": 4, "index": 0, "playerIndex": seat,
+                    "energyIndex": 0, "count": 1}],
+        "deck": None, "contextCard": None, "effect": None,
+    }
+    cost_state = DecisionState.from_observation(
+        observation, deck=tuple(DECK), deck_name="mega_starmie")
+    cost_provider = CgpyTransitionProvider(cost_state)
+    cost_result = cost_provider.transition(cost_state, cost_provider.actions(cost_state)[0])
+    assert isinstance(cost_result, Terminal)
+    after = cost_result.state.obs["current"]["players"][seat]
+    assert after["active"][0]["energyCards"] == []
+    assert after["discard"][-1]["id"] == WATER
+
+
+def test_native_salvatore_reconstructs_both_evolution_and_target_asks():
+    engine = _fixture(60)
+    gs = engine.gs
+    board = gs.players[0]
+
+    def take_from_deck(card_id):
+        serial = next(serial for serial in board.deck if gs.card_id(serial) == card_id)
+        board.deck.remove(serial)
+        return serial
+
+    salvatore = take_from_deck(SALVATORE)
+    staryu = take_from_deck(STARYU)
+    board.hand.append(salvatore)
+    stat = gs.stat(staryu)
+    board.bench.append(PokemonInPlay(
+        stack=[staryu], hp=stat.hp, max_hp=stat.hp, entered_turn=gs.turn - 1))
+    gs.pending = None
+    pose_main(gs, 0)
+    play_index = next(index for index, option in enumerate(gs.pending.options)
+                      if option["type"] == 7
+                      and gs.card_id(board.hand[option["index"]]) == SALVATORE)
+    engine.step([play_index])
+    assert gs.pending.context == 19
+
+    observation = engine.observation(viewer=0, sbi_token="native-token")
+    observation["own_prizes"] = _own_prize_export(engine, 0)
+    evolve_state = DecisionState.from_observation(
+        observation, deck=tuple(DECK), deck_name="mega_starmie")
+    evolve_provider = CgpyTransitionProvider(evolve_state)
+    assert not evolve_provider._local_nested
+    evolve_action = next(action for action in evolve_provider.actions(evolve_state)
+                         if action.selection)
+    target_node = evolve_provider.transition(evolve_state, evolve_action)
+    assert isinstance(target_node, Deterministic)
+    assert target_node.state.obs["select"]["context"] == 18
+
+    target_observation = target_node.state.obs
+    target_observation["search_begin_input"] = "native-token"
+    target_state = DecisionState.from_observation(
+        target_observation, deck=tuple(DECK), deck_name="mega_starmie")
+    target_provider = CgpyTransitionProvider(target_state)
+    assert not target_provider._local_nested
+    target_action = next(action for action in target_provider.actions(target_state)
+                         if target_observation["select"]["option"][action.selection[0]]["area"] == 5)
+    resolved = target_provider.transition(target_state, target_action)
+    assert isinstance(resolved, Deterministic)
+    assert resolved.state.obs["current"]["players"][0]["bench"][0]["id"] == MEGA_STARMIE
 
 
 class _TerminalMenu:

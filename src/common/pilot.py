@@ -310,7 +310,11 @@ class Pilot(
             self._observe_known_top(obs)         # Issue #289: live, self-verifying top-deck belief
             self._transients.observe(obs)        # engine-sim future must never mutate match state
             self._turn_boosts.observe(obs)
+        # ADR-0139 starts Bellman only after Set-Up.  Turn zero contains more engine-owned
+        # pregame selects than the four named opening contexts (for example DRAW_COUNT after an
+        # opponent mulligan), and future enum growth must remain outside strategic search too.
         if (self.strategy.params.get("bellman_turn_planner") is True
+                and int((obs.get("current") or {}).get("turn", 0)) > 0
                 and int(select.get("context", -1))
                 not in (_SETUP_ACTIVE, _SETUP_BENCH, _IS_FIRST, _MULLIGAN)):
             return self._bellman_evaluate(obs, carried=carried)

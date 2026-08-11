@@ -33,10 +33,11 @@ def test_contents_passes_when_main_and_deck_present(tmp_path):
 def test_contents_bundle_requires_engine_and_common(tmp_path):
     (tmp_path / "main.py").write_text("")
     (tmp_path / "deck.csv").write_text("3\n")
-    # extracted Bundle must also carry shared cg/ and common/ packages
-    result = check_contents(tmp_path, required=("main.py", "deck.csv", "cg", "common"))
+    # extracted Bundle must also carry both engines and the shared agent runtime
+    result = check_contents(
+        tmp_path, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
     assert not result.ok
-    assert "cg" in result.detail and "common" in result.detail
+    assert "cg" in result.detail and "cgpy" in result.detail and "common" in result.detail
 
 
 @pytest.mark.req("REQ-SIM-0002")

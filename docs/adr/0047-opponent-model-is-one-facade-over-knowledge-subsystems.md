@@ -8,7 +8,7 @@ first live consumer of `hand_size_delta` (the hand-swing oracle's freshness term
 existing **Read** (ADR-0003/0026/0027) and **Dispositions** (opponent_properties) behind it. New
 glossary terms *Opponent Model*, *Resources*, *Dispositions* in
 [src/common/CONTEXT.md](../../src/common/CONTEXT.md). Unblocks the five deferred opponent-side proposals
-in [data/strategy/proposals/](../../data/strategy/proposals). The plan the handoff
+formerly kept under `data/strategy/proposals/`. The plan the handoff
 `pokemonai-handoff-opponent-modeling-cluster.md` (since removed)
 called for.
 
