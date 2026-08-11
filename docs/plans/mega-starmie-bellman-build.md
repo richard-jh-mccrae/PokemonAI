@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M2 — one benefit/cost ledger and terminal board value.**
+**CURRENT: M3 — deterministic recursive solver.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -83,7 +83,7 @@ Deliverables:
 Exit: every sampled Mega Starmie root option appears once with stable identity; End is exact zero;
 allowances persist through successors; no tactical score is imported.
 
-### M2 — one benefit/cost ledger and terminal board value — CURRENT
+### M2 — one benefit/cost ledger and terminal board value — DONE
 
 Deliverables:
 
@@ -97,7 +97,7 @@ Deliverables:
 Exit: synthetic conservation tests prove no duplicated consequence and no free non-End action; all
 seed constants are centralized and diagnostic.
 
-### M3 — deterministic recursive solver — PENDING
+### M3 — deterministic recursive solver — CURRENT
 
 Deliverables:
 
@@ -245,3 +245,21 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - Checkpoint: M0+M1 Bellman tests pass (7 passed, one intended M0 xfail); runtime remains unchanged.
 - M2 exact next action: centralize portable Worth/deck overrides, build one differenced board potential
   and consumed-resource ledger, then prove conservation and strict negativity for benefitless actions.
+
+### 2026-08-11 — M2 value conservation
+
+- Added the Bellman `ValueRegistry`: one portable cross-deck Worth resolver, derived line-base role,
+  shared function tags, known/Basic-Energy/ACE facts, and upward-only deck overrides. Its complete
+  content identity rides in every search state.
+- Added one differenced `ValueOracle`. Existing neutral board families own game/prizes, damage and
+  threat removal, survival, typed readiness, mobility, dependencies, persistent development, and
+  denial; Bellman replaces the legacy hand family with the exact sum of portable held-card Worth.
+- Every positive family delta is a realized benefit; every negative delta is a consumed cost. Each
+  family is differenced once. Every consumed allowance is explicit, every non-End selection pays an
+  ordinal decision cost, and End returns the empty exact-zero ledger.
+- Conservation tests prove Hammer with no realized denial is strictly below End, Hammer with 0.10
+  realized board benefit nets exactly that benefit minus its 6/120 portable cost, and no known
+  non-End action can tie End without benefit.
+- Checkpoint: Bellman + existing card-Worth/state-value suites: 162 passed, 3 expected xfails.
+- M3 exact next action: implement deterministic reference recursion over engine-observation branches,
+  max/min continuation, memoization/cycle prevention, commit-first-action diagnostics, and fixtures.

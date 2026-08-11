@@ -15,6 +15,7 @@ from .api import (
 from .algebra import Actor, Chance, Choice, Deterministic, Ledger, Terminal, Unknown
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState, OpponentBelief, TurnBudgets
+from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
     "END_VALUE",
@@ -35,4 +36,9 @@ __all__ = (
     "TurnBudgets",
     "Unknown",
     "enumerate_legal_actions",
+    "CardFacts",
+    "Potential",
+    "ValueOracle",
+    "ValueRegistry",
+    "WorthSeeds",
 )
