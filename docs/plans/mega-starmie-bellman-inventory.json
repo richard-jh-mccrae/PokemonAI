@@ -1,0 +1,456 @@
+{
+  "schema": 1,
+  "deck": "mega_starmie",
+  "deck_size": 60,
+  "unique_cards": 18,
+  "main_option_kinds": [
+    "PLAY",
+    "ATTACH",
+    "EVOLVE",
+    "ABILITY",
+    "RETREAT",
+    "ATTACK",
+    "END"
+  ],
+  "allowances": [
+    "supporter",
+    "manual_attach",
+    "retreat",
+    "ability",
+    "attack",
+    "stadium"
+  ],
+  "cards": [
+    {
+      "card_id": 3,
+      "copies": 9,
+      "name": "Basic {W} Energy",
+      "card_type": 5,
+      "play_operations": [],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 17,
+      "copies": 4,
+      "name": "Ignition Energy",
+      "card_type": 6,
+      "play_operations": [],
+      "attacks": [],
+      "special": {
+        "eotSelfDiscard": true,
+        "provides": [
+          0
+        ],
+        "providesOnEvolution": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "card_id": 666,
+      "copies": 4,
+      "name": "Cinderace",
+      "card_type": 0,
+      "play_operations": [],
+      "attacks": [
+        {
+          "attack_id": 965,
+          "name": "Turbo Flare",
+          "damage": 50,
+          "cost": [
+            0
+          ],
+          "riders": [
+            "xDeckEnergyAttachDistribute"
+          ]
+        }
+      ],
+      "special": {}
+    },
+    {
+      "card_id": 1030,
+      "copies": 3,
+      "name": "Staryu",
+      "card_type": 0,
+      "play_operations": [],
+      "attacks": [
+        {
+          "attack_id": 1486,
+          "name": "Water Gun",
+          "damage": 20,
+          "cost": [
+            3
+          ],
+          "riders": []
+        }
+      ],
+      "special": {}
+    },
+    {
+      "card_id": 1031,
+      "copies": 3,
+      "name": "Mega Starmie ex",
+      "card_type": 0,
+      "play_operations": [],
+      "attacks": [
+        {
+          "attack_id": 1487,
+          "name": "Jetting Blow",
+          "damage": 120,
+          "cost": [
+            3
+          ],
+          "riders": [
+            "xChooseBenchDamage"
+          ]
+        },
+        {
+          "attack_id": 1488,
+          "name": "Nebula Beam",
+          "damage": 210,
+          "cost": [
+            0,
+            0,
+            0
+          ],
+          "riders": []
+        }
+      ],
+      "special": {}
+    },
+    {
+      "card_id": 1086,
+      "copies": 4,
+      "name": "Buddy-Buddy Poffin",
+      "card_type": 1,
+      "play_operations": [
+        "effectDeckToBenchAndShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1097,
+      "copies": 2,
+      "name": "Night Stretcher",
+      "card_type": 1,
+      "play_operations": [
+        "effectTrashToHand"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1120,
+      "copies": 4,
+      "name": "Crushing Hammer",
+      "card_type": 1,
+      "play_operations": [
+        "coin",
+        "ifHeads",
+        "trashEnergyEnemy"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1121,
+      "copies": 1,
+      "name": "Ultra Ball",
+      "card_type": 1,
+      "play_operations": [
+        "costHandTrash",
+        "effectDeckToHandAndShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1122,
+      "copies": 4,
+      "name": "Pokégear 3.0",
+      "card_type": 1,
+      "play_operations": [
+        "xLookTopMayTakeThenShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1145,
+      "copies": 4,
+      "name": "Mega Signal",
+      "card_type": 1,
+      "play_operations": [
+        "effectDeckToHandAndShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1159,
+      "copies": 1,
+      "name": "Hero’s Cape",
+      "card_type": 2,
+      "play_operations": [],
+      "attacks": [],
+      "special": {
+        "tool": {
+          "hpBonus": 100
+        }
+      }
+    },
+    {
+      "card_id": 1182,
+      "copies": 1,
+      "name": "Boss’s Orders",
+      "card_type": 3,
+      "play_operations": [
+        "effectSwitchEnemy"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1189,
+      "copies": 4,
+      "name": "Salvatore",
+      "card_type": 3,
+      "play_operations": [
+        "xDeckEvolveInPlayAndShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1223,
+      "copies": 2,
+      "name": "Harlequin",
+      "card_type": 3,
+      "play_operations": [
+        "xBothShuffleCoinDraw"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1225,
+      "copies": 2,
+      "name": "Hilda",
+      "card_type": 3,
+      "play_operations": [
+        "xDeckTakeSequenceAndShuffle"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1227,
+      "copies": 4,
+      "name": "Lillie's Determination",
+      "card_type": 3,
+      "play_operations": [
+        "xOwnShuffleHandDraw"
+      ],
+      "attacks": [],
+      "special": {}
+    },
+    {
+      "card_id": 1229,
+      "copies": 4,
+      "name": "Wally's Compassion",
+      "card_type": 3,
+      "play_operations": [
+        "xHealMegaBounceEnergy"
+      ],
+      "attacks": [],
+      "special": {}
+    }
+  ],
+  "effect_operations": [
+    {
+      "card_id": 666,
+      "op": "xDeckEnergyAttachDistribute",
+      "family": "energy_distribution"
+    },
+    {
+      "card_id": 1031,
+      "op": "xChooseBenchDamage",
+      "family": "bench_damage_target"
+    },
+    {
+      "card_id": 1086,
+      "op": "effectDeckToBenchAndShuffle",
+      "family": "deck_search_bench"
+    },
+    {
+      "card_id": 1097,
+      "op": "effectTrashToHand",
+      "family": "discard_recovery"
+    },
+    {
+      "card_id": 1120,
+      "op": "coin",
+      "family": "chance"
+    },
+    {
+      "card_id": 1120,
+      "op": "ifHeads",
+      "family": "chance"
+    },
+    {
+      "card_id": 1120,
+      "op": "trashEnergyEnemy",
+      "family": "denial_target"
+    },
+    {
+      "card_id": 1121,
+      "op": "costHandTrash",
+      "family": "discard_cost"
+    },
+    {
+      "card_id": 1121,
+      "op": "effectDeckToHandAndShuffle",
+      "family": "deck_search_hand"
+    },
+    {
+      "card_id": 1122,
+      "op": "xLookTopMayTakeThenShuffle",
+      "family": "look_search"
+    },
+    {
+      "card_id": 1145,
+      "op": "effectDeckToHandAndShuffle",
+      "family": "deck_search_hand"
+    },
+    {
+      "card_id": 1182,
+      "op": "effectSwitchEnemy",
+      "family": "opponent_switch"
+    },
+    {
+      "card_id": 1189,
+      "op": "xDeckEvolveInPlayAndShuffle",
+      "family": "deck_evolve"
+    },
+    {
+      "card_id": 1223,
+      "op": "xBothShuffleCoinDraw",
+      "family": "chance_refresh"
+    },
+    {
+      "card_id": 1225,
+      "op": "xDeckTakeSequenceAndShuffle",
+      "family": "sequential_search"
+    },
+    {
+      "card_id": 1227,
+      "op": "xOwnShuffleHandDraw",
+      "family": "self_refresh"
+    },
+    {
+      "card_id": 1229,
+      "op": "xHealMegaBounceEnergy",
+      "family": "heal_bounce"
+    }
+  ],
+  "effect_families": [
+    "bench_damage_target",
+    "chance",
+    "chance_refresh",
+    "deck_evolve",
+    "deck_search_bench",
+    "deck_search_hand",
+    "denial_target",
+    "discard_cost",
+    "discard_recovery",
+    "energy_distribution",
+    "heal_bounce",
+    "look_search",
+    "opponent_switch",
+    "self_refresh",
+    "sequential_search"
+  ],
+  "nested_select_contexts": [
+    "ATTACH_FROM",
+    "ATTACH_TO",
+    "DAMAGE",
+    "DISCARD",
+    "DISCARD_ENERGY",
+    "EVOLVE",
+    "EVOLVES_TO",
+    "HEAL",
+    "SWITCH",
+    "TO_BENCH",
+    "TO_HAND"
+  ],
+  "chance_sources": [
+    "coin",
+    "ifHeads",
+    "xBothShuffleCoinDraw",
+    "xLookTopMayTakeThenShuffle",
+    "xOwnShuffleHandDraw"
+  ],
+  "opponent_response_sources": [
+    "effectSwitchEnemy",
+    "forced_promotion",
+    "trashEnergyEnemy"
+  ],
+  "unmodelled": [],
+  "prior_art": {
+    "action_economics": [
+      "common.card_worth",
+      "common.action_cost",
+      "ADR-TEMP-507"
+    ],
+    "board_value": [
+      "common.state_value",
+      "ADR-0136",
+      "ADR-0137"
+    ],
+    "combat": [
+      "common.strategy.combat",
+      "common.state_model",
+      "ADR-0137"
+    ],
+    "engine_transition": [
+      "cgpy.engine",
+      "cgpy.turn",
+      "ADR-0098"
+    ],
+    "semantic_identity": [
+      "common.state_model.semantic_state_key",
+      "ADR-0138"
+    ],
+    "causal_demand": [
+      "common.needs",
+      "common.deciders.needs",
+      "ADR-0065",
+      "ADR-0127"
+    ],
+    "information": [
+      "common.strategy.refresh",
+      "ADR-0095",
+      "ADR-0129",
+      "ADR-0133"
+    ],
+    "opponent_belief": [
+      "common.scouting",
+      "ADR-0047"
+    ],
+    "setup": [
+      "common.deciders.opening",
+      "common.sound_rules",
+      "ADR-0079",
+      "ADR-0086"
+    ],
+    "corpus_rulings": [
+      "train.gates",
+      "data/corrections/reviewed.json",
+      "ADR-0088"
+    ]
+  }
+}

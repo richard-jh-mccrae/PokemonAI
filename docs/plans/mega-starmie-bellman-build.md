@@ -8,9 +8,9 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M0 — inventory and executable contracts.**
+**CURRENT: M1 — canonical state, budgets, and transition algebra.**
 
-Implementation has not started. The ADR and this ledger are the only artifacts created so far.
+M0 is complete. Runtime routing remains unchanged.
 
 ## Frozen decisions
 
@@ -52,7 +52,7 @@ evidence or an existing recorded adjudication.
 
 ## Milestones
 
-### M0 — inventory and executable contracts — CURRENT
+### M0 — inventory and executable contracts — DONE
 
 Purpose: prove what must be modeled before selecting implementation details.
 
@@ -69,7 +69,7 @@ Deliverables:
 Exit: inventory has no silent “other” bucket; all gaps are named; package boundary and failing
 contracts import cleanly; no runtime routing change.
 
-### M1 — canonical state, budgets, and transition algebra — PENDING
+### M1 — canonical state, budgets, and transition algebra — CURRENT
 
 Deliverables:
 
@@ -214,3 +214,19 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - Exact next action after compaction: re-read ADR + ledger, inspect source owners and deck inventory,
   then author M0's generated inventory and failing package-boundary contracts.
 
+### 2026-08-11 — M0 inventory and contracts
+
+- Generated `docs/plans/mega-starmie-bellman-inventory.json` from the 60-card deck and cgpy card/
+  attack definition tables: 20 unique cards; every effect operation, attack rider, nested context,
+  chance source, allowance, and opponent response is categorized; uncategorized operations fail.
+- Recorded the source/ADR prior-art route for every neutral capability in that inventory.
+- Added `common.bellman`'s public boundary, End-zero and named-consumption contracts, plus an AST
+  purity test forbidding legacy strategic imports.
+- Added the two Cinderace/Lillie's/Boss executable fixture cases; the unavailable planner boundary is
+  a strict expected failure, never a legacy delegation.
+- Added `tools/train/bellman_corpus.py` and captured an unfiltered 259-record live baseline: 0
+  exclusions, 171 equivalent-aware agreements, 88 misses. Contexts: 207 MAIN and 52 nested choices.
+- Checkpoint: `tests/bellman/test_m0_boundary.py` passes with only the intended strict xfail;
+  inventory freshness and `git diff --check` pass. Runtime routing is unchanged.
+- M1 exact next action: define immutable Bellman state/action/budget/node/diagnostic algebra, then
+  adapt engine menus to stable identities without reading any legacy score or chooser.
