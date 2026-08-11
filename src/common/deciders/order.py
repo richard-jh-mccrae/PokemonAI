@@ -105,6 +105,18 @@ class OrderMixin:
         Single-pick MAIN menus only; stable within a tier, so score order survives."""
         if max_count != 1 or len(order) < 2 or select_context != _MAIN:
             return order
+
+        # A Supporter that the evaluators price at zero has consumed its once-per-turn allowance
+        # without a realised benefit.  End is the sole exact-zero action; do not break that tie by
+        # raw menu order.  Positive or information-priced Supporters continue through Composer.
+        end = next((i for i in order if options[i].get("type") == _END), None)
+        first = order[0]
+        first_card = traces[first].card_id
+        first_stat = self.stats.get(first_card) if (self.stats and first_card is not None) else None
+        if (end is not None and options[first].get("type") == _PLAY
+                and first_stat is not None and first_stat.is_supporter
+                and traces[first].score <= 0.0):
+            return [end] + [i for i in order if i != end]
         ko_available = any(options[i].get("type") == _ATTACK and traces[i].tactical >= KO_SCORE
                            for i in order)
 

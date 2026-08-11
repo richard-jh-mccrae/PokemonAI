@@ -833,6 +833,7 @@ class MySide(_SideBase):
         return self._memoized(key, _make)
 
     def best_reachable_damage_vs(self, body: BodyView | None, defender: BodyView | None, *,
+                                 extra_unit_codes=(), manual_spent: bool = False,
                                  context: dict | None = None) -> float:
         """Biggest damage ``body`` can reach AGAINST ``defender`` — the damage-model sibling, so
         Weakness, Resistance, prevention and boosts reach the answer. ``context`` is `attacker="mine"`."""
@@ -840,9 +841,14 @@ class MySide(_SideBase):
             return 0.0
         target = defender.body if defender is not None else None
         key = ("best_reachable_damage_vs", body.card_id, body.is_active, body.energy_key,
-               self._key(target), self._key(context))
-        return self._memoized(key, lambda: self._combat.best_reachable_damage_vs(
-            body.body, target, budget=self.attach_budget(body), context=context))
+               tuple(extra_unit_codes), bool(manual_spent), self._key(target), self._key(context))
+
+        def _make():
+            raw = body.body if not extra_unit_codes else dict(
+                body.body, energies=list(body.body.get("energies") or ()) + list(extra_unit_codes))
+            return self._combat.best_reachable_damage_vs(
+                raw, target, budget=self.attach_budget(body, manual_spent=manual_spent), context=context)
+        return self._memoized(key, _make)
 
     def best_reachable_bench_damage(self, body: BodyView | None,
                                     defender: BodyView | None) -> float:

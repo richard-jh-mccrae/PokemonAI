@@ -121,12 +121,18 @@ def roles_in_dossiers(dossiers: Mapping) -> list[str]:
 
 
 def roles_in_brief(brief: Mapping) -> list[str]:
-    """Nothing loads `brief.schema.json`'s role enum, so a typo'd role in a Brief shipped green."""
+    """The compact Brief's Pokémon roles, reduced to the Pilot target-role vocabulary."""
+    doctrine_target_roles = {
+        "wincon": "prize_liability", "wincon_base": "fragile_preevo",
+        "wincon_stage": "fragile_preevo", "disruption_target": "disruption_target",
+        "primary_attacker": "attacker", "attacker": "attacker", "support": "engine",
+        "energy_accel": "engine", "draw_engine": "engine",
+    }
     out: set[str] = set()
-    for entry in (brief or {}).get("targets") or ():
-        role = (entry or {}).get("role") if isinstance(entry, dict) else None
-        if isinstance(role, str) and role:
-            out.add(role)
+    for entry in (brief or {}).get("pokemon") or ():
+        for role in (entry or {}).get("roles") or ():
+            if isinstance(role, str) and role in doctrine_target_roles:
+                out.add(doctrine_target_roles[role])
     return sorted(out)
 
 

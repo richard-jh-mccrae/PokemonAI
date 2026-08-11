@@ -19,11 +19,10 @@ class Brief:
     slug: str
     label: str
     covers: list[str]                                       # member archetype strings → variant routing
-    tempo: str = ""
-    summary: str = ""
     opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
-    threats: list[dict] = field(default_factory=list)        # attackers to respect ({card, why})
-    targets: list[dict] = field(default_factory=list)        # disrupt/snipe ({card, role, why})
+    wincon: dict = field(default_factory=dict)                # {line: [all stages], plan: str}
+    pokemon: list[dict] = field(default_factory=list)         # {card, roles: [closed doctrine roles]}
+    key_cards: list[dict] = field(default_factory=list)       # {card, role, enables?}
 
 
 def _brief_from(raw: dict) -> Brief | None:
@@ -33,9 +32,9 @@ def _brief_from(raw: dict) -> Brief | None:
         return None
     return Brief(
         slug=slug, label=raw.get("label", slug), covers=[str(c) for c in covers],
-        tempo=raw.get("tempo", ""), summary=raw.get("summary", ""),
         opponent_properties=raw.get("opponent_properties") or {},
-        threats=raw.get("threats") or [], targets=raw.get("targets") or [],
+        wincon=raw.get("wincon") or {}, pokemon=raw.get("pokemon") or [],
+        key_cards=raw.get("key_cards") or [],
     )
 
 
@@ -64,15 +63,34 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
     return next((b for b in briefs if top in b.covers), None)
 
 
+_TARGET_ROLE = {
+    "wincon": "prize_liability", "wincon_base": "fragile_preevo",
+    "wincon_stage": "fragile_preevo", "disruption_target": "disruption_target",
+    "primary_attacker": "attacker", "attacker": "attacker", "support": "engine",
+    "energy_accel": "engine", "draw_engine": "engine",
+}
+_TARGET_ROLE_ORDER = ("wincon", "wincon_base", "wincon_stage", "disruption_target",
+                      "primary_attacker", "attacker", "energy_accel", "draw_engine", "support")
+_THREAT_ROLES = frozenset({"threat", "wincon", "primary_attacker", "attacker", "disruption"})
+
+
 def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:
-    """``(threat_ids, target_roles)``. A name resolving to no id is skipped; one mapping to several
-    ids maps all of them; a card that is both threat and target appears in both (independent)."""
+    """Resolve compact Pokémon doctrine into Pilot threat ids and target roles.
+
+    Key trainer cards document how a body becomes dangerous; they never create a target on their
+    own.  The selected body roles drive snipe, gust, and energy-denial through MatchupPlan.
+    """
     threat_ids: set[int] = set()
-    for t in brief.threats or []:
-        threat_ids.update(ids_for_name(t.get("card", "")) or ())
     target_roles: dict[int, str] = {}
-    for t in brief.targets or []:
-        role = t.get("role")
-        for cid in ids_for_name(t.get("card", "")) or ():
-            target_roles[cid] = role
+    for entry in brief.pokemon or []:
+        roles = tuple(entry.get("roles") or ())
+        ids = ids_for_name(entry.get("card", "")) or ()
+        if _THREAT_ROLES.intersection(roles):
+            threat_ids.update(ids)
+        # A body may be both support and an explicitly valuable disruption target (Fezandipiti ex).
+        # Select the strongest declared target meaning, not the JSON list's incidental order.
+        target_role = next((_TARGET_ROLE[r] for r in _TARGET_ROLE_ORDER if r in roles), None)
+        if target_role:
+            for cid in ids:
+                target_roles[cid] = target_role
     return frozenset(threat_ids), target_roles

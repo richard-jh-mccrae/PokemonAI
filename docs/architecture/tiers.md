@@ -5,6 +5,11 @@ It carries **no %-complete marks**: those were the reason the six per-tier docs 
 deleted (they described the 2026-07-05 rung ladder, which POC-T4/5 replaced at MAIN). The owning ADR
 is the record for every decision below; `common.runtime.PROFILE` is the authority on what is armed.
 
+Mega Starmie is the deliberate exception. After Set-Up it uses the atomic Bellman planner in
+`common.bellman` under [ADR-0139](../adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md),
+not any T0-T6 strategic chooser. This tier description remains live for all unmigrated decks and for
+Mega Starmie's pregame/Set-Up policy.
+
 ## What decides a MAIN single-pick frame
 
 `PlannerMixin.plan_turn` (`src/common/strategy/planning/turn_line.py`), top rung first — the first

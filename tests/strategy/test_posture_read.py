@@ -364,7 +364,7 @@ def _mp_pilot(matchup_targeting=True, posture=True):
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition"]}, params={})
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
-                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+                  pokemon=[{"card": "Riolu", "roles": ["wincon_base"]}])
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
                  scout=Scout(tiny_artifact()), briefs=[brief],
@@ -401,7 +401,7 @@ def _mp_snipe_pilot(matchup_targeting=True):
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=90, maxDamage=30),
     }, attacks={11: AttackStat(11, damage=120, cost=1, benchSnipe=50)})
     brief = Brief(slug="ml", label="Mega Lucario ex", covers=["Mega Lucario ex"],
-                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
+                  pokemon=[{"card": "Riolu", "roles": ["wincon_base"]}])
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
                  scout=Scout(tiny_artifact()), briefs=[brief], snipe_relevance=True,
@@ -493,9 +493,9 @@ def _ml_stats():
 def _ml_brief_full():
     return Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                  opponent_properties={"opp_tempo": "midrange"},
-                 threats=[{"card": "Mega Lucario ex", "why": "270"}],
-                 targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"},
-                          {"card": "Solrock", "role": "engine", "why": "draw"}])
+                 pokemon=[{"card": "Mega Lucario ex", "roles": ["wincon", "primary_attacker"]},
+                          {"card": "Riolu", "roles": ["wincon_base"]},
+                          {"card": "Solrock", "roles": ["support"]}])
 
 
 def _ml_pilot(briefs):
@@ -571,7 +571,7 @@ def _lever_pilot(attack_table=None, **kw):
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
-                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
+                  pokemon=[{"card": "Riolu", "roles": ["wincon_base"]}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=2, hp=110)]
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
@@ -596,7 +596,7 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_briefed_preevo_boost_never_overrides_a_ko():
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
-                  targets=[{"card": "Riolu", "role": "fragile_preevo", "why": "snipe"}])
+                  pokemon=[{"card": "Riolu", "roles": ["wincon_base"]}])
     bench = [poke(RIOLU, hp=80), poke(SOLROCK, energy=1, hp=40)]     # Solrock dies to the 50 rider
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
@@ -683,7 +683,7 @@ def test_snipe_matchup_boost_stands_down_on_a_benched_tera():
     """The ADR-0051 matchup boost must stand down on a benched Tera, as it does on a redundant/mirage
     body. The GUST is unaffected: dragging a Tera Active removes the immunity (it is bench-only)."""
     brief = Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
-                  targets=[{"card": "Tera ex", "role": "prize_liability", "why": "the wincon"}])
+                  pokemon=[{"card": "Tera ex", "roles": ["wincon"]}])
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
                       current=state(active=poke(SNIPER), opp_active=poke(MEGA_LUCARIO, hp=340),
                                     opp_bench=[poke(TERA_WINCON, hp=200), poke(BRUISER, hp=120)]))

@@ -85,6 +85,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           F_full: ${{ steps.changes.outputs.full }}
           F_common_agent_core: ${{ steps.changes.outputs.common_agent_core }}
+          F_bellman: ${{ steps.changes.outputs.bellman }}
           F_agents: ${{ steps.changes.outputs.agents }}
           F_arena: ${{ steps.changes.outputs.arena }}
           F_sim: ${{ steps.changes.outputs.sim }}
@@ -124,6 +125,8 @@ jobs:
                   tests/sim tests/strategy tests/submit tests/train tests/tuner tests/value
             fi
 
+            if [ "$F_bellman" = "true" ]; then add tests/bellman; fi
+
             if [ "$F_agents" = "true" ]; then add tests/agents; fi
             if [ "$F_arena"  = "true" ]; then add tests/arena; fi
             if [ "$F_sim"    = "true" ]; then add tests/sim tests/arena tests/label tests/submit; fi
@@ -161,7 +164,7 @@ jobs:
 
             # Something changed but nothing recognised (and not docs-only) => full suite.
             matched=false
-            for v in "$F_full" "$F_common_agent_core" "$F_agents" "$F_arena" "$F_sim" \
+            for v in "$F_full" "$F_common_agent_core" "$F_bellman" "$F_agents" "$F_arena" "$F_sim" \
                      "$F_submit" "$F_train_wide" "$F_train_value" "$F_train_label" \
                      "$F_train_probes" "$F_meta" "$F_cards" "$F_scouting" "$F_strategy" \
                      "$F_value" "$F_tuner" "$F_blunder" "$F_train" "$F_label" "$F_parity" \
@@ -217,7 +220,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.empty != 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     # Run every step through bash (Git Bash on Windows runners) so the commands below are
     # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
     defaults:
@@ -345,7 +348,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.empty != 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash

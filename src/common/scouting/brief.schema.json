@@ -4,42 +4,33 @@
   "description": "The objective, shared counterplay annotations for ONE opponent Variant Cluster (ADR-0027). Lives beside the auto-artifact at src/common/scouting/briefs/<slug>.json; authored by /matchup-genie, consumed (future) by the Read/Posture layer to populate Board opponent-property fields. Validated by scripts/validate_brief.py (the enforcing gate; this schema is the human/machine reference).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets"],
+  "required": ["slug", "covers", "wincon", "pokemon", "key_cards", "opponent_properties"],
   "properties": {
     "slug": {"type": "string", "description": "matches the filename and data/meta/decks/<slug>/"},
-    "label": {"type": "string", "description": "the cluster's canonical label (from index.json)"},
+    "label": {"type": "string", "description": "optional human label"},
     "covers": {
       "type": "array", "minItems": 1, "items": {"type": "string"},
       "description": "member Archetype strings (from index.json[slug].covers) — routes every variant to this one Brief; the Read matches read.candidates[0] against this list"
     },
     "authored": {"type": "string", "description": "ISO date the Brief was authored/updated"},
-    "summary": {"type": "string", "description": "one-line objective profile: how it wins + its exploitable seam"},
-    "tempo": {"type": "string", "enum": ["fast", "midrange", "slow"], "description": "the race clock — when it starts taking prizes"},
+    "wincon": {"type": "object", "required": ["line", "plan"], "additionalProperties": false, "properties": {"line": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "plan": {"type": "string"}}},
     "opponent_properties": {
       "type": "object",
       "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in src/common/scouting/opponent_properties.json.",
       "additionalProperties": {"type": ["boolean", "string", "number"]}
     },
-    "threats": {
+    "pokemon": {
       "type": "array",
-      "description": "the opponent's attackers we must respect",
+      "description": "every strategically relevant Pokémon and its compact doctrine roles",
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["card", "why"],
-        "properties": {"card": {"type": "string"}, "why": {"type": "string"}}
-      }
-    },
-    "targets": {
-      "type": "array",
-      "description": "what to disrupt or snipe, using the Dossier role vocab",
-      "items": {
-        "type": "object", "additionalProperties": false, "required": ["card", "role", "why"],
+        "type": "object", "additionalProperties": false, "required": ["card", "roles"],
         "properties": {
           "card": {"type": "string"},
-          "role": {"type": "string", "enum": ["prize_liability", "fragile_preevo", "disruption_target", "attacker", "enabler", "engine", "avoid"], "description": "MUST equal the BRIEF-assignable half of common/scouting/matchup_plan.ROLE_REGISTRY (Issue #395 D2). `support` and `unknown` are declared there but are READ-ONLY: Scout._target_role emits them for \"I have no claim about this body\", which is not a claim a human authors. Nothing in src/ or tests/ loaded this enum before that issue, and validate_brief.py — which does enforce it — had no automated caller, so a typo'd role shipped green; tests/scouting/test_scouting_matchup_plan.py now asserts this list against the registry."},
-          "why": {"type": "string"}
+          "roles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["wincon", "wincon_base", "wincon_stage", "primary_attacker", "attacker", "support", "energy_accel", "draw_engine", "disruption", "disruption_target", "wall", "starter", "threat"]}}
         }
       }
     },
+    "key_cards": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["card", "role"], "properties": {"card": {"type": "string"}, "role": {"type": "string"}, "enables": {"type": "string"}}}},
     "sources": {"type": "array", "items": {"type": "string"}, "description": "citations (name — url)"}
   }
 }
