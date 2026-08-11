@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M6 — complete Mega Starmie mechanic coverage.**
+**CURRENT: M7 — bounded production search and atomic cutover.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -140,7 +140,7 @@ Deliverables:
 Exit: attacks are never valued on the pre-attack board; every Mega Starmie attack/nested option has
 reference coverage; the 50-HP Boss/KO boundary fixture passes economically.
 
-### M6 — complete Mega Starmie mechanic coverage — CURRENT
+### M6 — complete Mega Starmie mechanic coverage — DONE
 
 Deliverables:
 
@@ -154,7 +154,7 @@ Deliverables:
 Exit: isolated reference planner completes every reachable Mega Starmie correction state and scenario
 without strategic legacy calls. Exact legacy agreement is reported, not fitted blindly.
 
-### M7 — bounded production search and atomic cutover — PENDING
+### M7 — bounded production search and atomic cutover — CURRENT
 
 Deliverables:
 
@@ -317,3 +317,20 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - Checkpoint: 34 Bellman tests pass, one intended M0 xfail; runtime remains unchanged.
 - M6 exact next action: run every M0 mechanic family and all 259 correction observations through the
   engine adapter, close every named Unknown, and add useful/redundant/harmful benefit-cost fixtures.
+
+### 2026-08-11 — M6 complete deck mechanics
+
+- Added a one-selection historical nested adapter for old corrections whose opaque engine frame was
+  never recorded. Live search still retains and uses the exact cgpy frame; the adapter only applies
+  the fully visible nested consequence and stops, without ranking targets.
+- Replaced the ambiguous tuple freeze format with tagged map/list/tuple/set representations. Empty
+  Energy lists can no longer thaw as dictionaries, and hidden pending-frame identity remains exact.
+- Audited all 259 unfiltered Mega Starmie corrections: every provider is available and all 1,692
+  offered root actions transition without Unknown.
+- A representative of every deck action source recursively resolves all nested mechanics. The
+  matrix covers switch, Bench deployment, fetch, discard, damage, heal, evolution source/target,
+  Turbo Flare Energy selection/placement, and denial; all chance sources are explicit.
+- Checkpoint: M6 mechanics tests pass in 35.5 seconds; runtime routing remains unchanged.
+- M7 exact next action: add bounded search over the same contracts, measure against the reference on
+  tractable states, retain live engine sessions across nested decisions, and atomically route every
+  post-setup Mega Starmie selection through Bellman with raising legacy chooser stubs.

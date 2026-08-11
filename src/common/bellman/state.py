@@ -10,21 +10,26 @@ from typing import Mapping
 
 def freeze(value):
     if isinstance(value, Mapping):
-        return tuple((str(key), freeze(child)) for key, child in
-                     sorted(value.items(), key=lambda item: str(item[0])))
-    if isinstance(value, (list, tuple)):
-        return tuple(freeze(child) for child in value)
+        return ("__map__", tuple((str(key), freeze(child)) for key, child in
+                                 sorted(value.items(), key=lambda item: str(item[0]))))
+    if isinstance(value, list):
+        return ("__list__", tuple(freeze(child) for child in value))
+    if isinstance(value, tuple):
+        return ("__tuple__", tuple(freeze(child) for child in value))
     if isinstance(value, (set, frozenset)):
-        return tuple(sorted((freeze(child) for child in value), key=repr))
+        return ("__set__", tuple(sorted((freeze(child) for child in value), key=repr)))
     return value
 
 
 def thaw(value):
-    if isinstance(value, tuple):
-        if all(isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
-               for item in value):
-            return {key: thaw(child) for key, child in value}
-        return [thaw(child) for child in value]
+    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__map__":
+        return {key: thaw(child) for key, child in value[1]}
+    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__list__":
+        return [thaw(child) for child in value[1]]
+    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__tuple__":
+        return tuple(thaw(child) for child in value[1])
+    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__set__":
+        return set(thaw(child) for child in value[1])
     return value
 
 

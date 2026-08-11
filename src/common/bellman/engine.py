@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import copy
 from dataclasses import replace
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
@@ -38,6 +39,7 @@ class CgpyTransitionProvider:
         self.needs = needs or CausalNeeds()
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
+        self._local_nested = False
         self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
         self._error = ""
         try:
@@ -71,24 +73,33 @@ class CgpyTransitionProvider:
             self._engines[root.semantic_key] = engine
             self._attack_committed[root.semantic_key] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
-            self._error = f"{type(exc).__name__}: {exc}"
+            context = int(((root.obs.get("select") or {}).get("context", -1)))
+            if context != 0:
+                self._local_nested = True
+                self._error = ""
+            else:
+                self._error = f"{type(exc).__name__}: {exc}"
 
     @property
     def available(self) -> bool:
         return not self._error
 
     def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
-        if state.semantic_key not in self._engines:
+        if not self._local_nested and state.semantic_key not in self._engines:
             return ()
         return enumerate_legal_actions(state.obs)
 
     def actor(self, state: DecisionState) -> Actor:
+        if self._local_nested:
+            return Actor.OURS
         engine = self._engines.get(state.semantic_key)
         if engine is None:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
     def transition(self, state: DecisionState, action: LegalAction):
+        if self._local_nested:
+            return self._local_nested_transition(state, action)
         engine = self._engines.get(state.semantic_key)
         if engine is None:
             return Unknown("engine state unavailable", self._error or state.semantic_key)
@@ -103,6 +114,88 @@ class CgpyTransitionProvider:
             return self._register_successor(state, child, action)
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
+
+    @staticmethod
+    def _body(players, seat, area, index):
+        if not 0 <= seat < len(players):
+            return None
+        zone = "active" if int(area) == 4 else "bench" if int(area) == 5 else None
+        bodies = players[seat].get(zone) if zone else None
+        return bodies[index] if bodies and 0 <= index < len(bodies) else None
+
+    def _local_nested_transition(self, state, action):
+        """Resolve a recorded mid-effect menu when its opaque historical frame is unavailable.
+
+        Live searches retain the exact cgpy frame.  Old correction observations do not, so this
+        adapter applies the one visible, fully specified nested consequence and stops.  It is an
+        engine-fact bridge, not a target chooser.
+        """
+        try:
+            obs = copy.deepcopy(state.obs)
+            select = obs.get("select") or {}
+            options = select.get("option") or ()
+            picked = [options[index] for index in action.selection]
+            current = obs.get("current") or {}
+            players = current.get("players") or []
+            context = int(select.get("context", -1))
+            if context == 15:  # Jetting Blow's 50 Bench damage
+                for option in picked:
+                    body = self._body(players, int(option["playerIndex"]),
+                                      int(option["area"]), int(option["index"]))
+                    if body is None:
+                        raise ValueError("damage target is absent")
+                    body["hp"] = max(0, int(body.get("hp", 0)) - 50)
+            elif context == 21:  # Turbo Flare / generic visible Energy placement
+                card = copy.deepcopy(select.get("contextCard"))
+                if not card:
+                    raise ValueError("attach-from menu has no context Energy")
+                for option in picked:
+                    body = self._body(players, int(option["playerIndex"]),
+                                      int(option["area"]), int(option["index"]))
+                    if body is None:
+                        raise ValueError("Energy recipient is absent")
+                    body.setdefault("energyCards", []).append(card)
+            elif context == 4:  # forced promotion
+                for option in picked:
+                    seat = int(option["playerIndex"])
+                    index = int(option["index"])
+                    promoted = players[seat]["bench"].pop(index)
+                    old = next((body for body in (players[seat].get("active") or ()) if body), None)
+                    players[seat]["active"] = [promoted]
+                    if old and int(old.get("hp", 0)) > 0:
+                        players[seat].setdefault("bench", []).append(old)
+            elif context == 3:  # an ordinary switch/retreat target
+                for option in picked:
+                    seat = int(option["playerIndex"])
+                    index = int(option["index"])
+                    promoted = players[seat]["bench"].pop(index)
+                    old = next((body for body in (players[seat].get("active") or ()) if body), None)
+                    players[seat]["active"] = [promoted]
+                    if old:
+                        players[seat].setdefault("bench", []).append(old)
+            elif context == 7:  # visible deck/discard/looking card to hand
+                deck_listing = select.get("deck") or ()
+                for option in picked:
+                    seat = int(option["playerIndex"])
+                    area, index = int(option["area"]), int(option["index"])
+                    if area == 1:
+                        card = copy.deepcopy(deck_listing[index])
+                    elif area == 12:
+                        card = copy.deepcopy((current.get("looking") or ())[index])
+                    elif area == 3:
+                        card = copy.deepcopy(players[seat]["discard"][index])
+                    else:
+                        raise ValueError(f"unsupported to-hand source area {area}")
+                    players[seat].setdefault("hand", []).append(card)
+            else:
+                return Unknown("historical nested frame unavailable",
+                               f"select context {context}")
+            current["turnActionCount"] = int(current.get("turnActionCount", 0)) + 1
+            obs["select"] = None
+            successor = state.with_observation(obs)
+            return Terminal(successor, "isolated historical nested selection")
+        except Exception as exc:  # noqa: BLE001 - stays explicit
+            return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")
 
     def _state_from_engine(self, state, child, *, adjustments=()):
         from cgpy.search import export_token
