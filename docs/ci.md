@@ -213,8 +213,12 @@ sharding is the next lever, not another `-n` tweak.
 | Job | `timeout-minutes` | Why |
 | --- | --- | --- |
 | `plan` | 5 | Measured 8s |
-| `test` (native) | 20 | Measured 15m51s; loose headroom, not a floor |
-| `test-cgpy` | 15 | Measured 10m26s; loose headroom, not a floor |
+| `test` (native) | 45 | The Mega Starmie Bellman live cutover made the broad historical Pilot population exceed the old 20-minute budget on 2026-08-11; full scope is retained while search/runtime tuning remains explicit debt. |
+| `test-cgpy` | 45 | The same cutover reached the old 15-minute ceiling in PR #510; the job was cancelled by timeout while still in pytest, not by a failing assertion. |
+
+The 45-minute ceilings are provisional capacity, not a new performance target. Re-measure the first
+completed PR #510 jobs and tighten them after Bellman search/runtime work; do not restore a shorter
+number by dropping suites from `common_agent_core`.
 
 Re-measure per-step from the job JSON before trusting a new ceiling, not after the next raise —
 

@@ -220,7 +220,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.empty != 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 45
     # Run every step through bash (Git Bash on Windows runners) so the commands below are
     # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
     defaults:
@@ -348,7 +348,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.empty != 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
