@@ -153,6 +153,7 @@ class ValueOracle:
         hand = sum(self.registry.prizes(card_id)
                    for card_id in _hand_ids(state.obs, state.root_seat))
         families.append(("hand", hand))
+        families.extend(state.value_adjustments)
         return Potential(sum(value for _name, value in families), tuple(families), base.unknowns)
 
     def transition_ledger(self, before: DecisionState, after: DecisionState,

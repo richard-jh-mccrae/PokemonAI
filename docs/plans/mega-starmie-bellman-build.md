@@ -8,7 +8,7 @@ the commits since the last completed milestone.
 
 ## Current
 
-**CURRENT: M4 — chance, information, Needs, and Scouting belief.**
+**CURRENT: M5 — complete attack-resolution trees.**
 
 M0 is complete. Runtime routing remains unchanged.
 
@@ -111,7 +111,7 @@ Deliverables:
 Exit: reference solver finds complete deterministic turns without any legacy chooser; stopping is
 chosen whenever all actions are negative.
 
-### M4 — chance, information, Needs, and Scouting belief — CURRENT
+### M4 — chance, information, Needs, and Scouting belief — DONE
 
 Deliverables:
 
@@ -126,7 +126,7 @@ Deliverables:
 Exit: probability mass is exactly one; expected policy and actual replan share one evaluator; the
 60-HP Lillie's fixture passes without a card/frame exception.
 
-### M5 — complete attack-resolution trees — PENDING
+### M5 — complete attack-resolution trees — CURRENT
 
 Deliverables:
 
@@ -283,3 +283,23 @@ M0 must verify these at source; this table is a route, not proof that reuse is s
 - M4 exact next action: turn manual coins and hidden draw/search windows into normalized outcome
   distributions, add causal Turbo-Flare demand and immutable Scouting belief, then pass the 60-HP
   attach-Water -> Lillie's expected-policy fixture with actual-state replan semantics.
+
+### 2026-08-11 — M4 known uncertainty and beliefs
+
+- Added exact multivariate-hypergeometric count classes over disjoint causal needs plus explicit
+  remainder/whiff; every window asserts probability mass exactly one.
+- Added declarative causal Needs for Turbo Flare recipient -> Staryu -> Mega Starmie, typed reusable
+  Water, and evolved burst Energy. Needs emits marginal demand/rationale only and never chooses.
+- Added branch-controlled cgpy randomness. Lillie's Determination, Pokégear's top-seven reveal,
+  Harlequin's coin/draw split, and every manual coin now produce explicit Chance children. Coarse
+  non-need draw representatives carry a conditional portable-Worth correction rather than sampled
+  value; the real revealed state is replanned through the same solver.
+- Added immutable Scouting posterior adapter: exact visible opponent state, normalized archetype
+  probabilities, Brief properties, and explicit unknown mass. No targeting/action output crosses.
+- The 60-HP acceptance fixture now chooses attach Water first and then Lillie's expectation; the
+  chance branch replans after Staryu versus whiff. Engine tests prove all four real deck chance plays
+  become normalized Chance nodes.
+- Checkpoint: 29 Bellman tests pass, one intended M0 xfail; runtime remains unchanged.
+- M5 exact next action: prove cgpy's complete attack tree as the Bellman transition, including attack
+  payment, Turbo Flare allocation, Jetting target, all KOs/prizes/game results, and opponent min
+  promotion before post-attack value.

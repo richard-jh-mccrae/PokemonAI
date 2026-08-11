@@ -73,7 +73,7 @@ def _visible_own_ids(observation: Mapping, seat: int) -> Counter:
     ids = Counter()
     for zone in ("hand", "discard"):
         ids.update(int(card["id"]) for card in (player.get(zone) or ()) if card)
-    for body in (player.get("active") or ()) + (player.get("bench") or ()):
+    for body in tuple(player.get("active") or ()) + tuple(player.get("bench") or ()):
         if not body:
             continue
         ids[int(body["id"])] += 1
@@ -97,6 +97,7 @@ class DecisionState:
     budgets: TurnBudgets
     belief: OpponentBelief
     value_registry_identity: str
+    value_adjustments: tuple[tuple[str, float], ...] = ()
 
     @classmethod
     def from_observation(cls, observation: Mapping, *, deck: tuple[int, ...], deck_name: str,
@@ -119,6 +120,7 @@ class DecisionState:
             deck=tuple(int(card_id) for card_id in deck), deck_counts=tuple(sorted(remaining.items())),
             prize_counts=tuple(sorted(prizes.items())), budgets=TurnBudgets.from_observation(observation),
             belief=belief, value_registry_identity=str(value_registry_identity),
+            value_adjustments=(),
         )
 
     @property
@@ -129,7 +131,7 @@ class DecisionState:
     def semantic_key(self) -> str:
         payload = freeze((self.observation, self.root_seat, self.deck_name, self.deck_counts,
                           self.prize_counts, self.budgets, self.belief,
-                          self.value_registry_identity))
+                          self.value_registry_identity, self.value_adjustments))
         return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
     def with_observation(self, observation: Mapping) -> "DecisionState":
@@ -137,6 +139,10 @@ class DecisionState:
             observation, deck=self.deck, deck_name=self.deck_name, belief=self.belief,
             value_registry_identity=self.value_registry_identity)
         return replace(successor, root_seat=self.root_seat)
+
+    def with_adjustments(self, adjustments) -> "DecisionState":
+        return replace(self, value_adjustments=tuple(sorted(
+            (str(key), float(value)) for key, value in adjustments)))
 
 
 __all__ = ("DecisionState", "OpponentBelief", "TurnBudgets", "freeze", "thaw")

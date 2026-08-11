@@ -18,6 +18,7 @@ from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 from .solver import ReferenceSolver, SearchLimits, TransitionProvider
 from .engine import CgpyTransitionProvider
+from .information import CausalNeeds, DrawClass, Need, hypergeometric_classes, opponent_belief
 
 __all__ = (
     "END_VALUE",
@@ -47,4 +48,9 @@ __all__ = (
     "SearchLimits",
     "TransitionProvider",
     "CgpyTransitionProvider",
+    "CausalNeeds",
+    "DrawClass",
+    "Need",
+    "hypergeometric_classes",
+    "opponent_belief",
 )
