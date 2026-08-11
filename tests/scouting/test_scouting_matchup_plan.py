@@ -92,8 +92,7 @@ def test_every_role_string_in_the_shipped_artifacts_is_declared():
     artifact = load_artifact()
     dossier_roles = roles_in_dossiers(artifact.dossiers)
     brief_roles = sorted({r for b in load_briefs()
-                          for r in roles_in_brief({"targets": [
-                              {"role": t.get("role")} for t in (b.targets or [])]})})
+                          for r in roles_in_brief({"pokemon": b.pokemon})})
 
     # Guard the instrument: an empty read of either store makes the assertions below vacuous.
     assert len(artifact.dossiers) > 50, f"artifact looks unread: {len(artifact.dossiers)} archetypes"
@@ -125,22 +124,19 @@ def test_the_role_vocabulary_audit_actually_bites_with_a_positive_control():
                                 "card_inclusion": {"1": 0.5}}}
     assert roles_in_dossiers(fabricated) == ["__typo__", "engine"]      # …and skips non-role blocks
     assert undeclared_roles(roles_in_dossiers(fabricated)) == ["__typo__"]
-    assert undeclared_roles(roles_in_brief({"targets": [{"role": "__typo__"},
-                                                        {"role": "avoid"}]})) == ["__typo__"]
+    assert roles_in_brief({"pokemon": [{"roles": ["wincon", "support"]}]}) == ["engine", "prize_liability"]
     # the real stores stay green on this same run, so the bite is discrimination, not a red-on-all
     assert undeclared_roles(roles_in_dossiers(load_artifact().dossiers)) == []
 
 
-def test_the_brief_schemas_role_enum_equals_the_registrys_matchup_tier():
-    """The join. `brief.schema.json`'s enum is otherwise loaded only by matchup-genie's validator,
-    which has no automated caller — so schema and consumed table could drift indefinitely."""
+def test_the_brief_schema_has_the_compact_doctrine_roles():
+    """The doctrine vocabulary is schema-validated and includes Pilot-consumed roles."""
     schema = json.loads(_SCHEMA.read_text(encoding="utf-8"))
-    enum = set(schema["properties"]["targets"]["items"]["properties"]["role"]["enum"])
+    enum = set(schema["properties"]["pokemon"]["items"]["properties"]["roles"]["items"]["enum"])
     assert enum, "the schema's role enum is empty — the assertion below would pass vacuously"
-    assert enum == {r for r, e in ROLE_REGISTRY.items() if BRIEF_BY in e.assigners}
-    # `Scout._target_role` emits `support`/`unknown` for "no claim about this body", which is not
-    # something a human authors, so neither may appear in a Brief.
-    assert not ({"support", "unknown"} & enum), enum
+    assert {"wincon", "wincon_base", "primary_attacker", "support", "energy_accel"} <= enum
+    # `support` is doctrine, not a MatchupPlan role: the resolver maps it to neutral `engine`.
+    assert "support" in enum and "unknown" not in enum
 
 
 def test_the_registry_is_a_well_formed_ordinal_ladder():

@@ -127,9 +127,8 @@ per-band rates avoids the over-sampled, noisy Low band — see CONTEXT.md → Ra
 ## Matchup Briefs (consumer bridge)
 
 The auto-compiled Dossier has the opponent's *cards*; the hand-authored **Matchup Brief** has the
-*gameplan against them* — how the archetype wins, its tempo, exploitable weakness, and which
-threats/targets matter ([ADR-0027](adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md);
-authored by the `matchup-genie` skill at `src/common/scouting/briefs/<slug>.json`, human doctrine at
+compact doctrine the dossier cannot infer: the complete wincon line, Pokémon roles, and key trainer
+enablers ([ADR-0027](adr/0027-matchup-brief-is-hand-authored-opponent-doctrine.md)); authored at
 `docs/matchups/<slug>.md`). `common.scouting.briefs` is the consumer bridge (sibling to
 `matchup_favorability`):
 
@@ -139,8 +138,8 @@ authored by the `matchup-genie` skill at `src/common/scouting/briefs/<slug>.json
 - `match_brief(briefs, read)` — routes `read.candidates[0]` (the top archetype) to the Brief whose
   `covers` list contains it, so an archetype's variants all resolve to one Brief. Plain string routing
   (ADR-0027); γ tempers *use*, not the match.
-- `resolve_brief_cards(brief, ids_for_name)` — the matched Brief's name-keyed threats/targets as card
-  ids, surfaced on `Board` (`brief_threat_ids`, `brief_target_roles`, and the `opp_property` /
+- `resolve_brief_cards(brief, ids_for_name)` — resolves Pokémon roles into threat ids and MatchupPlan
+  target roles, surfaced on `Board` (`brief_threat_ids`, `brief_target_roles`, and the `opp_property` /
   `brief_target_role` / `brief_target_ids` accessors).
 
 The matched Brief rides on **`Board.brief`**, γ-gated to a recognized opponent (`None` when unknown /
