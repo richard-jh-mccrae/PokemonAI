@@ -1,7 +1,8 @@
 """Assemble a self-contained submission directory and zip it (see ADR-0004).
 
 Copies a deck-specific declaration together with the shared Bellman runtime, scouting data, and
-native engine. It writes a self-contained manifest brief, then zips the exact staged bundle to
+native engine. Offline diagnostic engines are categorically excluded. It writes a self-contained
+manifest brief, then zips the exact staged bundle to
 `dist/<name>_<YYYYMMDD>_<githash>.zip` — the staged dir *is* the exact shipped bundle,
 and the stamped zip names the deploy artifact by build date + commit (`-dirty` suffix when the
 work tree has uncommitted changes). `--no-stamp` falls back to a stable `dist/<name>.zip`.
@@ -21,8 +22,19 @@ REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 # Ship code, not docs. `attack_overrides.provenance.json` is documentation wearing a `.json`
 # extension — the runtime loads only `attack_overrides.json` (ADR-0108 §1).
-_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs",
+_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs", "engine.py",
                                  "attack_overrides.provenance.json")
+FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
+
+
+def _assert_kaggle_runtime_boundary(stage: Path) -> None:
+    """Reject offline-only code by both archive path and content, including generated files."""
+    for path in sorted(candidate for candidate in stage.rglob("*") if candidate.is_file()):
+        relative = path.relative_to(stage).as_posix()
+        if FORBIDDEN_KAGGLE_TOKEN.decode() in relative.lower():
+            raise ValueError(f"offline-only path cannot ship to Kaggle: {relative}")
+        if FORBIDDEN_KAGGLE_TOKEN in path.read_bytes().lower():
+            raise ValueError(f"offline-only reference cannot ship to Kaggle: {relative}")
 
 
 def _git_hash(repo: Path) -> str:
@@ -76,6 +88,7 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id)
     (stage / "brief.html").write_text(brief, encoding="utf-8")
     (stage / "brief.csv").write_text(render_brief_csv(manifest), encoding="utf-8", newline="")
+    _assert_kaggle_runtime_boundary(stage)
 
     stem = artifact_stem(name, when=when, git_hash=git_hash) if stamp else name
     return Path(shutil.make_archive(str(Path(dist) / stem), "zip", root_dir=stage))

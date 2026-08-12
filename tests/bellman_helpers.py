@@ -28,4 +28,5 @@ def deck(name: str) -> tuple[int, ...]:
 
 
 def runtime(name: str = "mega_starmie"):
-    return build_runtime(strategy(name), deck(name))
+    from common.engine import CgpyTransitionProvider
+    return build_runtime(strategy(name), deck(name), provider_factory=CgpyTransitionProvider)

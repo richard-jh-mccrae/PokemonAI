@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blunder Buster"
+  short_description: "Correct Bellman blunders from correction records."
+  default_prompt: "Use $blunder-buster to repair data/corrections/<correction>.json."

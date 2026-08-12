@@ -19,7 +19,7 @@ from .algebra import (
     Terminal,
     Unknown,
 )
-from .engine import CgpyTransitionProvider
+from .native_engine import NativeCgTransitionProvider
 from .information import (
     BellmanDeckProfile,
     DrawClass,
@@ -45,7 +45,7 @@ from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 __all__ = (
     "END_VALUE", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
     "BellmanTurnPlanner", "BellmanUnavailable", "BoardPotential", "CardFacts", "Chance",
-    "CgpyTransitionProvider", "Choice", "DecisionState", "Deterministic", "DrawClass",
+    "NativeCgTransitionProvider", "Choice", "DecisionState", "Deterministic", "DrawClass",
     "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "Potential",
     "ProductionLimits", "ProductionSolver", "ReferenceSolver", "RevealChoice", "RevealOutcome",
     "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TransitionProvider", "TurnBudgets",

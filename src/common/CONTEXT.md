@@ -18,7 +18,8 @@ The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
 - `value.py` and `potential.py`: portable card Worth and successor-state potential;
-- `engine.py`: forkable cgpy transition reconstruction;
+- `native_engine.py`: production Bellman branches through native `cg` search sessions;
+- `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
 - `effects.py`, `fetch.py`, and `draws.py`: effect data and pure chance-window mechanics;
 - `solver.py`: reference and bounded production recursion;
 - `planner.py`: first-action Bellman commitment;

@@ -15,7 +15,7 @@ should be shared across *all* agent builds, not copied into and diverging per ag
 src/
   common/      # shared deck-agnostic package — import as `common`
   cg/          # shared vendored engine — import as `cg` (do not edit)
-  cgpy/        # offline trace/correction twin; deliberately not packaged
+  cgpy/        # offline diagnostics/testing/simulation only; NEVER packaged
   agents/<name>/{*.py, deck.csv}   # deck-specific only (main.py + e.g. strategy.py)
 ```
 
@@ -37,7 +37,9 @@ The bundle also carries a self-contained `brief.html` (the embedded decision-ste
 
 **Consequences.**
 - One source of truth for shipped `common/` and native `cg/`; no per-agent drift. `cgpy/` remains
-  source-only for deterministic offline correction and parity work.
+  source-only for diagnostics, tests, and simulation and is forbidden from Kaggle artifacts.
+- The artifact gate scans both ZIP paths and every shipped file's bytes for `cgpy`; either form
+  fails the build. Production Bellman transitions use only native `cg.search_begin/search_step`.
 - All of an agent's top-level `*.py` ship (so `from strategy import …` works in the zip),
   plus `tuned.json` (when present) and a generated `brief.html` build card whose embedded
   Manifest carries the decklist + provenance (superseding the old `deck.txt`/`version_control.md`,

@@ -36,7 +36,7 @@ class BellmanRuntime:
     """Deployment shell: declarative pregame handling plus one Bellman planner."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
-                 scout=_ENGINE, briefs=_ENGINE):
+                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
@@ -49,6 +49,7 @@ class BellmanRuntime:
             scout = Scout(load_artifact(), provider=self.stats)
         self.scout = scout
         self.briefs = load_briefs() if briefs is _ENGINE else list(briefs or ())
+        self.provider_factory = provider_factory
         self.registry = ValueRegistry.from_strategy(
             strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
@@ -129,9 +130,12 @@ class BellmanRuntime:
             opponent_role_worth=resolve_scouted_role_worth(
                 self.last_read, getattr(self.scout, "artifact", None), self.stats,
                 briefs=self.briefs))
+        planner_kwargs = {}
+        if self.provider_factory is not None:
+            planner_kwargs["provider_factory"] = self.provider_factory
         return BellmanTurnPlanner(
             registry=self.registry, family_evaluator=potential,
-            effects=self.effects, stats=self.stats, belief=belief)
+            effects=self.effects, stats=self.stats, belief=belief, **planner_kwargs)
 
     def decide(self, observation: dict) -> RootDecision:
         current = observation.get("current") or {}

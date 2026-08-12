@@ -123,6 +123,12 @@ Mechanic adapters may branch on card rules because they simulate consequences. T
 on tactical conclusions such as “play this card in this matchup” or “prefer this target.” Those
 conclusions must emerge from successor value.
 
+Production transitions use only the authoritative native `cg` engine through immutable
+`search_begin`/`search_step` sessions. `cgpy` is restricted to offline diagnostics, tests, and
+simulation and must never appear in a Kaggle artifact. Packaging and exact-artifact verification
+scan every archive path and every file's bytes for that forbidden dependency. Missing native search
+state is an explicit Bellman failure, never an Attack/End fallback.
+
 Before activation, every option and nested selection reachable from the Mega Starmie deck must be
 deterministic, a fully enumerated Choice/Chance node, or an explicit tested refusal. A refusal reachable
 in ordinary Mega Starmie play blocks activation; the legacy Pilot may not silently handle it.

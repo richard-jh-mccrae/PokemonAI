@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 
 from common import (
-    END_VALUE, BellmanTurnPlanner, CgpyTransitionProvider,
+    END_VALUE, BellmanTurnPlanner, NativeCgTransitionProvider,
 )
 
 
@@ -54,5 +54,5 @@ def test_runtime_boundary_is_deck_neutral():
     assert BellmanTurnPlanner.__module__ == "common.planner"
 
 
-def test_runtime_uses_the_forkable_transition_provider():
-    assert CgpyTransitionProvider.__module__ == "common.engine"
+def test_runtime_uses_the_native_transition_provider():
+    assert NativeCgTransitionProvider.__module__ == "common.native_engine"

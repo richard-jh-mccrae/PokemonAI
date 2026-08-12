@@ -4,12 +4,15 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from submit.brief import build_manifest
 from submit.history import summary
 from submit.package import package
 
 
 REPO = Path(__file__).resolve().parents[2]
+SHIPPABLE_AGENTS = ("dragapult_ex", "mega_lucario", "mega_starmie")
 
 
 def test_manifest_describes_declarations_and_bellman_only():
@@ -27,6 +30,9 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         names = set(bundle.namelist())
         assert "common/runtime.py" in names
         assert "common/planner.py" in names
+        assert "common/native_engine.py" in names
+        assert "common/engine.py" not in names
+        assert any(name.startswith("cg/") for name in names)
         assert not any(name.startswith("common/bellman/") for name in names)
         assert "brief.html" in names and "brief.csv" in names
         assert "common/pilot.py" not in names
@@ -34,3 +40,12 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert "tuned.json" not in names
         manifest_text = bundle.read("brief.html").decode("utf-8")
         assert '"system": "bellman"' in manifest_text
+
+
+@pytest.mark.parametrize("agent_name", SHIPPABLE_AGENTS)
+def test_every_kaggle_bundle_contains_no_cgpy_name_or_content(tmp_path, agent_name):
+    archive = package(agent_name, tmp_path, stamp=False)
+    with zipfile.ZipFile(archive) as bundle:
+        for name in bundle.namelist():
+            assert "cgpy" not in name.lower(), name
+            assert b"cgpy" not in bundle.read(name).lower(), name

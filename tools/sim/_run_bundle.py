@@ -45,7 +45,8 @@ def _load(name):
     return module.agent
 
 
-env = make("cabt")
+# Debug mode preserves the exception traceback for the parent deployability check.
+env = make("cabt", debug=True)
 env.run([_load("_b0"), _load("_b1")])
 statuses = [s["status"] for s in env.state]
 print("STATUSES=" + json.dumps(statuses))

@@ -26,6 +26,7 @@ MS = REPO / "src"
 # Kaggle caps submission archive at 197.7 MiB.
 MAX_SUBMISSION_MIB = 197.7
 MAX_SUBMISSION_BYTES = int(MAX_SUBMISSION_MIB * 1024 * 1024)
+FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
 
 
 @dataclass
@@ -241,10 +242,17 @@ def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="b
 
     extracted = work_dir / "extracted"
     with zipfile.ZipFile(zip_path) as zf:
+        for name in zf.namelist():
+            if (FORBIDDEN_KAGGLE_TOKEN.decode() in name.lower()
+                    or FORBIDDEN_KAGGLE_TOKEN in zf.read(name).lower()):
+                return StageResult(
+                    False, "deployability",
+                    f"bundle contains offline-only runtime reference: {name}",
+                )
         zf.extractall(extracted)
 
     contents = check_contents(
-        extracted, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
+        extracted, required=("main.py", "deck.csv", "cg", "common"))
     if not contents.ok:
         return StageResult(False, "deployability", f"bundle {contents.detail}")
     legality = check_legality(extracted / "deck.csv")

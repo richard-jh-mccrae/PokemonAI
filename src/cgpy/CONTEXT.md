@@ -1,5 +1,9 @@
 # cgpy — the pure-Python twin of the native engine (ADR-0059)
 
+**Runtime boundary:** offline diagnostics, tests, and simulation only. This package is never a
+Kaggle dependency and must never be copied into a submission. Production agents use native `cg`;
+the package and exact-artifact gates reject any ZIP path or file content mentioning `cgpy`.
+
 A standalone reimplementation of the `src/cg` native engine (`cg.dll`/`libcg.so`), at exact
 parity, verified by trace replay. `src/cg/` is never modified; cgpy never imports it (importing
 `cg` loads the DLL).

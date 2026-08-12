@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .api import BellmanUnavailable, PlanRequest, RootDecision
-from .engine import CgpyTransitionProvider
+from .native_engine import NativeCgTransitionProvider
 from .solver import ProductionLimits, ProductionSolver
 from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
@@ -23,21 +23,23 @@ class BellmanTurnPlanner:
 
     def __init__(self, *, registry: ValueRegistry, family_evaluator, effects=None, stats=None,
                  belief: OpponentBelief | None = None,
-                 limits: ProductionLimits = DEFAULT_PRODUCTION_LIMITS):
+                 limits: ProductionLimits = DEFAULT_PRODUCTION_LIMITS,
+                 provider_factory=NativeCgTransitionProvider):
         self.registry = registry
         self.family_evaluator = family_evaluator
         self.effects = effects
         self.stats = stats
         self.belief = belief
         self.limits = limits
+        self.provider_factory = provider_factory
 
     def decide(self, request: PlanRequest) -> RootDecision:
         state = DecisionState.from_observation(
             request.observation, deck=request.deck, deck_name=request.deck_name,
             belief=self.belief, value_registry_identity=self.registry.identity)
-        provider = CgpyTransitionProvider(
+        provider = self.provider_factory(
             state, registry=self.registry, effects=self.effects, stats=self.stats)
-        backend = "cgpy-bellman"
+        backend = getattr(provider, "backend", "bellman")
         if not provider.available:
             if hasattr(provider, "close"):
                 provider.close()

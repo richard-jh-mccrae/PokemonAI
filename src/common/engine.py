@@ -77,6 +77,8 @@ class _ForcedShuffleRng:
 class CgpyTransitionProvider:
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 
+    backend = "cgpy-bellman"
+
     def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None, engine=None):
         self.root = root
         self.registry = registry

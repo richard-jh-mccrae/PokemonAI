@@ -32,27 +32,24 @@ def test_contents_passes_when_main_and_deck_present(tmp_path):
 
 
 @pytest.mark.req("REQ-SIM-0004")
-def test_contents_bundle_requires_engine_and_common(tmp_path):
+def test_contents_bundle_requires_native_engine_and_common(tmp_path):
     (tmp_path / "main.py").write_text("")
     (tmp_path / "deck.csv").write_text("3\n")
-    # extracted Bundle carries both engine bindings and the shared runtime.
+    # Extracted Bundle carries only the native engine and shared runtime.
     result = check_contents(
-        tmp_path, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
+        tmp_path, required=("main.py", "deck.csv", "cg", "common"))
     assert not result.ok
     assert "cg" in result.detail and "common" in result.detail
-    assert "cgpy" in result.detail
 
 
 @pytest.mark.req("REQ-SIM-0004")
 def test_exact_artifact_gate_extracts_and_runs_the_given_zip(tmp_path, monkeypatch):
     stage = tmp_path / "stage"
     (stage / "cg").mkdir(parents=True)
-    (stage / "cgpy").mkdir()
     (stage / "common").mkdir()
     (stage / "main.py").write_text("MARKER = 'exact-artifact'\n")
     (stage / "deck.csv").write_text(LEGAL_DECK.read_text())
     (stage / "cg" / "__init__.py").write_text("")
-    (stage / "cgpy" / "__init__.py").write_text("")
     (stage / "common" / "__init__.py").write_text("")
     artifact = tmp_path / "prior-build.zip"
     with zipfile.ZipFile(artifact, "w") as bundle:
@@ -71,6 +68,24 @@ def test_exact_artifact_gate_extracts_and_runs_the_given_zip(tmp_path, monkeypat
 
     assert result.ok, result.detail
     assert seen == [("MARKER = 'exact-artifact'\n", "mega_starmie")]
+
+
+@pytest.mark.req("REQ-SIM-0004")
+@pytest.mark.parametrize(
+    ("member", "content"),
+    (("cgpy/__init__.py", b""), ("common/bad.py", b"import cgpy\n")),
+)
+def test_exact_artifact_gate_rejects_offline_engine_names_and_content(
+        tmp_path, member, content):
+    artifact = tmp_path / "forbidden.zip"
+    with zipfile.ZipFile(artifact, "w") as bundle:
+        bundle.writestr(member, content)
+
+    result = check_artifact(artifact, tmp_path / "work")
+
+    assert not result.ok
+    assert result.stage == "deployability"
+    assert "offline-only" in result.detail
 
 
 @pytest.mark.req("REQ-SIM-0002")
