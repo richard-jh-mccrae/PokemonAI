@@ -82,5 +82,5 @@ def test_the_scan_stays_inside_this_checkout():
         f"or vendored dependency code — {foreign[:10]}")
 
     # ...and it must still reach the tree the ban is actually about.
-    assert any(p.startswith("tests/strategy/") for p in scanned), (
-        "the scan no longer covers tests/strategy/, where the shadowing bug was found")
+    assert any(p.startswith("tests/bellman/") for p in scanned), (
+        "the scan no longer covers the primary policy suite")

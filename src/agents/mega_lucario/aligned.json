@@ -1,5 +1,0 @@
-{
-  "common_commit": "40b918df0988022b52ac92b9b25a243e16836ad1",
-  "aligned_at": "2026-07-03",
-  "summary": "Phase B completion re-baselined vs merged main (STRATEGY.md §5b) + the T8' deferred five (2026-07-03). main.py on the current wiring contract; deck rules = fetch-the-engine-first, spring-heave-ho + ACTIVATE gates, gravity-mountain-vs-stage2, watchtower-vs-colorless-abilities (dont-cosmic-beam RETIRED — oracle requiresBench covers it). GENERAL pieces minted alongside: energy-recover credit + self-lock cost + recoil-doom charge + boost-lethal (damage-boost OHKO model: CardStat boost facts, TurnBoostTracker, oracle boosts), AttackStat.requiresBench, Board my_discard_basic_energy/active_best_attack_locked/opp_has_stage2/opp_has_colorless_ability/hand_ids/hand_basic_energy, Context attack_id/context_card_id, rules swap-out-the-locked-attacker + dont-promote-into-their-prize-reach"
-}

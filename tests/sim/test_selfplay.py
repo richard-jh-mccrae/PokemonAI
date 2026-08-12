@@ -1,5 +1,4 @@
-"""The self-play Corpus generator (tools/sim/selfplay): mirror games saved as Tuner-usable,
-auto-filing replays for the ADR-0009 own-Pilot loop (ADR-0022)."""
+"""The self-play corpus generator saves Bellman-correction-readable mirror games."""
 import json
 import os
 from datetime import datetime
@@ -55,7 +54,7 @@ def test_tag_replay_injects_ids_without_clobbering_the_film():
 
 
 @pytest.mark.req("REQ-SIM-0009")
-def test_generate_corpus_saves_tuner_usable_taggable_replays(tmp_path):
+def test_generate_corpus_saves_bellman_correction_replays(tmp_path):
     require_kaggle_environments()
     run_dir = generate_corpus("mega_starmie", 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
                               when=WHEN, sha="abc1234", syspath_roots=[REPO / "src"])
@@ -65,7 +64,7 @@ def test_generate_corpus_saves_tuner_usable_taggable_replays(tmp_path):
     replay = json.loads(files[0].read_text(encoding="utf-8"))
     decisions = iter_decisions(replay)
     assert decisions                                       # film yields taggable decisions
-    assert any(d.obs is not None for d in decisions)       # obs present -> Tuner-usable (cabt-env pivot)
+    assert any(d.obs is not None for d in decisions)
 
 
 @pytest.mark.req("REQ-SIM-0009")

@@ -1,5 +1,0 @@
-{
-  "common_commit": "f47002b58dd52aeac1edc1759cbe4499d0c83014",
-  "aligned_at": "2026-07-15",
-  "summary": "First alignment pass. All 4 of the 2026-07-09 re-author proposals confirmed SHIPPED into common (open-the-item-lock-starter, use-the-draw-engine-ability, dont-strand-the-evolving-engine + item_lock/energy_accel tags); deck now covers-as-is. Doc-hygiene reconciled STRATEGY.md + strategy.py docstring (queued/assumed -> SHIPPED). No folds available (3 deck hypotheses stay deck-bound: bench-the-comeback-drawer, hold-evolution-until-attacker-ready, play-risky-ruins-when-net-positive). tuned.json 14/14 keys live; params standard; my_archetype + opponent Briefs wired. Behavior-neutral."
-}

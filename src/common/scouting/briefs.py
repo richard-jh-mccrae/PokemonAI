@@ -1,6 +1,6 @@
 """Matchup Brief consumer — load the hand-authored ``briefs/<slug>.json`` and match one to the Read
 by ``covers`` (ADR-0027 variant routing). Pure and lib-free. It never ACTS: the γ-gated consumers
-live in the Pilot's Tactical layer.
+enter the Bellman board potential as opponent-role facts.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ _THREAT_ROLES = frozenset({
 
 
 def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:
-    """Resolve compact Pokémon doctrine into Pilot threat ids and target roles.
+    """Resolve compact Pokémon doctrine into Bellman threat ids and target roles.
 
     Key trainer cards document how a body becomes dangerous; they never create a target on their
     own.  The selected body roles drive snipe, gust, and energy-denial through MatchupPlan.

@@ -192,67 +192,6 @@ REGIGIGAS = 251                         # neutral defender: weakness {F}=6, no R
 EXPLODE, ROUND_708 = 651, 708
 
 
-def _agent_damage(gs: GameState, attack_id: int) -> float:
-    """The AGENT's oracle on the same board, folding the SHIPPED override table — not a fixture
-    that could agree with the engine while the shipped table does not."""
-    from common.scouting.provider import (CardStat, build_attack_stats, load_attack_overrides)
-    from common.strategy.damage import compute_active_damage
-    from common.strategy.damage_context import SideFacts, damage_context
-
-    stats = build_attack_stats(list(DB.attacks.values()), load_attack_overrides())
-
-    def side(seat: int) -> SideFacts:
-        bodies = gs.in_play(seat)
-        return SideFacts(
-            in_play_names=tuple(gs.stat(p.top).name for p in bodies),
-            in_play_attack_names=tuple(tuple(DB.attacks[a].name for a in gs.stat(p.top).attacks)
-                                       for p in bodies))
-
-    def card(p) -> CardStat:
-        d = gs.stat(p.top)
-        return CardStat(d.cardId, name=d.name, hp=d.hp, energyType=d.energyType,
-                        weakness=d.weakness, resistance=d.resistance)
-
-    return compute_active_damage(stats[attack_id], card(gs.players[0].active),
-                                 card(gs.players[1].active),
-                                 context=damage_context(side(0), side(1)))
-
-
-@pytest.mark.req("REQ-SCALER-0013")
-@pytest.mark.parametrize("mine,theirs,units", [
-    ((), (), 1),                                    # the attacker alone — the COMMON board, and the
-                                                    # one the frozen {"damage": 80} doubled
-    ((TR_KOFFING,), (), 2),
-    ((), (TR_WEEZING,), 2),                         # "both yours and your opponent's"
-    ((TR_KOFFING, TR_KOFFING), (TR_WEEZING,), 4),
-])
-def test_explode_together_now_agrees_between_the_engine_and_the_agent(mine, theirs, units):
-    """651: 40 damage per "Koffing"/"Weezing" in play, BOTH sides, printed `damage: 0`. The
-    `units=1` row is the defect: the ATTACKER matches its own predicate."""
-    gs = make_state(TR_WEEZING, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
-    engine = attack_damage(gs, gs.players[0].active, DB.attacks[EXPLODE],
-                           gs.players[1].active, adef=def_for(f"attack:{EXPLODE}") or {})
-    assert engine == 40 * units
-    assert _agent_damage(gs, EXPLODE) == engine
-
-
-@pytest.mark.req("REQ-SCALER-0013")
-@pytest.mark.parametrize("mine,theirs,units", [
-    ((), (), 1),
-    ((TYMPOLE,), (), 2),
-    ((TYMPOLE, SEISMITOAD), (), 3),
-    ((), (TYMPOLE, SEISMITOAD), 1),                 # "each of YOUR Pokémon" — theirs never count
-])
-def test_round_agrees_between_the_engine_and_the_agent(mine, theirs, units):
-    """708: 40 damage per one of YOUR Pokémon with the Round attack. Two bodies carry that attack
-    NAME at different per-unit values, which makes it a name predicate rather than an id list."""
-    gs = make_state(PALPITOAD, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
-    engine = attack_damage(gs, gs.players[0].active, DB.attacks[ROUND_708],
-                           gs.players[1].active, adef=def_for(f"attack:{ROUND_708}") or {})
-    assert engine == 40 * units
-    assert _agent_damage(gs, ROUND_708) == engine
-
-
 @pytest.mark.req("REQ-SCALER-0013")
 def test_the_pool_holds_exactly_the_matching_cards_this_family_was_ruled_against():
     """A positive control: if the pool widened, the parametrised counts above would be reasoning

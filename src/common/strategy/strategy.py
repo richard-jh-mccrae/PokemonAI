@@ -1,68 +1,37 @@
-"""The declarative Strategy a deck supplies to the Pilot (see common/CONTEXT.md, ADR-0008).
+"""Deck declarations consumed by the Bellman runtime.
 
-Pure data: structure + tunable numbers, no engine and no control flow. The deck's
-doctrine is expressed here as roles, prize plans, params, and hypotheses; the shared
-Pilot interprets it. This module also owns the closed Plan vocabulary.
+Decks provide facts: roles, evolution relationships, starter order, partner
+dependencies, prize routes, and upward-only Worth overrides.  Tactical rules and
+weighted hypotheses do not belong at this boundary.
 """
 from __future__ import annotations
 
-import enum
 from dataclasses import dataclass, field
 
 
 STANDARD_PRIZES_TO_WIN = 6
 
 
-class Plan(enum.Enum):
-    """The Pilot's current-turn strategic mode — a closed set, the tempo/defensive axis of the Match
-    Planner's Game Plan (ADR-0045)."""
-    SETUP = "SETUP"
-    RACE = "RACE"
-    STALL = "STALL"
-    STABILIZE = "STABILIZE"
-    SACRIFICE = "SACRIFICE"
-    CLOSE = "CLOSE"
-
-
-@dataclass
-class GamePlan:
-    """The Match Planner's output (ADR-0045): route, mode, confidence and the directed Turn Goal it
-    hands the Turn Planner. Re-derived each turn, NEVER a lock; withheld on low confidence."""
-    mode: Plan = Plan.SETUP
-    confidence: float = 0.0
-    route: frozenset = field(default_factory=frozenset)   # opp card ids on my cheapest Prize Path
-    route_turns: float | None = None                       # total feasibility turns of that route
-    directed_goal: str | None = None                       # the goal-kind to steer the Turn Planner (S3)
-    rationale: str = ""
-
-
-@dataclass
+@dataclass(frozen=True)
 class Ready:
-    """When a Line's payoff counts as online: in play with >= `energy` attached. `energy=None`
-    derives the threshold from the payoff's CHEAPEST attack cost, not its biggest."""
+    """Optional declared Energy threshold for an evolution-line payoff."""
+
     energy: int | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Line:
-    """Normalized evolution path consumed by legacy strategy code.
+    """Normalized evolution path derived from :class:`Roles`."""
 
-    Decks should declare evolution relationships through :class:`Roles`; ``Line`` remains the
-    compatibility shape read by existing consumers.
-    """
-    path: list
+    path: tuple[int, ...]
     payoff: int
     role: str = "win_condition"
-    ready: Ready = field(default_factory=Ready)
+    ready: Ready = Ready()
 
 
 @dataclass(frozen=True)
 class PrizePlan:
-    """Preferred order(s) in which the opponent should knock out our Pokémon.
-
-    Each route contains card ids in KO order. Printed prize values come from card facts, so the
-    declaration describes bodies rather than repeating prize numbers.
-    """
+    """Preferred order(s) in which the opponent takes our Pokémon prizes."""
 
     routes: tuple[tuple[int, ...], ...]
     prizes_to_win: int = STANDARD_PRIZES_TO_WIN
@@ -78,12 +47,7 @@ class PrizePlan:
 
 
 class Roles(dict):
-    """Card roles plus evolution relationships at the deck boundary.
-
-    ``evolves`` is ``source card id -> target card id``. Chains are normalized into legacy
-    :class:`Line` objects. The terminal card's role determines whether a line is a win condition or
-    a secondary-attacker line; ``ready`` optionally overrides its online Energy threshold.
-    """
+    """Card roles plus ``source -> target`` evolution relationships."""
 
     _LINE_ROLE_PRIORITY = ("win_condition", "primary_attacker", "secondary_attacker")
 
@@ -98,9 +62,8 @@ class Roles(dict):
         }
         self._lines = self._normalize_lines()
         for line in self._lines:
-            base_role = ("win_condition_base" if line.role == "win_condition"
-                         else "evolution_base")
-            base_roles = self.setdefault(int(line.path[0]), [])
+            base_role = "win_condition_base" if line.role == "win_condition" else "evolution_base"
+            base_roles = self.setdefault(line.path[0], [])
             if base_role not in base_roles:
                 base_roles.append(base_role)
 
@@ -115,13 +78,11 @@ class Roles(dict):
         roots = tuple(source for source in self.evolves if source not in targets)
         if not roots:
             raise ValueError("evolution relationships must not contain a cycle")
-        lines = []
-        visited = set()
+        lines, visited = [], set()
         for root in roots:
             path, seen = [root], {root}
             while path[-1] in self.evolves:
-                source = path[-1]
-                target = self.evolves[source]
+                source, target = path[-1], self.evolves[path[-1]]
                 if target in seen:
                     raise ValueError("evolution relationships must not contain a cycle")
                 visited.add(source)
@@ -135,50 +96,32 @@ class Roles(dict):
                 role = "win_condition"
             if role is None:
                 raise ValueError(f"evolution payoff {payoff} requires an attacker role")
-            lines.append(Line(path=path, payoff=payoff, role=role,
-                              ready=self.ready.get(payoff, Ready())))
+            lines.append(Line(tuple(path), payoff, role, self.ready.get(payoff, Ready())))
         if visited != set(self.evolves):
             raise ValueError("every evolution relationship must belong to a rooted line")
         return tuple(lines)
 
 
 @dataclass
-class Hypothesis:
-    """A named, testable claim that biases scoring. ``weight`` is REQUIRED and has NO default: a `0.0`
-    default made a rung authored by OMISSION indistinguishable from a deliberate `weight=0` seed."""
-    id: str
-    rationale: str
-    when: object                  # callable: (ctx) -> bool
-    weight: float
-    status: str = "assumed"
-
-
-@dataclass
 class Strategy:
+    """Complete deck-specific input to the shared Bellman system."""
+
     name: str = ""
-    lines: list = field(default_factory=list)          # normalized compatibility view of role relationships
-    roles: dict = field(default_factory=dict)          # cardId -> [Role]
-    params: dict = field(default_factory=dict)         # tunable scalars
-    hypotheses: list = field(default_factory=list)     # weighted, status-tracked rules
-    fetch_priority: list = field(default_factory=list)  # Tier-3 explicit grab order (cardIds, highest
-                                                        # first) -- combo deck's override of derived
-                                                        # fetch importance (ADR-0023); empty for most decks
-    starter_priority: list = field(default_factory=list)  # ordered opening bodies (cardIds, best first)
-                                                        # for the pregame Set-Up ACTIVE pick (ADR-0079).
-                                                        # Must be COMPLETE -- every startable body ranked.
-    weight_overrides: dict = field(default_factory=dict)  # authored per-deck seed overrides of (typically
-                                                        # general) Hypothesis weights by id -- doctrine-driven,
-                                                        # sparse, UNDER the learned tuned.json layer (ADR-0035)
-    partners: dict = field(default_factory=dict)       # cardId -> [partner cardIds]: an engine body whose
-                                                        # value REQUIRES a listed partner in play (ADR-0034);
-                                                        # the attach oracle zeroes a partnerless one
-    worth_overrides: dict = field(default_factory=dict)  # cardId -> Worth floor; deck doctrine may RAISE
-                                                         # the shared function value, never lower it
-    prize_plan: PrizePlan | None = None                  # deck-preferred own-Pokémon KO sequences
+    roles: Roles = field(default_factory=Roles)
+    starter_priority: tuple[int, ...] = ()
+    params: dict = field(default_factory=dict)
+    partners: dict[int, tuple[int, ...]] = field(default_factory=dict)
+    worth_overrides: dict[int, float] = field(default_factory=dict)
+    prize_plan: PrizePlan | None = None
+    lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:
-        declared_lines = tuple(getattr(self.roles, "lines", ()))
-        if declared_lines:
-            if self.lines:
-                raise ValueError("declare evolution lines in Roles or Strategy.lines, not both")
-            self.lines = list(declared_lines)
+        self.starter_priority = tuple(int(card_id) for card_id in self.starter_priority)
+        self.partners = {int(card_id): tuple(int(partner) for partner in partners)
+                         for card_id, partners in self.partners.items()}
+        self.worth_overrides = {int(card_id): float(value)
+                                for card_id, value in self.worth_overrides.items()}
+        self.lines = tuple(self.roles.lines)
+
+
+__all__ = ["Line", "PrizePlan", "Ready", "Roles", "Strategy"]

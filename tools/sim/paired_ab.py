@@ -48,7 +48,7 @@ def flips_on(result: dict, *, crashes: int, reg_tol: float = _REG_TOL) -> bool:
 
 def mid_build_verdict(result: dict, *, crashes: int, reg_tol: float = MID_BUILD_REG_TOL) -> bool:
     """The mid-build TRIPWIRE (ADR-0072 decision 1): zero crashes AND CI lower bound ≥ −``reg_tol``,
-    with NO delta clause. It claims no catastrophe — NOT non-regression; merit is `train.gates`."""
+    with NO delta clause. It claims no catastrophe — NOT non-regression; merit needs separate evidence."""
     return result["ci_lo"] >= -reg_tol and crashes == 0
 
 

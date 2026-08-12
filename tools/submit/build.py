@@ -24,11 +24,6 @@ def _previous_build(builds: Path | str, agent: str) -> dict | None:
     return prior[-1] if prior else None
 
 
-def _hyp_slim(rows: list) -> list:
-    """The minimal Hypothesis fields the next build's strategy-diff needs (keeps the ledger small)."""
-    return [{"id": h["id"], "effective": h["effective"], "status": h["status"]} for h in rows]
-
-
 def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFAULT_BUILDS,
           agents_root: Path | None = None, submission_id: int | None = None,
           label: str | None = None) -> dict:
@@ -36,12 +31,9 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
     stem is the join key downstream; `submission_id` defaults to the next monotonic id."""
     sid = submission_id if submission_id is not None else next_submission_id(builds)
     prev = _previous_build(builds, Path(name).name)        # baseline for change callouts
-    prev_hyps = ({"strategy": prev.get("strategy_hyps", []), "general": prev.get("general_hyps", [])}
-                 if prev else None)
     zip_path = package(name, Path(out), agents_root=agents_root,
                        prev_deck=(prev or {}).get("deck"),
-                       prev_build_id=(prev or {}).get("submission_id"),
-                       prev_hyps=prev_hyps)
+                       prev_build_id=(prev or {}).get("submission_id"))
     manifest = build_manifest(Path(out) / Path(name).name)   # exact staged bundle that shipped
     prov = manifest["provenance"]
     row = {
@@ -54,9 +46,6 @@ def build(name: str, *, out: Path | str = DEFAULT_OUT, builds: Path | str = DEFA
         "manifest_digest": manifest_digest(manifest),
         "summary": summary(manifest),
         "deck": manifest["deck"],  # full decklist — baseline the *next* build diffs against
-        # slim Hypothesis rows (id/effective/status) — baseline the *next* build diffs weights against
-        "strategy_hyps": _hyp_slim(manifest["strategy"]["hypotheses"]),
-        "general_hyps": _hyp_slim(manifest["general_strategy"]["hypotheses"]),
         "submitted_at": None,      # filled by `submit`
         "message": None,           # the `-m` text `submit` sent
         "kaggle_ref": None,        # filled by `collect` once Kaggle assigns it

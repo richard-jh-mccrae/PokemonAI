@@ -7,7 +7,7 @@ tombstone as a hyperlink, so a broken one is always a defect.
 Scope notes:
 
 * Targets must look like paths — containing `/` or a suffix. Bare `[x](plan)` is prose, not a link.
-* `.claude/skills/` is excluded: the vendored skills ship template placeholders, not references.
+* `.claude/skills/` and historical ADRs are excluded: both may describe retired paths.
 * Gitignored trees (`data/meta/`, `reports/`) are excluded — absent locally, present in a real run.
 * The scan set is `git ls-files`, never a filesystem walk; `tests/test_import_hygiene.py` says why.
 """
@@ -34,6 +34,7 @@ _GITIGNORED = ("data/meta/", "reports/", "data/probe/", "data/strategy/raw/", "d
 
 #: Vendored external skills carry example paths for a fictional repo, not references into this one.
 _VENDORED = ".claude/skills/"
+_ADR_ARCHIVE = "docs/adr/"
 
 _CONTROL_LIVE = "docs/rules.md"
 _CONTROL_DEAD = "docs/this-doc-does-not-exist.md"
@@ -68,7 +69,8 @@ def _is_path_like(target: str) -> bool:
 def _broken(tracked: list[str]) -> list[str]:
     out: list[str] = []
     for rel in tracked:
-        if not rel.endswith(".md") or rel.startswith(_VENDORED):
+        if (not rel.endswith(".md") or rel.startswith(_VENDORED)
+                or (rel.startswith(_ADR_ARCHIVE) and rel != "docs/adr/README.md")):
             continue
         text = (REPO / rel).read_text(encoding="utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), 1):
@@ -87,7 +89,7 @@ def test_the_resolver_accepts_a_real_path_and_rejects_an_invented_one() -> None:
     """A negative result needs a positive control: an always-false resolver would pass this file silently."""
     assert _resolves("docs/ci.md", _CONTROL_LIVE), "positive control failed — the resolver cannot see a real file"
     assert _resolves("docs/adr/README.md", "../rules.md"), "positive control failed — relative resolution is broken"
-    assert _resolves("docs/ci.md", "src/common/pilot.py:399"), "positive control failed — the file:line form is broken"
+    assert _resolves("docs/ci.md", "src/common/runtime.py:39"), "positive control failed — the file:line form is broken"
     assert not _resolves("docs/ci.md", _CONTROL_DEAD), "negative control failed — the resolver accepts anything"
 
 

@@ -5,8 +5,7 @@ parity — for DLL-free local play AND a clone/seed/step verification engine.
 **Worktree:** `.claude/worktrees/strategy-ingest-item-lock-152c58`, branch
 `claude/cggame-engine-reverse-engineer-bd04cf`. Milestone commit: `a509725`.
 **Plan of record:** [ADR-0059](../../../docs/adr/0059-cgpy-is-a-trace-verified-python-twin-of-the-native-engine.md)
-+ [src/cgpy/CONTEXT.md](../../../src/cgpy/CONTEXT.md) +
-[docs/pyeng/determinism.md](../../../docs/pyeng/determinism.md).
++ [src/cgpy/CONTEXT.md](../../../src/cgpy/CONTEXT.md).
 
 | Step | Doc | Status |
 |---|---|---|

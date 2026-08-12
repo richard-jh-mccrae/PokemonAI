@@ -1,6 +1,4 @@
-"""Tier-5 corpus recorder: battle.py's match loop captured into a cabt-`visualize`-shaped film the
-existing value extractor + blunder reader consume UNCHANGED — one corpus format across every tool.
-"""
+"""Corpus recorder: battle.py matches captured as correction-readable films."""
 import sys
 from pathlib import Path
 
@@ -53,28 +51,6 @@ def test_recorder_film_round_trips_through_the_film_readers():
     assert all(d.obs is not None for d in decisions)     # obs present -> Tuner/value mineable
 
 
-@pytest.mark.req("REQ-SIM-0011")
-def test_recorded_film_yields_value_feature_rows_through_the_real_extractor():
-    """The SHIPPED extractor, so the gauntlet corpus needs no new reader."""
-    from sim.record import MatchRecorder
-    from train.value.extract import rows_from_replay
-    from train.tune import _build_pilot
-    from common.value.features import FEATURE_NAMES
-
-    pilot, _ = _build_pilot("mega_starmie")
-    rec = MatchRecorder()
-    rec.step(_board_obs(0), [1])                          # decision frame 0 → +1 obs = seat-1 board
-    rec.step(_board_obs(1), [0])                          # decision frame 1 → +1 obs = terminal board
-    rec.finish(_board_obs(0, result=0), winner=0)
-    replay = rec.replay(episode_id=7, team_names=["A#0", "B#1"])
-
-    rows = list(rows_from_replay(pilot, replay))
-    assert rows
-    feats, won = rows[-1]
-    assert len(feats) == len(FEATURE_NAMES)
-    assert won == 1.0                                     # seat-0 board, winner=0
-
-
 @pytest.mark.req("REQ-SIM-0012")
 def test_recorder_maps_winner_to_seat_indexed_rewards():
     """A draw carries NO win label (equal rewards) so the extractor skips it rather than guessing."""
@@ -97,8 +73,7 @@ def test_play_match_with_a_recorder_yields_a_mineable_film():
     """The corpus comes off the SAME loop the A/B runs — process isolation, no two-deck collision."""
     from sim.battle import AgentServer, play_match, read_deck
     from sim.record import MatchRecorder
-    from train.value.extract import rows_from_replay
-    from train.tune import _build_pilot
+    from train.blunder.decisions import iter_decisions
 
     deck = read_deck(MEGA)
     rec = MatchRecorder()
@@ -110,6 +85,5 @@ def test_play_match_with_a_recorder_yields_a_mineable_film():
         b.close()
     assert result.winner in (0, 1, None)
     replay = rec.replay(episode_id=1, team_names=["mega_starmie#0", "mega_starmie#1"])
-    pilot, _ = _build_pilot("mega_starmie")
-    rows = list(rows_from_replay(pilot, replay))
-    assert len(rows) > 10
+    decisions = iter_decisions(replay)
+    assert len(decisions) > 10 and all(decision.obs is not None for decision in decisions)

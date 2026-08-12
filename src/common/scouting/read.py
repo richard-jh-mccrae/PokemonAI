@@ -33,3 +33,21 @@ class Read:
     expected_cards: list[tuple[int, float]] = field(default_factory=list)
     threats: list[Intel] = field(default_factory=list)
     targets: list[Intel] = field(default_factory=list)
+
+
+POSTURE_CONFIDENCE_LOW = 0.5
+POSTURE_CONFIDENCE_HIGH = 0.85
+
+
+def posture_gamma(read: Read | None) -> float:
+    """Map a Scout posterior to the Bellman belief-strength interval ``[0, 1]``."""
+
+    if read is None or not read.candidates:
+        return 0.0
+    top = read.confidence[0] if read.confidence else 0.0
+    span = POSTURE_CONFIDENCE_HIGH - POSTURE_CONFIDENCE_LOW
+    ramp = max(0.0, min(1.0, (top - POSTURE_CONFIDENCE_LOW) / span))
+    return ramp * (1.0 - read.unknown_mass)
+
+
+__all__ = ["EvoPath", "Intel", "Read", "posture_gamma"]

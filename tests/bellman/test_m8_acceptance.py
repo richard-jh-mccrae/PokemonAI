@@ -3,8 +3,8 @@ import json
 
 import pytest
 
+from bellman_helpers import runtime
 from train.blunder.store import load_corrections
-from train.tune import _build_pilot
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -43,13 +43,11 @@ def _correction(episode, frame):
     (92104376, 86, [0]),        # promotion keeps the deliberate seven-prize route available
 ))
 def test_rationale_led_hard_gates(episode, frame, expected):
-    pilot = _build_pilot("mega_starmie")[0]
-    assert pilot.decide(_correction(episode, frame).obs) == expected
+    assert runtime().decide(_correction(episode, frame).obs).chosen == tuple(expected)
 
 
 def test_heal_targets_the_exposed_active_not_the_loaded_safe_bench():
-    pilot = _build_pilot("mega_starmie")[0]
-    assert pilot.decide(_correction(None, 100).obs) == [0]
+    assert runtime().decide(_correction(None, 100).obs).chosen == (0,)
 
 
 def test_20260812_sequence_and_target_corrections():
@@ -67,7 +65,5 @@ def test_20260812_sequence_and_target_corrections():
         "4eaf233ccb54": [0, 1],    # discard duplicate tutor access; retain live Hammer
         "5972e5096b0c": [0],       # damage the scouted Alakazam win condition
     }
-    pilot = _build_pilot("mega_starmie")[0]
-
     for record in records:
-        assert pilot.decide(record["obs"]) == expected[record["id"]]
+        assert runtime().decide(record["obs"]).chosen == tuple(expected[record["id"]])

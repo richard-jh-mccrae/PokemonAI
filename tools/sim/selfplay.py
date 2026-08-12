@@ -1,8 +1,8 @@
 """Self-play Corpus generator: our agent's own mirror games, saved as taggable, Tuner-usable
-replays for the ADR-0009 own-Pilot correction loop (ADR-0057).
+replays for Bellman correction analysis.
 
 Runs N mirror games on the cabt-env path (reusing `check_agent._run_match` -> `env.toJSON()`, the
-only path that carries the per-frame agent `obs` the Tuner replays the Pilot on) and saves each to
+only path that carries the per-frame agent `obs` used by correction replay) and saves each to
 `data/replays/selfplay/<stem>/<episode_id>.json`. The stem matches `provenance.build_identity`, so
 Corrections auto-file under a real build folder; `EpisodeId` is globally unique (the dedup/review
 keys assume per-game uniqueness). Set `AGENT_OVERLAY` to mine a specific config's error surface.
@@ -88,7 +88,7 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(
         description="Generate a self-play Corpus: our agent's own mirror games as Tuner-usable, "
-                    "auto-filing replays for the own-Pilot correction loop (ADR-0057).")
+                    "auto-filing replays for Bellman correction analysis.")
     ap.add_argument("agent", help="agent under src/agents/ to self-play")
     ap.add_argument("-n", "--games", type=int, default=20, help="games to generate (default 20)")
     ap.add_argument("--overlay", default=None, help="experiment overlay JSON -> corpus of that config")

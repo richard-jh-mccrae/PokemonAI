@@ -4,13 +4,13 @@ from dataclasses import replace
 
 import pytest
 
-from common.bellman import (
+from common import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
     ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome, SearchLimits, Terminal,
 )
-from common.bellman.algebra import Edge, WeightedEdge
-from common.bellman.options import LegalAction
-from common.bellman.value import CardFacts, Potential, ValueOracle, ValueRegistry
+from common.algebra import Edge, WeightedEdge
+from common.options import LegalAction
+from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
 CARD = 900
@@ -200,7 +200,7 @@ def test_deterministic_function_families_use_the_same_equation(kind):
 
 def test_cgpy_provider_reconstructs_a_real_corpus_main_menu_without_ranking():
     from pathlib import Path
-    from common.bellman.engine import CgpyTransitionProvider
+    from common.engine import CgpyTransitionProvider
     from train.blunder.store import load_corrections
 
     repo = Path(__file__).resolve().parents[2]

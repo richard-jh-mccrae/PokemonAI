@@ -54,7 +54,7 @@ Decisions resolved (user ✓): mint BOTH keys; each encodes the **pierce overrid
 ### Seam 1 — Rock Inn is dead text vs non-ex attackers (the master seam) — AND vs effect-ignoring attacks
 - **Weakness:** Mysterious Rock Inn (and Sylveon's Safeguard) prevent damage only from opponent Pokémon **ex**. Two classes of attacker bypass it: (a) any **non-ex** body (damage fully unblocked); (b) **an effect-ignoring attack** — the "this attack's damage isn't affected by any effects on your opponent's Active Pokémon" clause treats the prevention as an effect on the Active and ignores it, so even an **ex** attacker lands full damage.
 - **Exploit:** Attack the wall with a non-ex body, OR with an `ignoresEffects` attack. Never commit a *plain* ex attacker head-on — it does literally nothing.
-- **Verified at source (engine + oracle):** `compute_active_damage` ([damage.py:110](../../src/common/strategy/damage.py)) — `if not attack.ignoresEffects and _prevented(...): return 0`. Confirmed end-to-end: **Nebula Beam → 210** into a Rock-Inn Crustle (id 345, `preventsDamageFrom='ex'`) and into Sylveon Safeguard; **Jetting Blow (plain ex) → 0**. The `ignoresEffects` pierce set: **Nebula Beam** (Mega Starmie ex, 210, also ignores W/R), **Spiky Hopper** (Mega Lopunny ex, 160 — the paper-meta counter), **Demolish** (Cornerstone Ogerpon ex, 140), **Twin Shotels** (Iron Crown ex, 50×2), **Destructive Drill** (Dudunsparce ex, 150), **Shred** (Koraidon, 130), **Sonic Edge** (Veluza, 110), **Surprise Pump** (Tatsugiri ex, 100). The Pilot already scores these correctly — no code change needed.
+- **Verified at source (engine):** attacks with `ignoresEffects` bypass the prevention. Confirmed end-to-end: **Nebula Beam → 210** into Rock-Inn Crustle and Sylveon Safeguard; **Jetting Blow (plain ex) → 0**. Bellman resolves this through engine transitions.
 - **Maps to:** `opp_ex_damage_immune = true` **(new key — minted)**, whose consumer contract ANDs the immunity with "no `ignoresEffects` attack payable this turn." Also drives `target: Dwebble fragile_preevo` for pure-ex decks with no non-ex / no-pierce answer.
 
 ### Seam 2 — Fire weakness ×2 (the clean KO route)
@@ -80,7 +80,7 @@ Decisions resolved (user ✓): mint BOTH keys; each encodes the **pierce overrid
 ### Seam 6 — Burst-cap inversion (Drednaw variant) — same pierce override
 - **Weakness:** Drednaw's Impervious Shell prevents any single hit **≥200** — so the OHKO burst you'd use to punch through the heal-wall is *fully wasted* on Drednaw (and it's Lightning-weak, not Fire).
 - **Exploit:** Vs the Drednaw variant, land the KO in the **140–199** window (multi-hit / sub-200 repeatable), never overkill — **unless** you have an `ignoresEffects` attack, which pierces the cap (Nebula Beam's 210 lands). The universal answer (non-ex + pre-evo snipe) still holds.
-- **Verified at source:** `compute_active_damage` ([damage.py:118-126](../../src/common/strategy/damage.py)) gates `preventsDamageAtLeast` behind `not attack.ignoresEffects`. Confirmed: **Sonic Ripper 220 (plain ex) → 0** into Drednaw (id 158, `preventsDamageAtLeast=200`); **Nebula Beam 210 → 210** (pierces cap).
+- **Verified at source:** native engine transitions confirm **Sonic Ripper 220 (plain ex) → 0** into Drednaw and **Nebula Beam 210 → 210** through the cap.
 - **Maps to:** `opp_caps_big_hits = true` **(new key — minted)**, consumer contract mirrors Seam 1's pierce override.
 
 ### Seam 7 — Slow, gust-less, disruption-less grind

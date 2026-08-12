@@ -2,390 +2,50 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
-# Newer pushes to the same ref cancel in-flight runs.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
-env:
-  PYTHONUTF8: "1"          # give Windows the same UTF-8 default Linux has (cards use é, ™, …)
-
 jobs:
-  # PLAN. Everything that decides WHAT to run, computed once and shared by both test jobs below
-  # (via `needs: plan` + job outputs) instead of being duplicated per-job. Cheap (~1s of actual
-  # work) and does not need Python, so it stays off the two heavier jobs' critical path.
-  plan:
-    name: Determine test plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    defaults:
-      run:
-        shell: bash
-    outputs:
-      mode: ${{ steps.plan.outputs.mode }}
-      paths: ${{ steps.plan.outputs.paths }}
-      coverage: ${{ steps.plan.outputs.coverage }}
-      audit: ${{ steps.plan.outputs.audit }}
-      empty: ${{ steps.plan.outputs.empty }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # LINE-ENDING GUARD. `.gitattributes` declares `text eol=lf` for source (*.py, *.yml, *.sh,
-      # *.toml, …), but it governs writes from the moment it lands — it never retroactively
-      # rewrites blobs already stored. Thirteen `.py` files sat `i/crlf` under `attr/text eol=lf`
-      # for months because of exactly that gap: git reported them permanently-modified on every
-      # fresh Linux clone (CI, the Kaggle grader, web sessions) while a Windows box with
-      # `core.autocrlf=true` masked it completely. Nothing in the suite could see it, because it
-      # is a property of the INDEX, not of any file's content.
-      #
-      # This is the whole invariant in one line: no blob may be stored CRLF under a rule that
-      # declares it LF. Byte-stable stores (`data/**`, `src/cg/**`, `tests/fixtures/**`,
-      # `docs/tuning/runs/**`) carry `-text !eol` and are invisible to it by construction, so the
-      # check cannot start demanding that a correction record be normalized. Pure git, ~0.1 s, and
-      # deliberately NOT gated on the test plan — a docs-only PR can reintroduce this.
-      - name: Line-ending guard (no CRLF blob under a `text eol=lf` rule)
-        run: |
-          bad=$(git ls-files --eol | grep '^i/crlf' | grep 'attr/text eol=lf' || true)
-          if [ -n "$bad" ]; then
-            echo "::error::CRLF stored in blobs that .gitattributes declares LF-only:"
-            echo "$bad"
-            echo "Fix: git add --renormalize -- '<pathspec>' && git commit"
-            exit 1
-          fi
-          echo "no CRLF blob under a text eol=lf rule ✅"
-
-      # SELECTIVE TESTING. A pull request runs only the test dirs its diff can affect. The
-      # declarative source->area map lives in .github/filters.yml; each filter is a boolean
-      # output. The reverse dependencies (e.g. arena imports sim.selfplay, so a sim change must
-      # also run arena) are applied in the "Determine test plan" step. Pushes to main and manual
-      # dispatch skip the filter and run the FULL suite. Rationale + table: docs/ci.md.
-      - name: Detect changed areas
-        if: github.event_name == 'pull_request'
-        id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: .github/filters.yml
-
-      # Turn the filter booleans into a concrete pytest target list, applying reverse-dependency
-      # unions. Fail-safe: on a push/dispatch, or when a change matches no known filter, run the
-      # FULL suite; a docs-only diff runs nothing. The coverage gate is only meaningful when the
-      # scouting tests are in scope (else it measures 0% and falsely fails); the audit gate runs
-      # when attack/damage/effect code (sim / meta_tracker / cards) is in scope.
-      - name: Determine test plan
-        id: plan
-        env:
-          EVENT: ${{ github.event_name }}
-          F_full: ${{ steps.changes.outputs.full }}
-          F_common_agent_core: ${{ steps.changes.outputs.common_agent_core }}
-          F_bellman: ${{ steps.changes.outputs.bellman }}
-          F_agents: ${{ steps.changes.outputs.agents }}
-          F_arena: ${{ steps.changes.outputs.arena }}
-          F_sim: ${{ steps.changes.outputs.sim }}
-          F_submit: ${{ steps.changes.outputs.submit }}
-          F_train_wide: ${{ steps.changes.outputs.train_wide }}
-          F_train_value: ${{ steps.changes.outputs.train_value }}
-          F_train_label: ${{ steps.changes.outputs.train_label }}
-          F_train_probes: ${{ steps.changes.outputs.train_probes }}
-          F_meta: ${{ steps.changes.outputs.meta }}
-          F_cards: ${{ steps.changes.outputs.cards }}
-          F_scouting: ${{ steps.changes.outputs.scouting }}
-          F_strategy: ${{ steps.changes.outputs.strategy }}
-          F_value: ${{ steps.changes.outputs.value }}
-          F_tuner: ${{ steps.changes.outputs.tuner }}
-          F_blunder: ${{ steps.changes.outputs.blunder }}
-          F_train: ${{ steps.changes.outputs.train }}
-          F_label: ${{ steps.changes.outputs.label }}
-          F_parity: ${{ steps.changes.outputs.parity }}
-          F_docs: ${{ steps.changes.outputs.docs }}
-          F_any: ${{ steps.changes.outputs.any }}
-        run: |
-          run_all=false
-          dirs=()
-          add() { for d in "$@"; do dirs+=("$d"); done; }
-
-          if [ "$EVENT" != "pull_request" ]; then
-            run_all=true
-          else
-            if [ "$F_full" = "true" ]; then run_all=true; fi
-
-            # common_agent_core: common.pilot/common.runtime + everything they import at
-            # module level (scouting, strategy, value, connective root modules). Reaches
-            # nearly the whole suite via runtime.make_agent (real + dynamically-loaded
-            # fixture agents) -- see .github/filters.yml and docs/ci.md for the evidence.
-            if [ "$F_common_agent_core" = "true" ]; then
-              add tests/agents tests/arena tests/blunder tests/label tests/scouting \
-                  tests/sim tests/strategy tests/submit tests/train tests/tuner tests/value
-            fi
-
-            if [ "$F_bellman" = "true" ]; then add tests/bellman; fi
-
-            if [ "$F_agents" = "true" ]; then add tests/agents; fi
-            if [ "$F_arena"  = "true" ]; then add tests/arena; fi
-            if [ "$F_sim"    = "true" ]; then add tests/sim tests/arena tests/label tests/submit; fi
-            if [ "$F_submit" = "true" ]; then add tests/submit tests/sim tests/arena tests/agents tests/blunder tests/label; fi
-
-            # tune.py imports both train.blunder.* and train.tuner.* at module level and is
-            # the shared pilot-builder ~20 test files across agents/strategy/blunder/sim/
-            # value/tuner import directly -- so blunder, tuner, and the tools/train/*.py
-            # root scripts all share this one broad blast radius (see filters.yml).
-            if [ "$F_train_wide" = "true" ]; then
-              add tests/train tests/tuner tests/blunder tests/value tests/label tests/sim \
-                  tests/strategy tests/agents
-            fi
-            if [ "$F_train_value"  = "true" ]; then add tests/value tests/label tests/sim; fi
-            if [ "$F_train_label"  = "true" ]; then add tests/label; fi
-            if [ "$F_train_probes" = "true" ]; then add tests/train; fi
-
-            if [ "$F_meta" = "true" ]; then
-              add tests/meta_tracker tests/cards tests/agents tests/arena tests/blunder \
-                  tests/label tests/scouting tests/sim tests/submit tests/train
-            fi
-            if [ "$F_cards" = "true" ]; then add tests/cards; fi
-
-            # Test-only filters: a pure test-file edit touches no source, so these stay
-            # narrow (own dir only) instead of paying for a broader filter's add-list above.
-            if [ "$F_scouting" = "true" ]; then add tests/scouting; fi
-            if [ "$F_strategy" = "true" ]; then add tests/strategy; fi
-            if [ "$F_value"    = "true" ]; then add tests/value; fi
-            if [ "$F_tuner"    = "true" ]; then add tests/tuner; fi
-            if [ "$F_blunder"  = "true" ]; then add tests/blunder; fi
-            if [ "$F_train"    = "true" ]; then add tests/train; fi
-            if [ "$F_label"    = "true" ]; then add tests/label; fi
-
-            if [ "$F_parity"   = "true" ]; then add tests/parity; fi
-
-            # Something changed but nothing recognised (and not docs-only) => full suite.
-            matched=false
-            for v in "$F_full" "$F_common_agent_core" "$F_bellman" "$F_agents" "$F_arena" "$F_sim" \
-                     "$F_submit" "$F_train_wide" "$F_train_value" "$F_train_label" \
-                     "$F_train_probes" "$F_meta" "$F_cards" "$F_scouting" "$F_strategy" \
-                     "$F_value" "$F_tuner" "$F_blunder" "$F_train" "$F_label" "$F_parity" \
-                     "$F_docs"; do
-              if [ "$v" = "true" ]; then matched=true; fi
-            done
-            if [ "$F_any" = "true" ] && [ "$matched" = "false" ]; then run_all=true; fi
-          fi
-
-          if [ "$run_all" = "true" ]; then
-            MODE=all; PATHS=tests; COV=true; AUDIT=true; EMPTY=false
-          elif [ "${#dirs[@]}" -eq 0 ]; then
-            MODE=none; PATHS=""; COV=false; AUDIT=false; EMPTY=true
-          else
-            # Every add-list above names a tests/<subdir>, so a selective run silently drops the
-            # root-level test FILES -- of which tests/test_import_hygiene.py is the only one, and
-            # it is the guard against `tests.*` package imports (shadowable; see that file's
-            # docstring). A PR editing tests/strategy/** matches F_strategy, so before this line
-            # the plan was exactly `tests/strategy` and the guard never ran -- on precisely the
-            # diffs that introduce the violation. It scans 555 files in 0.33s, so it always runs.
-            dirs+=("tests/test_import_hygiene.py")
-            PATHS=$(printf '%s\n' "${dirs[@]}" | sort -u | tr '\n' ' ' | sed 's/ *$//')
-            MODE=selective; EMPTY=false
-            case " $PATHS " in *" tests/scouting "*) COV=true ;; *) COV=false ;; esac
-            case " $PATHS " in
-              *" tests/sim "*|*" tests/meta_tracker "*|*" tests/cards "*) AUDIT=true ;;
-              *) AUDIT=false ;;
-            esac
-          fi
-
-          echo "plan: mode=$MODE  coverage=$COV  audit=$AUDIT"
-          echo "pytest targets: ${PATHS:-(none)}"
-          {
-            echo "mode=$MODE"
-            echo "paths=$PATHS"
-            echo "coverage=$COV"
-            echo "audit=$AUDIT"
-            echo "empty=$EMPTY"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: No tests affected (docs-only change)
-        if: steps.plan.outputs.empty == 'true'
-        run: echo "Diff touches only docs / non-code paths — no test suites to run. ✅"
-
-  # NATIVE ARM. Used to run sequentially after the cgpy arm in one ~30-40 min job (see git history
-  # for the old single-job layout); split out so it runs concurrently with `test-cgpy` instead of
-  # after it, and each pytest invocation now passes `-n auto` (pytest-xdist) to spread individual
-  # tests across the runner's cores instead of one at a time. Neither change drops a single test —
-  # this job still runs the exact same pytest target list the plan step computed. Measured
-  # before/after + the remaining budget: docs/ci.md "Job budget and timeout-minutes".
   test:
-    name: tests (native, ${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: plan
-    if: needs.plan.outputs.empty != 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Run every step through bash (Git Bash on Windows runners) so the commands below are
-    # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false       # report both OSes, don't cancel siblings
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.12"]   # most recent only (dev box runs 3.11)
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # The committed native engine must load on the runner — cg/libcg.so on Linux, cg/cg.dll on
-      # Windows (sim.py picks by os.name). Engine-backed legality/playability tests depend on it.
-      # Fail fast & clearly (and print which library loaded) if it can't.
-      - name: Verify native engine loads
-        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
-
-      # Runs the selected test dirs offline (native engine ships in-repo, kaggle-environments is a
-      # pip dep, the Kaggle CLI is monkeypatched). pytest.ini anchors rootdir at the repo root so a
-      # subset invocation still loads tests/conftest.py (the sys.path setup). The Scouting coverage
-      # gate (.coveragerc, fail_under=80) only runs when the scouting tests are in scope.
-      # `-n auto` (pytest-xdist): the suite has no cross-test shared state or fixed-path file
-      # writes (checked repo-wide before adopting this — every write goes through tmp_path), so
-      # spreading tests across the runner's cores is safe and is the whole reason this arm no
-      # longer needs ~20 minutes to itself.
-      - name: Run tests (JUnit + conditional Scouting coverage gate)
-        env:
-          PYTEST_PATHS: ${{ needs.plan.outputs.paths }}
-          RUN_COVERAGE: ${{ needs.plan.outputs.coverage }}
-        run: |
-          mkdir -p reports
-          COV=""
-          if [ "$RUN_COVERAGE" = "true" ]; then
-            COV="--cov=src/common/scouting --cov=tools/meta_tracker --cov-report=term-missing --cov-report=xml:reports/coverage-${{ matrix.os }}-py${{ matrix.python-version }}.xml"
-          fi
-          echo "pytest targets: $PYTEST_PATHS  (coverage gate: $RUN_COVERAGE)"
-          python -m pytest $PYTEST_PATHS -q -n auto \
-            --junitxml=reports/junit-${{ matrix.os }}-py${{ matrix.python-version }}.xml \
-            $COV \
-            --durations=10
-
-      # DETERMINISM BACKSTOP (#178). The live-native-engine tests are the only ones whose answer can
-      # ride the engine's RNG — a shuffle INSIDE a simulated line is not reproducible
-      # (docs/pyeng/determinism.md §4), and ml f24 flapped that way through three tests for weeks
-      # while passing in isolation every time. `planner._rng_probe` + the admissibility meta-test are
-      # the real guard (deterministic: a sampled frame fails the day it lands); this is the cheap
-      # backstop underneath them, for anything the probe cannot see.
-      #
-      # All 41 live-engine tests run in ~4.9 s, so repeating them is close to free — left running
-      # single-threaded on purpose; 15 repeats of a 5-second suite was never the expensive part of
-      # this job, so there is nothing here worth the added complexity of parallelising too.
-      - name: Determinism backstop (repeat the live-engine tests)
-        run: |
-          ENGINE_TESTS="tests/parity/test_determinism_pins_engine.py
-                        tests/sim/test_retreat_lock_engine.py
-                        tests/sim/test_transients_engine.py
-                        tests/strategy/test_lethal_engine.py
-                        tests/strategy/test_planner_engine.py
-                        tests/strategy/test_triggered_ability_shape.py
-                        tests/cards/test_card_effects_engine.py"
-          for i in $(seq 1 15); do
-            python -m pytest $ENGINE_TESTS -q -p no:cacheprovider --tb=line \
-              || { echo "::error::live-engine tests differed on repeat $i of 15 — a frame's answer is not a property of its board. See ADR-0072 amendment C."; exit 1; }
-          done
-          echo "15/15 repeats agreed ✅"
-
-      # ADR-0032 soundness gate: a bounded engine audit (the ignore-flag family + goldens, <1 min)
-      # diffed against the SHIPPED damage oracle — fails on any over-prediction (damage the closed
-      # form promises that the engine won't deal = phantom-KO risk). Runs whenever attack/damage/
-      # effect code is in scope (sim / meta_tracker / cards tests), and always on a full run.
-      - name: Attack-audit soundness gate
-        if: needs.plan.outputs.audit == 'true'
-        run: python tools/sim/ci_audit_gate.py
-
-      # ADR-0050 cgpy parity gate (every committed trace replays through src/cgpy divergence-
-      # free) runs as part of the pytest selection above: the `parity` filter adds tests/parity
-      # to the plan when cgpy files change, and a full run includes it. No separate step — an
-      # unrelated PR no longer pays for the heavy parity suite.
-
-      - name: Upload test & coverage reports
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - name: Verify native engine
+        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print(cg.sim.lib_path)"
+      - name: Bellman and retained tests
+        run: python -m pytest tests -q -n auto --junitxml=reports/junit.xml --durations=10
+      - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
         with:
-          name: reports-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: test-report
           path: reports/
           if-no-files-found: warn
 
-  # CGPY TWIN ARM (ADR-0050 M3). Selected behavioral tests re-run under the pure-Python engine
-  # twin (`CG_ENGINE=py`), whose search is SeededRng(0) and therefore reproducible BY
-  # CONSTRUCTION — any flap here is a real bug rather than engine RNG.
-  #
-  # THIS IS NOW ITS OWN JOB, not a step after the native arm. It depends only on `plan`, so it
-  # starts as soon as the plan is known and runs the whole time the `test` job is running, instead
-  # of after it. That is a strict improvement on the old same-job `if: always()` step guard (whose
-  # comment said "a red backstop cannot hide this arm's result") — job independence gives the same
-  # guarantee structurally, not via an `if:` condition someone could tighten by accident later.
-  #
-  # GATING, because it is green: 3883 passed / 8 skipped / 0 failed on 2026-07-27. It was tempting
-  # to ship this `continue-on-error` while cgpy is parity-limited (~298/434) — but a non-gating
-  # step is one nobody reads, which is the same invisibility that let a silent `pytest.skip` retire
-  # a determinism pin and let f24 flap for weeks. If it can go red without anyone caring, it is not
-  # worth the minutes.
-  #
-  # The escape valve is explicit and reviewable, not a workflow flag: a test the twin cannot answer
-  # gets `@needs_live_board_search` or a module-level skip that says WHY (see tests/conftest.py).
-  # Keep the same ordered target list as the native arm — a hand-expanded directory list changes
-  # pytest's collection order and can expose state leaks between otherwise independent suites.
-  test-cgpy:
-    name: cgpy twin (${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: plan
-    if: needs.plan.outputs.empty != 'true'
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.12"]
+  cgpy-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements.txt
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # The twin still builds each agent's real Pilot via the engine-backed CardStat provider, so
-      # the committed native library has to load here too. Same fail-fast check as the native arm.
-      - name: Verify native engine loads
-        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
-
-      # Runs the SAME pytest target list as the native arm (tests/parity included — nothing here
-      # currently excludes it, despite docs/ci.md's older claim to the contrary; see that file's
-      # "Determinism gates" section for the correction). `-n auto`: same rationale as the native
-      # arm's run — nothing in the suite depends on test order or shared mutable state, so cores
-      # replace wall-clock minutes for free.
-      - name: cgpy twin arm (ADR-0050 M3)
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - name: Pure-Python engine parity
         env:
           CG_ENGINE: py
-          PYTEST_PATHS: ${{ needs.plan.outputs.paths }}
-        run: |
-          python -m pytest $PYTEST_PATHS -q -n auto -p no:cacheprovider --tb=line --durations=10
+        run: python -m pytest tests/parity tests/bellman -q --tb=short

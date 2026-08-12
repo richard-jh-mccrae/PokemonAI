@@ -1,5 +1,5 @@
 """`CardFunctions` wraps the shipped `card_functions.json`. **Partial and additive**: an unknown card
-has no tags and a missing file degrades to empty, so the table can grow with no Pilot change."""
+has no tags and a missing file degrades to empty, so the table can grow without runtime changes."""
 from __future__ import annotations
 
 import json

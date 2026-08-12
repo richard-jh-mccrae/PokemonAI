@@ -42,17 +42,9 @@ def summary(manifest: dict) -> dict:
     """The compact state summary carried in the history row for quick diffing/charting."""
     caps = manifest["capabilities"]
     return {
-        "tier": caps["tier"],
-        "general_hyps": len(manifest["general_strategy"]["hypotheses"]),
-        "deck_hyps": len(manifest["strategy"]["hypotheses"]),
+        "system": manifest["system"],
         "deck_size": manifest["deck"]["size"],
-        "posture": caps["posture"]["enabled"],
-        "overrides": caps["overrides"]["count"],
-        "composer": {
-            "status": manifest["composer"]["status"],
-            "bespoke_equations": [row["id"] for row in manifest["composer"]["bespoke_equations"]],
-            "state_value_families": [row["id"] for row in manifest["composer"]["state_value_families"]],
-            "terminal_equations": [row["id"] for row in manifest["composer"]["terminal_equations"]],
-            "differencing_mechanics": [row["id"] for row in manifest["composer"]["differencing_mechanics"]],
-        },
+        "roles": len(manifest["strategy"]["roles"]),
+        "lines": len(manifest["strategy"]["lines"]),
+        "scouting": caps["scouting"],
     }

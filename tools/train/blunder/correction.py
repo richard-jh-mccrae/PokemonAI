@@ -165,7 +165,7 @@ class Correction:
     alternatives_why: str = ""       # the ruling, verbatim
     provenance: str = "human"   # who TAGGED this: "human" | "machine" (ADR-0053 WP3). Orthogonal to
                                 # `source` (whose GAME). On an identity_key collision, human wins.
-    obs: dict | None = None     # agent observation (int-enum) so Tuner can replay Pilot
+    obs: dict | None = None     # agent observation (int-enum) for Bellman replay
     agent_build: str | None = None  # submission-folder stem of build that played (traceability)
     built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
     live_trace: dict | None = None  # live Decision Telemetry this game emitted (ADR-0019), incl.
