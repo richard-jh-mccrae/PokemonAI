@@ -18,7 +18,9 @@ The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
 - `value.py` and `potential.py`: portable card Worth and successor-state potential;
-- `native_engine.py`: production Bellman branches through native `cg` search sessions;
+- `native_engine.py`: production Bellman branches through native `cg` search sessions; unknown
+  zones use low-discrepancy identity spacing so the deployment world cannot inherit numeric-id
+  ordering as fake draw knowledge;
 - `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
 - `effects.py`, `fetch.py`, and `draws.py`: effect data and pure chance-window mechanics;
 - `solver.py`: reference and bounded production recursion;
@@ -27,3 +29,7 @@ The flattened Bellman core owns the decision model:
 
 Neutral retained services are Scouting, card/stat providers, card-function data, own-deck tracking,
 option equivalence, telemetry, and board-card traversal.
+
+Information has no authored bonus. Its value is the Bellman quantity
+`E[max continuation after reveal]`; deterministic commitments, chance, and reveal choices all use
+the same successor-state utility.

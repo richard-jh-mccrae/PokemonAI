@@ -280,7 +280,8 @@ class ProductionSolver(ReferenceSolver):
     """Bounded search over the reference transition/value contracts.
 
     There is no depth horizon and no second policy. Width/state capacity are explicit. At a capped
-    state where End is legal, exact-zero End is a valid lower bound; mandatory states fail closed.
+    state where End is legal, exact-zero End is a valid lower bound. A mandatory selection is not
+    an optional action menu, so its legal choices are never discarded solely by the width bound.
     """
 
     def __init__(self, provider: TransitionProvider, oracle: ValueOracle, *, model_factory=None,
@@ -338,14 +339,15 @@ class ProductionSolver(ReferenceSolver):
                      else self.production_limits.effect_choice_width)
             non_end_count = sum(action.identity.kind != "end" for action in actions)
             if non_end_count > width:
-                self._active.remove(key)
                 end = next((action for action in actions if action.identity.kind == "end"), None)
                 if end is not None:
+                    self._active.remove(key)
                     lower = Evaluation(0.0, Ledger(), False,
                                        "production width cap: End lower bound")
                     return StateEvaluation(0.0, end, lower, ((end, lower),))
-                incomplete = Evaluation(-math.inf, Ledger(), False, "production width cap")
-                return StateEvaluation(-math.inf, None, incomplete, ())
+                # A forced effect selection has no legal End action.  Applying the optional-menu
+                # beam here would manufacture an illegal "no decision" outcome.  Evaluate its
+                # declared actions with the same Bellman backup; the node cap still bounds work.
 
         actor = self.provider.actor(state)
         if key == self._root_key:

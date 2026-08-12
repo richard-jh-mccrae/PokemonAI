@@ -1,14 +1,21 @@
 # Continuous integration
 
-`.github/workflows/ci.yml` has two Linux/Python 3.12 jobs:
+`.github/workflows/ci.yml` first applies `.github/filters.yml`, then runs only the affected
+independent jobs in parallel: tools, correction contracts, source, cgpy, documentation, and
+developed-agent mirrors. Unknown non-documentation paths fail closed to all jobs; pushes to `main`
+and manual dispatches run all jobs.
 
-1. the full retained test suite against the native engine;
-2. Bellman and parity tests with the pure-Python cgpy engine selected.
+Correction contracts also run whenever `src/common/` or any `src/agents/` implementation changes.
+
+Each developed agent gets an entry in the mirror matrix. The current entry, `mega_starmie`, plays
+ten serial, seat-balanced mirrors. Each Match runs to completion, then its wall time is measured; a
+crash or any completed Match above five minutes fails the job.
 
 Run the same primary check locally with:
 
 ```bash
 python -m pytest tests -q
+python tools/sim/mirror_gate.py mega_starmie --games 10 --max-match-seconds 300
 ```
 
 The former decider, leaf, tuner, composer, and value-stack gates were deleted with those systems.

@@ -145,6 +145,24 @@ def test_budget_dependent_lower_bound_is_not_transposition_cached():
     assert exact.value == pytest.approx(0.2)
 
 
+def test_mandatory_choice_ignores_optional_menu_width_cap():
+    """A forced selection must return a legal Bellman action, never crash on a width cap."""
+    root = _state("mandatory")
+    low, high = _state("low", board=0.1), _state("high", board=0.4)
+    choose_low, choose_high, end = _action("choose_low", 0), _action("choose_high", 1), _action("end")
+    decision = ProductionSolver(
+        Graph(
+            {"mandatory": (choose_low, choose_high), "low": (end,), "high": (end,)},
+            {("mandatory", "choose_low"): Deterministic(low),
+             ("mandatory", "choose_high"): Deterministic(high)},
+        ),
+        _oracle(), limits=ProductionLimits(max_nodes=20, effect_choice_width=1),
+    ).decide(root)
+
+    assert decision.chosen == (1,)
+    assert decision.action.kind == "choose_high"
+
+
 def test_opponent_min_and_known_chance_are_recursive_nodes():
     root = _state("root")
     good, bad = _state("leaf", board=0.4), _state("leaf2", board=-0.1)
@@ -185,6 +203,37 @@ def test_reveal_choice_uses_remaining_turn_value_not_static_card_precedence():
     assert decision.action.kind == "play"
     assert decision.value == pytest.approx(0.50)
     assert decision.diagnostics["root"].stopped_reason == "expected value after revealed choice"
+
+
+def test_information_before_commitment_wins_by_expected_continuation_value():
+    """E[max continuation | reveal] beats committing before the same uncertainty resolves."""
+    root = _state("root")
+    response_a = _state("response-a", board=0.8)
+    response_b = _state("response-b", board=0.8)
+    miss = _state("miss")
+    observe, commit, end = _action("play"), _action("attach"), _action("end", 1)
+    graph = Graph(
+        {"root": (observe, commit, end), "response-a": (end,),
+         "response-b": (end,), "miss": (end,)},
+        {("root", "play"): RevealChoice(
+            Actor.OURS,
+            (Edge("response-a", Deterministic(response_a)),
+             Edge("response-b", Deterministic(response_b))),
+            (RevealOutcome(0.5, ("response-a",)),
+             RevealOutcome(0.5, ("response-b",))),
+         ),
+         ("root", "attach"): Chance((
+             WeightedEdge(0.5, "commit happened to fit", Deterministic(response_a)),
+             WeightedEdge(0.5, "commit did not fit", Deterministic(miss)),
+         ))},
+    )
+
+    reference = ReferenceSolver(graph, _oracle()).decide(root)
+    production = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=20)).decide(root)
+
+    assert reference.action.kind == production.action.kind == "play"
+    assert reference.value == production.value == pytest.approx(0.8)
 
 
 @pytest.mark.parametrize("kind", ["attach", "evolve", "retreat", "heal", "fetch", "gust", "play"])

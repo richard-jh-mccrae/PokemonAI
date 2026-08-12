@@ -14,6 +14,7 @@ from common.information import (
     BellmanDeckProfile, OutcomeGroup, draw_outcomes, hypergeometric_classes, opponent_belief,
 )
 from common.options import LegalAction
+from common.native_engine import _stratified_order
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
@@ -86,6 +87,26 @@ def test_wide_draw_support_uses_mass_strata_not_seeded_rare_outcomes():
     assert sum(outcome.probability for outcome in outcomes) == pytest.approx(1.0)
     assert represented_rare_count == pytest.approx(expected_rare_count, abs=1 / 16)
     assert all(not outcome.exact for outcome in outcomes)
+
+
+def test_native_single_world_hidden_zone_is_not_grouped_by_numeric_identity():
+    """One deployed quadrature world must represent mixture, not arbitrary card-id ordering."""
+    grouped = (101,) * 12 + (202,) * 8 + (303,) * 4 + (404,)
+
+    ordered = _stratified_order(grouped, world_index=0, world_count=1)
+
+    assert Counter(ordered) == Counter(grouped)
+    assert ordered != list(grouped)
+    assert len(set(ordered[:7])) > 1
+    assert len(set(ordered[-7:])) > 1
+
+
+def test_native_belief_worlds_use_distinct_equal_strata_without_changing_mass():
+    cards = (101,) * 12 + (202,) * 8 + (303,) * 4 + (404,)
+    worlds = [_stratified_order(cards, index, 4) for index in range(4)]
+
+    assert len({tuple(world) for world in worlds}) == 4
+    assert all(Counter(world) == Counter(cards) for world in worlds)
 
 
 def test_scouting_adapter_conserves_unknown_mass_and_never_selects():

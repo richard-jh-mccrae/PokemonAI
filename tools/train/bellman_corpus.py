@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import option_equivalence  # noqa: E402
+from common.engine import CgpyTransitionProvider  # noqa: E402 - offline diagnostic only
 from common.runtime import build_runtime  # noqa: E402
 from common.telemetry import to_record  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
@@ -39,7 +40,9 @@ def _build_runtime():
     spec.loader.exec_module(module)
     deck = [int(value) for value in (agent_dir / "deck.csv").read_text().splitlines()
             if value.strip()]
-    return build_runtime(module.STRATEGY, deck)
+    # The correction corpus contains historical observation fixtures.  Replay them only with the
+    # offline cgpy diagnostic provider; the shipped Kaggle runtime always uses native cg.
+    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
 
 
 def _satisfies_human(chosen, correct, equivalence) -> bool:

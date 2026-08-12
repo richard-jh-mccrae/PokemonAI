@@ -11,11 +11,16 @@ from .state import DecisionState
 from common.strategy.context import _MAIN, _NO, _YES
 
 
-NATIVE_BELIEF_WORLD_COUNT = 8
+# One authoritative native world is the deployed latency budget.  Additional worlds are an
+# injectable offline diagnostic seam; multiplying complete full-turn searches in a live agent
+# turns one legal decision into minutes of native search and prevents a match from completing.
+NATIVE_BELIEF_WORLD_COUNT = 1
 MANUAL_COIN_CONTEXT = 46
 COIN_BRANCH_PROBABILITY = 0.5
 PROBABILITY_TOTAL = 1.0
 MINIMUM_CARD_ID = 1
+PHASE_DIGEST_BYTES = 8
+PHASE_DENOMINATOR = float(1 << (PHASE_DIGEST_BYTES * 8))
 
 
 @dataclass(frozen=True)
@@ -44,11 +49,32 @@ def _fill(cards, count: int, fallback) -> tuple[int, ...]:
 
 
 def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int) -> list[int]:
-    """Rotate physical cards through equal strata; identity/value never orders a branch."""
+    """Low-discrepancy hidden-zone order, then one midpoint from each world stratum.
+
+    A grouped-by-id order makes a one-world deployment treat arbitrary numeric ids as draw
+    probability.  Space every identity's physical copies across the unit interval with a stable
+    phase, then rotate worlds through equal-mass strata.  No Worth, role, function, effect, or card
+    name enters the construction.
+    """
     if not cards:
         return []
-    offset = (int(world_index) * len(cards)) // max(1, int(world_count))
-    return list(cards[offset:] + cards[:offset])
+    counts = Counter(int(card_id) for card_id in cards)
+    positioned = []
+    for card_id, count in counts.items():
+        digest = hashlib.blake2b(
+            str(card_id).encode("ascii"), digest_size=PHASE_DIGEST_BYTES,
+            person=b"bellman-zone",
+        ).digest()
+        phase = int.from_bytes(digest, "big") / PHASE_DENOMINATOR
+        positioned.extend(
+            ((copy_index + phase) / count, phase, card_id)
+            for copy_index in range(count)
+        )
+    balanced = tuple(card_id for _position, _phase, card_id in sorted(positioned))
+    worlds = max(1, int(world_count))
+    index = int(world_index) % worlds
+    offset = ((2 * index + 1) * len(balanced)) // (2 * worlds)
+    return list(balanced[offset:] + balanced[:offset])
 
 
 def _actor_seat(observation: dict, root_seat: int) -> int:

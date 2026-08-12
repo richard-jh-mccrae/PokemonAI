@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -9,43 +10,175 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  test:
+  plan:
+    name: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      tools: ${{ steps.plan.outputs.tools }}
+      corrections: ${{ steps.plan.outputs.corrections }}
+      src: ${{ steps.plan.outputs.src }}
+      cgpy: ${{ steps.plan.outputs.cgpy }}
+      docs: ${{ steps.plan.outputs.docs }}
+      mirrors: ${{ steps.plan.outputs.mirrors }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject CRLF blobs declared LF
+        shell: bash
+        run: |
+          bad=$(git ls-files --eol | grep '^i/crlf' | grep 'attr/text eol=lf' || true)
+          test -z "$bad" || { echo "$bad"; exit 1; }
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: .github/filters.yml
+      - id: plan
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          F_GLOBAL: ${{ steps.changes.outputs.global }}
+          F_RUNTIME: ${{ steps.changes.outputs.runtime }}
+          F_SRC: ${{ steps.changes.outputs.src }}
+          F_AGENTS: ${{ steps.changes.outputs.agents }}
+          F_TOOLS: ${{ steps.changes.outputs.tools }}
+          F_CORRECTIONS: ${{ steps.changes.outputs.corrections }}
+          F_CGPY: ${{ steps.changes.outputs.cgpy }}
+          F_MEGA_STARMIE: ${{ steps.changes.outputs.mega_starmie }}
+          F_DOCS: ${{ steps.changes.outputs.docs }}
+          F_OPERATIONAL_DATA: ${{ steps.changes.outputs.operational_data }}
+          F_AUTHORING: ${{ steps.changes.outputs.authoring }}
+          F_ANY: ${{ steps.changes.outputs.any }}
+        run: |
+          tools=false; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
+          enable_all() { tools=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
+          if [ "$EVENT" != 'pull_request' ] || [ "$F_GLOBAL" = true ]; then
+            enable_all
+          else
+            [ "$F_TOOLS" = true ] && tools=true
+            [ "$F_CORRECTIONS" = true ] && corrections=true
+            [ "$F_SRC" = true ] && src=true
+            [ "$F_AGENTS" = true ] && corrections=true
+            [ "$F_CGPY" = true ] && cgpy=true
+            [ "$F_DOCS" = true ] && docs=true
+            if [ "$F_RUNTIME" = true ]; then
+              tools=true; corrections=true; src=true; cgpy=true; mirrors='["mega_starmie"]'
+            fi
+            if [ "$F_MEGA_STARMIE" = true ]; then
+              tools=true; src=true; mirrors='["mega_starmie"]'
+            fi
+            known=false
+            for value in "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOLS" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
+              [ "$value" = true ] && known=true
+            done
+            [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
+          fi
+          printf 'tools=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tools" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
+
+  test-tools:
+    name: tests / tools
+    needs: plan
+    if: needs.plan.outputs.tools == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements.txt
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt
-      - name: Verify native engine
-        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print(cg.sim.lib_path)"
-      - name: Bellman and retained tests
-        run: python -m pytest tests -q -n auto --junitxml=reports/junit.xml --durations=10
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: test-report
-          path: reports/
-          if-no-files-found: warn
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - run: python -m pytest tests/arena tests/label tests/meta_tracker tests/sim tests/submit tests/train tests/tuner -q -n auto --tb=short
 
-  cgpy-parity:
+  test-corrections:
+    name: tests / corrections
+    needs: plan
+    if: needs.plan.outputs.corrections == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Run correction contracts
+        shell: bash
+        run: |
+          targets=(tests/blunder)
+          [ -d tests/corrections ] && targets+=(tests/corrections)
+          python -m pytest "${targets[@]}" -q -n auto --tb=short
+
+  test-src:
+    name: tests / src
+    needs: plan
+    if: needs.plan.outputs.src == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - run: python -m pytest tests/agents tests/bellman tests/cards tests/common tests/parity tests/scouting tests/strategy tests/value tests/test_import_hygiene.py -q -n auto --tb=short
+
+  test-cgpy:
+    name: tests / cgpy
+    needs: plan
+    if: needs.plan.outputs.cgpy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CG_ENGINE: py
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements.txt
-      - run: python -m pip install --upgrade pip
-      - run: pip install -r requirements.txt
-      - name: Pure-Python engine parity
-        env:
-          CG_ENGINE: py
-        run: python -m pytest tests/parity tests/bellman -q --tb=short
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - run: python -m pytest tests/parity tests/bellman -q -n auto --tb=short
+
+  test-docs:
+    name: tests / docs
+    needs: plan
+    if: needs.plan.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - run: python -m pytest tests/test_doc_links_resolve.py tests/test_line_endings_policy.py -q --tb=short
+
+  agent-mirror:
+    name: mirror / ${{ matrix.agent }}
+    needs: plan
+    if: needs.plan.outputs.mirrors != '[]'
+    runs-on: ubuntu-latest
+    # A completed Match is assessed after it returns; this is only GitHub's maximum job safeguard.
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(needs.plan.outputs.mirrors) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Ten-game mirror; every Match <= five minutes
+        run: python tools/sim/mirror_gate.py ${{ matrix.agent }} --games 10 --max-match-seconds 300

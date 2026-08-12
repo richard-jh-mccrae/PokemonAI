@@ -15,6 +15,7 @@ from submit.history import append_history, read_history
 
 COMPETITION = "pokemon-tcg-ai-battle"   # the Simulation track — agent's graded slug (ADR-0019)
 DEFAULT_REPORTS = Path(__file__).resolve().parents[2] / "reports"
+DEFAULT_KAGGLE_UPLOAD_TIMEOUT_SECONDS = 120
 
 
 def compose_message(row: dict) -> str:
@@ -39,8 +40,26 @@ def _default_check(zip_path: Path, name: str):
 
 def _default_upload(zip_path: Path, message: str) -> None:
     import subprocess
-    subprocess.run(["kaggle", "competitions", "submit", COMPETITION,
-                    "-f", str(zip_path), "-m", message], check=True)
+
+    print(f"artifact check passed; uploading {zip_path.name} to {COMPETITION}...", flush=True)
+    try:
+        subprocess.run(
+            ["kaggle", "competitions", "submit", COMPETITION,
+             "-f", str(zip_path), "-m", message],
+            check=True,
+            timeout=DEFAULT_KAGGLE_UPLOAD_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit("Kaggle CLI is unavailable; install it and authenticate with `kaggle auth login`.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise SystemExit(
+            f"Kaggle upload exceeded {DEFAULT_KAGGLE_UPLOAD_TIMEOUT_SECONDS}s; "
+            "upload was not recorded locally. Check Kaggle before retrying."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(
+            f"Kaggle upload failed (exit {exc.returncode}); submission was not recorded locally."
+        ) from exc
 
 
 def _resolve(rows: list[dict], build_id: int | None) -> dict:
@@ -74,6 +93,7 @@ def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILD
         raise SystemExit(f"Agent Check failed at stage '{report.failed_stage}'{detail}; not submitting")
     row["message"] = compose_message(row)
     (upload_fn or _default_upload)(zip_path, row["message"])
+    print("Kaggle accepted upload; recording local submission history...", flush=True)
     row["submitted_at"] = (when or datetime.now()).isoformat(timespec="seconds")
     append_history(history, row)
     return row

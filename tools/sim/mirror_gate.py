@@ -6,6 +6,9 @@ Usage:
 from __future__ import annotations
 
 import sys
+import os
+import tempfile
+import zipfile
 from pathlib import Path
 from time import monotonic
 
@@ -27,40 +30,59 @@ def assert_within_limit(seconds: list[float], limit: float) -> None:
             f"mirror max match time {stats['max']:.1f}s exceeds {limit:.1f}s")
 
 
+def _one_match(bundle: Path, *, a_seat: int) -> dict:
+    """Worker entry point: one isolated engine plus two isolated agent servers."""
+    from sim.battle import AgentServer, _play_seated, read_deck
+
+    bundle = Path(bundle)
+    if not (bundle / "main.py").is_file():
+        raise ValueError(f"no bundle at {bundle}")
+    deck = read_deck(bundle)
+    # Do not add src/: the Bundle must be the only agent runtime available to each server.
+    # A caller may have selected the offline parity engine; deployable mirrors must not.
+    os.environ.pop("CG_ENGINE", None)
+    servers = [AgentServer(bundle), AgentServer(bundle)]
+    try:
+        result = _play_seated(*servers, deck, deck, a_seat)
+    finally:
+        for server in servers:
+            server.close()
+    return {"a_seat": a_seat, "winner": result.winner, "crashed": list(result.crashed)}
+
+
 def run_mirror(agent: str, *, games: int, max_match_seconds: float,
                agents_root: Path, clock=monotonic) -> dict[str, float]:
-    """Run ``games`` source-agent mirrors serially so each returned duration is one Match."""
+    """Run serial deployable-agent mirrors; measure each completed Match wall time."""
     if games <= 0:
         raise ValueError("games must be positive")
     if max_match_seconds <= 0:
         raise ValueError("max_match_seconds must be positive")
 
-    from sim.battle import AgentServer, _play_seated, read_deck, seat_plan
+    from sim.battle import seat_plan
+    from submit.package import package
 
     agent_dir = Path(agents_root) / agent
     if not (agent_dir / "main.py").is_file():
         raise ValueError(f"no agent at {agent_dir}")
-    deck = read_deck(agent_dir)
-    servers = [AgentServer(agent_dir, [REPO / "src"]), AgentServer(agent_dir, [REPO / "src"])]
     durations: list[float] = []
-    try:
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp)
+        archive = package(agent, work_dir / "dist", agents_root=agents_root)
+        bundle = work_dir / "bundle"
+        with zipfile.ZipFile(archive) as zipped:
+            zipped.extractall(bundle)
+        if (bundle / "cgpy").exists():
+            raise RuntimeError("mirror bundle contains offline-only cgpy")
         for index, a_seat in enumerate(seat_plan(games), start=1):
             started = clock()
-            result = _play_seated(*servers, deck, deck, a_seat)
+            result = _one_match(bundle, a_seat=a_seat)
             elapsed = clock() - started
             durations.append(elapsed)
-            if result.crashed:
-                raise RuntimeError(f"mirror match {index} crashed at contestant seat(s) {result.crashed}")
+            if result["crashed"]:
+                raise RuntimeError(f"mirror match {index} crashed at contestant seat(s) {result['crashed']}")
             if elapsed > max_match_seconds:
                 raise RuntimeError(
                     f"mirror match {index} took {elapsed:.1f}s; limit is {max_match_seconds:.1f}s")
-            for position, server in enumerate(servers):
-                if not server.alive():
-                    server.close()
-                    servers[position] = AgentServer(agent_dir, [REPO / "src"])
-    finally:
-        for server in servers:
-            server.close()
     assert_within_limit(durations, max_match_seconds)
     return summarize(durations)
 

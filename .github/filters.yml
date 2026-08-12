@@ -1,0 +1,84 @@
+# Strict CI ownership map.  A pull request runs only the independent job(s) whose
+# implementation or tests it changes; an unrecognised non-doc path fails closed in ci.yml.
+
+global:
+  - '.github/**'
+  - 'requirements.txt'
+  - 'pytest.ini'
+  - '.coveragerc'
+  - '.gitattributes'
+  - 'tests/conftest.py'
+  - 'tests/fixtures/**'
+
+# Production runtime: shared code can affect all test groups and every developed agent mirror.
+runtime:
+  - 'src/common/**'
+  - 'src/cg/**'
+
+# Source-only tests.  `runtime` is deliberately separate above because its fan-out is wider.
+src:
+  - 'src/**'
+  - 'tests/agents/**'
+  - 'tests/bellman/**'
+  - 'tests/cards/**'
+  - 'tests/common/**'
+  - 'tests/parity/**'
+  - 'tests/scouting/**'
+  - 'tests/strategy/**'
+  - 'tests/value/**'
+  - 'tests/test_import_hygiene.py'
+
+# Agent policy changes must also preserve recorded blunder-correction contracts.
+agents:
+  - 'src/agents/**'
+
+# Tests for maintenance and simulation tools as one parallel component.
+tools:
+  - 'tools/**'
+  - 'tests/arena/**'
+  - 'tests/label/**'
+  - 'tests/meta_tracker/**'
+  - 'tests/sim/**'
+  - 'tests/submit/**'
+  - 'tests/train/**'
+  - 'tests/tuner/**'
+
+# Correction records and their writer/reader contract form an independent component.
+corrections:
+  - 'data/corrections/**'
+  - 'tools/train/blunder/**'
+  - 'tools/train/blunder_correction.py'
+  - 'tests/blunder/**'
+  - 'tests/corrections/**'
+
+# The cgpy arm is independent but must re-run whenever the shared runtime changes.
+cgpy:
+  - 'src/cgpy/**'
+  - 'tests/parity/**'
+  - 'tests/bellman/**'
+
+# Developed-agent mirror registry.  Add one filter entry when an agent earns a mirror gate.
+mega_starmie:
+  - 'src/agents/mega_starmie/**'
+  - 'tools/sim/mirror_gate.py'
+
+docs:
+  - 'docs/**'
+  - '**/*.md'
+  - 'tests/test_doc_links_resolve.py'
+  - 'tests/test_line_endings_policy.py'
+
+# Operational history does not change runtime or test inputs.
+operational_data:
+  - 'data/agent_history.jsonl'
+  - 'data/battles.jsonl'
+  - 'data/performance.jsonl'
+  - 'data/submissions/**'
+
+# Agent-authoring instructions affect development workflow, not shipped code or test inputs.
+authoring:
+  - '.claude/**'
+  - 'AGENTS.md'
+
+any:
+  - '**'

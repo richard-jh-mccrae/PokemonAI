@@ -27,6 +27,7 @@ MS = REPO / "src"
 MAX_SUBMISSION_MIB = 197.7
 MAX_SUBMISSION_BYTES = int(MAX_SUBMISSION_MIB * 1024 * 1024)
 FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
+DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS = 600
 
 
 @dataclass
@@ -211,7 +212,8 @@ def check_playability(
     return StageResult(True, "playability", f"{matches} matches clean")
 
 
-def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle"):
+def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle",
+                timeout_seconds: float = DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS):
     """Run the extracted Bundle in a clean-room subprocess; return (rc, output, replay)."""
     import subprocess
 
@@ -222,7 +224,19 @@ def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle"):
         Path(reports_dir).mkdir(parents=True, exist_ok=True)
         replay = Path(reports_dir) / f"{label}-deployability-fail.json"
         args.append(str(replay))
-    proc = subprocess.run(args, cwd=str(extracted), capture_output=True, text=True)
+    try:
+        proc = subprocess.run(
+            args, cwd=str(extracted), capture_output=True, text=True,
+            timeout=float(timeout_seconds),
+        )
+    except subprocess.TimeoutExpired as exc:
+        # ``TimeoutExpired`` may carry bytes despite ``text=True`` on some Python versions.
+        # The gate must report the timeout, never mask it with a TypeError.
+        def _text(value):
+            return value.decode(errors="replace") if isinstance(value, bytes) else (value or "")
+
+        output = (_text(exc.stdout) + _text(exc.stderr)).strip()
+        return None, output, replay
     return proc.returncode, (proc.stdout + proc.stderr).strip(), replay
 
 
@@ -259,7 +273,17 @@ def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="b
     if not legality.ok:
         return StageResult(False, "deployability", f"bundle deck is illegal: {legality.detail}")
 
+    print(
+        "artifact structure passed; running one exact bundle mirror "
+        f"(timeout {DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS}s)...",
+        flush=True,
+    )
     rc, output, replay = _run_bundle(extracted, reports_dir, label)
+    if rc is None:
+        return StageResult(
+            False, "deployability",
+            f"bundle mirror exceeded {DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS}s; not submitting",
+        )
     if rc != 0:
         detail = f"bundle match failed: {output}"
         if replay and replay.exists():

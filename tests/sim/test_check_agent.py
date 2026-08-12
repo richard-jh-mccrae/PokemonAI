@@ -88,6 +88,29 @@ def test_exact_artifact_gate_rejects_offline_engine_names_and_content(
     assert "offline-only" in result.detail
 
 
+@pytest.mark.req("REQ-SIM-0004")
+def test_exact_artifact_gate_reports_a_mirror_timeout(tmp_path, monkeypatch):
+    stage = tmp_path / "stage"
+    (stage / "cg").mkdir(parents=True)
+    (stage / "common").mkdir()
+    (stage / "main.py").write_text("")
+    (stage / "deck.csv").write_text(LEGAL_DECK.read_text())
+    (stage / "cg" / "__init__.py").write_text("")
+    (stage / "common" / "__init__.py").write_text("")
+    artifact = tmp_path / "timed-out.zip"
+    with zipfile.ZipFile(artifact, "w") as bundle:
+        for path in stage.rglob("*"):
+            if path.is_file():
+                bundle.write(path, path.relative_to(stage))
+
+    monkeypatch.setattr(checkmod, "check_legality", lambda _: checkmod.StageResult(True, "legality"))
+    monkeypatch.setattr(checkmod, "_run_bundle", lambda *args, **kwargs: (None, "", None))
+    result = check_artifact(artifact, tmp_path / "work")
+
+    assert not result.ok
+    assert "exceeded" in result.detail
+
+
 @pytest.mark.req("REQ-SIM-0002")
 def test_legality_fails_when_not_60_rows(tmp_path):
     deck = tmp_path / "deck.csv"
