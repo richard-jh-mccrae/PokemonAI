@@ -10,6 +10,7 @@ from common.bellman.value import CardFacts, FAMILY_OWNERS, Potential, ValueOracl
 
 HAMMER, LILLIE, WATER = 1120, 1227, 3
 DECK = (HAMMER, LILLIE, WATER)
+LINE_BASE, LINE_TOP, RUSH_EVOLUTION = 20, 21, 22
 
 
 def _obs(hand, *, supporter=False, attached=False, energy=0):
@@ -77,6 +78,22 @@ def test_realized_benefit_minus_same_consumed_cost_is_counted_once():
     assert 0.049 < ledger.total < 0.05
 
 
+def test_acquisition_has_zero_basis_but_reacquisition_restores_consumed_root_basis():
+    registry, oracle = _registry(), ValueOracle(_registry(), _families)
+    root = _state(_obs([LILLIE]), registry)
+    consumed_state = root.with_observation(_obs([]))
+    restored_state = consumed_state.with_observation(_obs([LILLIE]))
+    consumed = oracle.transition_ledger(root, consumed_state, ActionIdentity("play"))
+    restored = oracle.transition_ledger(consumed_state, restored_state, ActionIdentity("card"))
+    assert dict(restored.benefits)["hand"] == pytest.approx(registry.worth(LILLIE) / 120.0)
+    assert consumed.total + restored.total == pytest.approx(-2e-12)
+
+    empty_root = _state(_obs([]), registry)
+    acquired_state = empty_root.with_observation(_obs([LILLIE]))
+    acquired = oracle.transition_ledger(empty_root, acquired_state, ActionIdentity("card"))
+    assert "hand" not in dict(acquired.benefits)
+
+
 def test_every_known_non_end_decision_is_strictly_costly_without_benefit():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     state = _state(_obs([]), registry)
@@ -92,6 +109,32 @@ def test_duplicate_hand_options_diminish_but_never_become_free():
     assert first < second < third
     assert second - first == pytest.approx(registry.worth(LILLIE) * 0.55)
     assert third - second == pytest.approx(registry.worth(LILLIE) * 0.25)
+
+
+def test_retained_line_access_loses_value_when_its_target_is_built():
+    registry = ValueRegistry(
+        functions={RUSH_EVOLUTION: ("search", "rush_evolve")},
+        facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
+               LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
+               RUSH_EVOLUTION: CardFacts()},
+        line_pairs=((LINE_BASE, LINE_TOP),), lines=((LINE_BASE, LINE_TOP),),
+    )
+    before_obs = _obs([RUSH_EVOLUTION, RUSH_EVOLUTION])
+    before_obs["current"]["players"][0]["bench"] = [{"id": LINE_BASE, "serial": 30}]
+    after_obs = _obs([RUSH_EVOLUTION])
+    after_obs["current"]["players"][0]["bench"] = [{"id": LINE_TOP, "serial": 30}]
+    before = DecisionState.from_observation(
+        before_obs, deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION), deck_name="test",
+        value_registry_identity=registry.identity)
+    after = DecisionState.from_observation(
+        after_obs, deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION), deck_name="test",
+        value_registry_identity=registry.identity)
+
+    assert registry.held_worth(RUSH_EVOLUTION, before_obs) == registry.worth(RUSH_EVOLUTION)
+    assert registry.held_worth(RUSH_EVOLUTION, after_obs) < registry.worth(RUSH_EVOLUTION)
+    ledger = ValueOracle(registry, _families).transition_ledger(
+        before, after, ActionIdentity("play", (RUSH_EVOLUTION,)))
+    assert dict(ledger.costs)["hand"] == pytest.approx(13.0 / 120.0)
 
 
 def test_every_required_consequence_has_one_named_family_owner():

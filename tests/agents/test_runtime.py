@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from common.pilot import Pilot
+from common.pilot import Decision, Pilot
 from common.runtime import PROFILE, build_pilot, make_agent
 from common.scouting.provider import DictCardStatProvider
 from common.strategy import Strategy
@@ -203,3 +203,34 @@ def test_make_agent_emits_telemetry_unless_silenced(monkeypatch):
     select = make_select([opt(PLAY, area=HAND, index=0)], current=state(hand=[1030]))
     agent(select)
     assert emitted == [0]                            # emitted once, tier 0 (search_budget 0)
+
+
+def test_make_agent_emits_native_setup_telemetry_for_a_bellman_strategy(monkeypatch):
+    """Mega Starmie never puts legacy score/OptionTrace fields on the wire, including Set-Up."""
+    from common import runtime, telemetry
+
+    strategy = Strategy(params={"bellman_turn_planner": True})
+
+    class FakePilot:
+        deck = [1] * 60
+        search_budget = 0
+
+        def __init__(self):
+            self.strategy = strategy
+
+        def explain(self, _obs):
+            return Decision(chosen=[0], options=[object()])
+
+    emitted = []
+    monkeypatch.setattr(runtime, "build_pilot", lambda *_args, **_kwargs: FakePilot())
+    monkeypatch.setattr(runtime, "_read_deck", lambda: [1] * 60)
+    monkeypatch.setattr(telemetry, "emit_native",
+                        lambda decision, tier: emitted.append(
+                            telemetry.to_native_record(decision, tier=tier)))
+    monkeypatch.setattr(telemetry, "emit",
+                        lambda *_args, **_kwargs: pytest.fail("legacy telemetry emitted"))
+
+    agent = runtime.make_agent(strategy)
+    agent(make_select([opt(PLAY, area=HAND, index=0)], current=state(hand=[1])))
+
+    assert emitted == [{"schema": "setup", "tier": 0, "chosen": [0]}]

@@ -18,10 +18,9 @@ from common.strategy.context import (
 
 
 DEFAULT_RNG_SEED = 0
-SHORT_HAND_REFRESH_LIMIT = 2
-EXPANDED_PREVIEW_MAIN_STEPS = 2
-SINGLE_PREVIEW_MAIN_STEP = 1
 HEAL_PREVIEW_BUDGET = 80
+SEARCH_PREVIEW_BUDGET = 96
+SEARCH_SEQUENCE_TAGS = frozenset({"search", "bench_fill"})
 MANUAL_COIN_CONTEXT = 46
 BENCH_DAMAGE_CONTEXT = _DAMAGE
 BENCH_DAMAGE_AMOUNT = 50
@@ -142,60 +141,8 @@ class CgpyTransitionProvider:
         return frozenset((self.registry.functions.get(int(card_id), ())
                           if self.registry is not None and card_id is not None else ()))
 
-    def preview_actions(self, state, actions, *, main_steps: int):
-        """Cheap rollout menu: preserve commitments/terminal moves and one causal refresh.
-
-        Root admission still simulates every action. This filter applies only inside bounded
-        lookahead, preventing a newly drawn Pokégear/Harlequin from recursively opening another
-        information tree merely to estimate whether the preceding attach should happen first.
-        """
-        if self._local_nested:
-            return actions
-        engine = self._engines.get(state.semantic_key)
-        if engine is None:
-            return actions
-        board = engine.gs.players[state.root_seat]
-        active_id = engine.gs.card_id(board.active.top) if board.active is not None else None
-        in_play = {engine.gs.card_id(body.top) for body in engine.gs.in_play(state.root_seat)}
-        allow_refresh = ((active_id in self.profile.accelerators
-                          and not in_play.intersection(self.profile.line_cards))
-                         or len(board.hand) <= SHORT_HAND_REFRESH_LIMIT)
-        kept = []
-        for action in actions:
-            if action.identity.kind != "play":
-                kept.append(action)
-                continue
-            card_id, _serial = self._played_card_id(engine, action)
-            tags = self._tags(card_id)
-            if (card_id in self.profile.line_bases
-                    or ("shuffle_hand" in tags and "hand_disruption" not in tags
-                        and allow_refresh)):
-                kept.append(action)
-        return tuple(kept)
-
-    def preview_main_steps(self, state, action, default: int) -> int:
-        engine = self._engines.get(state.semantic_key)
-        context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context in (_TO_HAND, _HEAL):
-            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
-        if context in (_SWITCH, _TO_ACTIVE):
-            return max(default, SINGLE_PREVIEW_MAIN_STEP)
-        if action.identity.kind in ("attach", "evolve", "retreat"):
-            return max(default, SINGLE_PREVIEW_MAIN_STEP)
-        if engine is None or action.identity.kind != "play":
-            return default
-        card_id, _serial = self._played_card_id(engine, action)
-        tags = self._tags(card_id)
-        # Gust/heal can require target -> attach -> attack before their payoff is realized.
-        if tags.intersection({"gust", "heal"}):
-            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
-        # A denial/deploy play is useful before an otherwise terminal attack only if the full
-        # play-then-attack line still beats attacking now.
-        return max(default, SINGLE_PREVIEW_MAIN_STEP) if (card_id in self.profile.line_bases
-                                   or tags.intersection({"bench_fill", "energy_denial"})) else default
-
-    def preview_budget(self, state, action, default: int) -> int:
-        """Local mechanics depth, independent of strategic payoff."""
+    def preview_node_budget(self, state, action, default: int) -> int:
+        """Expanded-state allowance based only on the effect's mechanical branching."""
         context = int(((state.obs.get("select") or {}).get("context", -1)))
         if context == _HEAL:
             return max(default, HEAL_PREVIEW_BUDGET)
@@ -203,17 +150,13 @@ class CgpyTransitionProvider:
         if engine is None or action.identity.kind != "play":
             return default
         card_id, _serial = self._played_card_id(engine, action)
+        tags = self._tags(card_id)
         # Heal resolves a target, returned stack/Energy, a replacement attachment, then attack.
-        return max(default, HEAL_PREVIEW_BUDGET) if "heal" in self._tags(card_id) else default
-
-    def chance_replan_steps(self, state, action, default: int) -> int:
-        """Only revealed information earns an additional actual-state replan horizon."""
-        engine = self._engines.get(state.semantic_key)
-        if engine is None or action.identity.kind != "play":
-            return default
-        card_id, _serial = self._played_card_id(engine, action)
-        return max(default, SINGLE_PREVIEW_MAIN_STEP) if self._tags(card_id).intersection(
-            {"dig", "hand_disruption", "shuffle_hand"}) else default
+        if "heal" in tags:
+            return max(default, HEAL_PREVIEW_BUDGET)
+        # Search often owns mandatory discard and deck-target menus before returning to Main.
+        return max(default, SEARCH_PREVIEW_BUDGET) if tags.intersection(
+            SEARCH_SEQUENCE_TAGS) else default
 
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:

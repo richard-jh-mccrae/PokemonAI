@@ -6,7 +6,7 @@ import pytest
 
 from common.bellman import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
-    Terminal,
+    ProductionLimits, ProductionSolver, Terminal,
 )
 from common.bellman.algebra import Edge, WeightedEdge
 from common.bellman.options import LegalAction
@@ -77,6 +77,28 @@ def test_complete_line_continues_and_commits_only_first_action():
     assert decision.chosen == (0,)
     assert decision.value > 0.0
     assert decision.diagnostics["ledger"]["continuation"] > 0.0
+
+
+def test_production_turn_search_has_no_depth_limit():
+    """Width and nodes bound production; a finite legal turn is never cut off by action count."""
+    action, end = _action("play"), _action("end", 1)
+    states = [_state(f"step-{index}", board=index / 100.0) for index in range(13)]
+    actions = {state.obs["node"]: (action, end) for state in states}
+    transitions = {
+        (states[index].obs["node"], "play"): Deterministic(states[index + 1])
+        for index in range(len(states) - 1)
+    }
+    transitions[(states[-1].obs["node"], "play")] = Terminal(
+        states[-1], "win", Ledger())
+
+    decision = ProductionSolver(
+        Graph(actions, transitions), _oracle(),
+        limits=ProductionLimits(max_nodes=100, beam_width=1, max_preview_per_action=8),
+    ).decide(states[0])
+
+    assert decision.action.kind == "play"
+    assert decision.diagnostics["root"].nodes == len(states)
+    assert "max_depth" not in decision.diagnostics["production"]
 
 
 def test_all_negative_actions_choose_end_zero():

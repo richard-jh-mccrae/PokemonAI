@@ -224,7 +224,7 @@ own actions carry the same belief unless the action reveals information.
 
 There are two modes over the same transition and value contracts:
 
-- `reference`: exhaustive within explicit node/depth/time caps; any cap or unknown reports incomplete;
+- `reference`: exhaustive within its explicit node cap; any cap or unknown reports incomplete;
 - `production`: bounded best-first/beam search using exact semantic transposition and deterministic
   ordering.
 
@@ -329,8 +329,10 @@ The atomic Mega Starmie cutover is complete. After Set-Up, every offered action 
 generated and transitioned through `common.bellman`; no legacy strategic chooser or fallback can
 select the move. The bounded production solver and exhaustive reference solver share the same
 state, transition, Worth, potential, chance, belief, and ledger contracts. Production currently
-uses depth 4, 300 nodes, beam width 2, and exact current-action expansion before bounded
-continuation.
+has no depth limit: a turn ends by engine transition, semantic-cycle detection, or the 1,000-node
+budget. Branch width remains 2, every action receives a no-horizon Bellman preview, and each preview
+has a 24-expanded-state default budget. Terminal wins propagate through the same transition ledger
+as every other outcome; there is no tactical proof override or action-admission policy.
 
 The unfiltered final corpus audit contains 259 corrections, zero exclusions, and zero unexplained
 rows: 141 `MATCH`, 24 `EQUIVALENT_OR_BETTER_COMPLETE_LINE`, 19

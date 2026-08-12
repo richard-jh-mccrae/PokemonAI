@@ -11,19 +11,16 @@ from .algebra import (
 from .api import ActionIdentity, RootDecision
 from .options import LegalAction
 from .state import DecisionState
-from common.strategy.context import _MAIN, _SKILL, _TO_ACTIVE
 from .value import ValueOracle
 
 
-REFERENCE_MAX_DEPTH = 20
 REFERENCE_MAX_NODES = 100_000
-PRODUCTION_MAX_DEPTH = 12
 PRODUCTION_MAX_NODES = 4_000
 PRODUCTION_BEAM_WIDTH = 4
-PRODUCTION_PREVIEW_MAIN_STEPS = 1
 PRODUCTION_PREVIEW_CAP_PER_ACTION = 300
-FORCED_RESOLUTION_DEPTH_LIMIT = 24
-MULTI_PRIZE_GAIN_THRESHOLD = 2
+VALUE_TIE_DECIMALS = 12
+IMMEDIATE_VALUE_BEAM_SLOTS = 1
+RANKED_ACTION_SLOT = 2
 
 
 class TransitionProvider(Protocol):
@@ -39,16 +36,13 @@ class TransitionProvider(Protocol):
 
 @dataclass(frozen=True)
 class SearchLimits:
-    max_depth: int = REFERENCE_MAX_DEPTH
     max_nodes: int = REFERENCE_MAX_NODES
 
 
 @dataclass(frozen=True)
 class ProductionLimits:
-    max_depth: int = PRODUCTION_MAX_DEPTH
     max_nodes: int = PRODUCTION_MAX_NODES
     beam_width: int = PRODUCTION_BEAM_WIDTH
-    preview_main_steps: int = PRODUCTION_PREVIEW_MAIN_STEPS
     max_preview_per_action: int = PRODUCTION_PREVIEW_CAP_PER_ACTION
 
 
@@ -74,6 +68,11 @@ def _combine(base: Ledger, continuation: float, extra: Ledger = Ledger()) -> Led
                   base.continuation + extra.immediate + float(continuation))
 
 
+def _ordered_value(value: float) -> float:
+    """Suppress floating-association noise before deterministic stable-order tie breaking."""
+    return round(value, VALUE_TIE_DECIMALS) if math.isfinite(value) else value
+
+
 class ReferenceSolver:
     """Exact within explicit caps; unknown/cap/cycle states are incomplete, never fabricated zeroes."""
 
@@ -92,7 +91,7 @@ class ReferenceSolver:
         self._memo.clear()
         self._active.clear()
         self.nodes = self.cache_hits = 0
-        solved = self._state(state, depth=0)
+        solved = self._state(state)
         if solved.action is None:
             raise RuntimeError(f"Bellman root has no complete legal action: {solved.evaluation.reason}")
         end_pair = next(((action, result) for action, result in solved.alternatives
@@ -130,7 +129,7 @@ class ReferenceSolver:
         return self.oracle.transition_ledger(before, after, action.identity,
                                              before_model=left, after_model=right)
 
-    def _state(self, state: DecisionState, *, depth: int) -> StateEvaluation:
+    def _state(self, state: DecisionState) -> StateEvaluation:
         key = state.semantic_key
         if key in self._memo:
             self.cache_hits += 1
@@ -138,13 +137,13 @@ class ReferenceSolver:
         if key in self._active:
             incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
-        if depth > self.limits.max_depth or self.nodes >= self.limits.max_nodes:
+        if self.nodes >= self.limits.max_nodes:
             incomplete = Evaluation(-math.inf, Ledger(), False, "reference cap")
             return StateEvaluation(-math.inf, None, incomplete, ())
         self.nodes += 1
         self._active.add(key)
         actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
-        results = tuple((action, self._action(state, action, depth=depth)) for action in actions)
+        results = tuple((action, self._action(state, action)) for action in actions)
         self._active.remove(key)
         complete = [(action, result) for action, result in results if result.complete]
         if not complete:
@@ -154,25 +153,23 @@ class ReferenceSolver:
         else:
             actor = (self.provider.actor(state) if hasattr(self.provider, "actor") else Actor.OURS)
             chooser = max if actor is Actor.OURS else min
-            action, result = chooser(complete, key=lambda pair: (pair[1].value,
-                                                                  tuple(pair[0].identity.parts),
-                                                                  pair[0].identity.kind))
+            action, result = chooser(complete, key=lambda pair: _ordered_value(pair[1].value))
             answer = StateEvaluation(result.value, action, result, results)
         self._memo[key] = answer
         return answer
 
-    def _action(self, state: DecisionState, action: LegalAction, *, depth: int) -> Evaluation:
+    def _action(self, state: DecisionState, action: LegalAction) -> Evaluation:
         if action.identity.kind == "end":
             return Evaluation(0.0, Ledger(), True, "End exact zero")
-        return self._transition(state, action, self.provider.transition(state, action), depth=depth)
+        return self._transition(state, action, self.provider.transition(state, action))
 
-    def _transition(self, before: DecisionState, action: LegalAction, node, *, depth: int) -> Evaluation:
+    def _transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
         if isinstance(node, Unknown):
             return Evaluation(-math.inf, Ledger(), False,
                               f"{node.reason}: {node.missing_fact}")
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
-            continuation = self._state(node.state, depth=depth + 1)
+            continuation = self._state(node.state)
             if continuation.action is None and not continuation.evaluation.complete:
                 return Evaluation(-math.inf, base, False, continuation.evaluation.reason)
             ledger = _combine(base, continuation.value)
@@ -183,7 +180,7 @@ class ReferenceSolver:
             ledger = _combine(base, 0.0, node.ledger)
             return Evaluation(ledger.total, ledger, True, node.result)
         if isinstance(node, Choice):
-            branches = [(edge, self._transition(before, action, edge.node, depth=depth))
+            branches = [(edge, self._transition(before, action, edge.node))
                         for edge in node.children]
             complete = [(edge, result) for edge, result in branches if result.complete]
             if len(complete) != len(branches) or not complete:
@@ -192,14 +189,14 @@ class ReferenceSolver:
                                          "value": result.value, "reason": result.reason}
                                         for edge, result in branches))
             chooser = max if node.actor is Actor.OURS else min
-            edge, result = chooser(complete, key=lambda pair: (pair[1].value, pair[0].label))
+            edge, result = chooser(complete, key=lambda pair: _ordered_value(pair[1].value))
             return Evaluation(result.value, result.ledger, True,
                               f"{node.actor.value} chose {edge.label}",
                               tuple({"label": child.label, "value": evaluated.value,
                                      "complete": evaluated.complete}
                                     for child, evaluated in branches))
         if isinstance(node, Chance):
-            branches = [(edge, self._transition(before, action, edge.node, depth=depth))
+            branches = [(edge, self._transition(before, action, edge.node))
                         for edge in node.children]
             if any(not result.complete for _edge, result in branches):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete chance branch")
@@ -224,154 +221,33 @@ class ReferenceSolver:
 class ProductionSolver(ReferenceSolver):
     """Bounded search over the reference transition/value contracts.
 
-    Every root option is simulated through its nested effect to the next MAIN menu.  Only then does
-    the beam remove dominated continuations.  A cap is a real End choice when End is reachable; a
-    mandatory nested menu remains incomplete and can never inherit fabricated zero value.
+    Preview recursion has no depth horizon.  Width and expanded-state budgets are the only search
+    bounds.  A cap is a real End choice when End is reachable; a mandatory nested menu remains
+    incomplete and can never inherit fabricated zero value.
     """
 
     def __init__(self, provider: TransitionProvider, oracle: ValueOracle, *, model_factory=None,
                  limits: ProductionLimits = ProductionLimits()):
         super().__init__(provider, oracle, model_factory=model_factory,
-                         limits=SearchLimits(limits.max_depth, limits.max_nodes))
+                         limits=SearchLimits(limits.max_nodes))
         self.production_limits = limits
         self.previewed = 0
         self.pruned = 0
-        self._preview_cache: dict[tuple[str, str, int], float] = {}
+        self._preview_cache: dict[tuple[str, str], float] = {}
         self._root_previews: dict[str, float] = {}
         self._preview_remaining = limits.max_preview_per_action
         self.preview_caps = 0
-
-    def _forced_win(self, node, *, seen: frozenset[str], depth: int = 0) -> bool:
-        """Resolve only mandatory post-attack menus to prove an immediate game win."""
-        if depth > FORCED_RESOLUTION_DEPTH_LIMIT or isinstance(node, Unknown):
-            return False
-        if isinstance(node, Terminal):
-            return node.result == "win"
-        if isinstance(node, Choice):
-            rows = [self._forced_win(edge.node, seen=seen, depth=depth + 1)
-                    for edge in node.children]
-            return (any(rows) if node.actor is Actor.OURS else bool(rows) and all(rows))
-        if isinstance(node, Chance):
-            return bool(node.children) and all(
-                self._forced_win(edge.node, seen=seen, depth=depth + 1)
-                for edge in node.children)
-        if not isinstance(node, Deterministic):
-            return False
-        state = node.state
-        if state.semantic_key in seen or self._main(state):
-            return False
-        actions = self.provider.actions(state)
-        if not actions:
-            return False
-        rows = [self._forced_win(
-            self.provider.transition(state, action),
-            seen=seen | {state.semantic_key}, depth=depth + 1)
-                for action in actions]
-        actor = self.provider.actor(state)
-        return any(rows) if actor is Actor.OURS else all(rows)
-
-    def _immediate_winning_attacks(self, state, actions):
-        winners = []
-        for action in actions:
-            if action.identity.kind != "attack":
-                continue
-            checkpoint = (self.provider.preview_checkpoint()
-                          if hasattr(self.provider, "preview_checkpoint") else None)
-            try:
-                if self._forced_win(
-                        self.provider.transition(state, action),
-                        seen=frozenset({state.semantic_key})):
-                    winners.append(action)
-            finally:
-                if checkpoint is not None:
-                    self.provider.preview_restore(checkpoint)
-        return tuple(winners)
-
-    def _prize_gain(self, node, *, root_count: int, seen: frozenset[str], depth: int = 0):
-        if depth > FORCED_RESOLUTION_DEPTH_LIMIT or isinstance(node, Unknown):
-            return None
-        if isinstance(node, Terminal):
-            players = (node.state.obs.get("current") or {}).get("players") or ()
-            mine = players[node.state.root_seat] if len(players) > node.state.root_seat else {}
-            return max(0, root_count - len(mine.get("prize") or ()))
-        if isinstance(node, (Choice, Chance)):
-            rows = [self._prize_gain(edge.node, root_count=root_count, seen=seen,
-                                     depth=depth + 1) for edge in node.children]
-            if not rows or any(value is None for value in rows):
-                return None
-            if isinstance(node, Chance) or node.actor is Actor.OPPONENT:
-                return min(rows)
-            return max(rows)
-        if not isinstance(node, Deterministic):
-            return None
-        state = node.state
-        if state.semantic_key in seen or self._main(state):
-            return None
-        actions = self.provider.actions(state)
-        rows = [self._prize_gain(
-            self.provider.transition(state, action), root_count=root_count,
-            seen=seen | {state.semantic_key}, depth=depth + 1) for action in actions]
-        if not rows or any(value is None for value in rows):
-            return None
-        return max(rows) if self.provider.actor(state) is Actor.OURS else min(rows)
-
-    def _immediate_prize_attacks(self, state, actions):
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        root_count = len(mine.get("prize") or ())
-        rows = []
-        for action in actions:
-            if action.identity.kind != "attack":
-                continue
-            checkpoint = (self.provider.preview_checkpoint()
-                          if hasattr(self.provider, "preview_checkpoint") else None)
-            try:
-                gain = self._prize_gain(
-                    self.provider.transition(state, action), root_count=root_count,
-                    seen=frozenset({state.semantic_key}))
-            finally:
-                if checkpoint is not None:
-                    self.provider.preview_restore(checkpoint)
-            if gain is not None:
-                rows.append((gain, action))
-        best = max((gain for gain, _action in rows), default=0)
-        return (tuple(action for gain, action in rows if gain == best)
-                if best >= MULTI_PRIZE_GAIN_THRESHOLD else ())
-
-    def _immediate_prize_choices(self, state, actions):
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        root_count = len(mine.get("prize") or ())
-        rows = []
-        for action in actions:
-            checkpoint = (self.provider.preview_checkpoint()
-                          if hasattr(self.provider, "preview_checkpoint") else None)
-            try:
-                gain = self._prize_gain(
-                    self.provider.transition(state, action), root_count=root_count,
-                    seen=frozenset({state.semantic_key}))
-            finally:
-                if checkpoint is not None:
-                    self.provider.preview_restore(checkpoint)
-            if gain is not None:
-                rows.append((gain, action))
-        best = max((gain for gain, _action in rows), default=0)
-        return tuple(action for gain, action in rows if gain == best) if best > 0 else ()
-
-    @staticmethod
-    def _main(state: DecisionState) -> bool:
-        return int(((state.obs.get("select") or {}).get("context", -1))) == _MAIN
+        self._root_key = ""
 
     def decide(self, state: DecisionState) -> RootDecision:
         self.previewed = self.pruned = self.preview_caps = 0
+        self._root_key = state.semantic_key
         self._preview_cache.clear()
         self._root_previews.clear()
         decision = super().decide(state)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
             "beam_width": self.production_limits.beam_width,
-            "preview_main_steps": self.production_limits.preview_main_steps,
-            "max_depth": self.production_limits.max_depth,
             "max_nodes": self.production_limits.max_nodes,
             "max_preview_per_action": self.production_limits.max_preview_per_action,
             "previewed": self.previewed,
@@ -383,28 +259,49 @@ class ProductionSolver(ReferenceSolver):
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics)
 
-    def _preview_state(self, state: DecisionState, *, seen: frozenset[str],
-                       main_steps: int) -> float:
+    def _preview_state(self, state: DecisionState, *, seen: frozenset[str]) -> float:
         if state.semantic_key in seen:
             return -math.inf
-        actions = self.provider.actions(state)
-        if hasattr(self.provider, "preview_actions"):
-            actions = self.provider.preview_actions(
-                state, actions, main_steps=main_steps)
-        values = [self._preview_action(state, action, seen=seen | {state.semantic_key},
-                                       main_steps=main_steps)
-                  for action in actions]
+        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
+        if self.provider.actor(state) is Actor.OURS and len(actions) > 1:
+            ranked = []
+            for action in actions:
+                if action.identity.kind == "end":
+                    ranked.append((0.0, action, None))
+                    continue
+                node = self.provider.transition(state, action)
+                ranked.append((self._immediate_transition(state, action, node), action, node))
+            end = [row for row in ranked if row[1].identity.kind == "end"]
+            non_end = sorted(
+                (row for row in ranked if row[1].identity.kind != "end"),
+                key=lambda row: _ordered_value(row[0]), reverse=True)
+            kept = (*non_end[:self.production_limits.beam_width], *end)
+            values = [self._preview_node_action(
+                state, action, node, seen=seen | {state.semantic_key})
+                for _value, action, node in kept]
+        else:
+            values = [self._preview_action(state, action, seen=seen | {state.semantic_key})
+                      for action in actions]
         finite = [value for value in values if math.isfinite(value)]
         if not finite:
             return -math.inf
         actor = self.provider.actor(state)
+        if actor is Actor.OPPONENT and len(finite) != len(values):
+            return -math.inf
         return (max if actor is Actor.OURS else min)(finite)
 
     def _preview_action(self, state: DecisionState, action: LegalAction,
-                        *, seen: frozenset[str], main_steps: int) -> float:
+                        *, seen: frozenset[str]) -> float:
         if action.identity.kind == "end":
             return 0.0
-        key = (state.semantic_key, str(action.identity), int(main_steps))
+        return self._preview_node_action(
+            state, action, self.provider.transition(state, action), seen=seen)
+
+    def _preview_node_action(self, state: DecisionState, action: LegalAction, node,
+                             *, seen: frozenset[str]) -> float:
+        if action.identity.kind == "end":
+            return 0.0
+        key = (state.semantic_key, str(action.identity))
         if key in self._preview_cache:
             return self._preview_cache[key]
         if self._preview_remaining <= 0:
@@ -412,43 +309,53 @@ class ProductionSolver(ReferenceSolver):
             return -math.inf
         self._preview_remaining -= 1
         self.previewed += 1
-        value = self._preview_transition(
-            state, action, self.provider.transition(state, action), seen=seen,
-            main_steps=main_steps)
-        self._preview_cache[key] = value
+        value = self._preview_transition(state, action, node, seen=seen)
+        if math.isfinite(value):
+            self._preview_cache[key] = value
         return value
 
     def _preview_transition(self, before: DecisionState, action: LegalAction, node,
-                            *, seen: frozenset[str], main_steps: int) -> float:
+                            *, seen: frozenset[str]) -> float:
         if isinstance(node, Unknown):
             return -math.inf
         if isinstance(node, Terminal):
             return _combine(self._ledger(before, node.state, action), 0.0, node.ledger).total
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action).immediate
-            if self._main(node.state):
-                if main_steps <= 0:
-                    return base
-                continuation = self._preview_state(
-                    node.state, seen=seen, main_steps=main_steps - 1)
-                return base + continuation if math.isfinite(continuation) else -math.inf
-            continuation = self._preview_state(node.state, seen=seen,
-                                               main_steps=main_steps)
+            continuation = self._preview_state(node.state, seen=seen)
             return base + continuation if math.isfinite(continuation) else -math.inf
         if isinstance(node, Choice):
-            values = [self._preview_transition(before, action, edge.node, seen=seen,
-                                               main_steps=main_steps)
+            values = [self._preview_transition(before, action, edge.node, seen=seen)
+                      for edge in node.children]
+            finite = [value for value in values if math.isfinite(value)]
+            if not finite or (node.actor is Actor.OPPONENT and len(finite) != len(values)):
+                return -math.inf
+            return (max if node.actor is Actor.OURS else min)(finite)
+        if isinstance(node, Chance):
+            values = [self._preview_transition(before, action, edge.node, seen=seen)
                       for edge in node.children]
             if any(not math.isfinite(value) for value in values):
                 return -math.inf
-            return (max if node.actor is Actor.OURS else min)(values)
+            return sum(edge.probability * value for edge, value in zip(node.children, values))
+        return -math.inf
+
+    def _immediate_transition(self, before: DecisionState, action: LegalAction, node) -> float:
+        """One-transition ledger value used only to break equal no-horizon previews."""
+        if isinstance(node, Unknown):
+            return -math.inf
+        if isinstance(node, Terminal):
+            return _combine(self._ledger(before, node.state, action), 0.0, node.ledger).total
+        if isinstance(node, Deterministic):
+            return self._ledger(before, node.state, action).immediate
+        if isinstance(node, Choice):
+            values = [self._immediate_transition(before, action, edge.node)
+                      for edge in node.children]
+            finite = [value for value in values if math.isfinite(value)]
+            if not finite or (node.actor is Actor.OPPONENT and len(finite) != len(values)):
+                return -math.inf
+            return (max if node.actor is Actor.OURS else min)(finite)
         if isinstance(node, Chance):
-            chance_steps = main_steps
-            if hasattr(self.provider, "chance_replan_steps"):
-                chance_steps = self.provider.chance_replan_steps(
-                    before, action, chance_steps)
-            values = [self._preview_transition(before, action, edge.node, seen=seen,
-                                               main_steps=chance_steps)
+            values = [self._immediate_transition(before, action, edge.node)
                       for edge in node.children]
             if any(not math.isfinite(value) for value in values):
                 return -math.inf
@@ -463,13 +370,8 @@ class ProductionSolver(ReferenceSolver):
             return Evaluation(ledger.total, ledger, True, node.result)
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
-            chance_steps = self.production_limits.preview_main_steps
-            if hasattr(self.provider, "chance_replan_steps"):
-                chance_steps = self.provider.chance_replan_steps(
-                    before, action, chance_steps)
             continuation = self._preview_state(
-                node.state, seen=frozenset({before.semantic_key}),
-                main_steps=chance_steps)
+                node.state, seen=frozenset({before.semantic_key}))
             if not math.isfinite(continuation):
                 return Evaluation(-math.inf, base, False, "chance policy incomplete")
             ledger = _combine(base, continuation)
@@ -480,7 +382,8 @@ class ProductionSolver(ReferenceSolver):
             if any(not result.complete for _edge, result in branches):
                 return Evaluation(-math.inf, Ledger(), False, "chance choice incomplete")
             chooser = max if node.actor is Actor.OURS else min
-            _edge, result = chooser(branches, key=lambda pair: (pair[1].value, pair[0].label))
+            _edge, result = chooser(
+                branches, key=lambda pair: _ordered_value(pair[1].value))
             return result
         if isinstance(node, Chance):
             branches = [(edge, self._chance_policy(before, action, edge.node))
@@ -499,24 +402,20 @@ class ProductionSolver(ReferenceSolver):
             return Evaluation(ledger.total, ledger, True, "nested expected replan preview")
         return Evaluation(-math.inf, Ledger(), False, "undeclared chance policy node")
 
-    def _transition(self, before: DecisionState, action: LegalAction, node,
-                    *, depth: int) -> Evaluation:
+    def _transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
         if isinstance(node, Choice) and node.actor is Actor.OURS:
             budget = self.production_limits.max_preview_per_action
-            if hasattr(self.provider, "preview_budget"):
-                budget = self.provider.preview_budget(before, action, budget)
+            if hasattr(self.provider, "preview_node_budget"):
+                budget = self.provider.preview_node_budget(before, action, budget)
             self._preview_remaining = budget
-            steps = self.production_limits.preview_main_steps
-            if hasattr(self.provider, "preview_main_steps"):
-                steps = self.provider.preview_main_steps(before, action, steps)
             previews = [(edge, self._preview_transition(
-                before, action, edge.node, seen=frozenset({before.semantic_key}),
-                main_steps=steps)) for edge in node.children]
+                before, action, edge.node, seen=frozenset({before.semantic_key})))
+                for edge in node.children]
             finite = [(edge, value) for edge, value in previews if math.isfinite(value)]
             if not finite:
                 return Evaluation(-math.inf, Ledger(), False, "our choice preview incomplete")
-            edge, _value = max(finite, key=lambda pair: (pair[1], pair[0].label))
-            result = self._transition(before, action, edge.node, depth=depth)
+            edge, _value = max(finite, key=lambda pair: _ordered_value(pair[1]))
+            result = self._transition(before, action, edge.node)
             return Evaluation(result.value, result.ledger, result.complete,
                               f"ours chose {edge.label}",
                               tuple({"label": child.label, "value": value,
@@ -524,15 +423,14 @@ class ProductionSolver(ReferenceSolver):
                                     for child, value in previews))
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
-            continuation = self._state(
-                node.state, depth=depth + (1 if self._main(node.state) else 0))
+            continuation = self._state(node.state)
             if continuation.action is None and not continuation.evaluation.complete:
                 return Evaluation(-math.inf, base, False, continuation.evaluation.reason)
             ledger = _combine(base, continuation.value)
             return Evaluation(ledger.total, ledger, continuation.evaluation.complete,
                               continuation.evaluation.reason)
         if not isinstance(node, Chance):
-            return super()._transition(before, action, node, depth=depth)
+            return super()._transition(before, action, node)
         branches = []
         for edge in node.children:
             self._preview_remaining = self.production_limits.max_preview_per_action
@@ -552,8 +450,8 @@ class ProductionSolver(ReferenceSolver):
                                  "value": result.value}
                                 for edge, result in branches))
 
-    def _state(self, state: DecisionState, *, depth: int) -> StateEvaluation:
-        if depth > self.limits.max_depth or self.nodes >= self.limits.max_nodes:
+    def _state(self, state: DecisionState) -> StateEvaluation:
+        if self.nodes >= self.limits.max_nodes:
             end = next((action for action in self.provider.actions(state)
                         if action.identity.kind == "end"), None)
             if end is not None:
@@ -574,83 +472,51 @@ class ProductionSolver(ReferenceSolver):
         self.nodes += 1
         self._active.add(key)
         actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
-        if (int(((state.obs.get("select") or {}).get("context", -1))) == _SKILL
-                and self.provider.actor(state) is Actor.OURS):
-            immediate_prizes = self._immediate_prize_choices(state, actions)
-            if immediate_prizes:
-                actions = immediate_prizes
-        context = int(((state.obs.get("select") or {}).get("context", -1)))
-        # Forced promotion determines the attacker's entire next turn.  Retain every promotion
-        # candidate for its full board-value evaluation; broader nested menus retain the bounded
-        # preview policy below.
-        exact_nested_context = context == _TO_ACTIVE
-        if (not exact_nested_context and not self._main(state)
-                and self.provider.actor(state) is Actor.OURS and len(actions) > 1):
-            ranked_nested = []
-            for action in actions:
-                budget = self.production_limits.max_preview_per_action
-                if hasattr(self.provider, "preview_budget"):
-                    budget = self.provider.preview_budget(state, action, budget)
-                self._preview_remaining = budget
-                steps = self.production_limits.preview_main_steps
-                if hasattr(self.provider, "preview_main_steps"):
-                    steps = self.provider.preview_main_steps(state, action, steps)
-                checkpoint = (self.provider.preview_checkpoint()
-                              if hasattr(self.provider, "preview_checkpoint") else None)
-                try:
-                    value = self._preview_action(
-                        state, action, seen=frozenset({key}), main_steps=steps)
-                finally:
-                    if checkpoint is not None:
-                        self.provider.preview_restore(checkpoint)
-                ranked_nested.append((value, action))
-            finite_nested = [pair for pair in ranked_nested if math.isfinite(pair[0])]
-            if finite_nested:
-                _value, best_nested = max(
-                    finite_nested, key=lambda pair: (pair[0], pair[1].identity))
-                self.pruned += len(actions) - 1
-                actions = (best_nested,)
-        if self._main(state) and self.provider.actor(state) is Actor.OURS:
-            immediate_wins = self._immediate_winning_attacks(state, actions)
-            if immediate_wins:
-                actions = immediate_wins
-            else:
-                immediate_prizes = self._immediate_prize_attacks(state, actions)
-                if immediate_prizes:
-                    # Keep the best resolving attack(s), but do not erase setup that can precede
-                    # that same KO (heal, attach, information). Only a game-winning attack is
-                    # terminally dominant over every other root action.
-                    actions = tuple(action for action in actions
-                                    if action.identity.kind != "attack") + immediate_prizes
+        immediate_values: dict[ActionIdentity, float] = {}
+        if self.provider.actor(state) is Actor.OURS:
             ranked = []
             for action in actions:
                 budget = self.production_limits.max_preview_per_action
-                if hasattr(self.provider, "preview_budget"):
-                    budget = self.provider.preview_budget(state, action, budget)
+                if hasattr(self.provider, "preview_node_budget"):
+                    budget = self.provider.preview_node_budget(state, action, budget)
                 self._preview_remaining = budget
-                steps = self.production_limits.preview_main_steps
-                if hasattr(self.provider, "preview_main_steps"):
-                    steps = self.provider.preview_main_steps(state, action, steps)
                 checkpoint = (self.provider.preview_checkpoint()
                               if hasattr(self.provider, "preview_checkpoint") else None)
                 try:
-                    value = self._preview_action(
-                        state, action, seen=frozenset({key}), main_steps=steps)
+                    if action.identity.kind == "end":
+                        value = immediate = 0.0
+                    else:
+                        node = self.provider.transition(state, action)
+                        value = self._preview_node_action(
+                            state, action, node, seen=frozenset({key}))
+                        immediate = self._immediate_transition(state, action, node)
                 finally:
                     if checkpoint is not None:
                         self.provider.preview_restore(checkpoint)
-                ranked.append((value, action))
-            if depth == 0:
-                self._root_previews = {str(action.identity): value for value, action in ranked}
-            end = [pair for pair in ranked if pair[1].identity.kind == "end"]
-            non_end = sorted((pair for pair in ranked if pair[1].identity.kind != "end"),
-                             key=lambda pair: (pair[0], pair[1].identity), reverse=True)
+                immediate_values[action.identity] = immediate
+                ranked.append((value, immediate, action))
+            if key == self._root_key:
+                self._root_previews = {str(action.identity): value
+                                       for value, _immediate, action in ranked}
+            end = [pair for pair in ranked if pair[RANKED_ACTION_SLOT].identity.kind == "end"]
+            non_end = sorted((pair for pair in ranked
+                              if pair[RANKED_ACTION_SLOT].identity.kind != "end"),
+                             key=lambda pair: (_ordered_value(pair[0]),
+                                               _ordered_value(pair[1])), reverse=True)
             kept = non_end[:self.production_limits.beam_width]
-            chosen_set = {action.identity for _value, action in (*kept, *end)}
+            if self.production_limits.beam_width > IMMEDIATE_VALUE_BEAM_SLOTS and non_end:
+                immediate = sorted(
+                    non_end, key=lambda pair: (_ordered_value(pair[1]),
+                                               _ordered_value(pair[0])), reverse=True)
+                diverse = [*non_end[:self.production_limits.beam_width
+                                    - IMMEDIATE_VALUE_BEAM_SLOTS]]
+                diverse.extend(row for row in immediate if row not in diverse)
+                kept = tuple(diverse[:self.production_limits.beam_width])
+            chosen_set = {action.identity for _value, _immediate, action in (*kept, *end)}
             self.pruned += len(actions) - len(chosen_set)
-            actions = tuple(action for action in actions if action.identity in chosen_set)
+            actions = tuple(action for _value, _immediate, action in (*kept, *end))
 
-        results = tuple((action, self._action(state, action, depth=depth)) for action in actions)
+        results = tuple((action, self._action(state, action)) for action in actions)
         self._active.remove(key)
         complete = [(action, result) for action, result in results if result.complete]
         if not complete:
@@ -659,9 +525,13 @@ class ProductionSolver(ReferenceSolver):
                                                 "all legal actions incomplete"), results)
         else:
             actor = self.provider.actor(state)
-            chooser = max if actor is Actor.OURS else min
-            action, result = chooser(complete, key=lambda pair: (
-                pair[1].value, tuple(pair[0].identity.parts), pair[0].identity.kind))
+            if actor is Actor.OURS:
+                action, result = max(complete, key=lambda pair: (
+                    _ordered_value(pair[1].value),
+                    _ordered_value(immediate_values.get(pair[0].identity, -math.inf))))
+            else:
+                action, result = min(
+                    complete, key=lambda pair: _ordered_value(pair[1].value))
             answer = StateEvaluation(result.value, action, result, results)
         self._memo[key] = answer
         return answer

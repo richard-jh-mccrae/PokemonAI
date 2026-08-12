@@ -67,6 +67,17 @@ def test_retest_treats_indistinguishable_duplicate_species_as_fixed():
     assert r["fixed"] is True              # ...but [0] is the identical twin of correct [1]
 
 
+def test_retest_treats_identical_playable_copies_as_fixed():
+    """A correction may name either physical copy; Main Play canonicalizes the first one."""
+    options = [{"index": 0, "type": 7}, {"index": 1, "type": 7}]
+    obs = make_select(options, context=MAIN, current=state(hand=[111, 111]))
+    corr = _correction(obs, correct=[1], live_trace={"chosen": [1], "margin": 0})
+
+    r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
+    assert r["chosen_after"] == [0]
+    assert r["fixed"] is True
+
+
 def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
     """The guard is state-exact: two copies of one card that differ in ATTACHED ENERGY are NOT
     interchangeable, so a real positional miss (wanted the energized copy) still reports unfixed."""
@@ -152,4 +163,3 @@ def test_retest_span_re_drives_the_turn_and_stops_at_the_first_divergence():
     assert diverges["steps"][0]["diverged"] is True
     assert diverges["steps"][1] == {"frame": 1, "chosen_before": [0], "chosen_after": None,
                                     "diverged": False, "off_policy": True}
-

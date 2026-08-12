@@ -1,9 +1,8 @@
 """Decision Telemetry: serialise a Pilot Decision to a tagged stderr line (ADR-0019).
 
 One `@T <json>` record per decision, captured in the match log's `stderr` and parsed back by
-`collect`; `to_record` is pure and testable without I/O. The reorder markers exist so a trace reader
-never misreads "top-score not chosen" as a scoring bug. Every optional key is SPARSE, so a plain
-record stays byte-identical to the pre-marker era.
+`collect`. Legacy pilots use :func:`to_record`; Bellman-enabled pilots use :func:`to_native_record`
+so they never emit synthetic score/OptionTrace fields from the retired strategic stack.
 """
 from __future__ import annotations
 
@@ -39,6 +38,23 @@ def _opt_record(o) -> dict:
         rec["needy"] = True
     # `hs_relief` RETIRED (ADR-0102): the hand-size relief now arrives inside `tac`
     return rec
+
+
+def to_native_record(decision, *, tier: int = 0) -> dict | None:
+    """Compact telemetry for a Bellman-enabled pilot; no legacy score/planner fields."""
+    bellman = getattr(decision, "bellman", None)
+    if bellman is not None:
+        return {
+            "schema": "bellman",
+            "tier": tier,
+            "chosen": list(decision.chosen),
+            **_wire_value(bellman),
+        }
+    if not decision.options:                       # deck-submission handshake
+        return None
+    # Set-Up remains engine-owned rather than Bellman-searched, but it still uses the native wire
+    # envelope. Its old per-option scores are implementation debris, not useful planner evidence.
+    return {"schema": "setup", "tier": tier, "chosen": list(decision.chosen)}
 
 
 def to_record(decision, *, tier: int = 0) -> dict | None:
@@ -113,6 +129,14 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
 def emit(decision, *, tier: int = 0, out=None) -> None:
     """Write one `@T <json>` line to stderr for this decision (no-ops the deck-submission step)."""
     rec = to_record(decision, tier=tier)
+    if rec is not None:
+        print(f"{TAG} " + json.dumps(rec, separators=(",", ":")),
+              file=out or sys.stderr, flush=True)
+
+
+def emit_native(decision, *, tier: int = 0, out=None) -> None:
+    """Write Bellman/setup telemetry without the legacy Pilot record shape."""
+    rec = to_native_record(decision, tier=tier)
     if rec is not None:
         print(f"{TAG} " + json.dumps(rec, separators=(",", ":")),
               file=out or sys.stderr, flush=True)

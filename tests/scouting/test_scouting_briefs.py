@@ -69,7 +69,7 @@ def _ml_brief(**extra):
 def test_resolve_brief_cards_maps_names_to_ids_and_roles():
     name_ids = {"Mega Lucario ex": {678}, "Riolu": {677}}
     threat_ids, target_roles = resolve_brief_cards(_ml_brief(), lambda n: name_ids.get(n, ()))
-    assert threat_ids == frozenset({678})
+    assert threat_ids == frozenset({677, 678})
     assert target_roles == {678: "prize_liability", 677: "fragile_preevo"}
 
 
@@ -166,5 +166,5 @@ def test_compact_roles_supply_threat_and_target_readers():
     ])
     threats, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Riolu": {677}}.get(n, ()))
     plan = build_matchup_plan(brief_roles=roles, gamma=1.0)
-    assert threats == frozenset({678})                 # Deny relevance's Brief threat input
+    assert threats == frozenset({677, 678})            # Wincon stages are Brief threat inputs
     assert plan.priority(677) > 0 and plan.priority(678) > plan.priority(677)  # snipe + gust

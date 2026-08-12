@@ -71,7 +71,10 @@ _TARGET_ROLE = {
 }
 _TARGET_ROLE_ORDER = ("wincon", "wincon_base", "wincon_stage", "disruption_target",
                       "primary_attacker", "attacker", "energy_accel", "draw_engine", "support")
-_THREAT_ROLES = frozenset({"threat", "wincon", "primary_attacker", "attacker", "disruption"})
+_THREAT_ROLES = frozenset({
+    "threat", "wincon", "wincon_base", "wincon_stage",
+    "primary_attacker", "attacker", "disruption",
+})
 
 
 def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:

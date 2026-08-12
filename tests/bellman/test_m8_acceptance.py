@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -27,7 +28,7 @@ def _correction(episode, frame):
     (82753102, 85, [0]),        # Kadabra line outranks Dunsparce
     (83966968, 79, [1]),        # damaged multi-prize gust target
     (84897262, 110, [1]),       # fetched Water unlocks the game win
-    (82749168, 21, [7]),        # duplicate Hammers cannot crowd out useful Turbo Flare
+    (82749168, 21, [1]),        # Hammer can strip the energized Bench, then Turbo Flare follows
     (82228017, 4, [1]),         # satisfying held Energy demand is persistent development
     (82752604, 16, [2]),        # redundant Mega Signal loses to the resolving attack
     (82717711, 18, [1]),        # a legal beneficial attack beats exact-zero End
@@ -49,3 +50,24 @@ def test_rationale_led_hard_gates(episode, frame, expected):
 def test_heal_targets_the_exposed_active_not_the_loaded_safe_bench():
     pilot = _build_pilot("mega_starmie")[0]
     assert pilot.decide(_correction(None, 100).obs) == [0]
+
+
+def test_20260812_sequence_and_target_corrections():
+    records = [json.loads(line) for line in (
+        REPO / "data" / "corrections" / "mega_starmie_20260812_1a37dbb5" /
+        "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
+    expected = {
+        "9e502ba97ac7": [0],       # deterministic Mega search before probabilistic dig
+        "e4fae85fcf63": [1],       # take available damage instead of End
+        "fa978d4e6fe4": [0],       # damage the scouted evolving win condition
+        "0a482197b23f": [0],       # identical Salvatore copy of corrected option 2
+        "995549cd76ee": [0],       # evolve the loaded Staryu
+        "03fae5aa66e0": [5],       # Ultra Ball begins the proved same-turn game win
+        "71cf48e4701c": [6],       # establish Staryu before targeting both wincon bodies
+        "4eaf233ccb54": [0, 1],    # discard duplicate tutor access; retain live Hammer
+        "5972e5096b0c": [0],       # damage the scouted Alakazam win condition
+    }
+    pilot = _build_pilot("mega_starmie")[0]
+
+    for record in records:
+        assert pilot.decide(record["obs"]) == expected[record["id"]]

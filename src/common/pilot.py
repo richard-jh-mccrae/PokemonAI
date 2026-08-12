@@ -133,6 +133,8 @@ class Decision:
     composer: dict | None = None     # the SEQUENCE COMPOSER's per-decision telemetry (POC-T4/5): the
                                      # margin block, run stats, the winner's `working()` legs and step
                                      # indices, plus any coverage-gap reasons. None unless it ran.
+    bellman: dict | None = None      # Mega Starmie's native planner diagnostics. Kept separate from
+                                     # the retired-for-this-deck composer/OptionTrace telemetry schema.
     attach_working: dict | None = None  # ADR-0069 §9 per-option AXES rows. This DECIDES, so there is no
                                      # agreement bit. A Tool no channel prices ABSTAINS and is counted.
 
@@ -416,8 +418,9 @@ class Pilot(
         players = state.get("players") or ()
         opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
         ids_for_name = getattr(self.stats, "ids_for_name", None)
-        brief_roles = (resolve_brief_cards(brief, ids_for_name)[1]
-                       if brief is not None and ids_for_name is not None else {})
+        brief_threat_ids, brief_roles = (
+            resolve_brief_cards(brief, ids_for_name)
+            if brief is not None and ids_for_name is not None else (frozenset(), {}))
         matchup_plan = self._matchup_plan(opponent, brief_roles, read, gamma)
         belief = opponent_belief(
             obs, candidates=(read.candidates if read is not None else ()),
@@ -433,18 +436,12 @@ class Pilot(
                 self.stats, functions=self.functions, profile=profile,
                 threat_roles={card_id: assignment.role for card_id, assignment
                                           in matchup_plan.assignments.items()},
+                scouted_threat_ids=brief_threat_ids,
                 root_seat=seat),
             belief=belief).decide(
                 PlanRequest(obs, tuple(self.deck), self.strategy.name))
-        select = obs.get("select") or {}
-        menu = select.get("option") or ()
         chosen = list(planned.chosen)
-        traces = [OptionTrace(
-            index=index, score=(planned.value if index in chosen else 0.0), plan=Plan.RACE,
-            card_id=None, fired=[], tactical=(planned.value if index in chosen else 0.0),
-        ) for index, _option in enumerate(menu)]
         telemetry = {
-            "bellman": True,
             "action": dataclasses.asdict(planned.action),
             "value": planned.value,
             "complete": planned.complete,
@@ -453,8 +450,7 @@ class Pilot(
             "production": planned.diagnostics.get("production"),
             "root": dataclasses.asdict(planned.diagnostics["root"]),
         }
-        return Decision(chosen=chosen, options=traces, read=read,
-                        posture={"gamma": gamma, "source": "scouting"}, composer=telemetry)
+        return Decision(chosen=chosen, read=read, bellman=telemetry)
 
     def _leaf_discard_picks(self, obs: dict, select: dict, options: list, maximum: int) -> list[int] | None:
         """Mandatory discard picks, repriced after each removed visible hand card."""

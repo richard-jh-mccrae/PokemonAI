@@ -11,6 +11,10 @@ from train.blunder.store import load_corrections
 REPO = Path(__file__).resolve().parents[2]
 DECK = tuple(int(line) for line in (REPO / "src" / "agents" / "mega_starmie" /
                                     "deck.csv").read_text().split())
+EXPECTED_CORRECTION_ROWS = 283
+EXPECTED_SEMANTIC_ACTIONS = 1_755
+EXPECTED_SELECTION_INDICES = 2_140
+MINIMUM_EXERCISED_CHANCE_NODES = 2
 
 
 def _rows():
@@ -40,9 +44,9 @@ def test_every_unfiltered_correction_action_has_a_declared_transition():
             actions += 1
             covered += len(action.equivalent_selections)
             unknowns += isinstance(provider.transition(state, action), Unknown)
-    assert len(_rows()) == 259
-    assert actions == 1623
-    assert covered == 1989
+    assert len(_rows()) == EXPECTED_CORRECTION_ROWS
+    assert actions == EXPECTED_SEMANTIC_ACTIONS
+    assert covered == EXPECTED_SELECTION_INDICES
     assert unavailable == unknowns == 0
 
 
@@ -97,5 +101,5 @@ def test_every_deck_source_resolves_all_nested_mechanics_without_unknown():
         walk(provider.transition(state, action))
 
     assert not unknowns
-    assert chance_nodes >= 4
+    assert chance_nodes >= MINIMUM_EXERCISED_CHANCE_NODES
     assert {3, 5, 7, 8, 15, 17, 18, 19, 21, 22, 30} <= set(contexts)

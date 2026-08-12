@@ -12,6 +12,7 @@ PROBABILITY_MIN = 0.0
 PROBABILITY_MAX = 1.0
 BELIEF_MASS_TOLERANCE = 1e-6
 DEFAULT_ROOT_SEAT = 0
+FROZEN_TAGGED_PAIR_LENGTH = 2
 
 
 def freeze(value):
@@ -34,13 +35,17 @@ def freeze(value):
 
 
 def thaw(value):
-    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__map__":
+    if (isinstance(value, tuple) and len(value) == FROZEN_TAGGED_PAIR_LENGTH
+            and value[0] == "__map__"):
         return {key: thaw(child) for key, child in value[1]}
-    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__list__":
+    if (isinstance(value, tuple) and len(value) == FROZEN_TAGGED_PAIR_LENGTH
+            and value[0] == "__list__"):
         return [thaw(child) for child in value[1]]
-    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__tuple__":
+    if (isinstance(value, tuple) and len(value) == FROZEN_TAGGED_PAIR_LENGTH
+            and value[0] == "__tuple__"):
         return tuple(thaw(child) for child in value[1])
-    if isinstance(value, tuple) and len(value) == 2 and value[0] == "__set__":
+    if (isinstance(value, tuple) and len(value) == FROZEN_TAGGED_PAIR_LENGTH
+            and value[0] == "__set__"):
         return set(thaw(child) for child in value[1])
     return value
 
@@ -114,6 +119,7 @@ class DecisionState:
     budgets: TurnBudgets
     belief: OpponentBelief
     value_registry_identity: str
+    hand_basis_counts: tuple[tuple[int, int], ...]
     value_adjustments: tuple[tuple[str, float], ...] = ()
 
     @classmethod
@@ -137,6 +143,10 @@ class DecisionState:
             deck=tuple(int(card_id) for card_id in deck), deck_counts=tuple(sorted(remaining.items())),
             prize_counts=tuple(sorted(prizes.items())), budgets=TurnBudgets.from_observation(observation),
             belief=belief, value_registry_identity=str(value_registry_identity),
+            hand_basis_counts=tuple(sorted(Counter(
+                int(card["id"]) for card in ((players[seat] if 0 <= seat < len(players)
+                                                and players[seat] else {}).get("hand") or ())
+                if card).items())),
             value_adjustments=(),
         )
 
@@ -148,14 +158,15 @@ class DecisionState:
     def semantic_key(self) -> str:
         payload = (self.observation, self.root_seat, self.deck_name, self.deck_counts,
                    self.prize_counts, self.budgets, self.belief,
-                   self.value_registry_identity, self.value_adjustments)
+                   self.value_registry_identity, self.hand_basis_counts, self.value_adjustments)
         return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
     def with_observation(self, observation: Mapping) -> "DecisionState":
         successor = type(self).from_observation(
             observation, deck=self.deck, deck_name=self.deck_name, belief=self.belief,
             value_registry_identity=self.value_registry_identity)
-        return replace(successor, root_seat=self.root_seat)
+        return replace(successor, root_seat=self.root_seat,
+                       hand_basis_counts=self.hand_basis_counts)
 
     def with_adjustments(self, adjustments) -> "DecisionState":
         return replace(self, value_adjustments=tuple(sorted(

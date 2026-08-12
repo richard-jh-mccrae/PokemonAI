@@ -24,6 +24,7 @@ AREA_DISCARD = 3                                    # cg.api.AreaType.DISCARD
 AREA_ACTIVE = 4                                     # cg.api.AreaType.ACTIVE
 AREA_BENCH = 5                                      # cg.api.AreaType.BENCH
 AREA_LOOKING = 12                                   # cg.api.AreaType.LOOKING
+OPTION_PLAY = 7                                     # cg.api.OptionType.PLAY
 
 #: Area -> the key holding that zone's cards on a player's snapshot. **Membership IS the reveal
 #: test**: DECK and PRIZE are absent because they are face-down — grouping them asserts from ignorance.
@@ -79,6 +80,15 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
     if seat is None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
     cards = []
+    # Main-menu Play encodes its hand slot as a bare ``index`` rather than an explicit HAND area.
+    # It is still a visible zone reference; normalize it so physical copies of one card remain one
+    # semantic decision everywhere, including correction retests.
+    implicit_play = option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
+    if implicit_play:
+        card = _card_at(frame, seat, AREA_HAND, option.get("index"))
+        if card is None:
+            return None
+        cards.append([AREA_HAND, without_engine_serial(card)])
     for area_key, index_key in _ZONE_REFS:
         area = option.get(area_key)
         if area is None:
@@ -101,6 +111,13 @@ def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
     cards = []
     referenced = set()
+    implicit_play = option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
+    if implicit_play:
+        card = _card_at(frame, seat, AREA_HAND, option.get("index"))
+        if card is None:
+            return None
+        referenced.add("index")
+        cards.append([AREA_HAND, without_engine_serial(card)])
     for area_key, index_key in _ZONE_REFS:
         area = option.get(area_key)
         if area is None:

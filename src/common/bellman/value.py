@@ -26,6 +26,10 @@ TYPED_ENERGY_HAND_MULTIPLIERS = (1.0, 1.0, 1.0)
 TYPED_ENERGY_DUPLICATE_MULTIPLIER = 0.60
 CARD_HAND_MULTIPLIERS = (1.0, 0.55, 0.25)
 CARD_DUPLICATE_MULTIPLIER = 0.15
+REDUNDANT_LINE_ACCESS_MULTIPLIER = 0.25
+LINE_TUTOR_TAG = "tutor_mega"
+RUSH_EVOLUTION_TAG = "rush_evolve"
+MIN_EVOLUTION_LINE_LENGTH = 2
 
 FAMILY_OWNERS = {
     "prize_race": ("game", "prizes", "prize proximity"),
@@ -108,7 +112,8 @@ class ValueRegistry:
         lines = tuple(tuple(line.path) for line in declarations)
         line_bases = tuple(line.path[0] for line in declarations
                            if getattr(line, "role", "win_condition") == "win_condition")
-        line_pairs = tuple((line[0], line[-1]) for line in lines if len(line) >= 2)
+        line_pairs = tuple((line[0], line[-1]) for line in lines
+                           if len(line) >= MIN_EVOLUTION_LINE_LENGTH)
         prize_plan = getattr(strategy, "prize_plan", None)
         return cls(roles=roles, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
@@ -131,11 +136,33 @@ class ValueRegistry:
         return float(worth_to_prizes(self.worth(card_id)))
 
     def held_worth(self, card_id: int, observation: Mapping) -> float:
-        facts = self.facts.get(int(card_id), CardFacts(known=False))
+        card_id = int(card_id)
+        facts = self.facts.get(card_id, CardFacts(known=False))
         if (facts.pokemon and facts.stage not in (None, "basic")
-                and int(card_id) not in self.line_parents):
+                and card_id not in self.line_parents):
             return self.seeds.known_floor
-        return self.worth(card_id)
+        worth = self.worth(card_id)
+        tags = set(self.functions.get(card_id, ()))
+        if tags.intersection({LINE_TUTOR_TAG, RUSH_EVOLUTION_TAG}):
+            current = observation.get("current") or {}
+            seat = int(current.get("yourIndex", 0))
+            players = current.get("players") or ()
+            me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+            hand = {int(card["id"]) for card in me.get("hand") or () if card}
+            in_play = {int(card["id"]) for card in (
+                tuple(me.get("active") or ()) + tuple(me.get("bench") or ())) if card}
+            line_tops = {line[-1] for line in self.lines if line}
+            overlapping_line_access = any(
+                other_id != card_id and RUSH_EVOLUTION_TAG in self.functions.get(other_id, ())
+                for other_id in hand)
+            tutor_redundant = (LINE_TUTOR_TAG in tags
+                               and (line_tops.intersection(hand | in_play)
+                                    or overlapping_line_access))
+            rush_redundant = (RUSH_EVOLUTION_TAG in tags
+                              and bool(line_tops.intersection(in_play)))
+            if tutor_redundant or rush_redundant:
+                worth *= REDUNDANT_LINE_ACCESS_MULTIPLIER
+        return worth
 
     def hand_worth(self, card_ids, observation: Mapping) -> float:
         """Marginal option value of a hand; every duplicate stays positive, never free."""
@@ -181,38 +208,19 @@ def _hand_ids(observation: Mapping, seat: int) -> tuple[int, ...]:
     return tuple(int(card["id"]) for card in (player.get("hand") or ()) if card)
 
 
-def _consumed_hand_ids(before: Mapping, after: Mapping, seat: int) -> tuple[int, ...]:
-    """Cards that ceased to be held, matched by physical serial when observations expose it."""
-    players_before = ((before.get("current") or {}).get("players") or ())
-    players_after = ((after.get("current") or {}).get("players") or ())
-    left = list((players_before[seat] if 0 <= seat < len(players_before) else {}).get("hand") or ())
-    right = list((players_after[seat] if 0 <= seat < len(players_after) else {}).get("hand") or ())
-    right_serials = Counter((int(card.get("id", 0)), int(card["serial"]))
-                            for card in right if card and card.get("serial") is not None)
-    right_unserialled = Counter(int(card.get("id", 0)) for card in right
-                                if card and card.get("serial") is None)
-    removed = []
-    for card in left:
-        if not card:
-            continue
-        card_id = int(card.get("id", 0))
-        if card.get("serial") is not None:
-            token = (card_id, int(card["serial"]))
-            if right_serials[token]:
-                right_serials[token] -= 1
-                continue
-        elif right_unserialled[card_id]:
-            right_unserialled[card_id] -= 1
-            continue
-        removed.append(card_id)
-    return tuple(removed)
+def _basis_hand_ids(state: DecisionState) -> tuple[int, ...]:
+    """Root-held card units still represented in hand; later acquisitions have zero basis."""
+    current = Counter(_hand_ids(state.obs, state.root_seat))
+    basis = Counter(dict(state.hand_basis_counts))
+    return tuple((current & basis).elements())
 
 
 class ValueOracle:
     """Converts one neutral family evaluator into the conserved Bellman ledger.
 
-    ``family_evaluator`` returns legacy-neutral board families. Portable Worth is charged when a
-    held card is actually consumed; merely moving a higher-Worth card into hand is not a benefit.
+    ``family_evaluator`` returns legacy-neutral board families. Portable Worth uses the root hand's
+    fungible basis: new acquisitions are not benefits, while reacquiring a consumed root-held unit
+    restores its basis. Consumption therefore telescopes without rewarding deck-to-hand movement.
     """
 
     def __init__(self, registry: ValueRegistry,
@@ -264,16 +272,14 @@ class ValueOracle:
             removed_threat = float(attack_threat(before.obs) - attack_threat(after.obs))
             if removed_threat > 0.0:
                 benefits.append(("attack_threat", removed_threat))
-        removed = _consumed_hand_ids(before.obs, after.obs, before.root_seat)
-        if removed:
-            held = list(_hand_ids(before.obs, before.root_seat))
-            remaining = list(held)
-            for card_id in removed:
-                remaining.remove(card_id)
-            consumed = (self.registry.hand_worth(held, before.obs)
-                        - self.registry.hand_worth(remaining, before.obs))
-            if consumed > 0.0:
-                costs.append(("hand", worth_to_prizes(consumed)))
+        before_hand = _basis_hand_ids(before)
+        after_hand = _basis_hand_ids(after)
+        hand_change = (self.registry.hand_worth(before_hand, before.obs)
+                       - self.registry.hand_worth(after_hand, after.obs))
+        if hand_change > 0.0:
+            costs.append(("hand", worth_to_prizes(hand_change)))
+        elif hand_change < 0.0:
+            benefits.append(("hand", worth_to_prizes(-hand_change)))
         for name, available in vars(before.budgets).items():
             if name == "ability":
                 spent = len(after.budgets.ability) > len(available)

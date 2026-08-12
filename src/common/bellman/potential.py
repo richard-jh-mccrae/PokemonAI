@@ -13,6 +13,7 @@ ENERGY_COLORLESS = 0
 ENERGY_WILDCARD = 10
 ENERGY_CODES = frozenset(range(0, ENERGY_WILDCARD + 1))
 MIN_HP = 1
+KNOCKED_OUT_HP = 0
 ATTACK_DAMAGE_NORMALIZER = 210.0
 MULTI_PRIZE_LINE_FLOOR = 3
 MAX_RETAINED_ENERGY_FOR_THREAT = 4
@@ -20,7 +21,7 @@ MAX_LOADED_ENERGY_FOR_CHIP = 3
 BENCH_READINESS_WEIGHT = 0.30
 BENCH_LINE_PROGRESS_WEIGHT = 10.0
 FORWARD_DAMAGE_WEIGHT = 0.35
-SCOUT_MULTI_PRIZE_WEIGHT = 3.0
+SCOUT_MULTI_PRIZE_WEIGHT = 3.5
 DAMAGE_PROGRESS_CAP = 0.85
 DAMAGE_PROGRESS_SATURATION = 0.85
 LOADED_CHIP_WEIGHT = 0.15
@@ -46,6 +47,7 @@ SCOUT_CHIP_ROLE_WEIGHTS = {
     "attacker": 5.0, "prize_liability": 5.0, "disruption_target": 3.0,
     "engine": 2.0, "fragile_preevo": 1.2, "avoid": 0.45,
 }
+SCOUTED_THREAT_RELEVANCE_MULTIPLIER = 1.5
 FUTURE_THREAT_PRIORITY_MULTIPLIER = 1.25
 PRESSURE_ROLE_WEIGHTS = {
     "prize_liability": 2.0, "attacker": 1.25, "fragile_preevo": 1.15, "avoid": 0.55,
@@ -69,12 +71,16 @@ class BoardSeeds:
     # A spare declared base behind an evolved top is insurance for a multi-prize line, not
     # generic bench filler. Price it before committing the turn-ending attack.
     line_backup: float = 0.40
-    line_top: float = 0.32
+    # Realizing the declared top must dominate merely retaining a card that can access it
+    # (``needed_hand_card``); otherwise search/evolution is valued as destroying its own option.
+    line_top: float = 0.50
     accelerator: float = 0.12
     turbo_recipient: float = 0.24
     # The extra turn unlocked by an immediately fundable declared accelerator. This is a
     # board-state potential, rather than a card-specific action bonus.
     turbo_turn: float = 0.80
+    # Energy still in hand is access to that turn; realized attack readiness is the stronger state.
+    fundable_turbo_turn: float = 0.40
     needed_hand_card: float = 0.20
     persistent_line_energy: float = 0.05
     prize_route_active: float = 0.75
@@ -115,12 +121,14 @@ class MegaStarmiePotential:
     """Single, inexpensive absolute potential. Consequences are differenced once by ValueOracle."""
 
     def __init__(self, stats, *, functions=None, profile: BellmanDeckProfile = BellmanDeckProfile(),
-                 seeds: BoardSeeds = BoardSeeds(), threat_roles=None, root_seat: int | None = None):
+                 seeds: BoardSeeds = BoardSeeds(), threat_roles=None, scouted_threat_ids=(),
+                 root_seat: int | None = None):
         self.stats = stats
         self.functions = functions
         self.profile = profile
         self.seeds = seeds
         self.threat_roles = {int(key): str(value) for key, value in (threat_roles or {}).items()}
+        self.scouted_threat_ids = frozenset(int(card_id) for card_id in scouted_threat_ids)
         # ``current.yourIndex`` is the player whose turn the *successor* observation describes.
         # It changes after our attack; the value function must stay from the root Pilot's view.
         self.root_seat = None if root_seat is None else int(root_seat)
@@ -199,6 +207,8 @@ class MegaStarmiePotential:
                        if self.stats and hasattr(self.stats, "forward_max_damage") else 0)
             role = self.threat_roles.get(card_id, "") if scouting else ""
             role_weight = SCOUT_CHIP_ROLE_WEIGHTS.get(role, 1.0)
+            if scouting and card_id in self.scouted_threat_ids:
+                role_weight *= SCOUTED_THREAT_RELEVANCE_MULTIPLIER
             stat = self._stat(card_id)
             forward_ids = (self.stats.forward_card_ids(card_id)
                            if scouting and self.stats
@@ -270,6 +280,8 @@ class MegaStarmiePotential:
     def _future_threat(self, opponent):
         total = 0.0
         for body in _bodies(opponent):
+            if int(body.get("hp", KNOCKED_OUT_HP)) <= KNOCKED_OUT_HP:
+                continue
             card_id = int(body.get("id", 0))
             role = self.threat_roles.get(card_id, "")
             role_factor = (FUTURE_THREAT_PRIORITY_MULTIPLIER
@@ -297,18 +309,32 @@ class MegaStarmiePotential:
         opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
         total = 0.0
         for body in _bodies(opponent):
+            if int(body.get("hp", KNOCKED_OUT_HP)) <= KNOCKED_OUT_HP:
+                continue
             card_id = int(body.get("id", 0))
             role = self.threat_roles.get(card_id, "")
             role_factor = (FUTURE_THREAT_PRIORITY_MULTIPLIER if role in {
                 "attacker", "prize_liability", "fragile_preevo",
             } else 1.0)
+            if card_id in self.scouted_threat_ids:
+                role_factor *= SCOUTED_THREAT_RELEVANCE_MULTIPLIER
             energy_factor = 1.0 + ENERGY_THREAT_STEP * min(
                 MAX_RETAINED_ENERGY_FOR_THREAT, len(self._persistent_codes(body)))
             progress, _ready_damage = self._attack_profile(body, next_attach=True)
-            health = max(0.0, min(1.0, int(body.get("hp", 0)) /
+            forward_ids = (self.stats.forward_card_ids(card_id)
+                           if self.stats and hasattr(self.stats, "forward_card_ids") else ())
+            reachable_prizes = max(
+                [self._prizes(body)]
+                + [self._card_prizes(candidate) for candidate in forward_ids])
+            actual_prizes = self._prizes(body)
+            health = max(0.0, min(1.0, int(body.get("hp", KNOCKED_OUT_HP)) /
                                   max(MIN_HP, int(body.get("maxHp", body.get("hp", MIN_HP))))))
+            # Existing attack capacity follows the body's removal progress. Forward evolution-line
+            # capacity remains whole while the body survives and disappears only at the KO boundary.
+            capacity_prizes = (actual_prizes * health
+                               + max(0.0, reachable_prizes - actual_prizes))
             total += (self.seeds.attack_threat * role_factor * energy_factor
-                      * self._prizes(body) * progress * health)
+                      * capacity_prizes * progress)
         return total
 
     def _pressure(self, me, opponent):
@@ -360,10 +386,14 @@ class MegaStarmiePotential:
                 card_id in self.profile.line_cards for card_id in ids[1:]):
             value += self.seeds.turbo_recipient
             hand_ids = {int(card.get("id", 0)) for card in me.get("hand") or () if card}
-            turbo_ready, _damage = self._attack_profile(active, next_attach=True)
-            if turbo_ready and hand_ids.intersection(
-                    set(self.profile.reusable_energy) | set(self.profile.burst_energy)):
+            ready_now, _damage = self._attack_profile(active)
+            ready_after_attach, _damage = self._attack_profile(active, next_attach=True)
+            attach_fuel = hand_ids.intersection(
+                set(self.profile.reusable_energy) | set(self.profile.burst_energy))
+            if ready_now:
                 value += self.seeds.turbo_turn
+            elif ready_after_attach and attach_fuel:
+                value += self.seeds.fundable_turbo_turn
         return value
 
     def _card_prizes(self, card_id: int) -> int:
@@ -481,7 +511,8 @@ class MegaStarmiePotential:
         if ids.intersection(bases) and not ids.intersection(tops):
             value += self.seeds.needed_hand_card * bool(
                 hand.intersection(tops) or any(self._is_access_card(card_id) for card_id in hand))
-        if (len(ids & (bases | tops)) < MIN_LINE_REDUNDANCY
+        if (ids.intersection(bases | tops)
+                and len(ids & (bases | tops)) < MIN_LINE_REDUNDANCY
                 and len(bodies) < BOARD_BODY_CAPACITY and hand.intersection(bases)):
             value += self.seeds.needed_hand_card
         # Energy committed to the board is owned by readiness/development.  Pricing the same attack

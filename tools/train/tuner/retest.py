@@ -11,10 +11,17 @@ originally played — off-policy the moment the candidate Pilot picks differentl
 """
 from __future__ import annotations
 
-from common.telemetry import to_record
+from common.telemetry import to_native_record, to_record
+from common.option_equivalence import class_of, option_equivalence
 
 # AreaType values (see src/cg/api.py) — hardcoded so retest never imports the native `cg` lib.
 _ACTIVE, _BENCH = 4, 5
+
+
+def _record(decision, *, tier: int):
+    return (to_native_record(decision, tier=tier)
+            if getattr(decision, "bellman", None) is not None
+            else to_record(decision, tier=tier))
 
 
 def _body_sig(obs, option):
@@ -46,12 +53,15 @@ def _is_fixed(correct, chosen_after, obs):
     if all(c in chosen_after for c in correct):
         return True
     options = ((obs or {}).get("select") or {}).get("option") or []
+    equivalence = option_equivalence(options, obs)
 
     def sig(i):
         return _body_sig(obs, options[i]) if 0 <= i < len(options) else None
 
     chosen_sigs = [sig(i) for i in chosen_after]
     for c in correct:
+        if class_of(equivalence, c).intersection(chosen_after):
+            continue
         cs = sig(c)
         if c in chosen_after or (cs is not None and cs in chosen_sigs):
             continue
@@ -63,7 +73,7 @@ def retest(correction, pilot, *, tier: int = 0) -> dict:
     """``fixed`` is None where the Correction names no ``correct``: a prose-only scoped Correction
     asserts nothing to check. Other fields degrade to None when ``obs``/``live_trace`` are absent."""
     before = correction.live_trace
-    after = to_record(pilot.explain(correction.obs), tier=tier) if correction.obs is not None else None
+    after = _record(pilot.explain(correction.obs), tier=tier) if correction.obs is not None else None
     chosen_after = after["chosen"] if after else None
     fixed = _is_fixed(correction.correct, chosen_after, correction.obs)
     return {
@@ -73,7 +83,7 @@ def retest(correction, pilot, *, tier: int = 0) -> dict:
         "chosen_after": chosen_after,
         "correct": list(correction.correct),
         "margin_before": (before or {}).get("margin"),
-        "margin_after": after["margin"] if after else None,
+        "margin_after": after.get("margin") if after else None,
         # Layer verdicts (ADR-0030/0031): when either is non-null, scoring did NOT drive that
         # side's pick — the pilot returned early.
         "lethal_before": (before or {}).get("lethal"),
@@ -98,7 +108,7 @@ def retest_span(correction, pilot, *, tier: int = 0) -> dict:
             steps.append({"frame": entry.get("frame"), "chosen_before": before,
                           "chosen_after": None, "diverged": False, "off_policy": True})
             continue
-        after = to_record(pilot.explain(obs), tier=tier)
+        after = _record(pilot.explain(obs), tier=tier)
         chosen_after = after["chosen"] if after else None
         diverged = chosen_after != before
         if diverged:

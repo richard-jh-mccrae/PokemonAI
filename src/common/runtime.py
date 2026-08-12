@@ -125,6 +125,7 @@ def make_agent(strategy):
     pilot = build_pilot(strategy, _read_deck(), params=params, overrides=overrides)
     tier = 1 if pilot.search_budget > 0 else 0
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
+    native_telemetry = pilot.strategy.params.get("bellman_turn_planner") is True
     model = OwnCardModel(pilot.deck)   # match-scoped own-card tracker; resolves prizes -> exact deck
 
     def agent(obs_dict: dict) -> list[int]:
@@ -132,7 +133,8 @@ def make_agent(strategy):
         obs_dict["own_prizes"] = model.prize_export()   # annotate -> Board derives exact deck (None = fall back)
         decision = pilot.explain(obs_dict)          # same choice as decide(); also yields trace
         if telemetry_on:
-            telemetry.emit(decision, tier=tier)
+            emitter = telemetry.emit_native if native_telemetry else telemetry.emit
+            emitter(decision, tier=tier)
         return decision.chosen
 
     agent.pilot = pilot

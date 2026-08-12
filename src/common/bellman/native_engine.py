@@ -11,15 +11,14 @@ from .information import BellmanDeckProfile, CausalNeeds, hypergeometric_classes
 from .options import enumerate_legal_actions
 from .value import WORTH_PER_PRIZE
 from common.strategy.context import (
-    _HEAL, _MAIN, _MOVE_CARD, _NO, _SUPPORTER, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES,
+    _HEAL, _MAIN, _MOVE_CARD, _NO, _SUPPORTER, _YES,
 )
 
 
 MANUAL_COIN_CONTEXT = 46
-SHORT_HAND_REFRESH_LIMIT = 2
-EXPANDED_PREVIEW_MAIN_STEPS = 2
-SINGLE_PREVIEW_MAIN_STEP = 1
 HEAL_PREVIEW_BUDGET = 80
+SEARCH_PREVIEW_BUDGET = 96
+SEARCH_SEQUENCE_TAGS = frozenset({"search", "bench_fill"})
 FULL_PRIZE_COUNT = 6
 REFRESH_DRAW_WITH_FULL_PRIZES = 8
 REFRESH_DRAW_AFTER_PRIZE = 6
@@ -176,46 +175,13 @@ class NativeTransitionProvider:
     def _played_tags(self, state, action) -> frozenset[str]:
         return self._tags(self._played_card_id(state, action))
 
-    def preview_actions(self, state, actions, *, main_steps: int):
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        active = next((body for body in (mine.get("active") or ()) if body), None)
-        active_id = int(active["id"]) if active else None
-        bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
-        in_play = {int(body["id"]) for body in bodies if body}
-        allow_refresh = ((active_id in self.profile.accelerators
-                          and not in_play.intersection(self.profile.line_cards))
-                         or len(mine.get("hand") or ()) <= SHORT_HAND_REFRESH_LIMIT)
-        return tuple(action for action in actions
-                     if action.identity.kind != "play"
-                     or "dig" in self._played_tags(state, action)
-                     or ("shuffle_hand" in self._played_tags(state, action)
-                         and "hand_disruption" not in self._played_tags(state, action)
-                         and allow_refresh))
-
-    def preview_main_steps(self, state, action, default: int) -> int:
+    def preview_node_budget(self, state, action, default: int) -> int:
         context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context in (_TO_HAND, _HEAL):
-            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
-        if context in (_SWITCH, _TO_ACTIVE) or action.identity.kind in ("attach", "evolve", "retreat"):
-            return max(default, SINGLE_PREVIEW_MAIN_STEP)
-        card_id = self._played_card_id(state, action)
-        tags = self._tags(card_id)
-        if tags.intersection({"gust", "heal"}):
-            return max(default, EXPANDED_PREVIEW_MAIN_STEPS)
-        return max(default, SINGLE_PREVIEW_MAIN_STEP) if (card_id in self.profile.line_bases
-                                   or tags.intersection({"bench_fill", "energy_denial"})) else default
-
-    def preview_budget(self, state, action, default: int) -> int:
-        context = int(((state.obs.get("select") or {}).get("context", -1)))
-        if context == _HEAL or "heal" in self._played_tags(state, action):
-            return max(default, HEAL_PREVIEW_BUDGET)
-        return default
-
-    def chance_replan_steps(self, state, action, default: int) -> int:
         tags = self._played_tags(state, action)
-        return max(default, SINGLE_PREVIEW_MAIN_STEP) if tags.intersection(
-            {"dig", "hand_disruption", "shuffle_hand"}) else default
+        if context == _HEAL or "heal" in tags:
+            return max(default, HEAL_PREVIEW_BUDGET)
+        return max(default, SEARCH_PREVIEW_BUDGET) if tags.intersection(
+            SEARCH_SEQUENCE_TAGS) else default
 
     def transition(self, state, action):
         native = self._states.get(state.semantic_key)

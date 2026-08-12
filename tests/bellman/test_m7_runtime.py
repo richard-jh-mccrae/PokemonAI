@@ -17,6 +17,7 @@ from common.bellman import (
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.bellman.engine import CgpyTransitionProvider
+from common.telemetry import to_native_record
 from train.blunder.store import load_corrections
 from train.tune import _build_pilot
 
@@ -81,8 +82,7 @@ def test_60hp_policy_attaches_then_commits_lillie_and_replans():
     engine = _fixture(60)
     first = pilot.explain(_obs(engine))
     assert first.chosen == [1]
-    assert first.composer["bellman"] is True
-    assert first.composer["backend"] == "cgpy-offline"
+    assert first.bellman["backend"] == "cgpy-offline"
     engine.step(first.chosen)
     second = pilot.explain(_obs(engine))
     selected = engine.gs.pending.options[second.chosen[0]]
@@ -94,12 +94,25 @@ def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():
     engine = _fixture(50)
     decision = pilot.explain(_obs(engine))
     assert decision.chosen == [1]
-    assert decision.composer["value"] > 0.0
+    assert decision.bellman["value"] > 0.0
     engine.step(decision.chosen)
     decision = pilot.explain(_obs(engine))
     assert pilot.decide(_obs(engine)) == [0]
     engine.step(decision.chosen)
     assert pilot.decide(_obs(engine)) == [0]
+
+
+def test_bellman_telemetry_contains_no_legacy_pilot_payload():
+    decision = _build_pilot("mega_starmie")[0].explain(_obs(_fixture(60)))
+    record = to_native_record(decision)
+
+    assert record["schema"] == "bellman"
+    assert set(record) == {
+        "schema", "tier", "chosen", "action", "value", "complete", "backend",
+        "ledger", "production", "root",
+    }
+    assert not ({"plan", "opts", "lethal", "planned", "margin", "composer", "posture"}
+                & set(record))
 
 
 def test_post_attack_potential_keeps_the_root_players_perspective():
@@ -310,8 +323,7 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
         reference = ReferenceSolver(reference_provider, oracle).decide(state)
         production = ProductionSolver(
             production_provider, oracle,
-            limits=ProductionLimits(max_depth=4, max_nodes=1_000,
-                                    beam_width=1, preview_main_steps=0)).decide(state)
+            limits=ProductionLimits(max_nodes=1_000, beam_width=1)).decide(state)
         assert production.action == reference.action
         assert production.value == pytest.approx(reference.value)
 

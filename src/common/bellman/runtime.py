@@ -9,15 +9,13 @@ from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
 
 
-RUNTIME_MAX_DEPTH = 4
-RUNTIME_MAX_NODES = 300
+RUNTIME_MAX_NODES = 1_000
 RUNTIME_BEAM_WIDTH = 2
-RUNTIME_PREVIEW_MAIN_STEPS = 0
 RUNTIME_PREVIEW_CAP_PER_ACTION = 24
 
 DEFAULT_PRODUCTION_LIMITS = ProductionLimits(
-    max_depth=RUNTIME_MAX_DEPTH, max_nodes=RUNTIME_MAX_NODES, beam_width=RUNTIME_BEAM_WIDTH,
-    preview_main_steps=RUNTIME_PREVIEW_MAIN_STEPS, max_preview_per_action=RUNTIME_PREVIEW_CAP_PER_ACTION,
+    max_nodes=RUNTIME_MAX_NODES, beam_width=RUNTIME_BEAM_WIDTH,
+    max_preview_per_action=RUNTIME_PREVIEW_CAP_PER_ACTION,
 )
 
 
