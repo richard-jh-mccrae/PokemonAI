@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from common.bellman import Chance, Choice, DecisionState, Deterministic, Terminal, Unknown, ValueRegistry
-from common.bellman.engine import CgpyTransitionProvider
+from common import Chance, Choice, DecisionState, Deterministic, Terminal, Unknown, ValueRegistry
+from common.engine import CgpyTransitionProvider
 from train.blunder.store import load_corrections
-from train.tune import _build_pilot
+from bellman_helpers import runtime
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -24,9 +24,7 @@ def _rows():
 
 
 def _registry():
-    pilot = _build_pilot("mega_starmie")[0]
-    return ValueRegistry.from_strategy(
-        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
+    return runtime().registry
 
 
 def _source_key(obs, option):

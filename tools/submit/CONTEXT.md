@@ -1,86 +1,10 @@
-# Submission & Tracking (`tools/submit/`)
+# Submission
 
-Builds a traceable **Submission** from an agent, uploads it to the Simulation competition,
-and keeps a durable record of *what each agent was* against *how it performed* — so the
-project's growth over time is legible and joinable (the evidence base for the Strategy
-Writeup, see [ADR-0012](../../docs/adr/0012-optimize-for-strategy-category.md)).
+`package.py` stages a deck declaration, shared `common/`, and native `cg/`, then creates a zip.
+The embedded HTML/CSV brief records provenance, deck contents, Bellman system identity, Roles,
+evolution Lines, starter order, partners, prize plan, and capabilities.
 
-Reuses **Bundle** (ADR-0004), **Pilot** / **Strategy** / **Hypothesis** / **Role** /
-**Posture** (Agent Runtime), **Archetype** (Meta Tracker), and **Correction** (Agent Runtime) —
-defined in their own contexts and not redefined here.
+`build.py` records the artifact in the local build ledger. `submit.py` checks and uploads that exact
+artifact. `collect.py`, `history.py`, and `dashboard.py` retain submission/performance history.
 
-## Language
-
-### Submission
-
-**Submission**:
-A built, traceable agent — a **Bundle** plus its **Manifest** — destined for (or already
-uploaded to) the Simulation competition, identified by a **Submission Id**.
-_Avoid_: Bundle (just the package — a Submission is the Bundle plus its Manifest), upload, entry, version
-
-**Submission Id**:
-The monotonic integer assigned to a Submission *before* upload — the local join key, distinct
-from Kaggle's server-assigned `ref`.
-_Avoid_: ref (that is Kaggle's), version, build number
-
-### Records
-
-**Manifest**:
-A Submission's machine-readable **decision-steering fingerprint** — a declarative record of
-every input that steers the agent's play, plus build provenance. (See ADR-0019 for the full
-element list.)
-_Avoid_: config, metadata, snapshot
-
-**Agent Brief**:
-The self-contained HTML carried inside each Submission that **embeds** its Manifest and renders
-it for a human — one file that is both machine- and human-readable, the at-a-glance state of
-that agent at build time. Renders the full decklist (names from the card cache) and a highlighted
-**deck-change** callout versus this agent's previous build (the Build Ledger stores each build's
-deck as the baseline). Its sibling `brief.csv` is a long-form, appendable composer snapshot: the
-beam contract, bespoke equations retained in the leaf, state-value/terminal equations, and mechanics
-ranked purely by successor-state differencing.
-_Avoid_: report, readme, version_control card
-
-**Build Ledger**:
-The local, gitignored `builds.jsonl` recording every `build`. The pool `submit` draws from —
-by id, or the most recent by default — uploading that build's *exact* zip. `submit` then
-promotes the chosen build into Agent History.
-_Avoid_: Agent History (the committed *submitted* record), history
-
-Before upload, `submit` extracts that exact immutable zip and runs one full mirror Match in a
-fresh process. It does not rebuild the current source or repeat the source Playability matches;
-the explicit developer Agent Check owns those broader checks. The command prints the artifact
-name before this slower gate so the wait is visible and attributable.
-If that Match fails, its replay is retained under `reports/` and the command names it instead of
-discarding the only reproduction of a nondeterministic Playability failure.
-
-**Agent History**:
-The committed, durable record of *what each agent was* — one entry per Submission actually
-uploaded (state summary + join keys + lineage + experiment intent).
-_Avoid_: log, changelog, Build Ledger (that is the local pre-submit pool)
-
-**Performance Log**:
-The committed record of *how each agent performed over time* — time-stamped samples per
-Submission (score, rank, win/loss, per-Archetype matchups, **Efficiency**, aggregate telemetry,
-and the full indexed **Decision Telemetry** records). Separate from Agent History because performance varies with time
-while state does not.
-_Avoid_: results, scores, metrics
-
-**Dashboard**:
-The generated over-time view across all Submissions that charts the Performance Log against
-agent state — the growth-and-development picture.
-_Avoid_: report, Brief (that is per-Submission)
-
-### Signals
-
-**Decision Telemetry**:
-The per-decision trace the agent emits at runtime — legacy option scores/fired Hypotheses or the
-Bellman chosen action, ledger, chance branches, production caps, and rejected root alternatives.
-`collect` preserves these records under `telemetry.diagnostics` with match/decision coordinates;
-raw episode agent logs remain canonical.
-_Avoid_: log, debug output, trace
-
-**Efficiency**:
-A Submission's processing cost — how quickly it decides and how reliably it stays within the
-time budget. The benchmarking signal, distinct from playing strength.
-_Avoid_: speed, performance (that is the score/record side)
+Legacy hypotheses, tuning overlays, and composer inventories are not packaged.

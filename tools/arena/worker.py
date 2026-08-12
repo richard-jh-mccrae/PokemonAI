@@ -85,7 +85,7 @@ def main() -> None:
     os.environ["AGENT_NO_TELEMETRY"] = "1"          # keep the agent's stdout quiet
     for p in (agent_dir, _REPO / "src", _REPO / "tools"):
         sys.path.insert(0, str(p))
-    os.chdir(agent_dir)                             # agent reads deck.csv/tuned.json by cwd
+    os.chdir(agent_dir)                             # agent reads deck.csv by cwd
 
     from sim.check_agent import _import_make        # the quiet kaggle_environments import
     from arena import replay_store

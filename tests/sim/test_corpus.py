@@ -55,12 +55,12 @@ def test_cap_hit_reports_the_binding_cap():
 
 @pytest.mark.req("REQ-SIM-0016")
 def test_build_manifest_pins_the_shape_contract():
-    from sim.corpus import build_manifest, MANIFEST_VERSION, VALUE_MODEL_FORMAT
+    from sim.corpus import BELLMAN_CORRECTION_FORMAT, MANIFEST_VERSION, build_manifest
     m = build_manifest(run_id="r1", created_at="2026-07-13T00:00:00", git_rev="abc1234",
                        agents=["ms", "ml"], opponents=(), agent_versions={"ms": "abc1234"},
                        per_pairing=50, max_games=30_000, max_bytes=1 << 33)
     assert m["manifest_version"] == MANIFEST_VERSION
-    assert m["corpus_schema"]["value_model_format"] == VALUE_MODEL_FORMAT
+    assert m["corpus_schema"]["bellman_correction_format"] == BELLMAN_CORRECTION_FORMAT
     assert m["corpus_schema"]["replay_shape"] == "cabt-visualize"
     assert m["status"] == "running" and m["totals"] == {"games": 0, "bytes": 0}
     assert {(p["a"], p["b"]) for p in m["pairings"]} == {("ms", "ms"), ("ms", "ml"), ("ml", "ml")}
@@ -93,9 +93,8 @@ def test_prune_runs_reclaims_oldest_complete_only(tmp_path):
 def test_generate_corpus_run_writes_manifest_and_resumes(tmp_path):
     """Disk, not the manifest, is the authoritative resume cursor."""
     from sim.corpus import generate_corpus_run
-    from train.value.extract import rows_from_replay
+    from train.blunder.decisions import iter_decisions
     from meta_tracker.parse import load_replay
-    from train.tune import _build_pilot
 
     kw = dict(run_id="t1", created_at="2026-07-13T00:00:00", git_rev="abc1234",
               agents=["mega_starmie"], agents_root=FIXTURE_AGENTS, out_root=tmp_path,
@@ -108,9 +107,8 @@ def test_generate_corpus_run_writes_manifest_and_resumes(tmp_path):
     films = sorted(run_dir.rglob("*.json.gz"))
     assert len(films) == 2 and all(f.parent.name == "mega_starmie__mega_starmie" for f in films)
 
-    pilot, _ = _build_pilot("mega_starmie")
-    rows = list(rows_from_replay(pilot, load_replay(films[0])))      # load_replay reads .gz transparently
-    assert len(rows) > 10
+    decisions = iter_decisions(load_replay(films[0]))
+    assert len(decisions) > 10 and all(decision.obs is not None for decision in decisions)
 
     run_dir2 = generate_corpus_run(resume=True, **kw)                # same run_id -> resume
     films2 = list(run_dir2.rglob("*.json.gz"))

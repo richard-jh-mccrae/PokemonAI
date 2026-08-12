@@ -6,13 +6,12 @@ surface: ``Scout``, ``Read`` (+ ``Intel`` / ``EvoPath``), ``load_artifact`` /
 native engine.
 """
 from .artifact import Artifact, load_artifact
-from .matchup import matchup_favorability
 from .provider import CardStat, DictCardStatProvider, EngineCardStatProvider
 from .read import EvoPath, Intel, Read
 from .scout import Scout
 
 __all__ = [
     "Scout", "Read", "Intel", "EvoPath",
-    "Artifact", "load_artifact", "matchup_favorability",
+    "Artifact", "load_artifact",
     "CardStat", "DictCardStatProvider", "EngineCardStatProvider",
 ]

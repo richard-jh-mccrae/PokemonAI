@@ -1,8 +1,5 @@
-"""mega_starmie — DECLARATIONS ONLY: this deck carries ZERO deck Hypotheses. Every rule it ever
-authored was FOLDED into the General Strategy, keyed on the Roles / prize plan / params below, so any deck
-making the same declarations inherits the play. Weights stay ladder-tuned by id (ADR-0009).
+"""Mega Starmie declarations for the shared Bellman runtime.
 
-Architecture: docs/agent-architecture.md.
 Turbo Mega Starmie ex: open Cinderace (Explosiveness), Turbo Flare to load the Bench, tutor + evolve
 Staryu -> Mega Starmie ex, then fire Nebula Beam (one Ignition Energy on an Evolution = CCC).
 """
@@ -14,7 +11,7 @@ WATER_ENERGY, IGNITION_ENERGY = 3, 17
 MEGA_SIGNAL, BUDDY_POFFIN, SALVATORE, HILDA, ULTRA_BALL = 1145, 1086, 1189, 1225, 1121
 CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
-# Sparse Role overlay on the universal Function Tags — the deck's opt-in to the role-keyed general rules.
+# Sparse deck intent over portable card facts.
 ROLES = Roles({
     MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
     CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
@@ -35,7 +32,5 @@ STRATEGY = Strategy(
         (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
         (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
     )),
-    params={"bellman_turn_planner": True,  # Atomic post-setup cutover; synthetic strategies stay legacy.
-            "preferred_start": "second"},  # turbo: attack T1
-    hypotheses=[],                        # empty BY DESIGN — every rule folded into the general layer
+    params={"preferred_start": "second"},  # turbo: attack T1
 )

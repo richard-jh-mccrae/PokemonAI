@@ -4,8 +4,8 @@ from copy import deepcopy
 
 import pytest
 
-from common.bellman import ActionIdentity, DecisionState
-from common.bellman.value import CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry
+from common import ActionIdentity, DecisionState
+from common.value import CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry
 
 
 HAMMER, LILLIE, WATER = 1120, 1227, 3

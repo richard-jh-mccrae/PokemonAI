@@ -3,13 +3,18 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from common.bellman import (
+from common import (
     END_VALUE, BellmanTurnPlanner, CgpyTransitionProvider,
 )
 
 
 REPO = Path(__file__).resolve().parents[2]
-PACKAGE = REPO / "src" / "common" / "bellman"
+PACKAGE = REPO / "src" / "common"
+MODULES = (
+    "__init__.py", "algebra.py", "api.py", "damage.py", "damage_context.py", "draws.py",
+    "effects.py", "engine.py", "fetch.py", "information.py", "options.py", "planner.py",
+    "potential.py", "solver.py", "state.py", "value.py",
+)
 
 
 def test_end_value_is_the_neutral_continuation_contract():
@@ -23,7 +28,8 @@ def test_package_has_no_legacy_strategic_dependency():
         "common.strategy.doctrines.doctrine_fetch",
     }
     found = set()
-    for path in PACKAGE.glob("*.py"):
+    for name in MODULES:
+        path = PACKAGE / name
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -33,19 +39,20 @@ def test_package_has_no_legacy_strategic_dependency():
     assert not (found & forbidden), sorted(found & forbidden)
 
 
-def test_common_bellman_has_no_deck_or_named_card_policy():
+def test_common_core_has_no_deck_or_named_card_policy():
     forbidden = (
         "mega_starmie", "starmie", "cinderace", "pokegear", "harlequin", "lillie",
         "alakazam", "abra", "kadabra",
     )
-    for path in PACKAGE.glob("*.py"):
+    for name in MODULES:
+        path = PACKAGE / name
         source = path.read_text(encoding="utf-8").lower()
         assert not [name for name in forbidden if name in source], path
 
 
 def test_runtime_boundary_is_deck_neutral():
-    assert BellmanTurnPlanner.__module__ == "common.bellman.runtime"
+    assert BellmanTurnPlanner.__module__ == "common.planner"
 
 
 def test_runtime_uses_the_forkable_transition_provider():
-    assert CgpyTransitionProvider.__module__ == "common.bellman.engine"
+    assert CgpyTransitionProvider.__module__ == "common.engine"

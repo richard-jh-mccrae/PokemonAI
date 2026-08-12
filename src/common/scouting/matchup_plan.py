@@ -4,7 +4,7 @@ Every opponent body gets one ``(role, priority)`` from tiers of decreasing gener
 γ-independent **general** card fact, then the γ-gated **matchup** tier (curated Brief over Intel).
 
 **An ORDINAL PRIORITY, not a worth** (D1): nothing here may enter the prize-denominated
-`needs.opponent_target_value` currency. **The vocabulary is CLOSED** (D2) — an undeclared role
+the Bellman card-Worth currency. **The vocabulary is CLOSED** (D2) — an undeclared role
 resolves to 0 silently, so the audit and its two walks live HERE rather than in the test."""
 from __future__ import annotations
 
@@ -138,7 +138,7 @@ def roles_in_brief(brief: Mapping) -> list[str]:
 
 @dataclass(frozen=True)
 class BodyFacts:
-    """Supplied by the Pilot, which is what keeps this module pure. Every field already ships."""
+    """Supplied by the runtime, which keeps this module pure."""
 
     tags: frozenset = frozenset()
     prize_value: int = 1
@@ -168,6 +168,31 @@ def derive_general_roles(facts: Mapping[int, BodyFacts]) -> dict[int, str]:
         elif _ENGINE_TAGS & tags:
             out[cid] = "engine"
     return out
+
+
+def observed_body_facts(player: Mapping, *, stats=None, functions=None) -> dict[int, BodyFacts]:
+    """Resolve neutral in-play card facts without importing a strategic chooser."""
+
+    facts: dict[int, BodyFacts] = {}
+    bodies = tuple((player or {}).get("active") or ()) + tuple((player or {}).get("bench") or ())
+    for body in bodies:
+        card_id = (body or {}).get("id")
+        if card_id is None or int(card_id) in facts:
+            continue
+        card_id = int(card_id)
+        stat = stats.get(card_id) if stats is not None else None
+        forward = stats.forward_max_damage(card_id) if stats is not None else 0
+        tags = frozenset(functions.tags(card_id)) if functions is not None else frozenset()
+        facts[card_id] = BodyFacts(
+            tags=tags,
+            prize_value=int(getattr(stat, "prize_value", 1) if stat is not None else 1),
+            own_damage=float(getattr(stat, "maxDamage", 0) or 0),
+            forward_damage=float(forward or 0),
+            damage_boost=int(getattr(stat, "damageBoost", 0) or 0),
+            grants_free_retreat=bool(getattr(stat, "retreatFreeGrant", None)),
+            ability_fuel=bool(getattr(stat, "abilityEnergyTypes", ()) or ()),
+        )
+    return facts
 
 
 @dataclass(frozen=True)
@@ -214,5 +239,5 @@ __all__: Sequence[str] = (
     "Role", "ROLE_REGISTRY", "PROVENANCES", "ASSIGNERS", "DERIVED_BY", "READ_BY", "BRIEF_BY",
     "BodyFacts", "MatchupPlan",
     "role_priority", "undeclared_roles", "roles_in_dossiers", "roles_in_brief",
-    "derive_general_roles", "build_matchup_plan",
+    "derive_general_roles", "observed_body_facts", "build_matchup_plan",
 )

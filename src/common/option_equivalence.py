@@ -7,7 +7,7 @@ body, and fingerprinting only the body calls *different Energies onto one Pokém
 unfingerprintable, so it joins no class — blind implies conservative, structurally.
 
 Pure and lib-free: `tools/train/gates.py` imports this and must stay loadable with NO DLL, so nothing
-here may import `cg.api` (a bare import maps the native library) or a Pilot.
+here may import `cg.api` because a bare import maps the native library.
 
 Distinct from `gates.option_slot` (*which one identity does this option target*) and from
 `transposition_probe._bodykey` (deliberately lossy — it drops ``hp``).

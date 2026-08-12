@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from common.bellman import (
+from common import (
     Actor, Chance, Choice, DecisionState, Deterministic, Ledger, OpponentBelief, Terminal,
     TurnBudgets, Unknown, enumerate_legal_actions,
 )
-from common.bellman.algebra import Edge, WeightedEdge
+from common.algebra import Edge, WeightedEdge
 from train.blunder.store import load_corrections
 
 

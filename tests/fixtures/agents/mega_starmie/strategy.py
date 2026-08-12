@@ -35,6 +35,5 @@ STRATEGY = Strategy(
         (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
         (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
     )),
-    params={"preferred_start": "second"},  # turbo: attack T1 -> general `honor-preferred-start`
-    hypotheses=[],                        # empty by design — declarations drive General Strategy
+    params={"preferred_start": "second"},
 )

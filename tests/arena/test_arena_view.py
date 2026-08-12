@@ -1,6 +1,6 @@
 """Arena view-model: raw seat obs -> the phone-renderable board + labeled options.
 
-The one place obs decoding for the Visitor lives. Uses pilot_helpers' lib-free obs
+The one place obs decoding for the Visitor lives. Uses library-free observation
 builders with real pool ids, so labels are checked against real card names.
 Engine-backed only for name lookups (provider), same as CI's engine-load guarantee.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
-import pilot_helpers as ph  # noqa: E402
+import observation_helpers as ph  # noqa: E402
 from deck_convert import _indexes  # noqa: E402
 from arena import view  # noqa: E402
 

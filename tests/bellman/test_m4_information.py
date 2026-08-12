@@ -5,16 +5,16 @@ from math import comb
 
 import pytest
 
-from common.bellman import (
+from common import (
     ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver,
     RevealChoice, Terminal,
 )
-from common.bellman.algebra import WeightedEdge
-from common.bellman.information import (
+from common.algebra import WeightedEdge
+from common.information import (
     BellmanDeckProfile, OutcomeGroup, draw_outcomes, hypergeometric_classes, opponent_belief,
 )
-from common.bellman.options import LegalAction
-from common.bellman.value import CardFacts, Potential, ValueOracle, ValueRegistry
+from common.options import LegalAction
+from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
 STARYU, CINDERACE, BOSS, WATER, LILLIE = 1030, 666, 1182, 3, 1227
@@ -140,17 +140,17 @@ def test_60hp_fixture_attaches_then_takes_lillie_expectation_and_replans():
 def test_real_engine_owns_resolution_and_hidden_information_is_explicit_chance(
         card_id, node_type):
     from pathlib import Path
-    from common.bellman.engine import CgpyTransitionProvider
+    from common.engine import CgpyTransitionProvider
     from train.blunder.store import load_corrections
 
     repo = Path(__file__).resolve().parents[2]
     deck = tuple(int(line) for line in (repo / "src" / "agents" / "mega_starmie" /
                                         "deck.csv").read_text().split())
+    from bellman_helpers import runtime
     from common.cards import CardFunctions
     from common.effects import CardEffects
-    from train.tune import _build_pilot
     tags = CardFunctions.load()
-    stats = _build_pilot("mega_starmie")[0].stats
+    stats = runtime().stats
     registry = ValueRegistry(
         roles={CINDERACE: ("accel_source",)},
         functions={known: tuple(tags.tags(known)) for known in set(deck)},

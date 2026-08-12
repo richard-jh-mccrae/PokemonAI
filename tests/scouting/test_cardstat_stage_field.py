@@ -93,8 +93,18 @@ def test_dump_cards_stage_of_delegates_rather_than_respelling(cards):
 def test_csv_stage_truth_matches_the_engine_pool(cards):
     """The fixture audit's CSV-side mapping is INDEPENDENT ground truth, so it is checked against
     the engine rather than assumed. Without the Fossil leg it fails on the five `Item` rows."""
-    from test_cardstat_fixture_facts import _csv_truth        # sibling module (no tests package)
-    truth = _csv_truth()
+    column = "Stage (Pokémon)/Type (Energy and Trainer)"
+    labels = {"Basic Pokémon": "basic", "Stage 1 Pokémon": "stage1",
+              "Stage 2 Pokémon": "stage2"}
+    truth = {}
+    with CSV_PATH.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            card_id = int(row["Card ID"])
+            stage = labels.get(row[column])
+            hp = (row.get("HP") or "").strip()
+            if stage is None and hp.isdigit() and int(hp) > 0:
+                stage = "basic"
+            truth.setdefault(card_id, {"stage": stage})
     missing = [cid for cid in cards if cid not in truth]
     assert missing == []
     wrong = {cid: (truth[cid]["stage"], stage_from_card(c))

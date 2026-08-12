@@ -1,11 +1,7 @@
 """Assemble a self-contained submission directory and zip it (see ADR-0004).
 
-Copies a deck-specific agent (`agents/<name>/`'s `*.py` + `deck.csv` + `tuned.json` when
-present) together with the shared `common/`, native `cg/`, and forkable `cgpy/` packages (and the compiled
-`common/scouting/artifact.json`) into `dist/<name>/`, writes a self-contained `brief.html` and
-machine-joinable `brief.csv` (the embedded decision-steering **Manifest** — provenance, hypotheses,
-capabilities, deck, composer inventory;
-see ADR-0019), then zips it to
+Copies a deck-specific declaration together with the shared Bellman runtime, scouting data, and
+native engine. It writes a self-contained manifest brief, then zips the exact staged bundle to
 `dist/<name>_<YYYYMMDD>_<githash>.zip` — the staged dir *is* the exact shipped bundle,
 and the stamped zip names the deploy artifact by build date + commit (`-dirty` suffix when the
 work tree has uncommitted changes). `--no-stamp` falls back to a stable `dist/<name>.zip`.
@@ -71,18 +67,13 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
     for py in sorted(agent_dir.glob("*.py")):  # main.py + sibling modules (e.g. strategy.py)
         shutil.copy2(py, stage / py.name)
     shutil.copy2(agent_dir / "deck.csv", stage / "deck.csv")
-    if (tuned := agent_dir / "tuned.json").exists():   # machine weight overrides (ADR-0018), if present
-        shutil.copy2(tuned, stage / "tuned.json")
-    if (tuned_meta := agent_dir / "tuned.meta.json").exists():  # training provenance sidecar (ADR-0019)
-        shutil.copy2(tuned_meta, stage / "tuned.meta.json")
     shutil.copytree(MS / "common", stage / "common", ignore=_IGNORE)
     shutil.copytree(MS / "cg", stage / "cg", ignore=_IGNORE)
-    shutil.copytree(MS / "cgpy", stage / "cgpy", ignore=_IGNORE)
 
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
     from submit.brief import build_manifest, render_brief, render_brief_csv  # lazy: avoid import cycle
     manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
-    brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id, prev_hyps=prev_hyps)
+    brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id)
     (stage / "brief.html").write_text(brief, encoding="utf-8")
     (stage / "brief.csv").write_text(render_brief_csv(manifest), encoding="utf-8", newline="")
 

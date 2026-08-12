@@ -15,7 +15,7 @@ from pathlib import Path
 
 CORPUS_DIRNAME = "corpus"
 MANIFEST_VERSION = 1
-VALUE_MODEL_FORMAT = 2                     # C1b: the artifact format this corpus feeds (S2a §D3)
+BELLMAN_CORRECTION_FORMAT = 1
 _MANIFEST_FLUSH_EVERY = 10                 # games between manifest header flushes (disk is authoritative)
 
 
@@ -77,7 +77,8 @@ def build_manifest(*, run_id: str, created_at: str, git_rev: str, agents: list[s
         "pairings": pairings,
         "per_pairing": per_pairing,
         "caps": {"max_games": max_games, "max_bytes": max_bytes},
-        "corpus_schema": {"replay_shape": "cabt-visualize", "value_model_format": VALUE_MODEL_FORMAT},
+        "corpus_schema": {"replay_shape": "cabt-visualize",
+                          "bellman_correction_format": BELLMAN_CORRECTION_FORMAT},
         "status": "running",
         "totals": {"games": 0, "bytes": 0},
     }

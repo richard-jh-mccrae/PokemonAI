@@ -11,6 +11,7 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 import importlib
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -21,17 +22,42 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import option_equivalence  # noqa: E402
+from common.runtime import build_runtime  # noqa: E402
+from common.telemetry import to_record  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
-from train.gates import satisfies_human  # noqa: E402
-from train.tuner.retest import retest  # noqa: E402
 
 
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "mega-starmie-live-corpus-baseline.json"
 
 
-def _build_pilot():
-    return importlib.import_module("train.tune")._build_pilot("mega_starmie")[0]
+def _build_runtime():
+    agent_dir = REPO / "src" / "agents" / "mega_starmie"
+    spec = importlib.util.spec_from_file_location("_bellman_corpus_strategy",
+                                                  agent_dir / "strategy.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    deck = [int(value) for value in (agent_dir / "deck.csv").read_text().splitlines()
+            if value.strip()]
+    return build_runtime(module.STRATEGY, deck)
+
+
+def _satisfies_human(chosen, correct, equivalence) -> bool:
+    if chosen is None or correct is None:
+        return False
+    if not correct:
+        return not chosen
+    from common.option_equivalence import class_of
+    picked = frozenset(chosen)
+    return all(bool(class_of(equivalence, wanted) & picked) for wanted in correct)
+
+
+def _retest(correction, runtime) -> dict:
+    if correction.obs is None:
+        return {"after": None, "chosen_after": None}
+    decision = runtime.decide(correction.obs)
+    after = to_record(decision, read=runtime.last_read)
+    return {"after": after, "chosen_after": after["chosen"]}
 
 
 def _frame(correction) -> int:
@@ -43,15 +69,15 @@ def _episode(correction) -> int:
 
 
 def _sweep_episode(corrections) -> list[dict]:
-    pilot = _build_pilot()
+    runtime = _build_runtime()
     rows = []
     for c in corrections:
-        result = retest(c, pilot)
+        result = _retest(c, runtime)
         obs = c.obs or {}
         equivalence = option_equivalence(((obs.get("select") or {}).get("option") or []), obs)
         chosen = result["chosen_after"]
         exact = chosen == list(c.correct or ())
-        agrees = satisfies_human(chosen, list(c.correct or ()), equiv=equivalence)
+        agrees = _satisfies_human(chosen, list(c.correct or ()), equivalence)
         select = obs.get("select") or {}
         options = select.get("option") or []
         current = obs.get("current") or {}
@@ -74,18 +100,13 @@ def _sweep_episode(corrections) -> list[dict]:
             "rationale": c.rationale,
         }
         if not agrees:
-            composer = (result.get("after") or {}).get("composer") or {}
-            production = composer.get("production") or {}
+            after = result.get("after") or {}
+            diagnostics = after.get("diagnostics") or {}
             row["bellman"] = {
-                "action": composer.get("action"),
-                "value": composer.get("value"),
-                "complete": composer.get("complete"),
-                "ledger": composer.get("ledger"),
-                "root_previews": production.get("root_previews"),
-                "previewed": production.get("previewed"),
-                "pruned": production.get("pruned"),
-                "preview_caps": production.get("preview_caps"),
-                "cap_reached": production.get("cap_reached"),
+                "action": after.get("action"),
+                "value": after.get("value"),
+                "complete": after.get("complete"),
+                "diagnostics": diagnostics,
             }
         rows.append(row)
     return rows

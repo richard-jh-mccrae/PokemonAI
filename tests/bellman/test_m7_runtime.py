@@ -5,21 +5,21 @@ import json
 
 import pytest
 
+from bellman_helpers import runtime
 from cgpy.engine import Engine
 from cgpy.options import pose_main
 from cgpy.rng import SeededRng
 from cgpy.search import export_token
 from cgpy.state import PokemonInPlay
 
-from common.bellman.engine import _own_prize_export
-from common.bellman import (
+from common.engine import _own_prize_export
+from common import (
     BoardPotential, DecisionState, Deterministic, ProductionLimits, ProductionSolver,
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
-from common.bellman.engine import CgpyTransitionProvider
-from common.telemetry import to_native_record
+from common.engine import CgpyTransitionProvider
+from common.telemetry import to_record
 from train.blunder.store import load_corrections
-from train.tune import _build_pilot
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -78,38 +78,36 @@ def _obs(engine):
 
 
 def test_60hp_policy_attaches_then_commits_lillie_and_replans():
-    pilot = _build_pilot("mega_starmie")[0]
+    deployed = runtime()
     engine = _fixture(60)
-    first = pilot.explain(_obs(engine))
-    assert first.chosen == [1]
-    assert first.bellman["backend"] == "cgpy-bellman"
+    first = deployed.decide(_obs(engine))
+    assert first.chosen == (1,)
+    assert first.diagnostics["backend"] == "cgpy-bellman"
     engine.step(first.chosen)
-    second = pilot.explain(_obs(engine))
+    second = deployed.decide(_obs(engine))
     selected = engine.gs.pending.options[second.chosen[0]]
     assert engine.gs.card_id(engine.gs.players[0].hand[selected["index"]]) == LILLIE
 
 
 def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():
-    pilot = _build_pilot("mega_starmie")[0]
+    deployed = runtime()
     engine = _fixture(50)
-    decision = pilot.explain(_obs(engine))
-    assert decision.chosen == [1]
-    assert decision.bellman["value"] > 0.0
+    decision = deployed.decide(_obs(engine))
+    assert decision.chosen == (1,)
+    assert decision.value > 0.0
     engine.step(decision.chosen)
-    decision = pilot.explain(_obs(engine))
-    assert pilot.decide(_obs(engine)) == [0]
+    decision = deployed.decide(_obs(engine))
+    assert decision.chosen == (0,)
     engine.step(decision.chosen)
-    assert pilot.decide(_obs(engine)) == [0]
+    assert deployed.decide(_obs(engine)).chosen == (0,)
 
 
 def test_bellman_telemetry_contains_no_legacy_pilot_payload():
-    decision = _build_pilot("mega_starmie")[0].explain(_obs(_fixture(60)))
-    record = to_native_record(decision)
+    record = to_record(runtime().decide(_obs(_fixture(60))))
 
-    assert record["schema"] == "bellman"
+    assert record["bellman"] is True
     assert set(record) == {
-        "schema", "tier", "chosen", "action", "value", "complete", "backend",
-        "ledger", "production", "root",
+        "bellman", "chosen", "action", "value", "complete", "diagnostics", "belief",
     }
     assert not ({"plan", "opts", "lethal", "planned", "margin", "composer", "posture"}
                 & set(record))
@@ -117,20 +115,19 @@ def test_bellman_telemetry_contains_no_legacy_pilot_payload():
 
 def test_post_attack_potential_keeps_the_root_players_perspective():
     """A passed turn must not value our attacker as the opponent's threat."""
-    pilot = _build_pilot("mega_starmie")[0]
+    deployed = runtime()
     observation = _obs(_fixture(60))
     observation["current"]["yourIndex"] = 1
-    registry = ValueRegistry.from_strategy(
-        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
-    potential = BoardPotential(pilot.stats, registry=registry, root_seat=0)
+    registry = deployed.registry
+    potential = BoardPotential(deployed.stats, registry=registry, root_seat=0)
 
     assert potential(observation).total == pytest.approx(
-        BoardPotential(pilot.stats, registry=registry)(
+        BoardPotential(deployed.stats, registry=registry)(
         {**observation, "current": {**observation["current"], "yourIndex": 0}}).total)
 
 
 def test_bellman_batch_establishes_the_starmie_line_before_attacking():
-    pilot = _build_pilot("mega_starmie")[0]
+    deployed = runtime()
     records = [json.loads(line) for line in (
         REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -141,24 +138,19 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
     }
     for record in records:
         if record["id"] in expected:
-            assert pilot.decide(record["obs"]) == expected[record["id"]]
+            assert deployed.decide(record["obs"]).chosen == tuple(expected[record["id"]])
 
 
-def test_atomic_route_never_calls_legacy_strategic_choosers(monkeypatch):
-    pilot = _build_pilot("mega_starmie")[0]
-    engine = _fixture(60)
-
-    def legacy_called(*_args, **_kwargs):
-        raise AssertionError("legacy strategic chooser was called")
-
-    for name in ("_board", "_option_trace", "plan_turn", "_score_order",
-                 "_finish_turn_last", "_greedy_grab"):
-        monkeypatch.setattr(pilot, name, legacy_called)
-    assert pilot.decide(_obs(engine)) == [1]
+def test_runtime_exposes_no_legacy_strategic_choosers():
+    deployed = runtime()
+    assert not any(hasattr(deployed, name) for name in (
+        "_board", "_option_trace", "plan_turn", "_score_order",
+        "_finish_turn_last", "_greedy_grab"))
+    assert deployed.decide(_obs(_fixture(60))).chosen == (1,)
 
 
-def test_atomic_route_leaves_every_turn_zero_pregame_choice_to_legacy(monkeypatch):
-    pilot = _build_pilot("mega_starmie")[0]
+def test_turn_zero_uses_declarative_pregame_policy():
+    deployed = runtime()
     observation = _obs(_fixture(60))
     observation["current"]["turn"] = 0
     observation["select"] = {
@@ -168,11 +160,9 @@ def test_atomic_route_leaves_every_turn_zero_pregame_choice_to_legacy(monkeypatc
         "deck": None, "contextCard": None, "effect": None,
     }
 
-    def bellman_called(*_args, **_kwargs):
-        raise AssertionError("pregame DRAW_COUNT reached Bellman")
-
-    monkeypatch.setattr(pilot, "_bellman_evaluate", bellman_called)
-    assert pilot.decide(observation) in ([0], [1])
+    decision = deployed.decide(observation)
+    assert decision.chosen in ((0,), (1,))
+    assert decision.diagnostics["backend"] == "declarative-pregame"
 
 
 def test_forkable_engine_turbo_flare_energy_menu_reconstructs_the_attack_rider():
@@ -305,10 +295,9 @@ class _TerminalMenu:
 
 
 def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sample():
-    pilot = _build_pilot("mega_starmie")[0]
-    registry = ValueRegistry.from_strategy(
-        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
-    oracle = ValueOracle(registry, BoardPotential(pilot.stats, registry=registry))
+    deployed = runtime()
+    registry = deployed.registry
+    oracle = ValueOracle(registry, BoardPotential(deployed.stats, registry=registry))
     rows = []
     for correction in load_corrections(REPO / "data" / "corrections"):
         if (correction.agent != "mega_starmie" or not correction.obs
@@ -341,10 +330,9 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
 
 
 def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
-    pilot = _build_pilot("mega_starmie")[0]
-    registry = ValueRegistry.from_strategy(
-        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
-    potential = BoardPotential(pilot.stats, registry=registry)
+    deployed = runtime()
+    registry = deployed.registry
+    potential = BoardPotential(deployed.stats, registry=registry)
     engine = _fixture(50)
     before = _obs(engine)
     won = _obs(engine)

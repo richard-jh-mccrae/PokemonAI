@@ -1,10 +1,10 @@
-# ADR-0139 — Mega Starmie uses one Bellman-style full-turn planner
+# ADR-0139 — Every deck uses one Bellman-style full-turn planner
 
-Status: Accepted and implemented for Mega Starmie.
+Status: Accepted and implemented for Mega Starmie, Mega Lucario, and Dragapult.
 
 ## Context
 
-Mega Starmie's shipped Pilot is a rules-heavy hybrid. Legal-option generation, tactical deciders,
+The former shipped Pilot was a rules-heavy hybrid. Legal-option generation, tactical deciders,
 Needs, hypothesis rungs, goal ladders, Composer, planner overrides, and doctrine ordering can each
 own part of the same choice. Several layers are incomplete or dark, and a locally sensible score can
 be overwritten by a different subsystem that prices a different part of the line. The result is not
@@ -337,7 +337,7 @@ invariant remain authoritative substrate.
 ## Implementation outcome
 
 The atomic Mega Starmie cutover is complete. After Set-Up, every offered action and nested choice is
-generated and transitioned through `common.bellman`; no legacy strategic chooser or fallback can
+generated and transitioned through `common`; no legacy strategic chooser or fallback can
 select the move. The bounded production solver and exhaustive reference solver share the same
 state, transition, Worth, potential, chance, belief, and ledger contracts. Production has no depth
 horizon: a turn ends only by engine transition, semantic-cycle detection, or explicit capacity.

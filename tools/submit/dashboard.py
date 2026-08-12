@@ -44,10 +44,10 @@ def render_dashboard(history: list[dict], performance: list[dict]) -> str:
             f"<tr><td>{h['submission_id']}</td><td>{html.escape(str(h.get('label') or ''))}</td>"
             f"<td>{html.escape(str(h.get('built_at', ''))[:10])}</td>"
             f"<td><code>{html.escape(str(h.get('git_hash', '')))}</code></td>"
-            f"<td>{s['tier']}</td><td>{s['general_hyps'] + s['deck_hyps']}</td>"
+            f"<td>{html.escape(s.get('system', 'legacy'))}</td><td>{s.get('roles', '—')}</td>"
             f"<td>{p.get('public_score', '—')}</td><td>{record}</td><td>{_matchups(p)}</td></tr>")
-    head = ("<tr><th>#</th><th>label</th><th>built</th><th>commit</th><th>tier</th>"
-            "<th>hyps</th><th>score</th><th>W-L</th><th>matchups</th></tr>")
+    head = ("<tr><th>#</th><th>label</th><th>built</th><th>commit</th><th>system</th>"
+            "<th>roles</th><th>score</th><th>W-L</th><th>matchups</th></tr>")
     return (
         "<!doctype html>\n<html lang='en'><head><meta charset='utf-8'>\n"
         "<title>Agent Dashboard</title>\n"

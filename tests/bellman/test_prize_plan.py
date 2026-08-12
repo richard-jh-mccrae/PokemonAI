@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from common.bellman import BellmanDeckProfile, BoardPotential, CardFacts, ValueRegistry
+from common import BellmanDeckProfile, BoardPotential, CardFacts, ValueRegistry
 from common.strategy import PrizePlan, Strategy
 
 
@@ -86,3 +86,17 @@ def test_strategy_prize_plan_reaches_the_bellman_deck_profile():
     profile = BellmanDeckProfile.from_registry(registry)
     assert profile.prize_routes == strategy.prize_plan.routes
     assert profile.prizes_to_win == strategy.prize_plan.prizes_to_win
+
+
+def test_declared_engine_partner_controls_board_resource_value():
+    engine, partner = CINDERACE, STARYU
+    registry = ValueRegistry(
+        roles={engine: ("engine",), partner: ("engine",)},
+        facts={engine: CardFacts(pokemon=True), partner: CardFacts(pokemon=True)},
+        partners={engine: (partner,)},
+    )
+    potential = BoardPotential(_Stats(), registry=registry)
+    alone = _player(engine)
+    together = _player(engine, (partner,))
+
+    assert potential._board_resources(alone) < potential._board_resources(together)

@@ -36,7 +36,7 @@ def main() -> None:
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8")
     os.dup2(2, 1)
 
-    agent = _load_agent(bundle)                            # builds the Pilot once (the pregame window)
+    agent = _load_agent(bundle)                            # builds the runtime once
     for line in sys.stdin:
         line = line.strip()
         if not line:

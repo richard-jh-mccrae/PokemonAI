@@ -20,9 +20,9 @@ DEFAULT_REPORTS = Path(__file__).resolve().parents[2] / "reports"
 def compose_message(row: dict) -> str:
     """The `-m` message: the join key (submission id) + a readable state digest."""
     s = row["summary"]
-    msg = (f"#{row['submission_id']} {row['agent']} @{row['git_hash']} · "
-           f"Tier-{s['tier']} · {s['general_hyps'] + s['deck_hyps']} hyps · "
-           f"posture:{'on' if s['posture'] else 'off'} · overrides:{s['overrides']}")
+    msg = (f"#{row['submission_id']} {row['agent']} @{row['git_hash']} · Bellman · "
+           f"roles:{s['roles']} · lines:{s['lines']} · "
+           f"scouting:{'on' if s['scouting'] else 'off'}")
     return msg + (f" · {row['label']}" if row.get("label") else "")
 
 

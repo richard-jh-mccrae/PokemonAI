@@ -1,5 +1,0 @@
-{
-  "common_commit": "b31f999d8e854b67b0eacf59f2fd26dfe254d037",
-  "aligned_at": "2026-07-02",
-  "summary": "bootstrap: post-fold baseline (ADR-0034, hypotheses=[]) + weight_overrides infra (ADR-0035); hygiene pass renamed STRATEGY.md dispositions to the general ids; no folds pending, tuned.json clean"
-}
