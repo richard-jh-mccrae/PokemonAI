@@ -1,0 +1,39 @@
+{
+  "slug": "hydrapple_ex_meganium_teal_mask_ogerpon_ex",
+  "label": "Hydrapple ex / Meganium / Teal Mask Ogerpon ex",
+  "covers": [
+    "Hydrapple ex / Meganium / Teal Mask Ogerpon ex",
+    "Teal Mask Ogerpon ex"
+  ],
+  "authored": "2026-08-12",
+  "wincon": {
+    "line": ["Applin", "Dipplin", "Hydrapple ex"],
+    "plan": "develop Hydrapple ex and Meganium, spread Basic Grass Energy across the board, then take repeated OHKOs with Syrup Storm"
+  },
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_comeback_disruptor": true
+  },
+  "pokemon": [
+    {"card": "Applin", "roles": ["wincon_base"]},
+    {"card": "Dipplin", "roles": ["wincon_stage"]},
+    {"card": "Hydrapple ex", "roles": ["wincon", "primary_attacker", "energy_accel", "threat"]},
+    {"card": "Chikorita", "roles": ["wincon_base"]},
+    {"card": "Bayleef", "roles": ["wincon_stage", "support"]},
+    {"card": "Meganium", "roles": ["support", "energy_accel", "disruption_target", "threat"]},
+    {"card": "Teal Mask Ogerpon ex", "roles": ["support", "energy_accel", "disruption_target", "attacker", "threat"]},
+    {"card": "Fezandipiti ex", "roles": ["support", "draw_engine", "disruption_target", "attacker", "threat"]},
+    {"card": "Meowth ex", "roles": ["support", "disruption_target"]}
+  ],
+  "key_cards": [
+    {"card": "Forest of Vitality", "role": "evolution_compression", "enables": "same-turn Grass evolution after turn one"},
+    {"card": "Bug Catching Set", "role": "grass_energy_dig"},
+    {"card": "Unfair Stamp", "role": "post_ko_hand_disruption"},
+    {"card": "Boss's Orders", "role": "gust"}
+  ],
+  "sources": [
+    "PokeBeach — How Do You Like Them Apples? — https://www.pokebeach.com/2026/06/how-do-you-like-them-apples-hydrapples-rise-to-the-top",
+    "TCGplayer — The Best Pokémon TCG Decks Right Now, June 2026 — https://www.tcgplayer.com/content/article/The-Best-Pok%C3%A9mon-TCG-Decks-Right-Now-June-2026/a759cf58-5597-4450-8e55-9a95b3d266ed/",
+    "TCG Contender — Ogerpon Meganium Hydrapple — https://tcgcontender.com/pokemon/decks/standard/ogerpon-meganium-hydrapple"
+  ]
+}

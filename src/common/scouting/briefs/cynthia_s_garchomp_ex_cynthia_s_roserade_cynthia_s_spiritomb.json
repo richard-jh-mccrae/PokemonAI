@@ -1,0 +1,36 @@
+{
+  "slug": "cynthia_s_garchomp_ex_cynthia_s_roserade_cynthia_s_spiritomb",
+  "label": "Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb",
+  "covers": [
+    "Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb"
+  ],
+  "authored": "2026-08-12",
+  "wincon": {
+    "line": ["Cynthia's Gible", "Cynthia's Gabite", "Cynthia's Garchomp ex"],
+    "plan": "build a 330-to-400 HP Garchomp and stack Cynthia's Roserade boosts so Draconic Buster takes repeated two-prize knockouts"
+  },
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_donk_vulnerable": true,
+    "opp_effect_immune_bodies": true,
+    "opp_comeback_disruptor": true
+  },
+  "pokemon": [
+    {"card": "Cynthia's Gible", "roles": ["wincon_base"]},
+    {"card": "Cynthia's Gabite", "roles": ["wincon_stage", "support", "disruption_target"]},
+    {"card": "Cynthia's Garchomp ex", "roles": ["wincon", "primary_attacker", "threat"]},
+    {"card": "Cynthia's Roselia", "roles": ["support"]},
+    {"card": "Cynthia's Roserade", "roles": ["support", "disruption_target"]},
+    {"card": "Cynthia's Spiritomb", "roles": ["attacker", "threat"]}
+  ],
+  "key_cards": [
+    {"card": "Cynthia's Power Weight", "role": "bulk_boost", "enables": "Cynthia's Garchomp ex reaches 400 HP"},
+    {"card": "Rock Fighting Energy", "role": "attack_effect_protection", "enables": "attached Fighting Pokemon ignores opposing attack effects, but not damage"},
+    {"card": "Unfair Stamp", "role": "comeback_hand_disruption"}
+  ],
+  "sources": [
+    "TCGplayer, The Best Pokemon TCG Decks (May 2026) — https://www.tcgplayer.com/content/article/The-Best-Pok%C3%A9mon-TCG-Decks-May-2026/c50c6950-d055-44a2-8ee2-c099428fb322/",
+    "PokeBeach, Cynthia's Garchomp - Boom or Bust? — https://www.pokebeach.com/2025/06/cynthias-garchomp-boom-or-bust",
+    "Limitless Labs, Cynthia's Garchomp — https://labs.limitlesstcg.com/decks/cynthia-garchomp-ex?combine=&tournaments=66%2C65%2C64%2C63"
+  ]
+}
