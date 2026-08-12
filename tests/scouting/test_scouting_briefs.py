@@ -102,9 +102,8 @@ def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
     assert target_roles == {678: "prize_liability"}
 
 
-def test_bellman_role_worth_uses_authored_brief_roles_and_payoff_prizes():
+def test_bellman_role_worth_expands_primary_attacker_to_its_ancestors():
     brief = _ml_brief()
-    brief.wincon = {"line": ["Riolu", "Mega Lucario ex"]}
 
     class Stats:
         @staticmethod
@@ -113,12 +112,19 @@ def test_bellman_role_worth_uses_authored_brief_roles_and_payoff_prizes():
 
         @staticmethod
         def get(card_id):
-            return SimpleNamespace(prize_value=3 if card_id == 678 else 1, stage="basic")
+            return SimpleNamespace(
+                prize_value=3 if card_id == 678 else 1,
+                stage="basic" if card_id == 677 else "stage1",
+                evolvesFrom="Riolu" if card_id == 678 else None)
+
+        @staticmethod
+        def forward_card_ids(card_id):
+            return {678} if card_id == 677 else set()
 
     worth = resolve_scouted_role_worth(
         _read(("Mega Lucario ex", 1.0)), SimpleNamespace(dossiers={}), Stats(), briefs=(brief,))
 
-    assert worth[677] > worth[678]
+    assert worth[677] == worth[678] > 0
 
 
 def test_bellman_role_worth_does_not_promote_every_dossier_line_to_wincon():
@@ -170,7 +176,8 @@ def test_dragapult_brief_ranks_its_primary_attacker_above_its_support_exes():
     over the one whose loss ends the game. `_snipe_tera_veto` lets the primary carry a role."""
     prov = EngineCardStatProvider()
     brief = next(b for b in load_briefs() if b.slug == "dragapult_ex")
-    _, roles = resolve_brief_cards(brief, prov.ids_for_name)
+    _, roles = resolve_brief_cards(
+        brief, prov.ids_for_name, stat_for_id=prov.get, forward_ids=prov.forward_card_ids)
     plan = build_matchup_plan(brief_roles=roles, gamma=1.0)
 
     def _pri(name):
@@ -202,10 +209,11 @@ def _ancestor_names(prov, cid: int) -> set[str]:
 
 @pytest.mark.req("REQ-BRIEF-0002")
 def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
-    """A primary attacker is the curated matchup payoff; backup attackers remain below it."""
+    """A primary attacker and every earlier evolution are the curated matchup payoff."""
     prov = EngineCardStatProvider()
     for brief in load_briefs():
-        _, target_roles = resolve_brief_cards(brief, prov.ids_for_name)
+        _, target_roles = resolve_brief_cards(
+            brief, prov.ids_for_name, stat_for_id=prov.get, forward_ids=prov.forward_card_ids)
         primaries = [entry["card"] for entry in brief.pokemon
                      if "primary_attacker" in entry.get("roles", [])]
         assert primaries, f"{brief.slug}: Brief has no primary attacker"
@@ -213,6 +221,11 @@ def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
             ids = prov.ids_for_name(name) or ()
             assert any(target_roles.get(cid) == "prize_liability" for cid in ids), (
                 f"{brief.slug}: primary attacker {name!r} must resolve to prize_liability")
+            ancestor_names = set().union(*(_ancestor_names(prov, card_id) for card_id in ids))
+            for ancestor_name in ancestor_names:
+                assert all(target_roles.get(card_id) == "prize_liability"
+                           for card_id in prov.ids_for_name(ancestor_name)), (
+                    f"{brief.slug}: {ancestor_name!r} must inherit primary-attacker priority")
 
 
 def test_compact_roles_supply_threat_and_target_readers():
@@ -234,3 +247,28 @@ def test_multiple_primary_attackers_are_supported():
     ])
     _, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Hariyama": {679}}.get(n, ()))
     assert roles == {678: "prize_liability", 679: "prize_liability"}
+
+
+def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
+    class _Stat:
+        def __init__(self, name, parent=None):
+            self.name = name
+            self.evolvesFrom = parent
+
+    stats = {
+        1: _Stat("Basic"), 2: _Stat("Stage 1", "Basic"), 3: _Stat("Stage 2", "Stage 1"),
+        4: _Stat("Sibling Stage 1", "Basic"),
+    }
+    names = {stat.name: {card_id} for card_id, stat in stats.items()}
+    forward = {1: {2, 3, 4}, 2: {3}, 3: set(), 4: set()}
+    brief = _ml_brief(pokemon=[
+        {"card": "Stage 2", "roles": ["primary_attacker"]},
+        {"card": "Basic", "roles": ["backup_attacker"]},
+    ])
+
+    threats, roles = resolve_brief_cards(
+        brief, lambda name: names.get(name, ()), stat_for_id=stats.get,
+        forward_ids=lambda card_id: forward[card_id])
+
+    assert threats == frozenset({1, 2, 3})
+    assert roles == {1: "prize_liability", 2: "prize_liability", 3: "prize_liability"}
