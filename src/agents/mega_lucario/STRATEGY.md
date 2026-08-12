@@ -954,23 +954,19 @@ BOSS_ORDERS, AIR_BALLOON, GRAVITY_MOUNTAIN = 1182, 1174, 1252
 # NEW 2026-07-03: UNFAIR_STAMP=1080, BLACK_BELTS=1211, PETREL=1219, WALLYS=1229 (all covers-as-is,
 # no deck rule → no const needed in strategy.py). REMOVED: MAX_BELT=1158, WATCHTOWER=1256.
 
-roles = {
+roles = Roles({
     MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
-    RIOLU:           ["win_condition_base"],          # line pre-evo
     SOLROCK:         ["secondary_attacker", "engine"], # early attacker + Lunar Cycle enabler
     LUNATONE:        ["engine"],                        # the native draw engine (Lunar Cycle)
     HARIYAMA:        ["secondary_attacker", "gust"],   # Heave-Ho + Wild Press
-    MAKUHITA:        ["evolution_base"],
     MEOWTH_EX:       ["tutor"],                         # situational Supporter fetch
     BOSS_ORDERS:     ["gust"],
     AIR_BALLOON:     ["retreat_tool"],
     # Black Belt's / Wally's / Petrel / Unfair Stamp: NO Role — all covered by tag/CardStat-keyed
     # general rules (damage-boost model / clutch_heal doctrine / search / aceSpec guards).
-}
-lines  = [ Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition") ]
-# Secondary attackers (Solrock, Makuhita→Hariyama) are NOT a Line payoff — they're Roles, so the
-# Line stays single (the wincon). Online (SETUP→RACE) at the engine default = 1 F (Aura Jab) — correct,
-# no Ready() override.
+}, evolves={RIOLU: MEGA_LUCARIO_EX, MAKUHITA: HARIYAMA})
+# The terminal Roles distinguish the win-condition and secondary-attacker paths. Online
+# (SETUP→RACE) at the engine default = 1 F (Aura Jab) — correct; no readiness override.
 params = { "setup_energy_target": 2, "search_budget": 0 }   # 2 = FF for the first Mega Brave
 ```
 

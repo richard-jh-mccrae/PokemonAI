@@ -845,9 +845,8 @@ _Avoid_: Strategy, Posture, AttackPlan (that's the Score-layer attack choice), p
 — the label never gates rule eligibility), state machine (it is derived, not authored/transitioned)
 
 **Strategy**:
-A deck's static, declared doctrine — win-condition line(s), setup priorities, energy
-targets, and per-Function-Tag / per-card weights — supplied by `agents/<deck>/strategy.py`
-as a registry of named, testable hypotheses.
+A deck's static, declared doctrine — card roles and their evolution relationships, setup priorities,
+preferred Prize Plan, and sparse parameters — supplied by `agents/<deck>/strategy.py`.
 _Avoid_: the Strategy Category (the competition), Plan, "hard-coded logic"
 
 **General Strategy**:
@@ -876,12 +875,22 @@ still scores every rule as one flat sum, so cluster boundaries and order are irr
 _Avoid_: doctrine (reserve that for the archetype+Mixin files), module (too generic)
 
 **Role**:
-A deck's purpose-label assigned to one of its cards/lines (`win_condition`,
+A deck's purpose-label assigned to one of its cards (`win_condition`,
 `primary_attacker`, `accel_source`, `gust`, …) — the per-deck overlay on the universal
 Function Tag. Drawn from a closed, shared vocabulary (extended by process) so roles stay
-comparable across decks. (`starter` was retired 2026-07-28 by ADR-0079 — it drove nothing, and
+comparable across decks. The `Roles` declaration also carries `evolves={source: target}` edges;
+the shared layer normalizes those relationships into the Line view its consumers need. (`starter`
+was retired 2026-07-28 by ADR-0079 — it drove nothing, and
 naming a deck's openers is now the **Starter Priority**'s job.)
 _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), job, slot
+
+**Prize Plan**:
+A deck's preferred ordered routes through its own Pokémon losses. Each route names card ids in KO
+order; the shared Bellman value reads printed prize values from card facts and only rewards routes
+whose total exceeds the declared win threshold. Mega Starmie's two seven-prize routes are Cinderace
+→ Mega Starmie ex → Mega Starmie ex and Mega Starmie ex → Cinderace → Mega Starmie ex.
+_Avoid_: hard-coded prize values, an opponent Prize Path (that is the offensive route through their
+board), or an unordered set (placing Cinderace between the Megas is load-bearing)
 
 **Starter Priority**:
 A deck's ordered list of the bodies it wants in the **Active Spot** at the pregame Set-Up pick,

@@ -489,7 +489,7 @@ dragapult — id 666 is **shared with mega_starmie**, do not touch there). No `w
 no rule breaks. The trigger tests use a local `CINDERACE` filler (self-contained) — they still pass; modernising
 that filler to Dunsparce/Dreepy is a nicety for `/update-strategy`.
 
-## 7 · Roles, Lines, params (the executable shape, pre-code)
+## 7 · Roles, evolution relationships, params (the executable shape)
 
 **Card ids** (dragapult_ex/deck.csv, verified 2026-07-09): DUDUNSPARCE 66, MUNKIDORI 112, DREEPY 119, DRAKLOAK 120,
 DRAGAPULT_EX 121, FEZANDIPITI_EX 140, BUDEW 235, DUNSPARCE 305, MEOWTH_EX 1071, UNFAIR_STAMP 1080, BUDDY_POFFIN 1086,
@@ -498,9 +498,8 @@ LILLIES 1227, ROSAS 1240, RISKY_RUINS 1260; FIRE 2, PSYCHIC 5, DARKNESS 7. **JUD
 Psychic; NOT a `strategy.py` const — tag-driven `shuffle_hand`, no deck rule references it). (Removed: CINDERACE 666.)**
 
 ```
-roles = {
+roles = Roles({
   DRAGAPULT_EX:    ["win_condition", "primary_attacker"],
-  DREEPY:          ["win_condition_base"],        # Line pre-evo
   CRISPIN:         ["accel_source"],              # primary un-gated accel (color-fixer)
   BOSS_ORDERS:     ["gust"],
   NIGHT_STRETCHER: ["recovery"],
@@ -516,10 +515,8 @@ roles = {
   # Meowth ex: NO Role — supporter_tutor TAG drives it. Dunsparce/Dudunsparce: fetch/ability tags — not a Role.
   # Tutors + Lillie's: Fetch / Shuffle-Refresh doctrines key on their tags — no Role.
   # (CINDERACE role removed.)
-}
-
-lines = [ Line(path=[DREEPY, DRAKLOAK, DRAGAPULT_EX], payoff=DRAGAPULT_EX,
-               role="win_condition", ready=Ready(energy=2)) ]   # FP Phantom Dive
+}, evolves={DREEPY: DRAKLOAK, DRAKLOAK: DRAGAPULT_EX},
+   ready={DRAGAPULT_EX: 2})   # FP Phantom Dive
 
 params = {
   "preferred_start":     "second",   # CHANGED — Budew item-lock fires T1 only going second

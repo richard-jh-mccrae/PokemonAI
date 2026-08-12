@@ -17,6 +17,11 @@ def test_winner_from_rewards():
     assert winner_index(load_replay(FIXTURE)) == 0  # rewards [1, -1]
 
 
+def test_winner_is_unknown_when_an_unfinished_seat_has_no_reward():
+    """Kaggle uses null rewards for errored/unfinished episodes."""
+    assert winner_index({"rewards": [1, None]}) is None
+
+
 def test_parse_record_fields():
     rec = parse_replay(FIXTURE, band="Elite", sampled_team="keidroid",
                        sampled_rating=1367.5, sampled_episodes=165)

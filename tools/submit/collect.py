@@ -284,8 +284,15 @@ def _kaggle_download(row: dict, dest, max_replays: int, *, kaggle_ref=None, api=
             api.competition_episode_replay(episode_id=ep_id, path=str(dest))
             hit = True
         if not log_path.exists():
-            api.competition_episode_agent_logs(episode_id=ep_id, agent_index=seat, path=str(dest))
-            hit = True
+            try:
+                api.competition_episode_agent_logs(episode_id=ep_id, agent_index=seat, path=str(dest))
+                hit = True
+            except ValueError as e:
+                # Kaggle occasionally responds with concatenated JSON from this endpoint. Logs
+                # are telemetry only; the replay remains sufficient to collect the match result.
+                # Do not create an empty cache file: retry the log download next collection.
+                print(f"warning: episode {ep_id} agent log was malformed; collecting without "
+                      f"telemetry and will retry next time ({e})", file=sys.stderr)
         replay = json.loads(replay_path.read_text(encoding="utf-8"))
         log = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
         triples.append((replay, log, seat))

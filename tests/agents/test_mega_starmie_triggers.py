@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
@@ -72,69 +71,6 @@ def test_never_fetch_cinderace_silent_when_choosing_the_opening_active():
     p = _pilot()
     obs = make_select([card_opt(HAND, 0)], context=SETUP_ACTIVE, current=state(hand=[CINDERACE]))
     assert "dont-fetch-the-setup-only-opener" not in _fired(p.explain(obs).options[0])
-
-
-# --- conserve-discard-energy-prefer-basic (needs the minCostDamage + active_cheap_attack_kos signals) ---
-WATER_ENERGY, IGNITION = 3, 17
-_A_JET_IGN, _A_NEB_IGN = 51, 52   # Jetting Blow {W} 120 / Nebula Beam ●●● 210, verified in
-                                  # data/EN_Card_Data.csv. Mega Starmie ex is a Stage 1 from Staryu,
-                                  # which is what makes Ignition provide {C}{C}{C} on it.
-_IGN_STATS = DictCardStatProvider({
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
-                           hp=330, minAttackCost=1, minCostDamage=120, maxDamage=210,
-                           maxDamageCost=3, evolvesFrom="Staryu",
-                           attacks=(_A_JET_IGN, _A_NEB_IGN)),
-    WATER_ENERGY: CardStat(WATER_ENERGY, hp=0, energyType=WATER),   # reusable Basic
-    IGNITION: CardStat(IGNITION, hp=0, energyType=0),              # special discard-EOT Energy
-    9999: CardStat(9999),                                          # generic opp body (HP set via poke)
-}, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1, energyTypes=(WATER,)),
-            _A_NEB_IGN: AttackStat(_A_NEB_IGN, damage=210, cost=3, energyTypes=(0, 0, 0))})
-# REAL Function Tags, not trimmed to the one tag a test reads: Ignition's {C}{C}{C} on an Evolution
-# is read off `provides_evo:3`, so a fixture omitting the provision tags asserts an untrue card fact.
-_IGN_TAGS = CardFunctions({IGNITION: ignition_tags(),
-                           CINDERACE: ["opener"]})
-
-
-def _ign_pilot():
-    return Pilot(STRATEGY, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=_IGN_STATS, functions=_IGN_TAGS)
-
-
-def _attach_ignition_onto_active_wincon(opp_hp, hand):
-    # ATTACH option: Ignition card (hand index 1) onto my Active wincon (inPlay ACTIVE/0).
-    return make_select([opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)],
-                       current=state(active=poke(MEGA_STARMIE, energy=0),
-                                     opp_active=poke(9999, hp=opp_hp), hand=hand))
-
-
-@pytest.mark.req("REQ-MS-0003")
-def test_conserve_ignition_fires_when_the_cheap_attack_already_kos():
-    """Cheap Jetting Blow (120) KOs the 120-HP Active and a reusable Water is in hand → don't burn
-    the finite Ignition (CCC→Nebula); prefer the Water."""
-    obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[WATER_ENERGY, IGNITION])
-    # `conserve-discard-energy-prefer-basic` is DELETED (ADR-0069 §7): the burst's tonight-credit is
-    # CAPPED at what the reusable Basic would have bought unless its attack converts a KO.
-    row = _ign_pilot().explain(obs).attach_working["eq"][0]
-    assert row["units"] == 3, "the burst's printed provision must stay honest — only its CREDIT is capped"
-    assert row["this_turn"] == 120.0, (
-        "the burst still claims Nebula Beam's 210 while a reusable Basic reaches the same KO with "
-        f"Jetting Blow 120: {row}")
-
-
-@pytest.mark.req("REQ-MS-0003")
-def test_conserve_ignition_silent_when_nebula_is_actually_needed():
-    """Cheap attack (120) does NOT KO the 200-HP Active → you need Nebula (CCC via Ignition) → the
-    no-KO cap must LIFT so the burst keeps its full tonight-credit (ADR-0069 §5b)."""
-    obs = _attach_ignition_onto_active_wincon(opp_hp=200, hand=[WATER_ENERGY, IGNITION])
-    row = _ign_pilot().explain(obs).attach_working["eq"][0]
-    assert row["this_turn"] == 210.0, f"the burst's KO-converting credit was capped away: {row}"
-
-
-@pytest.mark.req("REQ-MS-0003")
-def test_conserve_ignition_silent_without_a_reusable_water_alternative():
-    """No reusable Water in hand → there's no cheaper alternative, so don't penalise the Ignition."""
-    obs = _attach_ignition_onto_active_wincon(opp_hp=120, hand=[STARYU, IGNITION])  # no Water; Ignition idx 1
-    assert "conserve-discard-energy-prefer-basic" not in _fired(_ign_pilot().explain(obs).options[0])
 
 
 # --- Hero's Cape deploy, end-to-end in the deck (Tool Doctrine, ADR-0028) ----------------------

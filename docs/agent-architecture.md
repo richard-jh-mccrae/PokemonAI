@@ -62,13 +62,20 @@ agent(obs) ─► Sense ───► Plan ────► Score ─────�
 A deck supplies `agents/<deck>/strategy.py`: pure data, no engine, no control flow.
 
 ```python
+ROLES = Roles(
+  {MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
+   CINDERACE: ["accel_source"], IGNITION_ENERGY: ["accel_source"], ...},
+  evolves={STARYU: MEGA_STARMIE_EX},
+)
+
 Strategy(
   name="mega_starmie",
-  lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
-              role="win_condition", ready=Ready(energy=3))],   # CCC for Nebula Beam
-  roles={CINDERACE: ["accel_source", "starter"], IGNITION_ENERGY: ["accel_source"], ...},
-  params={"setup_energy_target": 3,                             # tunable scalars
-          "preferred_start": "second"},                         # deck-intent the General Strategy honors
+  roles=ROLES,                  # Roles also normalize the Staryu -> Mega Starmie relationship
+  prize_plan=PrizePlan(routes=( # preferred own-Pokémon KO orders; printed prizes come from facts
+    (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
+    (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
+  )),
+  params={"bellman_turn_planner": True, "preferred_start": "second"},
   hypotheses=[],   # declarations drive the role-keyed General Strategy (see below); a deck MAY
 )                  # still author Hypotheses for genuinely deck-specific play the general rules lack
 ```
@@ -77,7 +84,7 @@ Strategy(
 the General Strategy — the triggers were already written in universal vocabulary (Roles / Function
 Tags / Board signals), so the rules moved to `baseline_*`/doctrine clusters and the deck now opts
 in purely via its declarations (fold table: the deck file's docstring). Author a NEW deck the same
-way: declare Lines/Roles/params, inherit the play; add a deck Hypothesis only when no general rule
+way: declare Roles/prize plan/params, inherit the play; add a deck Hypothesis only when no general rule
 can carry the trigger (then consider folding IT once its vocabulary proves general).
 
 - **Function Tag vs Role.** A **Function Tag** is *universal and mechanical* — what a card
@@ -85,7 +92,8 @@ can carry the trigger (then consider folding IT once its vocabulary proves gener
   `card_functions.json` ([ADR-0006](adr/0006-function-tags-single-source-of-structural-facts.md),
   [Function Tags](card-functions.md)). A **Role** is the *per-deck* purpose the deck assigns
   to a card (`win_condition`, `accel_source`, `tutor`, …) — a sparse overlay drawn from a
-  closed vocabulary, so roles stay comparable across decks.
+  closed vocabulary, so roles stay comparable across decks. `Roles.evolves` expresses evolution
+  relationships; the shared layer derives its normalized `Line` view from those relationships.
 - **Hypothesis.** A named, testable claim that biases scoring: a `rationale`, a trigger, a
   tunable `weight`, and a `status` (`assumed → testing → confirmed / refuted`). It is the
   unit the writeup is organised around.

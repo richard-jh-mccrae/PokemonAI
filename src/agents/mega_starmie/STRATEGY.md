@@ -499,15 +499,20 @@ Prefer the tag form over a hard-coded Cinderace id.
 going second. **Reads:** `select_context`, `option_type`. Likely deck-specific (setup-heavy decks
 prefer going first), so keep it in the deck Strategy, not the General Strategy.
 
-## 7 · Roles, Lines, params — current strategy.py (to be revised)
+## 7 · Roles, Prize Plan, params — current strategy.py
 
 ```
-roles  = { MEGA_STARMIE_EX: [win_condition, primary_attacker], CINDERACE: [accel_source, starter],
-           STARYU: [starter], IGNITION_ENERGY: [accel_source], MEGA_SIGNAL/SALVATORE/HILDA/
-           BUDDY_POFFIN/ULTRA_BALL: [tutor], CRUSHING_HAMMER: [disruption], BOSS_ORDERS: [gust],
-           WALLYS/NIGHT_STRETCHER: [recovery] }
-lines  = [ Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX, role="win_condition") ]
-params = { setup_energy_target: 3, search_budget: 0 }
+roles = Roles(
+  {MEGA_STARMIE_EX: [win_condition, primary_attacker], CINDERACE: [accel_source],
+   IGNITION_ENERGY: [accel_source], MEGA_SIGNAL/SALVATORE/HILDA/BUDDY_POFFIN/ULTRA_BALL: [tutor],
+   CRUSHING_HAMMER: [disruption], BOSS_ORDERS: [gust], WALLYS/NIGHT_STRETCHER: [recovery]},
+  evolves={STARYU: MEGA_STARMIE_EX},
+)
+prize_plan = PrizePlan(routes=(
+  (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),
+  (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
+))
+params = {bellman_turn_planner: true, preferred_start: second}
 ```
 
 ## 8 · Open questions / deferred

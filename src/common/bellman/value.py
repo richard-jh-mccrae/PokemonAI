@@ -29,6 +29,7 @@ CARD_DUPLICATE_MULTIPLIER = 0.15
 
 FAMILY_OWNERS = {
     "prize_race": ("game", "prizes", "prize proximity"),
+    "prize_plan": ("own KO ordering", "prize-route availability"),
     "survival": ("post-attack safety", "incoming KO exposure"),
     "threat": ("opponent threat removal", "denial counterfactual"),
     "readiness": ("typed attack readiness", "mobility", "retreat option"),
@@ -67,15 +68,21 @@ class ValueRegistry:
                  functions: Mapping[int, tuple[str, ...]] | None = None,
                  facts: Mapping[int, CardFacts] | None = None,
                  overrides: Mapping[int, float] | None = None,
-                 line_bases=(), line_pairs=(), lines=(), seeds: WorthSeeds = WorthSeeds()):
+                 line_bases=(), line_pairs=(), lines=(), prize_routes=(), prizes_to_win=None,
+                 seeds: WorthSeeds = WorthSeeds()):
         self.roles = {int(key): tuple(value) for key, value in (roles or {}).items()}
         for card_id in line_bases:
-            self.roles[int(card_id)] = (*self.roles.get(int(card_id), ()), "win_condition_base")
+            card_roles = self.roles.get(int(card_id), ())
+            if "win_condition_base" not in card_roles:
+                self.roles[int(card_id)] = (*card_roles, "win_condition_base")
         self.functions = {int(key): tuple(value) for key, value in (functions or {}).items()}
         self.facts = {int(key): value for key, value in (facts or {}).items()}
         self.overrides = {int(key): max(0.0, float(value)) for key, value in (overrides or {}).items()}
         self.line_parents = {int(top): int(base) for base, top in line_pairs}
         self.lines = tuple(tuple(int(card_id) for card_id in line) for line in lines)
+        self.prize_routes = tuple(tuple(int(card_id) for card_id in route)
+                                  for route in prize_routes)
+        self.prizes_to_win = None if prizes_to_win is None else int(prizes_to_win)
         self.seeds = seeds
 
     @classmethod
@@ -97,12 +104,18 @@ class ValueRegistry:
                 prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
                 energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
             )
-        lines = tuple(tuple(line.path) for line in getattr(strategy, "lines", ()) if line.path)
-        line_bases = tuple(line[0] for line in lines)
+        declarations = tuple(line for line in getattr(strategy, "lines", ()) if line.path)
+        lines = tuple(tuple(line.path) for line in declarations)
+        line_bases = tuple(line.path[0] for line in declarations
+                           if getattr(line, "role", "win_condition") == "win_condition")
         line_pairs = tuple((line[0], line[-1]) for line in lines if len(line) >= 2)
+        prize_plan = getattr(strategy, "prize_plan", None)
         return cls(roles=roles, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
-                   line_bases=line_bases, line_pairs=line_pairs, lines=lines)
+                   line_bases=line_bases, line_pairs=line_pairs, lines=lines,
+                   prize_routes=(getattr(prize_plan, "routes", ()) if prize_plan else ()),
+                   prizes_to_win=(getattr(prize_plan, "prizes_to_win", None)
+                                  if prize_plan else None))
 
     def worth(self, card_id: int) -> float:
         card_id = int(card_id)
@@ -146,6 +159,7 @@ class ValueRegistry:
             "facts": {key: vars(value) for key, value in self.facts.items()},
             "overrides": self.overrides, "seeds": vars(self.seeds),
             "line_parents": self.line_parents, "lines": self.lines,
+            "prize_routes": self.prize_routes, "prizes_to_win": self.prizes_to_win,
         }, sort_keys=True, separators=(",", ":"), default=list).encode("utf-8")
         return "bellman-worth/1:" + hashlib.sha256(payload).hexdigest()
 

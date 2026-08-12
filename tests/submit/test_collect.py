@@ -252,3 +252,21 @@ def test_kaggle_download_skips_episodes_already_on_disk(tmp_path):
     assert api.log_calls == [(200, 0)]
     assert len(triples) == 2                     # both episodes returned (cached + freshly fetched)
     assert {t[0]["r"] for t in triples} == {100, 200}
+
+
+def test_kaggle_download_keeps_the_replay_when_kaggle_returns_malformed_agent_logs(tmp_path, capsys):
+    """Agent logs are optional telemetry; a bad Kaggle log response must not discard the match."""
+    from submit.collect import _kaggle_download
+
+    class BadLogsApi(_FakeApi):
+        def competition_episode_agent_logs(self, **_kwargs):
+            raise json.JSONDecodeError("Extra data", "{}{}", 2)
+
+    dest = tmp_path / "replays"
+    api = BadLogsApi([200])
+    triples = _kaggle_download({"artifact": "x"}, dest, 20, kaggle_ref="42",
+                               api=api, sleep=lambda _s: None)
+
+    assert triples == [({"r": 200}, [], 0)]
+    assert not (dest / "episode-200-agent-0-logs.json").exists()  # retries next time
+    assert "malformed" in capsys.readouterr().err

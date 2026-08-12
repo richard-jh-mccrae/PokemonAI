@@ -29,7 +29,6 @@ from common.state_model import MySide, StateModel, TheirSide
 from common.strategy.damage_context import damage_context as _assemble_damage_context
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
-from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 from common.scouting.matchup_plan import (BodyFacts, MatchupPlan, build_matchup_plan,
                                           derive_general_roles)
@@ -411,12 +410,6 @@ class Pilot(
 
         read = self.opponent.observe(obs) if self.scout is not None else None
         gamma = _posture_gamma(read) if (self.posture and read is not None) else 0.0
-        my_arch = self.strategy.params.get("my_archetype")
-        favorability, coverage = (
-            matchup_favorability(self.scout.artifact, my_arch, read.candidates)
-            if self.posture and self.scout is not None and read is not None and my_arch
-            else (0.5, 0.0)
-        )
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         state = obs.get("current") or {}
         seat = int(state.get("yourIndex", 0))

@@ -77,6 +77,9 @@ class BoardSeeds:
     turbo_turn: float = 0.80
     needed_hand_card: float = 0.20
     persistent_line_energy: float = 0.05
+    prize_route_active: float = 0.75
+    prize_route_body: float = 0.10
+    prize_route_exact_body: float = 0.05
 
 
 def _bodies(player):
@@ -363,6 +366,60 @@ class MegaStarmiePotential:
                 value += self.seeds.turbo_turn
         return value
 
+    def _card_prizes(self, card_id: int) -> int:
+        stat = self._stat(card_id)
+        return int(getattr(stat, "prize_value", 1) if stat else 1)
+
+    def _route_suffix(self, route, prizes_taken: int):
+        cumulative = 0
+        for index, card_id in enumerate(route):
+            if cumulative == prizes_taken:
+                return route[index:]
+            cumulative += self._card_prizes(card_id)
+        return () if cumulative == prizes_taken else None
+
+    def _can_develop_into(self, card_id: int, payoff_id: int) -> bool:
+        return card_id == payoff_id or any(
+            card_id in line[:-1] and line[-1] == payoff_id for line in self.profile.lines)
+
+    def _route_body_score(self, bodies, suffix) -> float:
+        available = [int(body.get("id", 0)) for body in bodies]
+        matched = exact = 0
+        for desired in suffix:
+            match = next((index for index, card_id in enumerate(available)
+                          if card_id == desired), None)
+            if match is not None:
+                exact += 1
+            else:
+                match = next((index for index, card_id in enumerate(available)
+                              if self._can_develop_into(card_id, desired)), None)
+            if match is not None:
+                matched += 1
+                available.pop(match)
+        return (self.seeds.prize_route_body * matched
+                + self.seeds.prize_route_exact_body * exact)
+
+    def _prize_plan(self, me, opponent) -> float:
+        """Value the deck-declared KO order that makes the opponent cross its win threshold late."""
+        if not self.profile.prize_routes or self.profile.prizes_to_win is None:
+            return 0.0
+        prizes_taken = self.profile.prizes_to_win - len(opponent.get("prize") or ())
+        if prizes_taken < 0:
+            return 0.0
+        active = next((body for body in (me.get("active") or ()) if body), None)
+        bodies = _bodies(me)
+        candidates = []
+        for route in self.profile.prize_routes:
+            if sum(self._card_prizes(card_id) for card_id in route) <= self.profile.prizes_to_win:
+                continue
+            suffix = self._route_suffix(route, prizes_taken)
+            if not suffix:
+                continue
+            active_value = (self.seeds.prize_route_active
+                            if active and int(active.get("id", 0)) == suffix[0] else 0.0)
+            candidates.append(active_value + self._route_body_score(bodies, suffix))
+        return max(candidates, default=0.0)
+
     def _attach_option(self, me, opponent, current, select, *, historical=False,
                        next_turn=False):
         if (not historical and int((select or {}).get("context", -1)) != 0):
@@ -492,6 +549,7 @@ class MegaStarmiePotential:
             "threat": self._future_threat(opponent),
             "pressure": self._pressure(me, opponent),
             "development": self._development(me),
+            "prize_plan": self._prize_plan(me, opponent),
             "needs": self._needs(
                 me, opponent, current, observation.get("select"),
                 historical=bool(observation.get("bellmanHistoricalMain")),

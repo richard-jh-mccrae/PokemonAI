@@ -1,4 +1,4 @@
-"""The `common.strategy` package — the deck-facing data layer (Strategy/Hypothesis/Plan/Line/Ready),
+"""The `common.strategy` package — the deck-facing declarative data layer,
 the engine `context` vocabulary, the deck-agnostic `general_strategy`, and one module per
 card-archetype **doctrine** under `doctrines/` (`doctrine_gust`, `doctrine_fetch`,
 `doctrine_shuffle_refresh`). Each doctrine
@@ -8,6 +8,6 @@ inherits) — so a doctrine is one file, end to end (ADR-0008/0022/0023/0024).
 Re-exports the declarative data API so the historical `from common.strategy import Strategy, ...`
 imports keep working after `strategy.py` moved into this package.
 """
-from common.strategy.strategy import GamePlan, Hypothesis, Line, Plan, Ready, Strategy
+from common.strategy.strategy import GamePlan, Hypothesis, Line, Plan, PrizePlan, Ready, Roles, Strategy
 
-__all__ = ["GamePlan", "Hypothesis", "Line", "Plan", "Ready", "Strategy"]
+__all__ = ["GamePlan", "Hypothesis", "Line", "Plan", "PrizePlan", "Ready", "Roles", "Strategy"]

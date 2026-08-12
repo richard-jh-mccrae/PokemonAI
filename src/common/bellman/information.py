@@ -36,6 +36,8 @@ class BellmanDeckProfile:
     accelerators: tuple[int, ...] = ()
     reusable_energy: tuple[int, ...] = ()
     burst_energy: tuple[int, ...] = ()
+    prize_routes: tuple[tuple[int, ...], ...] = ()
+    prizes_to_win: int | None = None
 
     @classmethod
     def from_registry(cls, registry) -> "BellmanDeckProfile":
@@ -55,8 +57,12 @@ class BellmanDeckProfile:
         burst_energy = tuple(sorted(
             card_id for card_id, tags in functions.items()
             if "discard_eot" in tags and any(str(tag).startswith("provides_evo:") for tag in tags)))
-        return cls(tuple(tuple(int(card_id) for card_id in line) for line in lines),
-                   accelerators, reusable_energy, burst_energy)
+        prize_routes = tuple(tuple(int(card_id) for card_id in route)
+                             for route in getattr(registry, "prize_routes", ()))
+        return cls(lines=tuple(tuple(int(card_id) for card_id in line) for line in lines),
+                   accelerators=accelerators, reusable_energy=reusable_energy,
+                   burst_energy=burst_energy, prize_routes=prize_routes,
+                   prizes_to_win=getattr(registry, "prizes_to_win", None))
 
     @property
     def line_bases(self) -> frozenset[int]:

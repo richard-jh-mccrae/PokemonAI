@@ -1,4 +1,4 @@
-"""dragapult_ex — the deck overlay ONLY: Roles, the Line, params and the genuinely deck-bound
+"""dragapult_ex — the deck overlay ONLY: Roles, evolution relationships, params and the genuinely deck-bound
 Hypotheses. Pure data, no control flow. Weights are seeds, ladder-tuned (ADR-0009).
 
 Doctrine: src/agents/dragapult_ex/STRATEGY.md. Architecture: docs/agent-architecture.md.
@@ -9,7 +9,7 @@ Everything here that LOOKS deck-specific — gust, supporter tutor, energy denia
 fetch/draw suite, the spread infra — is covered by the General Strategy and lives in common, not in
 this file (ADR-0046); the deck opts in by running the tagged cards.
 """
-from common.strategy import Hypothesis, Line, Plan, Ready, Strategy
+from common.strategy import Hypothesis, Plan, Roles, Strategy
 
 # Card ids — dragapult_ex/deck.csv.
 DREEPY, DRAKLOAK, DRAGAPULT_EX = 119, 120, 121
@@ -21,9 +21,9 @@ ULTRA_BALL, POKE_PAD, BOSS_ORDERS, CRISPIN = 1121, 1152, 1182, 1198
 LILLIES, RISKY_RUINS = 1227, 1260
 
 # Sparse Role overlay on the universal Function Tags — only cards driving a role-keyed general rule.
-ROLES = {
+# Phantom Dive's two-Energy readiness override lives on the terminal role declaration.
+ROLES = Roles({
     DRAGAPULT_EX: ["win_condition", "primary_attacker"],
-    DREEPY:       ["win_condition_base"],
     CRISPIN:      ["accel_source"],
     BOSS_ORDERS:  ["gust"],
     NIGHT_STRETCHER: ["recovery"],
@@ -32,7 +32,7 @@ ROLES = {
     MUNKIDORI:    ["counter_mover"],
     # Deliberately role-LESS: Meowth ex (a `tutor` Role would misfire as a wincon dig) and Rosa's
     # (`accel_source` would mis-boost comeback accel at setup). Everything else is tag/card-id driven.
-}
+}, evolves={DREEPY: DRAKLOAK, DRAKLOAK: DRAGAPULT_EX}, ready={DRAGAPULT_EX: 2})
 
 _PLAY, _EVOLVE = 7, 9   # OptionType.PLAY / EVOLVE
 
@@ -53,10 +53,6 @@ HYPOTHESES = [
 
 STRATEGY = Strategy(
     name="dragapult_ex",
-    # Ready = Phantom Dive, NOT the engine's cheapest-attack default (Jet Headbutt at C): the deck
-    # stays in SETUP digging until Phantom Dive is funded.
-    lines=[Line(path=[DREEPY, DRAKLOAK, DRAGAPULT_EX], payoff=DRAGAPULT_EX,
-                role="win_condition", ready=Ready(energy=2))],
     roles=ROLES,
     # The COMPLETE pregame ACTIVE ranking, best first (ADR-0079, USER-RULED). Dreepy is FIFTH, below
     # both ex's, ON PURPOSE — it is the Line base and wants the Bench; a fragility+prize read inverts it.

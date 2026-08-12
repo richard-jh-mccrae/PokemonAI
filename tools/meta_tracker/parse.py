@@ -71,7 +71,10 @@ def extract_decks(replay: dict) -> tuple[list[int], list[int]]:
 
 def winner_index(replay: dict) -> int | None:
     rewards = replay.get("rewards") or []
-    if len(rewards) != 2 or rewards[0] == rewards[1]:
+    # Kaggle marks a failed/unfinished seat with ``null`` (for example
+    # ``[1, null]``). That is not a comparable match result, so leave it
+    # unlabelled just like a draw rather than letting collection crash.
+    if len(rewards) != 2 or None in rewards or rewards[0] == rewards[1]:
         return None
     return 0 if rewards[0] > rewards[1] else 1
 

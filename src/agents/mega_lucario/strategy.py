@@ -11,7 +11,7 @@ The Aura-Jab-vs-Mega-Brave choice, Aura Jab's bench-load targeting, the dual-Meg
 prize-trade interleaving and Heave-Ho's target pick all LOOK deck-specific and are all covered by the
 general layer (ADR-0069 attach marginal, ADR-0100 promote/retreat equation, gust target tacticals).
 """
-from common.strategy import Hypothesis, Line, Plan, Strategy
+from common.strategy import Hypothesis, Plan, Roles, Strategy
 
 # Card ids — mega_lucario/deck.csv.
 RIOLU, MEGA_LUCARIO_EX = 677, 678
@@ -55,19 +55,18 @@ def _reachable(board, cid):
 
 # Sparse Role overlay on the universal Function Tags — only deck-intentional cards. Roles drive deck
 # Hypotheses plus the universal role-keyed general rules.
-ROLES = {
+# Roles owns both the win-condition line and the secondary Makuhita -> Hariyama line.
+ROLES = Roles({
     # accel_source because Aura Jab IS the energy engine (3 Basic {F} from discard to the Bench).
     MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
-    RIOLU:    ["win_condition_base"],
     SOLROCK:  ["secondary_attacker", "engine"],
     LUNATONE: ["engine"],
     HARIYAMA: ["secondary_attacker", "gust"],
-    MAKUHITA: ["evolution_base"],
     BOSS_ORDERS: ["gust"],
     AIR_BALLOON: ["retreat_tool"],
     # Deliberately role-LESS: Meowth ex rides the `supporter_tutor` TAG — a `tutor` Role misfired as a
     # WINCON dig. Black Belt's / Wally's / Petrel / Unfair Stamp ride tag/CardStat-keyed general rules.
-}
+}, evolves={RIOLU: MEGA_LUCARIO_EX, MAKUHITA: HARIYAMA})
 
 HYPOTHESES = [
     # Solrock<->Lunatone pairing doctrine: start the attacker, power the attacker not the engine, skip
@@ -215,11 +214,6 @@ HYPOTHESES = [
 
 STRATEGY = Strategy(
     name="mega_lucario",
-    # No Ready() override: readiness is engine-derived at one {F} (Aura Jab 130), not Mega Brave's {F}{F}.
-    lines=[Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win_condition"),
-           # A NON-wincon Line (ADR-0048), so the win-condition machinery ignores it — only FETCH
-           # recognition and `develop-the-cheap-prize-wall-line` read it.
-           Line(path=[MAKUHITA, HARIYAMA], payoff=HARIYAMA, role="secondary_attacker")],
     roles=ROLES,
     # Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock/Lunatone (attach Ruling
     # 6). SOLE expression of that fact since Issue #425 retired the rungs that duplicated it.
