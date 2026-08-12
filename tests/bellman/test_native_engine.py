@@ -10,9 +10,29 @@ import pytest
 
 from common import Chance, DecisionState, Deterministic, NativeCgTransitionProvider, Terminal, Unknown
 from common.runtime import build_runtime
+from common.native_engine import _hidden_signature
 
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def test_hidden_signature_tracks_world_contents_not_action_path():
+    observation = {"current": {"players": [
+        {"deck": [{"id": 1}, {"id": 2}], "prize": [{"id": 3}], "hand": []},
+        {"deck": [{"id": 4}], "prize": [{"id": 5}], "hand": [{"id": 6}]},
+    ]}}
+    same_world_after_another_path = {"current": {"players": [
+        {"deck": [{"id": 1}, {"id": 2}], "prize": [{"id": 3}]},
+        {"deck": [{"id": 4}], "prize": [{"id": 5}], "hand": [{"id": 6}]},
+    ]}, "logs": ["different action path"]}
+    different_draw_order = {"current": {"players": [
+        {"deck": [{"id": 2}, {"id": 1}], "prize": [{"id": 3}]},
+        {"deck": [{"id": 4}], "prize": [{"id": 5}], "hand": [{"id": 6}]},
+    ]}}
+
+    signature = _hidden_signature(observation, 0)
+    assert signature == _hidden_signature(same_world_after_another_path, 0)
+    assert signature != _hidden_signature(different_draw_order, 0)
 
 
 pytest.importorskip("cg.sim", reason="native engine unavailable")

@@ -232,3 +232,20 @@ to turn new-set onboarding into review-and-correct.
 *Related internal documents: `docs/research/ml-training-system.md` (2026-07-11 deep-research
 report with its own 21-source list), `docs/adr/` (decision records), the Value System tracker
 (GitHub issue #136) and its phase issues (#137–#150), each carrying the per-phase evidence.*
+
+## 11. Production Bellman search allocation
+
+**Choice:** exact hidden-world transpositions plus equal root probes and Bellman-ranked successive
+halving. No depth horizon and no card/action-specific admission rules. Full measurements and rejected
+alternatives: `docs/research/bellman-search-latency.md`.
+
+- **Hyperband / successive halving** (Li et al., JMLR 2018) — primary precedent for allocating a
+  small equal budget broadly, then concentrating computation on promising incomplete candidates.
+  https://www.jmlr.org/papers/v18/16-558.html [P]
+- **Beam-stack search** (Zhou & Hansen, ICAPS 2005) — primary anytime/complete beam-search
+  alternative; retained as the future recovery design rather than added to the live latency fix.
+  https://m.aaai.org/Papers/ICAPS/2005/ICAPS05-010.pdf [P]
+- **Single-Agent Policy Tree Search With Guarantees** (Orseau et al., NeurIPS 2018) — primary
+  best-first policy-guided allocation result. https://papers.nips.cc/paper/7582-single-agent-policy-tree-search-with-guarantees [P]
+- **MCTSnets** (Guez et al., ICML 2018) — learns where, what, and how to search; deferred until this
+  agent owns a calibrated learned policy/value model. https://proceedings.mlr.press/v80/guez18a.html [P]

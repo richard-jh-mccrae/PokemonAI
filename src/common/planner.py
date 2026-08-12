@@ -8,8 +8,8 @@ from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
 
 
-# Deployment bounds branching, never depth.  Each semantically distinct root action receives the
-# same full state budget, so utility—not the number of other legal choices—drives the comparison.
+# Deployment bounds branching, never depth. Every root action receives an equal probe; the strongest
+# incomplete Bellman continuations receive the expensive refinement pass.
 RUNTIME_MAX_NODES_PER_ROOT_ACTION = 1_800
 RUNTIME_BEAM_WIDTH = 16
 RUNTIME_ROOT_BEAM_WIDTH = 16

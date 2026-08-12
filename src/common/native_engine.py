@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
@@ -21,6 +21,7 @@ PROBABILITY_TOTAL = 1.0
 MINIMUM_CARD_ID = 1
 PHASE_DIGEST_BYTES = 8
 PHASE_DENOMINATOR = float(1 << (PHASE_DIGEST_BYTES * 8))
+HIDDEN_SIGNATURE_DIGEST_BYTES = 16
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,43 @@ def _fill(cards, count: int, fallback) -> tuple[int, ...]:
     while len(repeated) < count:
         repeated.extend(reserve or values)
     return tuple(repeated[:count])
+
+
+def _plain_native(value):
+    """Convert cg dataclasses without ``dataclasses.asdict``'s recursive deep copies."""
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: _plain_native(getattr(value, field.name)) for field in fields(value)}
+    value_type = type(value)
+    if value_type is list:
+        return [_plain_native(child) for child in value]
+    if value_type is tuple:
+        return tuple(_plain_native(child) for child in value)
+    if value_type is dict:
+        return {key: _plain_native(child) for key, child in value.items()}
+    return value
+
+
+def _hidden_card_identity(card):
+    if isinstance(card, dict):
+        return card.get("id", card.get("cardId"))
+    return card
+
+
+def _hidden_signature(observation: dict, root_seat: int) -> str:
+    """Identity of the determinized hidden state, independent of the action path used to reach it."""
+    players = ((observation.get("current") or {}).get("players") or ())
+    zones = []
+    for seat, player in enumerate(players):
+        player = player or {}
+        names = ("deck", "prize") if seat == root_seat else ("deck", "prize", "hand")
+        zones.append(tuple(
+            (name, tuple(_hidden_card_identity(card) for card in (player.get(name) or ())))
+            for name in names
+        ))
+    payload = repr(tuple(zones)).encode("utf-8")
+    return hashlib.blake2b(
+        payload, digest_size=HIDDEN_SIGNATURE_DIGEST_BYTES, person=b"bellman-hidden",
+    ).hexdigest()
 
 
 def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int) -> list[int]:
@@ -180,7 +218,8 @@ class NativeCgTransitionProvider:
         return tuple(worlds)
 
     def _observation(self, native_observation, parent: DecisionState) -> dict:
-        observation = asdict(native_observation)
+        observation = _plain_native(native_observation)
+        observation["bellmanBeliefKey"] = _hidden_signature(observation, parent.root_seat)
         observation["bellmanActor"] = _actor_seat(observation, parent.root_seat)
         current = observation.get("current") or {}
         current["yourIndex"] = parent.root_seat
@@ -210,14 +249,25 @@ class NativeCgTransitionProvider:
         return children
 
     def _group_children(self, parent: DecisionState, action: LegalAction, children):
+        if len(children) == 1:
+            probability, search_id, committed, observation = children[0]
+            observation = dict(observation)
+            successor = parent.with_observation(observation)
+            successor_key = successor.semantic_key
+            self._worlds[successor_key] = (
+                _NativeWorld(PROBABILITY_TOTAL, int(search_id), bool(committed)),
+            )
+            return self._node(
+                parent, successor,
+                ((float(probability), int(search_id), bool(committed), observation),),
+            )
+
         grouped: dict[str, list[tuple[float, int, bool, dict]]] = {}
-        representatives: dict[str, DecisionState] = {}
         for probability, search_id, committed, observation in children:
             public = parent.with_observation(observation)
             group_key = public.semantic_key
             grouped.setdefault(group_key, []).append(
                 (float(probability), int(search_id), bool(committed), observation))
-            representatives.setdefault(group_key, public)
         if not grouped:
             return Unknown("native cg returned no successor", str(action.identity))
 
@@ -225,12 +275,9 @@ class NativeCgTransitionProvider:
         for index, (group_key, rows) in enumerate(sorted(grouped.items())):
             mass = sum(row[0] for row in rows)
             observation = dict(rows[0][3])
-            belief_key = hashlib.sha256(
-                f"{parent.semantic_key}|{action.identity}|{group_key}".encode("utf-8")
-            ).hexdigest()
-            observation["bellmanBeliefKey"] = belief_key
             successor = parent.with_observation(observation)
-            self._worlds[successor.semantic_key] = tuple(
+            successor_key = successor.semantic_key
+            self._worlds[successor_key] = tuple(
                 _NativeWorld(probability / mass, search_id, committed)
                 for probability, search_id, committed, _observation in rows
             )

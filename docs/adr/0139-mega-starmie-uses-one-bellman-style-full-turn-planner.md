@@ -234,9 +234,11 @@ There are two modes over the same transition and value contracts:
 - `production`: the same recurrence with semantic transposition, explicit width/state capacity, and
   a zero End lower bound when capacity is reached at a state where End is legal.
 
-Production grants the same state budget independently to every root action. A shared pool divided
-by menu size is forbidden: it makes an action's estimate worse merely because unrelated actions are
-also legal. Incomplete, budget-dependent lower bounds are never memoized as transposition values.
+Production uses successive halving at each committed root decision: every legal action receives the
+same small probe, then the two strongest incomplete Bellman lower bounds receive the full refinement
+budget. The allocation does not divide a branch budget by menu size and does not inspect action kind,
+card identity, or tags. Incomplete, budget-dependent lower bounds are never memoized as
+transposition values.
 On exactly equal utility, the sole secondary objective is fewer remaining decisions; it is
 lexicographic and therefore cannot overturn any real utility difference.
 
@@ -245,7 +247,8 @@ may prune for time but may not change the equation, fabricate a terminal value, 
 choice to legacy logic. Its budget and approximation regret are measured against reference states
 before activation. Budget constants and stopping reasons appear in telemetry.
 
-The live production transition provider uses the shipped forkable `cgpy` engine. Deterministic draws,
+The live production transition provider uses the shipped native `cg` engine. `cgpy` remains an
+offline diagnostic/reference adapter and is excluded from submissions. Deterministic draws,
 coins, reveal windows, and actor choices are transition algebra, not card-name handlers. A reveal is
 `chance(revealed set) -> max(legal revealed continuation)`; static Worth never chooses the card.
 Known reveal sets use exact hypergeometric mass. Wide hidden draws use deterministic bounded support,
@@ -367,6 +370,23 @@ promotion before terminal value, and the two Cinderace/Lillie's/Boss boundary fi
 ADR establishes the complete architecture and live cutover, not a claim that the initial human
 seeds are already a competitive policy. The adjudication ledger is the queue for subsequent
 economic tuning without restoring rules-based strategic owners.
+
+### 2026-08-12 production latency amendment
+
+A native decision profile measured 21.5 seconds, 3,600 searched states, and 70 million Python calls;
+native `search_step` consumed only 1.4 seconds. The dominant costs were exhaustive action-order
+permutations, semantic-state rebuilding, and potential recomputation. The native provider also put
+the parent action path into `bellmanBeliefKey`, preventing exact transpositions across commutative
+orders even when public state and determinized hidden zones were identical.
+
+Production now identifies a hidden world from its actual ordered deck/prize/opponent-hand contents,
+uses the same semantic key across action paths, converts native dataclasses without recursive deep
+copy, and caches immutable stat/attack/resource facts in the potential evaluator. Root allocation is
+successive halving: all actions receive 64 expansions, then the two highest incomplete Bellman lower
+bounds receive up to 1,800 expansions each. No depth horizon, card identity, tag, action-kind rule, or
+deck-specific branch participates in admission. The exact packaged native mirror improved from a
+600-second timeout to 143.5 seconds with both seats `DONE`; all 25 rationale-led hard acceptance
+gates pass.
 
 Submission collection preserves every emitted Bellman root ledger, branch diagnostic, cap, and
 alternative in `performance.jsonl` under `telemetry.diagnostics`, indexed by match and decision.

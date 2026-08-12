@@ -11,6 +11,7 @@ exact zip — gated: refuses a dirty build, runs the Agent Check. See tools/subm
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -88,5 +89,25 @@ def main(argv=None) -> int:
     return 0
 
 
+def cli() -> int:
+    """Render expected failures concisely; retain opt-in tracebacks for development."""
+    try:
+        return main()
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            print(f"ERROR: {exc.code}", file=sys.stderr)
+            return 1
+        return int(exc.code or 0)
+    except KeyboardInterrupt:
+        print("ERROR: interrupted; upload was not recorded", file=sys.stderr)
+        return 130
+    except Exception as exc:  # noqa: BLE001 - CLI boundary owns presentation
+        if os.environ.get("SUBMIT_AGENT_DEBUG") == "1":
+            raise
+        print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print("Set SUBMIT_AGENT_DEBUG=1 to show the full traceback.", file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(cli())

@@ -15,6 +15,8 @@ import importlib.util
 import json
 import logging
 import os
+import signal
+import subprocess
 import sys
 import warnings
 from dataclasses import dataclass
@@ -28,6 +30,9 @@ MAX_SUBMISSION_MIB = 197.7
 MAX_SUBMISSION_BYTES = int(MAX_SUBMISSION_MIB * 1024 * 1024)
 FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
 DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS = 600
+PROCESS_TREE_SHUTDOWN_SECONDS = 10
+FAILURE_DETAIL_MAX_LINES = 24
+FAILURE_DETAIL_MAX_CHARACTERS = 4_000
 
 
 @dataclass
@@ -147,8 +152,7 @@ def _suppressed_output():
 
 
 def _import_make():
-    """Import kaggle_environments.make, muting its env discovery. THREE distinct noise sources, each
-    needing its own mechanism: third-party logging, a native stderr fd dump, and Python warnings."""
+    """Import Kaggle's CABT factory without loading unrelated bundled environments."""
     prev_disable = logging.root.manager.disable
     # LiteLLM registers models during this import.  Some upstream model IDs are absent from its
     # cost table, producing harmless WARNING records and then handler errors on some installs.
@@ -157,7 +161,11 @@ def _import_make():
     try:
         with _suppressed_output(), warnings.catch_warnings():  # fd-level: native open_spiel stderr dump
             warnings.simplefilter("ignore")  # + ke's import-time warnings (pydantic Field deprecations, …)
-            from kaggle_environments import make
+            if __package__:
+                from .kaggle_cabt import import_cabt_make
+            else:
+                from kaggle_cabt import import_cabt_make
+            make = import_cabt_make()
     finally:
         logging.disable(prev_disable)
         klog = logging.getLogger("kaggle_environments")  # make it inert so nothing chatters/errors later
@@ -212,11 +220,47 @@ def check_playability(
     return StageResult(True, "playability", f"{matches} matches clean")
 
 
+def _terminate_process_tree(proc) -> None:
+    """Terminate a timed-out mirror and every descendant that may still hold ``cg.dll`` open."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                capture_output=True, text=True, check=False,
+                timeout=PROCESS_TREE_SHUTDOWN_SECONDS,
+            )
+        except (OSError, subprocess.SubprocessError):
+            proc.kill()
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            proc.kill()
+    try:
+        proc.wait(timeout=PROCESS_TREE_SHUTDOWN_SECONDS)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _failure_excerpt(output: str) -> str:
+    """Keep the actionable tail/traceback; discard megabytes of agent telemetry."""
+    lines = [line for line in str(output or "").splitlines() if line.strip()]
+    traceback_starts = [index for index, line in enumerate(lines)
+                        if line.startswith("Traceback (most recent call last):")]
+    if traceback_starts:
+        lines = lines[traceback_starts[-1]:]
+    lines = lines[-FAILURE_DETAIL_MAX_LINES:]
+    excerpt = "\n".join(lines)
+    if len(excerpt) > FAILURE_DETAIL_MAX_CHARACTERS:
+        excerpt = "…" + excerpt[-FAILURE_DETAIL_MAX_CHARACTERS:]
+    return excerpt or "mirror subprocess exited without diagnostics"
+
+
 def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle",
                 timeout_seconds: float = DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS):
     """Run the extracted Bundle in a clean-room subprocess; return (rc, output, replay)."""
-    import subprocess
-
     runner = Path(__file__).with_name("_run_bundle.py")
     args = [sys.executable, str(runner)]
     replay = None
@@ -224,20 +268,26 @@ def _run_bundle(extracted: Path, reports_dir=None, label: str = "bundle",
         Path(reports_dir).mkdir(parents=True, exist_ok=True)
         replay = Path(reports_dir) / f"{label}-deployability-fail.json"
         args.append(str(replay))
+    process_options = {
+        "cwd": str(extracted), "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
+        "text": True,
+    }
+    if os.name == "nt":
+        process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        process_options["start_new_session"] = True
+    proc = subprocess.Popen(args, **process_options)
     try:
-        proc = subprocess.run(
-            args, cwd=str(extracted), capture_output=True, text=True,
-            timeout=float(timeout_seconds),
-        )
-    except subprocess.TimeoutExpired as exc:
-        # ``TimeoutExpired`` may carry bytes despite ``text=True`` on some Python versions.
-        # The gate must report the timeout, never mask it with a TypeError.
-        def _text(value):
-            return value.decode(errors="replace") if isinstance(value, bytes) else (value or "")
-
-        output = (_text(exc.stdout) + _text(exc.stderr)).strip()
+        stdout, stderr = proc.communicate(timeout=float(timeout_seconds))
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=PROCESS_TREE_SHUTDOWN_SECONDS)
+        except subprocess.SubprocessError:
+            stdout, stderr = "", ""
+        output = ((stdout or "") + (stderr or "")).strip()
         return None, output, replay
-    return proc.returncode, (proc.stdout + proc.stderr).strip(), replay
+    return proc.returncode, ((stdout or "") + (stderr or "")).strip(), replay
 
 
 def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="bundle") -> StageResult:
@@ -282,10 +332,11 @@ def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="b
     if rc is None:
         return StageResult(
             False, "deployability",
-            f"bundle mirror exceeded {DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS}s; not submitting",
+            f"exact bundle mirror timed out after {DEFAULT_ARTIFACT_MATCH_TIMEOUT_SECONDS}s. "
+            "The mirror process tree was terminated; Kaggle upload was not attempted",
         )
     if rc != 0:
-        detail = f"bundle match failed: {output}"
+        detail = f"bundle mirror failed (exit {rc}):\n{_failure_excerpt(output)}"
         if replay and replay.exists():
             detail += f"; replay -> {replay}"
         return StageResult(False, "deployability", detail)

@@ -1,4 +1,5 @@
 """Agent Check harness (tools/sim): contents -> legality -> playability -> deployability."""
+import importlib.util
 from pathlib import Path
 import zipfile
 
@@ -108,7 +109,21 @@ def test_exact_artifact_gate_reports_a_mirror_timeout(tmp_path, monkeypatch):
     result = check_artifact(artifact, tmp_path / "work")
 
     assert not result.ok
-    assert "exceeded" in result.detail
+    assert "timed out after 600s" in result.detail
+    assert "process tree was terminated" in result.detail
+    assert "upload was not attempted" in result.detail
+
+
+def test_bundle_failure_excerpt_prefers_traceback_and_caps_noise():
+    telemetry = "\n".join(f"@T noisy telemetry {index} " + "x" * 300 for index in range(100))
+    output = telemetry + "\nTraceback (most recent call last):\nRuntimeError: useful failure\n"
+
+    excerpt = checkmod._failure_excerpt(output)
+
+    assert excerpt.startswith("Traceback (most recent call last):")
+    assert "RuntimeError: useful failure" in excerpt
+    assert "noisy telemetry" not in excerpt
+    assert len(excerpt) <= checkmod.FAILURE_DETAIL_MAX_CHARACTERS
 
 
 @pytest.mark.req("REQ-SIM-0002")
@@ -201,6 +216,28 @@ def test_cli_exits_nonzero_for_a_missing_agent():
     )
     assert proc.returncode == 1
     assert "contents" in (proc.stdout + proc.stderr).lower()
+
+
+def test_kaggle_import_registers_only_cabt():
+    if importlib.util.find_spec("kaggle_environments") is None:
+        pytest.skip("kaggle_environments not installed")
+    import subprocess
+    import sys
+
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path('tools').resolve()))
+from sim.check_agent import _import_make
+_import_make()
+from kaggle_environments import environments
+assert set(environments) == {'cabt'}, sorted(environments)
+assert not any(name.startswith('kaggle_environments.envs.open_spiel_env') for name in sys.modules)
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", code], cwd=REPO, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 @pytest.mark.req("REQ-SIM-0005")

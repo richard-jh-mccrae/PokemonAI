@@ -11,4 +11,8 @@ artifact. The exact-bundle mirror is bounded to 600 seconds and the Kaggle uploa
 a timeout is a visible failed gate and is never recorded as a submission. `collect.py`, `history.py`, and
 `dashboard.py` retain submission/performance history.
 
+On mirror timeout, the complete subprocess tree is terminated so Windows releases native `cg.dll`.
+The CLI reports stage, reason, and whether upload ran. Set `SUBMIT_AGENT_DEBUG=1` only when a full
+unexpected-exception traceback is needed.
+
 Legacy hypotheses, tuning overlays, and composer inventories are not packaged.

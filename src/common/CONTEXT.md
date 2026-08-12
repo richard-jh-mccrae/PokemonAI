@@ -23,7 +23,9 @@ The flattened Bellman core owns the decision model:
   ordering as fake draw knowledge;
 - `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
 - `effects.py`, `fetch.py`, and `draws.py`: effect data and pure chance-window mechanics;
-- `solver.py`: reference and bounded production recursion;
+- `solver.py`: reference recursion plus production successive-halving search. Every legal root gets
+  an equal value probe; the two strongest incomplete continuations get the full pass. This shapes
+  beam width only—turn depth remains uncapped;
 - `planner.py`: first-action Bellman commitment;
 - `runtime.py`: match-scoped deployment and declarative setup.
 
@@ -33,3 +35,7 @@ option equivalence, telemetry, and board-card traversal.
 Information has no authored bonus. Its value is the Bellman quantity
 `E[max continuation after reveal]`; deterministic commitments, chance, and reveal choices all use
 the same successor-state utility.
+
+Native semantic transpositions include a signature of the actual determinized hidden zones, not
+the action path used to reach them. Commutative action orders can therefore share exact results
+without merging different deck, prize, or opponent-hand worlds.

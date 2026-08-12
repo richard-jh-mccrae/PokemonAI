@@ -83,9 +83,25 @@ class BoardPotential:
         self.root_seat = None if root_seat is None else int(root_seat)
         self.opponent_role_worth = {int(card_id): max(0.0, float(worth))
                                     for card_id, worth in (opponent_role_worth or {}).items()}
+        self._stat_cache = {}
+        self._attack_cache = {}
+        self._resource_job_cache = {}
+        self._prize_job_capacities_cache = None
 
     def _stat(self, card_id):
-        return self.stats.get(int(card_id)) if self.stats and card_id is not None else None
+        if not self.stats or card_id is None:
+            return None
+        card_id = int(card_id)
+        if card_id not in self._stat_cache:
+            self._stat_cache[card_id] = self.stats.get(card_id)
+        return self._stat_cache[card_id]
+
+    def _attack(self, attack_id):
+        attack_id = int(attack_id)
+        if attack_id not in self._attack_cache:
+            self._attack_cache[attack_id] = (
+                self.stats.attack(attack_id) if hasattr(self.stats, "attack") else None)
+        return self._attack_cache[attack_id]
 
     def _prizes(self, body) -> int:
         stat = self._stat(body.get("id"))
@@ -125,7 +141,7 @@ class BoardPotential:
             stat = stat_for(body)
             if stat is None:
                 return ()
-            return tuple(str(getattr(self.stats.attack(attack_id), "name", "") or "")
+            return tuple(str(getattr(self._attack(attack_id), "name", "") or "")
                          for attack_id in (getattr(stat, "attacks", ()) or ()))
 
         boosts = []
@@ -184,7 +200,7 @@ class BoardPotential:
         defender_tags = frozenset(self.registry.functions.get(int(defender.get("id", 0)), ()))
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self.stats.attack(attack_id) if hasattr(self.stats, "attack") else None
+            attack = self._attack(attack_id)
             if attack is None:
                 continue
             required = tuple(getattr(attack, "energyTypes", ()) or ())
@@ -227,17 +243,23 @@ class BoardPotential:
         theirs = next((body for body in (opponent.get("active") or ()) if body), None)
         defenders = (self._reachable_defenders(
             theirs, opponent_moves_next=opponent_moves_next) if theirs is not None else ())
-        own = (max((min((self._attack_value(
-                             body, _energy_codes(body), defender,
-                             self._side_facts(me, attacking_body=body), self._side_facts(opponent))
-                         for defender in defenders), default=0.0)
-                    for body in _bodies(me)), default=0.0)
-               if theirs is not None else 0.0)
-        incoming = (max((self._attack_value(
-                            body, _energy_codes(body), mine,
-                            self._side_facts(opponent, attacking_body=body), self._side_facts(me))
-                         for body in _bodies(opponent)), default=0.0)
-                    if mine is not None else 0.0)
+        opponent_facts = self._side_facts(opponent)
+        me_facts = self._side_facts(me)
+        own_values = []
+        if theirs is not None:
+            for body in _bodies(me):
+                attacker_facts = self._side_facts(me, attacking_body=body)
+                own_values.append(min((self._attack_value(
+                    body, _energy_codes(body), defender, attacker_facts, opponent_facts)
+                    for defender in defenders), default=0.0))
+        own = max(own_values, default=0.0)
+        incoming_values = []
+        if mine is not None:
+            for body in _bodies(opponent):
+                attacker_facts = self._side_facts(opponent, attacking_body=body)
+                incoming_values.append(self._attack_value(
+                    body, _energy_codes(body), mine, attacker_facts, me_facts))
+        incoming = max(incoming_values, default=0.0)
         return own - incoming
 
     @staticmethod
@@ -251,21 +273,29 @@ class BoardPotential:
                      if card is not None and (not isinstance(card, dict) or card.get("id") is not None))
 
     def _resource_job(self, card_id: int):
+        card_id = int(card_id)
+        if card_id in self._resource_job_cache:
+            return self._resource_job_cache[card_id]
         roles = tuple(sorted(self.registry.roles.get(card_id, ())))
         functions = tuple(sorted(tag for tag in self.registry.functions.get(card_id, ())
                                  if not str(tag).startswith("provides:")))
         facts = self.registry.facts.get(card_id)
         category = "pokemon" if facts is not None and facts.pokemon else "card"
-        return (("role", roles[0], category) if roles else
-                ("function", functions[0], category) if functions else
-                ("card", card_id, category))
+        result = (("role", roles[0], category) if roles else
+                  ("function", functions[0], category) if functions else
+                  ("card", card_id, category))
+        self._resource_job_cache[card_id] = result
+        return result
 
     def _prize_job_capacities(self):
+        if self._prize_job_capacities_cache is not None:
+            return self._prize_job_capacities_cache
         capacities = {}
         for route in self.profile.prize_routes:
             counts = Counter(self._resource_job(int(card_id)) for card_id in route)
             for card_job, count in counts.items():
                 capacities[card_job] = max(capacities.get(card_job, 1), count)
+        self._prize_job_capacities_cache = capacities
         return capacities
 
     def _board_resources(self, me) -> float:

@@ -163,6 +163,38 @@ def test_mandatory_choice_ignores_optional_menu_width_cap():
     assert decision.action.kind == "choose_high"
 
 
+def test_production_successive_halving_refines_only_the_best_incomplete_root():
+    root = _state("root")
+    promising = _state("promising", board=0.10)
+    payoff = _state("payoff", board=0.50)
+    distraction = _state("distraction", board=0.05)
+    larger_hidden_payoff = _state("larger-hidden-payoff", board=0.90)
+    build, distract, continue_build, continue_distract, end = (
+        _action("build", 0), _action("distract", 1), _action("continue_build", 0),
+        _action("continue_distract", 0), _action("end", 2),
+    )
+    decision = ProductionSolver(
+        Graph(
+            {"root": (build, distract, end), "promising": (continue_build, end),
+             "payoff": (end,), "distraction": (continue_distract, end),
+             "larger-hidden-payoff": (end,)},
+            {("root", "build"): Deterministic(promising),
+             ("promising", "continue_build"): Deterministic(payoff),
+             ("root", "distract"): Deterministic(distraction),
+             ("distraction", "continue_distract"): Deterministic(larger_hidden_payoff)},
+        ),
+        _oracle(),
+        limits=ProductionLimits(
+            max_nodes=10, root_probe_nodes=1, root_refinement_width=1),
+    ).decide(root)
+
+    production = decision.diagnostics["production"]
+    assert decision.action.kind == "build"
+    assert production["root_branch_nodes"][0] > 1
+    assert production["root_branch_nodes"][1] == 1
+    assert production["root_refinement_width"] == 1
+
+
 def test_opponent_min_and_known_chance_are_recursive_nodes():
     root = _state("root")
     good, bad = _state("leaf", board=0.4), _state("leaf2", board=-0.1)

@@ -20,6 +20,8 @@ PRODUCTION_MAX_NODES = 4_000
 PRODUCTION_BEAM_WIDTH = 16
 DEFAULT_ROOT_BEAM_WIDTH = 16
 DEFAULT_EFFECT_CHOICE_WIDTH = 64
+DEFAULT_ROOT_PROBE_NODES = 64
+DEFAULT_ROOT_REFINEMENT_WIDTH = 2
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
@@ -47,6 +49,8 @@ class ProductionLimits:
     beam_width: int = PRODUCTION_BEAM_WIDTH
     root_beam_width: int = DEFAULT_ROOT_BEAM_WIDTH
     effect_choice_width: int = DEFAULT_EFFECT_CHOICE_WIDTH
+    root_probe_nodes: int = DEFAULT_ROOT_PROBE_NODES
+    root_refinement_width: int = DEFAULT_ROOT_REFINEMENT_WIDTH
 
 
 @dataclass(frozen=True)
@@ -279,9 +283,9 @@ class ReferenceSolver:
 class ProductionSolver(ReferenceSolver):
     """Bounded search over the reference transition/value contracts.
 
-    There is no depth horizon and no second policy. Width/state capacity are explicit. At a capped
-    state where End is legal, exact-zero End is a valid lower bound. A mandatory selection is not
-    an optional action menu, so its legal choices are never discarded solely by the width bound.
+    There is no depth horizon and no second action policy. Width/state capacity are explicit. At a
+    capped state where End is legal, exact-zero End is a valid lower bound. Every root receives an
+    equal probe; the strongest few incomplete roots receive the expensive refinement pass.
     """
 
     def __init__(self, provider: TransitionProvider, oracle: ValueOracle, *, model_factory=None,
@@ -291,21 +295,27 @@ class ProductionSolver(ReferenceSolver):
         self.production_limits = limits
         self._root_key = ""
         self._root_branch_nodes: list[int] = []
+        self._root_branch_capped: list[bool] = []
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
         self._root_branch_nodes = []
+        self._root_branch_capped = []
         decision = super().decide(state)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
             "beam_width": self.production_limits.beam_width,
             "root_beam_width": self.production_limits.root_beam_width,
             "effect_choice_width": self.production_limits.effect_choice_width,
+            "root_probe_nodes": self.production_limits.root_probe_nodes,
+            "root_refinement_width": self.production_limits.root_refinement_width,
             "max_nodes": self.production_limits.max_nodes,
-            "max_nodes_per_root_action": self.production_limits.max_nodes,
+            "max_nodes_per_refined_root_action": (
+                self.production_limits.root_probe_nodes
+                + self.production_limits.max_nodes - 1),
             "root_branch_nodes": tuple(self._root_branch_nodes),
-            "cap_reached": any(nodes >= self.production_limits.max_nodes
-                               for nodes in self._root_branch_nodes),
+            "root_branch_capped": tuple(self._root_branch_capped),
+            "cap_reached": any(self._root_branch_capped),
             "lower_bound": not decision.complete,
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
@@ -352,21 +362,52 @@ class ProductionSolver(ReferenceSolver):
         actor = self.provider.actor(state)
         if key == self._root_key:
             results_list = []
-            total_nodes = self.nodes
+            branch_nodes = []
+            branch_capped = []
             original_limits = self.limits
-            # Every root alternative receives the same full budget. Dividing a
-            # fixed pool by the number of legal choices makes a card worse merely
-            # because other cards are playable, and therefore is itself a hidden
-            # action-count policy rather than a Bellman comparison.
-            self.limits = SearchLimits(self.production_limits.max_nodes)
+            probe_nodes = min(
+                self.production_limits.max_nodes,
+                max(1, self.production_limits.root_probe_nodes),
+            )
+            self.limits = SearchLimits(probe_nodes)
             for action in actions:
                 self.nodes = 1
                 result = self._action(state, action)
-                self._root_branch_nodes.append(self.nodes)
-                total_nodes += max(0, self.nodes - 1)
+                branch_nodes.append(self.nodes)
+                branch_capped.append(not result.complete and self.nodes >= probe_nodes)
                 results_list.append((action, result))
+
+            # Successive halving allocates the expensive pass by observed Bellman continuation
+            # value.  Every legal choice receives the same probe, while exact probe results need no
+            # further work.  This shapes width, never turn depth or action semantics.
+            incomplete = [
+                (index, action, result)
+                for index, (action, result) in enumerate(results_list)
+                if not result.complete
+            ]
+            incomplete.sort(
+                key=lambda row: _ordered_evaluation(row[2], actor),
+                reverse=actor is Actor.OURS,
+            )
+            self.limits = SearchLimits(self.production_limits.max_nodes)
+            for index, action, probe in incomplete[:max(
+                    0, self.production_limits.root_refinement_width)]:
+                self.nodes = 1
+                refined = self._action(state, action)
+                branch_nodes[index] += max(0, self.nodes - 1)
+                branch_capped[index] = (
+                    not refined.complete and self.nodes >= self.production_limits.max_nodes)
+                if (math.isfinite(refined.value)
+                        and ((actor is Actor.OURS and _ordered_evaluation(refined, actor)
+                              >= _ordered_evaluation(probe, actor))
+                             or (actor is Actor.OPPONENT and _ordered_evaluation(refined, actor)
+                                 <= _ordered_evaluation(probe, actor)))):
+                    results_list[index] = (action, refined)
+
+            self._root_branch_nodes.extend(branch_nodes)
+            self._root_branch_capped.extend(branch_capped)
             self.limits = original_limits
-            self.nodes = total_nodes
+            self.nodes = 1 + sum(max(0, count - 1) for count in branch_nodes)
             results = tuple(results_list)
         else:
             results_list = []

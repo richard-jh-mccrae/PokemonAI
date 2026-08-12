@@ -32,7 +32,9 @@ def _default_check(zip_path: Path, name: str):
     from sim.check_agent import Report, check_artifact
 
     print(f"checking exact artifact {zip_path.name} (one mirror match)...", flush=True)
-    with tempfile.TemporaryDirectory() as tmp:
+    # Windows can briefly retain a native DLL mapping after a timed-out child exits. Cleanup must
+    # never replace the real gate result with an unrelated PermissionError traceback.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         stage = check_artifact(
             zip_path, Path(tmp), reports_dir=DEFAULT_REPORTS, label=name)
     return Report(name, [stage])
@@ -89,8 +91,12 @@ def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILD
               else _default_check(zip_path, row["agent"]))
     if not report.ok:
         bad = next((s for s in getattr(report, "stages", []) if not s.ok), None)
-        detail = f" — {bad.detail}" if bad and bad.detail else ""
-        raise SystemExit(f"Agent Check failed at stage '{report.failed_stage}'{detail}; not submitting")
+        detail = bad.detail if bad is not None and bad.detail else "no diagnostic was returned"
+        raise SystemExit(
+            f"SUBMISSION BLOCKED [{report.failed_stage}]\n"
+            f"Reason: {detail}\n"
+            "Upload: not attempted"
+        )
     row["message"] = compose_message(row)
     (upload_fn or _default_upload)(zip_path, row["message"])
     print("Kaggle accepted upload; recording local submission history...", flush=True)

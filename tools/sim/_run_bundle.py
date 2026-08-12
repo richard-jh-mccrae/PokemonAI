@@ -13,10 +13,12 @@ import logging
 import os
 import sys
 
+from kaggle_cabt import import_cabt_make
+
 sys.path.insert(0, os.getcwd())  # the extracted Bundle
 
-# Silence kaggle_environments' noisy one-time env discovery: INFO logging (global disable — the
-# library resets its own logger level on import) + native open_spiel stderr dump (fd-level).
+# Silence Kaggle Environment's import-time logging. Discovery is restricted to CABT, so unrelated
+# native environments such as OpenSpiel are neither imported nor initialized.
 logging.disable(logging.INFO)
 sys.stdout.flush()
 sys.stderr.flush()
@@ -25,7 +27,7 @@ _saved = os.dup(1), os.dup(2)
 os.dup2(_dn, 1)
 os.dup2(_dn, 2)
 try:
-    from kaggle_environments import make
+    make = import_cabt_make()
 finally:
     os.dup2(_saved[0], 1)
     os.dup2(_saved[1], 2)
