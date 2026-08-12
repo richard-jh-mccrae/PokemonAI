@@ -3,6 +3,7 @@
 Offline, synthetic briefs. The γ-gated consumers are the ADR-0038 Tactical levers (test_posture_read).
 """
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -15,9 +16,11 @@ from common.scouting.provider import EngineCardStatProvider
 from common.scouting.read import Read
 
 
+_BRIEFS_DIR = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting" / "briefs"
+
+
 def _write_brief(d, slug, covers, **extra):
-    brief = {"slug": slug, "covers": covers, "wincon": extra.get("wincon", {"line": ["Base"], "plan": "attack"}),
-             "opponent_properties": extra.get("opponent_properties", {}),
+    brief = {"slug": slug, "covers": covers, "opponent_properties": extra.get("opponent_properties", {}),
              "pokemon": extra.get("pokemon", []), "key_cards": extra.get("key_cards", [])}
     (d / f"{slug}.json").write_text(json.dumps(brief), encoding="utf-8")
 
@@ -64,21 +67,21 @@ def test_match_brief_none_when_unrecognized(tmp_path):
 def _ml_brief(**extra):
     return Brief(slug="ml", label="ML", covers=["Mega Lucario ex"],
                  pokemon=extra.get("pokemon", [
-                     {"card": "Mega Lucario ex", "roles": ["wincon", "primary_attacker"]},
-                     {"card": "Riolu", "roles": ["wincon_base"]},
+                     {"card": "Mega Lucario ex", "roles": ["primary_attacker"]},
+                     {"card": "Hariyama", "roles": ["backup_attacker"]},
                  ]))
 
 
 def test_resolve_brief_cards_maps_names_to_ids_and_roles():
-    name_ids = {"Mega Lucario ex": {678}, "Riolu": {677}}
+    name_ids = {"Mega Lucario ex": {678}, "Hariyama": {679}}
     threat_ids, target_roles = resolve_brief_cards(_ml_brief(), lambda n: name_ids.get(n, ()))
-    assert threat_ids == frozenset({677, 678})
-    assert target_roles == {678: "prize_liability", 677: "fragile_preevo"}
+    assert threat_ids == frozenset({678, 679})
+    assert target_roles == {678: "prize_liability", 679: "attacker"}
 
 
 def test_resolve_brief_cards_skips_unresolvable_names():
     threat_ids, target_roles = resolve_brief_cards(
-        _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["wincon"]},
+        _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["primary_attacker"]},
                             {"card": "Ghost Card", "roles": ["support"]}]),
         lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
@@ -87,13 +90,13 @@ def test_resolve_brief_cards_skips_unresolvable_names():
 
 def test_resolve_brief_cards_maps_a_name_to_all_its_ids():
     _, target_roles = resolve_brief_cards(
-        _ml_brief(pokemon=[{"card": "Riolu", "roles": ["wincon_base"]}]),
-        lambda n: {"Riolu": {677, 6771}}.get(n, ()))
-    assert target_roles == {677: "fragile_preevo", 6771: "fragile_preevo"}
+        _ml_brief(pokemon=[{"card": "Hariyama", "roles": ["backup_attacker"]}]),
+        lambda n: {"Hariyama": {679, 6791}}.get(n, ()))
+    assert target_roles == {679: "attacker", 6791: "attacker"}
 
 
 def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
-    brief = _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["wincon", "primary_attacker"]}])
+    brief = _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["primary_attacker"]}])
     threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
     assert target_roles == {678: "prize_liability"}
@@ -143,10 +146,28 @@ def test_shipped_briefs_have_no_covers_collision():
             seen[arch] = brief.slug
 
 
+def test_shipped_briefs_are_readable_crlf_json_with_bounded_lines():
+    """Briefs are reviewed directly, so preserve their intentional on-disk layout."""
+    for path in _BRIEFS_DIR.glob("*.json"):
+        raw = path.read_bytes()
+        assert b"\n" not in raw.replace(b"\r\n", b""), f"{path.name}: expected CRLF"
+        assert max(len(line) for line in raw.split(b"\r\n")) <= 120, f"{path.name}: line over 120 columns"
+
+
+def test_shipped_threats_are_labeled_as_primary_or_backup_attackers():
+    """Threatening Brief bodies must distinguish main lines from supporting attackers."""
+    for brief in load_briefs():
+        for entry in brief.pokemon:
+            roles = set(entry.get("roles", []))
+            if "threat" in roles:
+                assert {"primary_attacker", "backup_attacker"} & roles, (
+                    f"{brief.slug}: {entry['card']} is a threat without an attacker label")
+
+
 @pytest.mark.req("REQ-BRIEF-0003")
-def test_dragapult_brief_ranks_its_wincon_above_its_support_exes():
+def test_dragapult_brief_ranks_its_primary_attacker_above_its_support_exes():
     """The support ex's are all 2-prize bodies too, so without this the gust drags up a support body
-    over the one whose loss ends the game. `_snipe_tera_veto` is what lets the wincon carry a role."""
+    over the one whose loss ends the game. `_snipe_tera_veto` lets the primary carry a role."""
     prov = EngineCardStatProvider()
     brief = next(b for b in load_briefs() if b.slug == "dragapult_ex")
     _, roles = resolve_brief_cards(brief, prov.ids_for_name)
@@ -155,12 +176,12 @@ def test_dragapult_brief_ranks_its_wincon_above_its_support_exes():
     def _pri(name):
         return max(plan.priority(i) for i in prov.ids_for_name(name))
 
-    wincon = _pri("Dragapult ex")
-    assert wincon > 0, "the Dragapult ex WINCON must carry a target role (it had none)"
+    primary = _pri("Dragapult ex")
+    assert primary > 0, "the Dragapult ex primary attacker must carry a target role"
     for support in ("Fezandipiti ex", "Latias ex", "Meowth ex"):
-        assert wincon > _pri(support), (
-            f"Dragapult ex (the win-condition) must out-rank the support ex {support!r} — all are "
-            f"2-prize bodies, so the gust would otherwise drag up a support body over the wincon")
+        assert primary > _pri(support), (
+            f"Dragapult ex must out-rank the support ex {support!r} — all are 2-prize bodies, so "
+            "the gust would otherwise drag up a support body over the primary attacker")
 
 
 def _ancestor_names(prov, cid: int) -> set[str]:
@@ -180,26 +201,36 @@ def _ancestor_names(prov, cid: int) -> set[str]:
 
 
 @pytest.mark.req("REQ-BRIEF-0002")
-def test_shipped_briefs_never_neutralize_a_wincon_line_payoff():
-    """ADR-0051: `engine` is priority 0 in `build_matchup_plan`'s top last-write-wins tier, so it is
-    an ACTIVE suppressor. OMITTING a payoff from `targets` stays legitimate and is NOT pinned here."""
+def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
+    """A primary attacker is the curated matchup payoff; backup attackers remain below it."""
     prov = EngineCardStatProvider()
     for brief in load_briefs():
         _, target_roles = resolve_brief_cards(brief, prov.ids_for_name)
-        payoff = brief.wincon.get("line", [])[-1:]
-        for name in payoff:
+        primaries = [entry["card"] for entry in brief.pokemon
+                     if "primary_attacker" in entry.get("roles", [])]
+        assert primaries, f"{brief.slug}: Brief has no primary attacker"
+        for name in primaries:
             ids = prov.ids_for_name(name) or ()
             assert any(target_roles.get(cid) == "prize_liability" for cid in ids), (
-                f"{brief.slug}: wincon payoff {name!r} must resolve to prize_liability")
+                f"{brief.slug}: primary attacker {name!r} must resolve to prize_liability")
 
 
 def test_compact_roles_supply_threat_and_target_readers():
     """One doctrine source drives denial (threat) plus snipe/gust (target priority)."""
     brief = _ml_brief(pokemon=[
-        {"card": "Mega Lucario ex", "roles": ["wincon", "primary_attacker"]},
-        {"card": "Riolu", "roles": ["wincon_base"]},
+        {"card": "Mega Lucario ex", "roles": ["primary_attacker"]},
+        {"card": "Hariyama", "roles": ["backup_attacker"]},
     ])
-    threats, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Riolu": {677}}.get(n, ()))
+    threats, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Hariyama": {679}}.get(n, ()))
     plan = build_matchup_plan(brief_roles=roles, gamma=1.0)
-    assert threats == frozenset({677, 678})            # Wincon stages are Brief threat inputs
-    assert plan.priority(677) > 0 and plan.priority(678) > plan.priority(677)  # snipe + gust
+    assert threats == frozenset({678, 679})
+    assert plan.priority(678) > plan.priority(679) > 0
+
+
+def test_multiple_primary_attackers_are_supported():
+    brief = _ml_brief(pokemon=[
+        {"card": "Mega Lucario ex", "roles": ["primary_attacker"]},
+        {"card": "Hariyama", "roles": ["primary_attacker"]},
+    ])
+    _, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Hariyama": {679}}.get(n, ()))
+    assert roles == {678: "prize_liability", 679: "prize_liability"}

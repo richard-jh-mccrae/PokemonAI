@@ -6,10 +6,6 @@
     "Crustle / Mega Kangaskhan ex"
   ],
   "authored": "2026-08-12",
-  "wincon": {
-    "line": ["Mega Kangaskhan ex"],
-    "plan": "establish the wall that blanks the opponent's attacker, deny Energy and heal through chip, then finish the attrition game with Mega Kangaskhan ex"
-  },
   "opponent_properties": {
     "opp_tempo": "slow",
     "opp_ex_damage_immune": true,
@@ -18,21 +14,63 @@
     "opp_pierces_active_effects": true
   },
   "pokemon": [
-    {"card": "Dwebble", "roles": ["starter"]},
-    {"card": "Crustle", "roles": ["attacker", "wall", "threat"]},
-    {"card": "Cornerstone Mask Ogerpon ex", "roles": ["attacker", "wall", "threat"]},
-    {"card": "Mega Kangaskhan ex", "roles": ["wincon", "primary_attacker", "draw_engine", "wall", "threat"]}
+    {
+      "card": "Cornerstone Mask Ogerpon ex",
+      "roles": [
+        "primary_attacker",
+        "wall",
+        "threat"
+      ]
+    },
+    {
+      "card": "Crustle",
+      "roles": [
+        "primary_attacker",
+        "wall",
+        "threat"
+      ]
+    },
+    {
+      "card": "Dwebble",
+      "roles": [
+        "backup_attacker",
+        "starter"
+      ]
+    },
+    {
+      "card": "Mega Kangaskhan ex",
+      "roles": [
+        "primary_attacker",
+        "wall",
+        "draw_engine",
+        "threat"
+      ]
+    }
   ],
   "key_cards": [
-    {"card": "Crushing Hammer", "role": "energy_denial"},
-    {"card": "Jumbo Ice Cream", "role": "active_healing"},
-    {"card": "Battle Cage", "role": "bench_counter_guard"},
-    {"card": "Mist Energy", "role": "attack_effect_immunity"},
-    {"card": "Rock Fighting Energy", "role": "attack_effect_immunity"},
-    {"card": "Hero's Cape", "role": "hp_boost"}
-  ],
-  "sources": [
-    "PokeBeach — Vacancy at the Mysterious Rock Inn — https://www.pokebeach.com/2026/03/vacancy-at-the-mysterious-rock-inn-crustle-surprises-in-seattle",
-    "PTCGL community Crustle strategy — https://www.reddit.com/r/PTCGL/comments/1s6wpf5/how_to_play_crustle/"
+    {
+      "card": "Crushing Hammer",
+      "role": "energy_denial"
+    },
+    {
+      "card": "Jumbo Ice Cream",
+      "role": "active_healing"
+    },
+    {
+      "card": "Battle Cage",
+      "role": "bench_counter_guard"
+    },
+    {
+      "card": "Mist Energy",
+      "role": "attack_effect_immunity"
+    },
+    {
+      "card": "Rock Fighting Energy",
+      "role": "attack_effect_immunity"
+    },
+    {
+      "card": "Hero's Cape",
+      "role": "hp_boost"
+    }
   ]
 }

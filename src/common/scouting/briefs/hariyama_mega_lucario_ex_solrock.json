@@ -1,1 +1,66 @@
-{"slug":"hariyama_mega_lucario_ex_solrock","covers":["Hariyama / Mega Lucario ex","Hariyama / Mega Lucario ex / Solrock","Mega Lucario ex","Lunatone / Mega Lucario ex / Solrock"],"wincon":{"line":["Riolu","Mega Lucario ex"],"plan":"accelerate then trade big attackers"},"opponent_properties":{"opp_tempo":"midrange"},"pokemon":[{"card":"Riolu","roles":["wincon_base"]},{"card":"Mega Lucario ex","roles":["wincon","primary_attacker","threat"]},{"card":"Makuhita","roles":["wincon_base"]},{"card":"Hariyama","roles":["attacker","threat"]},{"card":"Solrock","roles":["support","energy_accel"]},{"card":"Lunatone","roles":["support","energy_accel"]}],"key_cards":[{"card":"Fighting Gong","role":"energy_search"},{"card":"Ignition Energy","role":"burst_accel"}]}
+{
+  "slug": "hariyama_mega_lucario_ex_solrock",
+  "covers": [
+    "Hariyama / Mega Lucario ex",
+    "Hariyama / Mega Lucario ex / Solrock",
+    "Mega Lucario ex",
+    "Lunatone / Mega Lucario ex / Solrock"
+  ],
+  "opponent_properties": {
+    "opp_tempo": "midrange"
+  },
+  "pokemon": [
+    {
+      "card": "Hariyama",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Lunatone",
+      "roles": [
+        "backup_attacker",
+        "energy_accel",
+        "support"
+      ]
+    },
+    {
+      "card": "Makuhita",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Mega Lucario ex",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Riolu",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Solrock",
+      "roles": [
+        "backup_attacker",
+        "energy_accel",
+        "support"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Fighting Gong",
+      "role": "energy_search"
+    },
+    {
+      "card": "Ignition Energy",
+      "role": "burst_accel"
+    }
+  ]
+}

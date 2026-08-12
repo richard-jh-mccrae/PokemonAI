@@ -17,14 +17,13 @@ _DEFAULT = Path(__file__).resolve().parent / "briefs"
 
 @dataclass
 class Brief:
-    """One opponent archetype's objective counterplay annotations (see docs/matchups/<slug>.md)."""
+    """One opponent archetype's compact counterplay annotations."""
     slug: str
     label: str
     covers: list[str]                                       # member archetype strings → variant routing
     opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
-    wincon: dict = field(default_factory=dict)                # {line: [all stages], plan: str}
-    pokemon: list[dict] = field(default_factory=list)         # {card, roles: [closed doctrine roles]}
-    key_cards: list[dict] = field(default_factory=list)       # {card, role, enables?}
+    pokemon: list[dict] = field(default_factory=list)         # {card, roles: [compact doctrine roles]}
+    key_cards: list[dict] = field(default_factory=list)       # {card, role}
 
 
 def _brief_from(raw: dict) -> Brief | None:
@@ -35,7 +34,7 @@ def _brief_from(raw: dict) -> Brief | None:
     return Brief(
         slug=slug, label=raw.get("label", slug), covers=[str(c) for c in covers],
         opponent_properties=raw.get("opponent_properties") or {},
-        wincon=raw.get("wincon") or {}, pokemon=raw.get("pokemon") or [],
+        pokemon=raw.get("pokemon") or [],
         key_cards=raw.get("key_cards") or [],
     )
 
@@ -66,16 +65,14 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
 
 
 _TARGET_ROLE = {
-    "wincon": "prize_liability", "wincon_base": "fragile_preevo",
-    "wincon_stage": "fragile_preevo", "disruption_target": "disruption_target",
-    "primary_attacker": "attacker", "attacker": "attacker", "support": "engine",
+    "primary_attacker": "prize_liability", "backup_attacker": "attacker",
+    "disruption_target": "disruption_target", "support": "engine",
     "energy_accel": "engine", "draw_engine": "engine",
 }
-_TARGET_ROLE_ORDER = ("wincon", "wincon_base", "wincon_stage", "disruption_target",
-                      "primary_attacker", "attacker", "energy_accel", "draw_engine", "support")
+_TARGET_ROLE_ORDER = ("primary_attacker", "disruption_target", "backup_attacker",
+                      "energy_accel", "draw_engine", "support")
 _THREAT_ROLES = frozenset({
-    "threat", "wincon", "wincon_base", "wincon_stage",
-    "primary_attacker", "attacker", "disruption",
+    "threat", "primary_attacker", "backup_attacker", "disruption",
 })
 
 

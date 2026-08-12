@@ -1,1 +1,41 @@
-{"slug":"crustle","covers":["Crustle","Crustle / Drednaw / Sylveon","Crustle / Sylveon"],"wincon":{"line":["Dwebble","Crustle"],"plan":"wall then attrition"},"opponent_properties":{"opp_ex_damage_immune":true,"opp_caps_big_hits":true,"opp_is_heal_wall":true,"opp_pierces_active_effects":true,"opp_single_prize":true},"pokemon":[{"card":"Dwebble","roles":["wincon_base"]},{"card":"Crustle","roles":["wincon","primary_attacker","wall","threat"]}],"key_cards":[{"card":"Hero's Cape","role":"hp_boost"},{"card":"Cook","role":"healing"}]}
+{
+  "slug": "crustle",
+  "covers": [
+    "Crustle",
+    "Crustle / Drednaw / Sylveon",
+    "Crustle / Sylveon"
+  ],
+  "opponent_properties": {
+    "opp_ex_damage_immune": true,
+    "opp_caps_big_hits": true,
+    "opp_is_heal_wall": true,
+    "opp_pierces_active_effects": true,
+    "opp_single_prize": true
+  },
+  "pokemon": [
+    {
+      "card": "Crustle",
+      "roles": [
+        "primary_attacker",
+        "wall",
+        "threat"
+      ]
+    },
+    {
+      "card": "Dwebble",
+      "roles": [
+        "backup_attacker"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Hero's Cape",
+      "role": "hp_boost"
+    },
+    {
+      "card": "Cook",
+      "role": "healing"
+    }
+  ]
+}
