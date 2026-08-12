@@ -3,10 +3,13 @@
 Offline, synthetic briefs. The γ-gated consumers are the ADR-0038 Tactical levers (test_posture_read).
 """
 import json
+from types import SimpleNamespace
 
 import pytest
 
-from common.scouting.briefs import Brief, load_briefs, match_brief, resolve_brief_cards
+from common.scouting.briefs import (
+    Brief, load_briefs, match_brief, resolve_brief_cards, resolve_scouted_role_worth,
+)
 from common.scouting.matchup_plan import build_matchup_plan
 from common.scouting.provider import EngineCardStatProvider
 from common.scouting.read import Read
@@ -94,6 +97,38 @@ def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
     threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
     assert target_roles == {678: "prize_liability"}
+
+
+def test_bellman_role_worth_uses_authored_brief_roles_and_payoff_prizes():
+    brief = _ml_brief()
+    brief.wincon = {"line": ["Riolu", "Mega Lucario ex"]}
+
+    class Stats:
+        @staticmethod
+        def ids_for_name(name):
+            return {"Riolu": {677}, "Mega Lucario ex": {678}}.get(name, ())
+
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(prize_value=3 if card_id == 678 else 1, stage="basic")
+
+    worth = resolve_scouted_role_worth(
+        _read(("Mega Lucario ex", 1.0)), SimpleNamespace(dossiers={}), Stats(), briefs=(brief,))
+
+    assert worth[677] > worth[678]
+
+
+def test_bellman_role_worth_does_not_promote_every_dossier_line_to_wincon():
+    artifact = SimpleNamespace(dossiers={"Deck": {
+        "targets": ({"cardId": 1, "role": "fragile_preevo"},
+                    {"cardId": 2, "role": "engine"}),
+        "evolution_lines": ((1, 3), (2, 4)),
+    }})
+    stats = SimpleNamespace(get=lambda _card_id: SimpleNamespace(stage="basic"))
+
+    worth = resolve_scouted_role_worth(_read(("Deck", 1.0)), artifact, stats)
+
+    assert worth[1] > worth[2]
 
 
 def test_shipped_briefs_have_no_covers_collision():

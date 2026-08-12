@@ -12,16 +12,35 @@ from typing import NewType
 #: retaining float arithmetic at runtime.
 Worth = NewType("Worth", float)
 
+WIN_CONDITION_TIER = 30.0
+WIN_CONDITION_BASE_TIER = 25.0
+WIN_CONDITION_STAGE_TIER = WIN_CONDITION_TIER
+
 ROLE_TIER: dict[str, float] = {
-    "win_condition": 30.0,
-    "primary_attacker": 30.0,
+    "win_condition": WIN_CONDITION_TIER,
+    "primary_attacker": WIN_CONDITION_TIER,
     "secondary_attacker": 20.0,
-    "win_condition_base": 20.0,   # a Line pre-evolution — a 2nd Dreepy is a 2nd LINE, not junk
+    "win_condition_base": WIN_CONDITION_BASE_TIER,
+    "win_condition_stage": WIN_CONDITION_STAGE_TIER,
     "evolution_base": 20.0,
     "engine": 12.0,
     "accel_source": 12.0,
     "counter_mover": 12.0,        # a damage-relay Ability body (Munkidori) — the engine band
     "tutor": 10.0,
+}
+
+# Scouting Brief vocabulary aliases into the same semantic Worth currency. These translate role
+# names only; they do not identify cards or prescribe an action.
+ROLE_ALIASES: dict[str, str] = {
+    "wincon": "win_condition",
+    "wincon_base": "win_condition_base",
+    "wincon_stage": "win_condition_stage",
+    "prize_liability": "win_condition",
+    "fragile_preevo": "win_condition_base",
+    "attacker": "secondary_attacker",
+    "threat": "primary_attacker",
+    "draw_engine": "engine",
+    "energy_accel": "accel_source",
 }
 ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the old flat-shed anchor
 ACE_SPEC_TIER = 25.0              # one-per-deck, unrecoverable — high floor, closure-discounted
@@ -64,7 +83,7 @@ def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = F
     """MAX, not sum — worth is the card's best job. Function defaults are shared across decks;
     ``worth_override`` is upward-only by construction. Only an unknown card may resolve to zero."""
     return max(
-        max((ROLE_TIER.get(r, 0.0) for r in roles), default=0.0),
+        max((ROLE_TIER.get(ROLE_ALIASES.get(r, r), 0.0) for r in roles), default=0.0),
         max((TAG_TIER.get(t, 0.0) for t in tags), default=0.0),
         max((FUNCTION_TIER.get(t, 0.0) for t in tags), default=0.0),
         ACE_SPEC_TIER if is_ace_spec else 0.0,

@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from common.bellman import Chance, Choice, DecisionState, Deterministic, Terminal, Unknown
+from common.bellman import Chance, Choice, DecisionState, Deterministic, Terminal, Unknown, ValueRegistry
 from common.bellman.engine import CgpyTransitionProvider
 from train.blunder.store import load_corrections
+from train.tune import _build_pilot
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -22,6 +23,12 @@ def _rows():
             if correction.agent == "mega_starmie" and correction.obs]
 
 
+def _registry():
+    pilot = _build_pilot("mega_starmie")[0]
+    return ValueRegistry.from_strategy(
+        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
+
+
 def _source_key(obs, option):
     kind = int(option["type"])
     if kind in (7, 8, 9):
@@ -34,11 +41,12 @@ def _source_key(obs, option):
 
 
 def test_every_unfiltered_correction_action_has_a_declared_transition():
+    registry = _registry()
     actions = covered = unknowns = unavailable = 0
     for correction in _rows():
         state = DecisionState.from_observation(
             correction.obs, deck=DECK, deck_name="mega_starmie")
-        provider = CgpyTransitionProvider(state)
+        provider = CgpyTransitionProvider(state, registry=registry)
         unavailable += not provider.available
         for action in provider.actions(state):
             actions += 1
@@ -51,6 +59,7 @@ def test_every_unfiltered_correction_action_has_a_declared_transition():
 
 
 def test_every_deck_source_resolves_all_nested_mechanics_without_unknown():
+    registry = _registry()
     representatives = {}
     for correction in _rows():
         obs = correction.obs
@@ -71,7 +80,7 @@ def test_every_deck_source_resolves_all_nested_mechanics_without_unknown():
         correction, root_index = representatives[key]
         state = DecisionState.from_observation(
             correction.obs, deck=DECK, deck_name="mega_starmie")
-        provider = CgpyTransitionProvider(state)
+        provider = CgpyTransitionProvider(state, registry=registry)
         action = next(action for action in provider.actions(state)
                       if root_index in action.selection)
         seen = set()

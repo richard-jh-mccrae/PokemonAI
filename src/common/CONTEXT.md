@@ -12,18 +12,21 @@ Shared game/meta vocabulary (`Archetype`, `Main-line` / `Sub-line` / `Engine Pok
 ### Bellman turn planning
 
 **Bellman Turn Planner** (ADR-0139):
-Mega Starmie's post-Set-Up strategic owner. It generates every legal action and nested selection,
-simulates deterministic/choice/chance/opponent consequences, differences one shared board potential,
-subtracts consumed resources and allowances, recursively continues valuable same-turn sequences,
-and compares them against End at exactly zero. It commits only the first real choice and replans from
-the next observation. Live transitions use the authoritative native `cg` fork API; the `cgpy` twin
-is offline-only for tokenless correction frames and is not shipped. Other decks remain on the
-legacy planner.
+The deck-neutral post-Set-Up strategic owner for decks that opt in. It enumerates legal actions and
+nested selections, forks the rules engine, and applies one recursion over deterministic, actor-choice,
+chance, and absorbing terminal nodes. It commits only the first real choice and replans from the next
+observation. Live and correction search both use the shipped forkable `cgpy` engine; `cg` remains the
+grader binding.
 
 **Portable Worth**:
-The cross-deck opportunity cost of consuming a known card, resolved from shared card functions and
-facts with upward-only deck overrides. Zero means no claim only at the raw catalog boundary; a known
-play still pays the Bellman action residual and any resolved held-card Worth.
+The cross-deck residual value of a known card, resolved from shared functions/effects and deck roles.
+It is a terminal-state input, never reveal precedence or action admission. Same-turn usefulness comes
+from the card's engine continuation. Residual hand jobs are deduplicated and future-access discounted.
+
+For reveal-and-choose effects, Bellman evaluates
+`E_R[max(c in legal(R) union decline, delta U(c) + V(successor(c)))]`. Reveal probability—not a
+card-precedence table—weights the branch. The finite same-turn recurrence has discount 1; the named
+future-hand discount applies only to resources carried beyond this turn.
 
 **Bellman Ledger**:
 The diagnostic identity `immediate benefits - consumed costs + expected continuation = Q`. Every

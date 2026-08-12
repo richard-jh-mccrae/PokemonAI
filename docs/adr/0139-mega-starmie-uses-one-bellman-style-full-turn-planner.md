@@ -225,20 +225,31 @@ own actions carry the same belief unless the action reveals information.
 There are two modes over the same transition and value contracts:
 
 - `reference`: exhaustive within its explicit node cap; any cap or unknown reports incomplete;
-- `production`: bounded best-first/beam search using exact semantic transposition and deterministic
-  ordering.
+- `production`: the same recurrence with semantic transposition, explicit width/state capacity, and
+  a zero End lower bound when capacity is reached at a state where End is legal.
+
+Production grants the same state budget independently to every root action. A shared pool divided
+by menu size is forbidden: it makes an action's estimate worse merely because unrelated actions are
+also legal. Incomplete, budget-dependent lower bounds are never memoized as transposition values.
+On exactly equal utility, the sole secondary objective is fewer remaining decisions; it is
+lexicographic and therefore cannot overturn any real utility difference.
 
 The reference solver is the correctness oracle for fixtures and sampled corpus states. Production
 may prune for time but may not change the equation, fabricate a terminal value, or delegate a pruned
 choice to legacy logic. Its budget and approximation regret are measured against reference states
 before activation. Budget constants and stopping reasons appear in telemetry.
 
-The live production transition provider uses the authoritative native `cg` fork API and releases
-every speculative state/search session. `cgpy` remains an offline correction/parity twin for frames
-that do not carry the native opaque search token; it is not included in submission bundles and is
-never a live ladder fallback. Known hidden outcomes are still classified by the shared
-hypergeometric/Needs model. An information action ends the speculative line at an expected
-actual-state-replan boundary; the next real engine observation starts a fresh native plan.
+The live production transition provider uses the shipped forkable `cgpy` engine. Deterministic draws,
+coins, reveal windows, and actor choices are transition algebra, not card-name handlers. A reveal is
+`chance(revealed set) -> max(legal revealed continuation)`; static Worth never chooses the card.
+Known reveal sets use exact hypergeometric mass. Wide hidden draws use deterministic bounded support,
+and their continuation values are probability-weighted by the same recurrence.
+
+For a reveal-and-choose effect the recurrence is
+`E_R[max(c in legal(R) union decline, delta U(c) + V(successor(c)))]`. The revealed card is never
+chosen by portable Worth or precedence. Same-turn transitions use discount 1 because the horizon is
+one finite turn; probability supplies chance weighting. The named future-hand-access discount applies
+only to resources left for later turns.
 
 Search continues while a legal successor has positive value over stopping. It stops at End, a fully
 resolved attack, a game result, or an explicit budget/unknown result. Cycles are prevented by semantic
@@ -328,11 +339,13 @@ invariant remain authoritative substrate.
 The atomic Mega Starmie cutover is complete. After Set-Up, every offered action and nested choice is
 generated and transitioned through `common.bellman`; no legacy strategic chooser or fallback can
 select the move. The bounded production solver and exhaustive reference solver share the same
-state, transition, Worth, potential, chance, belief, and ledger contracts. Production currently
-has no depth limit: a turn ends by engine transition, semantic-cycle detection, or the 1,000-node
-budget. Branch width remains 2, every action receives a no-horizon Bellman preview, and each preview
-has a 24-expanded-state default budget. Terminal wins propagate through the same transition ledger
-as every other outcome; there is no tactical proof override or action-admission policy.
+state, transition, Worth, potential, chance, belief, and ledger contracts. Production has no depth
+horizon: a turn ends only by engine transition, semantic-cycle detection, or explicit capacity.
+There is no preview policy, tactical candidate filter, card precedence, or separate terminal-win
+search. Engine-confirmed wins are ordinary terminal values and all legal siblings remain comparable,
+including the lexicographic shorter-line tie break. At
+capacity, production may back up End's exact-zero lower bound and marks the result incomplete in
+telemetry; mandatory nested states still fail closed.
 
 The unfiltered final corpus audit contains 259 corrections, zero exclusions, and zero unexplained
 rows: 141 `MATCH`, 24 `EQUIVALENT_OR_BETTER_COMPLETE_LINE`, 19

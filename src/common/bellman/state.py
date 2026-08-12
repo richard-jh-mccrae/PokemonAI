@@ -13,6 +13,11 @@ PROBABILITY_MAX = 1.0
 BELIEF_MASS_TOLERANCE = 1e-6
 DEFAULT_ROOT_SEAT = 0
 FROZEN_TAGGED_PAIR_LENGTH = 2
+SEMANTICALLY_VOLATILE_KEYS = frozenset({
+    "logs", "name", "remainingOverageTime", "serial", "step",
+    "turnActionCount",
+})
+UNORDERED_PLAYER_ZONES = ("hand", "discard")
 
 
 def freeze(value):
@@ -48,6 +53,42 @@ def thaw(value):
             and value[0] == "__set__"):
         return set(thaw(child) for child in value[1])
     return value
+
+
+def _semantic(value):
+    """Remove observation history/labels while preserving every rule-relevant state field."""
+    if isinstance(value, Mapping):
+        return {key: _semantic(child) for key, child in value.items()
+                if key not in SEMANTICALLY_VOLATILE_KEYS}
+    if isinstance(value, list):
+        return [_semantic(child) for child in value]
+    if isinstance(value, tuple):
+        return tuple(_semantic(child) for child in value)
+    return value
+
+
+def _semantic_observation(observation: Mapping):
+    normalized = _semantic(observation)
+    current = normalized.get("current") or {}
+    for player in current.get("players") or ():
+        if not isinstance(player, dict):
+            continue
+        player.pop("deck", None)
+        for zone in UNORDERED_PLAYER_ZONES:
+            cards = player.get(zone)
+            if isinstance(cards, list):
+                player[zone] = sorted(cards, key=lambda card: repr(freeze(card)))
+        bench = player.get("bench")
+        if isinstance(bench, list):
+            player["bench"] = sorted(bench, key=lambda body: repr(freeze(body)))
+    looking = current.get("looking")
+    if isinstance(looking, list):
+        current["looking"] = sorted(looking, key=lambda card: repr(freeze(card)))
+    select = normalized.get("select")
+    if isinstance(select, dict):
+        select.pop("option", None)
+        select.pop("deck", None)
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -119,8 +160,6 @@ class DecisionState:
     budgets: TurnBudgets
     belief: OpponentBelief
     value_registry_identity: str
-    hand_basis_counts: tuple[tuple[int, int], ...]
-    value_adjustments: tuple[tuple[str, float], ...] = ()
 
     @classmethod
     def from_observation(cls, observation: Mapping, *, deck: tuple[int, ...], deck_name: str,
@@ -143,11 +182,6 @@ class DecisionState:
             deck=tuple(int(card_id) for card_id in deck), deck_counts=tuple(sorted(remaining.items())),
             prize_counts=tuple(sorted(prizes.items())), budgets=TurnBudgets.from_observation(observation),
             belief=belief, value_registry_identity=str(value_registry_identity),
-            hand_basis_counts=tuple(sorted(Counter(
-                int(card["id"]) for card in ((players[seat] if 0 <= seat < len(players)
-                                                and players[seat] else {}).get("hand") or ())
-                if card).items())),
-            value_adjustments=(),
         )
 
     @cached_property
@@ -156,21 +190,20 @@ class DecisionState:
 
     @cached_property
     def semantic_key(self) -> str:
-        payload = (self.observation, self.root_seat, self.deck_name, self.deck_counts,
+        from .options import enumerate_legal_actions
+
+        legal = tuple(action.identity for action in enumerate_legal_actions(self.obs))
+        payload = (freeze(_semantic_observation(self.obs)), legal,
+                   self.root_seat, self.deck_name, self.deck_counts,
                    self.prize_counts, self.budgets, self.belief,
-                   self.value_registry_identity, self.hand_basis_counts, self.value_adjustments)
+                   self.value_registry_identity)
         return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
     def with_observation(self, observation: Mapping) -> "DecisionState":
         successor = type(self).from_observation(
             observation, deck=self.deck, deck_name=self.deck_name, belief=self.belief,
             value_registry_identity=self.value_registry_identity)
-        return replace(successor, root_seat=self.root_seat,
-                       hand_basis_counts=self.hand_basis_counts)
-
-    def with_adjustments(self, adjustments) -> "DecisionState":
-        return replace(self, value_adjustments=tuple(sorted(
-            (str(key), float(value)) for key, value in adjustments)))
+        return replace(successor, root_seat=self.root_seat)
 
 
 __all__ = ("DecisionState", "OpponentBelief", "TurnBudgets", "freeze", "thaw")

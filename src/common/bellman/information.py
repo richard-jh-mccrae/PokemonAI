@@ -1,4 +1,4 @@
-"""Known uncertainty, causal Needs, and Scouting belief adapters."""
+"""Deck declarations, exact finite probability classes, and opponent beliefs."""
 from __future__ import annotations
 
 from collections import Counter
@@ -11,16 +11,12 @@ from .state import OpponentBelief, freeze
 
 
 DEFAULT_SEAT = 0
-DEFAULT_BENCH_CAPACITY = 5
-ACCELERATOR_RECIPIENT_WORTH = 32.0
-LINE_EVOLUTION_WORTH = 30.0
-TYPED_ENERGY_WORTH = 12.0
-BURST_ENERGY_WORTH = 12.0
 PROBABILITY_MIN = 0.0
 PROBABILITY_MAX = 1.0
 HYPERGEOMETRIC_MASS_TOLERANCE = 1e-12
-OUTCOME_RNG_SEED = 0
 CANDIDATE_PAIR_SIZE = 2
+DEFAULT_INFORMATION_OUTCOME_LIMIT = 16
+STRATIFIED_BIN_MIDPOINT = 0.5
 
 
 @dataclass(frozen=True)
@@ -33,9 +29,6 @@ class BellmanDeckProfile:
     """
 
     lines: tuple[tuple[int, ...], ...] = ()
-    accelerators: tuple[int, ...] = ()
-    reusable_energy: tuple[int, ...] = ()
-    burst_energy: tuple[int, ...] = ()
     prize_routes: tuple[tuple[int, ...], ...] = ()
     prizes_to_win: int | None = None
 
@@ -45,23 +38,10 @@ class BellmanDeckProfile:
         if not lines:
             lines = tuple((base, top) for top, base in
                           sorted(getattr(registry, "line_parents", {}).items()))
-        functions = getattr(registry, "functions", {})
-        facts = getattr(registry, "facts", {})
-        roles = getattr(registry, "roles", {})
-        accelerators = tuple(sorted(
-            card_id for card_id, card_roles in roles.items()
-            if "accel_source" in card_roles and bool(getattr(facts.get(card_id), "pokemon", False))))
-        reusable_energy = tuple(sorted(
-            card_id for card_id, fact in facts.items()
-            if bool(getattr(fact, "typed_basic_energy", False))))
-        burst_energy = tuple(sorted(
-            card_id for card_id, tags in functions.items()
-            if "discard_eot" in tags and any(str(tag).startswith("provides_evo:") for tag in tags)))
         prize_routes = tuple(tuple(int(card_id) for card_id in route)
                              for route in getattr(registry, "prize_routes", ()))
         return cls(lines=tuple(tuple(int(card_id) for card_id in line) for line in lines),
-                   accelerators=accelerators, reusable_energy=reusable_energy,
-                   burst_energy=burst_energy, prize_routes=prize_routes,
+                   prize_routes=prize_routes,
                    prizes_to_win=getattr(registry, "prizes_to_win", None))
 
     @property
@@ -78,65 +58,9 @@ class BellmanDeckProfile:
 
 
 @dataclass(frozen=True)
-class Need:
+class OutcomeGroup:
     key: str
     card_ids: tuple[int, ...]
-    value_worth: float
-    rationale: str
-
-
-class CausalNeeds:
-    """Deck declaration translated into legal dependency demand; never an action chooser."""
-
-    def __init__(self, *, profile: BellmanDeckProfile = BellmanDeckProfile()):
-        self.profile = profile
-
-    @staticmethod
-    def _ids(player) -> list[int]:
-        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
-        return [int(body["id"]) for body in bodies if body]
-
-    def derive(self, observation: Mapping, *, deck_counts: Mapping[int, int]) -> tuple[Need, ...]:
-        current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", DEFAULT_SEAT))
-        players = current.get("players") or ()
-        me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-        bodies = self._ids(me)
-        bench_space = len(me.get("bench") or ()) < int(me.get("benchMax", DEFAULT_BENCH_CAPACITY))
-        needs = []
-        bases = self.profile.line_bases
-        tops = self.profile.line_tops
-        if (set(self.profile.accelerators).intersection(bodies) and not set(bodies).intersection(bases)
-                and not set(bodies).intersection(tops) and bench_space
-                and any(deck_counts.get(card_id, 0) > 0 for card_id in bases)):
-            needs.append(Need(
-                "accelerator-recipient", tuple(sorted(bases)), ACCELERATOR_RECIPIENT_WORTH,
-                "A declared evolution-line base supplies a Bench recipient for acceleration",
-            ))
-        missing_tops = tuple(card_id for card_id in tops if card_id not in bodies
-                             and deck_counts.get(card_id, 0) > 0)
-        if set(bodies).intersection(bases) and missing_tops:
-            needs.append(Need(
-                "line-evolution", missing_tops, LINE_EVOLUTION_WORTH,
-                "A declared top evolution converts the established dependency into a win condition",
-            ))
-        active = next((body for body in (me.get("active") or ()) if body), None)
-        active_energy = len((active or {}).get("energyCards") or (active or {}).get("energies") or ())
-        reusable = tuple(card_id for card_id in self.profile.reusable_energy
-                         if deck_counts.get(card_id, 0) > 0)
-        if active is not None and active_energy == 0 and reusable:
-            needs.append(Need(
-                "typed-attack-energy", reusable, TYPED_ENERGY_WORTH,
-                "A reusable typed Energy funds the current attack and persists",
-            ))
-        burst = tuple(card_id for card_id in self.profile.burst_energy
-                      if deck_counts.get(card_id, 0) > 0)
-        if set(bodies).intersection(tops) and burst:
-            needs.append(Need(
-                "burst-energy", burst, BURST_ENERGY_WORTH,
-                "Burst Energy can fund the evolved body's colourless attack this turn",
-            ))
-        return tuple(needs)
 
 
 @dataclass(frozen=True)
@@ -147,32 +71,142 @@ class DrawClass:
     label: str
 
 
-def hypergeometric_classes(pool_ids, draws: int, needs: tuple[Need, ...]) -> tuple[DrawClass, ...]:
-    """Exact mutually-exclusive count classes for disjoint need groups plus explicit remainder."""
+@dataclass(frozen=True)
+class RevealSet:
+    probability: float
+    card_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class DrawOutcome:
+    probability: float
+    card_ids: tuple[int, ...]
+    exact: bool
+
+
+def _combination_at_rank(total: int, draws: int, rank: int) -> tuple[int, ...]:
+    """Unrank one lexicographic physical-card subset among ``comb(total, draws)`` subsets."""
+    indices = []
+    start = 0
+    for remaining in range(draws, 0, -1):
+        for index in range(start, total):
+            suffixes = comb(total - index - 1, remaining - 1)
+            if rank < suffixes:
+                indices.append(index)
+                start = index + 1
+                break
+            rank -= suffixes
+    return tuple(indices)
+
+
+def draw_outcomes(pool_ids, draws: int, *,
+                  max_outcomes: int = DEFAULT_INFORMATION_OUTCOME_LIMIT) -> tuple[DrawOutcome, ...]:
+    """Multivariate-hypergeometric outcomes, stratified when support exceeds the width cap."""
     pool = Counter(int(card_id) for card_id in pool_ids)
-    groups, claimed = [], set()
-    for need in needs:
-        ids = tuple(card_id for card_id in need.card_ids if card_id not in claimed)
-        claimed.update(ids)
-        groups.append(sum(pool[card_id] for card_id in ids))
     total = sum(pool.values())
     draws = min(max(0, int(draws)), total)
-    remainder_n = total - sum(groups)
+    if draws == 0:
+        return (DrawOutcome(PROBABILITY_MAX, (), True),)
+    identities = tuple(sorted(pool))
+    signatures = []
+
+    def enumerate_counts(index, remaining, chosen):
+        if len(signatures) > max_outcomes:
+            return
+        if index == len(identities):
+            if remaining == 0:
+                signatures.append(tuple(chosen))
+            return
+        card_id = identities[index]
+        for count in range(min(pool[card_id], remaining) + 1):
+            enumerate_counts(index + 1, remaining - count,
+                             (*chosen, *((card_id,) * count)))
+
+    enumerate_counts(0, draws, ())
+    denominator = comb(total, draws)
+    if len(signatures) <= max_outcomes:
+        exact = []
+        for signature in signatures:
+            selected = Counter(signature)
+            ways = 1
+            for card_id, count in selected.items():
+                ways *= comb(pool[card_id], count)
+            exact.append(DrawOutcome(ways / denominator, signature, True))
+        return tuple(exact)
+
+    # One midpoint from each equal-mass stratum of physical-card subsets. Unlike seeded Monte Carlo,
+    # a rare hand cannot consume several branches because of seed luck; unlike signature ordering,
+    # no card identity or value determines the strata. Duplicate signatures are merged.
+    expanded = tuple(sorted(pool.elements()))
+    quantiles = tuple((index + STRATIFIED_BIN_MIDPOINT) / max_outcomes
+                      for index in range(max_outcomes))
+    representatives: Counter[tuple[int, ...]] = Counter()
+    for quantile in quantiles:
+        rank = min(denominator - 1, int(quantile * denominator))
+        signature = tuple(expanded[index]
+                          for index in _combination_at_rank(total, draws, rank))
+        representatives[signature] += 1
+    return tuple(DrawOutcome(count / max_outcomes, signature, False)
+                 for signature, count in sorted(representatives.items()))
+
+
+def reveal_sets(pool_ids, draws: int, eligible_ids) -> tuple[RevealSet, ...]:
+    """Exact distribution of distinct selectable identities in a without-replacement window."""
+    pool = Counter(int(card_id) for card_id in pool_ids)
+    eligible = tuple(sorted(set(int(card_id) for card_id in eligible_ids) & set(pool)))
+    total = sum(pool.values())
+    draws = min(max(0, int(draws)), total)
     denominator = comb(total, draws) if total >= draws else 0
     if denominator == 0:
-        return (DrawClass(1.0, tuple(0 for _ in groups), 0, "empty"),)
+        return (RevealSet(PROBABILITY_MAX, ()),)
+    ineligible = total - sum(pool[card_id] for card_id in eligible)
+    grouped: dict[tuple[int, ...], int] = {}
+    ranges = [range(min(pool[card_id], draws) + 1) for card_id in eligible]
+    for counts in product(*ranges):
+        remainder = draws - sum(counts)
+        if not 0 <= remainder <= ineligible:
+            continue
+        ways = comb(ineligible, remainder)
+        for card_id, count in zip(eligible, counts):
+            ways *= comb(pool[card_id], count)
+        if ways:
+            signature = tuple(card_id for card_id, count in zip(eligible, counts) if count)
+            grouped[signature] = grouped.get(signature, 0) + ways
+    outcomes = tuple(RevealSet(ways / denominator, signature)
+                     for signature, ways in sorted(grouped.items()))
+    mass = sum(outcome.probability for outcome in outcomes)
+    if abs(mass - PROBABILITY_MAX) > HYPERGEOMETRIC_MASS_TOLERANCE:
+        raise ValueError(f"reveal outcome mass {mass} != 1")
+    return outcomes
+
+
+def hypergeometric_classes(pool_ids, draws: int,
+                           groups: tuple[OutcomeGroup, ...]) -> tuple[DrawClass, ...]:
+    """Exact count classes for caller-declared disjoint card sets plus explicit remainder."""
+    pool = Counter(int(card_id) for card_id in pool_ids)
+    sizes, claimed = [], set()
+    for group in groups:
+        ids = tuple(card_id for card_id in group.card_ids if card_id not in claimed)
+        claimed.update(ids)
+        sizes.append(sum(pool[card_id] for card_id in ids))
+    total = sum(pool.values())
+    draws = min(max(0, int(draws)), total)
+    remainder_n = total - sum(sizes)
+    denominator = comb(total, draws) if total >= draws else 0
+    if denominator == 0:
+        return (DrawClass(1.0, tuple(0 for _ in sizes), 0, "empty"),)
     outcomes = []
-    ranges = [range(min(size, draws) + 1) for size in groups]
+    ranges = [range(min(size, draws) + 1) for size in sizes]
     for counts in product(*ranges):
         remainder = draws - sum(counts)
         if not 0 <= remainder <= remainder_n:
             continue
         numerator = comb(remainder_n, remainder)
-        for size, count in zip(groups, counts):
+        for size, count in zip(sizes, counts):
             numerator *= comb(size, count)
         if not numerator:
             continue
-        labels = [f"{need.key}={count}" for need, count in zip(needs, counts)]
+        labels = [f"{group.key}={count}" for group, count in zip(groups, counts)]
         labels.append(f"other={remainder}")
         outcomes.append(DrawClass(numerator / denominator, tuple(counts), remainder,
                                   ",".join(labels)))
@@ -212,55 +246,7 @@ def opponent_belief(observation: Mapping, *, candidates=(), properties=None) -> 
     )
 
 
-class OutcomeRng:
-    """One branch's forced draw multiset; other randomness stays deterministic."""
-
-    def __init__(self, *, seat: int, serial_to_card: Mapping[int, int], draw_ids):
-        from cgpy.rng import SeededRng
-        self._fallback = SeededRng(OUTCOME_RNG_SEED)
-        self.seat = int(seat)
-        self.serial_to_card = dict(serial_to_card)
-        self.draw_ids = list(int(card_id) for card_id in draw_ids)
-        self._armed = True
-
-    def shuffle(self, seq, *, seat: int):
-        if seat != self.seat or not self._armed:
-            self._fallback.shuffle(seq, seat=seat)
-            return
-        chosen, remaining = [], list(seq)
-        for card_id in self.draw_ids:
-            serial = next((serial for serial in remaining
-                           if self.serial_to_card.get(serial) == card_id), None)
-            if serial is None:
-                raise ValueError(f"branch requested unavailable card {card_id}")
-            remaining.remove(serial)
-            chosen.append(serial)
-        seq[:] = remaining + list(reversed(chosen))
-        self._armed = False
-
-    def coin(self, seat=None):
-        return self._fallback.coin(seat=seat)
-
-    def draw_bind(self, seat, deck, *, prize=None):
-        return deck[-1]
-
-    def prize_bind(self, seat, deck, count):
-        return self._fallback.prize_bind(seat, deck, count)
-
-    def hand_pick(self, seat, hand):
-        return self._fallback.hand_pick(seat, hand)
-
-    def hand_pick_expect(self, seat, serials):
-        return None
-
-    def look_bind(self, seat, deck, n, *, from_bottom=False):
-        return self._fallback.look_bind(seat, deck, n, from_bottom=from_bottom)
-
-    def mill_bind(self, seat, deck, prize, n):
-        return self._fallback.mill_bind(seat, deck, prize, n)
-
-
 __all__ = (
-    "BellmanDeckProfile", "CausalNeeds", "DrawClass", "Need", "OutcomeRng", "hypergeometric_classes",
-    "opponent_belief",
+    "BellmanDeckProfile", "DrawClass", "DrawOutcome", "OutcomeGroup", "RevealSet",
+    "draw_outcomes", "hypergeometric_classes", "opponent_belief", "reveal_sets",
 )

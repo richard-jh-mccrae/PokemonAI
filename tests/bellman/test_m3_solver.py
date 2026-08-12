@@ -6,7 +6,7 @@ import pytest
 
 from common.bellman import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
-    ProductionLimits, ProductionSolver, Terminal,
+    ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome, SearchLimits, Terminal,
 )
 from common.bellman.algebra import Edge, WeightedEdge
 from common.bellman.options import LegalAction
@@ -93,7 +93,7 @@ def test_production_turn_search_has_no_depth_limit():
 
     decision = ProductionSolver(
         Graph(actions, transitions), _oracle(),
-        limits=ProductionLimits(max_nodes=100, beam_width=1, max_preview_per_action=8),
+        limits=ProductionLimits(max_nodes=100, beam_width=1),
     ).decide(states[0])
 
     assert decision.action.kind == "play"
@@ -109,6 +109,40 @@ def test_all_negative_actions_choose_end_zero():
     decision = ReferenceSolver(graph, _oracle()).decide(root)
     assert decision.action.kind == "end"
     assert decision.value == 0.0
+
+
+def test_equal_utility_uses_the_shorter_bellman_continuation():
+    root, mid, finish = _state("root"), _state("mid"), _state("finish", board=0.2)
+    long, followup, direct, end = (
+        _action("ability"), _action("attach"), _action("play"), _action("end", 1))
+    graph = Graph(
+        {"root": (long, direct, end), "mid": (followup, end), "finish": (end,)},
+        {("root", "ability"): Deterministic(mid),
+         ("mid", "attach"): Deterministic(finish),
+         ("root", "play"): Deterministic(finish)},
+    )
+
+    assert ReferenceSolver(graph, _oracle()).decide(root).action.kind == "play"
+
+
+def test_budget_dependent_lower_bound_is_not_transposition_cached():
+    root, finish = _state("root"), _state("finish", board=0.2)
+    play, end = _action("play"), _action("end", 1)
+    solver = ProductionSolver(
+        Graph({"root": (play, end), "finish": (end,)},
+              {("root", "play"): Deterministic(finish)}),
+        _oracle(), limits=ProductionLimits(max_nodes=1),
+    )
+
+    bounded = solver._state(root)
+    assert not bounded.evaluation.complete
+    assert root.semantic_key not in solver._memo
+
+    solver.nodes = 0
+    solver.limits = SearchLimits(10)
+    exact = solver._state(root)
+    assert exact.evaluation.complete
+    assert exact.value == pytest.approx(0.2)
 
 
 def test_opponent_min_and_known_chance_are_recursive_nodes():
@@ -127,6 +161,30 @@ def test_opponent_min_and_known_chance_are_recursive_nodes():
         WeightedEdge(0.25, "bad", Deterministic(bad)),
     ))
     assert ReferenceSolver(graph, _oracle()).decide(root).action.kind == "play"
+
+
+def test_reveal_choice_uses_remaining_turn_value_not_static_card_precedence():
+    root = _state("root")
+    static_high = _state("static-high", board=0.10)
+    useful = _state("useful", board=0.0)
+    payoff = _state("payoff", board=0.50)
+    dig, use, end = _action("play"), _action("ability"), _action("end", 1)
+    graph = Graph(
+        {"root": (dig, end), "static-high": (end,), "useful": (use, end), "payoff": (end,)},
+        {("root", "play"): RevealChoice(
+            Actor.OURS,
+            (Edge("higher static worth", Deterministic(static_high)),
+             Edge("board-useful card", Deterministic(useful))),
+            (RevealOutcome(1.0, ("higher static worth", "board-useful card")),),
+        ),
+         ("useful", "ability"): Deterministic(payoff)},
+    )
+
+    decision = ReferenceSolver(graph, _oracle()).decide(root)
+
+    assert decision.action.kind == "play"
+    assert decision.value == pytest.approx(0.50)
+    assert decision.diagnostics["root"].stopped_reason == "expected value after revealed choice"
 
 
 @pytest.mark.parametrize("kind", ["attach", "evolve", "retreat", "heal", "fetch", "gust", "play"])

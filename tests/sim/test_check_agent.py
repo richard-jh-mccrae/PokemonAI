@@ -35,22 +35,24 @@ def test_contents_passes_when_main_and_deck_present(tmp_path):
 def test_contents_bundle_requires_engine_and_common(tmp_path):
     (tmp_path / "main.py").write_text("")
     (tmp_path / "deck.csv").write_text("3\n")
-    # extracted Bundle carries the native engine and shared runtime; cgpy stays source-only
+    # extracted Bundle carries both engine bindings and the shared runtime.
     result = check_contents(
-        tmp_path, required=("main.py", "deck.csv", "cg", "common"))
+        tmp_path, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
     assert not result.ok
     assert "cg" in result.detail and "common" in result.detail
-    assert "cgpy" not in result.detail
+    assert "cgpy" in result.detail
 
 
 @pytest.mark.req("REQ-SIM-0004")
 def test_exact_artifact_gate_extracts_and_runs_the_given_zip(tmp_path, monkeypatch):
     stage = tmp_path / "stage"
     (stage / "cg").mkdir(parents=True)
+    (stage / "cgpy").mkdir()
     (stage / "common").mkdir()
     (stage / "main.py").write_text("MARKER = 'exact-artifact'\n")
     (stage / "deck.csv").write_text(LEGAL_DECK.read_text())
     (stage / "cg" / "__init__.py").write_text("")
+    (stage / "cgpy" / "__init__.py").write_text("")
     (stage / "common" / "__init__.py").write_text("")
     artifact = tmp_path / "prior-build.zip"
     with zipfile.ZipFile(artifact, "w") as bundle:

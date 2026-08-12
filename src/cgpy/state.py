@@ -146,14 +146,55 @@ class GameState:
         return cls(db=db, cards=cards, players=players, rng=rng)
 
     def clone(self) -> "GameState":
-        rng, db = self.rng, self.db
-        self.rng = self.db = None      # db is an immutable table (frozen dataclasses,
-        try:                           # lru_cache-shared already) — never deep-copied
-            twin = copy.deepcopy(self)
-        finally:
-            self.rng, self.db = rng, db
-        twin.rng = rng   # shared rng: forks that need independence pass their own
-        twin.db = db
+        def pokemon(body: PokemonInPlay | None) -> PokemonInPlay | None:
+            if body is None:
+                return None
+            result = copy.copy(body)
+            result.stack = list(body.stack)
+            result.energy = list(body.energy)
+            result.tools = list(body.tools)
+            result.attack_locks = dict(body.attack_locks)
+            return result
+
+        def board(source: PlayerBoard) -> PlayerBoard:
+            result = copy.copy(source)
+            result.deck = list(source.deck)
+            result.hand = list(source.hand)
+            result.discard = list(source.discard)
+            result.prize = list(source.prize)
+            result.active = pokemon(source.active)
+            result.bench = [pokemon(body) for body in source.bench]
+            return result
+
+        twin = copy.copy(self)
+        twin.players = [board(source) for source in self.players]
+        twin.stadium = list(self.stadium)
+        twin.turn_markers = copy.deepcopy(self.turn_markers)
+        twin.ko_turn = list(self.ko_turn)
+        twin.attach_seq = dict(self.attach_seq)
+        twin.looking = None if self.looking is None else list(self.looking)
+        twin.pending = (None if self.pending is None else PendingSelect(
+            seat=self.pending.seat, type=self.pending.type, context=self.pending.context,
+            min_count=self.pending.min_count, max_count=self.pending.max_count,
+            options=[dict(option) for option in self.pending.options],
+            remain_damage_counter=self.pending.remain_damage_counter,
+            remain_energy_cost=self.pending.remain_energy_cost,
+            deck_listing=(None if self.pending.deck_listing is None
+                          else list(self.pending.deck_listing)),
+            context_card=self.pending.context_card, effect_card=self.pending.effect_card,
+        ))
+        twin.frames = [EffectFrame(
+            program=frame.program, pc=frame.pc, vars=copy.deepcopy(frame.vars),
+            seat=frame.seat, source=frame.source, kind=frame.kind) for frame in self.frames]
+        twin.pending_triggers = copy.deepcopy(self.pending_triggers)
+        twin.outbox = [[dict(entry) for entry in rows] for rows in self.outbox]
+        twin.outbox_god = [dict(entry) for entry in self.outbox_god]
+        twin.phase_data = copy.deepcopy(self.phase_data)
+        # Card instances and the card database are immutable after construction. The caller that
+        # needs independent randomness (Engine.fork) replaces this shared RNG immediately.
+        twin.cards = self.cards
+        twin.db = self.db
+        twin.rng = self.rng
         return twin
 
     # ---------------------------------------------------------------- helpers

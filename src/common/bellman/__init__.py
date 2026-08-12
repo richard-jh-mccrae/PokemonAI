@@ -1,4 +1,4 @@
-"""Public boundary for the Mega Starmie Bellman turn planner.
+"""Public boundary for deck-neutral full-turn Bellman search.
 
 The package is intentionally isolated from the legacy strategic selectors.  Neutral game facts may
 cross this boundary; legacy scores and chosen actions may not.
@@ -12,16 +12,18 @@ from .api import (
     PlanRequest,
     RootDecision,
 )
-from .algebra import Actor, Chance, Choice, Deterministic, Ledger, Terminal, Unknown
+from .algebra import Actor, Chance, Choice, Deterministic, Ledger, RevealChoice, RevealOutcome, Terminal, Unknown
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 from .solver import ProductionLimits, ProductionSolver, ReferenceSolver, SearchLimits, TransitionProvider
 from .engine import CgpyTransitionProvider
-from .native_engine import NativeTransitionProvider
-from .information import BellmanDeckProfile, CausalNeeds, DrawClass, Need, hypergeometric_classes, opponent_belief
-from .runtime import MegaStarmieTurnPlanner
-from .potential import BoardSeeds, MegaStarmiePotential
+from .information import (
+    BellmanDeckProfile, DrawClass, OutcomeGroup, RevealSet, hypergeometric_classes,
+    opponent_belief, reveal_sets,
+)
+from .runtime import BellmanTurnPlanner
+from .potential import BoardPotential, UtilityScale
 
 __all__ = (
     "END_VALUE",
@@ -38,6 +40,8 @@ __all__ = (
     "Ledger",
     "LegalAction",
     "OpponentBelief",
+    "RevealChoice",
+    "RevealOutcome",
     "Terminal",
     "TurnBudgets",
     "Unknown",
@@ -53,14 +57,14 @@ __all__ = (
     "SearchLimits",
     "TransitionProvider",
     "CgpyTransitionProvider",
-    "NativeTransitionProvider",
     "BellmanDeckProfile",
-    "CausalNeeds",
     "DrawClass",
-    "Need",
+    "OutcomeGroup",
+    "RevealSet",
     "hypergeometric_classes",
     "opponent_belief",
-    "MegaStarmieTurnPlanner",
-    "BoardSeeds",
-    "MegaStarmiePotential",
+    "reveal_sets",
+    "BellmanTurnPlanner",
+    "BoardPotential",
+    "UtilityScale",
 )

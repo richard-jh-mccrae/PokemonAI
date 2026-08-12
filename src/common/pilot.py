@@ -29,7 +29,7 @@ from common.state_model import MySide, StateModel, TheirSide
 from common.strategy.damage_context import damage_context as _assemble_damage_context
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
-from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
+from common.scouting.briefs import Brief, match_brief, resolve_scouted_role_worth
 from common.scouting.matchup_plan import (BodyFacts, MatchupPlan, build_matchup_plan,
                                           derive_general_roles)
 from common.option_equivalence import canonical_keys   # ADR-0103: the ordering tie-break is a board
@@ -133,7 +133,7 @@ class Decision:
     composer: dict | None = None     # the SEQUENCE COMPOSER's per-decision telemetry (POC-T4/5): the
                                      # margin block, run stats, the winner's `working()` legs and step
                                      # indices, plus any coverage-gap reasons. None unless it ran.
-    bellman: dict | None = None      # Mega Starmie's native planner diagnostics. Kept separate from
+    bellman: dict | None = None      # Native Bellman diagnostics. Kept separate from
                                      # the retired-for-this-deck composer/OptionTrace telemetry schema.
     attach_working: dict | None = None  # ADR-0069 §9 per-option AXES rows. This DECIDES, so there is no
                                      # agreement bit. A Tool no channel prices ABSTAINS and is counted.
@@ -246,7 +246,7 @@ class Pilot(
                                                         # ADR-0051 steer stand down together while it is armed
         self.deny_relevance = deny_relevance            # ADR-0080: emits the Deny Relevance read and ARMS all
                                                         # three deny surfaces. OFF leaves ADR-0062's oracle live.
-        self.leaf_followups = leaf_followups            # Issue #387: Mega Starmie's validated CARD and
+        self.leaf_followups = leaf_followups            # Issue #387: validated CARD and
                                                         # multi-pick leaf ownership; other decks defer.
         self._phase_prev = None                         # Carried State (ADR-0068): the phase hysteresis memory
                                                         # — read via `carried()`, never mutated by a hypothetical
@@ -289,7 +289,7 @@ class Pilot(
         self._composer_trace = None                     # POC-T4/5: the last composer run's margin + stats
         self._planning = False                          # reentrancy guard: True while an engine sim re-runs
                                                         # policy, so plan_turn stays closed-form
-        self._bellman_registry = None                   # Mega Starmie's atomic post-setup planner boundary
+        self._bellman_registry = None                   # Atomic post-setup planner boundary
 
     def decide(self, obs: dict) -> list[int]:
         """The highest-scoring legal selection (the grader hot path): the deck on the initial
@@ -404,9 +404,9 @@ class Pilot(
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     def _bellman_evaluate(self, obs: dict, *, carried=None) -> Decision:
-        """The isolated Mega Starmie route. No legacy score, planner, or chooser is consulted."""
+        """The isolated Bellman route. No legacy score, planner, or chooser is consulted."""
         from common.bellman import (
-            BellmanDeckProfile, MegaStarmiePotential, MegaStarmieTurnPlanner, PlanRequest, ValueRegistry,
+            BellmanDeckProfile, BellmanTurnPlanner, BoardPotential, PlanRequest, ValueRegistry,
             opponent_belief,
         )
 
@@ -415,13 +415,6 @@ class Pilot(
         brief = match_brief(self.briefs, read) if (self.posture and read and gamma > 0) else None
         state = obs.get("current") or {}
         seat = int(state.get("yourIndex", 0))
-        players = state.get("players") or ()
-        opponent = players[1 - seat] if len(players) > 1 and players[1 - seat] else {}
-        ids_for_name = getattr(self.stats, "ids_for_name", None)
-        brief_threat_ids, brief_roles = (
-            resolve_brief_cards(brief, ids_for_name)
-            if brief is not None and ids_for_name is not None else (frozenset(), {}))
-        matchup_plan = self._matchup_plan(opponent, brief_roles, read, gamma)
         belief = opponent_belief(
             obs, candidates=(read.candidates if read is not None else ()),
             properties=(brief.opponent_properties if brief is not None else None),
@@ -430,14 +423,15 @@ class Pilot(
             self._bellman_registry = ValueRegistry.from_strategy(
                 strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
         profile = BellmanDeckProfile.from_registry(self._bellman_registry)
-        planned = MegaStarmieTurnPlanner(
+        opponent_role_worth = resolve_scouted_role_worth(
+            read, getattr(self.scout, "artifact", None), self.stats, briefs=self.briefs)
+        planned = BellmanTurnPlanner(
             registry=self._bellman_registry,
-            family_evaluator=MegaStarmiePotential(
-                self.stats, functions=self.functions, profile=profile,
-                threat_roles={card_id: assignment.role for card_id, assignment
-                                          in matchup_plan.assignments.items()},
-                scouted_threat_ids=brief_threat_ids,
-                root_seat=seat),
+            effects=self.effects,
+            stats=self.stats,
+            family_evaluator=BoardPotential(
+                self.stats, registry=self._bellman_registry, profile=profile, root_seat=seat,
+                opponent_role_worth=opponent_role_worth),
             belief=belief).decide(
                 PlanRequest(obs, tuple(self.deck), self.strategy.name))
         chosen = list(planned.chosen)

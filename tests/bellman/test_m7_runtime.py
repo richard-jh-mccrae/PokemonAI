@@ -13,7 +13,7 @@ from cgpy.state import PokemonInPlay
 
 from common.bellman.engine import _own_prize_export
 from common.bellman import (
-    DecisionState, Deterministic, MegaStarmiePotential, ProductionLimits, ProductionSolver,
+    BoardPotential, DecisionState, Deterministic, ProductionLimits, ProductionSolver,
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.bellman.engine import CgpyTransitionProvider
@@ -82,7 +82,7 @@ def test_60hp_policy_attaches_then_commits_lillie_and_replans():
     engine = _fixture(60)
     first = pilot.explain(_obs(engine))
     assert first.chosen == [1]
-    assert first.bellman["backend"] == "cgpy-offline"
+    assert first.bellman["backend"] == "cgpy-bellman"
     engine.step(first.chosen)
     second = pilot.explain(_obs(engine))
     selected = engine.gs.pending.options[second.chosen[0]]
@@ -120,11 +120,12 @@ def test_post_attack_potential_keeps_the_root_players_perspective():
     pilot = _build_pilot("mega_starmie")[0]
     observation = _obs(_fixture(60))
     observation["current"]["yourIndex"] = 1
-    potential = MegaStarmiePotential(
-        pilot.stats, functions=pilot.functions, root_seat=0)
+    registry = ValueRegistry.from_strategy(
+        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
+    potential = BoardPotential(pilot.stats, registry=registry, root_seat=0)
 
     assert potential(observation).total == pytest.approx(
-        MegaStarmiePotential(pilot.stats, functions=pilot.functions)(
+        BoardPotential(pilot.stats, registry=registry)(
         {**observation, "current": {**observation["current"], "yourIndex": 0}}).total)
 
 
@@ -134,9 +135,9 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        "eb4fb1f19691": [2],  # Bench Staryu before the hand refresh.
+        "eb4fb1f19691": [3],  # Free deterministic Ability, then Bench Staryu before refresh.
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
-        "3730b43d89a5": [3],  # Attach to Cinderace to enable Turbo Flare.
+        "3730b43d89a5": [1],  # Free Cape, then Water to Cinderace and Turbo Flare.
     }
     for record in records:
         if record["id"] in expected:
@@ -174,7 +175,7 @@ def test_atomic_route_leaves_every_turn_zero_pregame_choice_to_legacy(monkeypatc
     assert pilot.decide(observation) in ([0], [1])
 
 
-def test_native_turbo_flare_energy_menu_reconstructs_the_attack_rider():
+def test_forkable_engine_turbo_flare_energy_menu_reconstructs_the_attack_rider():
     records = json.loads((REPO / "tests" / "fixtures" / "continuation_parity" /
                           "seeded_continuations.json").read_text(encoding="utf-8"))["records"]
     observation = next(record["seed_observation"] for record in records
@@ -193,9 +194,9 @@ def test_native_turbo_flare_energy_menu_reconstructs_the_attack_rider():
     assert resolved.state.obs["current"]["turn"] > observation["current"]["turn"]
 
 
-def test_native_mandatory_prize_and_retreat_cost_menus_replan_without_unknown():
+def test_historical_mandatory_prize_and_retreat_cost_menus_replan_without_unknown():
     observation = _obs(_fixture(60))
-    observation["search_begin_input"] = "native-token"
+    observation["search_begin_input"] = "opaque-historical-token"
     seat = observation["current"]["yourIndex"]
     before_prizes = len(observation["current"]["players"][seat]["prize"])
     observation["select"] = {
@@ -215,7 +216,7 @@ def test_native_mandatory_prize_and_retreat_cost_menus_replan_without_unknown():
     assert len(prize_result.state.obs["current"]["players"][seat]["prize"]) == before_prizes - 3
 
     observation = _obs(_fixture(60))
-    observation["search_begin_input"] = "native-token"
+    observation["search_begin_input"] = "opaque-historical-token"
     player = observation["current"]["players"][seat]
     energy = next(card for card in player["hand"] if card["id"] == WATER)
     player["hand"].remove(energy)
@@ -239,7 +240,7 @@ def test_native_mandatory_prize_and_retreat_cost_menus_replan_without_unknown():
     assert after["discard"][-1]["id"] == WATER
 
 
-def test_native_salvatore_reconstructs_both_evolution_and_target_asks():
+def test_forkable_engine_reconstructs_both_evolution_and_target_asks():
     engine = _fixture(60)
     gs = engine.gs
     board = gs.players[0]
@@ -263,7 +264,7 @@ def test_native_salvatore_reconstructs_both_evolution_and_target_asks():
     engine.step([play_index])
     assert gs.pending.context == 19
 
-    observation = engine.observation(viewer=0, sbi_token="native-token")
+    observation = engine.observation(viewer=0, sbi_token="opaque-historical-token")
     observation["own_prizes"] = _own_prize_export(engine, 0)
     evolve_state = DecisionState.from_observation(
         observation, deck=tuple(DECK), deck_name="mega_starmie")
@@ -276,7 +277,7 @@ def test_native_salvatore_reconstructs_both_evolution_and_target_asks():
     assert target_node.state.obs["select"]["context"] == 18
 
     target_observation = target_node.state.obs
-    target_observation["search_begin_input"] = "native-token"
+    target_observation["search_begin_input"] = "opaque-historical-token"
     target_state = DecisionState.from_observation(
         target_observation, deck=tuple(DECK), deck_name="mega_starmie")
     target_provider = CgpyTransitionProvider(target_state)
@@ -307,12 +308,23 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
     pilot = _build_pilot("mega_starmie")[0]
     registry = ValueRegistry.from_strategy(
         strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
-    oracle = ValueOracle(registry, MegaStarmiePotential(pilot.stats))
-    rows = [correction for correction in load_corrections(REPO / "data" / "corrections")
-            if correction.agent == "mega_starmie" and correction.obs
-            and int((correction.obs.get("select") or {}).get("context", -1)) == 0
-            and any(option.get("type") == 13
-                    for option in correction.obs["select"].get("option") or ())][:12]
+    oracle = ValueOracle(registry, BoardPotential(pilot.stats, registry=registry))
+    rows = []
+    for correction in load_corrections(REPO / "data" / "corrections"):
+        if (correction.agent != "mega_starmie" or not correction.obs
+                or int((correction.obs.get("select") or {}).get("context", -1)) != 0):
+            continue
+        state = DecisionState.from_observation(
+            correction.obs, deck=tuple(DECK), deck_name="mega_starmie",
+            value_registry_identity=registry.identity)
+        provider = CgpyTransitionProvider(state, registry=registry)
+        attacks = tuple(action for action in provider.actions(state)
+                        if action.identity.kind == "attack")
+        if attacks and all(isinstance(provider.transition(state, action), Terminal)
+                           for action in attacks):
+            rows.append(correction)
+        if len(rows) == 12:
+            break
     assert len(rows) == 12
     for correction in rows:
         state = DecisionState.from_observation(
@@ -330,7 +342,9 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
 
 def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
     pilot = _build_pilot("mega_starmie")[0]
-    potential = MegaStarmiePotential(pilot.stats, functions=pilot.functions)
+    registry = ValueRegistry.from_strategy(
+        strategy=pilot.strategy, stats=pilot.stats, functions=pilot.functions, deck=pilot.deck)
+    potential = BoardPotential(pilot.stats, registry=registry)
     engine = _fixture(50)
     before = _obs(engine)
     won = _obs(engine)
@@ -339,5 +353,5 @@ def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
     won["current"]["players"][0]["active"][0]["energyCards"] = [
         {"id": WATER, "playerIndex": 0} for _ in range(8)]
     won["current"]["players"][0]["active"][0]["energies"] = [3] * 8
-    assert potential(won).families == (("game", potential.seeds.game),)
+    assert potential(won).families == (("game", potential.scale.game),)
     assert potential(won).total > potential(before).total

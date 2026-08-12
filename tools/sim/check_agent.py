@@ -244,7 +244,7 @@ def check_artifact(zip_path: Path, work_dir: Path, reports_dir=None, *, label="b
         zf.extractall(extracted)
 
     contents = check_contents(
-        extracted, required=("main.py", "deck.csv", "cg", "common"))
+        extracted, required=("main.py", "deck.csv", "cg", "cgpy", "common"))
     if not contents.ok:
         return StageResult(False, "deployability", f"bundle {contents.detail}")
     legality = check_legality(extracted / "deck.csv")

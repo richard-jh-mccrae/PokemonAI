@@ -57,36 +57,35 @@ def test_portable_worth_is_shared_and_overrides_only_raise():
     assert _registry({HAMMER: 11.0}).worth(HAMMER) == 11.0
 
 
-def test_pure_cost_card_loses_to_end_exactly_zero():
+def test_unused_hand_card_has_no_terminal_turn_wealth():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     before = _state(_obs([HAMMER]), registry)
     after = _state(_obs([]), registry)
     play = oracle.transition_ledger(before, after, ActionIdentity("play", (HAMMER,)))
-    assert play.total < 0.0
-    assert dict(play.costs)["hand"] == pytest.approx(6.0 / 120.0)
+    assert play.total == 0.0
     assert oracle.transition_ledger(before, before, ActionIdentity("end")).total == 0.0
 
 
-def test_realized_benefit_minus_same_consumed_cost_is_counted_once():
+def test_realized_board_benefit_is_counted_once():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     before_obs, after_obs = _obs([HAMMER]), _obs([])
     after_obs["current"]["board"] = 0.10
     ledger = oracle.transition_ledger(_state(before_obs, registry), _state(after_obs, registry),
                                       ActionIdentity("play", (HAMMER,)))
     assert dict(ledger.benefits)["board"] == pytest.approx(0.10)
-    assert dict(ledger.costs)["hand"] == pytest.approx(0.05)
-    assert 0.049 < ledger.total < 0.05
+    assert "hand" not in dict(ledger.costs)
+    assert ledger.total == pytest.approx(0.10)
 
 
-def test_acquisition_has_zero_basis_but_reacquisition_restores_consumed_root_basis():
+def test_acquisition_enables_continuation_without_becoming_terminal_hand_wealth():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     root = _state(_obs([LILLIE]), registry)
     consumed_state = root.with_observation(_obs([]))
     restored_state = consumed_state.with_observation(_obs([LILLIE]))
     consumed = oracle.transition_ledger(root, consumed_state, ActionIdentity("play"))
     restored = oracle.transition_ledger(consumed_state, restored_state, ActionIdentity("card"))
-    assert dict(restored.benefits)["hand"] == pytest.approx(registry.worth(LILLIE) / 120.0)
-    assert consumed.total + restored.total == pytest.approx(-2e-12)
+    assert "hand" not in dict(restored.benefits)
+    assert consumed.total + restored.total == pytest.approx(0.0)
 
     empty_root = _state(_obs([]), registry)
     acquired_state = empty_root.with_observation(_obs([LILLIE]))
@@ -94,24 +93,24 @@ def test_acquisition_has_zero_basis_but_reacquisition_restores_consumed_root_bas
     assert "hand" not in dict(acquired.benefits)
 
 
-def test_every_known_non_end_decision_is_strictly_costly_without_benefit():
+def test_action_labels_do_not_change_the_same_state_transition_value():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     state = _state(_obs([]), registry)
-    for kind in ("attack", "ability", "card", "retreat"):
-        assert oracle.transition_ledger(state, state, ActionIdentity(kind)).total < 0.0
+    for kind in ("attack", "ability", "card", "retreat", "play"):
+        assert oracle.transition_ledger(state, state, ActionIdentity(kind)).total == 0.0
 
 
-def test_duplicate_hand_options_diminish_but_never_become_free():
+def test_duplicate_hand_resources_are_linear_and_policy_free():
     registry = _registry()
     first = registry.hand_worth([LILLIE], _obs([LILLIE]))
     second = registry.hand_worth([LILLIE, LILLIE], _obs([LILLIE, LILLIE]))
     third = registry.hand_worth([LILLIE, LILLIE, LILLIE], _obs([LILLIE] * 3))
     assert first < second < third
-    assert second - first == pytest.approx(registry.worth(LILLIE) * 0.55)
-    assert third - second == pytest.approx(registry.worth(LILLIE) * 0.25)
+    assert second - first == pytest.approx(registry.worth(LILLIE))
+    assert third - second == pytest.approx(registry.worth(LILLIE))
 
 
-def test_retained_line_access_loses_value_when_its_target_is_built():
+def test_held_worth_does_not_embed_board_state_policy():
     registry = ValueRegistry(
         functions={RUSH_EVOLUTION: ("search", "rush_evolve")},
         facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
@@ -131,16 +130,14 @@ def test_retained_line_access_loses_value_when_its_target_is_built():
         value_registry_identity=registry.identity)
 
     assert registry.held_worth(RUSH_EVOLUTION, before_obs) == registry.worth(RUSH_EVOLUTION)
-    assert registry.held_worth(RUSH_EVOLUTION, after_obs) < registry.worth(RUSH_EVOLUTION)
+    assert registry.held_worth(RUSH_EVOLUTION, after_obs) == registry.worth(RUSH_EVOLUTION)
     ledger = ValueOracle(registry, _families).transition_ledger(
         before, after, ActionIdentity("play", (RUSH_EVOLUTION,)))
-    assert dict(ledger.costs)["hand"] == pytest.approx(13.0 / 120.0)
+    assert "hand" not in dict(ledger.costs)
 
 
 def test_every_required_consequence_has_one_named_family_owner():
     flattened = [fact for facts in FAMILY_OWNERS.values() for fact in facts]
-    for required in ("game", "prizes", "post-attack safety", "opponent threat removal",
-                     "denial counterfactual", "typed attack readiness", "mobility",
-                     "evolution dependencies", "persistent Energy", "Bench capacity",
-                     "portable card Worth", "future access"):
+    for required in ("game", "prizes", "damage progress", "reachable attack value",
+                     "in-play resource value"):
         assert flattened.count(required) == 1

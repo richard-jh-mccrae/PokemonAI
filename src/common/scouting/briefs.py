@@ -8,6 +8,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from common.card_worth import role_value
+
 from .read import Read
 
 _DEFAULT = Path(__file__).resolve().parent / "briefs"
@@ -97,3 +99,38 @@ def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dic
             for cid in ids:
                 target_roles[cid] = target_role
     return frozenset(threat_ids), target_roles
+
+
+def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=()) -> dict[int, float]:
+    """Posterior expected role Worth from authored Briefs, with dossier targets as fallback."""
+    expected: dict[int, float] = {}
+    dossiers = getattr(artifact, "dossiers", {}) if artifact is not None else {}
+    for candidate, probability in (read.candidates if read is not None else ()):
+        brief = next((item for item in briefs if candidate in item.covers), None)
+        ids_for_name = getattr(stats, "ids_for_name", None)
+        if brief is not None and ids_for_name is not None:
+            wincon_line = tuple(brief.wincon.get("line") or ())
+            payoff_ids = tuple(ids_for_name(wincon_line[-1]) or ()) if wincon_line else ()
+            payoff_prizes = max(
+                (int(getattr(stats.get(card_id), "prize_value", 1) or 1)
+                 for card_id in payoff_ids), default=1)
+            for row in brief.pokemon or ():
+                roles = tuple(row.get("roles") or ())
+                worth = role_value(roles)
+                if (row.get("card") in wincon_line[:-1]
+                        and {"wincon_base", "wincon_stage"}.intersection(roles)):
+                    worth *= payoff_prizes
+                for card_id in ids_for_name(row.get("card", "")) or ():
+                    expected[int(card_id)] = expected.get(int(card_id), 0.0) + (
+                        float(probability) * worth)
+            continue
+        dossier = dossiers.get(candidate) or {}
+        roles_by_card: dict[int, set[str]] = {}
+        for row in dossier.get("targets") or ():
+            roles_by_card.setdefault(int(row["cardId"]), set()).add(str(row["role"]))
+        for card_id, roles in roles_by_card.items():
+            stat = stats.get(card_id) if stats is not None else None
+            if "fragile_preevo" in roles and getattr(stat, "stage", None) not in (None, "basic"):
+                roles = {*roles, "wincon_stage"}
+            expected[card_id] = expected.get(card_id, 0.0) + float(probability) * role_value(roles)
+    return expected

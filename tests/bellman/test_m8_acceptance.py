@@ -28,8 +28,8 @@ def _correction(episode, frame):
     (82753102, 85, [0]),        # Kadabra line outranks Dunsparce
     (83966968, 79, [1]),        # damaged multi-prize gust target
     (84897262, 110, [1]),       # fetched Water unlocks the game win
-    (82749168, 21, [1]),        # Hammer can strip the energized Bench, then Turbo Flare follows
-    (82228017, 4, [1]),         # satisfying held Energy demand is persistent development
+    (82749168, 21, [0]),        # deterministic Water attach, then Hammer strips the energized Bench
+    (82228017, 4, [2]),         # free Cape, then the ruled Water attach to Cinderace
     (82752604, 16, [2]),        # redundant Mega Signal loses to the resolving attack
     (82717711, 18, [1]),        # a legal beneficial attack beats exact-zero End
     (83116081, 76, [5]),        # heal then reattach then KO survives bounded search
@@ -58,7 +58,7 @@ def test_20260812_sequence_and_target_corrections():
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
         "9e502ba97ac7": [0],       # deterministic Mega search before probabilistic dig
-        "e4fae85fcf63": [1],       # take available damage instead of End
+        "e4fae85fcf63": [0],       # free deterministic search, then the ruled attack over End
         "fa978d4e6fe4": [0],       # damage the scouted evolving win condition
         "0a482197b23f": [0],       # identical Salvatore copy of corrected option 2
         "995549cd76ee": [0],       # evolve the loaded Staryu

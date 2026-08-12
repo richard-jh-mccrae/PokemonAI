@@ -1,33 +1,33 @@
-"""Pure Mega Starmie Bellman runtime; neutral facts enter through constructor adapters."""
+"""Deck-neutral production boundary for full-turn Bellman search."""
 from __future__ import annotations
 
 from .api import BellmanUnavailable, PlanRequest, RootDecision
-from .information import BellmanDeckProfile, CausalNeeds
-from .native_engine import NativeTransitionProvider
+from .engine import CgpyTransitionProvider
 from .solver import ProductionLimits, ProductionSolver
 from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
 
 
-RUNTIME_MAX_NODES = 1_000
-RUNTIME_BEAM_WIDTH = 2
-RUNTIME_PREVIEW_CAP_PER_ACTION = 24
+RUNTIME_MAX_NODES_PER_ROOT_ACTION = 1_800
+RUNTIME_BEAM_WIDTH = 16
+RUNTIME_ROOT_BEAM_WIDTH = 16
 
 DEFAULT_PRODUCTION_LIMITS = ProductionLimits(
-    max_nodes=RUNTIME_MAX_NODES, beam_width=RUNTIME_BEAM_WIDTH,
-    max_preview_per_action=RUNTIME_PREVIEW_CAP_PER_ACTION,
+    max_nodes=RUNTIME_MAX_NODES_PER_ROOT_ACTION, beam_width=RUNTIME_BEAM_WIDTH,
+    root_beam_width=RUNTIME_ROOT_BEAM_WIDTH,
 )
 
 
-class MegaStarmieTurnPlanner:
+class BellmanTurnPlanner:
     """Production boundary over the same engine, ledger, and recursion used by the reference solver."""
 
-    def __init__(self, *, registry: ValueRegistry, family_evaluator,
+    def __init__(self, *, registry: ValueRegistry, family_evaluator, effects=None, stats=None,
                  belief: OpponentBelief | None = None,
                  limits: ProductionLimits = DEFAULT_PRODUCTION_LIMITS):
         self.registry = registry
         self.family_evaluator = family_evaluator
-        self.profile = BellmanDeckProfile.from_registry(registry)
+        self.effects = effects
+        self.stats = stats
         self.belief = belief
         self.limits = limits
 
@@ -35,19 +35,9 @@ class MegaStarmieTurnPlanner:
         state = DecisionState.from_observation(
             request.observation, deck=request.deck, deck_name=request.deck_name,
             belief=self.belief, value_registry_identity=self.registry.identity)
-        token = request.observation.get("search_begin_input")
-        if token is None or str(token).startswith("cgpy/1:"):
-            # Historical correction frames have no native opaque token; cgpy remains an offline
-            # oracle only. The packaged live agent does not contain that module and always arrives
-            # with the native grader token.
-            from .engine import CgpyTransitionProvider
-            provider = CgpyTransitionProvider(
-                state, registry=self.registry, needs=CausalNeeds(profile=self.profile), production_chance=True)
-            backend = "cgpy-offline"
-        else:
-            provider = NativeTransitionProvider(
-                state, registry=self.registry, needs=CausalNeeds(profile=self.profile), production_chance=True)
-            backend = "native-cg"
+        provider = CgpyTransitionProvider(
+            state, registry=self.registry, effects=self.effects, stats=self.stats)
+        backend = "cgpy-bellman"
         if not provider.available:
             if hasattr(provider, "close"):
                 provider.close()
@@ -61,12 +51,10 @@ class MegaStarmieTurnPlanner:
         finally:
             if hasattr(provider, "close"):
                 provider.close()
-        if not decision.complete:
-            raise BellmanUnavailable("bounded Bellman result is incomplete")
         diagnostics = dict(decision.diagnostics)
         diagnostics["backend"] = backend
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics)
 
 
-__all__ = ("MegaStarmieTurnPlanner",)
+__all__ = ("BellmanTurnPlanner",)

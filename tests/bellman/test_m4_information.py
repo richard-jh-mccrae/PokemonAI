@@ -6,18 +6,20 @@ from math import comb
 import pytest
 
 from common.bellman import (
-    ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver, Terminal,
+    ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver,
+    RevealChoice, Terminal,
 )
 from common.bellman.algebra import WeightedEdge
-from common.bellman.information import BellmanDeckProfile, CausalNeeds, hypergeometric_classes, opponent_belief
+from common.bellman.information import (
+    BellmanDeckProfile, OutcomeGroup, draw_outcomes, hypergeometric_classes, opponent_belief,
+)
 from common.bellman.options import LegalAction
 from common.bellman.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
 STARYU, CINDERACE, BOSS, WATER, LILLIE = 1030, 666, 1182, 3, 1227
 DECK = (STARYU,) * 4 + (CINDERACE,) * 4 + (BOSS,) + (WATER,) * 9 + (LILLIE,)
-PROFILE = BellmanDeckProfile(lines=((STARYU, 1031),), accelerators=(CINDERACE,),
-                             reusable_energy=(WATER,))
+PROFILE = BellmanDeckProfile(lines=((STARYU, 1031),))
 
 
 def _board(*, node="root", hand=(), energy=0, bench=(), value=0.0):
@@ -58,25 +60,32 @@ class Graph:
         return Actor.OURS
 
 
-def test_causal_turbo_need_transfers_as_dependency_not_tactic():
-    obs = _board(hand=(BOSS, WATER, LILLIE))
-    needs = CausalNeeds(profile=PROFILE).derive(obs, deck_counts=Counter({STARYU: 4, WATER: 8}))
-    assert [(need.key, need.card_ids) for need in needs] == [
-        ("accelerator-recipient", (STARYU,)), ("typed-attack-energy", (WATER,))]
-    benched = ({"id": STARYU, "serial": 22, "playerIndex": 0},)
-    needs = CausalNeeds(profile=PROFILE).derive(_board(bench=benched),
-                                 deck_counts=Counter({STARYU: 3, WATER: 8}))
-    assert "accelerator-recipient" not in {need.key for need in needs}
+def test_deck_profile_contains_declarations_without_derived_tactical_needs():
+    assert PROFILE.lines == ((STARYU, 1031),)
+    assert PROFILE.line_bases == {STARYU}
+    assert PROFILE.line_tops == {1031}
 
 
 def test_hypergeometric_classes_are_mutually_exclusive_with_explicit_whiff():
-    need = CausalNeeds(profile=PROFILE).derive(_board(), deck_counts=Counter({STARYU: 4}))[0]
+    group = OutcomeGroup("line-base", (STARYU,))
     pool = [STARYU] * 4 + [999] * 16
-    outcomes = hypergeometric_classes(pool, 6, (need,))
+    outcomes = hypergeometric_classes(pool, 6, (group,))
     assert sum(outcome.probability for outcome in outcomes) == pytest.approx(1.0)
     whiff = next(outcome for outcome in outcomes if outcome.counts == (0,))
     assert whiff.probability == pytest.approx(comb(16, 6) / comb(20, 6))
     assert all(outcome.remainder + sum(outcome.counts) == 6 for outcome in outcomes)
+
+
+def test_wide_draw_support_uses_mass_strata_not_seeded_rare_outcomes():
+    pool = [card_id for card_id in range(100, 110) for _copy in range(5)] + [999] * 3
+    outcomes = draw_outcomes(pool, 8, max_outcomes=16)
+    expected_rare_count = 8 * 3 / len(pool)
+    represented_rare_count = sum(
+        outcome.probability * outcome.card_ids.count(999) for outcome in outcomes)
+
+    assert sum(outcome.probability for outcome in outcomes) == pytest.approx(1.0)
+    assert represented_rare_count == pytest.approx(expected_rare_count, abs=1 / 16)
+    assert all(not outcome.exact for outcome in outcomes)
 
 
 def test_scouting_adapter_conserves_unknown_mass_and_never_selects():
@@ -125,8 +134,11 @@ def test_60hp_fixture_attaches_then_takes_lillie_expectation_and_replans():
     assert attached_decision.diagnostics["root"].alternatives
 
 
-@pytest.mark.parametrize("card_id", [LILLIE, 1120, 1122, 1223])
-def test_real_engine_information_and_coin_plays_become_chance_nodes(card_id):
+@pytest.mark.parametrize(("card_id", "node_type"), [
+    (LILLIE, Chance), (1120, Chance), (1122, RevealChoice), (1223, Chance),
+])
+def test_real_engine_owns_resolution_and_hidden_information_is_explicit_chance(
+        card_id, node_type):
     from pathlib import Path
     from common.bellman.engine import CgpyTransitionProvider
     from train.blunder.store import load_corrections
@@ -135,7 +147,10 @@ def test_real_engine_information_and_coin_plays_become_chance_nodes(card_id):
     deck = tuple(int(line) for line in (repo / "src" / "agents" / "mega_starmie" /
                                         "deck.csv").read_text().split())
     from common.cards import CardFunctions
+    from common.effects import CardEffects
+    from train.tune import _build_pilot
     tags = CardFunctions.load()
+    stats = _build_pilot("mega_starmie")[0].stats
     registry = ValueRegistry(
         roles={CINDERACE: ("accel_source",)},
         functions={known: tuple(tags.tags(known)) for known in set(deck)},
@@ -150,19 +165,27 @@ def test_real_engine_information_and_coin_plays_become_chance_nodes(card_id):
             continue
         state = DecisionState.from_observation(correction.obs, deck=deck,
                                                deck_name="mega_starmie")
-        provider = CgpyTransitionProvider(state, registry=registry)
+        provider = CgpyTransitionProvider(
+            state, registry=registry, effects=CardEffects.load(), stats=stats)
         if not provider.available:
             continue
         for action in provider.actions(state):
-            played, _serial = provider._played_card_id(provider._engines[state.semantic_key], action)
+            if action.identity.kind != "play":
+                continue
+            option = correction.obs["select"]["option"][action.selection[0]]
+            hand = correction.obs["current"]["players"][state.root_seat].get("hand") or ()
+            played = int(hand[int(option["index"])]["id"])
             if played == card_id:
                 node = provider.transition(state, action)
-                if isinstance(node, Chance):
+                if isinstance(node, node_type):
                     found = node
                     break
         if found is not None:
             break
     assert found is not None, f"no reconstructable {card_id} chance play"
-    assert sum(edge.probability for edge in found.children) == pytest.approx(1.0)
-    if card_id == 1120:
+    if isinstance(found, Chance):
+        assert sum(edge.probability for edge in found.children) == pytest.approx(1.0)
+    if card_id == 1122:
+        assert any(len(outcome.choices) > 2 for outcome in found.outcomes)
+    if card_id in (1120, 1223):
         assert {edge.label for edge in found.children} == {"heads", "tails"}

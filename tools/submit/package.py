@@ -1,7 +1,7 @@
 """Assemble a self-contained submission directory and zip it (see ADR-0004).
 
 Copies a deck-specific agent (`agents/<name>/`'s `*.py` + `deck.csv` + `tuned.json` when
-present) together with the shared `common/` and native `cg/` packages (and the compiled
+present) together with the shared `common/`, native `cg/`, and forkable `cgpy/` packages (and the compiled
 `common/scouting/artifact.json`) into `dist/<name>/`, writes a self-contained `brief.html` and
 machine-joinable `brief.csv` (the embedded decision-steering **Manifest** — provenance, hypotheses,
 capabilities, deck, composer inventory;
@@ -77,6 +77,7 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
         shutil.copy2(tuned_meta, stage / "tuned.meta.json")
     shutil.copytree(MS / "common", stage / "common", ignore=_IGNORE)
     shutil.copytree(MS / "cg", stage / "cg", ignore=_IGNORE)
+    shutil.copytree(MS / "cgpy", stage / "cgpy", ignore=_IGNORE)
 
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
     from submit.brief import build_manifest, render_brief, render_brief_csv  # lazy: avoid import cycle
