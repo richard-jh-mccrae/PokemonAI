@@ -1,0 +1,39 @@
+{
+  "slug": "latias_ex_mega_kangaskhan_ex_slowking",
+  "label": "Latias ex / Mega Kangaskhan ex / Slowking",
+  "covers": [
+    "Latias ex / Mega Kangaskhan ex / Slowking"
+  ],
+  "authored": "2026-08-12",
+  "wincon": {
+    "line": ["Slowpoke", "Slowking"],
+    "plan": "control the top card with Academy at Night or Ciphermaniac and have Slowking copy the best single-prize attack for the board"
+  },
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_is_engine_dependent": true
+  },
+  "pokemon": [
+    {"card": "Slowpoke", "roles": ["wincon_base"]},
+    {"card": "Slowking", "roles": ["wincon", "primary_attacker", "threat"]},
+    {"card": "Smoochum", "roles": ["starter", "energy_accel", "disruption_target"]},
+    {"card": "Kyurem", "roles": ["attacker", "threat"]},
+    {"card": "Annihilape", "roles": ["attacker", "threat"]},
+    {"card": "Conkeldurr", "roles": ["attacker", "threat"]},
+    {"card": "Mega Kangaskhan ex", "roles": ["support", "draw_engine", "disruption_target", "attacker", "threat"]},
+    {"card": "Latias ex", "roles": ["support", "disruption_target", "threat"]},
+    {"card": "Fezandipiti ex", "roles": ["support", "draw_engine", "disruption_target", "threat"]},
+    {"card": "Meowth ex", "roles": ["support", "disruption_target"]}
+  ],
+  "key_cards": [
+    {"card": "Academy at Night", "role": "topdeck_gate", "enables": "Slowking: guaranteed Seek Inspiration attack"},
+    {"card": "Ciphermaniac's Codebreaking", "role": "topdeck_backup", "enables": "Slowking when Academy at Night is absent"},
+    {"card": "Wondrous Patch", "role": "energy_accel", "enables": "replacement Slowking lines"},
+    {"card": "Prime Catcher", "role": "gust_and_switch"}
+  ],
+  "sources": [
+    "TCGplayer, Slowking Deck Guide — https://www.tcgplayer.com/content/article/Slowking-Deck-Guide-Pok%C3%A9mon-TCG/80014a0e-4c46-413a-8113-7b6a0aa77c6c/",
+    "Bindex, Slowking deck: complete NAIC 2026 guide — https://getbindex.app/en/blog/slowking-deck-pokemon-tcg-naic-2026-guide.html",
+    "Limitless, Slowking deck overview — https://limitlesstcg.com/decks/322"
+  ]
+}

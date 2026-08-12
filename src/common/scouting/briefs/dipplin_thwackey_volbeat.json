@@ -1,0 +1,35 @@
+{
+  "slug": "dipplin_thwackey_volbeat",
+  "label": "Dipplin / Thwackey / Volbeat",
+  "covers": [
+    "Dipplin / Thwackey",
+    "Dipplin / Thwackey / Volbeat"
+  ],
+  "authored": "2026-08-12",
+  "wincon": {
+    "line": ["Applin", "Dipplin"],
+    "plan": "fill the Bench, keep Festival Grounds in play, and use Do the Wave twice while Thwackey searches exact rebuild pieces"
+  },
+  "opponent_properties": {
+    "opp_tempo": "fast",
+    "opp_donk_vulnerable": true,
+    "opp_comeback_disruptor": true
+  },
+  "pokemon": [
+    {"card": "Applin", "roles": ["wincon_base"]},
+    {"card": "Dipplin", "roles": ["wincon", "primary_attacker", "threat"]},
+    {"card": "Grookey", "roles": ["support"]},
+    {"card": "Thwackey", "roles": ["support", "disruption_target"]},
+    {"card": "Fezandipiti ex", "roles": ["support", "draw_engine", "disruption_target", "threat"]}
+  ],
+  "key_cards": [
+    {"card": "Festival Grounds", "role": "stadium_gate", "enables": "Dipplin: Festival Lead second attack"},
+    {"card": "Brave Bangle", "role": "ex_damage_boost", "enables": "Dipplin: two 130-damage attacks into Pokemon ex at full Bench"},
+    {"card": "Unfair Stamp", "role": "comeback_hand_disruption"}
+  ],
+  "sources": [
+    "JustInBasil, Budget Decks — https://www.justinbasil.com/guide/budget",
+    "PokeGym, Twilight Masquerade FAQ — https://pokegym.net/wp-content/uploads/2024/05/FAQ-SV06-Twilight-Masquerade.pdf",
+    "Limitless Labs, Festival Lead — https://labs.limitlesstcg.com/decks/festival-lead?tournaments=33%2C32%2C30%2C31%2C29%2C28%2C27%2C26%2C25"
+  ]
+}

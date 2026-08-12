@@ -1,0 +1,70 @@
+{
+  "slug": "froslass_marnie_s_grimmsnarl_ex",
+  "label": "Froslass / Marnie's Grimmsnarl ex",
+  "covers": [
+    "Froslass / Marnie's Grimmsnarl ex"
+  ],
+  "authored": "2026-08-12",
+  "wincon": {
+    "line": [
+      "Marnie's Impidimp",
+      "Marnie's Morgrem",
+      "Marnie's Grimmsnarl ex"
+    ],
+    "plan": "Evolve into a self-powered Grimmsnarl, then combine Shadow Bullet with Froslass counters and Munkidori transfers for multi-KO turns."
+  },
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_spreads_bench": true,
+    "opp_comeback_disruptor": true
+  },
+  "pokemon": [
+    {
+      "card": "Marnie's Impidimp",
+      "roles": ["wincon_base"]
+    },
+    {
+      "card": "Marnie's Morgrem",
+      "roles": ["wincon_stage"]
+    },
+    {
+      "card": "Marnie's Grimmsnarl ex",
+      "roles": ["wincon", "primary_attacker", "energy_accel", "threat"]
+    },
+    {
+      "card": "Froslass",
+      "roles": ["support", "disruption", "disruption_target", "threat"]
+    },
+    {
+      "card": "Munkidori",
+      "roles": ["support", "disruption", "disruption_target", "threat"]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Rare Candy",
+      "role": "rush_evolve",
+      "enables": "Turn-two Grimmsnarl from a surviving Impidimp."
+    },
+    {
+      "card": "Spikemuth Gym",
+      "role": "line_search",
+      "enables": "Finds one Marnie's Pokemon every turn."
+    },
+    {
+      "card": "Unfair Stamp",
+      "role": "comeback_hand_reset",
+      "enables": "After a KO, redraws the opponent to two cards."
+    },
+    {
+      "card": "Boss's Orders",
+      "role": "gust",
+      "enables": "Converts spread damage by forcing a chosen Benched target Active."
+    }
+  ],
+  "sources": [
+    "Bulbapedia, Marnie's Grimmsnarl ex archetype strategy — https://bulbapedia.bulbagarden.net/wiki/Marnie%27s_Grimmsnarl_ex_%28TCG%29",
+    "TCGplayer, Marnie's Grimmsnarl ex Deck Guide — https://www.tcgplayer.com/content/article/Marnie-s-Grimmsnarl-ex-Deck-Guide-Pokemon-TCG/bc476f13-b374-4602-ae4a-ff8513490c46",
+    "Limitless, Grimmsnarl/Froslass card profile — https://www.limitlesstcg.com/decks/329/cards"
+  ]
+}
