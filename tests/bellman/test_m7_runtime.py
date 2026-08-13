@@ -614,6 +614,77 @@ def test_typed_tutor_option_value_credits_its_best_reachable_outcome():
     assert hand_value(1219) > hand_value(1182)
 
 
+def test_petrel_need_route_targets_air_balloon_when_retreat_is_the_missing_operation():
+    deployed = runtime("mega_lucario")
+    potential = BoardPotential(
+        deployed.stats, registry=deployed.registry, profile=deployed.profile,
+        effects=deployed.effects, root_seat=0,
+    )
+    observation = json.loads((
+        REPO / "tests" / "fixtures" / "corrections" /
+        "ml_petrel_balloon_retreat_lethal_f15.json").read_text())["obs"]
+    observation["current"]["energyAttached"] = True
+    seat = int(observation["current"]["yourIndex"])
+    me = observation["current"]["players"][seat]
+    needs = potential._need_model.immediate(observation, seat)
+    available = potential._remaining_deck_pool(me)
+
+    route = potential._need_model.best_route(
+        1219, needs, supporter_available=True,
+        discard_capacity=len(me["hand"]) - 1,
+        bench_capacity=int(me.get("benchMax", 5)) - len(me.get("bench") or ()),
+        available_targets=available)
+
+    assert route is not None
+    assert needs[route.need_index].key == "retreat_access"
+    assert route.path == (1219, 1174)
+
+    potential.prepare_needs(observation, seat)
+    prepared = potential._prepared_need_routes[1219]
+    assert (1219, 1174) in {candidate.path for candidate in prepared}
+    assert (1219, 1123) in {candidate.path for candidate in prepared}  # Switch, same operation.
+    pending = json.loads(json.dumps(observation))
+    pending["select"]["effect"] = {"id": 1219}
+    assert potential._pending_need_access(pending) > 0.0
+    fetched = json.loads(json.dumps(me))
+    fetched["hand"] = [card for card in fetched["hand"] if int(card["id"]) != 1219]
+    fetched["hand"].append({"id": 1174})
+    assert potential._visible_need_access(fetched) > 0.0
+
+
+def test_meowth_need_routes_include_petrel_to_damage_boost_only_when_boost_is_missing():
+    deployed = runtime("mega_lucario")
+    potential = BoardPotential(
+        deployed.stats, registry=deployed.registry, profile=deployed.profile,
+        effects=deployed.effects, root_seat=0,
+    )
+    observation = json.loads((
+        REPO / "tests" / "fixtures" / "corrections" /
+        "ml_lethal_retreat_boost_to_ko_f24.json").read_text())["obs"]
+    seat = int(observation["current"]["yourIndex"])
+    me = observation["current"]["players"][seat]
+    me["hand"] = [card for card in me["hand"] if int(card["id"]) != 1141]
+    me["handCount"] = len(me["hand"])
+    needs = potential._need_model.immediate(observation, seat)
+    uncovered = potential._need_model.uncovered_by_direct_hand(
+        needs, (int(card["id"]) for card in me["hand"]), supporter_available=True)
+    available = potential._remaining_deck_pool(me)
+    routes = potential._need_model.routes(
+        1071, uncovered, supporter_available=True,
+        discard_capacity=len(me["hand"]) - 1,
+        bench_capacity=int(me.get("benchMax", 5)) - len(me.get("bench") or ()),
+        available_targets=available)
+
+    assert any(
+        uncovered[route.need_index].key == "damage_threshold"
+        and route.path == (1071, 1219, 1141)
+        for route in routes)
+
+    held_needs = potential._need_model.uncovered_by_direct_hand(
+        needs, (1141,), supporter_available=True)
+    assert "damage_threshold" not in {need.key for need in held_needs}
+
+
 def test_prize_route_credits_tutored_evolution_access_between_held_and_absent():
     deployed = runtime("mega_lucario")
 

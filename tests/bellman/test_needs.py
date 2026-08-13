@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from common.effects import CardEffects
-from common.needs import Need, NeedModel, best_assignment
+from common.needs import CoverageEdge, Need, NeedModel, best_assignment
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.value import CardFacts, Potential, ValueRegistry
 
@@ -12,6 +12,9 @@ LINE_BASE = 901
 LINE_TOP = 902
 SUPPORTER = 903
 UNRELATED = 904
+BENCH_TUTOR = 905
+TRAINER_TUTOR = 906
+TOOL = 907
 
 
 def _potential(observation):
@@ -120,6 +123,64 @@ def test_fetch_without_a_remaining_target_is_not_an_out():
     assert model.coverage_slots(
         SUPPORTER, (need,), supporter_available=True, discard_capacity=0,
         available_targets={LINE_TOP: 0}) == ()
+
+
+def test_typed_need_routes_cross_bench_ability_and_supporter_tutor_edges():
+    registry = ValueRegistry(facts={
+        BENCH_TUTOR: CardFacts(pokemon=True, stage="basic"),
+        TRAINER_TUTOR: CardFacts(),
+        TOOL: CardFacts(),
+    })
+    stats = DictCardStatProvider({
+        BENCH_TUTOR: CardStat(BENCH_TUTOR, hp=70, stage="basic"),
+        TRAINER_TUTOR: CardStat(TRAINER_TUTOR, cardType=3),
+        TOOL: CardStat(TOOL, cardType=2),
+    })
+    effects = CardEffects({
+        BENCH_TUTOR: [{"kind": "fetch", "target": "supporter", "zone": "deck",
+                       "trigger": "on_bench_play"}],
+        TRAINER_TUTOR: [{"kind": "fetch", "target": "trainer", "zone": "deck"}],
+    })
+    model = NeedModel(registry, _potential, effects=effects, stats=stats)
+    need = Need("retreat", ((TOOL, 2.0),))
+    available = {TRAINER_TUTOR: 1, TOOL: 1}
+
+    route = model.best_route(
+        BENCH_TUTOR, (need,), supporter_available=True, discard_capacity=0,
+        bench_capacity=1, available_targets=available)
+
+    assert route is not None
+    assert route.path == (BENCH_TUTOR, TRAINER_TUTOR, TOOL)
+    assert route.value == pytest.approx(2.0 * 0.75 ** 2)
+    assert model.routes(
+        BENCH_TUTOR, (need,), supporter_available=True, discard_capacity=0,
+        bench_capacity=0, available_targets=available) == ()
+    assert model.routes(
+        BENCH_TUTOR, (need,), supporter_available=False, discard_capacity=0,
+        bench_capacity=1, available_targets=available) == ()
+
+
+def test_assignment_cannot_spend_one_intermediate_tutor_copy_twice():
+    signatures = (
+        (CoverageEdge(0, 1.0, fetched_targets=(TRAINER_TUTOR, TOOL)),),
+        (CoverageEdge(1, 1.0, fetched_targets=(TRAINER_TUTOR, LINE_TOP)),),
+    )
+
+    assignment = best_assignment(
+        signatures, 2, target_counts={TRAINER_TUTOR: 1, TOOL: 1, LINE_TOP: 1})
+
+    assert assignment.value == pytest.approx(1.0)
+    assert assignment.covered_mask in (0b01, 0b10)
+
+
+def test_visible_direct_out_removes_need_before_tutor_valuation():
+    model = _model()
+    needs = (Need("develop", ((LINE_TOP, 1.0),)),)
+
+    assert model.uncovered_by_direct_hand(
+        needs, [LINE_TOP], supporter_available=True) == ()
+    assert model.uncovered_by_direct_hand(
+        needs, [UNRELATED], supporter_available=True) == needs
 
 
 @pytest.mark.parametrize("observation", (

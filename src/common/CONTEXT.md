@@ -17,8 +17,9 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
-- `needs.py`: deck-neutral immediate demand, card-to-need assignment, and deterministic next-turn
-  option value for visible cards. It projects only rule clocks and known cards, never hidden draws;
+- `needs.py`: deck-neutral immediate demand, typed multi-hop tutor routes, card-to-need assignment,
+  and deterministic next-turn option value for visible cards. It projects only rule clocks and
+  known cards, never hidden draws;
 - `refresh.py`: analytic shuffle-refresh commitments. It integrates need-coverage classes with exact
   hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
   never constructs or searches a hypothetical redraw;

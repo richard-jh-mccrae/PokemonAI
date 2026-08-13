@@ -50,6 +50,11 @@ Typed successor reachability also lives in `BoardPotential`. Fetch clauses form 
 probability-discounted graph, so a tutor carries the option value of its best legal target without
 summing mutually exclusive targets. This covers multi-hop lines such as a Supporter tutor into a
 Trainer tutor while the transition engine remains authoritative for same-turn costs and limits.
+Before valuing that option, `common.needs` removes operations already supplied by the visible hand,
+then propagates remaining energy, Pokémon, retreat, and damage-threshold demand through the same
+typed fetch graph for Trainer/Supporter tutors. Once played, Meowth's pending choice carries the
+value of a legal downstream Petrel route; target selection remains a normal Bellman continuation.
+The visible demand is frozen once per solve, while legality and target inventory remain live.
 
 Prize routes are conditional chains, not forced scripts. Progress reads our lost prizes and can
 resume from the current Active after an off-route KO. Route value requires every remaining body to

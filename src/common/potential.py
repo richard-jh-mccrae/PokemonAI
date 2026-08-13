@@ -17,6 +17,7 @@ from .information import BellmanDeckProfile
 from .damage import compute_active_damage
 from .damage_context import SideFacts, damage_context
 from .fetch import WINDOW, fetch_target_matches
+from .needs import CoverageEdge, NeedModel, best_assignment
 from .value import Potential, ValueRegistry, worth_to_prizes
 from common.strategy.context import _ATTACK, _MAIN
 
@@ -114,6 +115,29 @@ class BoardPotential:
         self._known_prize_counts = Counter()
         self._reachable_access_cache = {}
         self._reachable_source_cache = {}
+        self._base_potential_cache = {}
+        self._deriving_needs = False
+        self._prepared_needs = None
+        self._prepared_need_routes = {}
+        self._prepared_need_targets = frozenset()
+        self._prepared_pending_need_values = {}
+        self._need_model = NeedModel(
+            registry, self._potential_without_needs, effects=effects, stats=stats)
+
+    def _potential_without_needs(self, observation) -> Potential:
+        """Evaluate a hypothetical need outcome without recursively deriving that same demand."""
+        key = self.cache_key(observation)
+        cached = self._base_potential_cache.get(key)
+        if cached is not None:
+            return cached
+        previous = self._deriving_needs
+        self._deriving_needs = True
+        try:
+            potential = self(observation)
+            self._base_potential_cache[key] = potential
+            return potential
+        finally:
+            self._deriving_needs = previous
 
     @staticmethod
     def cache_key(observation) -> str:
@@ -845,7 +869,71 @@ class BoardPotential:
                         usable_access *= float(outcomes.get(int(partner), 0.0))
                 best = max(best, usable_access * self.registry.worth(target))
             worth += max(0.0, best - source_worth)
-        return FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
+        return (FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
+                + self._visible_need_access(me))
+
+    def _visible_need_access(self, me) -> float:
+        needs = tuple(self._prepared_needs or ())
+        if not needs or not self._prepared_need_targets:
+            return 0.0
+        signatures = []
+        for card in me.get("hand") or ():
+            card_id = int(card.get("id", 0)) if card else 0
+            signatures.append(tuple(
+                CoverageEdge(index, float(dict(need.direct).get(card_id, 0.0)))
+                for index, need in enumerate(needs)
+                if (card_id in self._prepared_need_targets
+                    and float(dict(need.direct).get(card_id, 0.0)) > 0.0)))
+        return float(best_assignment(signatures, len(needs)).value)
+
+    def prepare_needs(self, observation, seat: int) -> None:
+        """Freeze visible demand as the option Trainer/Supporter tutors carry through this solve."""
+        current = observation.get("current") or {}
+        players = current.get("players") or ()
+        me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+        hand_ids = tuple(int(card["id"]) for card in (me.get("hand") or ())
+                         if card and card.get("id") is not None)
+        fetchers = tuple(card_id for card_id in hand_ids
+                         if any(clause.get("target") in ("supporter", "trainer")
+                                for clause in self._fetch_clauses(card_id)))
+        self._prepared_needs = ()
+        self._prepared_need_routes = {}
+        self._prepared_need_targets = frozenset()
+        self._prepared_pending_need_values = {}
+        if not fetchers:
+            return
+        needs = self._need_model.immediate(observation, seat)
+        if not needs:
+            return
+        supporter_available = not bool(current.get("supporterPlayed"))
+        self._prepared_needs = self._need_model.uncovered_by_direct_hand(
+            needs, hand_ids, supporter_available=supporter_available)
+        if not self._prepared_needs:
+            return
+        available = self._remaining_deck_pool(me)
+        bench_capacity = max(0, int(me.get("benchMax", 5) or 5)
+                             - len(tuple(body for body in (me.get("bench") or ()) if body)))
+        for card_id in fetchers:
+            self._prepared_need_routes[card_id] = self._need_model.routes(
+                card_id, self._prepared_needs,
+                supporter_available=supporter_available,
+                discard_capacity=max(0, len(hand_ids) - 1), bench_capacity=bench_capacity,
+                available_targets=available)
+        self._prepared_need_targets = frozenset(
+            route.path[-1] for routes in self._prepared_need_routes.values()
+            for route in routes if len(route.path) > 1)
+        for routes in self._prepared_need_routes.values():
+            for route in routes:
+                for source in route.path[:-1]:
+                    self._prepared_pending_need_values[int(source)] = max(
+                        float(route.value),
+                        self._prepared_pending_need_values.get(int(source), 0.0))
+
+    def _pending_need_access(self, observation) -> float:
+        select = observation.get("select") or {}
+        source = select.get("effect") or select.get("contextCard") or {}
+        card_id = source.get("id") if isinstance(source, dict) else source
+        return float(self._prepared_pending_need_values.get(int(card_id or 0), 0.0))
 
     def _opponent_role_pressure(self, opponent) -> float:
         """Remaining existence plus health Worth of roles declared by the matched scouting Brief."""
@@ -972,6 +1060,13 @@ class BoardPotential:
             int(((observation.get("select") or {}).get("context", -1))) == _MAIN
             and any(int(option.get("type", -1)) == _ATTACK
                     for option in ((observation.get("select") or {}).get("option") or ())))
+        if not self._deriving_needs:
+            if self._prepared_needs is None:
+                self._deriving_needs = True
+                try:
+                    self.prepare_needs(observation, seat)
+                finally:
+                    self._deriving_needs = False
         families = {
             "game": 0.0,
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
@@ -991,7 +1086,9 @@ class BoardPotential:
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
             "development": self._development(me),
-            "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
+            "hand": self._hand_resources(
+                me, setup_complete=int(current.get("turn", 0)) > 0)
+                + self._pending_need_access(observation),
             "opponent_roles": self._opponent_role_pressure(opponent),
             "prize_plan": self._prize_plan(me, opponent),
         }
