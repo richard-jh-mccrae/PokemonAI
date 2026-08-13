@@ -5,14 +5,6 @@
     "Froslass / Marnie's Grimmsnarl ex"
   ],
   "authored": "2026-08-12",
-  "wincon": {
-    "line": [
-      "Marnie's Impidimp",
-      "Marnie's Morgrem",
-      "Marnie's Grimmsnarl ex"
-    ],
-    "plan": "Evolve into a self-powered Grimmsnarl, then combine Shadow Bullet with Froslass counters and Munkidori transfers for multi-KO turns."
-  },
   "opponent_properties": {
     "opp_tempo": "midrange",
     "opp_spreads_bench": true,
@@ -20,51 +12,62 @@
   },
   "pokemon": [
     {
-      "card": "Marnie's Impidimp",
-      "roles": ["wincon_base"]
-    },
-    {
-      "card": "Marnie's Morgrem",
-      "roles": ["wincon_stage"]
+      "card": "Froslass",
+      "roles": [
+        "backup_attacker",
+        "disruption",
+        "disruption_target",
+        "support",
+        "threat"
+      ]
     },
     {
       "card": "Marnie's Grimmsnarl ex",
-      "roles": ["wincon", "primary_attacker", "energy_accel", "threat"]
+      "roles": [
+        "primary_attacker",
+        "energy_accel",
+        "threat"
+      ]
     },
     {
-      "card": "Froslass",
-      "roles": ["support", "disruption", "disruption_target", "threat"]
+      "card": "Marnie's Impidimp",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Marnie's Morgrem",
+      "roles": [
+        "backup_attacker"
+      ]
     },
     {
       "card": "Munkidori",
-      "roles": ["support", "disruption", "disruption_target", "threat"]
+      "roles": [
+        "backup_attacker",
+        "disruption",
+        "disruption_target",
+        "support",
+        "threat"
+      ]
     }
   ],
   "key_cards": [
     {
       "card": "Rare Candy",
-      "role": "rush_evolve",
-      "enables": "Turn-two Grimmsnarl from a surviving Impidimp."
+      "role": "rush_evolve"
     },
     {
       "card": "Spikemuth Gym",
-      "role": "line_search",
-      "enables": "Finds one Marnie's Pokemon every turn."
+      "role": "line_search"
     },
     {
       "card": "Unfair Stamp",
-      "role": "comeback_hand_reset",
-      "enables": "After a KO, redraws the opponent to two cards."
+      "role": "comeback_hand_reset"
     },
     {
       "card": "Boss's Orders",
-      "role": "gust",
-      "enables": "Converts spread damage by forcing a chosen Benched target Active."
+      "role": "gust"
     }
-  ],
-  "sources": [
-    "Bulbapedia, Marnie's Grimmsnarl ex archetype strategy — https://bulbapedia.bulbagarden.net/wiki/Marnie%27s_Grimmsnarl_ex_%28TCG%29",
-    "TCGplayer, Marnie's Grimmsnarl ex Deck Guide — https://www.tcgplayer.com/content/article/Marnie-s-Grimmsnarl-ex-Deck-Guide-Pokemon-TCG/bc476f13-b374-4602-ae4a-ff8513490c46",
-    "Limitless, Grimmsnarl/Froslass card profile — https://www.limitlesstcg.com/decks/329/cards"
   ]
 }

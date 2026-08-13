@@ -1,1 +1,48 @@
-{"slug":"archaludon_ex_cinderace","covers":["Archaludon ex / Cinderace"],"wincon":{"line":["Duraludon","Archaludon ex"],"plan":"accelerate then tank"},"opponent_properties":{"opp_is_heal_wall":true,"opp_accel_dependent":true,"opp_tempo":"slow"},"pokemon":[{"card":"Duraludon","roles":["wincon_base"]},{"card":"Archaludon ex","roles":["wincon","primary_attacker","threat"]},{"card":"Cinderace","roles":["support","energy_accel","threat"]},{"card":"Relicanth","roles":["support"]}],"key_cards":[{"card":"Ignition Energy","role":"burst_accel","enables":"Archaludon ex"}]}
+{
+  "slug": "archaludon_ex_cinderace",
+  "covers": [
+    "Archaludon ex / Cinderace"
+  ],
+  "opponent_properties": {
+    "opp_is_heal_wall": true,
+    "opp_accel_dependent": true,
+    "opp_tempo": "slow"
+  },
+  "pokemon": [
+    {
+      "card": "Archaludon ex",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Cinderace",
+      "roles": [
+        "backup_attacker",
+        "energy_accel",
+        "support",
+        "threat"
+      ]
+    },
+    {
+      "card": "Duraludon",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Relicanth",
+      "roles": [
+        "backup_attacker",
+        "support"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Ignition Energy",
+      "role": "burst_accel"
+    }
+  ]
+}

@@ -30,13 +30,14 @@ def _facts(cid, prize, *tags):
     return {cid: BodyFacts(tags=frozenset(tags), prize_value=prize)}
 
 
-def test_brief_wincon_and_preevo_outrank_a_plain_body():
-    # Doctrine: the ready wincon is the top target.
-    plan = build_matchup_plan(brief_roles={1031: "prize_liability", 1030: "fragile_preevo"}, gamma=1.0)
-    assert plan.priority(1031) > 0                    # wincon body is a target
+def test_brief_primary_and_derived_preevo_outrank_a_plain_body():
+    # Doctrine: the Brief names the ready primary; card facts name its developing pre-evo.
+    plan = build_matchup_plan(brief_roles={1031: "prize_liability"},
+                              general_roles={1030: "fragile_preevo"}, gamma=1.0)
+    assert plan.priority(1031) > 0                    # primary body is a target
     assert plan.priority(1030) > 0                    # its pre-evo is a target
     assert plan.priority(999) == 0.0                  # a body the Brief doesn't name
-    assert plan.priority(1031) >= plan.priority(1030)  # ready wincon >= its developing pre-evo
+    assert plan.priority(1031) >= plan.priority(1030)  # ready primary >= its developing pre-evo
 
 
 def test_avoid_role_is_a_negative_priority():
@@ -124,7 +125,7 @@ def test_the_role_vocabulary_audit_actually_bites_with_a_positive_control():
                                 "card_inclusion": {"1": 0.5}}}
     assert roles_in_dossiers(fabricated) == ["__typo__", "engine"]      # …and skips non-role blocks
     assert undeclared_roles(roles_in_dossiers(fabricated)) == ["__typo__"]
-    assert roles_in_brief({"pokemon": [{"roles": ["wincon", "support"]}]}) == ["engine", "prize_liability"]
+    assert roles_in_brief({"pokemon": [{"roles": ["primary_attacker", "support"]}]}) == ["engine", "prize_liability"]
     # the real stores stay green on this same run, so the bite is discrimination, not a red-on-all
     assert undeclared_roles(roles_in_dossiers(load_artifact().dossiers)) == []
 
@@ -134,7 +135,7 @@ def test_the_brief_schema_has_the_compact_doctrine_roles():
     schema = json.loads(_SCHEMA.read_text(encoding="utf-8"))
     enum = set(schema["properties"]["pokemon"]["items"]["properties"]["roles"]["items"]["enum"])
     assert enum, "the schema's role enum is empty — the assertion below would pass vacuously"
-    assert {"wincon", "wincon_base", "primary_attacker", "support", "energy_accel"} <= enum
+    assert {"primary_attacker", "backup_attacker", "support", "energy_accel"} <= enum
     # `support` is doctrine, not a MatchupPlan role: the resolver maps it to neutral `engine`.
     assert "support" in enum and "unknown" not in enum
 
@@ -153,7 +154,7 @@ def test_the_registry_is_a_well_formed_ordinal_ladder():
 
 def test_the_530_shipped_attacker_assignments_are_no_longer_inert():
     """Rank asserted relative to its neighbours, not as a magnitude: attacking is a real steer but
-    not automatically a better removal target than the wincon or its fragile pre-evolution."""
+    not automatically a better removal target than the primary attacker or its fragile pre-evolution."""
     assert role_priority("attacker") > 0
     assert role_priority("prize_liability") > role_priority("attacker") > role_priority("engine")
     plan = build_matchup_plan(read_roles={345: "attacker"}, gamma=1.0)

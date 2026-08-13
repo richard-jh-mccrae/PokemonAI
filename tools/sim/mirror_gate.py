@@ -1,7 +1,8 @@
-"""CI gate: run a serial, seat-balanced mirror and bound every Match's wall time.
+"""CI gate: run seat-balanced mirrors and bound every Match's wall time.
 
 Usage:
     python tools/sim/mirror_gate.py mega_starmie --games 10 --max-match-seconds 600
+    python tools/sim/mirror_gate.py mega_starmie --games 10 --workers 2 --max-match-seconds 600
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import queue
 import subprocess
 import tempfile
 import zipfile
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from time import monotonic
 from threading import Thread, Lock
@@ -120,13 +122,24 @@ def _one_match_with_deadline(bundle: Path, *, a_seat: int, timeout: float) -> di
     return payload
 
 
+def _timed_match(task: tuple[Path, int, float]) -> tuple[dict, float]:
+    """Run one deadline-bounded match; suitable for a process-pool worker."""
+    bundle, a_seat, timeout = task
+    started = monotonic()
+    return (_one_match_with_deadline(bundle, a_seat=a_seat, timeout=timeout),
+            monotonic() - started)
+
+
 def run_mirror(agent: str, *, games: int, max_match_seconds: float,
-               agents_root: Path, clock=monotonic) -> dict[str, dict[str, float]]:
-    """Run serial deployable-agent mirrors; measure each completed Match wall time."""
+               agents_root: Path, workers: int = 1,
+               clock=monotonic) -> dict[str, dict[str, float]]:
+    """Run deadline-bounded deployable mirrors; default to serial execution."""
     if games <= 0:
         raise ValueError("games must be positive")
     if max_match_seconds <= 0:
         raise ValueError("max_match_seconds must be positive")
+    if workers <= 0:
+        raise ValueError("workers must be positive")
 
     from sim.battle import seat_plan
     from submit.package import package
@@ -144,11 +157,16 @@ def run_mirror(agent: str, *, games: int, max_match_seconds: float,
             zipped.extractall(bundle)
         if (bundle / "cgpy").exists():
             raise RuntimeError("mirror bundle contains offline-only cgpy")
-        for index, a_seat in enumerate(seat_plan(games), start=1):
-            started = clock()
-            result = _one_match_with_deadline(
-                bundle, a_seat=a_seat, timeout=max_match_seconds)
-            elapsed = clock() - started
+        seats = seat_plan(games)
+        if workers == 1:
+            completed = ((_one_match_with_deadline(
+                bundle, a_seat=a_seat, timeout=max_match_seconds), clock() - started)
+                         for a_seat in seats for started in (clock(),))
+        else:
+            with ProcessPoolExecutor(max_workers=min(workers, games)) as executor:
+                tasks = ((bundle, a_seat, max_match_seconds) for a_seat in seats)
+                completed = tuple(executor.map(_timed_match, tasks))
+        for index, (result, elapsed) in enumerate(completed, start=1):
             durations.append(elapsed)
             callback_durations.extend(result["callback_seconds"])
             if result["crashed"]:
@@ -171,10 +189,12 @@ def run_mirror(agent: str, *, games: int, max_match_seconds: float,
 def main(argv=None) -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run a bounded serial mirror gate for one source agent")
+    parser = argparse.ArgumentParser(description="Run a bounded mirror gate for one source agent")
     parser.add_argument("agent", help="source agent under src/agents/")
     parser.add_argument("--games", type=int, default=10)
     parser.add_argument("--max-match-seconds", type=float, default=600.0)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="concurrent isolated matches (default: 1)")
     parser.add_argument("--agents-root", default=str(REPO / "src" / "agents"))
     args = parser.parse_args(argv)
 
@@ -182,7 +202,7 @@ def main(argv=None) -> int:
     try:
         stats = run_mirror(
             args.agent, games=args.games, max_match_seconds=args.max_match_seconds,
-            agents_root=Path(args.agents_root))
+            agents_root=Path(args.agents_root), workers=args.workers)
     except (RuntimeError, ValueError) as exc:
         print(f"MIRROR GATE FAILED: {exc}")
         return 1

@@ -4,7 +4,7 @@
   "description": "The objective, shared counterplay annotations for ONE opponent Variant Cluster (ADR-0027). Lives beside the auto-artifact at src/common/scouting/briefs/<slug>.json; authored by /matchup-genie, consumed (future) by the Read/Posture layer to populate Board opponent-property fields. Validated by scripts/validate_brief.py (the enforcing gate; this schema is the human/machine reference).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["slug", "covers", "wincon", "pokemon", "key_cards", "opponent_properties"],
+  "required": ["slug", "covers", "pokemon", "key_cards", "opponent_properties"],
   "properties": {
     "slug": {"type": "string", "description": "matches the filename and data/meta/decks/<slug>/"},
     "label": {"type": "string", "description": "optional human label"},
@@ -13,7 +13,6 @@
       "description": "member Archetype strings (from index.json[slug].covers) — routes every variant to this one Brief; the Read matches read.candidates[0] against this list"
     },
     "authored": {"type": "string", "description": "ISO date the Brief was authored/updated"},
-    "wincon": {"type": "object", "required": ["line", "plan"], "additionalProperties": false, "properties": {"line": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "plan": {"type": "string"}}},
     "opponent_properties": {
       "type": "object",
       "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in src/common/scouting/opponent_properties.json.",
@@ -26,7 +25,7 @@
         "type": "object", "additionalProperties": false, "required": ["card", "roles"],
         "properties": {
           "card": {"type": "string"},
-          "roles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["wincon", "wincon_base", "wincon_stage", "primary_attacker", "attacker", "support", "energy_accel", "draw_engine", "disruption", "disruption_target", "wall", "starter", "threat"]}}
+          "roles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["primary_attacker", "backup_attacker", "support", "energy_accel", "draw_engine", "disruption", "disruption_target", "wall", "starter", "threat"]}}
         }
       }
     },
