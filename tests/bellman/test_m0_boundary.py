@@ -12,8 +12,8 @@ REPO = Path(__file__).resolve().parents[2]
 PACKAGE = REPO / "src" / "common"
 MODULES = (
     "__init__.py", "algebra.py", "api.py", "commutativity.py", "damage.py", "damage_context.py", "draws.py",
-    "effects.py", "engine.py", "fetch.py", "information.py", "options.py", "planner.py",
-    "potential.py", "solver.py", "state.py", "value.py",
+    "effects.py", "engine.py", "fetch.py", "information.py", "needs.py", "options.py", "planner.py",
+    "potential.py", "refresh.py", "solver.py", "state.py", "value.py",
 )
 
 

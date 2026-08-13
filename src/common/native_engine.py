@@ -8,6 +8,7 @@ import hashlib
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
 from .options import LegalAction, enumerate_legal_actions
 from .commutativity import action_footprint
+from .refresh import refresh_transition
 from .state import DecisionState
 from common.strategy.context import _MAIN, _NO, _YES
 
@@ -178,6 +179,9 @@ class NativeCgTransitionProvider:
         worlds = self._worlds.get(state.semantic_key)
         if not worlds:
             return Unknown("native search state unavailable", state.semantic_key)
+        refresh = refresh_transition(state, action, self.effects)
+        if refresh is not None:
+            return refresh
         children = []
         try:
             for world in worlds:

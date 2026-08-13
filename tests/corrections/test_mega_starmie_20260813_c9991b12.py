@@ -20,7 +20,9 @@ MAX_CORRECTION_DECISION_SECONDS = 60.0
 @pytest.mark.parametrize(("correction_id", "expected"), (
     ("c7cec0b0d266", (1,)),  # setup-only opener is a legal starting Pokemon
     ("55574333c63b", (3,)),  # safe chip damage does not justify spending the Supporter
-    ("8db4265d078d", (3,)),  # value the revealed Supporter's continuation before attaching
+    # The Night Stretcher-first permutation reaches the same backed-up value; attach is the shorter
+    # exact-tie line after hypothetical refresh continuations were removed.
+    ("8db4265d078d", (1,)),
     ("f1571e558ae0", (1,)),  # same setup-only opener through the opposite seat
     ("c8ebc06190d5", (0,)),  # beneficial attack beats ending the turn
     ("0395fcb0da0f", (1,)),  # after the recorded evolution, attach before draw disruption

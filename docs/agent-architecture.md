@@ -16,12 +16,23 @@ agent main.py
 order, partner dependencies, prize routes, and a preferred starting turn. Mega Starmie, Mega Lucario,
 and Dragapult all enter the same `BellmanRuntime` and `BellmanTurnPlanner`.
 
-The transition provider reconstructs the offered state in the forkable `cgpy` rules engine. The
-native grader remains the source of the offered observation and opaque search token; both live and
-historical frames enter the same state, ledger, value registry, and solver contracts.
+Production transitions use the native `cg` search API. `cgpy` is an offline diagnostic adapter only
+and is excluded from submissions. Both adapters enter the same state, ledger, value registry, and
+solver contracts.
 
-Hypergeometric probability remains part of the system in `common.information`: draw outcomes
-are disjoint classes with an explicit whiff class. The deleted `common.needs` and `common.deck_odds`
-were duplicate legacy owners, not the Bellman probability implementation.
+Shuffle-refresh cards are a deliberate exception to successor-state expansion. The solver does not
+invent a shuffled hand and play a hypothetical remainder of the turn. `common.needs` derives
+immediate unmet jobs, direct/fetch coverage, and deterministic next-turn options for visible cards.
+The next-turn projection advances only rule clocks; it can recognize a held evolution becoming legal
+or a known Supporter/evolution combination becoming useful, but never predicts an opponent action or
+unknown card. `common.refresh` integrates immediate coverage classes with exact hypergeometric
+probabilities and weighs that benefit against both current and next-turn known-hand option value.
+The branch stops at the refresh commitment; after the live engine produces the real hand, the next
+callback replans from reality.
+
+This keeps refresh decisions inside the Bellman ledger without turning random cards into an
+imaginary turn. It also makes useful non-Supporter plays naturally precede a refresh: realizing a
+known option removes its shuffle-away cost, while a need already satisfiable from hand receives no
+draw credit.
 
 No incomplete result or adapter failure falls back to another strategy system.

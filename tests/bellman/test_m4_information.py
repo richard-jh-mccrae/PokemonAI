@@ -7,7 +7,7 @@ import pytest
 
 from common import (
     ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver,
-    RevealChoice, Terminal,
+    Refresh, RevealChoice, Terminal,
 )
 from common.algebra import WeightedEdge
 from common.information import (
@@ -156,9 +156,9 @@ def test_60hp_fixture_attaches_then_takes_lillie_expectation_and_replans():
 
 
 @pytest.mark.parametrize(("card_id", "node_type"), [
-    (LILLIE, Chance), (1120, Chance), (1122, RevealChoice), (1223, Chance),
+    (LILLIE, Refresh), (1120, Chance), (1122, RevealChoice), (1223, Refresh),
 ])
-def test_real_engine_owns_resolution_and_hidden_information_is_explicit_chance(
+def test_real_engine_owns_resolution_and_hidden_information_has_an_explicit_boundary(
         card_id, node_type):
     from pathlib import Path
     from common.engine import CgpyTransitionProvider
@@ -203,10 +203,13 @@ def test_real_engine_owns_resolution_and_hidden_information_is_explicit_chance(
                     break
         if found is not None:
             break
-    assert found is not None, f"no reconstructable {card_id} chance play"
+    assert found is not None, f"no reconstructable {card_id} information play"
     if isinstance(found, Chance):
         assert sum(edge.probability for edge in found.children) == pytest.approx(1.0)
     if card_id == 1122:
         assert any(len(outcome.choices) > 2 for outcome in found.outcomes)
-    if card_id in (1120, 1223):
+    if card_id == 1120:
         assert {edge.label for edge in found.children} == {"heads", "tails"}
+    if isinstance(found, Refresh):
+        assert found.draws
+        assert not hasattr(found, "state")

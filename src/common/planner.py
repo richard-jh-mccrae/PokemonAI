@@ -47,7 +47,9 @@ class BellmanTurnPlanner:
                 provider.close()
             raise BellmanUnavailable(provider._error)  # exact adapter failure; never legacy fallback
         solver = ProductionSolver(
-            provider, ValueOracle(self.registry, self.family_evaluator), limits=self.limits)
+            provider, ValueOracle(
+                self.registry, self.family_evaluator, effects=self.effects, stats=self.stats),
+            limits=self.limits)
         try:
             decision = solver.decide(state)
         except RuntimeError as exc:

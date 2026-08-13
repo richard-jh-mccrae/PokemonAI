@@ -12,6 +12,7 @@ from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
 from .commutativity import action_footprint
+from .refresh import refresh_transition
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -25,7 +26,6 @@ AREA_PRIZE = 6
 COIN_BRANCH_PROBABILITY = 0.5
 ENERGY_REMOVAL_INDEX_SLOT = 2
 DEFAULT_REVEAL_AMOUNT = 1
-SHUFFLE_OWN_HAND_RIDER = "shuffle_own_hand_in"
 
 
 def _expand(counts) -> list[int]:
@@ -44,35 +44,6 @@ def _take(cards: tuple[int, ...], count: int) -> list[int]:
 def _own_prize_export(engine, seat: int) -> dict[int, int]:
     board = engine.gs.players[seat]
     return dict(Counter(engine.gs.card_id(serial) for serial in board.prize))
-
-
-class _ForcedShuffleRng:
-    """Delegate RNG except for one own-deck shuffle whose top identities define a chance branch."""
-
-    def __init__(self, delegate, game_state, seat: int, top_ids):
-        self.delegate = delegate
-        self.game_state = game_state
-        self.seat = int(seat)
-        self.top_ids = tuple(int(card_id) for card_id in top_ids)
-        self.used = False
-
-    def shuffle(self, sequence, *, seat: int) -> None:
-        self.delegate.shuffle(sequence, seat=seat)
-        if self.used or int(seat) != self.seat:
-            return
-        remaining, chosen = list(sequence), []
-        for card_id in self.top_ids:
-            serial = next((serial for serial in remaining
-                           if self.game_state.card_id(serial) == card_id), None)
-            if serial is None:
-                raise ValueError(f"sampled shuffle card {card_id} is unavailable")
-            remaining.remove(serial)
-            chosen.append(serial)
-        sequence[:] = remaining + list(reversed(chosen))
-        self.used = True
-
-    def __getattr__(self, name):
-        return getattr(self.delegate, name)
 
 
 class CgpyTransitionProvider:
@@ -155,6 +126,9 @@ class CgpyTransitionProvider:
         if engine is None:
             return Unknown("engine state unavailable", self._error or state.semantic_key)
         try:
+            refresh = refresh_transition(state, action, self.effects)
+            if refresh is not None:
+                return refresh
             reveal = self._revealing_transition(state, engine, action)
             if reveal is not None:
                 return reveal
@@ -275,7 +249,7 @@ class CgpyTransitionProvider:
         if len(draw_clauses) != 1:
             return None
         clause = draw_clauses[0]
-        if clause.get("opponent_amount") or clause.get("rider") not in (None, SHUFFLE_OWN_HAND_RIDER):
+        if clause.get("opponent_amount") or clause.get("rider") is not None:
             return None
         from .draws import draw_branches
 
@@ -287,24 +261,12 @@ class CgpyTransitionProvider:
             return None
         draws = amounts[0][0]
         pool = [engine.gs.card_id(serial) for serial in mine.deck]
-        if clause.get("rider") == SHUFFLE_OWN_HAND_RIDER:
-            played_serial = mine.hand[(engine.gs.pending.options[action.selection[0]])["index"]]
-            pool.extend(engine.gs.card_id(serial) for serial in mine.hand if serial != played_serial)
         outcomes = draw_outcomes(pool, draws)
         edges = []
         for index, outcome in enumerate(outcomes):
             branch = engine.fork()
-            if clause.get("rider") == SHUFFLE_OWN_HAND_RIDER:
-                delegate = branch.gs.rng
-                branch.gs.rng = _ForcedShuffleRng(
-                    delegate, branch.gs, state.root_seat, outcome.card_ids)
-                try:
-                    branch.step(list(action.selection))
-                finally:
-                    branch.gs.rng = delegate
-            else:
-                self._force_top_ids(branch, state.root_seat, outcome.card_ids)
-                branch.step(list(action.selection))
+            self._force_top_ids(branch, state.root_seat, outcome.card_ids)
+            branch.step(list(action.selection))
             method = "exact" if outcome.exact else "stratified"
             edges.append(WeightedEdge(outcome.probability, f"{method}:{index}",
                                       self._register_successor(state, branch, action)))

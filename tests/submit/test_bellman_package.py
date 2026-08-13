@@ -31,6 +31,8 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert "common/runtime.py" in names
         assert "common/planner.py" in names
         assert "common/native_engine.py" in names
+        assert "common/needs.py" in names
+        assert "common/refresh.py" in names
         assert "common/engine.py" not in names
         assert any(name.startswith("cg/") for name in names)
         assert not any(name.startswith("common/bellman/") for name in names)

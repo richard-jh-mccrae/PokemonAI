@@ -29,9 +29,20 @@ The fix has five deck-neutral parts:
    recursive deep-copy overhead.
 5. **Immutable fact caches.** Card stats, attack facts, resource jobs, and prize-route capacities are
    cached inside the board-potential evaluator. This changes evaluation cost, not evaluation value.
+6. **Analytic shuffle-refresh boundary.** A refresh no longer creates an imagined hand and searches
+   its imagined turn. Board state defines immediate jobs (such as an evolution available now or a
+   missing Energy attachment); direct cards and generic fetch effects are grouped by which jobs they
+   satisfy, and exact hypergeometric coverage supplies expected benefit. Known hand options supply
+   the cost. The branch ends at the gamble, and the real hand is replanned on the next callback.
 
 Search depth is not capped. A line may continue until the engine ends the turn, an attack resolves,
 a game result occurs, a semantic cycle is found, or the explicit node budget is consumed.
+
+## To build (deferred)
+
+The ordered specification is maintained in `docs/plans/bellman-to-build.md`: first extract a clean,
+shared needs model; then add deterministic next-turn retained-hand needs. Neither item permits
+sampled draws, hypothetical hands, or imagined redraw continuations.
 
 ## Why this is a value-guided beam
 
@@ -110,6 +121,9 @@ registration to CABT, so unrelated OpenSpiel native code is no longer loaded dur
 - `src/common/solver.py`: sleep-set partial-order reduction, equal probes, refinement, diagnostics.
 - `src/common/native_engine.py`: hidden-world identity, exact transpositions, cheaper conversion.
 - `src/common/potential.py`: immutable evaluator caches and repeated-fact elimination.
+- `src/common/needs.py`: immediate coverage and deterministic visible-card next-turn options.
+- `src/common/refresh.py`: exact need-class odds and the no-hypothetical-redraw boundary.
 - `docs/adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md`: architecture amendment.
 - `tests/bellman/test_m3_solver.py`: allocation contract.
 - `tests/bellman/test_native_engine.py`: hidden-world identity contract.
+- `tests/bellman/test_refresh.py`: analytic refresh probability and zero engine-step contract.

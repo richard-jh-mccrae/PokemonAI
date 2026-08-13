@@ -7,8 +7,8 @@ from time import monotonic
 from typing import Protocol
 
 from .algebra import (
-    ActionDiagnostic, Actor, Chance, Choice, Deterministic, Ledger, RevealChoice, RootDiagnostics,
-    Terminal, Unknown,
+    ActionDiagnostic, Actor, Chance, Choice, Deterministic, Ledger, Refresh, RevealChoice,
+    RootDiagnostics, Terminal, Unknown,
 )
 from .api import RootDecision
 from .commutativity import ActionFootprint, independent
@@ -275,6 +275,14 @@ class ReferenceSolver:
             return _expected_evaluation(
                 weighted, reason="expected value after revealed choice", branches=diagnostics,
                 complete=all(result.complete for result in evaluated.values()))
+        if isinstance(node, Refresh):
+            try:
+                ledger, diagnostics = self.oracle.refresh_ledger(before, node)
+            except (TypeError, ValueError) as exc:
+                return Evaluation(-math.inf, Ledger(), False,
+                                  f"refresh valuation unavailable: {exc}")
+            return Evaluation(ledger.total, ledger, True, "analytic refresh gamble",
+                              diagnostics, decisions=1.0)
         if isinstance(node, Chance):
             branches = [(edge, self._transition(before, action, edge.node, ()))
                         for edge in node.children]
