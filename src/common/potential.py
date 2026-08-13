@@ -485,10 +485,6 @@ class BoardPotential:
             if (setup_complete and "opener" in tags
                     and facts is not None and facts.stage != "basic"):
                 continue
-            if ({"heal", "clutch_heal"}.intersection(tags)
-                    and not any(int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0)))
-                                for body in _bodies(me))):
-                continue
             card_job = self._resource_job(card_id)
             held_worth = self.registry.worth(card_id)
             if self.isolated_selection and "discard_eot" in tags:
@@ -501,22 +497,29 @@ class BoardPotential:
         return FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
 
     def _hand_demand(self, me) -> float:
-        """Value visible cards by whether they cover a presently missing board job."""
+        """Value visible cards and general access by presently missing board jobs."""
         occupied = Counter(self._resource_job(card_id)
                            for body in _bodies(me) for card_id in self._stack_ids(body))
+        capacities = self._prize_job_capacities()
+        missing_slots = sum(max(0, capacity - occupied[job])
+                            for job, capacity in capacities.items())
         value = 0.0
+        access = 0.0
         seen = Counter()
         for card in (me.get("hand") or ()):
             if not card or card.get("id") is None:
                 continue
             card_id = int(card["id"])
             job = self._resource_job(card_id)
-            capacity = self._prize_job_capacities().get(job, 1)
-            if occupied[job] + seen[job] >= capacity:
-                continue
-            seen[job] += 1
-            value += worth_to_prizes(self.registry.worth(card_id))
-        return 0.01 * value
+            capacity = capacities.get(job, 1)
+            if occupied[job] + seen[job] < capacity:
+                seen[job] += 1
+                value += worth_to_prizes(self.registry.worth(card_id))
+            tags = frozenset(self.registry.functions.get(card_id, ()))
+            if (self.isolated_selection and missing_slots
+                    and {"draw", "dig"}.intersection(tags)):
+                access += missing_slots * worth_to_prizes(self.registry.worth(card_id))
+        return 0.01 * value + FUTURE_HAND_ACCESS_DISCOUNT * access
 
     def _opponent_role_pressure(self, opponent) -> float:
         """Remaining existence plus health Worth of roles declared by the matched scouting Brief."""

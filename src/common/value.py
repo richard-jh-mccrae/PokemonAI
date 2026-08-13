@@ -34,7 +34,7 @@ FAMILY_OWNERS = {
     "energy_position": ("usable attached resources", "survival", "saturation"),
     "development": ("completed evolution development",),
     "hand": ("accessible future-turn resources",),
-    "hand_demand": ("visible missing board jobs",),
+    "hand_demand": ("visible missing board jobs", "prospective hand access"),
     "opponent_roles": ("scouted opponent role pressure",),
 }
 

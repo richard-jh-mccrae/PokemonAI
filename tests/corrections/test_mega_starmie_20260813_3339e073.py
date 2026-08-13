@@ -15,7 +15,7 @@ RUNTIME = runtime()
 
 @pytest.mark.parametrize(("correction_id", "expected"), (
     ("d39f2e524f36", (6,)),  # free mulligan cards are monotonically beneficial
-    ("e02e699ced1d", (0,)),  # full-health board makes recovery dead; take live draw
+    ("e02e699ced1d", (0,)),  # draw access covers two missing primary-attacker slots
     ("92e27180b008", (1,)),  # deterministic evolution beats the labelled reveal gamble
     ("8c69ecaccafa", (0,)),  # equal damage concentrates toward the nearer KO
     ("dfc26070178c", (0,)),  # information action precedes the resolving attack

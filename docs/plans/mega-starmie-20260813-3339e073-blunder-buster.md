@@ -10,7 +10,7 @@ Source: `data/corrections/mega_starmie_20260813_3339e073/` (20 records).
   - `8d91984d4430`, `91cea0a2fa6d`, `da39bb37b166`, `baede6accfac`,
     `79767ab416a7`: useful attached-Energy saturation, survival, and persistence.
 - Tuning of existing state machinery:
-  - `e02e699ced1d`: recovery cards have no accessible-hand value on a full-health board.
+  - `e02e699ced1d`: draw/dig hand access gains value from missing board-role slots.
   - `dfc26070178c`, `c7fd0670fb3e`, `feafb8ef77c5`, `3c2afa3f1f28`: resolved by the
     shared repairs and retained Bellman continuation.
 - Reclassified after full-turn review:
@@ -39,7 +39,6 @@ No named-card function, correction recognizer, or deck-local tactical branch was
   reachable attack cost for every attacker, including Basics. Basic lines receive increasing
   marginal value until the Active covers an immediate KO, then diminishing marginal value
   preserves optionality across attackers. Attached Energy does not consume hand capacity there.
-- Recovery hand Worth is zero when no own body is damaged.
 
 ## Validation
 
