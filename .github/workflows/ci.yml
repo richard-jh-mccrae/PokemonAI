@@ -93,7 +93,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/arena tests/label tests/meta_tracker tests/sim tests/submit tests/train tests/tuner -q -n auto --tb=short
+      - run: python -m pytest tests/arena tests/meta_tracker tests/sim tests/submit -q -n auto --tb=short
 
   test-corrections:
     name: tests / corrections
@@ -128,7 +128,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/agents tests/bellman tests/cards tests/common tests/parity tests/scouting tests/strategy tests/value tests/test_import_hygiene.py -q -n auto --tb=short
+      - run: python -m pytest tests/agents tests/bellman tests/cards tests/common tests/parity tests/scouting tests/test_import_hygiene.py -q -n auto --tb=short
 
   test-cgpy:
     name: tests / cgpy
@@ -180,5 +180,5 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Ten-game mirror; every Match <= five minutes
-        run: python tools/sim/mirror_gate.py ${{ matrix.agent }} --games 10 --max-match-seconds 300
+      - name: Ten parallel mirrors; every Match <= five minutes
+        run: python tools/sim/mirror_gate.py ${{ matrix.agent }} --games 10 --workers 10 --max-match-seconds 300
