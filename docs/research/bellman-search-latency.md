@@ -38,11 +38,12 @@ The fix has five deck-neutral parts:
 Search depth is not capped. A line may continue until the engine ends the turn, an attack resolves,
 a game result occurs, a semantic cycle is found, or the explicit node budget is consumed.
 
-## To build (deferred)
+## Implemented needs boundary
 
-The ordered specification is maintained in `docs/plans/bellman-to-build.md`: first extract a clean,
-shared needs model; then add deterministic next-turn retained-hand needs. Neither item permits
-sampled draws, hypothetical hands, or imagined redraw continuations.
+`common.needs` now owns shared immediate demand and deterministic retained evolution value. It does
+not sample draws, construct hypothetical hands, or search imagined redraw continuations. A
+future-card effect combination is deliberately outside this boundary until it has a generic
+effect-outcome evaluator; the ordinary `hand` family continues to retain those known cards.
 
 ## Why this is a value-guided beam
 

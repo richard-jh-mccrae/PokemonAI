@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from sim import mirror_gate
-from sim.mirror_gate import MirrorGateFailure, assert_within_limit, run_mirror, summarize
+from sim.mirror_gate import MirrorGateFailure, assert_within_limit, run_mirror, summarize, worker_count
 
 
 def _artifact(path):
@@ -38,6 +38,43 @@ def test_mirror_gate_rejects_the_slowest_match_not_the_average():
 def test_mirror_gate_rejects_nonpositive_worker_counts(tmp_path):
     with pytest.raises(ValueError, match="workers must be positive"):
         run_mirror("missing", games=1, max_match_seconds=1, agents_root=tmp_path, workers=0)
+
+
+def test_worker_count_never_exceeds_the_five_match_gate_limit():
+    assert worker_count(10, 10) == 5
+    assert worker_count(3, 10) == 3
+    assert worker_count(10, 2) == 2
+
+
+def test_posix_timeout_kills_the_entire_match_process_group(monkeypatch):
+    calls = []
+
+    class Process:
+        pid = 123
+
+        @staticmethod
+        def is_alive():
+            return True
+
+        @staticmethod
+        def join(_timeout=None):
+            return None
+
+        @staticmethod
+        def terminate():
+            raise AssertionError("POSIX must kill the session, not only the wrapper")
+
+        @staticmethod
+        def kill():
+            return None
+
+    monkeypatch.setattr(mirror_gate, "_is_windows", lambda: False)
+    monkeypatch.setattr(mirror_gate.os, "killpg", lambda pid, sig: calls.append((pid, sig)),
+                        raising=False)
+
+    mirror_gate._terminate_process(Process())
+
+    assert calls == [(123, mirror_gate.POSIX_KILL_SIGNAL)]
 
 
 def test_parallel_report_contract_preserves_all_results_and_exact_artifact_identity(

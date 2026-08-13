@@ -38,21 +38,21 @@ test or has been deliberately rejected.
 - No hypothetical hand, draw order, or post-redraw continuation is constructed.
 - Submission packaging includes the clean module and excludes the legacy file.
 
-## 2. Add deterministic next-turn retained-hand needs — implemented
+## 2. Add deterministic next-turn retained-hand needs — partial implementation
 
 ### Purpose
 
-Price known cards that cannot be used now but will become usable and important next turn. Examples
-include an evolution card held for a pre-evolution that entered play this turn, or an enabling
-Supporter plus the evolution card it makes usable next turn.
+Price known cards that cannot be used now but will become usable and important next turn. The
+implemented first slice covers an evolution card held for a pre-evolution that entered play this
+turn. Known Supporters remain valued by the ordinary hand family.
 
 ### Design
 
 - Derive next-turn eligibility from the real board and deterministic rule clocks: evolution age,
   reset turn budgets, declared evolution lines, printed card functions/effects, and prize routes.
-- Create next-turn need slots and coverage edges for known cards already in hand.
-- Value matched combinations jointly when every member is required; do not merely add unrelated
-  static card Worth. A card cannot simultaneously fund two incompatible combinations.
+- Create next-turn need slots and coverage edges for known evolution cards already in hand.
+- Reserve multi-card, effect-specific combinations for a generic effect-outcome evaluator; do not
+  introduce a per-effect rule inside Bellman merely to value one Supporter pairing.
 - Discount next-turn value with one documented, descriptive factor in the common value currency.
 - Add the resolved retained-option value to the cost of shuffling the known hand away.
 - Recompute from the actual observation on every callback; never predict unknown card identities.
@@ -81,8 +81,8 @@ need value and the hand value at risk.
 
 - An evolution card that becomes legal next turn has more retain value than an unrelated card with
   otherwise equal static Worth.
-- A required Supporter/evolution combination receives joint value without double-counting either
-  card.
+- A known Supporter retains its normal hand-family value; it receives no special next-turn bonus
+  until a generic effect-outcome evaluator can prove the whole combination.
 - If the enabling board body is removed or the combination is already redundant, that joint value
   disappears.
 - Immediate useful non-Supporters remain preferable before refresh when their real transition value

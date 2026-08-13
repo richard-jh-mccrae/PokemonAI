@@ -23,9 +23,9 @@ solver contracts.
 Shuffle-refresh cards are a deliberate exception to successor-state expansion. The solver does not
 invent a shuffled hand and play a hypothetical remainder of the turn. `common.needs` derives
 immediate unmet jobs, direct/fetch coverage, and deterministic next-turn options for visible cards.
-The next-turn projection advances only rule clocks; it can recognize a held evolution becoming legal
-or a known Supporter/evolution combination becoming useful, but never predicts an opponent action or
-unknown card. `common.refresh` integrates immediate coverage classes with exact hypergeometric
+The next-turn projection advances only evolution legality for known cards; future Supporter effects
+remain in the normal hand family until a generic effect-outcome evaluator exists. It never predicts
+an opponent action or unknown card. `common.refresh` integrates immediate coverage classes with exact hypergeometric
 probabilities and weighs that benefit against both current and next-turn known-hand option value.
 The branch stops at the refresh commitment; after the live engine produces the real hand, the next
 callback replans from reality.

@@ -16,11 +16,10 @@ DEFAULT_BENCH_CAPACITY = 5
 DEFAULT_ENERGY_CODE = 0
 FETCHER_CARD_COUNT = 1
 FLOAT_TIE_DIGITS = 12
-MINIMUM_BODY_HP = 1
+MINIMUM_BODY_HP = 10
 MINIMUM_ENERGY_UNITS = 1
 NEXT_STAGE_OFFSET = 1
 NEXT_TURN_OPTION_DISCOUNT = 0.75
-SUPPORTED_HEAL_RIDERS = frozenset({None, "bounce_energy_to_hand"})
 
 
 @dataclass(frozen=True)
@@ -38,6 +37,7 @@ class CoverageEdge:
 
     need_index: int
     value: float
+    fetched_target: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,26 +89,48 @@ def coverage_signature(edges: dict[int, float]) -> tuple[tuple[int, float], ...]
                         for index, value in edges.items() if value > 0.0))
 
 
-def best_assignment(signatures, need_count: int) -> ResolvedAssignment:
-    """Assign each card to at most one need and each need to at most one card."""
-    dp = {0: (0.0, 0)}
+def best_assignment(signatures, need_count: int, *, target_counts=None) -> ResolvedAssignment:
+    """Assign tokens to needs without reusing a fetched deck target.
+
+    Plain ``(need_index, value)`` pairs remain valid direct-resource edges. ``CoverageEdge`` adds
+    an optional fetched target; its limited count is consumed only when that edge is selected.
+    """
+    target_counts = target_counts or {}
+    target_ids = tuple(sorted(int(card_id) for card_id, count in target_counts.items() if count > 0))
+    target_positions = {card_id: index for index, card_id in enumerate(target_ids)}
+    initial_counts = tuple(int(target_counts[card_id]) for card_id in target_ids)
+    dp = {(0, initial_counts): (0.0, 0)}
     for card_index, signature in enumerate(signatures):
         advanced = dict(dp)
-        for mask, (value, used) in dp.items():
-            for need_index, edge_value in signature:
+        for (mask, available), (value, used) in dp.items():
+            for raw_edge in signature:
+                if isinstance(raw_edge, CoverageEdge):
+                    need_index, edge_value, target = (
+                        raw_edge.need_index, raw_edge.value, raw_edge.fetched_target)
+                else:
+                    need_index, edge_value = raw_edge
+                    target = None
                 bit = 1 << need_index
                 if mask & bit:
                     continue
+                next_available = available
+                if target is not None:
+                    position = target_positions.get(int(target))
+                    if position is None or available[position] <= 0:
+                        continue
+                    next_available = (*available[:position], available[position] - 1,
+                                      *available[position + 1:])
                 new_mask = mask | bit
                 candidate = (value + edge_value, used | (1 << card_index))
-                previous = advanced.get(new_mask)
+                state = (new_mask, next_available)
+                previous = advanced.get(state)
                 if (previous is None or
                         (round(candidate[0], FLOAT_TIE_DIGITS), candidate[1])
                         > (round(previous[0], FLOAT_TIE_DIGITS), previous[1])):
-                    advanced[new_mask] = candidate
+                    advanced[state] = candidate
         dp = advanced
-    mask, (value, used) = max(
-        dp.items(), key=lambda row: (round(row[1][0], FLOAT_TIE_DIGITS), row[0], row[1][1]))
+    (mask, _available), (value, used) = max(
+        dp.items(), key=lambda row: (round(row[1][0], FLOAT_TIE_DIGITS), row[0][0], row[1][1]))
     return ResolvedAssignment(value, mask, used)
 
 
@@ -222,16 +244,25 @@ class NeedModel:
                              for offset in range(missing))
         return tuple(needs)
 
-    def coverage(self, card_id: int, needs: tuple[Need, ...], *,
-                 supporter_available: bool, discard_capacity: int) -> tuple[CoverageEdge, ...]:
+    def coverage_slots(self, card_id: int, needs: tuple[Need, ...], *,
+                       supporter_available: bool, discard_capacity: int,
+                       available_targets=None) -> tuple[tuple[CoverageEdge, ...], ...]:
+        """Independent resources a card can supply, respecting printed fetch capacity.
+
+        A multi-target fetch contributes one assignment token per printed target.  The tokens are
+        capped by matching targets still available in the deck, so a Tutor is never an out once all
+        of its relevant targets are visible, discarded, or known prized.
+        """
         edges = {index: dict(need.direct).get(int(card_id), 0.0)
                  for index, need in enumerate(needs)}
         edges = {index: value for index, value in edges.items() if value > 0.0}
+        direct = tuple(CoverageEdge(index, value) for index, value in sorted(edges.items()))
         stat = self.stat(card_id)
         if stat is None or getattr(stat, "is_pokemon", False) or getattr(stat, "is_energy", False):
-            return tuple(CoverageEdge(index, value) for index, value in sorted(edges.items()))
+            return (direct,) if direct else ()
         if getattr(stat, "is_supporter", False) and not supporter_available:
-            return tuple(CoverageEdge(index, value) for index, value in sorted(edges.items()))
+            return (direct,) if direct else ()
+        tokens = []
         clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
         for clause in clauses:
             if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
@@ -241,29 +272,44 @@ class NeedModel:
                 continue
             if bool(clause.get("cost_required")) and discard_cost(clause) > discard_capacity:
                 continue
-            for index, need in enumerate(needs):
-                reachable = [value for target, value in need.direct
-                             if fetch_target_matches(clause, self.stat(target), reading=REACH)]
+            reachable = tuple(
+                CoverageEdge(index, value, int(target))
+                for index, need in enumerate(needs)
+                for target, value in need.direct
+                if (fetch_target_matches(clause, self.stat(target), reading=REACH)
+                    and (available_targets is None
+                         or int(available_targets.get(int(target), 0)) > 0))
+            )
+            matching_targets = {
+                edge.fetched_target for edge in reachable
+            }
+            remaining_targets = (sum(int(available_targets.get(target, 0))
+                                     for target in matching_targets)
+                                 if available_targets is not None else len(matching_targets))
+            printed_capacity = max(1, int(clause.get("amount", 1) or 1))
+            for _ in range(min(printed_capacity, remaining_targets)):
                 if reachable:
-                    edges[index] = max(edges.get(index, 0.0), max(reachable))
-        return tuple(CoverageEdge(index, value) for index, value in sorted(edges.items()))
+                    tokens.append(reachable)
+        return tuple(token for token in (direct, *tokens) if token)
 
     def uncovered_by_hand(self, needs: tuple[Need, ...], hand_ids, *,
-                          supporter_available: bool, discard_capacity: int) -> tuple[Need, ...]:
+                          supporter_available: bool, discard_capacity: int,
+                          available_targets=None) -> tuple[Need, ...]:
         signatures = []
         for card_id in hand_ids:
             stat = self.stat(card_id)
             if stat is not None and getattr(stat, "is_supporter", False):
                 continue
-            signatures.append(tuple((edge.need_index, edge.value) for edge in self.coverage(
-                int(card_id), needs, supporter_available=supporter_available,
-                discard_capacity=discard_capacity)))
-        assignment = best_assignment(signatures, len(needs))
+            signatures.extend(self.coverage_slots(
+                int(card_id), needs,
+                supporter_available=supporter_available,
+                discard_capacity=discard_capacity,
+                available_targets=available_targets))
+        assignment = best_assignment(signatures, len(needs), target_counts=available_targets)
         return tuple(need for index, need in enumerate(needs)
                      if not assignment.covered_mask & (1 << index))
 
-    def next_turn_retained(self, observation, seat: int, hand_ids, *,
-                           supporter_available_after_commit: bool) -> RetainedAssignment:
+    def next_turn_retained(self, observation, seat: int, hand_ids) -> RetainedAssignment:
         """Value deterministic next-turn uses of cards already visible now."""
         projected = self._next_turn_observation(observation, seat, hand_ids)
         original_player = observation["current"]["players"][seat]
@@ -272,7 +318,6 @@ class NeedModel:
         options: list[RetainedOption] = []
         hand = projected["current"]["players"][seat].get("hand") or ()
 
-        evolution_rows = []
         for area, index in sorted(appeared):
             body = projected["current"]["players"][seat][area][index]
             target = self._next_stage(body.get("id"))
@@ -290,39 +335,6 @@ class NeedModel:
                 option = RetainedOption(key, (hand_index,), gain,
                                         f"evolve:{area}:{index}:{target}")
                 options.append(option)
-                evolution_rows.append((area, index, target, hand_index, key))
-
-        if not supporter_available_after_commit:
-            supporters = [(index, int(card["id"])) for index, card in enumerate(hand)
-                          if card and self._is_supporter(card.get("id"))]
-            for supporter_index, supporter_id in supporters:
-                for clause in self._deterministic_heal_clauses(supporter_id):
-                    for area, index, body in body_rows(projected["current"]["players"][seat]):
-                        if not self._heal_target_matches(clause, area, body):
-                            continue
-                        healed = self._heal(projected, seat, area, index, clause,
-                                            consumed_cards=(supporter_index,))
-                        gain = self.operation_gain(projected, healed) * NEXT_TURN_OPTION_DISCOUNT
-                        if gain > 0.0:
-                            options.append(RetainedOption(
-                                f"heal:{area}:{index}", (supporter_index,), gain,
-                                f"support:{area}:{index}:{supporter_id}"))
-
-                for area, index, target, evolution_index, key in evolution_rows:
-                    if supporter_index == evolution_index:
-                        continue
-                    evolved = self._evolve(projected, seat, area, index, target,
-                                           consumed_cards=(evolution_index, supporter_index))
-                    evolved_body = evolved["current"]["players"][seat][area][index]
-                    for clause in self._deterministic_heal_clauses(supporter_id):
-                        if not self._heal_target_matches(clause, area, evolved_body):
-                            continue
-                        combined = self._heal(evolved, seat, area, index, clause)
-                        gain = self.operation_gain(projected, combined) * NEXT_TURN_OPTION_DISCOUNT
-                        if gain > 0.0:
-                            options.append(RetainedOption(
-                                key, tuple(sorted((evolution_index, supporter_index))), gain,
-                                f"evolve+support:{area}:{index}:{target}:{supporter_id}"))
 
         return best_retained_assignment(tuple(options))
 
@@ -367,44 +379,6 @@ class NeedModel:
             except ValueError:
                 continue
         return max(amounts, default=0)
-
-    def _is_supporter(self, card_id) -> bool:
-        stat = self.stat(card_id)
-        return bool(stat is not None and getattr(stat, "is_supporter", False))
-
-    def _deterministic_heal_clauses(self, card_id):
-        clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
-        return tuple(clause for clause in clauses if clause.get("kind") == "heal"
-                     and clause.get("rider") in SUPPORTED_HEAL_RIDERS)
-
-    def _heal_target_matches(self, clause, area: str, body) -> bool:
-        restriction = clause.get("restriction")
-        stat = self.stat(body.get("id"))
-        if restriction is None:
-            return True
-        if restriction == "active_only":
-            return area == "active"
-        if restriction == "mega_only":
-            return bool(stat is not None and getattr(stat, "megaEx", False))
-        return False
-
-    def _heal(self, observation, seat: int, area: str, index: int, clause, *,
-              consumed_cards: tuple[int, ...] = ()):
-        healed = copy.deepcopy(observation)
-        self._remove_hand_positions(healed, seat, consumed_cards)
-        player = healed["current"]["players"][seat]
-        body = player[area][index]
-        maximum = int(body.get("maxHp", body.get("hp", MINIMUM_BODY_HP)) or MINIMUM_BODY_HP)
-        amount = clause.get("amount")
-        body["hp"] = maximum if amount == "all" else min(
-            maximum, int(body.get("hp", maximum) or 0) + max(0, int(amount or 0)))
-        if clause.get("rider") == "bounce_energy_to_hand":
-            energy_cards = list(body.get("energyCards") or ())
-            player.setdefault("hand", []).extend(energy_cards)
-            player["handCount"] = len(player.get("hand") or ())
-            body["energyCards"] = []
-            body["energies"] = []
-        return healed
 
     @staticmethod
     def _remove_hand_positions(observation, seat: int, positions) -> None:

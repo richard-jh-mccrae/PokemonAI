@@ -8,7 +8,7 @@ from math import comb
 
 from .algebra import Ledger, Refresh
 from .draws import draw_branches, draw_shape_problem
-from .needs import NeedModel, best_assignment, coverage_signature
+from .needs import NeedModel, best_assignment
 from .value import KNOWN_CARD_FLOOR, worth_to_prizes
 
 
@@ -121,12 +121,8 @@ class RefreshEvaluator:
         except ValueError:
             pass
         held_cost = self._held_option_cost(observation, state.root_seat)
-        refresh_stat = self.needs.stat(node.card_id)
-        supporter_spent = bool(refresh_stat is not None
-                               and getattr(refresh_stat, "is_supporter", False))
         retained = self.needs.next_turn_retained(
             observation, state.root_seat, returned,
-            supporter_available_after_commit=state.budgets.supporter and not supporter_spent,
         )
         branch_rows = []
         weighted_needs = weighted_tactical = weighted_opponent = 0.0
@@ -136,10 +132,12 @@ class RefreshEvaluator:
                 immediate, returned,
                 supporter_available=state.budgets.supporter,
                 discard_capacity=max(0, len(returned) - FETCHER_CARD_COUNT),
+                available_targets=Counter({int(card_id): int(count)
+                                           for card_id, count in state.deck_counts}),
             )
             need_value = self._expected_need_value(
                 state, uncovered, returned, int(own_draw),
-                supporter_available=state.budgets.supporter and not supporter_spent,
+                supporter_available=state.budgets.supporter,
             )
             tactical = self._hand_size_tactical_delta(
                 observation, state.root_seat, int(own_draw), int(opponent_draw),
@@ -202,16 +200,18 @@ class RefreshEvaluator:
         mine = players[state.root_seat] if len(players) > state.root_seat else {}
         hidden_counts = Counter({int(card_id): int(count) for card_id, count in state.deck_counts})
         returned_counts = Counter(int(card_id) for card_id in returned)
+        refreshed_counts = hidden_counts + returned_counts
         discard_capacity = max(0, int(draws) - FETCHER_CARD_COUNT)
 
         def semantic_counts(identity_counts):
             grouped = Counter()
             for card_id, count in identity_counts.items():
-                edges = self.needs.coverage(
+                slots = self.needs.coverage_slots(
                     card_id, needs, supporter_available=supporter_available,
-                    discard_capacity=discard_capacity)
-                grouped[coverage_signature(
-                    {edge.need_index: edge.value for edge in edges})] += count
+                    discard_capacity=discard_capacity, available_targets=refreshed_counts)
+                # Only card identities capable of filling one of these needs must remain distinct.
+                # Every other identity is equivalent filler for this closed-form calculation.
+                grouped[int(card_id) if slots else None] += count
             return grouped
 
         hidden_semantic = semantic_counts(hidden_counts)
@@ -235,8 +235,19 @@ class RefreshEvaluator:
                 hidden_draws, _sample_distribution(hidden_semantic, hidden_draws))
             for returned_signatures, returned_probability in returned_distribution.items():
                 for hidden_signatures, hidden_probability in hidden_distribution.items():
+                    drawn_ids = tuple(card_id for card_id in (
+                        *returned_signatures, *hidden_signatures) if card_id is not None)
+                    remaining_targets = refreshed_counts.copy()
+                    remaining_targets.subtract(drawn_ids)
+                    remaining_targets = Counter({card_id: count for card_id, count
+                                                 in remaining_targets.items() if count > 0})
+                    tokens = tuple(
+                        token for card_id in drawn_ids for token in self.needs.coverage_slots(
+                            card_id, needs, supporter_available=supporter_available,
+                            discard_capacity=discard_capacity,
+                            available_targets=remaining_targets))
                     assignment = best_assignment(
-                        (*returned_signatures, *hidden_signatures), len(needs))
+                        tokens, len(needs), target_counts=remaining_targets)
                     expected += (split * returned_probability * hidden_probability
                                  * assignment.value)
         return expected

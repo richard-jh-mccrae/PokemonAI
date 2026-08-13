@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from common.effects import CardEffects
-from common.needs import NeedModel, best_assignment
+from common.needs import Need, NeedModel, best_assignment
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.value import CardFacts, Potential, ValueRegistry
 
@@ -65,10 +65,7 @@ def _model():
         SUPPORTER: CardStat(SUPPORTER, cardType=3),
         UNRELATED: CardStat(UNRELATED, cardType=1),
     })
-    effects = CardEffects({SUPPORTER: [{
-        "kind": "heal", "amount": "all", "restriction": "mega_only",
-    }]})
-    return NeedModel(registry, _potential, effects=effects, stats=stats)
+    return NeedModel(registry, _potential, effects=CardEffects({}), stats=stats)
 
 
 def test_assignment_never_uses_one_card_or_need_twice():
@@ -83,37 +80,54 @@ def test_next_turn_evolution_has_situational_value_beyond_equal_static_hand_wort
     model = _model()
 
     useful = model.next_turn_retained(
-        _observation([LINE_TOP, UNRELATED]), 0, [LINE_TOP, UNRELATED],
-        supporter_available_after_commit=True)
+        _observation([LINE_TOP, UNRELATED]), 0, [LINE_TOP, UNRELATED])
     unrelated = model.next_turn_retained(
-        _observation([UNRELATED]), 0, [UNRELATED],
-        supporter_available_after_commit=True)
+        _observation([UNRELATED]), 0, [UNRELATED])
 
     assert useful.value == pytest.approx(0.6)
     assert useful.options[0].description.startswith("evolve:")
     assert unrelated.value == 0.0
 
 
-def test_supporter_and_evolution_are_jointly_valued_without_double_counting():
+def test_multi_target_fetch_provides_one_assignment_token_per_printed_target():
     model = _model()
+    needs = (
+        Need("setup:one", ((LINE_BASE, 0.5),)),
+        Need("setup:two", ((LINE_BASE, 0.5),)),
+    )
+    effects = CardEffects({SUPPORTER: [{
+        "kind": "fetch", "target": "pokemon", "zone": "deck", "amount": 2,
+    }]})
+    model = NeedModel(model.registry, _potential, effects=effects, stats=model.stats)
 
-    resolved = model.next_turn_retained(
-        _observation([LINE_TOP, SUPPORTER]), 0, [LINE_TOP, SUPPORTER],
-        supporter_available_after_commit=False)
+    tokens = model.coverage_slots(
+        SUPPORTER, needs, supporter_available=True, discard_capacity=0,
+        available_targets={LINE_BASE: 2})
+    assignment = best_assignment(tokens, len(needs), target_counts={LINE_BASE: 2})
 
-    assert resolved.value == pytest.approx(0.675)
-    assert len(resolved.options) == 1
-    assert resolved.options[0].required_cards == (0, 1)
-    assert resolved.options[0].description.startswith("evolve+support:")
+    assert len(tokens) == 2
+    assert assignment.value == pytest.approx(1.0)
+
+
+def test_fetch_without_a_remaining_target_is_not_an_out():
+    model = _model()
+    need = Need("develop", ((LINE_TOP, 1.0),))
+    effects = CardEffects({SUPPORTER: [{
+        "kind": "fetch", "target": "pokemon", "zone": "deck",
+    }]})
+    model = NeedModel(model.registry, _potential, effects=effects, stats=model.stats)
+
+    assert model.coverage_slots(
+        SUPPORTER, (need,), supporter_available=True, discard_capacity=0,
+        available_targets={LINE_TOP: 0}) == ()
 
 
 @pytest.mark.parametrize("observation", (
-    _observation([LINE_TOP, SUPPORTER], appeared=False),
-    _observation([LINE_TOP, SUPPORTER], body=False),
+    _observation([LINE_TOP], appeared=False),
+    _observation([LINE_TOP], body=False),
 ))
-def test_next_turn_combination_disappears_when_the_enabling_clock_or_body_is_absent(observation):
-    resolved = _model().next_turn_retained(
-        observation, 0, [LINE_TOP, SUPPORTER], supporter_available_after_commit=False)
+def test_next_turn_evolution_option_disappears_when_the_enabling_clock_or_body_is_absent(observation):
+    resolved = _model().next_turn_retained(observation, 0, [LINE_TOP])
 
     assert resolved.value == 0.0
     assert resolved.options == ()

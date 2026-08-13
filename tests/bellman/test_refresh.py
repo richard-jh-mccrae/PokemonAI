@@ -7,6 +7,7 @@ import pytest
 from common import DecisionState, Refresh
 from common.effects import CardEffects
 from common.native_engine import NativeCgTransitionProvider, _NativeWorld
+from common.needs import Need
 from common.options import enumerate_legal_actions
 from common.refresh import RefreshEvaluator
 from common.scouting.provider import CardStat, DictCardStatProvider
@@ -130,6 +131,24 @@ def test_refresh_uses_exact_need_class_odds_for_direct_cards_and_fetchers():
 
     assert dict(ledger.benefits)["refresh_immediate_needs"] == pytest.approx(2 / 3)
     assert branches[0]["needs"] == ("evolve:bench:0",)
+
+
+def test_drawn_tutor_cannot_reuse_the_last_matching_target_drawn_beside_it():
+    deck = (REFRESH_CARD, LINE_BASE, LINE_TOP, POKEMON_TUTOR)
+    state, registry = _state(deck)
+    evaluator = RefreshEvaluator(
+        registry, _potential,
+        effects=CardEffects({POKEMON_TUTOR: [{
+            "kind": "fetch", "target": "pokemon", "zone": "deck",
+        }]}),
+        stats=_stats(),
+    )
+    needs = (Need("first", ((LINE_TOP, 1.0),)), Need("second", ((LINE_TOP, 1.0),)))
+
+    value = evaluator._expected_need_value(
+        state, needs, (), 2, supporter_available=True)
+
+    assert value == pytest.approx(1.0)
 
 
 def test_refresh_does_not_claim_a_need_already_held_and_playable_first():

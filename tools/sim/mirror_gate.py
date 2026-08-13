@@ -10,6 +10,7 @@ import hashlib
 import multiprocessing
 import os
 import queue
+import signal
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,7 @@ DEFAULT_MATCH_TIMEOUT_SECONDS = 600.0
 MAX_CALLBACK_SECONDS = 120.0
 PROCESS_SHUTDOWN_SECONDS = 5.0
 RESULT_QUEUE_TIMEOUT_SECONDS = 1.0
+POSIX_KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 class MirrorGateFailure(RuntimeError):
@@ -36,6 +38,10 @@ class MirrorGateFailure(RuntimeError):
     def __init__(self, report: dict, message: str):
         super().__init__(message)
         self.report = report
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
 
 
 def summarize(seconds: list[float]) -> dict[str, float]:
@@ -53,6 +59,11 @@ def assert_within_limit(seconds: list[float], limit: float) -> None:
     if stats["max"] > limit:
         raise RuntimeError(
             f"mirror max match time {stats['max']:.1f}s exceeds {limit:.1f}s")
+
+
+def worker_count(games: int, workers: int) -> int:
+    """Honor a smaller request, but never launch more than the five-match gate permits."""
+    return min(int(games), int(workers), DEFAULT_FINAL_WORKERS)
 
 
 def _artifact_sha256(archive: Path) -> str:
@@ -125,6 +136,10 @@ def _one_match(bundle: Path, *, a_seat: int) -> dict:
 
 
 def _match_process(bundle: Path, a_seat: int, output) -> None:
+    # The deadline parent kills this process group on POSIX, including AgentServer descendants.
+    # Windows receives the equivalent `/T` tree termination below.
+    if not _is_windows():
+        os.setsid()
     try:
         output.put((True, _one_match(bundle, a_seat=a_seat)))
     except Exception as exc:  # noqa: BLE001 - cross-process failure must reach the gate
@@ -134,13 +149,16 @@ def _match_process(bundle: Path, a_seat: int, output) -> None:
 def _terminate_process(process) -> None:
     if not process.is_alive():
         return
-    if os.name == "nt":
+    if _is_windows():
         subprocess.run(
             ["taskkill", "/PID", str(process.pid), "/T", "/F"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
         )
     else:
-        process.terminate()
+        try:
+            os.killpg(process.pid, POSIX_KILL_SIGNAL)
+        except (OSError, ProcessLookupError):
+            process.terminate()
     process.join(PROCESS_SHUTDOWN_SECONDS)
     if process.is_alive():
         process.kill()
@@ -254,7 +272,7 @@ def run_mirror(agent: str, *, games: int = DEFAULT_FINAL_MATCHES,
                 outcome = _timed_archive_match(task)
                 outcomes[outcome["index"]] = outcome
         else:
-            with ProcessPoolExecutor(max_workers=min(workers, games)) as executor:
+            with ProcessPoolExecutor(max_workers=worker_count(games, workers)) as executor:
                 submitted = {executor.submit(_timed_archive_match, task): (task[0], clock())
                              for task in tasks}
                 for future in as_completed(submitted):
