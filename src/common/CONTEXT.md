@@ -2,6 +2,40 @@
 
 Every shipped deck uses one system: `common.runtime.BellmanRuntime`.
 
+## Language
+
+**Action Family**:
+Legal sibling choices that answer the same local question and may be ranked by one family equation.
+_Avoid_: Decision group, option bucket
+
+**Family Score**:
+An explainable within-family scheduling score. It orders search and never contributes to Bellman utility.
+_Avoid_: Action value, policy value
+
+**Search Wave**:
+A cohort of admitted candidates that receives equal shallow planning work before any candidate is deepened.
+_Avoid_: Beam, batch
+
+**Planning Epoch**:
+Planning work performed from one known state until an information boundary or validated plan completion.
+_Avoid_: Callback budget
+
+**Plan Suffix**:
+The deterministic remainder of a chosen line, guarded by its expected states and legal choices.
+_Avoid_: Script, macro
+
+**Information Boundary**:
+An event that reveals previously unknown facts or hands control to the opponent, invalidating a plan suffix.
+_Avoid_: Any callback
+
+**Structural Prune**:
+Permanent removal justified by semantic equivalence or coefficient-independent dominance.
+_Avoid_: Low score, clear loser
+
+**Pilot Profile**:
+The resolved, versioned set of adjustable value, search, clock, belief, execution, and diagnostic parameters.
+_Avoid_: Constants, tuning blob
+
 The runtime performs declarative setup choices, builds a deck profile from `Strategy`, reads the
 opponent through Scouting, and sends every normal-turn decision to `common.BellmanTurnPlanner`.
 There is no rules-pipeline fallback.

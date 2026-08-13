@@ -6,6 +6,7 @@ from .api import (
     BellmanPlanner,
     BellmanUnavailable,
     PlanRequest,
+    PlanStep,
     RootDecision,
 )
 from .algebra import (
@@ -40,6 +41,7 @@ from .information import (
 )
 from .options import LegalAction, enumerate_legal_actions
 from .planner import BellmanTurnPlanner
+from .pilot_profile import DEFAULT_PILOT_PROFILE, DEFINITIONS, PilotProfile
 from .potential import BoardPotential, UtilityScale
 from .solver import (
     ProductionLimits,
@@ -55,10 +57,11 @@ __all__ = (
     "END_VALUE", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
     "BellmanTurnPlanner", "BellmanUnavailable", "BoardPotential", "CardFacts", "Chance",
     "NativeCgTransitionProvider", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
-    "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "Potential",
+    "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "PlanStep", "Potential",
     "Need", "NeedModel", "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "RevealChoice", "RevealOutcome",
     "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TransitionProvider", "TurnBudgets",
     "Unknown", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
-    "enumerate_legal_actions", "hypergeometric_classes", "opponent_belief", "reveal_sets",
+    "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "PilotProfile", "enumerate_legal_actions",
+    "hypergeometric_classes", "opponent_belief", "reveal_sets",
 )

@@ -10,25 +10,27 @@ from .algebra import (
     ActionDiagnostic, Actor, Chance, Choice, Deterministic, Ledger, Refresh, RevealChoice,
     RootDiagnostics, Terminal, Unknown,
 )
-from .api import RootDecision
+from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
 from .options import LegalAction
+from .family_ranking import FamilyRanking, rank_actions
+from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
 from .value import ValueOracle
 
 
 REFERENCE_MAX_NODES = 100_000
-PRODUCTION_MAX_NODES = 4_000
-PRODUCTION_CHANCE_MAX_NODES = 600
-PRODUCTION_REVEAL_MAX_NODES = 1_300
-UNCERTAINTY_REFINEMENT_VALUE_MARGIN = 0.10
-PRODUCTION_MAX_SECONDS = 15.0
-PRODUCTION_BEAM_WIDTH = 16
-DEFAULT_ROOT_BEAM_WIDTH = 16
-DEFAULT_EFFECT_CHOICE_WIDTH = 64
-DEFAULT_ROOT_PROBE_NODES = 96
-DEFAULT_ROOT_REFINEMENT_WIDTH = 2
+PRODUCTION_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.max_nodes"))
+PRODUCTION_CHANCE_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.chance_max_nodes"))
+PRODUCTION_REVEAL_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.reveal_max_nodes"))
+UNCERTAINTY_REFINEMENT_VALUE_MARGIN = DEFAULT_PILOT_PROFILE.get("search.uncertainty_margin")
+PRODUCTION_MAX_SECONDS = DEFAULT_PILOT_PROFILE.get("clock.remaining_200_seconds")
+PRODUCTION_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.beam_width"))
+DEFAULT_ROOT_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.root_beam_width"))
+DEFAULT_EFFECT_CHOICE_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.effect_choice_width"))
+DEFAULT_ROOT_PROBE_NODES = int(DEFAULT_PILOT_PROFILE.get("search.shallow_nodes"))
+DEFAULT_ROOT_REFINEMENT_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.refinement_width"))
 SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
@@ -72,6 +74,7 @@ class Evaluation:
     reason: str = ""
     branches: tuple[dict, ...] = ()
     decisions: float = 0.0
+    continuation: tuple[PlanStep, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -167,7 +170,13 @@ class ReferenceSolver:
             chosen=solved.action.selection, action=solved.action.identity,
             value=solved.value, complete=solved.evaluation.complete,
             diagnostics={"root": diagnostics, "ledger": solved.evaluation.ledger.as_dict()},
+            plan_suffix=solved.evaluation.continuation,
         )
+
+    def _continuation_steps(self, before: DecisionState, action: LegalAction,
+                            after: DecisionState,
+                            continuation: StateEvaluation) -> tuple[PlanStep, ...]:
+        return ()
 
     def _models(self, before: DecisionState, after: DecisionState):
         if self.model_factory is None:
@@ -261,9 +270,10 @@ class ReferenceSolver:
             if continuation.action is None and not continuation.evaluation.complete:
                 return Evaluation(-math.inf, base, False, continuation.evaluation.reason)
             ledger = _combine(base, continuation.value)
+            steps = self._continuation_steps(before, action, node.state, continuation)
             return Evaluation(ledger.total, ledger, continuation.evaluation.complete,
                               continuation.evaluation.reason, decisions=(
-                                  1.0 + continuation.evaluation.decisions))
+                                  1.0 + continuation.evaluation.decisions), continuation=steps)
         if isinstance(node, Terminal):
             base = self._ledger(before, node.state, action)
             ledger = _combine(base, 0.0, node.ledger)
@@ -348,10 +358,12 @@ class ProductionSolver(ReferenceSolver):
     """
 
     def __init__(self, provider: TransitionProvider, oracle: ValueOracle, *, model_factory=None,
-                 limits: ProductionLimits = ProductionLimits()):
+                 limits: ProductionLimits = ProductionLimits(),
+                 profile: PilotProfile = DEFAULT_PILOT_PROFILE):
         super().__init__(provider, oracle, model_factory=model_factory,
                          limits=SearchLimits(limits.max_nodes))
         self.production_limits = limits
+        self.profile = profile
         self._root_key = ""
         self._root_branch_nodes: list[int] = []
         self._root_branch_capped: list[bool] = []
@@ -360,6 +372,9 @@ class ProductionSolver(ReferenceSolver):
         self._budget = FairBudgetPrototype(limits.max_seconds)
         self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
         self.por_pruned = 0
+        self._structural_prunes: list[dict] = []
+        self._family_rankings: dict[str, FamilyRanking] = {}
+        self._completed_rounds = 0
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
@@ -367,9 +382,16 @@ class ProductionSolver(ReferenceSolver):
         self._root_branch_capped = []
         self._por_memo.clear()
         self.por_pruned = 0
+        self._structural_prunes.clear()
+        self._family_rankings.clear()
+        self._completed_rounds = 0
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
+        if self._root_key not in self._family_rankings:
+            root_actions = tuple(sorted(self.provider.actions(state), key=lambda row: row.identity))
+            self._family_rankings[self._root_key] = rank_actions(
+                state, root_actions, self.provider, self.oracle, self.profile)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
             "beam_width": self.production_limits.beam_width,
@@ -389,9 +411,35 @@ class ProductionSolver(ReferenceSolver):
             "cap_reached": any(self._root_branch_capped),
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
+            "structural_prunes": tuple(self._structural_prunes),
+            "profile_hash": self.profile.hash,
+            "completed_rounds": self._completed_rounds,
+            "family_candidates": tuple(
+                candidate.diagnostic()
+                for candidate in self._family_rankings.get(self._root_key, FamilyRanking((), (), ())).candidates
+            ),
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
-                            decision.complete, diagnostics)
+                            decision.complete, diagnostics, decision.plan_suffix)
+
+    def _continuation_steps(self, before: DecisionState, action: LegalAction,
+                            after: DecisionState,
+                            continuation: StateEvaluation) -> tuple[PlanStep, ...]:
+        if continuation.action is None or self.provider.actor(after) is not Actor.OURS:
+            return ()
+        before_current = before.obs.get("current") or {}
+        after_current = after.obs.get("current") or {}
+        if int(before_current.get("turn", 0)) != int(after_current.get("turn", 0)):
+            return ()
+        footprint = self._footprint(before, action)
+        if footprint is not None and footprint.barrier:
+            return ()
+        step = PlanStep(
+            after.semantic_key, after.legal_menu_digest, continuation.action.selection,
+            continuation.action.identity, self.profile.hash,
+            int(after_current.get("turn", 0)), int(after_current.get("yourIndex", 0)),
+        )
+        return (step,) + continuation.evaluation.continuation
 
     def _footprint(self, state: DecisionState, action: LegalAction) -> ActionFootprint | None:
         footprint = getattr(self.provider, "footprint", None)
@@ -446,8 +494,23 @@ class ProductionSolver(ReferenceSolver):
             filtered = tuple(action for action in actions
                              if footprints[action.identity] is None
                              or footprints[action.identity].event not in asleep)
+            for action in actions:
+                footprint = footprints[action.identity]
+                if footprint is not None and footprint.event in asleep:
+                    self._structural_prunes.append({
+                        "proof_type": "commutativity",
+                        "pruned": str(action.identity),
+                        "retained_event": footprint.event,
+                    })
             self.por_pruned += len(actions) - len(filtered)
             actions = filtered
+            ordering = self.profile.get("family.attachment_ordering") >= 0.5
+            widening = self.profile.get("family.attachment_widening") >= 0.5
+            if ordering or widening:
+                ranking = rank_actions(state, actions, self.provider, self.oracle, self.profile)
+                self._family_rankings[key] = ranking
+            if ordering:
+                actions = ranking.ordered_actions
         if self.provider.actor(state) is Actor.OURS:
             width = (self.production_limits.root_beam_width if key == self._root_key
                      else self.production_limits.beam_width if context == MAIN_DECISION_CONTEXT
@@ -476,16 +539,22 @@ class ProductionSolver(ReferenceSolver):
         else:
             child_sleeps = {action.identity: sleep for action in actions}
         if key == self._root_key:
+            ranking = self._family_rankings.get(key)
+            action_waves = ({candidate.action: candidate.wave for candidate in ranking.candidates}
+                            if ranking is not None else {})
             results_list = []
             branch_nodes = []
             branch_capped = []
             original_limits = self.limits
-            probe_nodes = min(
-                self.production_limits.max_nodes,
-                max(1, self.production_limits.root_probe_nodes),
-            )
-            self.limits = SearchLimits(probe_nodes)
             for index, action in enumerate(actions):
+                wave = action_waves.get(action, 0)
+                widening = self.profile.get("family.attachment_widening") >= 0.5
+                probe_nodes = min(
+                    self.production_limits.max_nodes,
+                    max(1, self.production_limits.root_probe_nodes
+                        if wave <= 1 or not widening else 1),
+                )
+                self.limits = SearchLimits(probe_nodes)
                 self._deadline = self._budget.root_deadline(
                     monotonic(), self._hard_deadline, len(actions) - index)
                 self.nodes = 1
@@ -494,6 +563,8 @@ class ProductionSolver(ReferenceSolver):
                 branch_capped.append(not result.complete and (
                     self.nodes >= probe_nodes or monotonic() >= self._deadline))
                 results_list.append((action, result))
+            if results_list:
+                self._completed_rounds = 1 + max(action_waves.values(), default=0)
             self._deadline = self._hard_deadline
 
             # Successive halving allocates the expensive pass by observed Bellman continuation
@@ -583,7 +654,7 @@ class ProductionSolver(ReferenceSolver):
             proven = result.complete and len(finite) == len(results) and all(
                 evaluated.complete for _candidate, evaluated in results)
             evaluation = Evaluation(result.value, result.ledger, proven, result.reason,
-                                    result.branches, result.decisions)
+                                    result.branches, result.decisions, result.continuation)
             answer = StateEvaluation(result.value, action, evaluation, results)
         # A bounded lower bound depends on the budget remaining when it was
         # reached.  Reusing it from another branch would turn traversal order

@@ -11,6 +11,7 @@ from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
+from common.pilot_profile import PilotProfile
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs, match_brief, resolve_scouted_role_worth
 from common.scouting.provider import EngineCardStatProvider
@@ -55,6 +56,11 @@ class BellmanRuntime:
         self.registry = ValueRegistry.from_strategy(
             strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
+        self.pilot_profile = PilotProfile.resolve(
+            authored_deck=getattr(strategy, "pilot_adjustments", {}),
+            provenance=f"strategy:{strategy.name}",
+        )
+        self._plan_suffix = ()
         self.last_read = Read()
 
     @staticmethod
@@ -154,15 +160,54 @@ class BellmanRuntime:
             planner_kwargs["limits"] = self.limits
         return BellmanTurnPlanner(
             registry=self.registry, family_evaluator=potential,
-            effects=self.effects, stats=self.stats, belief=belief, **planner_kwargs)
+            effects=self.effects, stats=self.stats, belief=belief,
+            profile=self.pilot_profile, **planner_kwargs)
+
+    def _cached_decision(self, planner, request):
+        if not self._plan_suffix or self.pilot_profile.get("plan_reuse.enabled") < 0.5:
+            return None, "empty"
+        step = self._plan_suffix[0]
+        state = planner.state_for(request)
+        current = state.obs.get("current") or {}
+        guards = (
+            (step.profile_hash == self.pilot_profile.hash, "profile_changed"),
+            (step.turn == int(current.get("turn", 0)), "turn_changed"),
+            (step.seat == int(current.get("yourIndex", 0)), "seat_changed"),
+            (step.legal_menu_digest == state.legal_menu_digest, "legal_menu_changed"),
+            (step.expected_state_key == state.semantic_key, "semantic_state_changed"),
+        )
+        failure = next((reason for valid, reason in guards if not valid), None)
+        if failure is not None:
+            self._plan_suffix = ()
+            return None, failure
+        self._plan_suffix = self._plan_suffix[1:]
+        return RootDecision(
+            step.chosen, step.action, 0.0, True,
+            {"backend": "plan-suffix", "profile_hash": self.pilot_profile.hash,
+             "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix)}},
+            self._plan_suffix,
+        ), "hit"
 
     def decide(self, observation: dict) -> RootDecision:
         current = observation.get("current") or {}
         if int(current.get("turn", 0)) <= 0:
+            self._plan_suffix = ()
             self.last_read = Read()
             return self._pregame(observation)
-        return self._planner(observation).decide(
-            PlanRequest(observation, self.deck, self.strategy.name))
+        planner = self._planner(observation)
+        request = PlanRequest(observation, self.deck, self.strategy.name)
+        cached, invalidation = self._cached_decision(planner, request)
+        if cached is not None:
+            return cached
+        decision = planner.decide(request)
+        self._plan_suffix = decision.plan_suffix
+        diagnostics = dict(decision.diagnostics)
+        diagnostics["plan_suffix"] = {
+            "hit": False, "invalidation": invalidation,
+            "cached_steps": len(self._plan_suffix),
+        }
+        return RootDecision(decision.chosen, decision.action, decision.value,
+                            decision.complete, diagnostics, decision.plan_suffix)
 
 
 def build_runtime(strategy, deck, **kwargs) -> BellmanRuntime:

@@ -30,14 +30,26 @@ class PlanRequest:
 
 
 @dataclass(frozen=True)
+class PlanStep:
+    expected_state_key: str
+    legal_menu_digest: str
+    chosen: tuple[int, ...]
+    action: ActionIdentity
+    profile_hash: str
+    turn: int
+    seat: int
+
+
+@dataclass(frozen=True)
 class RootDecision:
-    """The next committed choice.  The planner always replans after the real transition."""
+    """The next committed choice plus its guarded deterministic continuation."""
 
     chosen: tuple[int, ...]
     action: ActionIdentity
     value: float
     complete: bool
     diagnostics: Mapping
+    plan_suffix: tuple[PlanStep, ...] = ()
 
 
 class BellmanUnavailable(RuntimeError):
@@ -57,5 +69,6 @@ __all__ = (
     "BellmanPlanner",
     "BellmanUnavailable",
     "PlanRequest",
+    "PlanStep",
     "RootDecision",
 )

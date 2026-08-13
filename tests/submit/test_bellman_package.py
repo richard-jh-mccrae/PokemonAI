@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from submit.brief import build_manifest
+from submit.brief import build_manifest, render_brief, render_brief_csv
 from submit.history import summary
 from submit.package import package
 
@@ -22,6 +22,20 @@ def test_manifest_describes_declarations_and_bellman_only():
     assert manifest["strategy"]["roles"]["1031"] == ["win_condition", "primary_attacker"]
     assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
     assert summary(manifest)["system"] == "bellman"
+    assert manifest["pilot_profile"]["hash"]
+    assert "planning_clock" in manifest["pilot_profile"]["groups"]
+
+
+def test_brief_projects_the_same_profile_to_html_and_csv():
+    manifest = build_manifest(REPO / "src" / "agents" / "mega_starmie",
+                              git_hash="abc123", cards={})
+    html = render_brief(manifest)
+    csv_text = render_brief_csv(manifest)
+
+    assert "<details><summary>planning_clock" in html
+    assert manifest["pilot_profile"]["hash"] in html
+    assert "pilot_parameter" in csv_text
+    assert "clock.remaining_600_seconds" in csv_text
 
 
 def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):

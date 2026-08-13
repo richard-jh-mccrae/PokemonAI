@@ -188,6 +188,8 @@ def test_production_partial_order_reduction_skips_only_the_reverse_commutative_o
     assert ("after-alpha", "beta") in graph.calls
     assert ("after-beta", "alpha") not in graph.calls
     assert decision.diagnostics["production"]["commutative_permutations_pruned"] >= 1
+    assert decision.diagnostics["production"]["structural_prunes"][0]["proof_type"] == \
+        "commutativity"
 
 
 def test_chance_boundary_clears_partial_order_sleep_set():
@@ -264,6 +266,70 @@ def test_information_effect_is_a_partial_order_barrier():
 
     footprint = action_footprint(state, play, effects=Effects())
     assert footprint.barrier
+
+
+def test_fetch_into_hand_is_an_information_barrier():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 901}, {"id": 905}],
+             "active": [{"id": 903, "serial": 44}], "bench": []},
+            {"hand": None, "active": [{"id": 904, "serial": 45}], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 8, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 7, "index": 1},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation)
+    attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
+    fetch = LegalAction(ActionIdentity("play"), (1,), ((1,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return ({"kind": "fetch", "target": "supporter", "zone": "deck"},) \
+                if card_id == 905 else ()
+
+    attach_footprint = action_footprint(state, attach, effects=Effects())
+    fetch_footprint = action_footprint(state, fetch, effects=Effects())
+
+    assert fetch_footprint.barrier
+    assert not independent(attach_footprint, fetch_footprint)
+
+
+def test_bench_fetch_and_evolution_do_not_claim_retreat_commutativity():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 905}, {"id": 906}],
+             "active": [{"id": 903, "serial": 44}],
+             "bench": [{"id": 904, "serial": 45}]},
+            {"hand": None, "active": [{"id": 907, "serial": 46}], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 7, "index": 0},
+            {"type": 9, "index": 1, "inPlayArea": 5, "inPlayIndex": 0},
+            {"type": 12},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation)
+    fetch = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
+    evolve = LegalAction(ActionIdentity("evolve"), (1,), ((1,),), ())
+    retreat = LegalAction(ActionIdentity("retreat"), (2,), ((2,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return ({"kind": "fetch", "target": "basic_pokemon", "zone": "deck",
+                     "dest": "bench"},) if card_id == 905 else ()
+
+    fetch_footprint = action_footprint(state, fetch, effects=Effects())
+    evolve_footprint = action_footprint(state, evolve, effects=Effects())
+    retreat_footprint = action_footprint(state, retreat, effects=Effects())
+
+    assert fetch_footprint.barrier
+    assert retreat_footprint.barrier
+    assert not independent(fetch_footprint, retreat_footprint)
+    assert not independent(evolve_footprint, retreat_footprint)
 
 
 def test_all_negative_actions_choose_end_zero():
