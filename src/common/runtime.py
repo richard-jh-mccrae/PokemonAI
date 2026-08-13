@@ -18,6 +18,7 @@ from common.scouting.read import Read, posture_gamma
 from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
+    _DRAW_COUNT,
     _HAND,
     _IS_FIRST,
     _MULLIGAN,
@@ -116,6 +117,12 @@ class BellmanRuntime:
             option_type = _NO if self._hand_has_setup_starter(observation, seat) else _YES
             pick = self._option_of_type(options, option_type)
             chosen, action = ((pick if pick is not None else 0,), "mulligan")
+        elif context == _DRAW_COUNT:
+            # Taking a free mulligan draw cannot remove information or a held option.  The
+            # numerically largest offered count therefore dominates every smaller count.
+            pick = max(range(len(options)),
+                       key=lambda index: int(options[index].get("number", 0)), default=None)
+            chosen, action = ((pick,) if pick is not None else (), "free_draw_count")
         else:
             minimum = min(int(select.get("minCount", 0)), len(options))
             chosen = tuple(range(minimum))
@@ -137,7 +144,8 @@ class BellmanRuntime:
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=resolve_scouted_role_worth(
                 self.last_read, getattr(self.scout, "artifact", None), self.stats,
-                briefs=self.briefs))
+                briefs=self.briefs),
+            isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0)
         planner_kwargs = {}
         if self.provider_factory is not None:
             planner_kwargs["provider_factory"] = self.provider_factory

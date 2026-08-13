@@ -18,6 +18,7 @@ from common import (
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.engine import CgpyTransitionProvider
+from common.strategy.context import _DRAW_COUNT
 from common.telemetry import to_record
 from train.blunder.store import load_corrections
 
@@ -178,7 +179,7 @@ def test_turn_zero_uses_declarative_pregame_policy():
     observation = _obs(_fixture(60))
     observation["current"]["turn"] = 0
     observation["select"] = {
-        "type": 8, "context": 38, "minCount": 1, "maxCount": 1,
+        "type": 8, "context": _DRAW_COUNT, "minCount": 1, "maxCount": 1,
         "remainDamageCounter": 0, "remainEnergyCost": 0,
         "option": [{"type": 0, "number": 0}, {"type": 0, "number": 1}],
         "deck": None, "contextCard": None, "effect": None,
