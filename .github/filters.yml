@@ -3,10 +3,13 @@
 
 global:
   - '.github/**'
-  - 'requirements.txt'
-  - 'pytest.ini'
   - '.coveragerc'
   - '.gitattributes'
+
+# Shared test infrastructure can affect every tool suite.
+tool_global:
+  - 'requirements.txt'
+  - 'pytest.ini'
   - 'tests/conftest.py'
   - 'tests/fixtures/**'
 
@@ -30,14 +33,36 @@ src:
 agents:
   - 'src/agents/**'
 
-# Tests for maintenance and simulation tools as one parallel component.
-tools:
-  - 'tools/**'
-  - 'tests/test_agent_skills.py'
+# Tool test ownership. Each filter names one independently tested tool, including
+# its command-line adapters where applicable. A PR runs only that tool's tests.
+tool_arena:
+  - 'tools/arena/**'
+  - 'tools/deck_convert.py'
   - 'tests/arena/**'
+
+tool_meta_tracker:
+  - 'tools/meta_tracker/**'
+  - 'tools/deck_convert.py'
+  - 'tools/deck_stealer.py'
+  - 'tools/export_meta_decks.py'
+  - 'tools/run_meta_tracker.py'
+  - 'tools/verify_meta_cards.py'
   - 'tests/meta_tracker/**'
+
+tool_sim:
+  - 'tools/sim/**'
   - 'tests/sim/**'
+
+tool_submit:
+  - 'tools/submit/**'
+  - 'tools/submit_agent.py'
   - 'tests/submit/**'
+
+tool_agent_skills:
+  - 'tools/sync_agent_skills.py'
+  - '.claude/skills/**'
+  - '.agents/skills/**'
+  - 'tests/test_agent_skills.py'
 
 # Correction records and their writer/reader contract form an independent component.
 corrections:
@@ -46,6 +71,18 @@ corrections:
   - 'tools/train/blunder_correction.py'
   - 'tests/blunder/**'
   - 'tests/corrections/**'
+
+# These tools have no dedicated test suite. Mark them known so a change does
+# not trigger the fail-closed all-jobs fallback.
+tool_untested:
+  - 'tools/asserted_text.py'
+  - 'tools/audit_card_functions.py'
+  - 'tools/build_card_functions.py'
+  - 'tools/build_scouting_artifact.py'
+  - 'tools/doc_budget.py'
+  - 'tools/parity/**'
+  - 'tools/train/**'
+  - 'tools/README.md'
 
 # The cgpy arm is independent but must re-run whenever the shared runtime changes.
 cgpy:
