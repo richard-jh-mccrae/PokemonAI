@@ -31,6 +31,7 @@ FAMILY_OWNERS = {
     "readiness": ("reachable attack value",),
     "multi_target_ko": ("simultaneous Active and Bench knockout readiness",),
     "board": ("in-play resource value",),
+    "development": ("completed evolution development",),
     "hand": ("accessible future-turn resources",),
     "opponent_roles": ("scouted opponent role pressure",),
 }
@@ -197,8 +198,6 @@ class ValueOracle:
 
     def transition_ledger(self, before: DecisionState, after: DecisionState,
                           action: ActionIdentity, *, before_model=None, after_model=None) -> Ledger:
-        if action.kind == "end":
-            return Ledger()
         left = dict(self.potential(before, model=before_model).families)
         right = dict(self.potential(after, model=after_model).families)
         benefits, costs = [], []

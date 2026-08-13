@@ -55,7 +55,7 @@ def test_20260812_sequence_and_target_corrections():
         REPO / "data" / "corrections" / "mega_starmie_20260812_1a37dbb5" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        "9e502ba97ac7": [0],       # deterministic Mega search before probabilistic dig
+        "9e502ba97ac7": [1],       # need-aware dig before a now-redundant deterministic Mega search
         "e4fae85fcf63": [0],       # free deterministic search, then the ruled attack over End
         "fa978d4e6fe4": [0],       # damage the scouted evolving win condition
         "0a482197b23f": [0],       # identical Salvatore copy of corrected option 2
