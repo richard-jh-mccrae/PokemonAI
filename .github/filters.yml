@@ -33,6 +33,7 @@ agents:
 # Tests for maintenance and simulation tools as one parallel component.
 tools:
   - 'tools/**'
+  - 'tests/test_agent_skills.py'
   - 'tests/arena/**'
   - 'tests/meta_tracker/**'
   - 'tests/sim/**'
@@ -73,6 +74,7 @@ operational_data:
 # Agent-authoring instructions affect development workflow, not shipped code or test inputs.
 authoring:
   - '.claude/**'
+  - '.agents/**'
   - 'AGENTS.md'
 
 any:
