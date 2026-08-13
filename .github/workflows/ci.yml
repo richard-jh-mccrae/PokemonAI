@@ -111,7 +111,7 @@ jobs:
       - name: Run correction contracts
         shell: bash
         run: |
-          targets=(tests/blunder tests/bellman/test_m6_mechanics.py)
+          targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
           [ -d tests/corrections ] && targets+=(tests/corrections)
           python -m pytest "${targets[@]}" -q -n auto --tb=short
 
