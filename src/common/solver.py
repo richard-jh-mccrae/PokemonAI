@@ -11,6 +11,7 @@ from .algebra import (
     RootDiagnostics, Terminal, Unknown,
 )
 from .api import RootDecision
+from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
 from .options import LegalAction
 from .state import DecisionState
@@ -355,7 +356,8 @@ class ProductionSolver(ReferenceSolver):
         self._root_branch_nodes: list[int] = []
         self._root_branch_capped: list[bool] = []
         self._deadline = math.inf
-        self._root_probe_active = False
+        self._hard_deadline = math.inf
+        self._budget = FairBudgetPrototype(limits.max_seconds)
         self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
         self.por_pruned = 0
 
@@ -365,7 +367,8 @@ class ProductionSolver(ReferenceSolver):
         self._root_branch_capped = []
         self._por_memo.clear()
         self.por_pruned = 0
-        self._deadline = monotonic() + max(0.0, self.production_limits.max_seconds)
+        self._hard_deadline = self._budget.hard_deadline(monotonic())
+        self._deadline = self._hard_deadline
         decision = super().decide(state)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
@@ -410,8 +413,7 @@ class ProductionSolver(ReferenceSolver):
 
     def _state(self, state: DecisionState,
                sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
-        if (self.nodes >= self.limits.max_nodes
-                or (not self._root_probe_active and monotonic() >= self._deadline)):
+        if self.nodes >= self.limits.max_nodes or monotonic() >= self._deadline:
             actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
             end = next((action for action in actions if action.identity.kind == "end"), None)
             if end is not None:
@@ -483,15 +485,16 @@ class ProductionSolver(ReferenceSolver):
                 max(1, self.production_limits.root_probe_nodes),
             )
             self.limits = SearchLimits(probe_nodes)
-            self._root_probe_active = True
-            for action in actions:
+            for index, action in enumerate(actions):
+                self._deadline = self._budget.root_deadline(
+                    monotonic(), self._hard_deadline, len(actions) - index)
                 self.nodes = 1
                 result = self._action(state, action, child_sleeps[action.identity])
                 branch_nodes.append(self.nodes)
-                branch_capped.append(not result.complete and self.nodes >= probe_nodes)
+                branch_capped.append(not result.complete and (
+                    self.nodes >= probe_nodes or monotonic() >= self._deadline))
                 results_list.append((action, result))
-            self._root_probe_active = False
-            self._deadline = monotonic() + max(0.0, self.production_limits.max_seconds)
+            self._deadline = self._hard_deadline
 
             # Successive halving allocates the expensive pass by observed Bellman continuation
             # value.  Every legal choice receives the same probe, while exact probe results need no

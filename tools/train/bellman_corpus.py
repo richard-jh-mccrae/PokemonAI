@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import replace
 from datetime import datetime, timezone
 import importlib
 import importlib.util
@@ -23,6 +24,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import option_equivalence  # noqa: E402
 from common.engine import CgpyTransitionProvider  # noqa: E402 - offline diagnostic only
+from common.planner import DEFAULT_PRODUCTION_LIMITS  # noqa: E402
 from common.runtime import build_runtime  # noqa: E402
 from common.telemetry import to_record  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
@@ -32,7 +34,7 @@ from train.blunder.decode import option_label  # noqa: E402
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "mega-starmie-live-corpus-baseline.json"
 
 
-def _build_runtime():
+def _build_runtime(max_seconds: float | None = None):
     agent_dir = REPO / "src" / "agents" / "mega_starmie"
     spec = importlib.util.spec_from_file_location("_bellman_corpus_strategy",
                                                   agent_dir / "strategy.py")
@@ -42,7 +44,10 @@ def _build_runtime():
             if value.strip()]
     # The correction corpus contains historical observation fixtures.  Replay them only with the
     # offline cgpy diagnostic provider; the shipped Kaggle runtime always uses native cg.
-    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
+    limits = (None if max_seconds is None else
+              replace(DEFAULT_PRODUCTION_LIMITS, max_seconds=float(max_seconds)))
+    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
+                         limits=limits)
 
 
 def _satisfies_human(chosen, correct, equivalence) -> bool:
@@ -58,9 +63,11 @@ def _satisfies_human(chosen, correct, equivalence) -> bool:
 def _retest(correction, runtime) -> dict:
     if correction.obs is None:
         return {"after": None, "chosen_after": None}
+    started = time.perf_counter()
     decision = runtime.decide(correction.obs)
+    elapsed = time.perf_counter() - started
     after = to_record(decision, read=runtime.last_read)
-    return {"after": after, "chosen_after": after["chosen"]}
+    return {"after": after, "chosen_after": after["chosen"], "elapsed_seconds": elapsed}
 
 
 def _frame(correction) -> int:
@@ -71,8 +78,8 @@ def _episode(correction) -> int:
     return -1 if correction.episode_id is None else int(correction.episode_id)
 
 
-def _sweep_episode(corrections) -> list[dict]:
-    runtime = _build_runtime()
+def _sweep_episode(corrections, max_seconds: float | None = None) -> list[dict]:
+    runtime = _build_runtime(max_seconds)
     rows = []
     for c in corrections:
         result = _retest(c, runtime)
@@ -101,6 +108,7 @@ def _sweep_episode(corrections) -> list[dict]:
             "chosen_label": ", ".join(labels),
             "correct_label": ", ".join(correct_labels),
             "rationale": c.rationale,
+            "elapsed_seconds": result.get("elapsed_seconds", 0.0),
         }
         if not agrees:
             after = result.get("after") or {}
@@ -129,6 +137,8 @@ def _payload(rows: list[dict]) -> dict:
         "exact": sum(row["exact"] for row in rows),
         "agrees": sum(row["agrees"] for row in rows),
         "misses": sum(not row["agrees"] for row in rows),
+        "decision_seconds": sum(row.get("elapsed_seconds", 0.0) for row in rows),
+        "max_decision_seconds": max((row.get("elapsed_seconds", 0.0) for row in rows), default=0.0),
         "contexts": dict(sorted(contexts.items())),
         "rows": rows,
     }
@@ -148,18 +158,18 @@ def _write_payload(path: Path, rows: list[dict]) -> None:
             time.sleep(0.05 * (attempt + 1))
 
 
-def sweep(*, store, limit: int | None = None, workers: int = 1,
-          checkpoint: Path | None = None) -> dict:
-    corrections = [c for c in load_corrections(store) if c.agent == "mega_starmie"]
+def sweep_corrections(corrections, *, workers: int = 1,
+                      checkpoint: Path | None = None,
+                      max_seconds: float | None = None) -> dict:
+    corrections = [c for c in corrections if c.agent == "mega_starmie"]
     corrections.sort(key=lambda c: (_episode(c), _frame(c), c.id))
-    if limit is not None:
-        corrections = corrections[:limit]
     # One frame per task prevents a hard episode from retaining native search graphs for every
     # later correction assigned to the same worker. It is isolation, never corpus filtering.
     groups = [[correction] for correction in corrections]
     if workers > 1:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_sweep_episode, group): group[0] for group in groups}
+            futures = {pool.submit(_sweep_episode, group, max_seconds): group[0]
+                       for group in groups}
             rows = []
             for completed, future in enumerate(as_completed(futures), start=1):
                 rows.extend(future.result())
@@ -171,12 +181,21 @@ def sweep(*, store, limit: int | None = None, workers: int = 1,
     else:
         rows = []
         for completed, group in enumerate(groups, start=1):
-            rows.extend(_sweep_episode(group))
+            rows.extend(_sweep_episode(group, max_seconds))
             if checkpoint is not None:
                 _write_payload(checkpoint, rows)
             print(f"[{completed}/{len(groups)}] {_episode(group[0])}-{_frame(group[0])}", flush=True)
 
     return _payload(rows)
+
+
+def sweep(*, store, limit: int | None = None, workers: int = 1,
+          checkpoint: Path | None = None, max_seconds: float | None = None) -> dict:
+    corrections = [c for c in load_corrections(store) if c.agent == "mega_starmie"]
+    if limit is not None:
+        corrections = corrections[:limit]
+    return sweep_corrections(corrections, workers=workers, checkpoint=checkpoint,
+                             max_seconds=max_seconds)
 
 
 def main(argv=None) -> int:
@@ -185,10 +204,11 @@ def main(argv=None) -> int:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--max-seconds", type=float)
     args = parser.parse_args(argv)
     checkpoint = args.output if args.limit is None else None
     payload = sweep(store=args.store, limit=args.limit, workers=max(1, args.workers),
-                    checkpoint=checkpoint)
+                    checkpoint=checkpoint, max_seconds=args.max_seconds)
     rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     if args.limit is None:
         args.output.write_text(rendered, encoding="utf-8")
