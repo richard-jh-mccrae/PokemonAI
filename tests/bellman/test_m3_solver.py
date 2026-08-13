@@ -368,6 +368,50 @@ def test_mandatory_choice_ignores_optional_menu_width_cap():
     assert decision.action.kind == "choose_high"
 
 
+def test_focused_mandatory_menu_beams_by_one_step_bellman_value():
+    root = _state("focused-menu")
+    root_obs = dict(root.obs)
+    root_obs["select"] = {**root.obs["select"], "context": 7}
+    root_obs["focus"] = 1.0
+    root = root.with_observation(root_obs)
+    low = _state("focused-low", board=0.1)
+    high = _state("focused-high", board=0.2)
+    distract = _state("focused-distract", board=0.4)
+    low = low.with_observation({**low.obs, "focus": 1.0})
+    high = high.with_observation({**high.obs, "focus": 2.0})
+    distract = distract.with_observation({**distract.obs, "focus": 0.0})
+    choose_low, choose_high, choose_distract, end = (
+        _action("choose_low", 0), _action("choose_high", 1),
+        _action("choose_distract", 2), _action("end"))
+
+    class FocusedFamilies:
+        def __call__(self, observation):
+            board = float((observation.get("current") or {}).get("board", 0.0))
+            focus = float(observation.get("focus", 0.0))
+            return Potential(board + focus, (("board", board), ("focus", focus)))
+
+        @staticmethod
+        def search_focus(observation):
+            return float(observation.get("focus", 0.0))
+
+    decision = ProductionSolver(
+        Graph(
+            {"focused-menu": (choose_low, choose_high, choose_distract),
+             "focused-low": (end,), "focused-high": (end,),
+             "focused-distract": (end,)},
+            {("focused-menu", "choose_low"): Deterministic(low),
+             ("focused-menu", "choose_high"): Deterministic(high),
+             ("focused-menu", "choose_distract"): Deterministic(distract)},
+        ),
+        ValueOracle(REGISTRY, FocusedFamilies()),
+        limits=ProductionLimits(max_nodes=20),
+    ).decide(root)
+
+    assert decision.action.kind == "choose_high"
+    assert not decision.complete
+    assert decision.diagnostics["production"]["focused_effect_actions_pruned"] == 2
+
+
 def test_production_successive_halving_refines_only_the_best_incomplete_root():
     root = _state("root")
     promising = _state("promising", board=0.10)

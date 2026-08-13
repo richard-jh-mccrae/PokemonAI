@@ -566,6 +566,11 @@ def test_meowth_tutor_lines_reach_legal_mega_lucario_outs():
     )
     provider = CgpyTransitionProvider(
         state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+    potential = BoardPotential(
+        deployed.stats, registry=deployed.registry, profile=deployed.profile,
+        effects=deployed.effects, root_seat=seat,
+    )
+    potential.prepare_needs(observation, seat)
 
     def carries(action, card_id):
         return f'"id":{card_id}' in repr(action.identity.parts)
@@ -575,6 +580,37 @@ def test_meowth_tutor_lines_reach_legal_mega_lucario_outs():
         transition = provider.transition(current, action)
         assert isinstance(transition, Deterministic)
         return transition.state
+
+    # A real multi-hop route is carried through each engine state. Existing hand copies cannot
+    # masquerade as fetched progress; every committed fetch/play step raises its Bellman value.
+    chain = state
+    progress = [potential._need_route_access(chain.obs, seat)]
+    chain = take(chain, lambda action: action.identity.kind == "play"
+                 and carries(action, 1071))
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: action.identity.kind == "yes")
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: carries(action, 1219))
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: action.identity.kind == "play"
+                 and carries(action, 1219))
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: carries(action, 1121))
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: action.identity.kind == "play"
+                 and carries(action, 1121))
+    progress.append(potential._need_route_access(chain.obs, seat))
+    chain = take(chain, lambda action: action.identity.kind == "card")
+    chain = take(chain, lambda action: carries(action, 673))
+    fetched_progress = potential._need_route_access(chain.obs, seat)
+    chain = take(chain, lambda action: action.identity.kind == "play"
+                 and carries(action, 673))
+
+    assert progress == sorted(progress)
+    assert progress[-1] > progress[0] > 0.0
+    assert fetched_progress > progress[-1]
+    assert all(673 not in dict(need.direct)
+               for need in potential._need_model.immediate(chain.obs, seat))
 
     meowth = take(state, lambda action: action.identity.kind == "play"
                   and carries(action, 1071))
@@ -643,13 +679,42 @@ def test_petrel_need_route_targets_air_balloon_when_retreat_is_the_missing_opera
     prepared = potential._prepared_need_routes[1219]
     assert (1219, 1174) in {candidate.path for candidate in prepared}
     assert (1219, 1123) in {candidate.path for candidate in prepared}  # Switch, same operation.
-    pending = json.loads(json.dumps(observation))
-    pending["select"]["effect"] = {"id": 1219}
-    assert potential._pending_need_access(pending) > 0.0
-    fetched = json.loads(json.dumps(me))
-    fetched["hand"] = [card for card in fetched["hand"] if int(card["id"]) != 1219]
-    fetched["hand"].append({"id": 1174})
-    assert potential._visible_need_access(fetched) > 0.0
+    state = DecisionState.from_observation(
+        observation, deck=tuple(LUCARIO_DECK), deck_name="mega_lucario",
+        value_registry_identity=deployed.registry.identity)
+    provider = CgpyTransitionProvider(
+        state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+    play_petrel = next(action for action in provider.actions(state)
+                       if action.selection == (0,))
+    pending_transition = provider.transition(state, play_petrel)
+    assert isinstance(pending_transition, Deterministic)
+    pending = pending_transition.state
+    pending_access = potential._need_route_access(pending.obs, seat)
+    route_targets = {int(route.path[1]) for route in prepared if len(route.path) > 1}
+    unavailable = json.loads(json.dumps(pending.obs))
+    deck = tuple(unavailable["select"].get("deck") or ())
+    irrelevant_option = next(
+        option for option in unavailable["select"]["option"]
+        if option.get("area") == 1
+        and int(deck[int(option["index"])]["id"]) not in route_targets)
+    unavailable["select"]["option"] = [irrelevant_option]
+    assert potential._need_route_access(unavailable, seat) == 0.0
+    fetch_balloon = next(
+        action for action in provider.actions(pending)
+        if '"id":1174' in repr(action.identity.parts))
+    fetched_transition = provider.transition(pending, fetch_balloon)
+    assert isinstance(fetched_transition, Deterministic)
+    fetched = fetched_transition.state
+    fetched_access = potential._need_route_access(fetched.obs, seat)
+    attach_balloon = next(action for action in provider.actions(fetched)
+                          if action.identity.kind == "attach")
+    attached_transition = provider.transition(fetched, attach_balloon)
+    assert isinstance(attached_transition, Deterministic)
+
+    assert pending_access > 0.0
+    assert fetched_access > pending_access
+    assert potential.search_focus(attached_transition.state.obs) > fetched_access
+    assert potential(attached_transition.state.obs).total >= potential(fetched.obs).total
 
 
 def test_meowth_need_routes_include_petrel_to_damage_boost_only_when_boost_is_missing():

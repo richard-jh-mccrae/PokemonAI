@@ -54,7 +54,14 @@ Before valuing that option, `common.needs` removes operations already supplied b
 then propagates remaining energy, Pokémon, retreat, and damage-threshold demand through the same
 typed fetch graph for Trainer/Supporter tutors. Once played, Meowth's pending choice carries the
 value of a legal downstream Petrel route; target selection remains a normal Bellman continuation.
-The visible demand is frozen once per solve, while legality and target inventory remain live.
+The visible demand is frozen once per solve, while legality and target inventory remain live. A
+same-turn route exists only when the need is not already covered by a playable hand card, its
+source is playable or presently resolving, every downstream identity has a known or inferred deck
+copy, and the final card becomes a legal MAIN action. Each committed play and verified target
+selection raises the route's discounted state value. The value transfers into the fulfilled board
+state when the final card is played, so bounded search never loses the Bellman gradient between
+fetching the answer and realizing its effect. Existing hand copies cannot masquerade as newly
+fetched progress, and an actual target menu overrides inferred inventory.
 
 Prize routes are conditional chains, not forced scripts. Progress reads our lost prizes and can
 resume from the current Active after an off-route KO. Route value requires every remaining body to

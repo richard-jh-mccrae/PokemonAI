@@ -55,6 +55,16 @@ class NeedRoute:
     need_index: int
     value: float
     path: tuple[int, ...]
+    direct_value: float = 0.0
+
+    def progress_value(self, position: int, *, pending: bool = False) -> float:
+        """Discounted value at one hand/pending step of the same-turn route."""
+        direct = self.direct_value or self.value
+        # Each tutor card needs one play and one target decision. A pending source has already paid
+        # its play; the final card still needs its ordinary play/attach/evolve action.
+        remaining_cards = max(0, len(self.path) - int(position))
+        actions = max(0, 2 * remaining_cards - 1 - int(bool(pending)))
+        return float(direct) * TUTOR_STEP_DISCOUNT ** actions
 
 
 @dataclass(frozen=True)
@@ -284,6 +294,7 @@ class NeedModel:
     def routes(self, card_id: int, needs: tuple[Need, ...], *,
                supporter_available: bool, discard_capacity: int,
                bench_capacity: int = DEFAULT_BENCH_CAPACITY, available_targets=None,
+               committed: bool = False,
                _path: tuple[int, ...] = ()) -> tuple[NeedRoute, ...]:
         """Typed need routes reachable from one visible card.
 
@@ -299,10 +310,11 @@ class NeedModel:
         if stat is None:
             return ()
         is_supporter = bool(getattr(stat, "is_supporter", False))
-        if is_supporter and not supporter_available:
+        if is_supporter and not supporter_available and not committed:
             return ()
 
-        routes = [NeedRoute(index, float(dict(need.direct).get(card_id, 0.0)), (card_id,))
+        routes = [NeedRoute(index, float(dict(need.direct).get(card_id, 0.0)), (card_id,),
+                            float(dict(need.direct).get(card_id, 0.0)))
                   for index, need in enumerate(needs)
                   if float(dict(need.direct).get(card_id, 0.0)) > 0.0]
         clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
@@ -315,11 +327,13 @@ class NeedModel:
             trigger = clause.get("trigger")
             if trigger not in (None, "on_bench_play"):
                 continue
-            if trigger == "on_bench_play" and bench_capacity <= 0:
+            if trigger == "on_bench_play" and bench_capacity <= 0 and not committed:
                 continue
             required_discards = discard_cost(clause) if clause.get("cost_required") else 0
-            if required_discards > discard_capacity:
+            if required_discards > discard_capacity and not committed:
                 continue
+            paid_discards = 0 if committed else required_discards
+            paid_bench = 0 if committed else int(trigger == "on_bench_play")
             target_counts = available_targets or {}
             for target, count in sorted(target_counts.items()):
                 target = int(target)
@@ -329,12 +343,12 @@ class NeedModel:
                     continue
                 child = self.routes(
                     target, needs, supporter_available=next_supporter,
-                    discard_capacity=max(0, discard_capacity - required_discards),
-                    bench_capacity=max(0, bench_capacity - int(trigger == "on_bench_play")),
+                    discard_capacity=max(0, discard_capacity - paid_discards),
+                    bench_capacity=max(0, bench_capacity - paid_bench),
                     available_targets=available_targets, _path=path)
                 routes.extend(NeedRoute(
                     route.need_index, TUTOR_STEP_DISCOUNT * route.value,
-                    (card_id, *route.path))
+                    (card_id, *route.path), route.direct_value or route.value)
                     for route in child)
         by_route = {(route.need_index, route.path): route for route in routes}
         return tuple(sorted(by_route.values(), key=lambda route: (
@@ -434,6 +448,11 @@ class NeedModel:
         for card_id in hand_ids:
             stat = self.stat(card_id)
             if stat is not None and getattr(stat, "is_supporter", False):
+                if supporter_available:
+                    signatures.append(tuple(
+                        CoverageEdge(index, float(dict(need.direct).get(int(card_id), 0.0)))
+                        for index, need in enumerate(needs)
+                        if float(dict(need.direct).get(int(card_id), 0.0)) > 0.0))
                 continue
             signatures.extend(self.coverage_slots(
                 int(card_id), needs,

@@ -19,7 +19,7 @@ from .damage_context import SideFacts, damage_context
 from .fetch import WINDOW, fetch_target_matches
 from .needs import CoverageEdge, NeedModel, best_assignment
 from .value import Potential, ValueRegistry, worth_to_prizes
-from common.strategy.context import _ATTACK, _MAIN
+from common.strategy.context import _ATTACH, _ATTACK, _DECK, _EVOLVE, _MAIN, _PLAY
 
 
 ENERGY_COLORLESS = 0
@@ -119,8 +119,9 @@ class BoardPotential:
         self._deriving_needs = False
         self._prepared_needs = None
         self._prepared_need_routes = {}
-        self._prepared_need_targets = frozenset()
-        self._prepared_pending_need_values = {}
+        self._prepared_hand_serials = frozenset()
+        self._prepared_hand_counts = Counter()
+        self._prepared_base_total = 0.0
         self._need_model = NeedModel(
             registry, self._potential_without_needs, effects=effects, stats=stats)
 
@@ -869,22 +870,7 @@ class BoardPotential:
                         usable_access *= float(outcomes.get(int(partner), 0.0))
                 best = max(best, usable_access * self.registry.worth(target))
             worth += max(0.0, best - source_worth)
-        return (FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
-                + self._visible_need_access(me))
-
-    def _visible_need_access(self, me) -> float:
-        needs = tuple(self._prepared_needs or ())
-        if not needs or not self._prepared_need_targets:
-            return 0.0
-        signatures = []
-        for card in me.get("hand") or ():
-            card_id = int(card.get("id", 0)) if card else 0
-            signatures.append(tuple(
-                CoverageEdge(index, float(dict(need.direct).get(card_id, 0.0)))
-                for index, need in enumerate(needs)
-                if (card_id in self._prepared_need_targets
-                    and float(dict(need.direct).get(card_id, 0.0)) > 0.0)))
-        return float(best_assignment(signatures, len(needs)).value)
+        return FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
 
     def prepare_needs(self, observation, seat: int) -> None:
         """Freeze visible demand as the option Trainer/Supporter tutors carry through this solve."""
@@ -893,24 +879,34 @@ class BoardPotential:
         me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
         hand_ids = tuple(int(card["id"]) for card in (me.get("hand") or ())
                          if card and card.get("id") is not None)
-        fetchers = tuple(card_id for card_id in hand_ids
-                         if any(clause.get("target") in ("supporter", "trainer")
-                                for clause in self._fetch_clauses(card_id)))
+        self._prepared_hand_serials = frozenset(
+            int(card["serial"]) for card in (me.get("hand") or ())
+            if card and card.get("serial") is not None)
+        self._prepared_hand_counts = Counter(hand_ids)
+        pending_source, _offered = self._pending_source_and_targets(observation)
+        fetchers = list(card_id for card_id in hand_ids
+                        if any(clause.get("target") in ("supporter", "trainer")
+                               for clause in self._fetch_clauses(card_id)))
+        if (pending_source and pending_source not in fetchers
+                and any(clause.get("target") in ("supporter", "trainer")
+                        for clause in self._fetch_clauses(pending_source))):
+            fetchers.append(pending_source)
+        fetchers = tuple(fetchers)
         self._prepared_needs = ()
         self._prepared_need_routes = {}
-        self._prepared_need_targets = frozenset()
-        self._prepared_pending_need_values = {}
         if not fetchers:
             return
         needs = self._need_model.immediate(observation, seat)
+        self._prepared_base_total = self._potential_without_needs(observation).total
         if not needs:
             return
         supporter_available = not bool(current.get("supporterPlayed"))
-        self._prepared_needs = self._need_model.uncovered_by_direct_hand(
-            needs, hand_ids, supporter_available=supporter_available)
+        available = self._remaining_deck_pool(me)
+        self._prepared_needs = self._need_model.uncovered_by_hand(
+            needs, hand_ids, supporter_available=supporter_available,
+            discard_capacity=max(0, len(hand_ids) - 1), available_targets=available)
         if not self._prepared_needs:
             return
-        available = self._remaining_deck_pool(me)
         bench_capacity = max(0, int(me.get("benchMax", 5) or 5)
                              - len(tuple(body for body in (me.get("bench") or ()) if body)))
         for card_id in fetchers:
@@ -918,22 +914,127 @@ class BoardPotential:
                 card_id, self._prepared_needs,
                 supporter_available=supporter_available,
                 discard_capacity=max(0, len(hand_ids) - 1), bench_capacity=bench_capacity,
-                available_targets=available)
-        self._prepared_need_targets = frozenset(
-            route.path[-1] for routes in self._prepared_need_routes.values()
-            for route in routes if len(route.path) > 1)
-        for routes in self._prepared_need_routes.values():
-            for route in routes:
-                for source in route.path[:-1]:
-                    self._prepared_pending_need_values[int(source)] = max(
-                        float(route.value),
-                        self._prepared_pending_need_values.get(int(source), 0.0))
+                available_targets=available, committed=card_id == pending_source)
 
-    def _pending_need_access(self, observation) -> float:
+    @staticmethod
+    def _pending_source_and_targets(observation) -> tuple[int, frozenset[int]]:
         select = observation.get("select") or {}
         source = select.get("effect") or select.get("contextCard") or {}
-        card_id = source.get("id") if isinstance(source, dict) else source
-        return float(self._prepared_pending_need_values.get(int(card_id or 0), 0.0))
+        source_id = source.get("id") if isinstance(source, dict) else source
+        deck = tuple(select.get("deck") or ())
+        targets = set()
+        for option in select.get("option") or ():
+            if int(option.get("area", -1)) != _DECK:
+                continue
+            index = option.get("index")
+            if isinstance(index, int) and 0 <= index < len(deck) and deck[index]:
+                targets.add(int(deck[index].get("id", 0)))
+        return int(source_id or 0), frozenset(targets)
+
+    @staticmethod
+    def _playable_hand_positions(observation, hand) -> frozenset[int]:
+        select = observation.get("select") or {}
+        if int(select.get("context", -1)) != _MAIN:
+            return frozenset()
+        playable = set()
+        for option in select.get("option") or ():
+            if int(option.get("type", -1)) not in (_PLAY, _ATTACH, _EVOLVE):
+                continue
+            index = option.get("index")
+            if isinstance(index, int) and 0 <= index < len(hand) and hand[index]:
+                playable.add(index)
+        return frozenset(playable)
+
+    def _need_route_access(self, observation, seat: int) -> float:
+        """Value current progress along a prepared, still-legal same-turn need route."""
+        needs = tuple(self._prepared_needs or ())
+        routes = tuple(route for rows in self._prepared_need_routes.values() for route in rows
+                       if len(route.path) > 1)
+        if not needs or not routes:
+            return 0.0
+        current = observation.get("current") or {}
+        players = current.get("players") or ()
+        me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+        hand = tuple(me.get("hand") or ())
+        playable = self._playable_hand_positions(observation, hand)
+        available = self._remaining_deck_pool(me)
+        signatures = []
+        serialless_seen = Counter()
+        for hand_index in sorted(playable):
+            card_id = int(hand[hand_index].get("id", 0))
+            serial = hand[hand_index].get("serial")
+            if serial is None:
+                serialless_seen[card_id] += 1
+                fetched = serialless_seen[card_id] > self._prepared_hand_counts.get(card_id, 0)
+            else:
+                fetched = int(serial) not in self._prepared_hand_serials
+            edges = []
+            for route in routes:
+                for position, route_card in enumerate(route.path):
+                    if int(route_card) != card_id:
+                        continue
+                    # A downstream card already held when demand was frozen is a direct out, not
+                    # evidence that this route progressed. Only the source or a newly fetched copy
+                    # can carry the route forward.
+                    if position > 0 and not fetched:
+                        continue
+                    edges.append(CoverageEdge(
+                        route.need_index, route.progress_value(position),
+                        fetched_targets=tuple(route.path[position + 1:])))
+            signatures.append(tuple(edges))
+
+        source_id, offered = self._pending_source_and_targets(observation)
+        pending_edges = []
+        if source_id:
+            for route in routes:
+                for position, route_card in enumerate(route.path[:-1]):
+                    next_card = int(route.path[position + 1])
+                    target_exists = (next_card in offered if offered
+                                     else int(available.get(next_card, 0)) > 0)
+                    if int(route_card) == source_id and target_exists:
+                        pending_edges.append(CoverageEdge(
+                            route.need_index, route.progress_value(position, pending=True),
+                            fetched_targets=tuple(route.path[position + 1:])))
+        if pending_edges:
+            signatures.append(tuple(pending_edges))
+        return float(best_assignment(
+            signatures, len(needs), target_counts=available).value) if signatures else 0.0
+
+    def search_focus(self, observation) -> float:
+        """Positive only while a prepared same-turn need route has legal visible progress."""
+        current = observation.get("current") or {}
+        seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
+        return (self._need_route_access(observation, seat)
+                + self._fulfilled_need_access(observation, seat))
+
+    @staticmethod
+    def _same_need(left, right) -> bool:
+        left_kind = str(left.key).split(":", 1)[0]
+        right_kind = str(right.key).split(":", 1)[0]
+        left_targets = {int(card_id) for card_id, _value in left.direct}
+        right_targets = {int(card_id) for card_id, _value in right.direct}
+        return left_kind == right_kind and bool(left_targets & right_targets)
+
+    def _fulfilled_need_access(self, observation, seat: int) -> float:
+        """Transfer route value into the resulting state until base potential pays it back."""
+        prepared = tuple(self._prepared_needs or ())
+        if not prepared:
+            return 0.0
+        players = ((observation.get("current") or {}).get("players") or ())
+        mine = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+        if mine.get("hand") is None:
+            return 0.0
+        current = self._need_model.immediate(observation, seat)
+        fulfilled = sum(
+            max((float(value) for _card_id, value in need.direct), default=0.0)
+            for need in prepared
+            if not any(self._same_need(need, candidate) for candidate in current)
+        )
+        if fulfilled <= 0.0:
+            return 0.0
+        base_gain = max(
+            0.0, self._potential_without_needs(observation).total - self._prepared_base_total)
+        return max(0.0, fulfilled - base_gain)
 
     def _opponent_role_pressure(self, opponent) -> float:
         """Remaining existence plus health Worth of roles declared by the matched scouting Brief."""
@@ -1086,9 +1187,10 @@ class BoardPotential:
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
             "development": self._development(me),
-            "hand": self._hand_resources(
-                me, setup_complete=int(current.get("turn", 0)) > 0)
-                + self._pending_need_access(observation),
+            "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0)
+                + (0.0 if self._deriving_needs else (
+                    self._need_route_access(observation, seat)
+                    + self._fulfilled_need_access(observation, seat))),
             "opponent_roles": self._opponent_role_pressure(opponent),
             "prize_plan": self._prize_plan(me, opponent),
         }

@@ -32,6 +32,7 @@ SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
+_UNRESOLVED_TRANSITION = object()
 
 
 class TransitionProvider(Protocol):
@@ -223,7 +224,7 @@ class ReferenceSolver:
         return answer
 
     def _action(self, state: DecisionState, action: LegalAction,
-                sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:
+                sleep: tuple[SleepEvent, ...] = (), node=_UNRESOLVED_TRANSITION) -> Evaluation:
         if action.identity.kind == "end":
             resolve_end = getattr(self.provider, "resolve_end", None)
             if resolve_end is None:
@@ -232,7 +233,9 @@ class ReferenceSolver:
             if node is None:
                 return Evaluation(0.0, Ledger(), True, "End exact zero")
             return self._end_transition(state, action, node)
-        return self._transition(state, action, self.provider.transition(state, action), sleep)
+        transition = (self.provider.transition(state, action)
+                      if node is _UNRESOLVED_TRANSITION else node)
+        return self._transition(state, action, transition, sleep)
 
     def _end_transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
         """Value only the forced turn-boundary outcome, without planning the opponent's turn."""
@@ -367,6 +370,7 @@ class ProductionSolver(ReferenceSolver):
         self._root_probe_active = False
         self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
         self.por_pruned = 0
+        self.focus_beam_pruned = 0
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
@@ -374,6 +378,7 @@ class ProductionSolver(ReferenceSolver):
         self._root_branch_capped = []
         self._por_memo.clear()
         self.por_pruned = 0
+        self.focus_beam_pruned = 0
         self._deadline = monotonic() + max(0.0, self.production_limits.max_seconds)
         decision = super().decide(state)
         diagnostics = dict(decision.diagnostics)
@@ -395,6 +400,7 @@ class ProductionSolver(ReferenceSolver):
             "cap_reached": any(self._root_branch_capped),
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
+            "focused_effect_actions_pruned": self.focus_beam_pruned,
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics)
@@ -416,6 +422,42 @@ class ProductionSolver(ReferenceSolver):
                         for footprint in earlier if independent(footprint, current))
         by_event = {event.event: event for event in retained}
         return tuple(by_event[event] for event in sorted(by_event))
+
+    def _ordered_effect_actions(self, state: DecisionState, actions, actor: Actor, context: int):
+        """Order nested choices by their one-step Bellman delta; never remove a legal action."""
+        focus = self.oracle.search_focus(state)
+        if actor is not Actor.OURS or focus <= 0.0:
+            return tuple(actions), {}, {}
+        transitions = {}
+        scores = {}
+        ranked = []
+        for action in actions:
+            if action.identity.kind == "end":
+                ranked.append((0.0, action))
+                continue
+            node = self.provider.transition(state, action)
+            transitions[action.identity] = node
+            score = 0.0
+            if isinstance(node, Deterministic):
+                score = self._ledger(state, node.state, action).total
+            elif isinstance(node, Terminal):
+                score = _combine(
+                    self._ledger(state, node.state, action), 0.0, node.ledger).total
+            scores[action.identity] = float(score)
+            ranked.append((float(score), action))
+        ranked.sort(key=lambda row: (round(row[0], VALUE_TIE_DECIMALS), row[1].identity),
+                    reverse=True)
+        return tuple(action for _score, action in ranked), transitions, scores
+
+    def _focus_gain(self, state: DecisionState, action: LegalAction, prefetched) -> float:
+        before = self.oracle.search_focus(state)
+        if before <= 0.0 or action.identity.kind == "end":
+            return 0.0
+        node = prefetched.get(action.identity, _UNRESOLVED_TRANSITION)
+        if node is _UNRESOLVED_TRANSITION:
+            node = self.provider.transition(state, action)
+        return (self.oracle.search_focus(node.state) - before
+                if isinstance(node, Deterministic) else 0.0)
 
     def _state(self, state: DecisionState,
                sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
@@ -455,6 +497,19 @@ class ProductionSolver(ReferenceSolver):
         self._active.add(memo_key)
         actor = self.provider.actor(state)
         context = int(((state.obs.get("select") or {}).get("context", -1)))
+        actions, prefetched, effect_scores = self._ordered_effect_actions(
+            state, actions, actor, context)
+        focus_pruned = False
+        if actor is Actor.OURS and context != MAIN_DECISION_CONTEXT and effect_scores:
+            best_score = max(effect_scores.get(action.identity, -math.inf) for action in actions)
+            retained = tuple(
+                action for action in actions
+                if round(effect_scores.get(action.identity, -math.inf), VALUE_TIE_DECIMALS)
+                == round(best_score, VALUE_TIE_DECIMALS))
+            if retained and len(retained) < len(actions):
+                self.focus_beam_pruned += len(actions) - len(retained)
+                actions = retained
+                focus_pruned = True
         footprints: dict[object, ActionFootprint | None] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             footprints = {action.identity: self._footprint(state, action) for action in actions}
@@ -504,7 +559,9 @@ class ProductionSolver(ReferenceSolver):
             self._root_probe_active = True
             for action in actions:
                 self.nodes = 1
-                result = self._action(state, action, child_sleeps[action.identity])
+                result = self._action(
+                    state, action, child_sleeps[action.identity],
+                    prefetched.get(action.identity, _UNRESOLVED_TRANSITION))
                 branch_nodes.append(self.nodes)
                 branch_capped.append(not result.complete and self.nodes >= probe_nodes)
                 results_list.append((action, result))
@@ -520,7 +577,9 @@ class ProductionSolver(ReferenceSolver):
                 if not result.complete
             ]
             incomplete.sort(
-                key=lambda row: _ordered_evaluation(row[2], actor),
+                key=lambda row: (
+                    *_ordered_evaluation(row[2], actor),
+                    round(self._focus_gain(state, row[1], prefetched), VALUE_TIE_DECIMALS)),
                 reverse=actor is Actor.OURS,
             )
             refinement_width = (len(actions)
@@ -529,6 +588,23 @@ class ProductionSolver(ReferenceSolver):
                                     and len(actions) <= SMALL_ROOT_FULL_REFINEMENT_ACTIONS)
                                 else self.production_limits.root_refinement_width)
             selected = incomplete[:max(0, refinement_width)]
+            root_focus = self.oracle.search_focus(state)
+
+            def focus_gain(row) -> bool:
+                transition = self.provider.transition(state, row[1])
+                return (isinstance(transition, Deterministic)
+                        and self.oracle.search_focus(transition.state) > root_focus)
+
+            if selected and not any(focus_gain(row) for row in selected):
+                focused_candidate = next(
+                    (row for row in incomplete
+                     if (focus_gain(row)
+                         and abs(float(row[2].value) - float(incomplete[0][2].value))
+                         <= UNCERTAINTY_REFINEMENT_VALUE_MARGIN)),
+                    None,
+                )
+                if focused_candidate is not None:
+                    selected[-1] = focused_candidate
             for uncertainty_type in (Chance, RevealChoice):
                 if (selected
                         and not any(isinstance(self.provider.transition(state, row[1]),
@@ -579,7 +655,9 @@ class ProductionSolver(ReferenceSolver):
         else:
             results_list = []
             for action in actions:
-                result = self._action(state, action, child_sleeps[action.identity])
+                result = self._action(
+                    state, action, child_sleeps[action.identity],
+                    prefetched.get(action.identity, _UNRESOLVED_TRANSITION))
                 results_list.append((action, result))
             results = tuple(results_list)
         self._active.remove(memo_key)
@@ -591,13 +669,17 @@ class ProductionSolver(ReferenceSolver):
         else:
             if actor is Actor.OURS:
                 action, result = max(
-                    finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
+                    finite, key=lambda pair: (
+                        *_ordered_evaluation(pair[1], actor),
+                        round(self._focus_gain(state, pair[0], prefetched),
+                              VALUE_TIE_DECIMALS)))
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
-            proven = result.complete and len(finite) == len(results) and all(
+            proven = not focus_pruned and result.complete and len(finite) == len(results) and all(
                 evaluated.complete for _candidate, evaluated in results)
-            evaluation = Evaluation(result.value, result.ledger, proven, result.reason,
+            reason = ("production focused Bellman beam" if focus_pruned else result.reason)
+            evaluation = Evaluation(result.value, result.ledger, proven, reason,
                                     result.branches, result.decisions)
             answer = StateEvaluation(result.value, action, evaluation, results)
         # A bounded lower bound depends on the budget remaining when it was

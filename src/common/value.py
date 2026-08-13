@@ -248,6 +248,13 @@ class ValueOracle:
                 costs.append((family, -delta))
         return Ledger(tuple(benefits), tuple(costs))
 
+    def search_focus(self, state: DecisionState) -> float:
+        # Route demand is derived from the root state. Search may ask for focus before the first
+        # transition ledger, so initialize the family evaluator through its ordinary potential.
+        self.potential(state)
+        focus = getattr(self._families, "search_focus", None)
+        return max(0.0, float(focus(state.obs))) if focus is not None else 0.0
+
     def refresh_ledger(self, state: DecisionState, node):
         if self._refresh is None:
             raise ValueError("shuffle-refresh valuation requires effects and card facts")

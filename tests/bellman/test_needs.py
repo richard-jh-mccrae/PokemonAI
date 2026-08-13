@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from common.effects import CardEffects
-from common.needs import CoverageEdge, Need, NeedModel, best_assignment
+from common.needs import CoverageEdge, Need, NeedModel, NeedRoute, best_assignment
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.value import CardFacts, Potential, ValueRegistry
 
@@ -160,6 +160,43 @@ def test_typed_need_routes_cross_bench_ability_and_supporter_tutor_edges():
         bench_capacity=1, available_targets=available) == ()
 
 
+def test_need_route_progress_rises_only_as_same_turn_actions_are_committed():
+    route = NeedRoute(0, 2.0 * 0.75 ** 2,
+                      (BENCH_TUTOR, TRAINER_TUTOR, TOOL), direct_value=2.0)
+
+    values = (
+        route.progress_value(0),
+        route.progress_value(0, pending=True),
+        route.progress_value(1),
+        route.progress_value(1, pending=True),
+        route.progress_value(2),
+        route.direct_value,
+    )
+
+    assert values == tuple(sorted(values))
+    assert values[0] == pytest.approx(2.0 * 0.75 ** 5)
+    assert values[-1] == pytest.approx(2.0)
+
+
+def test_committed_supporter_route_survives_after_its_play_is_paid():
+    registry = ValueRegistry(facts={TRAINER_TUTOR: CardFacts(), TOOL: CardFacts()})
+    stats = DictCardStatProvider({
+        TRAINER_TUTOR: CardStat(TRAINER_TUTOR, cardType=3),
+        TOOL: CardStat(TOOL, cardType=2),
+    })
+    model = NeedModel(registry, _potential, effects=CardEffects({
+        TRAINER_TUTOR: [{"kind": "fetch", "target": "trainer", "zone": "deck"}],
+    }), stats=stats)
+    need = Need("retreat", ((TOOL, 2.0),))
+
+    assert model.routes(
+        TRAINER_TUTOR, (need,), supporter_available=False, discard_capacity=0,
+        available_targets={TOOL: 1}) == ()
+    assert model.best_route(
+        TRAINER_TUTOR, (need,), supporter_available=False, discard_capacity=0,
+        available_targets={TOOL: 1}, committed=True).path == (TRAINER_TUTOR, TOOL)
+
+
 def test_assignment_cannot_spend_one_intermediate_tutor_copy_twice():
     signatures = (
         (CoverageEdge(0, 1.0, fetched_targets=(TRAINER_TUTOR, TOOL)),),
@@ -181,6 +218,16 @@ def test_visible_direct_out_removes_need_before_tutor_valuation():
         needs, [LINE_TOP], supporter_available=True) == ()
     assert model.uncovered_by_direct_hand(
         needs, [UNRELATED], supporter_available=True) == needs
+
+
+def test_playable_supporter_in_hand_covers_its_direct_need_only_while_usable():
+    model = _model()
+    needs = (Need("damage", ((SUPPORTER, 1.0),)),)
+
+    assert model.uncovered_by_hand(
+        needs, [SUPPORTER], supporter_available=True, discard_capacity=0) == ()
+    assert model.uncovered_by_hand(
+        needs, [SUPPORTER], supporter_available=False, discard_capacity=0) == needs
 
 
 @pytest.mark.parametrize("observation", (
