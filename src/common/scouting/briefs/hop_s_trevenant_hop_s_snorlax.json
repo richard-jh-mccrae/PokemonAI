@@ -1,1 +1,52 @@
-{"slug":"hop_s_trevenant_hop_s_snorlax","covers":["Hop's Trevenant","Hop's Trevenant / Hop's Cramorant","Hop's Trevenant / Hop's Cramorant / Hop's Snorlax","Hop's Trevenant / Hop's Snorlax"],"wincon":{"line":["Hop's Phantump","Hop's Trevenant"],"plan":"boost then trap or revenge KO"},"opponent_properties":{"opp_single_prize":true,"opp_tempo":"midrange","opp_special_energy_fragile":true,"opp_effect_immune_bodies":true},"pokemon":[{"card":"Hop's Phantump","roles":["wincon_base"]},{"card":"Hop's Trevenant","roles":["wincon","primary_attacker","threat"]},{"card":"Hop's Snorlax","roles":["support","threat"]}],"key_cards":[{"card":"Hop's Choice Band","role":"damage_boost"},{"card":"Postwick","role":"damage_boost"},{"card":"Boss's Orders","role":"gust"}]}
+{
+  "slug": "hop_s_trevenant_hop_s_snorlax",
+  "covers": [
+    "Hop's Trevenant",
+    "Hop's Trevenant / Hop's Cramorant",
+    "Hop's Trevenant / Hop's Cramorant / Hop's Snorlax",
+    "Hop's Trevenant / Hop's Snorlax"
+  ],
+  "opponent_properties": {
+    "opp_single_prize": true,
+    "opp_tempo": "midrange",
+    "opp_special_energy_fragile": true,
+    "opp_effect_immune_bodies": true
+  },
+  "pokemon": [
+    {
+      "card": "Hop's Phantump",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Hop's Snorlax",
+      "roles": [
+        "backup_attacker",
+        "support",
+        "threat"
+      ]
+    },
+    {
+      "card": "Hop's Trevenant",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Hop's Choice Band",
+      "role": "damage_boost"
+    },
+    {
+      "card": "Postwick",
+      "role": "damage_boost"
+    },
+    {
+      "card": "Boss's Orders",
+      "role": "gust"
+    }
+  ]
+}

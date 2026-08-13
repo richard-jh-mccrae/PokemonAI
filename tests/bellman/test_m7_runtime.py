@@ -141,6 +141,27 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
             assert deployed.decide(record["obs"]).chosen == tuple(expected[record["id"]])
 
 
+@pytest.mark.parametrize(("fixture", "expected"), [
+    ("ms_snipe_attacker_line_over_support_f85.json", (0,)),
+    ("ms_snipe_ko_beats_positional_stack_f45.json", (0,)),
+])
+def test_snipe_prioritizes_the_attack_line_but_never_over_a_ko(fixture, expected):
+    record = json.loads((REPO / "tests" / "fixtures" / "corrections" / fixture).read_text())
+
+    assert runtime().decide(record["obs"]).chosen == expected
+
+
+@pytest.mark.parametrize(("correction_id", "expected"), [
+    ("5d3c218d35c2", (1,)),  # Keep attacking the primary when gusting support gains less value.
+    ("6d7a2f5332c9", (0,)),  # Gust the developing primary line for the reachable KO.
+])
+def test_gust_choices_remain_bellman_cost_benefit_decisions(correction_id, expected):
+    record = next(correction for correction in load_corrections(REPO / "data" / "corrections")
+                  if correction.agent == "mega_starmie" and correction.id == correction_id)
+
+    assert runtime().decide(record.obs).chosen == expected
+
+
 def test_runtime_exposes_no_legacy_strategic_choosers():
     deployed = runtime()
     assert not any(hasattr(deployed, name) for name in (

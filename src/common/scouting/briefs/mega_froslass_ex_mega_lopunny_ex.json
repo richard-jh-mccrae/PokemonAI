@@ -6,13 +6,6 @@
     "Mega Lopunny ex"
   ],
   "authored": "2026-08-12",
-  "wincon": {
-    "line": [
-      "Buneary",
-      "Mega Lopunny ex"
-    ],
-    "plan": "Loop Wally's Compassion around a 330-HP Lopunny while resetting Gale Thrust; pivot to Mega Froslass when the opponent's hand makes Resentful Refrain lethal."
-  },
   "opponent_properties": {
     "opp_tempo": "fast",
     "opp_is_heal_wall": true,
@@ -22,47 +15,49 @@
   "pokemon": [
     {
       "card": "Buneary",
-      "roles": ["wincon_base", "starter"]
-    },
-    {
-      "card": "Mega Lopunny ex",
-      "roles": ["wincon", "primary_attacker", "wall", "threat"]
-    },
-    {
-      "card": "Snorunt",
-      "roles": ["wincon_base"]
+      "roles": [
+        "backup_attacker",
+        "starter"
+      ]
     },
     {
       "card": "Mega Froslass ex",
-      "roles": ["attacker", "threat"]
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Mega Lopunny ex",
+      "roles": [
+        "primary_attacker",
+        "wall",
+        "threat"
+      ]
+    },
+    {
+      "card": "Snorunt",
+      "roles": [
+        "backup_attacker"
+      ]
     }
   ],
   "key_cards": [
     {
       "card": "Wally's Compassion",
-      "role": "full_heal_loop",
-      "enables": "Erases all damage from a surviving Mega ex and returns its Energy to hand."
+      "role": "full_heal_loop"
     },
     {
       "card": "Air Balloon",
-      "role": "pivot",
-      "enables": "Makes the Bench-to-Active Gale Thrust reset cheap and repeatable."
+      "role": "pivot"
     },
     {
       "card": "Mist Energy",
-      "role": "attack_effect_immunity",
-      "enables": "Prevents effects of opposing attacks on the attached Pokemon."
+      "role": "attack_effect_immunity"
     },
     {
       "card": "Battle Cage",
-      "role": "bench_counter_guard",
-      "enables": "Prevents opposing attack and Ability effects from placing damage counters on the Bench."
+      "role": "bench_counter_guard"
     }
-  ],
-  "sources": [
-    "PokeBeach, Tank Decks Are Back—Why Lopunny is Hopping to the Top — https://www.pokebeach.com/2026/05/tank-decks-are-back-why-lopunny-is-hopping-to-the-top",
-    "Limitless, Takumi Ubukata Lopunny/Dudunsparce/Froslass — https://limitlesstcg.com/decks/list/26803",
-    "Limitless, Mega Lopunny archetype card profile — https://limitlesstcg.com/decks/353/cards?variant=2",
-    "Limitless, Mega Froslass ex — https://limitlesstcg.com/cards/ASC/47"
   ]
 }

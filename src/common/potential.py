@@ -26,6 +26,8 @@ STANDARD_PRIZE_COUNT = 6
 FUTURE_HAND_ACCESS_DISCOUNT = 0.75
 OPPONENT_ROLE_PRESENCE_SHARE = 0.90
 OPPONENT_ROLE_HEALTH_SHARE = 0.10
+OPPONENT_ROLE_THREAT_SHARE = 0.20
+OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
 
 
 @dataclass(frozen=True)
@@ -258,7 +260,10 @@ class BoardPotential:
             for body in _bodies(opponent):
                 attacker_facts = self._side_facts(opponent, attacking_body=body)
                 incoming_values.append(self._attack_value(
-                    body, _energy_codes(body), mine, attacker_facts, me_facts))
+                    body, _energy_codes(body), mine, attacker_facts, me_facts)
+                    * (1.0 + OPPONENT_ROLE_THREAT_SHARE
+                       * self.opponent_role_worth.get(int(body.get("id", 0)), 0.0)
+                       / OPPONENT_ROLE_WORTH_NORMALIZER))
         incoming = max(incoming_values, default=0.0)
         return own - incoming
 

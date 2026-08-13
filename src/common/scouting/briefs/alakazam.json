@@ -1,1 +1,44 @@
-{"slug":"alakazam","covers":["Alakazam","Alakazam / Frillish"],"wincon":{"line":["Abra","Kadabra","Alakazam"],"plan":"build hand then attack"},"opponent_properties":{"opp_hand_size_attacker":true,"opp_single_prize":true,"opp_tempo":"midrange"},"pokemon":[{"card":"Abra","roles":["wincon_base"]},{"card":"Kadabra","roles":["wincon_stage","draw_engine"]},{"card":"Alakazam","roles":["wincon","primary_attacker","threat"]}],"key_cards":[{"card":"Boss's Orders","role":"gust"},{"card":"Enhanced Hammer","role":"special_energy_denial"}]}
+{
+  "slug": "alakazam",
+  "covers": [
+    "Alakazam",
+    "Alakazam / Frillish"
+  ],
+  "opponent_properties": {
+    "opp_hand_size_attacker": true,
+    "opp_single_prize": true,
+    "opp_tempo": "midrange"
+  },
+  "pokemon": [
+    {
+      "card": "Abra",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Alakazam",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Kadabra",
+      "roles": [
+        "backup_attacker",
+        "draw_engine"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Boss's Orders",
+      "role": "gust"
+    },
+    {
+      "card": "Enhanced Hammer",
+      "role": "special_energy_denial"
+    }
+  ]
+}

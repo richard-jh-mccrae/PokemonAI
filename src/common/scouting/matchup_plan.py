@@ -41,10 +41,10 @@ class Role:
 #: above the snipe/gust rungs but well below KO_SCORE, and the ORDER is the load-bearing part.
 ROLE_REGISTRY: dict[str, Role] = {
     "prize_liability": Role(
-        100, "the wincon body itself — KO/gust it", (DERIVED_BY, READ_BY, BRIEF_BY)),
+        100, "a primary attacker or multi-prize liability — KO/gust it", (DERIVED_BY, READ_BY, BRIEF_BY)),
     "fragile_preevo": Role(
-        90, "its pre-evolution — deny the wincon before it comes online",
-        (DERIVED_BY, READ_BY, BRIEF_BY)),
+        90, "a pre-evolution with a threatening forward line — deny it before it comes online",
+        (DERIVED_BY, READ_BY)),
     "disruption_target": Role(
         60, "their key supporter/enabler the Brief says to REMOVE (the 'hunt an engine' role). "
             "Curated ONLY: an explicit human claim about this matchup outranks a derived one, and "
@@ -57,8 +57,8 @@ ROLE_REGISTRY: dict[str, Role] = {
             "IN PLAY the derived tier usually names it too and, being γ-independent, supersedes the "
             "dossier's claim; the dossier's own 530 remain the live reading for the predicted "
             "entries the derivation cannot see. Both are corrections of the same defect. Sits BELOW "
-            "the wincon and its pre-evo deliberately: a body that attacks is a real steer but not "
-            "automatically a better removal target than the wincon itself. The worked example is "
+            "a primary attacker deliberately: a backup attacker is a real steer but not "
+            "automatically a better removal target than the primary attacker. The worked example is "
             "Crustle, the Crustle / Mega Kangaskhan ex deck's main attacker *because* it cannot be "
             "damaged by an ex attacker in an ex-dominated format.",
         (DERIVED_BY, READ_BY, BRIEF_BY)),
@@ -123,9 +123,8 @@ def roles_in_dossiers(dossiers: Mapping) -> list[str]:
 def roles_in_brief(brief: Mapping) -> list[str]:
     """The compact Brief's Pokémon roles, reduced to the Pilot target-role vocabulary."""
     doctrine_target_roles = {
-        "wincon": "prize_liability", "wincon_base": "fragile_preevo",
-        "wincon_stage": "fragile_preevo", "disruption_target": "disruption_target",
-        "primary_attacker": "attacker", "attacker": "attacker", "support": "engine",
+        "primary_attacker": "prize_liability", "backup_attacker": "attacker",
+        "disruption_target": "disruption_target", "support": "engine",
         "energy_accel": "engine", "draw_engine": "engine",
     }
     out: set[str] = set()

@@ -1,1 +1,89 @@
-{"slug":"dragapult_ex","covers":["Dragapult ex","Dragapult ex / Dusknoir","Dragapult ex / Dusknoir / N's Zoroark ex"],"wincon":{"line":["Dreepy","Drakloak","Dragapult ex"],"plan":"evolve then spread"},"opponent_properties":{"opp_tempo":"midrange","opp_spreads_bench":true,"opp_item_locks":true,"opp_comeback_disruptor":true},"pokemon":[{"card":"Dreepy","roles":["wincon_base"]},{"card":"Drakloak","roles":["wincon_stage","draw_engine"]},{"card":"Dragapult ex","roles":["wincon","primary_attacker","threat"]},{"card":"Fezandipiti ex","roles":["support","draw_engine","disruption_target","threat"]},{"card":"Latias ex","roles":["support","disruption_target","threat"]},{"card":"Meowth ex","roles":["support","disruption_target"]},{"card":"Budew","roles":["disruption","threat"]},{"card":"Munkidori","roles":["support","threat"]}],"key_cards":[{"card":"Rare Candy","role":"rush_evolve"},{"card":"Buddy-Buddy Poffin","role":"setup"}]}
+{
+  "slug": "dragapult_ex",
+  "covers": [
+    "Dragapult ex",
+    "Dragapult ex / Dusknoir",
+    "Dragapult ex / Dusknoir / N's Zoroark ex"
+  ],
+  "opponent_properties": {
+    "opp_tempo": "midrange",
+    "opp_spreads_bench": true,
+    "opp_item_locks": true,
+    "opp_comeback_disruptor": true
+  },
+  "pokemon": [
+    {
+      "card": "Budew",
+      "roles": [
+        "backup_attacker",
+        "disruption",
+        "threat"
+      ]
+    },
+    {
+      "card": "Dragapult ex",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Drakloak",
+      "roles": [
+        "backup_attacker",
+        "draw_engine"
+      ]
+    },
+    {
+      "card": "Dreepy",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Fezandipiti ex",
+      "roles": [
+        "backup_attacker",
+        "draw_engine",
+        "disruption_target",
+        "support",
+        "threat"
+      ]
+    },
+    {
+      "card": "Latias ex",
+      "roles": [
+        "backup_attacker",
+        "disruption_target",
+        "support",
+        "threat"
+      ]
+    },
+    {
+      "card": "Meowth ex",
+      "roles": [
+        "backup_attacker",
+        "disruption_target",
+        "support"
+      ]
+    },
+    {
+      "card": "Munkidori",
+      "roles": [
+        "backup_attacker",
+        "support",
+        "threat"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Rare Candy",
+      "role": "rush_evolve"
+    },
+    {
+      "card": "Buddy-Buddy Poffin",
+      "role": "setup"
+    }
+  ]
+}

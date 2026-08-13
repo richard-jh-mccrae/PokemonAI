@@ -17,14 +17,13 @@ _DEFAULT = Path(__file__).resolve().parent / "briefs"
 
 @dataclass
 class Brief:
-    """One opponent archetype's objective counterplay annotations (see docs/matchups/<slug>.md)."""
+    """One opponent archetype's compact counterplay annotations."""
     slug: str
     label: str
     covers: list[str]                                       # member archetype strings → variant routing
     opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
-    wincon: dict = field(default_factory=dict)                # {line: [all stages], plan: str}
-    pokemon: list[dict] = field(default_factory=list)         # {card, roles: [closed doctrine roles]}
-    key_cards: list[dict] = field(default_factory=list)       # {card, role, enables?}
+    pokemon: list[dict] = field(default_factory=list)         # {card, roles: [compact doctrine roles]}
+    key_cards: list[dict] = field(default_factory=list)       # {card, role}
 
 
 def _brief_from(raw: dict) -> Brief | None:
@@ -35,7 +34,7 @@ def _brief_from(raw: dict) -> Brief | None:
     return Brief(
         slug=slug, label=raw.get("label", slug), covers=[str(c) for c in covers],
         opponent_properties=raw.get("opponent_properties") or {},
-        wincon=raw.get("wincon") or {}, pokemon=raw.get("pokemon") or [],
+        pokemon=raw.get("pokemon") or [],
         key_cards=raw.get("key_cards") or [],
     )
 
@@ -66,38 +65,71 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
 
 
 _TARGET_ROLE = {
-    "wincon": "prize_liability", "wincon_base": "fragile_preevo",
-    "wincon_stage": "fragile_preevo", "disruption_target": "disruption_target",
-    "primary_attacker": "attacker", "attacker": "attacker", "support": "engine",
+    "primary_attacker": "prize_liability", "backup_attacker": "attacker",
+    "disruption_target": "disruption_target", "support": "engine",
     "energy_accel": "engine", "draw_engine": "engine",
 }
-_TARGET_ROLE_ORDER = ("wincon", "wincon_base", "wincon_stage", "disruption_target",
-                      "primary_attacker", "attacker", "energy_accel", "draw_engine", "support")
+_TARGET_ROLE_ORDER = ("primary_attacker", "disruption_target", "backup_attacker",
+                      "energy_accel", "draw_engine", "support")
 _THREAT_ROLES = frozenset({
-    "threat", "wincon", "wincon_base", "wincon_stage",
-    "primary_attacker", "attacker", "disruption",
+    "threat", "primary_attacker", "backup_attacker", "disruption",
 })
 
 
-def resolve_brief_cards(brief: Brief, ids_for_name) -> tuple[frozenset[int], dict[int, str]]:
+def _evolution_line(card_ids, ids_for_name, stat_for_id, forward_ids) -> frozenset[int]:
+    """Return every known printing in the declared attacker's evolution line."""
+    line = {int(card_id) for card_id in card_ids}
+    if stat_for_id is None:
+        return frozenset(line)
+    if forward_ids is not None:
+        for card_id in tuple(line):
+            line.update(int(descendant) for descendant in forward_ids(card_id) or ())
+    pending = list(line)
+    while pending:
+        card_id = pending.pop()
+        stat = stat_for_id(card_id)
+        parent_name = getattr(stat, "evolvesFrom", None) if stat is not None else None
+        for ancestor in ids_for_name(parent_name) if parent_name else ():
+            if int(ancestor) not in line:
+                line.add(int(ancestor))
+                pending.append(int(ancestor))
+    return frozenset(line)
+
+
+def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
+                        forward_ids=None) -> tuple[frozenset[int], dict[int, str]]:
     """Resolve compact Pokémon doctrine into Bellman threat ids and target roles.
 
     Key trainer cards document how a body becomes dangerous; they never create a target on their
     own.  The selected body roles drive snipe, gust, and energy-denial through MatchupPlan.
     """
     threat_ids: set[int] = set()
-    target_roles: dict[int, str] = {}
+    role_claims: dict[int, set[str]] = {}
+    primary_ids: set[int] = set()
     for entry in brief.pokemon or []:
         roles = tuple(entry.get("roles") or ())
-        ids = ids_for_name(entry.get("card", "")) or ()
+        ids = {int(card_id) for card_id in ids_for_name(entry.get("card", "")) or ()}
         if _THREAT_ROLES.intersection(roles):
             threat_ids.update(ids)
+        for card_id in ids:
+            role_claims.setdefault(card_id, set()).update(roles)
+        if "primary_attacker" in roles:
+            primary_ids.update(ids)
+
+    # A primary attacker means its whole evolution line. This lets generic card evolution data
+    # identify the Basic and intermediate bodies even when the Brief only names the final attacker.
+    primary_line = _evolution_line(primary_ids, ids_for_name, stat_for_id, forward_ids)
+    threat_ids.update(primary_line)
+    for card_id in primary_line:
+        role_claims.setdefault(card_id, set()).add("primary_attacker")
+
+    target_roles: dict[int, str] = {}
+    for card_id, roles in role_claims.items():
         # A body may be both support and an explicitly valuable disruption target (Fezandipiti ex).
         # Select the strongest declared target meaning, not the JSON list's incidental order.
-        target_role = next((_TARGET_ROLE[r] for r in _TARGET_ROLE_ORDER if r in roles), None)
+        target_role = next((_TARGET_ROLE[role] for role in _TARGET_ROLE_ORDER if role in roles), None)
         if target_role:
-            for cid in ids:
-                target_roles[cid] = target_role
+            target_roles[card_id] = target_role
     return frozenset(threat_ids), target_roles
 
 
@@ -109,20 +141,34 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
         brief = next((item for item in briefs if candidate in item.covers), None)
         ids_for_name = getattr(stats, "ids_for_name", None)
         if brief is not None and ids_for_name is not None:
-            wincon_line = tuple(brief.wincon.get("line") or ())
-            payoff_ids = tuple(ids_for_name(wincon_line[-1]) or ()) if wincon_line else ()
-            payoff_prizes = max(
-                (int(getattr(stats.get(card_id), "prize_value", 1) or 1)
-                 for card_id in payoff_ids), default=1)
+            _threat_ids, target_roles = resolve_brief_cards(
+                brief, ids_for_name, stat_for_id=getattr(stats, "get", None),
+                forward_ids=getattr(stats, "forward_card_ids", None))
+            candidate_worth: dict[int, float] = {}
             for row in brief.pokemon or ():
                 roles = tuple(row.get("roles") or ())
                 worth = role_value(roles)
-                if (row.get("card") in wincon_line[:-1]
-                        and {"wincon_base", "wincon_stage"}.intersection(roles)):
-                    worth *= payoff_prizes
-                for card_id in ids_for_name(row.get("card", "")) or ():
-                    expected[int(card_id)] = expected.get(int(card_id), 0.0) + (
-                        float(probability) * worth)
+                row_ids = {int(card_id) for card_id in ids_for_name(row.get("card", "")) or ()}
+                for card_id in row_ids:
+                    candidate_worth[int(card_id)] = max(
+                        candidate_worth.get(int(card_id), 0.0), worth)
+                if "primary_attacker" in roles:
+                    line_ids = _evolution_line(
+                        row_ids, ids_for_name, getattr(stats, "get", None),
+                        getattr(stats, "forward_card_ids", None))
+                    payoff_prizes = max(
+                        (int(getattr(stats.get(card_id), "prize_value", 1) or 1)
+                         for card_id in line_ids), default=1)
+                    for card_id in line_ids:
+                        candidate_worth[card_id] = max(
+                            candidate_worth.get(card_id, 0.0), worth * payoff_prizes)
+            primary_worth = role_value(("primary_attacker",))
+            for card_id, role in target_roles.items():
+                if role == "prize_liability":
+                    candidate_worth[int(card_id)] = max(
+                        candidate_worth.get(int(card_id), 0.0), primary_worth)
+            for card_id, worth in candidate_worth.items():
+                expected[card_id] = expected.get(card_id, 0.0) + float(probability) * worth
             continue
         dossier = dossiers.get(candidate) or {}
         roles_by_card: dict[int, set[str]] = {}

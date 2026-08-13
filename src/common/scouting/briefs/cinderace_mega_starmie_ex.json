@@ -1,1 +1,50 @@
-{"slug":"cinderace_mega_starmie_ex","covers":["Cinderace / Mega Froslass ex / Mega Starmie ex","Cinderace / Mega Starmie ex"],"wincon":{"line":["Staryu","Mega Starmie ex"],"plan":"rush evolve then burst"},"opponent_properties":{"opp_tempo":"fast","opp_pierces_active_effects":true},"pokemon":[{"card":"Staryu","roles":["wincon_base"]},{"card":"Mega Starmie ex","roles":["wincon","primary_attacker","threat"]},{"card":"Cinderace","roles":["support","energy_accel","starter","threat"]}],"key_cards":[{"card":"Ignition Energy","role":"burst_accel","enables":"Mega Starmie ex: Nebula Beam"},{"card":"Salvatore","role":"rush_evolve"},{"card":"Wally's Compassion","role":"heal_reset"}]}
+{
+  "slug": "cinderace_mega_starmie_ex",
+  "covers": [
+    "Cinderace / Mega Froslass ex / Mega Starmie ex",
+    "Cinderace / Mega Starmie ex"
+  ],
+  "opponent_properties": {
+    "opp_tempo": "fast",
+    "opp_pierces_active_effects": true
+  },
+  "pokemon": [
+    {
+      "card": "Cinderace",
+      "roles": [
+        "backup_attacker",
+        "starter",
+        "energy_accel",
+        "support",
+        "threat"
+      ]
+    },
+    {
+      "card": "Mega Starmie ex",
+      "roles": [
+        "primary_attacker",
+        "threat"
+      ]
+    },
+    {
+      "card": "Staryu",
+      "roles": [
+        "backup_attacker"
+      ]
+    }
+  ],
+  "key_cards": [
+    {
+      "card": "Ignition Energy",
+      "role": "burst_accel"
+    },
+    {
+      "card": "Salvatore",
+      "role": "rush_evolve"
+    },
+    {
+      "card": "Wally's Compassion",
+      "role": "heal_reset"
+    }
+  ]
+}

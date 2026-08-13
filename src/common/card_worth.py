@@ -38,6 +38,7 @@ ROLE_ALIASES: dict[str, str] = {
     "prize_liability": "win_condition",
     "fragile_preevo": "win_condition_base",
     "attacker": "secondary_attacker",
+    "backup_attacker": "secondary_attacker",
     "threat": "primary_attacker",
     "draw_engine": "engine",
     "energy_accel": "accel_source",
