@@ -1,11 +1,19 @@
 # Continuous integration
 
 `.github/workflows/ci.yml` first applies `.github/filters.yml`, then runs only the affected
-independent jobs in parallel: tools, correction contracts, source, cgpy, documentation, and
+independent jobs in parallel: per-tool tests, correction contracts, source, cgpy, documentation, and
 developed-agent mirrors. Unknown non-documentation paths fail closed to all jobs; pushes to `main`
 and manual dispatches run all jobs.
 
 Correction contracts also run whenever `src/common/` or any `src/agents/` implementation changes.
+
+Tool tests are selected independently: arena, meta tracker, simulator, and submission. A PR runs a
+tool suite only when that tool's implementation, adapter, or tests changed. Each selected suite has
+a twelve-minute job budget; individual tests are capped at two minutes and the twenty slowest are
+reported, so a stall is attributable instead of consuming the whole job.
+
+The agent-skills synchronisation check is selected separately when its tool, canonical skills,
+Codex adapters, or its test changes.
 
 Each developed agent gets an entry in the mirror matrix. The current entry, `mega_starmie`, plays
 five seat-balanced mirrors in parallel inside one CI job. Each Match extracts the same exact artifact

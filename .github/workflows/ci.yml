@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      tools: ${{ steps.plan.outputs.tools }}
+      tool_tests: ${{ steps.plan.outputs.tool_tests }}
       corrections: ${{ steps.plan.outputs.corrections }}
       src: ${{ steps.plan.outputs.src }}
       cgpy: ${{ steps.plan.outputs.cgpy }}
@@ -46,7 +46,12 @@ jobs:
           F_RUNTIME: ${{ steps.changes.outputs.runtime }}
           F_SRC: ${{ steps.changes.outputs.src }}
           F_AGENTS: ${{ steps.changes.outputs.agents }}
-          F_TOOLS: ${{ steps.changes.outputs.tools }}
+          F_TOOL_ARENA: ${{ steps.changes.outputs.tool_arena }}
+          F_TOOL_META_TRACKER: ${{ steps.changes.outputs.tool_meta_tracker }}
+          F_TOOL_SIM: ${{ steps.changes.outputs.tool_sim }}
+          F_TOOL_SUBMIT: ${{ steps.changes.outputs.tool_submit }}
+          F_TOOL_AGENT_SKILLS: ${{ steps.changes.outputs.tool_agent_skills }}
+          F_TOOL_UNTESTED: ${{ steps.changes.outputs.tool_untested }}
           F_CORRECTIONS: ${{ steps.changes.outputs.corrections }}
           F_CGPY: ${{ steps.changes.outputs.cgpy }}
           F_MEGA_STARMIE: ${{ steps.changes.outputs.mega_starmie }}
@@ -55,37 +60,50 @@ jobs:
           F_AUTHORING: ${{ steps.changes.outputs.authoring }}
           F_ANY: ${{ steps.changes.outputs.any }}
         run: |
-          tools=false; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
-          enable_all() { tools=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
+          tool_tests='[]'; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
+          add_tool_test() {
+            tool_tests=$(python -c 'import json, sys; tests = json.loads(sys.argv[1]); tool = sys.argv[2]; print(json.dumps(tests if tool in tests else tests + [tool]))' "$tool_tests" "$1")
+          }
+          enable_all() { tool_tests='["arena", "meta_tracker", "sim", "submit", "test_agent_skills.py"]'; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
           if [ "$EVENT" != 'pull_request' ] || [ "$F_GLOBAL" = true ]; then
             enable_all
           else
-            [ "$F_TOOLS" = true ] && tools=true
+            [ "$F_TOOL_ARENA" = true ] && add_tool_test arena
+            [ "$F_TOOL_META_TRACKER" = true ] && add_tool_test meta_tracker
+            [ "$F_TOOL_SIM" = true ] && add_tool_test sim
+            [ "$F_TOOL_SUBMIT" = true ] && add_tool_test submit
+            [ "$F_TOOL_AGENT_SKILLS" = true ] && add_tool_test test_agent_skills.py
             [ "$F_CORRECTIONS" = true ] && corrections=true
             [ "$F_SRC" = true ] && src=true
             [ "$F_AGENTS" = true ] && corrections=true
             [ "$F_CGPY" = true ] && cgpy=true
             [ "$F_DOCS" = true ] && docs=true
             if [ "$F_RUNTIME" = true ]; then
-              tools=true; corrections=true; src=true; cgpy=true; mirrors='["mega_starmie"]'
+              corrections=true; src=true; cgpy=true; mirrors='["mega_starmie"]'
             fi
             if [ "$F_MEGA_STARMIE" = true ]; then
-              tools=true; src=true; mirrors='["mega_starmie"]'
+              add_tool_test sim; src=true; mirrors='["mega_starmie"]'
             fi
             known=false
-            for value in "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOLS" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
+            for value in "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOL_ARENA" "$F_TOOL_META_TRACKER" "$F_TOOL_SIM" "$F_TOOL_SUBMIT" "$F_TOOL_AGENT_SKILLS" "$F_TOOL_UNTESTED" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
               [ "$value" = true ] && known=true
             done
             [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
           fi
-          printf 'tools=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tools" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
+          printf 'tool_tests=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tool_tests" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
 
   test-tools:
-    name: tests / tools
+    name: tests / ${{ matrix.tool }}
     needs: plan
-    if: needs.plan.outputs.tools == 'true'
+    if: needs.plan.outputs.tool_tests != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # A tool test must never hide for most of an Actions runner allocation.  The
+    # per-test timeout below identifies the specific test; this is the backstop.
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: ${{ fromJSON(needs.plan.outputs.tool_tests) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -93,7 +111,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/arena tests/meta_tracker tests/sim tests/submit tests/test_agent_skills.py -q -n auto --tb=short
+      - run: python -m pytest tests/${{ matrix.tool }} -q -n auto --tb=short --timeout=120 --timeout-method=signal --durations=20
 
   test-corrections:
     name: tests / corrections
