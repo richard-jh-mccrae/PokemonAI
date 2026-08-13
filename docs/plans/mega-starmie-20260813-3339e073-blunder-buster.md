@@ -7,7 +7,7 @@ Source: `data/corrections/mega_starmie_20260813_3339e073/` (20 records).
 - New machinery:
   - `d39f2e524f36`: free pregame draw-count dominance.
   - `8c69ecaccafa`: nonlinear KO pressure in damage progress.
-  - `91cea0a2fa6d`, `da39bb37b166`, `baede6accfac`,
+  - `8d91984d4430`, `91cea0a2fa6d`, `da39bb37b166`, `baede6accfac`,
     `79767ab416a7`: useful attached-Energy saturation, survival, and persistence.
 - Tuning of existing state machinery:
   - `e02e699ced1d`: recovery cards have no accessible-hand value on a full-health board.
@@ -16,8 +16,6 @@ Source: `data/corrections/mega_starmie_20260813_3339e073/` (20 records).
 - Reclassified after full-turn review:
   - `92e27180b008`: deterministic evolution is worth `0.12`; the labelled Pokégear gamble
     is worth `0.09913` and does not dominate.
-  - `8d91984d4430`: prior acceptance evidence requires Turbo Flare to complete one empty
-    pre-evolution before spreading; the labelled 2+1 split contradicts that general rule.
   - `5ee5f49312b2`, `da72e53929f0`: the analytic hidden-refresh commitment is negative; it
     cannot plan a hypothetical post-refresh hand or append an attack after that hidden boundary.
   - `76e7d6d7539e`: retreat reaches a stronger full-turn line than healing into a one-Energy
@@ -37,9 +35,10 @@ No named-card function, correction recognizer, or deck-local tactical branch was
 
 - `DrawCount(s) = argmax offered numeric count` for cost-free mulligan draws.
 - `damage_progress = damage / 200 + 1e-6 * prizes * (damage / max_hp)^2`.
-- During isolated selections, `energy_position = survival * Σ(useful_energy_i / i)`, capped by
-  the largest reachable current/evolution attack cost; attached Energy does not consume hand
-  capacity in that evaluation.
+- During isolated selections, useful Energy is survival-weighted and capped by the largest
+  reachable attack cost for every attacker, including Basics. Basic lines receive increasing
+  marginal value until the Active covers an immediate KO, then diminishing marginal value
+  preserves optionality across attackers. Attached Energy does not consume hand capacity there.
 - Recovery hand Worth is zero when no own body is damaged.
 
 ## Validation

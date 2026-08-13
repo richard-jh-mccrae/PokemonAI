@@ -18,6 +18,7 @@ from common.scouting.read import Read, posture_gamma
 from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
+    _DRAW_COUNT,
     _HAND,
     _IS_FIRST,
     _MULLIGAN,
@@ -30,7 +31,6 @@ from common.value import ValueRegistry
 
 
 _ENGINE = object()
-_DRAW_COUNT = 38
 
 
 class BellmanRuntime:

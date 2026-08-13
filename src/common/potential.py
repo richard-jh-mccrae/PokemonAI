@@ -418,17 +418,26 @@ class BoardPotential:
                           if attack is not None else 0)
         return cap
 
-    def _energy_position(self, me) -> float:
-        """Usable attached-resource value, discounted by saturation and survival.
+    def _active_ko_ready(self, me, opponent) -> bool:
+        attacker = next((body for body in (me.get("active") or ()) if body), None)
+        defender = next((body for body in (opponent.get("active") or ()) if body), None)
+        if attacker is None or defender is None:
+            return False
+        return self._attack_value(
+            attacker, _energy_codes(attacker), defender,
+            self._side_facts(me, attacking_body=attacker), self._side_facts(opponent),
+        ) >= self._prizes(defender)
 
-        Marginal value declines per Energy on one body, so an isolated effect choice preserves
-        optionality across viable attackers. Immediate attack readiness remains a separate family
-        and can outweigh that discount when completing a live attack really matters.
+    def _energy_position(self, me, opponent) -> float:
+        """Usable attached-resource value, shaped by deployment urgency and survival.
+
+        Basic lines concentrate resources until the Active covers the immediate KO; after that,
+        declining marginal value preserves optionality across viable attackers. Immediate attack
+        readiness remains a separate family.
         """
         total = 0.0
+        active_ko_ready = self._active_ko_ready(me, opponent)
         for body in _bodies(me):
-            if not body.get("preEvolution"):
-                continue
             cap = self._energy_cost_cap(int(body.get("id", 0)))
             if cap <= 0:
                 continue
@@ -441,8 +450,13 @@ class BoardPotential:
                 values = [worth_to_prizes(self.registry.seeds.energy)] * min(
                     cap, len(_energy_codes(body)))
             if self.isolated_selection:
-                total += survival * sum(value / (index + 1)
-                                        for index, value in enumerate(values))
+                # Once the Active already covers the immediate KO, diminishing returns preserve
+                # optionality across Basics.  Otherwise increasing returns concentrate resources
+                # toward deploying one Basic attacker; evolved bodies are already deployed.
+                diversify = active_ko_ready or bool(body.get("preEvolution"))
+                total += survival * sum(
+                    value / (index + 1) if diversify else value * (index + 1)
+                    for index, value in enumerate(values))
         return total
 
     def _development(self, me) -> float:
@@ -604,7 +618,7 @@ class BoardPotential:
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
-            "energy_position": self._energy_position(me),
+            "energy_position": self._energy_position(me, opponent),
             "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
             "hand_demand": self._hand_demand(me),

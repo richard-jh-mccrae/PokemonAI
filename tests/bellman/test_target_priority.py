@@ -35,11 +35,20 @@ def _observation(primary, backup):
     }
 
 
-def _potential():
+def _potential(*, isolated_selection=False):
     registry = ValueRegistry(facts={card_id: CardFacts(pokemon=True)
                                     for card_id in (1, 2, 3, 9)})
     return BoardPotential(
-        _Stats(), registry=registry, opponent_role_worth={1: 30.0, 2: 20.0}, root_seat=0)
+        _Stats(), registry=registry, opponent_role_worth={1: 30.0, 2: 20.0}, root_seat=0,
+        isolated_selection=isolated_selection)
+
+
+def test_energy_position_includes_basic_attackers_during_isolated_selections():
+    observation = _observation(_body(1), _body(2))
+
+    families = dict(_potential(isolated_selection=True)(observation).families)
+
+    assert families["energy_position"] > 0.0
 
 
 def test_snipe_progress_values_the_primary_attacker_above_the_backup():

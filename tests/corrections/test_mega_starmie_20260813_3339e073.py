@@ -19,7 +19,7 @@ RUNTIME = runtime()
     ("92e27180b008", (1,)),  # deterministic evolution beats the labelled reveal gamble
     ("8c69ecaccafa", (0,)),  # equal damage concentrates toward the nearer KO
     ("dfc26070178c", (0,)),  # information action precedes the resolving attack
-    ("8d91984d4430", (0,)),  # established Turbo Flare rule completes one pre-evolution first
+    ("8d91984d4430", (1,)),  # diversify acceleration across viable Basic attackers
     ("c7fd0670fb3e", (0,)),  # evolve the funded line
     ("76e7d6d7539e", (4,)),  # retreat enables the stronger full-turn continuation
     ("5ee5f49312b2", (1,)),  # analytic refresh commitment does not plan a hidden hand
