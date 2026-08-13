@@ -31,6 +31,7 @@ OPPONENT_ROLE_THREAT_SHARE = 0.20
 OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
 BENCH_ATTACK_ACCESS_SHARE = 0.50
 EVOLVED_BODY_PRIZE_SHARE = 0.040
+KO_PRESSURE_SHARE = 0.000001
 
 
 @dataclass(frozen=True)
@@ -80,7 +81,7 @@ class BoardPotential:
     def __init__(self, stats, *, registry: ValueRegistry,
                  profile: BellmanDeckProfile | None = None,
                  scale: UtilityScale = UtilityScale(), root_seat: int | None = None,
-                 opponent_role_worth=None):
+                 opponent_role_worth=None, isolated_selection: bool = False):
         self.stats = stats
         self.registry = registry
         self.profile = profile or BellmanDeckProfile.from_registry(registry)
@@ -88,6 +89,7 @@ class BoardPotential:
         self.root_seat = None if root_seat is None else int(root_seat)
         self.opponent_role_worth = {int(card_id): max(0.0, float(worth))
                                     for card_id, worth in (opponent_role_worth or {}).items()}
+        self.isolated_selection = bool(isolated_selection)
         self._stat_cache = {}
         self._attack_cache = {}
         self._resource_job_cache = {}
@@ -218,10 +220,18 @@ class BoardPotential:
 
     def _damage_progress(self, player) -> float:
         total = 0.0
+        body_ids = Counter(int(body.get("id", 0)) for body in _bodies(player))
         for body in _bodies(player):
             maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
             health = max(KNOCKED_OUT_HP, int(body.get("hp", maximum)))
-            total += (maximum - health) / DAMAGE_COUNTERS_PER_PRIZE
+            damage = maximum - health
+            # Linear progress prices every damage counter.  Convex KO pressure additionally
+            # prices concentration: the same new damage is more useful on an already injured
+            # target because it is closer to converting into prizes.
+            total += (damage / DAMAGE_COUNTERS_PER_PRIZE
+                      + (self._prizes(body) * KO_PRESSURE_SHARE * (damage / maximum) ** 2
+                         if (self.isolated_selection
+                             and body_ids[int(body.get("id", 0))] > 1) else 0.0))
         return total
 
     def _reachable_defenders(self, body, *, opponent_moves_next: bool):
@@ -394,6 +404,47 @@ class BoardPotential:
                     for card_job, values in jobs.items())
         return float(worth_to_prizes(worth))
 
+    def _energy_cost_cap(self, card_id: int) -> int:
+        candidates = [int(card_id)]
+        if hasattr(self.stats, "forward_card_ids"):
+            candidates.extend(int(candidate)
+                              for candidate in (self.stats.forward_card_ids(int(card_id)) or ()))
+        cap = 0
+        for candidate in candidates:
+            stat = self._stat(candidate)
+            for attack_id in (getattr(stat, "attacks", ()) or ()) if stat is not None else ():
+                attack = self._attack(attack_id)
+                cap = max(cap, len(tuple(getattr(attack, "energyTypes", ()) or ()))
+                          if attack is not None else 0)
+        return cap
+
+    def _energy_position(self, me) -> float:
+        """Usable attached-resource value, discounted by saturation and survival.
+
+        Marginal value declines per Energy on one body, so an isolated effect choice preserves
+        optionality across viable attackers. Immediate attack readiness remains a separate family
+        and can outweigh that discount when completing a live attack really matters.
+        """
+        total = 0.0
+        for body in _bodies(me):
+            if not body.get("preEvolution"):
+                continue
+            cap = self._energy_cost_cap(int(body.get("id", 0)))
+            if cap <= 0:
+                continue
+            maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
+            survival = max(0.0, min(1.0, int(body.get("hp", maximum)) / maximum))
+            cards = tuple(card for card in (body.get("energyCards") or ()) if card)
+            values = [worth_to_prizes(self.registry.worth(int(card.get("id", 0))))
+                      for card in cards[:cap]]
+            if not values:
+                values = [worth_to_prizes(self.registry.seeds.energy)] * min(
+                    cap, len(_energy_codes(body)))
+            if self.isolated_selection:
+                total += survival * sum(value / (index + 1)
+                                        for index, value in enumerate(values))
+        return total
+
     def _development(self, me) -> float:
         """Value realized by turning a line piece into a developed body.
 
@@ -406,7 +457,10 @@ class BoardPotential:
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()
         occupied = Counter(self._resource_job(card_id)
-                           for body in _bodies(me) for card_id in self._stack_ids(body))
+                           for body in _bodies(me) for card_id in self._stack_ids(body)
+                           if not (self.isolated_selection
+                                   and self._stat(card_id) is not None
+                                   and getattr(self._stat(card_id), "is_energy", False)))
         candidates: dict[tuple, list[float]] = {}
         for card in (me.get("hand") or ()):
             if not card or card.get("id") is None:
@@ -417,13 +471,38 @@ class BoardPotential:
             if (setup_complete and "opener" in tags
                     and facts is not None and facts.stage != "basic"):
                 continue
+            if ({"heal", "clutch_heal"}.intersection(tags)
+                    and not any(int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0)))
+                                for body in _bodies(me))):
+                continue
             card_job = self._resource_job(card_id)
-            candidates.setdefault(card_job, []).append(self.registry.worth(card_id))
+            held_worth = self.registry.worth(card_id)
+            if self.isolated_selection and "discard_eot" in tags:
+                held_worth *= 0.20
+            candidates.setdefault(card_job, []).append(held_worth)
         worth = 0.0
         for card_job, values in candidates.items():
             remaining = max(0, capacities.get(card_job, 1) - occupied.get(card_job, 0))
             worth += sum(sorted(values, reverse=True)[:remaining])
         return FUTURE_HAND_ACCESS_DISCOUNT * float(worth_to_prizes(worth))
+
+    def _hand_demand(self, me) -> float:
+        """Value visible cards by whether they cover a presently missing board job."""
+        occupied = Counter(self._resource_job(card_id)
+                           for body in _bodies(me) for card_id in self._stack_ids(body))
+        value = 0.0
+        seen = Counter()
+        for card in (me.get("hand") or ()):
+            if not card or card.get("id") is None:
+                continue
+            card_id = int(card["id"])
+            job = self._resource_job(card_id)
+            capacity = self._prize_job_capacities().get(job, 1)
+            if occupied[job] + seen[job] >= capacity:
+                continue
+            seen[job] += 1
+            value += worth_to_prizes(self.registry.worth(card_id))
+        return 0.01 * value
 
     def _opponent_role_pressure(self, opponent) -> float:
         """Remaining existence plus health Worth of roles declared by the matched scouting Brief."""
@@ -525,8 +604,10 @@ class BoardPotential:
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
+            "energy_position": self._energy_position(me),
             "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
+            "hand_demand": self._hand_demand(me),
             "opponent_roles": self._opponent_role_pressure(opponent),
             "prize_plan": self._prize_plan(me, opponent),
         }

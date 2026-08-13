@@ -232,6 +232,14 @@ def _print_report(report: dict) -> None:
     print(f"max: {stats['max']:.3f}s", flush=True)
     print(f"avg: {stats['avg']:.3f}s", flush=True)
     print(f"batch wall: {report['batch_wall']:.3f}s", flush=True)
+    callback = report.get("callback")
+    if callback is None:
+        print("callback: no completed-match samples", flush=True)
+    else:
+        print(f"callback total: {callback['total']:.3f}s", flush=True)
+        print(f"callback min: {callback['min']:.3f}s", flush=True)
+        print(f"callback max: {callback['max']:.3f}s", flush=True)
+        print(f"callback avg: {callback['avg']:.3f}s", flush=True)
     print(f"artifact sha256: {report['artifact_sha256']}", flush=True)
 
 
