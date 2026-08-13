@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from functools import cached_property
 import hashlib
+import json
 
 
 PROBABILITY_MIN = 0.0
@@ -70,6 +71,11 @@ def _semantic(value):
 def _semantic_observation(observation: Mapping):
     normalized = _semantic(observation)
     current = normalized.get("current") or {}
+    if normalized.get("bellmanActor") == current.get("yourIndex"):
+        normalized.pop("bellmanActor", None)
+    transient = normalized.get("bellmanTransient")
+    if isinstance(transient, dict) and not any(transient.values()):
+        normalized.pop("bellmanTransient", None)
     for player in current.get("players") or ():
         if not isinstance(player, dict):
             continue
@@ -192,12 +198,24 @@ class DecisionState:
     def semantic_key(self) -> str:
         from .options import enumerate_legal_actions
 
-        legal = tuple(action.identity for action in enumerate_legal_actions(self.obs))
-        payload = (freeze(_semantic_observation(self.obs)), legal,
-                   self.root_seat, self.deck_name, self.deck_counts,
-                   self.prize_counts, self.budgets, self.belief,
-                   self.value_registry_identity)
-        return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
+        legal = tuple((action.identity.kind, action.identity.parts)
+                      for action in enumerate_legal_actions(self.obs))
+        payload = {
+            "observation": _semantic_observation(self.obs),
+            "legal": legal,
+            "root_seat": self.root_seat,
+            "deck_name": self.deck_name,
+            "deck_counts": self.deck_counts,
+            "prize_counts": self.prize_counts,
+            "budgets": vars(self.budgets),
+            "belief": vars(self.belief),
+            "value_registry_identity": self.value_registry_identity,
+        }
+        encoded = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+            default=repr,
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
 
     def with_observation(self, observation: Mapping) -> "DecisionState":
         successor = type(self).from_observation(

@@ -10,10 +10,11 @@ from .scorer import posterior
 
 
 class Scout:
-    def __init__(self, artifact, provider=None, *, k: int = 3,
+    def __init__(self, artifact, provider=None, functions=None, *, k: int = 3,
                  confidence_threshold: float = 0.6):
         self.artifact = artifact
         self.provider = provider
+        self.functions = functions
         self.k = k
         self.confidence_threshold = confidence_threshold
         self._evidence: set[int] = set()
@@ -139,16 +140,22 @@ class Scout:
     def _evolution_paths(self, top) -> list[EvoPath]:
         """Predict each in-play opponent Pokémon's line top (dossier evolution lines)."""
         arch = self._confident_archetype(top)
+        paths: dict[int, EvoPath] = {}
+        if self.functions is not None and hasattr(self.functions, "evolves_to"):
+            for cid in self._opp_in_play:
+                targets = self.functions.evolves_to(cid)
+                if len(targets) == 1:
+                    paths[cid] = EvoPath(seen_cardId=cid, line=[cid, targets[0]],
+                                         top_cardId=targets[0])
         if arch is None:
-            return []
+            return list(paths.values())
         lines = (self.artifact.dossiers.get(arch) or {}).get("evolution_lines") or []
-        paths = []
         for cid in self._opp_in_play:
             for line in lines:
                 if cid in line and line[-1] != cid:
-                    paths.append(EvoPath(seen_cardId=cid, line=list(line), top_cardId=line[-1]))
+                    paths[cid] = EvoPath(seen_cardId=cid, line=list(line), top_cardId=line[-1])
                     break
-        return paths
+        return list(paths.values())
 
     @staticmethod
     def _confidence(top) -> tuple[float, float]:

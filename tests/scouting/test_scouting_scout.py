@@ -4,6 +4,7 @@ import pytest
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.scouting.read import Read
 from common.scouting.scout import Scout
+from common.cards import CardFunctions
 from scouting_helpers import (
     KIRLIA, MEGA_LUCARIO, RIOLU, SHARED, SOLROCK, make_obs, tiny_artifact,
 )
@@ -88,6 +89,16 @@ def test_evolution_paths_predict_line_top():
 
     paths = {p.seen_cardId: p.top_cardId for p in read.evolution_paths}
     assert paths.get(RIOLU) == MEGA_LUCARIO   # that basic becomes win-condition
+
+
+@pytest.mark.req("REQ-SCOUT-0005")
+def test_shared_evolution_tags_predict_a_next_form_without_an_archetype_read():
+    scout = Scout(tiny_artifact(), functions=CardFunctions({RIOLU: [f"evolves:{MEGA_LUCARIO}"]}),
+                  confidence_threshold=1.1)
+    read = scout.observe(make_obs(opp_active=RIOLU))
+
+    assert [(path.seen_cardId, path.top_cardId) for path in read.evolution_paths] == [
+        (RIOLU, MEGA_LUCARIO)]
 
 
 @pytest.mark.req("REQ-SCOUT-0004")

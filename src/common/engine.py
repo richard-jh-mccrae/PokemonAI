@@ -13,10 +13,10 @@ from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
 from .commutativity import action_footprint
-from .refresh import refresh_transition
+from .refresh import SHUFFLE_OWN_HAND_RIDER, refresh_transition
 from .transition_value import end_has_forced_value_change
 from common.strategy.context import (
-    _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
+    _ACTIVE, _ATTACH_FROM, _ATTACK, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
 )
 
@@ -61,6 +61,7 @@ class CgpyTransitionProvider:
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
         self._local_nested = False
+        self._local_error = ""
         self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
         self._error = ""
         try:
@@ -91,12 +92,26 @@ class CgpyTransitionProvider:
                 _take(filler, int(opp.get("handCount", 0))), [],
                 manual_coin=True, rng=SeededRng(DEFAULT_RNG_SEED),
             )
+            if int(((obs.get("select") or {}).get("context", -1))) == _MAIN:
+                from cgpy.options import main_options
+
+                active = engine.gs.players[root.root_seat].active
+                if active is not None:
+                    offered = {int(option["attackId"])
+                               for option in ((obs.get("select") or {}).get("option") or ())
+                               if int(option.get("type", -1)) == _ATTACK}
+                    generated = {int(option["attackId"])
+                                 for option in main_options(engine.gs, root.root_seat)
+                                 if int(option.get("type", -1)) == _ATTACK}
+                    for attack_id in generated - offered:
+                        active.attack_locks[str(attack_id)] = engine.gs.turn
             self._engines[root.semantic_key] = engine
             self._attack_committed[root.semantic_key] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
             context = int(((root.obs.get("select") or {}).get("context", -1)))
             if context != _MAIN:
                 self._local_nested = True
+                self._local_error = f"{type(exc).__name__}: {exc}"
                 self._error = ""
             else:
                 self._error = f"{type(exc).__name__}: {exc}"
@@ -149,15 +164,26 @@ class CgpyTransitionProvider:
         return self.transition(state, action) if end_has_forced_value_change(state, self.registry) else None
 
     @staticmethod
-    def _played_card_id(engine, action):
-        if action.identity.kind != "play" or len(action.selection) != 1:
+    def _action_source_card_id(engine, action):
+        if len(action.selection) != 1:
             return None
         option = engine.gs.pending.options[action.selection[0]]
-        hand_index = option.get("index")
-        hand = engine.gs.players[engine.select_seat].hand
-        if not isinstance(hand_index, int) or not 0 <= hand_index < len(hand):
+        index = option.get("index")
+        if not isinstance(index, int) or index < 0:
             return None
-        return int(engine.gs.card_id(hand[hand_index]))
+        board = engine.gs.players[engine.select_seat]
+        if action.identity.kind == "play":
+            return (int(engine.gs.card_id(board.hand[index]))
+                    if index < len(board.hand) else None)
+        if action.identity.kind == "ability":
+            area = int(option.get("area", -1))
+            if area == _ACTIVE and index == 0 and board.active is not None:
+                return int(engine.gs.card_id(board.active.top))
+            if area == _BENCH and index < len(board.bench):
+                return int(engine.gs.card_id(board.bench[index].top))
+            if area == 3 and index < len(engine.gs.stadium):
+                return int(engine.gs.card_id(engine.gs.stadium[index]))
+        return None
 
     @staticmethod
     def _force_top_ids(engine, seat, top_ids):
@@ -178,7 +204,7 @@ class CgpyTransitionProvider:
         Probability describes what the window exposes. Which exposed card to take is not encoded
         here: the authoritative engine poses that choice and the solver values each continuation.
         """
-        card_id = self._played_card_id(engine, action)
+        card_id = self._action_source_card_id(engine, action)
         clauses = self.effects.clauses(card_id) if self.effects is not None and card_id else ()
         dig_clauses = tuple(clause for clause in clauses
                             if clause.get("kind") == "fetch" and clause.get("dig"))
@@ -248,20 +274,31 @@ class CgpyTransitionProvider:
 
     def _drawing_transition(self, state, engine, action):
         """Branch hidden draws from effect clauses; continuation, never static Worth, values them."""
-        card_id = self._played_card_id(engine, action)
+        card_id = self._action_source_card_id(engine, action)
         clauses = self.effects.clauses(card_id) if self.effects is not None and card_id else ()
         draw_clauses = tuple(clause for clause in clauses if clause.get("kind") == "draw")
         if len(draw_clauses) != 1:
             return None
         clause = draw_clauses[0]
-        if clause.get("opponent_amount") or clause.get("rider") is not None:
+        if (clause.get("opponent_amount")
+                or clause.get("rider") in ("shuffle_own_hand_in", "shuffle_both_hands")):
             return None
         from .draws import draw_branches
 
         players = engine.gs.players
         mine, opponent = players[state.root_seat], players[1 - state.root_seat]
+        probability_clause = dict(clause)
+        # Legality and non-shuffle costs are resolved by the rules engine. They do not alter the
+        # identity distribution of the declared draw window.
+        if probability_clause.get("rider") not in (None, SHUFFLE_OWN_HAND_RIDER,
+                                                    "shuffle_both_hands"):
+            probability_clause.pop("rider", None)
+        if probability_clause.get("condition") not in (None, "pokemon_ko_last_turn"):
+            probability_clause.pop("condition", None)
+        probability_clause.pop("allowance", None)
         amounts = draw_branches(
-            clause, len(mine.prize), len(opponent.prize), my_hand_size=len(mine.hand))
+            probability_clause, len(mine.prize), len(opponent.prize),
+            my_hand_size=len(mine.hand))
         if amounts is None or len(amounts) != 1 or amounts[0][1] != 0:
             return None
         draws = amounts[0][0]
@@ -273,8 +310,11 @@ class CgpyTransitionProvider:
             self._force_top_ids(branch, state.root_seat, outcome.card_ids)
             branch.step(list(action.selection))
             method = "exact" if outcome.exact else "stratified"
-            edges.append(WeightedEdge(outcome.probability, f"{method}:{index}",
-                                      self._register_successor(state, branch, action)))
+            edges.append(WeightedEdge(
+                outcome.probability, f"{method}:{index}",
+                self._register_successor(
+                    state, branch, action,
+                    latent=("draw", index, tuple(outcome.card_ids)))))
         return Chance(tuple(edges))
 
     @staticmethod
@@ -412,18 +452,24 @@ class CgpyTransitionProvider:
         except Exception as exc:  # noqa: BLE001 - stays explicit
             return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")
 
-    def _state_from_engine(self, state, child):
+    def _state_from_engine(self, state, child, *, latent=()):
         from cgpy.search import export_token
 
         observation = child.observation(
             viewer=state.root_seat, sbi_token=export_token(child.gs))
         observation["bellmanActor"] = int(child.select_seat)
+        observation["bellmanTransient"] = {
+            "damage_boosts": tuple(copy.deepcopy(
+                child.gs.turn_markers.get("damage_bonus", ())))
+        }
+        if latent:
+            observation["bellmanLatent"] = tuple(latent)
         observation["own_prizes"] = _own_prize_export(child, state.root_seat)
         return state.with_observation(observation)
 
-    def _register_successor(self, state, child, action):
+    def _register_successor(self, state, child, action, *, latent=()):
         try:
-            successor = self._state_from_engine(state, child)
+            successor = self._state_from_engine(state, child, latent=latent)
             committed = self._attack_committed.get(state.semantic_key, False) or \
                 action.identity.kind == "attack"
             if successor.semantic_key not in self._engines:

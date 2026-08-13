@@ -1,4 +1,4 @@
-"""Unfiltered Mega Starmie correction sweep for Bellman development.
+"""Unfiltered per-agent correction sweep for Bellman development.
 
 This reader never consults ``reviewed.json`` to exclude a record.  It preserves every rationale and
 reports exact/equivalent agreement separately, so later M8 adjudication can treat prose as the primary
@@ -32,8 +32,8 @@ from train.blunder.decode import option_label  # noqa: E402
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "mega-starmie-live-corpus-baseline.json"
 
 
-def _build_runtime():
-    agent_dir = REPO / "src" / "agents" / "mega_starmie"
+def _build_runtime(agent: str = "mega_starmie"):
+    agent_dir = REPO / "src" / "agents" / agent
     spec = importlib.util.spec_from_file_location("_bellman_corpus_strategy",
                                                   agent_dir / "strategy.py")
     module = importlib.util.module_from_spec(spec)
@@ -58,7 +58,13 @@ def _satisfies_human(chosen, correct, equivalence) -> bool:
 def _retest(correction, runtime) -> dict:
     if correction.obs is None:
         return {"after": None, "chosen_after": None}
-    decision = runtime.decide(correction.obs)
+    try:
+        decision = runtime.decide(correction.obs)
+    except Exception as exc:  # corpus diagnostics must retain failed frames
+        return {
+            "after": None, "chosen_after": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     after = to_record(decision, read=runtime.last_read)
     return {"after": after, "chosen_after": after["chosen"]}
 
@@ -71,8 +77,8 @@ def _episode(correction) -> int:
     return -1 if correction.episode_id is None else int(correction.episode_id)
 
 
-def _sweep_episode(corrections) -> list[dict]:
-    runtime = _build_runtime()
+def _sweep_episode(corrections, agent: str = "mega_starmie") -> list[dict]:
+    runtime = _build_runtime(agent)
     rows = []
     for c in corrections:
         result = _retest(c, runtime)
@@ -85,7 +91,7 @@ def _sweep_episode(corrections) -> list[dict]:
         options = select.get("option") or []
         current = obs.get("current") or {}
         labels = [option_label(options[index], current, select=select)
-                  for index in chosen if 0 <= index < len(options)]
+                  for index in (chosen or ()) if 0 <= index < len(options)]
         correct_labels = [option_label(options[index], current, select=select)
                           for index in c.correct if 0 <= index < len(options)]
         row = {
@@ -102,6 +108,8 @@ def _sweep_episode(corrections) -> list[dict]:
             "correct_label": ", ".join(correct_labels),
             "rationale": c.rationale,
         }
+        if result.get("error"):
+            row["error"] = result["error"]
         if not agrees:
             after = result.get("after") or {}
             diagnostics = after.get("diagnostics") or {}
@@ -115,12 +123,12 @@ def _sweep_episode(corrections) -> list[dict]:
     return rows
 
 
-def _payload(rows: list[dict]) -> dict:
+def _payload(rows: list[dict], agent: str = "mega_starmie") -> dict:
     rows.sort(key=lambda row: (row["episode"], row["frame"]))
     contexts = Counter(str(row["context"]) for row in rows)
     return {
         "schema": 2,
-        "deck": "mega_starmie",
+        "deck": agent,
         "git_rev": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO,
                                             text=True).strip(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -129,14 +137,16 @@ def _payload(rows: list[dict]) -> dict:
         "exact": sum(row["exact"] for row in rows),
         "agrees": sum(row["agrees"] for row in rows),
         "misses": sum(not row["agrees"] for row in rows),
+        "errors": sum(bool(row.get("error")) for row in rows),
         "contexts": dict(sorted(contexts.items())),
         "rows": rows,
     }
 
 
-def _write_payload(path: Path, rows: list[dict]) -> None:
+def _write_payload(path: Path, rows: list[dict], agent: str = "mega_starmie") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".partial")
-    rendered = json.dumps(_payload(list(rows)), indent=2, ensure_ascii=False) + "\n"
+    rendered = json.dumps(_payload(list(rows), agent), indent=2, ensure_ascii=False) + "\n"
     temporary.write_text(rendered, encoding="utf-8")
     for attempt in range(20):
         try:
@@ -148,9 +158,11 @@ def _write_payload(path: Path, rows: list[dict]) -> None:
             time.sleep(0.05 * (attempt + 1))
 
 
-def sweep(*, store, limit: int | None = None, workers: int = 1,
-          checkpoint: Path | None = None) -> dict:
-    corrections = [c for c in load_corrections(store) if c.agent == "mega_starmie"]
+def sweep(*, store, agent: str = "mega_starmie", limit: int | None = None, workers: int = 1,
+          checkpoint: Path | None = None, keys: frozenset[tuple[int, int]] = frozenset()) -> dict:
+    corrections = [c for c in load_corrections(store) if c.agent == agent]
+    if keys:
+        corrections = [c for c in corrections if (_episode(c), _frame(c)) in keys]
     corrections.sort(key=lambda c: (_episode(c), _frame(c), c.id))
     if limit is not None:
         corrections = corrections[:limit]
@@ -159,36 +171,42 @@ def sweep(*, store, limit: int | None = None, workers: int = 1,
     groups = [[correction] for correction in corrections]
     if workers > 1:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_sweep_episode, group): group[0] for group in groups}
+            futures = {pool.submit(_sweep_episode, group, agent): group[0] for group in groups}
             rows = []
             for completed, future in enumerate(as_completed(futures), start=1):
                 rows.extend(future.result())
                 if checkpoint is not None:
-                    _write_payload(checkpoint, rows)
+                    _write_payload(checkpoint, rows, agent)
                 correction = futures[future]
                 print(f"[{completed}/{len(groups)}] {_episode(correction)}-{_frame(correction)}",
                       flush=True)
     else:
         rows = []
         for completed, group in enumerate(groups, start=1):
-            rows.extend(_sweep_episode(group))
+            rows.extend(_sweep_episode(group, agent))
             if checkpoint is not None:
-                _write_payload(checkpoint, rows)
+                _write_payload(checkpoint, rows, agent)
             print(f"[{completed}/{len(groups)}] {_episode(group[0])}-{_frame(group[0])}", flush=True)
 
-    return _payload(rows)
+    return _payload(rows, agent)
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--store", default=str(REPO / "data" / "corrections"))
+    parser.add_argument("--agent", default="mega_starmie")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--key", action="append", default=[], metavar="EPISODE:FRAME")
     args = parser.parse_args(argv)
+    keys = frozenset(tuple(map(int, key.split(":"))) for key in args.key)
+    if any(len(key) != 2 for key in keys):
+        parser.error("--key must be EPISODE:FRAME")
     checkpoint = args.output if args.limit is None else None
-    payload = sweep(store=args.store, limit=args.limit, workers=max(1, args.workers),
-                    checkpoint=checkpoint)
+    payload = sweep(store=args.store, agent=args.agent, limit=args.limit,
+                    workers=max(1, args.workers),
+                    checkpoint=checkpoint, keys=keys)
     rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     if args.limit is None:
         args.output.write_text(rendered, encoding="utf-8")

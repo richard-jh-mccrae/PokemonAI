@@ -186,12 +186,21 @@ class ReferenceSolver:
         if key in self._active:
             incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
+        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
+        if len(actions) == 1:
+            action = actions[0]
+            self._active.add(key)
+            result = self._action(state, action)
+            self._active.remove(key)
+            answer = StateEvaluation(result.value, action, result, ((action, result),))
+            if result.complete:
+                self._memo[key] = answer
+            return answer
         if self.nodes >= self.limits.max_nodes:
             incomplete = Evaluation(-math.inf, Ledger(), False, "reference cap")
             return StateEvaluation(-math.inf, None, incomplete, ())
         self.nodes += 1
         self._active.add(key)
-        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
         actor = (self.provider.actor(state) if hasattr(self.provider, "actor") else Actor.OURS)
         results_list = []
         for action in actions:
@@ -257,7 +266,7 @@ class ReferenceSolver:
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
             continuation = self._state(node.state, sleep)
-            if continuation.action is None and not continuation.evaluation.complete:
+            if not math.isfinite(continuation.value):
                 return Evaluation(-math.inf, base, False, continuation.evaluation.reason)
             ledger = _combine(base, continuation.value)
             return Evaluation(ledger.total, ledger, continuation.evaluation.complete,
@@ -410,16 +419,6 @@ class ProductionSolver(ReferenceSolver):
 
     def _state(self, state: DecisionState,
                sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
-        if (self.nodes >= self.limits.max_nodes
-                or (not self._root_probe_active and monotonic() >= self._deadline)):
-            actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
-            end = next((action for action in actions if action.identity.kind == "end"), None)
-            if end is not None:
-                lower = Evaluation(0.0, Ledger(), False, "production cap: End lower bound")
-                return StateEvaluation(0.0, end, lower, ((end, lower),))
-            incomplete = Evaluation(-math.inf, Ledger(), False, "production state cap")
-            return StateEvaluation(-math.inf, None, incomplete, ())
-
         key = state.semantic_key
         sleep_key = self._sleep_key(sleep)
         memo_key = (key, sleep_key)
@@ -432,9 +431,28 @@ class ProductionSolver(ReferenceSolver):
             incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
 
+        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
+        if len(actions) == 1:
+            action = actions[0]
+            self._active.add(memo_key)
+            result = self._action(state, action, sleep)
+            self._active.remove(memo_key)
+            answer = StateEvaluation(result.value, action, result, ((action, result),))
+            if result.complete:
+                memo[lookup_key] = answer
+            return answer
+
+        if (self.nodes >= self.limits.max_nodes
+                or (not self._root_probe_active and monotonic() >= self._deadline)):
+            end = next((action for action in actions if action.identity.kind == "end"), None)
+            if end is not None:
+                lower = Evaluation(0.0, Ledger(), False, "production cap: End lower bound")
+                return StateEvaluation(0.0, end, lower, ((end, lower),))
+            incomplete = Evaluation(-math.inf, Ledger(), False, "production state cap")
+            return StateEvaluation(-math.inf, None, incomplete, ())
+
         self.nodes += 1
         self._active.add(memo_key)
-        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
         actor = self.provider.actor(state)
         context = int(((state.obs.get("select") or {}).get("context", -1)))
         footprints: dict[object, ActionFootprint | None] = {}
@@ -446,7 +464,7 @@ class ProductionSolver(ReferenceSolver):
                              or footprints[action.identity].event not in asleep)
             self.por_pruned += len(actions) - len(filtered)
             actions = filtered
-        if self.provider.actor(state) is Actor.OURS:
+        if actor is Actor.OURS:
             width = (self.production_limits.root_beam_width if key == self._root_key
                      else self.production_limits.beam_width if context == MAIN_DECISION_CONTEXT
                      else self.production_limits.effect_choice_width)

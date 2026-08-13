@@ -32,6 +32,7 @@ class BellmanDeckProfile:
     partners: tuple[tuple[int, tuple[int, ...]], ...] = ()
     prize_routes: tuple[tuple[int, ...], ...] = ()
     prizes_to_win: int | None = None
+    deck_counts: tuple[tuple[int, int], ...] = ()
 
     @classmethod
     def from_registry(cls, registry) -> "BellmanDeckProfile":
@@ -46,7 +47,8 @@ class BellmanDeckProfile:
             for card_id, values in getattr(registry, "partners", {}).items()))
         return cls(lines=tuple(tuple(int(card_id) for card_id in line) for line in lines),
                    partners=partners, prize_routes=prize_routes,
-                   prizes_to_win=getattr(registry, "prizes_to_win", None))
+                   prizes_to_win=getattr(registry, "prizes_to_win", None),
+                   deck_counts=tuple(getattr(registry, "deck_counts", ()) or ()))
 
     @property
     def line_bases(self) -> frozenset[int]:

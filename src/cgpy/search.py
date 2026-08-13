@@ -191,10 +191,15 @@ _OP_POSES = {
     # CABT observation carries a native (not cgpy) search token, so this first rider ask must be
     # reconstructible from the public attack log just like a trainer's first ask.
     "xDeckEnergyAttachDistribute": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
+    # Discard recovery first chooses the Energy cards, then poses one placement ask per card.
+    # The first answer is sufficient to resume the plain-data rider frame.
+    "xDiscardEnergyAttachBench": {(int(SelectType.CARD), int(SelectContext.ATTACH_TO))},
     "xDeckEvolveInPlayAndShuffle": {
         (int(SelectType.CARD), int(SelectContext.EVOLVES_TO)),
         (int(SelectType.CARD), int(SelectContext.EVOLVES_FROM)),
     },
+    "xActivateAsk": {(int(SelectType.YES_NO), int(SelectContext.ACTIVATE))},
+    "xMayAsk": {(int(SelectType.YES_NO), int(SelectContext.ACTIVATE))},
 }
 
 
@@ -207,11 +212,15 @@ def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list
     """
     from .chain import def_for
     eff = gs.pending.effect_card
+    if (eff is None
+            and int(select["context"]) == int(SelectContext.ACTIVATE)):
+        eff = gs.pending.context_card
     if eff is None:
         raise ValueError(
             f"state_from_obs: cannot seed a non-MAIN select with no effect card "
             f"(context {select['context']})")
     in_play = any(p.top == eff for s in (0, 1) for p in gs.in_play(s))
+    cdef = def_for(gs.card_id(eff)) or {}
     kind = "play"
     if in_play:
         attacks = [entry for entry in reversed(logs or [])
@@ -219,14 +228,28 @@ def _reconstruct_effect_frame(gs: GameState, select: dict, seat: int, logs: list
                    and int(entry.get("playerIndex", -1)) == seat
                    and int(entry.get("serial", -1)) == eff
                    and entry.get("attackId") is not None]
-        if len(attacks) != 1:
-            raise ValueError(
-                "state_from_obs: cannot identify the attack that posed the mid-effect select")
-        attack_id = int(attacks[0]["attackId"])
-        program = (def_for(f"attack:{attack_id}") or {}).get("rider")
-        kind = "attack"
+        if len(attacks) == 1:
+            attack_id = int(attacks[0]["attackId"])
+            program = (def_for(f"attack:{attack_id}") or {}).get("rider")
+            kind = "attack"
+        else:
+            source_events = [entry for entry in reversed(logs or [])
+                             if int(entry.get("playerIndex", -1)) == seat
+                             and int(entry.get("serial", -1)) == eff
+                             and int(entry.get("type", -1)) in (
+                                 int(LogType.PLAY), int(LogType.EVOLVE))]
+            trigger = None
+            if source_events:
+                trigger_key = ("onBench" if int(source_events[0]["type"]) == int(LogType.PLAY)
+                               else "onEvolve")
+                hook = cdef.get(trigger_key)
+                if hook and hook.get("program"):
+                    trigger = [{"op": "xActivateAsk", "program": hook["program"]}]
+            ability = cdef.get("ability") or {}
+            program = trigger or ability.get("program")
+            kind = "ability"
     else:
-        program = (def_for(gs.card_id(eff)) or {}).get("play")
+        program = cdef.get("play")
     if not program:
         raise ValueError(f"state_from_obs: effect source {gs.card_id(eff)} has no {kind} program "
                          "to reconstruct")

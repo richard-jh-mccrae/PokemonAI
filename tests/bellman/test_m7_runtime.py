@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 import json
 
@@ -14,10 +15,11 @@ from cgpy.state import PokemonInPlay
 
 from common.engine import _own_prize_export
 from common import (
-    BoardPotential, DecisionState, Deterministic, ProductionLimits, ProductionSolver,
+    BoardPotential, Chance, DecisionState, Deterministic, ProductionLimits, ProductionSolver,
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.engine import CgpyTransitionProvider
+from common.planner import forced_action_decision
 from common.telemetry import to_record
 from train.blunder.store import load_corrections
 
@@ -25,8 +27,10 @@ from train.blunder.store import load_corrections
 REPO = Path(__file__).resolve().parents[2]
 DECK = [int(line) for line in (REPO / "src" / "agents" / "mega_starmie" /
                                "deck.csv").read_text().split()]
+LUCARIO_DECK = [int(line) for line in (REPO / "src" / "agents" / "mega_lucario" /
+                                       "deck.csv").read_text().split()]
 CINDERACE, STARYU, BOSS, WATER, LILLIE = 666, 1030, 1182, 3, 1227
-SALVATORE, MEGA_STARMIE = 1189, 1031
+SALVATORE, MEGA_STARMIE, MEOWTH = 1189, 1031, 1071
 
 
 def _fixture(hp):
@@ -189,6 +193,49 @@ def test_turn_zero_uses_declarative_pregame_policy():
     assert decision.diagnostics["backend"] == "declarative-pregame"
 
 
+def test_only_legal_action_bypasses_all_bellman_work():
+    deployed = runtime()
+    observation = _obs(_fixture(60))
+    observation["select"] = {
+        "type": 1, "context": 8, "minCount": 1, "maxCount": 1,
+        "remainDamageCounter": 0, "remainEnergyCost": 0,
+        "option": [{"type": 3, "area": 2, "index": 1, "playerIndex": 0}],
+        "deck": None, "contextCard": None, "effect": None,
+    }
+    deployed._planner = lambda _observation: pytest.fail("forced action entered Bellman")
+
+    decision = deployed.decide(observation)
+
+    assert decision.chosen == (0,)
+    assert decision.complete
+    assert decision.diagnostics == {
+        "backend": "forced-single-action", "searched": False, "legal_actions": 1,
+    }
+
+
+def test_exact_successor_policy_is_reused_at_the_live_decision_boundary():
+    deployed = runtime()
+    engine = _fixture(60)
+
+    first = deployed.decide(_obs(engine))
+    engine.step(first.chosen)
+    second = deployed.decide(_obs(engine))
+
+    assert second.diagnostics == {
+        "backend": "cgpy-bellman-transposition", "searched": False,
+    }
+
+
+def test_single_optional_option_is_not_mistaken_for_a_forced_action():
+    observation = _obs(_fixture(60))
+    observation["select"] = {
+        "type": 1, "context": 8, "minCount": 0, "maxCount": 1,
+        "option": [{"type": 3, "area": 2, "index": 1, "playerIndex": 0}],
+    }
+
+    assert forced_action_decision(observation) is None
+
+
 def test_forkable_engine_turbo_flare_energy_menu_reconstructs_the_attack_rider():
     records = json.loads((REPO / "tests" / "fixtures" / "continuation_parity" /
                           "seeded_continuations.json").read_text(encoding="utf-8"))["records"]
@@ -198,7 +245,7 @@ def test_forkable_engine_turbo_flare_energy_menu_reconstructs_the_attack_rider()
         observation, deck=tuple(DECK), deck_name="mega_starmie")
     provider = CgpyTransitionProvider(state)
 
-    assert provider.available and not provider._local_nested
+    assert provider.available and not provider._local_nested, provider._local_error
     action = next(action for action in provider.actions(state) if len(action.selection) == 3)
     resolved = provider.transition(state, action)
     assert isinstance(resolved, Deterministic)
@@ -303,6 +350,98 @@ def test_forkable_engine_reconstructs_both_evolution_and_target_asks():
     assert resolved.state.obs["current"]["players"][0]["bench"][0]["id"] == MEGA_STARMIE
 
 
+def test_forkable_engine_reconstructs_an_in_play_triggered_ability_gate():
+    engine, _seat, _error = Engine.start(
+        LUCARIO_DECK, LUCARIO_DECK, rng=SeededRng(4))
+    gs = engine.gs
+    for seat, board in enumerate(gs.players):
+        board.hand = []
+        board.discard = []
+        board.prize = []
+        board.deck = []
+        board.active = None
+        board.bench = []
+        owned = [serial for serial, card in gs.cards.items() if card.owner == seat]
+        riolu = next(serial for serial in owned if gs.card_id(serial) == 677)
+        board.active = PokemonInPlay(stack=[riolu], hp=80, max_hp=80, entered_turn=0)
+        remaining = [serial for serial in owned if serial != riolu]
+        board.prize = remaining[:6]
+        board.deck = remaining[6:]
+    board = gs.players[0]
+    meowth = next(serial for serial in board.deck if gs.card_id(serial) == MEOWTH)
+    board.deck.remove(meowth)
+    board.hand.append(meowth)
+    gs.turn = 1
+    gs.first_player = 1
+    gs.phase = "TURN"
+    gs.phase_data = {"seat": 0}
+    gs.pending = None
+    pose_main(gs, 0)
+    play = next(index for index, option in enumerate(engine.gs.pending.options)
+                if option["type"] == 7
+                and engine.gs.card_id(board.hand[option["index"]]) == MEOWTH)
+    engine.step([play])
+    assert engine.gs.pending.context == 43
+
+    observation = _obs(engine)
+    observation["search_begin_input"] = "opaque-native-token"
+    state = DecisionState.from_observation(
+        observation, deck=tuple(LUCARIO_DECK), deck_name="mega_lucario")
+    provider = CgpyTransitionProvider(state)
+
+    assert provider.available and not provider._local_nested, provider._local_error
+    outcomes = {action.identity.kind: provider.transition(state, action)
+                for action in provider.actions(state)}
+    assert set(outcomes) == {"yes", "no"}
+    assert isinstance(outcomes["yes"], Deterministic)
+    assert outcomes["yes"].state.obs["select"]["context"] == 7
+    assert isinstance(outcomes["no"], Deterministic)
+    assert outcomes["no"].state.obs["select"]["context"] == 0
+
+
+def test_cost_before_draw_chance_outcomes_keep_distinct_latent_states():
+    correction = next(
+        c for c in load_corrections(REPO / "data" / "corrections")
+        if c.agent == "mega_lucario" and c.episode_id == 85785067
+        and int((c.decision or {}).get("frame", -1)) == 54)
+    deployed = runtime("mega_lucario")
+    state = DecisionState.from_observation(
+        correction.obs, deck=tuple(LUCARIO_DECK), deck_name="mega_lucario",
+        value_registry_identity=deployed.registry.identity)
+    provider = CgpyTransitionProvider(
+        state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+    ability = next(action for action in provider.actions(state)
+                   if action.identity.kind == "ability")
+
+    transition = provider.transition(state, ability)
+
+    assert isinstance(transition, Chance)
+    keys = [edge.node.state.semantic_key for edge in transition.children]
+    assert len(keys) == len(set(keys)) == 16
+    assert all(edge.node.state.obs.get("bellmanLatent") for edge in transition.children)
+
+
+def test_engine_exports_generic_turn_damage_modifiers_to_successor_value():
+    correction = next(
+        c for c in load_corrections(REPO / "data" / "corrections")
+        if c.agent == "mega_lucario" and c.episode_id == 84889539
+        and int((c.decision or {}).get("frame", -1)) == 48)
+    deployed = runtime("mega_lucario")
+    state = DecisionState.from_observation(
+        correction.obs, deck=tuple(LUCARIO_DECK), deck_name="mega_lucario",
+        value_registry_identity=deployed.registry.identity)
+    provider = CgpyTransitionProvider(
+        state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+    boost = next(action for action in provider.actions(state)
+                 if action.identity.kind == "play")
+
+    transition = provider.transition(state, boost)
+
+    assert isinstance(transition, Deterministic)
+    assert transition.state.obs["bellmanTransient"]["damage_boosts"] == (
+        {"bonus": 30, "attackerEnergyType": 6},)
+
+
 class _TerminalMenu:
     def __init__(self, delegate):
         self.delegate = delegate
@@ -367,3 +506,168 @@ def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
     won["current"]["players"][0]["active"][0]["energies"] = [3] * 8
     assert potential(won).families == (("game", potential.scale.game),)
     assert potential(won).total > potential(before).total
+
+
+def test_typed_fetch_graph_reaches_evolution_cards_through_multi_hop_tutors():
+    deployed = runtime("mega_lucario")
+    potential = BoardPotential(
+        deployed.stats, registry=deployed.registry, profile=deployed.profile,
+        effects=deployed.effects, root_seat=0,
+    )
+
+    def player(hand):
+        visible = list(hand) + [673]
+        remaining = len(deployed.deck) - len(visible)
+        return {
+            "hand": [{"id": card_id} for card_id in hand], "discard": [],
+            "active": [], "bench": [{"id": 673, "hp": 80, "maxHp": 80,
+                                        "energies": [], "tools": [], "preEvolution": []}],
+            "benchMax": 5, "deckCount": remaining,
+        }
+
+    direct, _ = potential._reachable_card_access(player([1152]))  # Poké Pad
+    assert direct[674] == pytest.approx(0.75)       # Hariyama: no Rule Box
+    assert 678 not in direct                        # Mega Lucario ex: Rule Box
+
+    chained, _ = potential._reachable_card_access(player([1071]))  # Meowth ex
+    assert chained[1219] == pytest.approx(0.75)       # Petrel
+    assert chained[1152] == pytest.approx(0.75 ** 2)  # Petrel -> Poké Pad
+    assert chained[1142] == pytest.approx(0.75 ** 2)  # Petrel -> Fighting Gong
+    assert chained[1141] == pytest.approx(0.75 ** 2)  # Petrel -> Premium Power Pro
+    assert chained[1174] == pytest.approx(0.75 ** 2)  # Petrel -> Air Balloon
+    assert chained[1211] == pytest.approx(0.75)       # Meowth -> Black Belt directly
+    assert chained[674] == pytest.approx(0.75 ** 3)   # Pad -> Hariyama
+    assert chained[676] == pytest.approx(0.75 ** 3)   # Gong/Pad -> Solrock
+    assert chained[6] == pytest.approx(0.75 ** 3)     # Gong -> Basic Fighting Energy
+
+    with_fodder, _ = potential._reachable_card_access(player([1071, 1252, 1252]))
+    assert with_fodder[678] == pytest.approx(0.75 ** 3)  # Petrel -> Ultra Ball -> Mega
+
+    absent, _ = potential._reachable_card_access(player([]))
+    assert 674 not in absent
+
+
+def test_meowth_tutor_lines_reach_legal_mega_lucario_outs():
+    correction = next(
+        c for c in load_corrections(REPO / "data" / "corrections")
+        if c.agent == "mega_lucario" and c.episode_id == 85709280
+        and int((c.decision or {}).get("frame", -1)) == 17
+    )
+    deployed = runtime("mega_lucario")
+    observation = json.loads(json.dumps(correction.obs))
+    seat = int(observation["current"]["yourIndex"])
+    known_prizes = Counter(
+        card["id"] for card in correction.decision["current"]["players"][seat]["prize"])
+    observation["own_prizes"] = {str(card_id): count
+                                  for card_id, count in known_prizes.items()}
+    state = DecisionState.from_observation(
+        observation, deck=tuple(LUCARIO_DECK), deck_name="mega_lucario",
+        value_registry_identity=deployed.registry.identity,
+    )
+    provider = CgpyTransitionProvider(
+        state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+
+    def carries(action, card_id):
+        return f'"id":{card_id}' in repr(action.identity.parts)
+
+    def take(current, predicate):
+        action = next(action for action in provider.actions(current) if predicate(action))
+        transition = provider.transition(current, action)
+        assert isinstance(transition, Deterministic)
+        return transition.state
+
+    meowth = take(state, lambda action: action.identity.kind == "play"
+                  and carries(action, 1071))
+    supporter_menu = take(meowth, lambda action: action.identity.kind == "yes")
+
+    # Black Belt is a Supporter, so Meowth must fetch it directly for same-turn damage.
+    black_belt = take(supporter_menu, lambda action: carries(action, 1211))
+    assert any(action.identity.kind == "play" and carries(action, 1211)
+               for action in provider.actions(black_belt))
+
+    petrel = take(supporter_menu, lambda action: carries(action, 1219))
+    trainer_menu = take(petrel, lambda action: action.identity.kind == "play"
+                        and carries(action, 1219))
+    for target in (1152, 1142, 1121, 1141):
+        fetched = take(trainer_menu, lambda action, target=target: carries(action, target))
+        assert any(action.identity.kind == "play" and carries(action, target)
+                   for action in provider.actions(fetched))
+
+
+def test_typed_tutor_option_value_credits_its_best_reachable_outcome():
+    deployed = runtime("mega_lucario")
+    potential = BoardPotential(
+        deployed.stats, registry=deployed.registry, profile=deployed.profile,
+        effects=deployed.effects, root_seat=0,
+    )
+
+    def hand_value(card_id):
+        owner = {
+            "active": [{"id": 675}], "bench": [],
+            "hand": [{"id": card_id}], "discard": [],
+            "benchMax": 5, "deckCount": len(deployed.deck) - 2,
+        }
+        return potential._hand_resources(owner)
+
+    # Boss has immediate gust Worth. Petrel can instead reach a typed Trainer and that Trainer's
+    # best legal target, so its state value carries the option rather than tying on cardboard.
+    assert hand_value(1219) > hand_value(1182)
+
+
+def test_prize_route_credits_tutored_evolution_access_between_held_and_absent():
+    deployed = runtime("mega_lucario")
+
+    def route_value(hand):
+        potential = BoardPotential(
+            deployed.stats, registry=deployed.registry, profile=deployed.profile,
+            effects=deployed.effects, root_seat=0,
+        )
+        me = {
+            "active": [{"id": 678, "energies": [6]}],
+            "bench": [{"id": 673, "energies": [6, 6, 6]},
+                      {"id": 678, "energies": [6]}],
+            "hand": [{"id": card_id} for card_id in hand], "discard": [],
+            "benchMax": 5, "deckCount": len(deployed.deck) - 3 - len(hand),
+            "prize": [None] * 5,
+        }
+        opponent = {"prize": [None] * 6}
+        potential._known_prize_counts = Counter()
+        return potential._prize_plan(me, opponent)
+
+    held = route_value([674])
+    tutored = route_value([1152])
+    absent = route_value([])
+
+    assert held == pytest.approx(2.0)
+    assert tutored == pytest.approx(1.5)
+    assert absent == pytest.approx(0.0)
+    assert absent < tutored < held
+
+
+def test_tutored_hariyama_access_changes_prize_route_energy_preparation():
+    deployed = runtime("mega_lucario")
+
+    def route_value(hand, makuhita_energy, lucario_energy):
+        potential = BoardPotential(
+            deployed.stats, registry=deployed.registry, profile=deployed.profile,
+            effects=deployed.effects, root_seat=0,
+        )
+        me = {
+            "active": [{"id": 678, "energies": [6]}],
+            "bench": [
+                {"id": 673, "energies": [6] * makuhita_energy},
+                {"id": 678, "energies": [6] * lucario_energy},
+            ],
+            "hand": [{"id": card_id} for card_id in hand], "discard": [],
+            "benchMax": 5, "deckCount": len(deployed.deck) - 3 - len(hand),
+            "prize": [None] * 5,
+        }
+        potential._known_prize_counts = Counter()
+        return potential._prize_plan(me, {"prize": [None] * 6})
+
+    for hand in ([674], [1152], [674, 6], [1152, 6]):
+        # Hariyama or typed access through Poké Pad, with or without another Energy in hand.
+        # That hand Energy retains competing uses; it is not assumed attached for free.
+        assert route_value(hand, 3, 0) > route_value(hand, 2, 1)
+        assert route_value(hand, 3, 0) > route_value(hand, 1, 2)
+    assert route_value([], 3, 0) == pytest.approx(route_value([], 1, 2))

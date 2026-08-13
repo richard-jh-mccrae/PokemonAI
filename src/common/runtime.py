@@ -9,7 +9,7 @@ from common.cards import CardFunctions
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
-from common.planner import BellmanTurnPlanner
+from common.planner import BellmanTurnPlanner, forced_action_decision
 from common.potential import BoardPotential
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs, match_brief, resolve_scouted_role_worth
@@ -46,7 +46,7 @@ class BellmanRuntime:
         self.functions = CardFunctions.load() if functions is _ENGINE else functions
         self.effects = CardEffects.load()
         if scout is _ENGINE:
-            scout = Scout(load_artifact(), provider=self.stats)
+            scout = Scout(load_artifact(), provider=self.stats, functions=self.functions)
         self.scout = scout
         self.briefs = load_briefs() if briefs is _ENGINE else list(briefs or ())
         self.provider_factory = provider_factory
@@ -134,7 +134,8 @@ class BellmanRuntime:
             observation, candidates=self.last_read.candidates,
             properties=(brief.opponent_properties if brief is not None else None))
         potential = BoardPotential(
-            self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
+            self.stats, registry=self.registry, effects=self.effects,
+            profile=self.profile, root_seat=seat,
             opponent_role_worth=resolve_scouted_role_worth(
                 self.last_read, getattr(self.scout, "artifact", None), self.stats,
                 briefs=self.briefs))
@@ -146,6 +147,10 @@ class BellmanRuntime:
             effects=self.effects, stats=self.stats, belief=belief, **planner_kwargs)
 
     def decide(self, observation: dict) -> RootDecision:
+        forced = forced_action_decision(observation)
+        if forced is not None:
+            self.last_read = Read()
+            return forced
         current = observation.get("current") or {}
         if int(current.get("turn", 0)) <= 0:
             self.last_read = Read()

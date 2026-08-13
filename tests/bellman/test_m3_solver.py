@@ -292,10 +292,11 @@ def test_equal_utility_uses_the_shorter_bellman_continuation():
 
 def test_budget_dependent_lower_bound_is_not_transposition_cached():
     root, finish = _state("root"), _state("finish", board=0.2)
-    play, end = _action("play"), _action("end", 1)
+    play, follow, end = _action("play"), _action("attach"), _action("end", 1)
     solver = ProductionSolver(
-        Graph({"root": (play, end), "finish": (end,)},
-              {("root", "play"): Deterministic(finish)}),
+        Graph({"root": (play, end), "finish": (follow, end)},
+              {("root", "play"): Deterministic(finish),
+               ("finish", "attach"): Terminal(finish, "resolved", Ledger())}),
         _oracle(), limits=ProductionLimits(max_nodes=1),
     )
 
@@ -308,6 +309,45 @@ def test_budget_dependent_lower_bound_is_not_transposition_cached():
     exact = solver._state(root)
     assert exact.evaluation.complete
     assert exact.value == pytest.approx(0.2)
+
+
+def test_forced_recursive_transition_spends_no_search_node_budget():
+    root, forced, finish = (_state("root"), _state("forced"),
+                            _state("finish", board=0.2))
+    play, forced_pick, end = _action("play"), _action("attach"), _action("end", 1)
+    decision = ProductionSolver(
+        Graph(
+            {"root": (play, end), "forced": (forced_pick,), "finish": (end,)},
+            {("root", "play"): Deterministic(forced),
+             ("forced", "attach"): Deterministic(finish)},
+        ),
+        _oracle(), limits=ProductionLimits(max_nodes=1),
+    ).decide(root)
+
+    assert decision.action.kind == "play"
+    assert decision.value == pytest.approx(0.2)
+    assert decision.complete
+
+
+def test_forced_chain_propagates_nonfinite_incompleteness_without_invalid_ledger():
+    root, forced, capped = (_state("root"), _state("forced"),
+                            _state("capped", board=0.2))
+    play, forced_pick, follow, other, end = (
+        _action("play"), _action("attach"), _action("ability"), _action("retreat"),
+        _action("end", 1))
+    decision = ProductionSolver(
+        Graph(
+            {"root": (play, end), "forced": (forced_pick,), "capped": (follow, other)},
+            {("root", "play"): Deterministic(forced),
+             ("forced", "attach"): Deterministic(capped),
+             ("capped", "ability"): Terminal(capped, "resolved", Ledger()),
+             ("capped", "retreat"): Terminal(capped, "resolved", Ledger())},
+        ),
+        _oracle(), limits=ProductionLimits(max_nodes=1),
+    ).decide(root)
+
+    assert decision.action.kind == "end"
+    assert not decision.complete
 
 
 def test_mandatory_choice_ignores_optional_menu_width_cap():

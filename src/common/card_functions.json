@@ -389,11 +389,22 @@
 "671": [
 "paralyze"
 ],
+"673": [
+"evolves:674"
+],
 "674": [
 "gust"
 ],
 "675": [
-"draw"
+"draw",
+"partner:676",
+"role:engine"
+],
+"676": [
+"partner:675"
+],
+"677": [
+"evolves:678"
 ],
 "678": [
 "discard_energy_recur"
@@ -562,6 +573,7 @@
 ],
 "1071": [
 "search",
+"role:engine",
 "supporter_tutor"
 ],
 "1076": [
@@ -712,6 +724,7 @@
 "tool"
 ],
 "1174": [
+"retreat_reduction",
 "tool"
 ],
 "1181": [

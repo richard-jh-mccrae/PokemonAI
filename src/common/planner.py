@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .api import BellmanUnavailable, PlanRequest, RootDecision
 from .native_engine import NativeCgTransitionProvider
+from .options import enumerate_legal_actions
 from .solver import ProductionLimits, ProductionSolver
 from .state import DecisionState, OpponentBelief
 from .value import ValueOracle, ValueRegistry
@@ -18,6 +19,19 @@ DEFAULT_PRODUCTION_LIMITS = ProductionLimits(
     max_nodes=RUNTIME_MAX_NODES_PER_ROOT_ACTION, beam_width=RUNTIME_BEAM_WIDTH,
     root_beam_width=RUNTIME_ROOT_BEAM_WIDTH,
 )
+
+
+def forced_action_decision(observation: dict) -> RootDecision | None:
+    """Return a sole legal action without constructing a Bellman tree."""
+
+    actions = enumerate_legal_actions(observation)
+    if len(actions) != 1:
+        return None
+    action = actions[0]
+    return RootDecision(
+        action.selection, action.identity, 0.0, True,
+        {"backend": "forced-single-action", "searched": False, "legal_actions": 1},
+    )
 
 
 class BellmanTurnPlanner:
@@ -36,6 +50,9 @@ class BellmanTurnPlanner:
         self.provider_factory = provider_factory
 
     def decide(self, request: PlanRequest) -> RootDecision:
+        forced = forced_action_decision(request.observation)
+        if forced is not None:
+            return forced
         state = DecisionState.from_observation(
             request.observation, deck=request.deck, deck_name=request.deck_name,
             belief=self.belief, value_registry_identity=self.registry.identity)
@@ -63,4 +80,4 @@ class BellmanTurnPlanner:
                             decision.complete, diagnostics)
 
 
-__all__ = ("BellmanTurnPlanner",)
+__all__ = ("BellmanTurnPlanner", "forced_action_decision")

@@ -8,6 +8,9 @@ from pathlib import Path
 from common.card_tags import is_card_key
 
 _DEFAULT = Path(__file__).resolve().parent / "card_functions.json"
+_PARTNER_PREFIX = "partner:"
+_ROLE_PREFIX = "role:"
+_EVOLVES_PREFIX = "evolves:"
 
 
 class CardFunctions:
@@ -17,6 +20,45 @@ class CardFunctions:
 
     def tags(self, card_id: int) -> list[str]:
         return self._table.get(card_id, [])
+
+    def partners(self, card_id: int) -> tuple[int, ...]:
+        """Printed in-play partner dependencies carried as ``partner:<card-id>`` tags.
+
+        These are card facts, not deck doctrine. Invalid or self-referential values fail closed.
+        """
+        card_id = int(card_id)
+        partners = set()
+        for tag in self._table.get(card_id, ()):
+            if not isinstance(tag, str) or not tag.startswith(_PARTNER_PREFIX):
+                continue
+            try:
+                partner = int(tag.removeprefix(_PARTNER_PREFIX))
+            except ValueError:
+                continue
+            if partner > 0 and partner != card_id:
+                partners.add(partner)
+        return tuple(sorted(partners))
+
+    def roles(self, card_id: int) -> tuple[str, ...]:
+        """Shared card roles carried as ``role:<name>`` tags."""
+        return tuple(tag.removeprefix(_ROLE_PREFIX) for tag in self._table.get(int(card_id), ())
+                     if isinstance(tag, str) and tag.startswith(_ROLE_PREFIX)
+                     and tag.removeprefix(_ROLE_PREFIX))
+
+    def evolves_to(self, card_id: int) -> tuple[int, ...]:
+        """Printed one-hop evolution targets carried as ``evolves:<card-id>`` tags."""
+        card_id = int(card_id)
+        targets = set()
+        for tag in self._table.get(card_id, ()):
+            if not isinstance(tag, str) or not tag.startswith(_EVOLVES_PREFIX):
+                continue
+            try:
+                target = int(tag.removeprefix(_EVOLVES_PREFIX))
+            except ValueError:
+                continue
+            if target > 0 and target != card_id:
+                targets.add(target)
+        return tuple(sorted(targets))
 
     def dig_depth(self, card_id: int) -> int:
         """Cards this card's draw/dig Ability puts within reach in one use — the `dig:N` tag. Only

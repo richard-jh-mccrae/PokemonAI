@@ -65,6 +65,7 @@ FUNCTION_TIER: dict[str, float] = {
     "shuffle_hand": 8.0,
     "energy_denial": 6.0,
     "switch": 5.0,
+    "retreat_reduction": 5.0,
     "stall": 5.0,
 }
 

@@ -24,6 +24,15 @@ def test_manifest_describes_declarations_and_bellman_only():
     assert summary(manifest)["system"] == "bellman"
 
 
+def test_manifest_includes_shared_card_partner_dependencies():
+    manifest = build_manifest(REPO / "src" / "agents" / "mega_lucario",
+                              git_hash="abc123", cards={})
+    assert manifest["strategy"]["partners"] == {"675": [676], "676": [675]}
+    assert manifest["strategy"]["roles"]["675"] == ["engine"]
+    assert [line["path"] for line in manifest["strategy"]["lines"]] == [
+        [673, 674], [677, 678]]
+
+
 def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
     archive = package("mega_starmie", tmp_path, stamp=False)
     with zipfile.ZipFile(archive) as bundle:

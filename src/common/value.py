@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import Counter
 import hashlib
 import json
 import math
@@ -10,6 +11,7 @@ from typing import Callable, Mapping
 from common.card_worth import (
     ACE_SPEC_TIER, ENERGY_TIER, FUNCTION_TIER, KNOWN_CARD_FLOOR, ROLE_TIER, TAG_TIER, role_value,
 )
+from common.strategy import Roles
 
 from .algebra import Ledger
 from .api import ActionIdentity
@@ -68,7 +70,7 @@ class ValueRegistry:
                  facts: Mapping[int, CardFacts] | None = None,
                  overrides: Mapping[int, float] | None = None,
                  line_bases=(), line_pairs=(), lines=(), partners=None,
-                 prize_routes=(), prizes_to_win=None,
+                 prize_routes=(), prizes_to_win=None, deck_counts=(),
                  seeds: WorthSeeds = WorthSeeds()):
         self.roles = {int(key): tuple(value) for key, value in (roles or {}).items()}
         for card_id in line_bases:
@@ -85,13 +87,19 @@ class ValueRegistry:
         self.prize_routes = tuple(tuple(int(card_id) for card_id in route)
                                   for route in prize_routes)
         self.prizes_to_win = None if prizes_to_win is None else int(prizes_to_win)
+        self.deck_counts = tuple(sorted((int(card_id), int(count))
+                                        for card_id, count in deck_counts if int(count) > 0))
         self.seeds = seeds
 
     @classmethod
     def from_strategy(cls, *, strategy, stats, functions, deck) -> "ValueRegistry":
         card_ids = set(int(card_id) for card_id in deck)
-        roles = {card_id: tuple((getattr(strategy, "roles", {}) or {}).get(card_id, ()))
-                 for card_id in card_ids}
+        roles = {}
+        for card_id in card_ids:
+            shared = (functions.roles(card_id) if functions is not None
+                      and hasattr(functions, "roles") else ())
+            declared = (getattr(strategy, "roles", {}) or {}).get(card_id, ())
+            roles[card_id] = tuple(dict.fromkeys((*shared, *declared)))
         tags = {card_id: tuple(functions.tags(card_id)) if functions else () for card_id in card_ids}
         facts = {}
         for card_id in card_ids:
@@ -110,17 +118,43 @@ class ValueRegistry:
                 bench_damage=max((int(getattr(attack, "benchSnipe", 0) or 0)
                                   for attack in attacks if attack is not None), default=0),
             )
-        declarations = tuple(line for line in getattr(strategy, "lines", ()) if line.path)
+        evolves = dict(getattr(getattr(strategy, "roles", None), "evolves", {}) or {})
+        if functions is not None and hasattr(functions, "evolves_to"):
+            for card_id in card_ids:
+                targets = tuple(target for target in functions.evolves_to(card_id)
+                                if target in card_ids)
+                if len(targets) > 1:
+                    raise ValueError(f"ambiguous shared evolution targets for {card_id}: {targets}")
+                if targets:
+                    target = targets[0]
+                    existing = evolves.get(card_id)
+                    if existing is not None and int(existing) != target:
+                        raise ValueError(f"conflicting evolution targets for {card_id}")
+                    evolves[card_id] = target
+        normalized_roles = Roles(roles, evolves=evolves)
+        roles = {card_id: tuple(normalized_roles.get(card_id, ())) for card_id in card_ids}
+        declarations = normalized_roles.lines
         lines = tuple(tuple(line.path) for line in declarations)
         line_bases = tuple(line.path[0] for line in declarations
                            if getattr(line, "role", "win_condition") == "win_condition")
         line_pairs = tuple((line[0], line[-1]) for line in lines
                            if len(line) >= MIN_EVOLUTION_LINE_LENGTH)
+        declared_partners = getattr(strategy, "partners", {}) or {}
+        partners = {}
+        for card_id in sorted(card_ids | {int(card_id) for card_id in declared_partners}):
+            shared = (functions.partners(card_id) if functions is not None
+                      and hasattr(functions, "partners") else ())
+            declared = declared_partners.get(card_id, ())
+            merged = tuple(dict.fromkeys(int(partner) for partner in (*shared, *declared)
+                                         if int(partner) in card_ids and int(partner) != card_id))
+            if merged:
+                partners[card_id] = merged
         prize_plan = getattr(strategy, "prize_plan", None)
         return cls(roles=roles, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
                    line_bases=line_bases, line_pairs=line_pairs, lines=lines,
-                   partners=getattr(strategy, "partners", {}) or {},
+                   partners=partners,
+                   deck_counts=Counter(int(card_id) for card_id in deck).items(),
                    prize_routes=(getattr(prize_plan, "routes", ()) if prize_plan else ()),
                    prizes_to_win=(getattr(prize_plan, "prizes_to_win", None)
                                   if prize_plan else None))
@@ -154,6 +188,7 @@ class ValueRegistry:
             "line_parents": self.line_parents, "lines": self.lines,
             "partners": self.partners,
             "prize_routes": self.prize_routes, "prizes_to_win": self.prizes_to_win,
+            "deck_counts": self.deck_counts,
         }, sort_keys=True, separators=(",", ":"), default=list).encode("utf-8")
         return "bellman-worth/1:" + hashlib.sha256(payload).hexdigest()
 
@@ -187,13 +222,17 @@ class ValueOracle:
         self._refresh = refresh_evaluator
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
-        if model is None and state.semantic_key in self._potential_cache:
-            return self._potential_cache[state.semantic_key]
-        base = self._families(model if model is not None else state.obs)
+        observation = model if model is not None else state.obs
+        cache_key = (self._families.cache_key(observation)
+                     if model is None and hasattr(self._families, "cache_key")
+                     else state.semantic_key)
+        if model is None and cache_key in self._potential_cache:
+            return self._potential_cache[cache_key]
+        base = self._families(observation)
         families = [(name, float(value)) for name, value in base.families]
         result = Potential(sum(value for _name, value in families), tuple(families), base.unknowns)
         if model is None:
-            self._potential_cache[state.semantic_key] = result
+            self._potential_cache[cache_key] = result
         return result
 
     def transition_ledger(self, before: DecisionState, after: DecisionState,

@@ -46,22 +46,121 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
     return {"size": len(ids), "cards": rows}
 
 
-def _strategy(strategy) -> dict:
-    roles = {str(card_id): list(names) for card_id, names in sorted(strategy.roles.items())}
+def _shared_partners(agent_dir: Path, card_ids) -> dict[int, tuple[int, ...]]:
+    """Read printed partner tags from the staged bundle, or source when briefing in place."""
+    source = agent_dir / "common" / "card_functions.json"
+    if not source.exists():
+        source = REPO / "src" / "common" / "card_functions.json"
+    try:
+        tags = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    deck = {int(card_id) for card_id in card_ids}
+    partners: dict[int, tuple[int, ...]] = {}
+    for card_id in sorted(deck):
+        values = set()
+        for tag in tags.get(str(card_id), ()):
+            if not isinstance(tag, str) or not tag.startswith("partner:"):
+                continue
+            try:
+                partner = int(tag.removeprefix("partner:"))
+            except ValueError:
+                continue
+            if partner in deck and partner != card_id:
+                values.add(partner)
+        if values:
+            partners[card_id] = tuple(sorted(values))
+    return partners
+
+
+def _shared_roles(agent_dir: Path, card_ids) -> dict[int, tuple[str, ...]]:
+    source = agent_dir / "common" / "card_functions.json"
+    if not source.exists():
+        source = REPO / "src" / "common" / "card_functions.json"
+    try:
+        tags = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        int(card_id): tuple(tag.removeprefix("role:") for tag in tags.get(str(card_id), ())
+                            if isinstance(tag, str) and tag.startswith("role:")
+                            and tag.removeprefix("role:"))
+        for card_id in card_ids
+        if any(isinstance(tag, str) and tag.startswith("role:") and tag.removeprefix("role:")
+               for tag in tags.get(str(card_id), ()))
+    }
+
+
+def _shared_lines(agent_dir: Path, card_ids) -> tuple[tuple[int, ...], ...]:
+    source = agent_dir / "common" / "card_functions.json"
+    if not source.exists():
+        source = REPO / "src" / "common" / "card_functions.json"
+    try:
+        tags = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ()
+    deck, edges = {int(card_id) for card_id in card_ids}, {}
+    for card_id in deck:
+        targets = []
+        for tag in tags.get(str(card_id), ()):
+            if not isinstance(tag, str) or not tag.startswith("evolves:"):
+                continue
+            try:
+                target = int(tag.removeprefix("evolves:"))
+            except ValueError:
+                continue
+            if target in deck and target != card_id:
+                targets.append(target)
+        if len(set(targets)) == 1:
+            edges[card_id] = targets[0]
+    roots = sorted(set(edges) - set(edges.values()))
+    lines = []
+    for root in roots:
+        path, seen = [root], {root}
+        while path[-1] in edges and edges[path[-1]] not in seen:
+            path.append(edges[path[-1]])
+            seen.add(path[-1])
+        if len(path) > 1:
+            lines.append(tuple(path))
+    return tuple(lines)
+
+
+def _strategy(strategy, *, shared_roles=None, shared_partners=None, shared_lines=()) -> dict:
+    merged_roles = {int(card_id): tuple(names) for card_id, names in strategy.roles.items()}
+    for card_id, values in (shared_roles or {}).items():
+        merged_roles[card_id] = tuple(dict.fromkeys((*values, *merged_roles.get(card_id, ()))))
+    roles = {str(card_id): list(names) for card_id, names in sorted(merged_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}
              for line in strategy.lines]
+    declared_paths = {tuple(line["path"]) for line in lines}
+    for path in shared_lines:
+        if path in declared_paths:
+            continue
+        payoff_roles = set(merged_roles.get(path[-1], ()))
+        role = ("win_condition" if "primary_attacker" in payoff_roles else
+                next((name for name in ("win_condition", "secondary_attacker")
+                      if name in payoff_roles), "evolution_base"))
+        lines.append({"path": list(path), "payoff": path[-1], "role": role,
+                      "ready": {"energy": None}})
     prize_plan = None if strategy.prize_plan is None else {
         "routes": [list(route) for route in strategy.prize_plan.routes],
         "prizes_to_win": strategy.prize_plan.prizes_to_win,
     }
+    partners = {}
+    for source in (shared_partners or {}, getattr(strategy, "partners", {}) or {}):
+        for card_id, values in source.items():
+            merged = tuple(dict.fromkeys((*partners.get(int(card_id), ()),
+                                          *(int(value) for value in values))))
+            if merged:
+                partners[int(card_id)] = merged
     return {
         "name": strategy.name,
         "roles": roles,
         "lines": lines,
         "starter_priority": list(strategy.starter_priority),
-        "partners": {str(card_id): list(partners)
-                     for card_id, partners in sorted(strategy.partners.items())},
+        "partners": {str(card_id): list(values)
+                     for card_id, values in sorted(partners.items())},
         "worth_overrides": {str(card_id): value
                             for card_id, value in sorted(strategy.worth_overrides.items())},
         "prize_plan": prize_plan,
@@ -77,6 +176,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     git_hash = _git_hash(REPO) if git_hash is None else git_hash
     agent_name = agent_name or agent_dir.name
     strategy = _load_strategy(agent_dir)
+    deck = _deck(agent_dir, cards)
     return {
         "schema_version": 3,
         "provenance": {
@@ -86,8 +186,12 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
             "artifact": artifact_stem(agent_name, when=when, git_hash=git_hash),
         },
         "system": "bellman",
-        "deck": _deck(agent_dir, cards),
-        "strategy": _strategy(strategy),
+        "deck": deck,
+        "strategy": _strategy(
+            strategy,
+            shared_roles=_shared_roles(agent_dir, (row["id"] for row in deck["cards"])),
+            shared_partners=_shared_partners(agent_dir, (row["id"] for row in deck["cards"])),
+            shared_lines=_shared_lines(agent_dir, (row["id"] for row in deck["cards"]))),
         "capabilities": {
             "bellman": True,
             "card_functions": (agent_dir / "common" / "card_functions.json").exists(),
