@@ -50,13 +50,18 @@ jobs:
           F_CORRECTIONS: ${{ steps.changes.outputs.corrections }}
           F_CGPY: ${{ steps.changes.outputs.cgpy }}
           F_MEGA_STARMIE: ${{ steps.changes.outputs.mega_starmie }}
+          F_MEGA_LUCARIO: ${{ steps.changes.outputs.mega_lucario }}
           F_DOCS: ${{ steps.changes.outputs.docs }}
           F_OPERATIONAL_DATA: ${{ steps.changes.outputs.operational_data }}
           F_AUTHORING: ${{ steps.changes.outputs.authoring }}
           F_ANY: ${{ steps.changes.outputs.any }}
         run: |
-          tools=false; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
-          enable_all() { tools=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
+          tools=false; corrections=false; src=false; cgpy=false; docs=false
+          mirror_starmie=false; mirror_lucario=false
+          enable_all() {
+            tools=true; corrections=true; src=true; cgpy=true; docs=true
+            mirror_starmie=true; mirror_lucario=true
+          }
           if [ "$EVENT" != 'pull_request' ] || [ "$F_GLOBAL" = true ]; then
             enable_all
           else
@@ -67,16 +72,28 @@ jobs:
             [ "$F_CGPY" = true ] && cgpy=true
             [ "$F_DOCS" = true ] && docs=true
             if [ "$F_RUNTIME" = true ]; then
-              tools=true; corrections=true; src=true; cgpy=true; mirrors='["mega_starmie"]'
+              tools=true; corrections=true; src=true; cgpy=true
+              mirror_starmie=true; mirror_lucario=true
             fi
             if [ "$F_MEGA_STARMIE" = true ]; then
-              tools=true; src=true; mirrors='["mega_starmie"]'
+              tools=true; src=true; mirror_starmie=true
+            fi
+            if [ "$F_MEGA_LUCARIO" = true ]; then
+              tools=true; src=true; mirror_lucario=true
             fi
             known=false
-            for value in "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOLS" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
+            for value in "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOLS" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_MEGA_LUCARIO" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
               [ "$value" = true ] && known=true
             done
             [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
+          fi
+          mirrors='[]'
+          if [ "$mirror_starmie" = true ] && [ "$mirror_lucario" = true ]; then
+            mirrors='[{"agent":"mega_starmie","games":5},{"agent":"mega_lucario","games":10}]'
+          elif [ "$mirror_starmie" = true ]; then
+            mirrors='[{"agent":"mega_starmie","games":5}]'
+          elif [ "$mirror_lucario" = true ]; then
+            mirrors='[{"agent":"mega_lucario","games":10}]'
           fi
           printf 'tools=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tools" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
 
@@ -163,7 +180,7 @@ jobs:
       - run: python -m pytest tests/test_doc_links_resolve.py tests/test_line_endings_policy.py -q --tb=short
 
   agent-mirror:
-    name: mirror / ${{ matrix.agent }}
+    name: mirror / ${{ matrix.mirror.agent }}
     needs: plan
     if: needs.plan.outputs.mirrors != '[]'
     runs-on: ubuntu-latest
@@ -172,7 +189,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        agent: ${{ fromJSON(needs.plan.outputs.mirrors) }}
+        mirror: ${{ fromJSON(needs.plan.outputs.mirrors) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -180,5 +197,5 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - name: Five parallel mirrors; every Match <= ten minutes
-        run: python tools/sim/mirror_gate.py ${{ matrix.agent }} --games 5 --workers 5 --max-match-seconds 600
+      - name: Run ${{ matrix.mirror.games }} mirrors in five workers; every Match <= ten minutes
+        run: python tools/sim/mirror_gate.py ${{ matrix.mirror.agent }} --games ${{ matrix.mirror.games }} --workers 5 --max-match-seconds 600

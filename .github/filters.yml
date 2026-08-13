@@ -57,6 +57,10 @@ mega_starmie:
   - 'src/agents/mega_starmie/**'
   - 'tools/sim/mirror_gate.py'
 
+mega_lucario:
+  - 'src/agents/mega_lucario/**'
+  - 'tools/sim/mirror_gate.py'
+
 docs:
   - 'docs/**'
   - '**/*.md'
