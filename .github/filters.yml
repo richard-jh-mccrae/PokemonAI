@@ -3,10 +3,13 @@
 
 global:
   - '.github/**'
-  - 'requirements.txt'
-  - 'pytest.ini'
   - '.coveragerc'
   - '.gitattributes'
+
+# Shared test infrastructure can affect every tool suite.
+tool_global:
+  - 'requirements.txt'
+  - 'pytest.ini'
   - 'tests/conftest.py'
   - 'tests/fixtures/**'
 

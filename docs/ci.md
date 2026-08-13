@@ -8,9 +8,9 @@ and manual dispatches run all jobs.
 Correction contracts also run whenever `src/common/` or any `src/agents/` implementation changes.
 
 Tool tests are selected independently: arena, meta tracker, simulator, and submission. A PR runs a
-tool suite only when that tool's implementation, adapter, or tests changed. Each selected suite has
-a twelve-minute job budget; individual tests are capped at two minutes and the twenty slowest are
-reported, so a stall is attributable instead of consuming the whole job.
+tool suite only when that tool's implementation, adapter, or tests changed. Shared test
+infrastructure runs every tool suite; CI configuration changes do not. Each selected suite has a
+twelve-minute job budget and reports the twenty slowest tests.
 
 The agent-skills synchronisation check is selected separately when its tool, canonical skills,
 Codex adapters, or its test changes.
