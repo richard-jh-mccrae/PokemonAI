@@ -9,6 +9,7 @@ from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEd
 from .options import LegalAction, enumerate_legal_actions
 from .commutativity import action_footprint
 from .refresh import refresh_transition
+from .transition_value import end_has_forced_value_change
 from .state import DecisionState
 from common.strategy.context import _MAIN, _NO, _YES
 
@@ -196,6 +197,9 @@ class NativeCgTransitionProvider:
             return self._group_children(state, action, children)
         except Exception as exc:  # noqa: BLE001 - engine gap remains explicit
             return Unknown("native cg transition failed", f"{type(exc).__name__}: {exc}")
+
+    def resolve_end(self, state: DecisionState, action: LegalAction):
+        return self.transition(state, action) if end_has_forced_value_change(state, self.registry) else None
 
     def _begin_worlds(self, root: DecisionState) -> tuple[_NativeWorld, ...]:
         observation = root.obs

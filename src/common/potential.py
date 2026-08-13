@@ -29,6 +29,8 @@ OPPONENT_ROLE_HEALTH_SHARE = 0.10
 SAFE_DAMAGE_RESERVE_SHARE = 0.25
 OPPONENT_ROLE_THREAT_SHARE = 0.20
 OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
+BENCH_ATTACK_ACCESS_SHARE = 0.50
+EVOLVED_BODY_PRIZE_SHARE = 0.040
 
 
 @dataclass(frozen=True)
@@ -248,14 +250,18 @@ class BoardPotential:
             theirs, opponent_moves_next=opponent_moves_next) if theirs is not None else ())
         opponent_facts = self._side_facts(opponent)
         me_facts = self._side_facts(me)
-        own_values = []
+        active_values = []
+        bench_values = []
         if theirs is not None:
-            for body in _bodies(me):
-                attacker_facts = self._side_facts(me, attacking_body=body)
-                own_values.append(min((self._attack_value(
-                    body, _energy_codes(body), defender, attacker_facts, opponent_facts)
-                    for defender in defenders), default=0.0))
-        own = max(own_values, default=0.0)
+            for bodies, values in (((me.get("active") or ()), active_values),
+                                   ((me.get("bench") or ()), bench_values)):
+                for body in (body for body in bodies if body):
+                    attacker_facts = self._side_facts(me, attacking_body=body)
+                    values.append(min((self._attack_value(
+                        body, _energy_codes(body), defender, attacker_facts, opponent_facts)
+                        for defender in defenders), default=0.0))
+        own = max(max(active_values, default=0.0),
+                  BENCH_ATTACK_ACCESS_SHARE * max(bench_values, default=0.0))
         incoming_values = []
         if mine is not None:
             for body in _bodies(opponent):
@@ -388,6 +394,15 @@ class BoardPotential:
                     for card_job, values in jobs.items())
         return float(worth_to_prizes(worth))
 
+    def _development(self, me) -> float:
+        """Value realized by turning a line piece into a developed body.
+
+        The retained pre-evolution stack already proves that development occurred.  Scale the
+        improvement by the evolved body's prize liability so the term stays card- and deck-neutral.
+        """
+        return sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
+                   for body in (me.get("bench") or ()) if body and body.get("preEvolution"))
+
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()
         occupied = Counter(self._resource_job(card_id)
@@ -510,6 +525,7 @@ class BoardPotential:
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
+            "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
             "opponent_roles": self._opponent_role_pressure(opponent),
             "prize_plan": self._prize_plan(me, opponent),

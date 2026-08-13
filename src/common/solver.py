@@ -216,7 +216,16 @@ class ReferenceSolver:
     def _action(self, state: DecisionState, action: LegalAction,
                 sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:
         if action.identity.kind == "end":
-            return Evaluation(0.0, Ledger(), True, "End exact zero")
+            resolve_end = getattr(self.provider, "resolve_end", None)
+            if resolve_end is None:
+                return Evaluation(0.0, Ledger(), True, "End exact zero")
+            node = resolve_end(state, action)
+            if node is None:
+                return Evaluation(0.0, Ledger(), True, "End exact zero")
+            if isinstance(node, (Deterministic, Terminal)):
+                ledger = self._ledger(state, node.state, action)
+                return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0)
+            return Evaluation(-math.inf, Ledger(), False, "End transition unavailable")
         return self._transition(state, action, self.provider.transition(state, action), sleep)
 
     def _transition(self, before: DecisionState, action: LegalAction, node,

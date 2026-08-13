@@ -57,6 +57,16 @@ class Graph:
         return Actor.OURS
 
 
+class ResolvedEndGraph(Graph):
+    def resolve_end(self, state, action):
+        return self.transition(state, action)
+
+
+class UnchangedEndGraph(Graph):
+    def resolve_end(self, state, action):
+        return None
+
+
 class FootprintedGraph(Graph):
     def __init__(self, actions, transitions, footprints):
         super().__init__(actions, transitions)
@@ -75,6 +85,25 @@ def _oracle():
     return ValueOracle(REGISTRY, lambda obs: Potential(
         float(obs["current"].get("board", 0.0)),
         (("board", float(obs["current"].get("board", 0.0))),)))
+
+
+def test_provider_can_resolve_forced_end_transition_value():
+    root, expired = _state("root", board=0.2), _state("expired")
+    end = _action("end")
+    decision = ReferenceSolver(
+        ResolvedEndGraph({"root": (end,)}, {("root", "end"): Deterministic(expired)}),
+        _oracle(),
+    ).decide(root)
+
+    assert decision.value == pytest.approx(-0.2)
+    assert decision.diagnostics["ledger"]["costs"] == {"board": pytest.approx(0.2)}
+
+
+def test_provider_can_retain_exact_zero_end_when_nothing_forced_changes():
+    root, end = _state("root", board=0.2), _action("end")
+    decision = ReferenceSolver(UnchangedEndGraph({"root": (end,)}, {}), _oracle()).decide(root)
+
+    assert decision.value == 0.0
 
 
 def test_complete_line_continues_and_commits_only_first_action():

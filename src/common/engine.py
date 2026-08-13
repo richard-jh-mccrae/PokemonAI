@@ -5,7 +5,8 @@ from collections import Counter
 import copy
 
 from .algebra import (
-    Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown, WeightedEdge,
+    Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
+    WeightedEdge,
 )
 from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState
@@ -13,6 +14,7 @@ from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
 from .commutativity import action_footprint
 from .refresh import refresh_transition
+from .transition_value import end_has_forced_value_change
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -142,6 +144,9 @@ class CgpyTransitionProvider:
             return self._register_successor(state, child, action)
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
+
+    def resolve_end(self, state: DecisionState, action: LegalAction):
+        return self.transition(state, action) if end_has_forced_value_change(state, self.registry) else None
 
     @staticmethod
     def _played_card_id(engine, action):
