@@ -191,21 +191,21 @@ match objectives. They should not add tactical `if/else` branches to the solver.
 
 ### 7. Known uncertainty and replanning
 
-Known uncertainty is evaluated as an outcome distribution. Hypergeometric/card-window odds provide
-probability; Needs and successor search provide each outcome's marginal value. Outcome classes are
-mutually exclusive complete states, not independently summed hit rates. Whiff mass is explicit.
+Known uncertainty is evaluated according to when its information becomes actionable. A revealed
+choice is an outcome distribution with successor search. A hidden shuffle-refresh is instead an
+analytic commitment: exact hypergeometric classes measure whether the redraw satisfies current board
+needs, while the known hand supplies the opportunity cost. No drawn hand is invented.
 
-Lillie's Determination, Recon Dive, an unknown-order Ultra Ball search, and similar effects are
-contingent policy trees:
+Lillie's Determination and other shuffle-refresh effects follow this boundary:
 
 1. compare the expected value of taking the uncertain action now with every current alternative;
 2. choose it only when expected benefit exceeds its full cost and opportunity margin;
 3. execute the real action;
-4. replan from the actual revealed state;
-5. make the newly presented off-MAIN selection with the same evaluator.
+4. do not search a hypothetical post-refresh action;
+5. replan from the actual drawn hand on the next callback.
 
-The plan commits only the next action, never a fictional post-reveal sequence. The expected search
-and the real replan must use the same value contract.
+Reveal-and-choose effects such as Recon Dive remain contingent policy trees because the revealed menu
+is itself a real decision. The plan still commits only the next action.
 
 ### 8. Opponent belief and Scouting
 
@@ -249,11 +249,12 @@ choice to legacy logic. Its budget and approximation regret are measured against
 before activation. Budget constants and stopping reasons appear in telemetry.
 
 The live production transition provider uses the shipped native `cg` engine. `cgpy` remains an
-offline diagnostic/reference adapter and is excluded from submissions. Deterministic draws,
-coins, reveal windows, and actor choices are transition algebra, not card-name handlers. A reveal is
+offline diagnostic/reference adapter and is excluded from submissions. Coins, reveal windows, and
+actor choices are transition algebra, not card-name handlers. A reveal is
 `chance(revealed set) -> max(legal revealed continuation)`; static Worth never chooses the card.
-Known reveal sets use exact hypergeometric mass. Wide hidden draws use deterministic bounded support,
-and their continuation values are probability-weighted by the same recurrence.
+Known reveal sets use exact hypergeometric mass. Shuffle-refreshes use exact semantic need classes
+and terminate at an analytic ledger; neither production nor offline search creates a hypothetical
+redraw continuation.
 
 For a reveal-and-choose effect the recurrence is
 `E_R[max(c in legal(R) union decline, delta U(c) + V(successor(c)))]`. The revealed card is never

@@ -133,7 +133,9 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        "eb4fb1f19691": [3],  # Free deterministic Ability, then Bench Staryu before refresh.
+        # Bench Staryu directly. The no-op Ability-first permutation has identical utility but
+        # one extra decision, so the solver's documented exact-tie objective removes it.
+        "eb4fb1f19691": [2],
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
         "3730b43d89a5": [1],  # Free Cape, then Water to Cinderace and Turbo Flare.
     }

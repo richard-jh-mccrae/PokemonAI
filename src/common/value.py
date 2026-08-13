@@ -172,12 +172,18 @@ class ValueOracle:
     """Differences a state utility once per transition; it never inspects action semantics."""
 
     def __init__(self, registry: ValueRegistry,
-                 family_evaluator: Callable[[Mapping], Potential]):
+                 family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
+                 refresh_evaluator=None):
         self.registry = registry
         if family_evaluator is None:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
+        if refresh_evaluator is None and effects is not None and stats is not None:
+            from .refresh import RefreshEvaluator
+            refresh_evaluator = RefreshEvaluator(
+                registry, family_evaluator, effects=effects, stats=stats)
+        self._refresh = refresh_evaluator
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
         if model is None and state.semantic_key in self._potential_cache:
@@ -203,6 +209,11 @@ class ValueOracle:
             elif delta < 0.0:
                 costs.append((family, -delta))
         return Ledger(tuple(benefits), tuple(costs))
+
+    def refresh_ledger(self, state: DecisionState, node):
+        if self._refresh is None:
+            raise ValueError("shuffle-refresh valuation requires effects and card facts")
+        return self._refresh.evaluate(state, node)
 
 
 __all__ = (

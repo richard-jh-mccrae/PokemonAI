@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 PROBABILITY_MIN = 0.0
 PROBABILITY_MAX = 1.0
 CHANCE_MASS_TOLERANCE = 1e-12
+MINIMUM_CARD_ID = 1
 
 
 class Actor(str, Enum):
@@ -124,6 +125,26 @@ class RevealChoice:
 
 
 @dataclass(frozen=True)
+class Refresh:
+    """A shuffle-refresh valued analytically before real randomness resolves.
+
+    ``draws`` contains the printed own/opponent redraw counts for each equally likely card-effect
+    branch (for example, the two sides of a coin).  It deliberately contains no sampled cards and
+    no successor state: the live engine resolves the gamble after the solver commits the play.
+    """
+
+    card_id: int
+    draws: tuple[tuple[int, int], ...]
+    opponent_shuffles: bool
+
+    def __post_init__(self) -> None:
+        if int(self.card_id) < MINIMUM_CARD_ID or not self.draws:
+            raise ValueError("refresh nodes need a card identity and at least one draw branch")
+        if any(int(mine) < 0 or int(theirs) < 0 for mine, theirs in self.draws):
+            raise ValueError("refresh draw counts cannot be negative")
+
+
+@dataclass(frozen=True)
 class Terminal:
     state: "DecisionState"
     result: str
@@ -140,7 +161,7 @@ class Unknown:
             raise ValueError("unknown nodes require reason and missing fact")
 
 
-TransitionResult = Deterministic | Choice | Chance | RevealChoice | Terminal | Unknown
+TransitionResult = Deterministic | Choice | Chance | RevealChoice | Refresh | Terminal | Unknown
 
 
 @dataclass(frozen=True)
@@ -165,6 +186,6 @@ class RootDiagnostics:
 
 __all__ = (
     "ActionDiagnostic", "Actor", "Chance", "Choice", "Deterministic", "Edge", "Ledger",
-    "RevealChoice", "RevealOutcome", "RootDiagnostics", "Terminal", "TransitionResult", "Unknown",
+    "Refresh", "RevealChoice", "RevealOutcome", "RootDiagnostics", "Terminal", "TransitionResult", "Unknown",
     "WeightedEdge",
 )

@@ -17,6 +17,11 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
+- `needs.py`: deck-neutral immediate demand, card-to-need assignment, and deterministic next-turn
+  option value for visible cards. It projects only rule clocks and known cards, never hidden draws;
+- `refresh.py`: analytic shuffle-refresh commitments. It integrates need-coverage classes with exact
+  hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
+  never constructs or searches a hypothetical redraw;
 - `value.py` and `potential.py`: portable card Worth and successor-state potential;
 - `native_engine.py`: production Bellman branches through native `cg` search sessions; unknown
   zones use low-discrepancy identity spacing so the deployment world cannot inherit numeric-id
@@ -32,9 +37,9 @@ The flattened Bellman core owns the decision model:
 Neutral retained services are Scouting, card/stat providers, card-function data, own-deck tracking,
 option equivalence, telemetry, and board-card traversal.
 
-Information has no authored bonus. Its value is the Bellman quantity
-`E[max continuation after reveal]`; deterministic commitments, chance, and reveal choices all use
-the same successor-state utility.
+Revealed choices use `E[max continuation after reveal]`. Hidden shuffle-refresh draws do not: their
+identities are integrated out as need-coverage classes, and the solver commits or declines before
+the live random result. Actual post-refresh cards are planned only on the next engine callback.
 
 Native semantic transpositions include a signature of the actual determinized hidden zones, not
 the action path used to reach them. Commutative action orders can therefore share exact results

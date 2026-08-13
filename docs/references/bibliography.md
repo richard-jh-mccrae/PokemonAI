@@ -249,3 +249,16 @@ alternatives: `docs/research/bellman-search-latency.md`.
   best-first policy-guided allocation result. https://papers.nips.cc/paper/7582-single-agent-policy-tree-search-with-guarantees [P]
 - **MCTSnets** (Guez et al., ICML 2018) — learns where, what, and how to search; deferred until this
   agent owns a calibrated learned policy/value model. https://proceedings.mlr.press/v80/guez18a.html [P]
+
+## 12. Analytic shuffle-refresh decisions
+
+**Choice:** integrate hidden redraw identities out as exact hypergeometric need-coverage classes.
+Do not construct a hypothetical hand or search actions using cards that have not actually been
+drawn. Implementation and competition-write-up wording: `docs/agent-architecture.md` and
+`docs/research/bellman-search-latency.md`.
+
+- **Multivariate hypergeometric distribution** — sampling identities without replacement; supplies
+  the exact probability mass over semantic need-coverage classes. [S]
+- **Receding-horizon replanning** — commit only the refresh action, observe the real redraw, then
+  solve again from the new observation. The analytic pre-commit equation estimates the gamble; it
+  never becomes an executable post-draw policy. [S]

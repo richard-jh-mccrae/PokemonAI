@@ -14,12 +14,21 @@ from .algebra import (
     Choice,
     Deterministic,
     Ledger,
+    Refresh,
     RevealChoice,
     RevealOutcome,
     Terminal,
     Unknown,
 )
 from .native_engine import NativeCgTransitionProvider
+from .needs import (
+    CoverageEdge,
+    Need,
+    NeedModel,
+    ResolvedAssignment,
+    RetainedAssignment,
+    RetainedOption,
+)
 from .information import (
     BellmanDeckProfile,
     DrawClass,
@@ -45,9 +54,10 @@ from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 __all__ = (
     "END_VALUE", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
     "BellmanTurnPlanner", "BellmanUnavailable", "BoardPotential", "CardFacts", "Chance",
-    "NativeCgTransitionProvider", "Choice", "DecisionState", "Deterministic", "DrawClass",
+    "NativeCgTransitionProvider", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
     "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "Potential",
-    "ProductionLimits", "ProductionSolver", "ReferenceSolver", "RevealChoice", "RevealOutcome",
+    "Need", "NeedModel", "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
+    "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "RevealChoice", "RevealOutcome",
     "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TransitionProvider", "TurnBudgets",
     "Unknown", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "enumerate_legal_actions", "hypergeometric_classes", "opponent_belief", "reveal_sets",
