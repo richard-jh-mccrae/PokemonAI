@@ -231,8 +231,9 @@ own actions carry the same belief unless the action reveals information.
 There are two modes over the same transition and value contracts:
 
 - `reference`: exhaustive within its explicit node cap; any cap or unknown reports incomplete;
-- `production`: the same recurrence with semantic transposition, explicit width/state capacity, and
-  a zero End lower bound when capacity is reached at a state where End is legal.
+- `production`: the same recurrence with conservative sleep-set partial-order reduction, semantic
+  transposition, explicit width/state capacity, and a zero End lower bound when capacity is reached
+  at a state where End is legal.
 
 Production uses successive halving at each committed root decision: every legal action receives the
 same small probe, then the two strongest incomplete Bellman lower bounds receive the full refinement
@@ -382,11 +383,21 @@ orders even when public state and determinized hidden zones were identical.
 Production now identifies a hidden world from its actual ordered deck/prize/opponent-hand contents,
 uses the same semantic key across action paths, converts native dataclasses without recursive deep
 copy, and caches immutable stat/attack/resource facts in the potential evaluator. Root allocation is
-successive halving: all actions receive 64 expansions, then the two highest incomplete Bellman lower
-bounds receive up to 1,800 expansions each. No depth horizon, card identity, tag, action-kind rule, or
-deck-specific branch participates in admission. The exact packaged native mirror improved from a
+successive halving: all actions receive 96 expansions, then the strongest incomplete Bellman lower
+bounds receive up to 256 deterministic, 600 chance, or 1,300 reveal-choice expansions. No depth
+horizon, card identity, tag, or deck-specific branch participates in admission. The exact packaged native mirror improved from a
 600-second timeout to 143.5 seconds with both seats `DONE`; all 25 rationale-led hard acceptance
 gates pass.
+
+The original design also required commutative sequences to collapse before search. Exact
+transpositions implemented only the after-the-fact half: both orders were still expanded until they
+reached the same exact state. Production now uses action read/write footprints and a sleep set to
+admit one canonical ordering of independent deterministic actions. The reverse permutation is never
+expanded. Unknown effects are conservative barriers; draw, reveal, and chance nodes clear the sleep
+set. This is partial-order reduction over transition dependencies, not action ranking. A packaged
+native mirror sample after the change completed in 15.016 seconds with callback avg/max
+0.272/4.047 seconds; the required 10-game serial gate still exhibits a separate nondeterministic
+long-match tail and is not claimed passing.
 
 Submission collection preserves every emitted Bellman root ledger, branch diagnostic, cap, and
 alternative in `performance.jsonl` under `telemetry.diagnostics`, indexed by match and decision.

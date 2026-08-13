@@ -11,19 +11,23 @@ ordering of the available actions. A representative slow decision took 21.5 seco
 engine transition call; most time was spent rebuilding equivalent states, recomputing their utility,
 and revisiting permutations of commutative actions.
 
-The fix has four deck-neutral parts:
+The fix has five deck-neutral parts:
 
-1. **Exact transpositions.** A determinized hidden world is identified by the actual ordered contents
+1. **Pre-expansion partial-order reduction.** Each deterministic action declares the abstract state
+   resources it reads and writes. Independent actions receive one stable canonical order through a
+   sleep set, so `A → B` is searched and the equivalent `B → A` permutation is not. Unknown and
+   stochastic effects are barriers; chance and reveal outcomes reset the sleep set.
+2. **Exact transpositions.** A determinized hidden world is identified by the actual ordered contents
    of both decks, both prize zones, and the opponent hand—not by the path of actions used to reach
    it. Equivalent public states reached through different action orders can now share exact Bellman
    results, while different hidden worlds remain distinct.
-2. **Successive-halving allocation.** Every legal root action receives the same 64-node probe. The
-   two highest-valued incomplete Bellman continuations receive a full pass of up to 1,800 nodes.
-   Final choice still compares Bellman values; allocation never reads card identity, card name,
-   action kind, deck, or a tactical rule.
-3. **Cheaper native conversion.** Native dataclasses are converted without `dataclasses.asdict`'s
+3. **Successive-halving allocation.** Every legal root action receives the same 96-node probe. The
+   two highest-valued incomplete Bellman continuations receive deeper refinement. Deterministic,
+   chance, and reveal-choice roots have explicit capacity bounds reflecting their branching shape.
+   Final choice still compares Bellman values; allocation never reads card identity or card name.
+4. **Cheaper native conversion.** Native dataclasses are converted without `dataclasses.asdict`'s
    recursive deep-copy overhead.
-4. **Immutable fact caches.** Card stats, attack facts, resource jobs, and prize-route capacities are
+5. **Immutable fact caches.** Card stats, attack facts, resource jobs, and prize-route capacities are
    cached inside the board-potential evaluator. This changes evaluation cost, not evaluation value.
 
 Search depth is not capped. A line may continue until the engine ends the turn, an attack resolves,
@@ -102,7 +106,8 @@ registration to CABT, so unrelated OpenSpiel native code is no longer loaded dur
 
 ## Implementation trail
 
-- `src/common/solver.py`: equal probes, Bellman-ranked refinement, diagnostics.
+- `src/common/commutativity.py`: conservative action read/write footprints and independence proof.
+- `src/common/solver.py`: sleep-set partial-order reduction, equal probes, refinement, diagnostics.
 - `src/common/native_engine.py`: hidden-world identity, exact transpositions, cheaper conversion.
 - `src/common/potential.py`: immutable evaluator caches and repeated-fact elimination.
 - `docs/adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md`: architecture amendment.

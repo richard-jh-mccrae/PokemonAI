@@ -12,15 +12,16 @@ from bellman_helpers import runtime
 REPO = Path(__file__).resolve().parents[2]
 DECK = tuple(int(line) for line in (REPO / "src" / "agents" / "mega_starmie" /
                                     "deck.csv").read_text().split())
-EXPECTED_CORRECTION_ROWS = 283
-EXPECTED_SEMANTIC_ACTIONS = 1_755
-EXPECTED_SELECTION_INDICES = 2_140
+EXPECTED_CORRECTION_ROWS = 294
+EXPECTED_SEMANTIC_ACTIONS = 1_811
+EXPECTED_SELECTION_INDICES = 2_204
 MINIMUM_EXERCISED_CHANCE_NODES = 2
 
 
 def _rows():
     return [correction for correction in load_corrections(REPO / "data" / "corrections")
-            if correction.agent == "mega_starmie" and correction.obs]
+            if (correction.agent == "mega_starmie" and correction.obs
+                and int((correction.obs.get("current") or {}).get("turn", 0)) > 0)]
 
 
 def _registry():

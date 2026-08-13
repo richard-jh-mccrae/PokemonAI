@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+from time import monotonic
 from typing import Protocol
 
 from .algebra import (
@@ -10,6 +11,7 @@ from .algebra import (
     Terminal, Unknown,
 )
 from .api import RootDecision
+from .commutativity import ActionFootprint, independent
 from .options import LegalAction
 from .state import DecisionState
 from .value import ValueOracle
@@ -17,11 +19,16 @@ from .value import ValueOracle
 
 REFERENCE_MAX_NODES = 100_000
 PRODUCTION_MAX_NODES = 4_000
+PRODUCTION_CHANCE_MAX_NODES = 600
+PRODUCTION_REVEAL_MAX_NODES = 1_300
+UNCERTAINTY_REFINEMENT_VALUE_MARGIN = 0.10
+PRODUCTION_MAX_SECONDS = 15.0
 PRODUCTION_BEAM_WIDTH = 16
 DEFAULT_ROOT_BEAM_WIDTH = 16
 DEFAULT_EFFECT_CHOICE_WIDTH = 64
-DEFAULT_ROOT_PROBE_NODES = 64
+DEFAULT_ROOT_PROBE_NODES = 96
 DEFAULT_ROOT_REFINEMENT_WIDTH = 2
+SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
@@ -51,6 +58,9 @@ class ProductionLimits:
     effect_choice_width: int = DEFAULT_EFFECT_CHOICE_WIDTH
     root_probe_nodes: int = DEFAULT_ROOT_PROBE_NODES
     root_refinement_width: int = DEFAULT_ROOT_REFINEMENT_WIDTH
+    chance_max_nodes: int = PRODUCTION_CHANCE_MAX_NODES
+    reveal_max_nodes: int = PRODUCTION_REVEAL_MAX_NODES
+    max_seconds: float = PRODUCTION_MAX_SECONDS
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,14 @@ class StateEvaluation:
     action: LegalAction | None
     evaluation: Evaluation
     alternatives: tuple[tuple[LegalAction, Evaluation], ...]
+
+
+@dataclass(frozen=True)
+class SleepEvent:
+    """An earlier enabled action suppressed only on its commutative reverse-order path."""
+
+    event: tuple[str, ...]
+    footprint: ActionFootprint
 
 
 def _combine(base: Ledger, continuation: float, extra: Ledger = Ledger()) -> Ledger:
@@ -160,7 +178,7 @@ class ReferenceSolver:
         return self.oracle.transition_ledger(before, after, action.identity,
                                              before_model=left, after_model=right)
 
-    def _state(self, state: DecisionState) -> StateEvaluation:
+    def _state(self, state: DecisionState, sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
         key = state.semantic_key
         if key in self._memo:
             self.cache_hits += 1
@@ -195,18 +213,20 @@ class ReferenceSolver:
             self._memo[key] = answer
         return answer
 
-    def _action(self, state: DecisionState, action: LegalAction) -> Evaluation:
+    def _action(self, state: DecisionState, action: LegalAction,
+                sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:
         if action.identity.kind == "end":
             return Evaluation(0.0, Ledger(), True, "End exact zero")
-        return self._transition(state, action, self.provider.transition(state, action))
+        return self._transition(state, action, self.provider.transition(state, action), sleep)
 
-    def _transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
+    def _transition(self, before: DecisionState, action: LegalAction, node,
+                    sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:
         if isinstance(node, Unknown):
             return Evaluation(-math.inf, Ledger(), False,
                               f"{node.reason}: {node.missing_fact}")
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
-            continuation = self._state(node.state)
+            continuation = self._state(node.state, sleep)
             if continuation.action is None and not continuation.evaluation.complete:
                 return Evaluation(-math.inf, base, False, continuation.evaluation.reason)
             ledger = _combine(base, continuation.value)
@@ -218,7 +238,7 @@ class ReferenceSolver:
             ledger = _combine(base, 0.0, node.ledger)
             return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0)
         if isinstance(node, Choice):
-            branches = [(edge, self._transition(before, action, edge.node))
+            branches = [(edge, self._transition(before, action, edge.node, sleep))
                         for edge in node.children]
             finite = [(edge, result) for edge, result in branches if math.isfinite(result.value)]
             if len(finite) != len(branches) or not finite:
@@ -237,7 +257,7 @@ class ReferenceSolver:
                                      "complete": evaluated.complete}
                                     for child, evaluated in branches), result.decisions)
         if isinstance(node, RevealChoice):
-            evaluated = {edge.label: self._transition(before, action, edge.node)
+            evaluated = {edge.label: self._transition(before, action, edge.node, ())
                          for edge in node.choices}
             if any(not math.isfinite(result.value) for result in evaluated.values()):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete reveal choice")
@@ -256,7 +276,7 @@ class ReferenceSolver:
                 weighted, reason="expected value after revealed choice", branches=diagnostics,
                 complete=all(result.complete for result in evaluated.values()))
         if isinstance(node, Chance):
-            branches = [(edge, self._transition(before, action, edge.node))
+            branches = [(edge, self._transition(before, action, edge.node, ()))
                         for edge in node.children]
             if any(not math.isfinite(result.value) for _edge, result in branches):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete chance branch")
@@ -296,11 +316,18 @@ class ProductionSolver(ReferenceSolver):
         self._root_key = ""
         self._root_branch_nodes: list[int] = []
         self._root_branch_capped: list[bool] = []
+        self._deadline = math.inf
+        self._root_probe_active = False
+        self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
+        self.por_pruned = 0
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
         self._root_branch_nodes = []
         self._root_branch_capped = []
+        self._por_memo.clear()
+        self.por_pruned = 0
+        self._deadline = monotonic() + max(0.0, self.production_limits.max_seconds)
         decision = super().decide(state)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
@@ -310,6 +337,9 @@ class ProductionSolver(ReferenceSolver):
             "root_probe_nodes": self.production_limits.root_probe_nodes,
             "root_refinement_width": self.production_limits.root_refinement_width,
             "max_nodes": self.production_limits.max_nodes,
+            "chance_max_nodes": self.production_limits.chance_max_nodes,
+            "reveal_max_nodes": self.production_limits.reveal_max_nodes,
+            "max_seconds": self.production_limits.max_seconds,
             "max_nodes_per_refined_root_action": (
                 self.production_limits.root_probe_nodes
                 + self.production_limits.max_nodes - 1),
@@ -317,12 +347,33 @@ class ProductionSolver(ReferenceSolver):
             "root_branch_capped": tuple(self._root_branch_capped),
             "cap_reached": any(self._root_branch_capped),
             "lower_bound": not decision.complete,
+            "commutative_permutations_pruned": self.por_pruned,
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics)
 
-    def _state(self, state: DecisionState) -> StateEvaluation:
-        if self.nodes >= self.limits.max_nodes:
+    def _footprint(self, state: DecisionState, action: LegalAction) -> ActionFootprint | None:
+        footprint = getattr(self.provider, "footprint", None)
+        return footprint(state, action) if footprint is not None else None
+
+    @staticmethod
+    def _sleep_key(sleep: tuple[SleepEvent, ...]) -> tuple[tuple[str, ...], ...]:
+        return tuple(sorted((event.event for event in sleep)))
+
+    def _successor_sleep(self, sleep: tuple[SleepEvent, ...], earlier: list[ActionFootprint],
+                         current: ActionFootprint | None) -> tuple[SleepEvent, ...]:
+        if current is None or current.barrier:
+            return ()
+        retained = [event for event in sleep if independent(event.footprint, current)]
+        retained.extend(SleepEvent(footprint.event, footprint)
+                        for footprint in earlier if independent(footprint, current))
+        by_event = {event.event: event for event in retained}
+        return tuple(by_event[event] for event in sorted(by_event))
+
+    def _state(self, state: DecisionState,
+               sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
+        if (self.nodes >= self.limits.max_nodes
+                or (not self._root_probe_active and monotonic() >= self._deadline)):
             actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
             end = next((action for action in actions if action.identity.kind == "end"), None)
             if end is not None:
@@ -332,18 +383,32 @@ class ProductionSolver(ReferenceSolver):
             return StateEvaluation(-math.inf, None, incomplete, ())
 
         key = state.semantic_key
-        if key in self._memo:
+        sleep_key = self._sleep_key(sleep)
+        memo_key = (key, sleep_key)
+        memo = self._por_memo if sleep else self._memo
+        lookup_key = memo_key if sleep else key
+        if lookup_key in memo:
             self.cache_hits += 1
-            return self._memo[key]
-        if key in self._active:
+            return memo[lookup_key]
+        if memo_key in self._active:
             incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
 
         self.nodes += 1
-        self._active.add(key)
+        self._active.add(memo_key)
         actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
+        actor = self.provider.actor(state)
+        context = int(((state.obs.get("select") or {}).get("context", -1)))
+        footprints: dict[object, ActionFootprint | None] = {}
+        if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
+            footprints = {action.identity: self._footprint(state, action) for action in actions}
+            asleep = {event.event for event in sleep}
+            filtered = tuple(action for action in actions
+                             if footprints[action.identity] is None
+                             or footprints[action.identity].event not in asleep)
+            self.por_pruned += len(actions) - len(filtered)
+            actions = filtered
         if self.provider.actor(state) is Actor.OURS:
-            context = int(((state.obs.get("select") or {}).get("context", -1)))
             width = (self.production_limits.root_beam_width if key == self._root_key
                      else self.production_limits.beam_width if context == MAIN_DECISION_CONTEXT
                      else self.production_limits.effect_choice_width)
@@ -351,7 +416,7 @@ class ProductionSolver(ReferenceSolver):
             if non_end_count > width:
                 end = next((action for action in actions if action.identity.kind == "end"), None)
                 if end is not None:
-                    self._active.remove(key)
+                    self._active.remove(memo_key)
                     lower = Evaluation(0.0, Ledger(), False,
                                        "production width cap: End lower bound")
                     return StateEvaluation(0.0, end, lower, ((end, lower),))
@@ -360,6 +425,16 @@ class ProductionSolver(ReferenceSolver):
                 # declared actions with the same Bellman backup; the node cap still bounds work.
 
         actor = self.provider.actor(state)
+        child_sleeps: dict[object, tuple[SleepEvent, ...]] = {}
+        if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
+            earlier = []
+            for action in actions:
+                footprint = footprints.get(action.identity)
+                child_sleeps[action.identity] = self._successor_sleep(sleep, earlier, footprint)
+                if footprint is not None and not footprint.barrier:
+                    earlier.append(footprint)
+        else:
+            child_sleeps = {action.identity: sleep for action in actions}
         if key == self._root_key:
             results_list = []
             branch_nodes = []
@@ -370,12 +445,15 @@ class ProductionSolver(ReferenceSolver):
                 max(1, self.production_limits.root_probe_nodes),
             )
             self.limits = SearchLimits(probe_nodes)
+            self._root_probe_active = True
             for action in actions:
                 self.nodes = 1
-                result = self._action(state, action)
+                result = self._action(state, action, child_sleeps[action.identity])
                 branch_nodes.append(self.nodes)
                 branch_capped.append(not result.complete and self.nodes >= probe_nodes)
                 results_list.append((action, result))
+            self._root_probe_active = False
+            self._deadline = monotonic() + max(0.0, self.production_limits.max_seconds)
 
             # Successive halving allocates the expensive pass by observed Bellman continuation
             # value.  Every legal choice receives the same probe, while exact probe results need no
@@ -389,14 +467,47 @@ class ProductionSolver(ReferenceSolver):
                 key=lambda row: _ordered_evaluation(row[2], actor),
                 reverse=actor is Actor.OURS,
             )
-            self.limits = SearchLimits(self.production_limits.max_nodes)
-            for index, action, probe in incomplete[:max(
-                    0, self.production_limits.root_refinement_width)]:
+            refinement_width = (len(actions)
+                                if (self.production_limits.root_refinement_width
+                                    == DEFAULT_ROOT_REFINEMENT_WIDTH
+                                    and len(actions) <= SMALL_ROOT_FULL_REFINEMENT_ACTIONS)
+                                else self.production_limits.root_refinement_width)
+            selected = incomplete[:max(0, refinement_width)]
+            for uncertainty_type in (Chance, RevealChoice):
+                if (selected
+                        and not any(isinstance(self.provider.transition(state, row[1]),
+                                               uncertainty_type)
+                                    for row in selected)):
+                    uncertainty_candidate = next(
+                        (row for row in incomplete
+                         if (isinstance(self.provider.transition(state, row[1]), uncertainty_type)
+                             and abs(float(row[2].value) - float(incomplete[0][2].value))
+                             <= UNCERTAINTY_REFINEMENT_VALUE_MARGIN)),
+                        None,
+                    )
+                    if uncertainty_candidate is not None:
+                        replacement = next(
+                            (position for position in range(len(selected) - 1, -1, -1)
+                             if not isinstance(self.provider.transition(
+                                 state, selected[position][1]), (Chance, RevealChoice))),
+                            None,
+                        )
+                        if replacement is not None:
+                            selected[replacement] = uncertainty_candidate
+            for index, action, probe in selected:
+                transition = self.provider.transition(state, action)
+                if isinstance(transition, RevealChoice):
+                    refinement_nodes = self.production_limits.reveal_max_nodes
+                elif isinstance(transition, Chance):
+                    refinement_nodes = self.production_limits.chance_max_nodes
+                else:
+                    refinement_nodes = self.production_limits.max_nodes
+                self.limits = SearchLimits(refinement_nodes)
                 self.nodes = 1
-                refined = self._action(state, action)
+                refined = self._action(state, action, child_sleeps[action.identity])
                 branch_nodes[index] += max(0, self.nodes - 1)
                 branch_capped[index] = (
-                    not refined.complete and self.nodes >= self.production_limits.max_nodes)
+                    not refined.complete and self.nodes >= refinement_nodes)
                 if (math.isfinite(refined.value)
                         and ((actor is Actor.OURS and _ordered_evaluation(refined, actor)
                               >= _ordered_evaluation(probe, actor))
@@ -412,10 +523,10 @@ class ProductionSolver(ReferenceSolver):
         else:
             results_list = []
             for action in actions:
-                result = self._action(state, action)
+                result = self._action(state, action, child_sleeps[action.identity])
                 results_list.append((action, result))
             results = tuple(results_list)
-        self._active.remove(key)
+        self._active.remove(memo_key)
         finite = [(action, result) for action, result in results if math.isfinite(result.value)]
         if not finite or (actor is Actor.OPPONENT and len(finite) != len(results)):
             answer = StateEvaluation(-math.inf, None,
@@ -437,7 +548,7 @@ class ProductionSolver(ReferenceSolver):
         # reached.  Reusing it from another branch would turn traversal order
         # into policy.  Only exact Bellman backups are transposition-safe.
         if answer.evaluation.complete:
-            self._memo[key] = answer
+            memo[lookup_key] = answer
         return answer
 
 

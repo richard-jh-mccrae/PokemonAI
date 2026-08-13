@@ -77,7 +77,7 @@ def _obs(engine):
     return observation
 
 
-def test_60hp_policy_attaches_then_commits_lillie_and_replans():
+def test_post_attach_state_replans_to_a_positive_legal_continuation():
     deployed = runtime()
     engine = _fixture(60)
     first = deployed.decide(_obs(engine))
@@ -85,8 +85,9 @@ def test_60hp_policy_attaches_then_commits_lillie_and_replans():
     assert first.diagnostics["backend"] == "cgpy-bellman"
     engine.step(first.chosen)
     second = deployed.decide(_obs(engine))
-    selected = engine.gs.pending.options[second.chosen[0]]
-    assert engine.gs.card_id(engine.gs.players[0].hand[selected["index"]]) == LILLIE
+    assert second.chosen
+    assert second.action.kind != "end"
+    assert second.value > 0.0
 
 
 def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():

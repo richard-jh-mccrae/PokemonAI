@@ -75,10 +75,18 @@ class BellmanRuntime:
         return next((index for index, option in enumerate(options)
                      if int(option.get("type", -1)) == option_type), None)
 
-    def _hand_has_basic(self, observation, seat: int) -> bool:
+    def _hand_has_setup_starter(self, observation, seat: int) -> bool:
+        """Whether the hand can legally supply the setup Active.
+
+        Printed setup abilities are represented by the portable ``opener`` function tag.  They are
+        legal starters even when the card's ordinary evolution stage is not Basic.
+        """
         for card in self._player(observation, seat).get("hand") or ():
             stat = self.stats.get(card.get("id")) if card and self.stats else None
-            if stat is not None and stat.is_pokemon and stat.stage == "basic":
+            card_id = int(card["id"]) if card and card.get("id") is not None else None
+            tags = self.functions.tags(card_id) if card_id is not None and self.functions else ()
+            if (stat is not None and stat.is_pokemon
+                    and (stat.stage == "basic" or "opener" in tags)):
                 return True
         return False
 
@@ -105,7 +113,7 @@ class BellmanRuntime:
             pick = self._option_of_type(options, option_type)
             chosen, action = ((pick if pick is not None else 0,), "choose_start")
         elif context == _MULLIGAN:
-            option_type = _NO if self._hand_has_basic(observation, seat) else _YES
+            option_type = _NO if self._hand_has_setup_starter(observation, seat) else _YES
             pick = self._option_of_type(options, option_type)
             chosen, action = ((pick if pick is not None else 0,), "mulligan")
         else:

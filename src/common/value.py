@@ -29,6 +29,7 @@ FAMILY_OWNERS = {
     "prize_plan": ("own KO ordering", "prize-route availability"),
     "damage": ("damage progress",),
     "readiness": ("reachable attack value",),
+    "multi_target_ko": ("simultaneous Active and Bench knockout readiness",),
     "board": ("in-play resource value",),
     "hand": ("accessible future-turn resources",),
     "opponent_roles": ("scouted opponent role pressure",),

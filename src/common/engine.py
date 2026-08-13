@@ -11,6 +11,7 @@ from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
+from .commutativity import action_footprint
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -144,6 +145,9 @@ class CgpyTransitionProvider:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
+    def footprint(self, state: DecisionState, action: LegalAction):
+        return action_footprint(state, action, effects=self.effects, stats=self.stats)
+
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:
             return self._local_nested_transition(state, action)
@@ -236,7 +240,7 @@ class CgpyTransitionProvider:
             self._force_top_ids(branch, state.root_seat, top_ids)
             branch.step(list(action.selection))
             pending = branch.gs.pending
-            if pending is None:
+            if pending is None or branch.gs.looking is None:
                 if selected is not None:
                     raise ValueError("reveal did not pose its declared choice")
                 return self._register_successor(state, branch, action)
@@ -257,9 +261,10 @@ class CgpyTransitionProvider:
         choices = [Edge("decline", reveal_branch(visible_card=decline_source))]
         choices.extend(Edge(f"card:{card}", reveal_branch(selected=card, visible_card=card))
                        for card in matching)
-        outcomes = [RevealOutcome(outcome.probability,
-                                  ("decline", *(f"card:{card}" for card in outcome.card_ids)))
-                    for outcome in distributions]
+        outcomes = [RevealOutcome(
+            outcome.probability,
+            ("decline", *(f"card:{card}" for card in outcome.card_ids)))
+            for outcome in distributions]
         return RevealChoice(Actor.OURS, tuple(choices), tuple(outcomes))
 
     def _drawing_transition(self, state, engine, action):

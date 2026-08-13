@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from common import (
     ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome, SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
+from common.commutativity import ActionFootprint, action_footprint, independent
 from common.options import LegalAction
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
@@ -55,6 +57,20 @@ class Graph:
         return Actor.OURS
 
 
+class FootprintedGraph(Graph):
+    def __init__(self, actions, transitions, footprints):
+        super().__init__(actions, transitions)
+        self._footprints = footprints
+        self.calls = []
+
+    def transition(self, state, action):
+        self.calls.append((state.obs["node"], action.identity.kind))
+        return super().transition(state, action)
+
+    def footprint(self, state, action):
+        return self._footprints[action.identity.kind]
+
+
 def _oracle():
     return ValueOracle(REGISTRY, lambda obs: Potential(
         float(obs["current"].get("board", 0.0)),
@@ -99,6 +115,110 @@ def test_production_turn_search_has_no_depth_limit():
     assert decision.action.kind == "play"
     assert decision.diagnostics["root"].nodes == len(states)
     assert "max_depth" not in decision.diagnostics["production"]
+
+
+def test_production_partial_order_reduction_skips_only_the_reverse_commutative_order():
+    root = _state("root")
+    after_alpha = _state("after-alpha", board=0.1)
+    after_beta = _state("after-beta", board=0.1)
+    finish = _state("finish", board=0.2)
+    alpha, beta, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"root": (alpha, beta, end), "after-alpha": (beta, end),
+         "after-beta": (alpha, end), "finish": (end,)},
+        {("root", "alpha"): Deterministic(after_alpha),
+         ("root", "beta"): Deterministic(after_beta),
+         ("after-alpha", "beta"): Deterministic(finish),
+         ("after-beta", "alpha"): Deterministic(finish)},
+        {"alpha": ActionFootprint(("alpha",), writes=frozenset({"alpha"})),
+         "beta": ActionFootprint(("beta",), writes=frozenset({"beta"})),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "alpha"
+    assert ("after-alpha", "beta") in graph.calls
+    assert ("after-beta", "alpha") not in graph.calls
+    assert decision.diagnostics["production"]["commutative_permutations_pruned"] >= 1
+
+
+def test_chance_boundary_clears_partial_order_sleep_set():
+    root = _state("chance-root")
+    after_alpha = _state("chance-after-alpha", board=0.1)
+    after_beta = _state("chance-after-beta", board=0.1)
+    finish = _state("chance-finish", board=0.2)
+    alpha, beta, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"chance-root": (alpha, beta, end), "chance-after-alpha": (beta, end),
+         "chance-after-beta": (alpha, end), "chance-finish": (end,)},
+        {("chance-root", "alpha"): Deterministic(after_alpha),
+         ("chance-root", "beta"): Chance((WeightedEdge(1.0, "outcome", Deterministic(after_beta)),)),
+         ("chance-after-alpha", "beta"): Deterministic(finish),
+         ("chance-after-beta", "alpha"): Deterministic(finish)},
+        {"alpha": ActionFootprint(("alpha",), writes=frozenset({"alpha"})),
+         "beta": ActionFootprint(("beta",), writes=frozenset({"beta"})),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert ("chance-after-beta", "alpha") in graph.calls
+
+
+def test_declared_deterministic_play_commutes_with_independent_attachment():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 901}, {"id": 902}],
+             "active": [{"id": 903, "serial": 44}], "bench": []},
+            {"hand": None, "active": [{"id": 904, "serial": 45}], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 8, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 7, "index": 1},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation)
+    attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
+    play = LegalAction(ActionIdentity("play"), (1,), ((1,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return ({"kind": "gust"},) if card_id == 902 else ()
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=card_id == 902, is_stadium=False)
+
+    attach_footprint = action_footprint(state, attach, effects=Effects(), stats=Stats())
+    play_footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+    assert independent(attach_footprint, play_footprint)
+
+
+def test_information_effect_is_a_partial_order_barrier():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 905}], "active": [], "bench": []},
+            {"hand": None, "active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [{"type": 7, "index": 0}]},
+    }
+    state = SimpleNamespace(obs=observation)
+    play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "draw", "amount": 2},)
+
+    footprint = action_footprint(state, play, effects=Effects())
+    assert footprint.barrier
 
 
 def test_all_negative_actions_choose_end_zero():

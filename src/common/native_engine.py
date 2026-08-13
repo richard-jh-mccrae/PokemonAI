@@ -7,6 +7,7 @@ import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
 from .options import LegalAction, enumerate_legal_actions
+from .commutativity import action_footprint
 from .state import DecisionState
 from common.strategy.context import _MAIN, _NO, _YES
 
@@ -169,6 +170,9 @@ class NativeCgTransitionProvider:
     def actor(self, state: DecisionState) -> Actor:
         seat = int(state.obs.get("bellmanActor", state.root_seat))
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
+
+    def footprint(self, state: DecisionState, action: LegalAction):
+        return action_footprint(state, action, effects=self.effects, stats=self.stats)
 
     def transition(self, state: DecisionState, action: LegalAction):
         worlds = self._worlds.get(state.semantic_key)

@@ -39,3 +39,7 @@ the same successor-state utility.
 Native semantic transpositions include a signature of the actual determinized hidden zones, not
 the action path used to reach them. Commutative action orders can therefore share exact results
 without merging different deck, prize, or opponent-hand worlds.
+
+Production also removes commutative permutations before expansion. Deterministic actions declare
+abstract read/write footprints; independent actions use one canonical sleep-set order. Opaque,
+random, draw, and reveal effects are barriers, and every stochastic outcome begins a fresh order.

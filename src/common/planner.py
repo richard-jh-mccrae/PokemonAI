@@ -10,7 +10,7 @@ from .value import ValueOracle, ValueRegistry
 
 # Deployment bounds branching, never depth. Every root action receives an equal probe; the strongest
 # incomplete Bellman continuations receive the expensive refinement pass.
-RUNTIME_MAX_NODES_PER_ROOT_ACTION = 1_800
+RUNTIME_MAX_NODES_PER_ROOT_ACTION = 256
 RUNTIME_BEAM_WIDTH = 16
 RUNTIME_ROOT_BEAM_WIDTH = 16
 
