@@ -31,8 +31,10 @@ FAMILY_OWNERS = {
     "readiness": ("reachable attack value",),
     "multi_target_ko": ("simultaneous Active and Bench knockout readiness",),
     "board": ("in-play resource value",),
+    "energy_position": ("usable attached resources", "survival", "saturation"),
     "development": ("completed evolution development",),
     "hand": ("accessible future-turn resources",),
+    "hand_demand": ("visible missing board jobs", "prospective hand access"),
     "opponent_roles": ("scouted opponent role pressure",),
 }
 

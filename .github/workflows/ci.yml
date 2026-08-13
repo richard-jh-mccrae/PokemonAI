@@ -93,7 +93,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/arena tests/meta_tracker tests/sim tests/submit -q -n auto --tb=short
+      - run: python -m pytest tests/arena tests/meta_tracker tests/sim tests/submit tests/test_agent_skills.py -q -n auto --tb=short
 
   test-corrections:
     name: tests / corrections
@@ -111,7 +111,7 @@ jobs:
       - name: Run correction contracts
         shell: bash
         run: |
-          targets=(tests/blunder)
+          targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
           [ -d tests/corrections ] && targets+=(tests/corrections)
           python -m pytest "${targets[@]}" -q -n auto --tb=short
 
