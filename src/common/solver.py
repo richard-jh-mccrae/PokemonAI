@@ -222,11 +222,32 @@ class ReferenceSolver:
             node = resolve_end(state, action)
             if node is None:
                 return Evaluation(0.0, Ledger(), True, "End exact zero")
-            if isinstance(node, (Deterministic, Terminal)):
-                ledger = self._ledger(state, node.state, action)
-                return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0)
-            return Evaluation(-math.inf, Ledger(), False, "End transition unavailable")
+            return self._end_transition(state, action, node)
         return self._transition(state, action, self.provider.transition(state, action), sleep)
+
+    def _end_transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
+        """Value only the forced turn-boundary outcome, without planning the opponent's turn."""
+        if isinstance(node, Unknown):
+            return Evaluation(-math.inf, Ledger(), False,
+                              f"{node.reason}: {node.missing_fact}")
+        if isinstance(node, Deterministic):
+            ledger = self._ledger(before, node.state, action)
+            return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0)
+        if isinstance(node, Terminal):
+            ledger = _combine(self._ledger(before, node.state, action), 0.0, node.ledger)
+            return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0)
+        if isinstance(node, Chance):
+            branches = [(edge, self._end_transition(before, action, edge.node))
+                        for edge in node.children]
+            if any(not result.complete for _edge, result in branches):
+                return Evaluation(-math.inf, Ledger(), False, "incomplete End chance branch")
+            return _expected_evaluation(
+                ((edge.probability, result) for edge, result in branches),
+                reason="expected End value",
+                branches=tuple({"label": edge.label, "probability": edge.probability,
+                                "value": result.value} for edge, result in branches),
+            )
+        return Evaluation(-math.inf, Ledger(), False, "End transition unavailable")
 
     def _transition(self, before: DecisionState, action: LegalAction, node,
                     sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:

@@ -106,6 +106,22 @@ def test_provider_can_retain_exact_zero_end_when_nothing_forced_changes():
     assert decision.value == 0.0
 
 
+def test_provider_resolves_expected_value_across_forced_end_chance():
+    root = _state("root", board=0.2)
+    low, high = _state("low", board=0.1), _state("high", board=0.3)
+    end = _action("end")
+    chance = Chance((WeightedEdge(0.5, "tails", Deterministic(low)),
+                     WeightedEdge(0.5, "heads", Deterministic(high))))
+    decision = ReferenceSolver(
+        ResolvedEndGraph({"root": (end,)}, {("root", "end"): chance}), _oracle(),
+    ).decide(root)
+
+    assert decision.complete
+    assert decision.value == pytest.approx(0.0)
+    assert decision.diagnostics["ledger"]["benefits"] == {"board": pytest.approx(0.05)}
+    assert decision.diagnostics["ledger"]["costs"] == {"board": pytest.approx(0.05)}
+
+
 def test_complete_line_continues_and_commits_only_first_action():
     root, mid, finish = _state("root", hand=(CARD,)), _state("mid", hand=(), board=0.02), \
         _state("finish", hand=(), board=0.20)

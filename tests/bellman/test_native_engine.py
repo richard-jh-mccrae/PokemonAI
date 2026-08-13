@@ -35,6 +35,20 @@ def test_hidden_signature_tracks_world_contents_not_action_path():
     assert signature != _hidden_signature(different_draw_order, 0)
 
 
+def test_end_observation_can_preserve_the_actual_next_turn_actor():
+    observation = {"current": {"yourIndex": 0, "players": [
+        {"deck": [], "prize": [], "hand": []},
+        {"deck": [], "prize": [], "hand": []},
+    ]}, "select": {"context": 0, "option": []}}
+    parent = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    provider = object.__new__(NativeCgTransitionProvider)
+
+    successor = provider._observation(observation, parent, actor_seat=1)
+
+    assert successor["current"]["yourIndex"] == 0
+    assert successor["bellmanActor"] == 1
+
+
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 if os.environ.get("CG_ENGINE") == "py":
     pytest.skip("production-provider test requires native cg", allow_module_level=True)

@@ -184,14 +184,17 @@ class NativeCgTransitionProvider:
         if refresh is not None:
             return refresh
         children = []
+        forced_next_actor = 1 - state.root_seat if action.identity.kind == "end" else None
         try:
             for world in worlds:
                 stepped = self._api.search_step(world.search_id, list(action.selection))
                 committed = world.attack_committed or action.identity.kind == "attack"
-                observation = self._observation(stepped.observation, state)
+                observation = self._observation(
+                    stepped.observation, state, actor_seat=forced_next_actor)
                 if int(((observation.get("select") or {}).get("context", -1))) == MANUAL_COIN_CONTEXT:
                     children.extend(self._coin_children(
-                        stepped.searchId, world.probability, committed, state, observation))
+                        stepped.searchId, world.probability, committed, state, observation,
+                        actor_seat=forced_next_actor))
                 else:
                     children.append((world.probability, stepped.searchId, committed, observation))
             return self._group_children(state, action, children)
@@ -229,10 +232,11 @@ class NativeCgTransitionProvider:
             worlds.append(_NativeWorld(probability, int(state.searchId)))
         return tuple(worlds)
 
-    def _observation(self, native_observation, parent: DecisionState) -> dict:
+    def _observation(self, native_observation, parent: DecisionState, *, actor_seat=None) -> dict:
         observation = _plain_native(native_observation)
         observation["bellmanBeliefKey"] = _hidden_signature(observation, parent.root_seat)
-        observation["bellmanActor"] = _actor_seat(observation, parent.root_seat)
+        observation["bellmanActor"] = (_actor_seat(observation, parent.root_seat)
+                                       if actor_seat is None else int(actor_seat))
         current = observation.get("current") or {}
         current["yourIndex"] = parent.root_seat
         players = current.get("players") or ()
@@ -247,7 +251,7 @@ class NativeCgTransitionProvider:
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
-                       parent: DecisionState, observation: dict):
+                       parent: DecisionState, observation: dict, *, actor_seat=None):
         options = tuple((observation.get("select") or {}).get("option") or ())
         by_type = {int(option.get("type", -1)): index for index, option in enumerate(options)}
         if _YES not in by_type or _NO not in by_type:
@@ -255,7 +259,8 @@ class NativeCgTransitionProvider:
         children = []
         for option_type in (_YES, _NO):
             stepped = self._api.search_step(search_id, [by_type[option_type]])
-            observation = self._observation(stepped.observation, parent)
+            observation = self._observation(
+                stepped.observation, parent, actor_seat=actor_seat)
             children.append((probability * COIN_BRANCH_PROBABILITY,
                              int(stepped.searchId), committed, observation))
         return children
