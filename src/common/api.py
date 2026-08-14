@@ -38,6 +38,7 @@ class PlanStep:
     profile_hash: str
     turn: int
     seat: int
+    value: float = 0.0
 
 
 @dataclass(frozen=True)

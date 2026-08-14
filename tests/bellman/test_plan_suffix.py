@@ -29,7 +29,7 @@ def _runtime(state):
     deployed = object.__new__(BellmanRuntime)
     deployed.pilot_profile = PilotProfile.resolve()
     deployed._plan_suffix = (PlanStep(
-        state.semantic_key, state.legal_menu_digest, (0,), ActionIdentity("end"),
+        state.plan_key, state.legal_menu_digest, (0,), ActionIdentity("end"),
         deployed.pilot_profile.hash, 4, 0),)
     return deployed
 

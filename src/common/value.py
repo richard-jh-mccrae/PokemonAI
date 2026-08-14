@@ -178,6 +178,8 @@ class ValueOracle:
                  family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
                  refresh_evaluator=None):
         self.registry = registry
+        self.effects = effects
+        self.stats = stats
         if family_evaluator is None:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
@@ -188,6 +190,7 @@ class ValueOracle:
             refresh_evaluator = RefreshEvaluator(
                 registry, family_evaluator, effects=effects, stats=stats)
         self._refresh = refresh_evaluator
+        self.needs = refresh_evaluator.needs if refresh_evaluator is not None else None
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
         if model is None and state.semantic_key in self._potential_cache:

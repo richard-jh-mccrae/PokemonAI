@@ -1,0 +1,29 @@
+{
+  "corpus": "data/replays/mega_starmie_20260814_814103ff-dirty",
+  "replays": 22,
+  "decisions": 880,
+  "planning_seconds": 2.0,
+  "plan_suffix": {
+    "eligibility": "exact_completed_continuations_only",
+    "cache_hits": 54,
+    "fresh_replan_ms_on_hit_frames": 12537.8011,
+    "cached_ms_on_hit_frames": 158.7114,
+    "wall_clock_reduction_on_hit_frames": 0.987341,
+    "decision_changes": 0
+  },
+  "needs_shadow": {
+    "unknown_actions": 0,
+    "mirror_errors": 4,
+    "error_note": "The same BellmanUnavailable deadline failures occur without plan reuse."
+  },
+  "needs_focus_first_100": {
+    "decision_changes_from_shadow": 11,
+    "later_wave_actions": 53,
+    "activation_ready": false
+  },
+  "production": {
+    "plan_suffix_enabled": true,
+    "needs_shadow_enabled": true,
+    "needs_focus_enabled": false
+  }
+}

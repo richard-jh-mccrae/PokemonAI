@@ -82,7 +82,7 @@ class BellmanTurnPlanner:
         diagnostics = dict(decision.diagnostics)
         diagnostics["backend"] = backend
         return RootDecision(decision.chosen, decision.action, decision.value,
-                            decision.complete, diagnostics)
+                            decision.complete, diagnostics, decision.plan_suffix)
 
 
 __all__ = ("BellmanTurnPlanner",)

@@ -408,6 +408,14 @@
 "1260": {
 "covers": "full",
 "reason": "2 damage counters on any Basic non-{D} put onto EITHER player's Bench during their turn — the whole card, and the tax the Deploy Marginal (ADR-0086) currently misses"
+},
+"1188": {
+"covers": "full",
+"reason": "search 2, shuffle, then place both on top in chosen order; ordered Known Top owns the destination"
+},
+"1248": {
+"covers": "full",
+"reason": "granted action places one hand card on top; ordered Known Top owns the destination"
 }
 },
 "17": [
@@ -949,6 +957,16 @@
 "cost_required": true
 }
 ],
+"1188": [
+{
+"kind": "fetch",
+"target": "any",
+"zone": "deck",
+"amount": 2,
+"dest": "deck_top",
+"rider": "shuffle_before_place"
+}
+],
 "1189": [
 {
 "kind": "fetch",
@@ -1355,6 +1373,16 @@
 "symmetric": true
 }
 ],
+"1248": [
+{
+"kind": "deck_top",
+"source": "hand",
+"dest": "deck_top",
+"amount": 1,
+"granted_action": true,
+"symmetric": true
+}
+],
 "1251": [
 {
 "kind": "stadium_static",
@@ -1383,6 +1411,15 @@
 "target": "opponent_active",
 "timing": "before_weakness_resistance",
 "symmetric": true
+}
+],
+"1259": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"amount": 1,
+"name_family": "Marnie's"
 }
 ],
 "1260": [

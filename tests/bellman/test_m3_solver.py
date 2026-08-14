@@ -7,11 +7,14 @@ import pytest
 
 from common import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
-    ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome, SearchLimits, Terminal,
+    NeedModel, PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
+    SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
 from common.commutativity import ActionFootprint, action_footprint, independent
+from common.needs import ActionFocus, NeedBeam, semantic_action_key
 from common.options import LegalAction
+import common.solver as solver_module
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
@@ -160,6 +163,69 @@ def test_production_turn_search_has_no_depth_limit():
     assert decision.action.kind == "play"
     assert decision.diagnostics["root"].nodes == len(states)
     assert "max_depth" not in decision.diagnostics["production"]
+
+
+def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkeypatch):
+    root = _state("focus-root")
+    alpha = _state("alpha", board=0.5)
+    alpha_finish = _state("alpha-finish", board=0.6)
+    beta = _state("beta", board=0.3)
+    gamma = _state("gamma", board=0.2)
+    first, second, third, end = (
+        _action("alpha", 0), _action("beta", 1), _action("gamma", 2), _action("end", 3))
+
+    class FixedBeamBuilder:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def build(self, _state, _actions, ranking=None):
+            del ranking
+            return NeedBeam(
+                focused=(ActionFocus(
+                    semantic_action_key(first), "play", (), 1.0, "current need"),),
+                safety=(ActionFocus(
+                    semantic_action_key(end), "end", (), 0.0, "turn boundary"),),
+                unknown=(), paths=(), features=(), elapsed_ms=0.0, exhausted=False,
+                inactive=(
+                    ActionFocus(semantic_action_key(second), "play", (), 0.0,
+                                "no current need"),
+                    ActionFocus(semantic_action_key(third), "play", (), 0.0,
+                                "no current need"),
+                ),
+            )
+
+    monkeypatch.setattr(solver_module, "NeedBeamBuilder", FixedBeamBuilder)
+    oracle = _oracle()
+    oracle.needs = NeedModel(REGISTRY, lambda obs: Potential(
+        float(obs["current"].get("board", 0.0)),
+        (("board", float(obs["current"].get("board", 0.0))),)))
+    graph = FootprintedGraph(
+            {"focus-root": (first, second, third, end),
+             "alpha": (first, end), "alpha-finish": (end,),
+             "beta": (end,), "gamma": (end,)},
+            {("focus-root", "alpha"): Deterministic(alpha),
+             ("alpha", "alpha"): Deterministic(alpha_finish),
+             ("focus-root", "beta"): Deterministic(beta),
+             ("focus-root", "gamma"): Deterministic(gamma)},
+            {kind: ActionFootprint((kind,), barrier=True)
+             for kind in ("alpha", "beta", "gamma", "end")},
+        )
+    solver = ProductionSolver(
+        graph,
+        oracle,
+        limits=ProductionLimits(max_nodes=50),
+        profile=PilotProfile.resolve(global_values={"needs.focus_enabled": 1.0}),
+    )
+
+    decision = solver.decide(root)
+
+    assert decision.action.kind == "alpha"
+    assert decision.diagnostics["production"]["needs_later_wave"] == 2
+    assert decision.diagnostics["production"]["needs_clock_scale"] == 1.0
+    assert decision.diagnostics["production"]["root_branch_nodes"] == (3, 1, 2, 2)
+    assert {call for call in graph.calls if call[0] == "focus-root"} == {
+        ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma"),
+        ("focus-root", "end")}
 
 
 def test_production_partial_order_reduction_skips_only_the_reverse_commutative_order():
