@@ -118,7 +118,7 @@ def main(argv=None) -> int:
     run_dir = generate_corpus(args.agent, args.games, agents_root=args.agents_root, out_root=args.out,
                               when=datetime.now(), sha=_git_short(), overlay=args.overlay,
                               syspath_roots=[repo / "src"])
-    saved = len(list(Path(run_dir).glob("*.json")))
+    saved = len([path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name])
     print(f"Self-play Corpus: {saved} games -> {run_dir}")
     return 0
 

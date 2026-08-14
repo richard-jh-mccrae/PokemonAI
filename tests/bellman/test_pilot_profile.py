@@ -55,3 +55,9 @@ def test_pilot_overlay_reads_experiment_values(tmp_path, monkeypatch):
 
     assert values == {"search.max_nodes": 100000.0}
     assert provenance == str(path.resolve())
+
+
+def test_offline_clock_accepts_an_exhaustive_budget():
+    assert PilotProfile.resolve(
+        global_values={"clock.remaining_200_seconds": 600}
+    ).get("clock.remaining_200_seconds") == 600

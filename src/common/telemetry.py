@@ -29,6 +29,7 @@ def to_record(decision, *, read=None, seat=None) -> dict:
 
     diagnostics = _wire(dict(decision.diagnostics))
     record = {
+        "schema": "bellman",
         "bellman": True,
         "chosen": list(decision.chosen),
         "action": _wire(decision.action),
