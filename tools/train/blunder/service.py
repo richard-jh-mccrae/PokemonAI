@@ -45,6 +45,7 @@ def decisions_payload(replay: dict, our_team: str | None = None) -> dict:
                 "frame": d.frame, "seat": d.seat, "turn": d.turn,
                 "context": d.select_context, "type": d.select_type,
                 "chosen": d.chosen, "options": _labeled_options(d),
+                "decision_seconds": d.decision_seconds,
             }
             for d in decisions
         ],
@@ -84,6 +85,7 @@ def frames_payload(replay: dict, our_team: str | None = None,
             "context": select.get("context"), "type": select.get("type"),
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
+            "decision_seconds": decision.decision_seconds if decision is not None else None,
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
@@ -107,6 +109,7 @@ def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict
     return [
         {"frame": d.frame, "select_context": d.select_context, "select_type": d.select_type,
          "chosen": list(d.chosen), "chosen_label": _labels_for(d, d.chosen), "obs": d.obs,
+         "decision_seconds": d.decision_seconds,
          "live_trace": _live_for(replay, live_records, seat=seat, frame=d.frame)}
         for d in iter_decisions(replay) if d.seat == seat and d.turn == turn
     ]
@@ -131,6 +134,7 @@ def list_corrections(replay: dict, store_path: Path | str = DEFAULT_PATH) -> lis
             "id": c.id, "frame": frame, "step": (frame or 0) + 1, "turn": c.decision.get("turn"),
             "seat": c.seat, "source": c.source, "category": c.category,
             "correct": c.correct, "correct_label": c.correct_label, "rationale": c.rationale,
+            "decision_seconds": c.decision.get("decision_seconds"),
             "posture_mismatch": c.posture_mismatch,   # human flagged the opponent Read wrong (ADR-0041)
             "scope": c.scope, "subject": c.subject,   # what the tag is ABOUT (ADR-0049) — a Turn
             "span_len": len(c.span or []),            # Correction and the Decision Corrections inside

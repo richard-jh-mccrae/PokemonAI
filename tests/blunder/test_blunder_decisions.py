@@ -3,12 +3,39 @@
 Decisions come from the full-information ``visualize`` film (both hands visible),
 not the per-seat agent Observation (which hides the opponent).
 """
+import pytest
 from conftest import FIXTURES
 
 from meta_tracker.parse import load_replay
 from train.blunder.decisions import iter_decisions
+from train.blunder.service import decisions_payload, frames_payload
+from train.blunder.shell import _SHELL_HTML
 
 FIXTURE = FIXTURES / "episode-81364540-replay.json.gz"
+
+
+def _timed_replay():
+    def prompt(seat, remaining):
+        return {
+            "current": {"yourIndex": seat, "turn": 1},
+            "select": {"context": "Main", "type": "Main", "option": [{"type": "End"}]},
+            "selected": [0], "obs": {"remainingOverageTime": remaining},
+        }
+
+    film = [
+        {"current": {"yourIndex": 0, "turn": 1},
+         "select": {"context": "Main", "type": "Main", "option": [{"type": "End"}]}},
+        prompt(1, 10.0), prompt(0, 20.0), prompt(1, 7.5),
+        {"selected": [0], "obs": {"remainingOverageTime": 18.0}},
+    ]
+    return {
+        "info": {"EpisodeId": 1},
+        "steps": [
+            [{"visualize": film}, {}],
+            [{"observation": {"remainingOverageTime": 6.0}},
+             {"observation": {"remainingOverageTime": 17.25}}],
+        ],
+    }
 
 
 def test_iter_decisions_yields_taggable_decisions_from_film():
@@ -56,3 +83,25 @@ def test_decision_carries_pilot_ready_obs_aligned_to_its_options():
     assert isinstance(main.obs["select"]["type"], int)                  # int enum = Pilot-ready
     assert len(main.obs["select"]["option"]) == len(main.options)       # aligned to Decision
     assert all(0 <= c < len(main.obs["select"]["option"]) for c in main.chosen)
+
+
+def test_decision_time_uses_the_next_same_seat_clock_and_terminal_state():
+    replay = _timed_replay()
+    decisions = iter_decisions(replay)
+
+    assert [decision.decision_seconds for decision in decisions] == pytest.approx(
+        [2.5, 2.0, 1.5, 0.75])
+    assert decisions[-1].snapshot()["decision_seconds"] == pytest.approx(0.75)
+
+
+def test_decision_time_reaches_both_shell_payloads_and_visible_ui():
+    replay = _timed_replay()
+
+    listed = decisions_payload(replay)["decisions"]
+    frames = frames_payload(replay)["frames"]
+
+    assert listed[0]["decision_seconds"] == pytest.approx(2.5)
+    assert frames[0]["decision_seconds"] == pytest.approx(2.5)
+    assert frames[-1]["decision_seconds"] is None
+    assert "decision time" in _SHELL_HTML
+    assert "decision_seconds" in _SHELL_HTML

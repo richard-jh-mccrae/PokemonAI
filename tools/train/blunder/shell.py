@@ -245,6 +245,7 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  #nav input{width:64px} #pick{flex:1}
  .now{background:#f2f6fc;padding:10px;border-radius:6px;margin-bottom:6px}
  .now .big{font-size:18px;font-weight:700}
+ .timing{font-size:15px;margin:4px 0}.timing b{font-variant-numeric:tabular-nums}
  label{display:block;margin:10px 0 3px;font-weight:600} select,textarea,input{width:100%;font:13px system-ui}
  textarea{height:200px;resize:vertical} #correct{height:120px} #cfchoice{height:100px}
  button{padding:6px 10px;cursor:pointer} #save{margin-top:12px;padding:8px 14px;font-weight:600}
@@ -362,6 +363,7 @@ async function refreshList(){
     `<div class="item"><span class="x" onclick="removeItem(${k})">✕</span>`+
     `<span class="ed" onclick="editItem(${k})">edit</span>`+
     `<b>step ${it.step}</b> · T${it.turn} · seat ${it.seat} · ${esc(it.category)} · ${esc(it.source)}`+
+    (it.decision_seconds!=null?` · ${it.decision_seconds.toFixed(3)}s`:'')+
     (it.scope!=='decision'?` · <b class="sc">${esc(scopeTag(it))}</b>`:'')+
     turnGrade(it)+
     (CRIT_RE.test(it.rationale||'')?' · <b style="color:#c00">⚠ CRITICAL</b>':'')+
@@ -517,6 +519,7 @@ function show(n){
   let h=`<div class="big">Step ${f.step}/${total} &nbsp;·&nbsp; Turn ${f.turn}</div>`+
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
+  if(f.taggable) h+=`<div class="timing">decision time: <b>${f.decision_seconds==null?'unavailable':f.decision_seconds.toFixed(3)+'s'}</b></div>`;
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
   if(f.live){
     // The shipped agent's @T record for this decision (ADR-0019): how it ACTUALLY decided. A
@@ -578,7 +581,8 @@ function pickOption(f,k){
   // Our-agent decisions stand out: ▶ marker + bold (bold on <option> is browser-dependent, the
   // marker is the reliable cue). Show the turn, then the decision taken — easier to eyeball.
   const own=isOwn(f.seat), act=f.selected_label||f.context||'—';
-  const o=new Option(`${f.step}/${total} · T${f.turn} · ${own?'▶ ':''}${act}${f.taggable?'':' (—)'}`,k);
+  const timing=f.decision_seconds==null?'':` · ${f.decision_seconds.toFixed(3)}s`;
+  const o=new Option(`${f.step}/${total} · T${f.turn}${timing} · ${own?'▶ ':''}${act}${f.taggable?'':' (—)'}`,k);
   if(own) o.style.fontWeight='bold';
   return o;
 }
@@ -624,4 +628,3 @@ $('save').onclick=async()=>{
 };
 boot();
 </script></body></html>"""
-

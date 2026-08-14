@@ -8,7 +8,8 @@ hands are visible -- unlike the per-seat agent Observation, which hides the oppo
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class Decision:
     chosen: list[int]     # positional indices into options (recorded selection)
     current: dict         # full-information board snapshot at this Decision
     obs: dict | None = None  # agent observation (int enums) for the Tuner -- aligned to options
+    decision_seconds: float | None = None
 
     def snapshot(self) -> dict:
         """The embedded state a Correction stores -- already decoupled from the
@@ -34,6 +36,7 @@ class Decision:
             "select_type": self.select_type,
             "options": self.options,
             "current": self.current,
+            "decision_seconds": self.decision_seconds,
         }
 
 
@@ -43,6 +46,36 @@ def _film(replay: dict) -> list[dict]:
     if not steps or not steps[0]:
         return []
     return steps[0][0].get("visualize") or []
+
+
+def _remaining_time(observation) -> float | None:
+    value = (observation or {}).get("remainingOverageTime")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
+def _with_decision_times(replay: dict, decisions: list[Decision]) -> list[Decision]:
+    steps = replay.get("steps") or ()
+    terminal = steps[-1] if steps else ()
+    next_remaining = {
+        seat: _remaining_time((row or {}).get("observation"))
+        for seat, row in enumerate(terminal)
+        if isinstance(row, dict)
+    }
+    resolved = list(decisions)
+    for index in range(len(resolved) - 1, -1, -1):
+        decision = resolved[index]
+        before = _remaining_time(decision.obs)
+        after = next_remaining.get(decision.seat)
+        elapsed = before - after if before is not None and after is not None else None
+        if elapsed is not None and elapsed < 0.0:
+            elapsed = None
+        resolved[index] = replace(decision, decision_seconds=elapsed)
+        if before is not None:
+            next_remaining[decision.seat] = before
+    return resolved
 
 
 def iter_decisions(replay: dict) -> list[Decision]:
@@ -78,4 +111,4 @@ def iter_decisions(replay: dict) -> list[Decision]:
                 obs=copy.deepcopy(nxt.get("obs")),
             )
         )
-    return out
+    return _with_decision_times(replay, out)
