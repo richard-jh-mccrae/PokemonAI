@@ -30,7 +30,7 @@ RUNTIME = runtime()
     ("188cceda7001", (1,)),  # Poffin creates a Turbo Flare recipient before attacking
     ("feafb8ef77c5", (0,)),  # information action before Turbo Flare
     ("496a7657096f", (2,)),  # exhaust the dead deterministic search before refreshing
-    ("baede6accfac", (5,)),  # full-turn search ties redundant pre-attack actions
+    ("baede6accfac", (2,)),  # free Mega Signal information precedes the tied attachment
     ("cb70b1405932", (4,)),  # expiring Energy is lost at End in either line
     ("79767ab416a7", (0,)),  # persistent basic Energy beats expiring Energy
     ("3c2afa3f1f28", (0,)),  # beneficial attack beats End
