@@ -59,12 +59,18 @@ def test_generate_corpus_saves_bellman_correction_replays(tmp_path):
     require_kaggle_environments()
     overlay = tmp_path / "quick.json"
     overlay.write_text(json.dumps({"pilot": {
-        "search.runtime_nodes_per_root": 8,
-        "search.beam_width": 4,
-        "search.root_beam_width": 4,
-        "search.shallow_nodes": 4,
-        "search.refinement_width": 1,
+        "search.runtime_nodes_per_root": 1,
+        "search.chance_max_nodes": 1,
+        "search.reveal_max_nodes": 1,
+        "search.beam_width": 1,
+        "search.root_beam_width": 1,
+        "search.effect_choice_width": 1,
+        "search.shallow_nodes": 1,
+        "search.refinement_width": 0,
+        "clock.remaining_600_seconds": 2,
         "clock.remaining_200_seconds": 2,
+        "clock.remaining_140_seconds": 2,
+        "clock.emergency_seconds": 2,
     }}), encoding="utf-8")
     run_dir = generate_corpus(
         "mega_starmie", 1, agents_root=FIXTURE_AGENTS, out_root=tmp_path,

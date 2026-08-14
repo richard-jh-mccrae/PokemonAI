@@ -18,6 +18,25 @@ FIXTURE_AGENTS = REPO / "tests" / "fixtures" / "agents"
 LEGAL_DECK = FIXTURE_AGENTS / "mega_starmie" / "deck.csv"
 
 
+def _quick_overlay(tmp_path):
+    overlay = tmp_path / "quick.json"
+    overlay.write_text(json.dumps({"pilot": {
+        "search.runtime_nodes_per_root": 1,
+        "search.chance_max_nodes": 1,
+        "search.reveal_max_nodes": 1,
+        "search.beam_width": 1,
+        "search.root_beam_width": 1,
+        "search.effect_choice_width": 1,
+        "search.shallow_nodes": 1,
+        "search.refinement_width": 0,
+        "clock.remaining_600_seconds": 2,
+        "clock.remaining_200_seconds": 2,
+        "clock.remaining_140_seconds": 2,
+        "clock.emergency_seconds": 2,
+    }}), encoding="utf-8")
+    return overlay
+
+
 @pytest.mark.req("REQ-SIM-0001")
 def test_contents_fails_naming_the_missing_file(tmp_path):
     (tmp_path / "deck.csv").write_text("3\n")  # deck present, main.py missing
@@ -155,16 +174,7 @@ def test_playability_fixture_self_play_is_clean(tmp_path, monkeypatch):
     require_kaggle_environments()
     from sim.check_agent import check_playability
 
-    overlay = tmp_path / "quick.json"
-    overlay.write_text(json.dumps({"pilot": {
-        "search.runtime_nodes_per_root": 8,
-        "search.beam_width": 4,
-        "search.root_beam_width": 4,
-        "search.shallow_nodes": 4,
-        "search.refinement_width": 1,
-        "clock.remaining_200_seconds": 2,
-    }}), encoding="utf-8")
-    monkeypatch.setenv("AGENT_OVERLAY", str(overlay))
+    monkeypatch.setenv("AGENT_OVERLAY", str(_quick_overlay(tmp_path)))
     agent_dir = FIXTURE_AGENTS / "mega_starmie"   # shared common/cg resolve via src on sys.path
     result = check_playability(agent_dir, syspath_roots=[REPO / "src"], matches=2)
     assert result.ok, result.detail
@@ -195,10 +205,11 @@ def test_playability_detects_a_crash_and_saves_replay(tmp_path):
 
 
 @pytest.mark.req("REQ-SIM-0004")
-def test_deployability_packages_extracts_and_runs(tmp_path):
+def test_deployability_packages_extracts_and_runs(tmp_path, monkeypatch):
     require_kaggle_environments()
     from sim.check_agent import check_deployability
 
+    monkeypatch.setenv("AGENT_OVERLAY", str(_quick_overlay(tmp_path)))
     result = check_deployability("mega_starmie", work_dir=tmp_path, agents_root=FIXTURE_AGENTS)
     assert result.ok, result.detail
 
@@ -261,11 +272,12 @@ def test_agent_name_accepts_a_path_or_bare_name():
 
 
 @pytest.mark.req("REQ-SIM-0005")
-def test_cli_runs_a_real_agent_through_playability():
+def test_cli_runs_a_real_agent_through_playability(tmp_path, monkeypatch):
     require_kaggle_environments()
     import subprocess
     import sys
 
+    monkeypatch.setenv("AGENT_OVERLAY", str(_quick_overlay(tmp_path)))
     proc = subprocess.run(
         [sys.executable, str(REPO / "tools" / "sim" / "check_agent.py"),
          "mega_starmie", "--agents-root", str(FIXTURE_AGENTS), "--no-deployability", "--matches", "1"],
