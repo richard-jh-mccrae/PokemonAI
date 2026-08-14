@@ -118,6 +118,24 @@ def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int
     return list(balanced[offset:] + balanced[:offset])
 
 
+def _own_hidden_zones(root: DecisionState, player: dict, *, world_index: int,
+                      world_count: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    deck_count = max(0, int(player.get("deckCount", 0)))
+    prize_count = len(player.get("prize") or ())
+    known_prizes = _expand(root.prize_counts)
+    unknown_prize_count = max(0, prize_count - len(known_prizes))
+    required = deck_count + unknown_prize_count
+    remaining = tuple(_stratified_order(
+        _expand(root.deck_counts), world_index, world_count))
+    if len(remaining) < required:
+        fallback = tuple(_stratified_order(root.deck, world_index, world_count))
+        remaining = _fill(remaining, required, fallback)
+    hidden_prizes = remaining[:unknown_prize_count]
+    deck = _fill(remaining[unknown_prize_count:], deck_count, root.deck)
+    prizes = _fill((*known_prizes, *hidden_prizes), prize_count, root.deck)
+    return deck, prizes
+
+
 def _actor_seat(observation: dict, root_seat: int) -> int:
     select = observation.get("select") or {}
     if int(select.get("context", -1)) == _MAIN:
@@ -210,8 +228,6 @@ class NativeCgTransitionProvider:
         players = current.get("players") or ()
         mine = players[root.root_seat] if len(players) > root.root_seat else {}
         opponent = players[1 - root.root_seat] if len(players) > 1 else {}
-        own_deck = _fill(_expand(root.deck_counts), int(mine.get("deckCount", 0)), root.deck)
-        own_prize = _fill(_expand(root.prize_counts), len(mine.get("prize") or ()), root.deck)
         opponent_deck = _fill((), int(opponent.get("deckCount", 0)), root.deck)
         opponent_prize = _fill((), len(opponent.get("prize") or ()), root.deck)
         opponent_hand = _fill((), int(opponent.get("handCount", 0)), root.deck)
@@ -219,10 +235,12 @@ class NativeCgTransitionProvider:
         worlds = []
         probability = PROBABILITY_TOTAL / self.world_count
         for index in range(self.world_count):
+            own_deck, own_prize = _own_hidden_zones(
+                root, mine, world_index=index, world_count=self.world_count)
             state = self._api.search_begin(
                 native_observation,
-                _stratified_order(own_deck, index, self.world_count),
-                _stratified_order(own_prize, index, self.world_count),
+                list(own_deck),
+                list(own_prize),
                 _stratified_order(opponent_deck, index, self.world_count),
                 _stratified_order(opponent_prize, index, self.world_count),
                 _stratified_order(opponent_hand, index, self.world_count),

@@ -17,6 +17,7 @@ from .options import LegalAction
 from .family_ranking import FAMILIES, FamilyRanking, apply_family_ordering, rank_actions
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
+from .strategy.context import _DISCARD
 from .value import ValueOracle
 
 
@@ -111,6 +112,18 @@ def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, float]
     return value, decision_order
 
 
+def _select_our_action(finite, context: int):
+    if context == _DISCARD and all(not result.complete for _action, result in finite):
+        immediate = max(result.ledger.immediate for _action, result in finite)
+        leaders = tuple(
+            pair for pair in finite
+            if round(pair[1].ledger.immediate, VALUE_TIE_DECIMALS)
+            == round(immediate, VALUE_TIE_DECIMALS)
+        )
+        return min(leaders, key=lambda pair: str(pair[0].identity))
+    return max(finite, key=lambda pair: _ordered_evaluation(pair[1], Actor.OURS))
+
+
 def _expected_evaluation(weighted, *, reason: str, branches=(), complete: bool = True) -> Evaluation:
     benefits: dict[str, float] = {}
     costs: dict[str, float] = {}
@@ -178,6 +191,9 @@ class ReferenceSolver:
                             after: DecisionState,
                             continuation: StateEvaluation) -> tuple[PlanStep, ...]:
         return ()
+
+    def _reveal_choices(self, before: DecisionState, node: RevealChoice):
+        return node.choices
 
     def _models(self, before: DecisionState, after: DecisionState):
         if self.model_factory is None:
@@ -300,7 +316,7 @@ class ReferenceSolver:
                                     for child, evaluated in branches), result.decisions)
         if isinstance(node, RevealChoice):
             evaluated = {edge.label: self._transition(before, action, edge.node, ())
-                         for edge in node.choices}
+                         for edge in self._reveal_choices(before, node)}
             if any(not math.isfinite(result.value) for result in evaluated.values()):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete reveal choice")
             chooser = max if node.actor is Actor.OURS else min
@@ -445,9 +461,27 @@ class ProductionSolver(ReferenceSolver):
         )
         return (step,) + continuation.evaluation.continuation
 
+    def _reveal_choices(self, before: DecisionState, node: RevealChoice):
+        def priority(edge):
+            child = edge.node
+            state = child.state if isinstance(child, (Deterministic, Terminal)) else None
+            need = (self.oracle.reveal_choice_priority(before, state)
+                    if state is not None else 0.0)
+            return -need, edge.label
+
+        return tuple(sorted(node.choices, key=priority))
+
     def _footprint(self, state: DecisionState, action: LegalAction) -> ActionFootprint | None:
         footprint = getattr(self.provider, "footprint", None)
         return footprint(state, action) if footprint is not None else None
+
+    def _information_priority(self, state: DecisionState, action: LegalAction) -> float:
+        node = self.provider.transition(state, action)
+        reveal = self.oracle.reveal_node_priority(state, node)
+        if isinstance(node, RevealChoice):
+            minimum = self.profile.get("search.reveal_information_min_need")
+            return reveal if reveal >= minimum else 0.0
+        return self.oracle.need_coverage_value(state, action)
 
     @staticmethod
     def _sleep_key(sleep: tuple[SleepEvent, ...]) -> tuple[tuple[str, ...], ...]:
@@ -519,6 +553,122 @@ class ProductionSolver(ReferenceSolver):
                     else:
                         self.por_pruned += 1
             actions = filtered
+            deterministic_need = any(
+                not footprints[action.identity].information_first
+                and self.oracle.need_coverage_value(state, action) > 0.0
+                for action in actions if footprints[action.identity] is not None
+            )
+            if deterministic_need:
+                retained = []
+                minimum = self.profile.get("search.reveal_information_min_need")
+                for action in actions:
+                    footprint = footprints[action.identity]
+                    node = (self.provider.transition(state, action)
+                            if footprint is not None and footprint.information_first else None)
+                    reveal = (self.oracle.reveal_node_priority(state, node)
+                              if isinstance(node, RevealChoice) else minimum)
+                    if reveal >= minimum:
+                        retained.append(action)
+                        continue
+                    self._structural_prunes.append({
+                        "proof_type": "weak_reveal_vs_deterministic_need",
+                        "pruned": str(action.identity),
+                    })
+                actions = tuple(retained)
+            retained = []
+            for action in actions:
+                heal = self.oracle.heal_need_value(state, action)
+                if heal is None or heal >= self.profile.get("needs.heal_min_gain"):
+                    retained.append(action)
+                    continue
+                self._structural_prunes.append({
+                    "proof_type": "heal_below_minimum_gain",
+                    "pruned": str(action.identity),
+                    "gain": heal,
+                })
+            actions = tuple(retained)
+            energy_heals = tuple(
+                action for action in actions
+                if self.oracle.heal_repositions_energy(state, action)
+                and self.oracle.heal_need_value(state, action) >= self.profile.get(
+                    "needs.heal_min_gain")
+            )
+            if energy_heals:
+                urgent = max(self.oracle.heal_need_value(state, action)
+                             for action in energy_heals) >= self.profile.get(
+                                 "needs.heal_urgent_gain")
+                retained = []
+                for action in actions:
+                    footprint = footprints[action.identity]
+                    transition = (self.provider.transition(state, action)
+                                  if footprint is not None and footprint.commitment else None)
+                    useful_information = bool(
+                        footprint is not None and footprint.information_first
+                        and self._information_priority(state, action) > 0.0)
+                    useful_recovery = self.oracle.recovery_need_value(state, action) > 0.0
+                    if (action in energy_heals or action.identity.kind == "end"
+                            or useful_information
+                            or useful_recovery
+                            or (not urgent and (footprint is None or not footprint.commitment))
+                            or (isinstance(transition, Terminal)
+                                and transition.result == TERMINAL_WIN_REASON)):
+                        retained.append(action)
+                        continue
+                    self._structural_prunes.append({
+                        "proof_type": "heal_before_commitment",
+                        "pruned": str(action.identity),
+                        "retained_event": footprints[energy_heals[0].identity].event,
+                    })
+                actions = tuple(retained)
+            information_actions = tuple(
+                action for action in actions
+                if footprints[action.identity] is not None
+                and footprints[action.identity].information_first
+                and footprints[action.identity].event not in asleep
+                and self._information_priority(state, action) > 0.0
+            )
+            information = tuple(footprints[action.identity] for action in information_actions)
+            if information:
+                retained = []
+                for action in actions:
+                    footprint = footprints[action.identity]
+                    transition = (self.provider.transition(state, action)
+                                  if footprint is not None and footprint.commitment else None)
+                    if (footprint is None or not footprint.commitment
+                            or action.identity.kind == "evolve"
+                            or self.oracle.need_coverage_value(state, action) > 0.0
+                            or (isinstance(transition, Terminal)
+                                and transition.result == TERMINAL_WIN_REASON)):
+                        retained.append(action)
+                        continue
+                    self._structural_prunes.append({
+                        "proof_type": "information_before_commitment",
+                        "pruned": str(action.identity),
+                        "retained_event": information[0].event,
+                    })
+                    self.information_pruned += 1
+                actions = tuple(retained)
+            if self.profile.get("search.needs_before_commitment") >= 0.5:
+                preparations = tuple(
+                    action for action in actions
+                    if footprints[action.identity] is not None
+                    and not footprints[action.identity].commitment
+                    and hasattr(self.oracle, "need_coverage_ledger")
+                    and self.oracle.need_coverage_ledger(state, action) is not None
+                )
+                if preparations:
+                    retained = []
+                    for action in actions:
+                        footprint = footprints[action.identity]
+                        if footprint is None or not footprint.commitment:
+                            retained.append(action)
+                            continue
+                        self._structural_prunes.append({
+                            "proof_type": "needs_before_commitment",
+                            "pruned": str(action.identity),
+                            "retained_event": footprints[preparations[0].identity].event,
+                        })
+                    actions = tuple(retained)
             ordering = any(self.profile.get(f"family.{family}_ordering") >= 0.5
                            for family in FAMILIES)
             widening = any(self.profile.get(f"family.{family}_widening") >= 0.5
@@ -548,8 +698,12 @@ class ProductionSolver(ReferenceSolver):
         child_sleeps: dict[object, tuple[SleepEvent, ...]] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             earlier = []
-            information = tuple(footprint for footprint in footprints.values()
-                                if footprint is not None and footprint.information_first)
+            information = tuple(
+                footprints[action.identity] for action in actions
+                if footprints[action.identity] is not None
+                and footprints[action.identity].information_first
+                and self._information_priority(state, action) > 0.0
+            )
             for action in actions:
                 footprint = footprints.get(action.identity)
                 child_sleeps[action.identity] = self._successor_sleep(
@@ -670,8 +824,7 @@ class ProductionSolver(ReferenceSolver):
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:
-                action, result = max(
-                    finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
+                action, result = _select_our_action(finite, context)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))

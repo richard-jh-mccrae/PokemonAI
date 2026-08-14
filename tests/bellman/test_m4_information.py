@@ -14,7 +14,7 @@ from common.information import (
     BellmanDeckProfile, OutcomeGroup, draw_outcomes, hypergeometric_classes, opponent_belief,
 )
 from common.options import LegalAction
-from common.native_engine import _stratified_order
+from common.native_engine import _own_hidden_zones, _stratified_order
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
 
@@ -107,6 +107,22 @@ def test_native_belief_worlds_use_distinct_equal_strata_without_changing_mass():
 
     assert len({tuple(world) for world in worlds}) == 4
     assert all(Counter(world) == Counter(cards) for world in worlds)
+
+
+def test_unknown_prizes_are_partitioned_after_balancing_the_whole_hidden_pool():
+    root = type("Root", (), {
+        "deck_counts": ((101, 5), (999, 5)),
+        "prize_counts": (),
+        "deck": (101,) * 5 + (999,) * 5,
+    })()
+
+    deck, prizes = _own_hidden_zones(
+        root, {"deckCount": 4, "prize": [None] * 6}, world_index=0, world_count=1)
+
+    assert len(deck) == 4
+    assert len(prizes) == 6
+    assert Counter(deck + prizes) == Counter(root.deck)
+    assert set(deck) == {101, 999}
 
 
 def test_scouting_adapter_conserves_unknown_mass_and_never_selects():

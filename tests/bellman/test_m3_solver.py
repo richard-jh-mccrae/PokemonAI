@@ -19,7 +19,7 @@ CARD = 900
 DECK = (CARD,)
 
 
-def _obs(node, *, hand=(), board=0.0, supporter=False):
+def _obs(node, *, hand=(), board=0.0, supporter=False, context=0):
     return {"node": node, "current": {"yourIndex": 0, "board": board,
             "supporterPlayed": supporter, "energyAttached": False, "retreated": False,
             "stadiumPlayed": False,
@@ -28,7 +28,7 @@ def _obs(node, *, hand=(), board=0.0, supporter=False):
                           for i, cid in enumerate(hand)],
                  "active": [], "bench": [], "discard": [], "prize": []},
                 {"hand": None, "active": [], "bench": [], "discard": [], "prize": []},
-            ]}, "select": {"context": 0, "option": []}}
+            ]}, "select": {"context": context, "option": []}}
 
 
 REGISTRY = ValueRegistry(functions={CARD: ("search",)}, facts={CARD: CardFacts()})
@@ -298,6 +298,64 @@ def test_fetch_into_hand_is_an_information_barrier():
     assert not independent(attach_footprint, fetch_footprint)
 
 
+def test_supporter_fetch_is_a_commitment_not_free_information():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 905}], "active": [], "bench": []},
+            {"hand": None, "active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [{"type": 7, "index": 0}]},
+    }
+    state = SimpleNamespace(obs=observation)
+    play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "evolution", "zone": "deck",
+                     "dest": "in_play"},)
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(is_supporter=True, is_stadium=False)
+
+    footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+
+    assert footprint.barrier
+    assert footprint.commitment
+    assert not footprint.information_first
+
+
+def test_bench_fetch_without_a_remaining_target_is_a_commitment():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 905}], "active": [], "bench": [], "benchMax": 5},
+            {"hand": None, "active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [{"type": 7, "index": 0}]},
+    }
+    state = SimpleNamespace(obs=observation, deck_counts=((906, 2),))
+    play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "basic_pokemon", "zone": "deck",
+                     "dest": "bench"},)
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(is_pokemon=False, is_supporter=False, is_stadium=False)
+
+    footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+
+    assert footprint.barrier
+    assert footprint.commitment
+    assert not footprint.information_first
+
+
 def test_shuffle_refresh_is_not_safe_information_first():
     observation = {
         "current": {"yourIndex": 0, "players": [
@@ -337,8 +395,11 @@ def test_information_first_prunes_only_the_commitment_then_fetch_order():
          "end": ActionFootprint(("end",), barrier=True)},
     )
 
+    oracle = _oracle()
+    oracle.need_coverage_value = lambda _state, action: (
+        1.0 if action.identity.kind == "play" else 0.0)
     decision = ProductionSolver(
-        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+        graph, oracle, limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
     ).decide(root)
 
     assert decision.action.kind == "play"
@@ -346,6 +407,79 @@ def test_information_first_prunes_only_the_commitment_then_fetch_order():
     assert ("after-fetch", "attach") in graph.calls
     assert any(row["proof_type"] == "information_before_commitment"
                for row in decision.diagnostics["production"]["structural_prunes"])
+
+
+def test_immediate_need_preparation_precedes_a_commitment():
+    root = _state("need-root")
+    after_setup = _state("after-setup", board=0.1)
+    after_attach = _state("after-attach", board=0.2)
+    finish = _state("need-finish", board=0.8)
+    attach, setup, end = _action("attach"), _action("play", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"need-root": (attach, setup, end), "after-attach": (setup, end),
+         "after-setup": (attach, end), "need-finish": (end,)},
+        {("need-root", "attach"): Deterministic(after_attach),
+         ("need-root", "play"): Deterministic(after_setup),
+         ("after-attach", "play"): Deterministic(finish),
+         ("after-setup", "attach"): Deterministic(finish)},
+        {"attach": ActionFootprint(("attach",), commitment=True),
+         "play": ActionFootprint(("play",), barrier=True),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+    oracle = _oracle()
+    oracle.need_coverage_ledger = lambda _state, action: (
+        ("deployment", Ledger((("board", 0.2),), ()))
+        if action.identity.kind == "play" else None)
+
+    decision = ProductionSolver(
+        graph, oracle, limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "play"
+    assert any(row["proof_type"] == "needs_before_commitment"
+               for row in decision.diagnostics["production"]["structural_prunes"])
+
+
+def test_urgent_heal_retains_free_recovery_that_fills_a_need():
+    root = _state("heal-root")
+    recovered = _state("recovered", board=0.1)
+    healed = _state("healed", board=0.2)
+    finish = _state("finish", board=0.8)
+    recover, heal, end = _action("recover"), _action("heal", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"heal-root": (heal, recover, end), "recovered": (heal, end),
+         "healed": (end,), "finish": (end,)},
+        {("heal-root", "heal"): Deterministic(healed),
+         ("heal-root", "recover"): Deterministic(recovered),
+         ("recovered", "heal"): Deterministic(finish)},
+        {"heal": ActionFootprint(("heal",), commitment=True),
+         "recover": ActionFootprint(("recover",), barrier=True),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+    oracle = _oracle()
+    oracle.heal_repositions_energy = lambda _state, action: action.identity.kind == "heal"
+    oracle.heal_need_value = lambda _state, action: (
+        1.0 if action.identity.kind == "heal" else None)
+    oracle.recovery_need_value = lambda _state, action: (
+        0.5 if action.identity.kind == "recover" else 0.0)
+
+    decision = ProductionSolver(
+        graph, oracle, limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "recover"
+
+
+def test_incomplete_forced_discard_uses_stable_immediate_value_fallback():
+    from common.solver import Evaluation, _select_our_action
+
+    keep, waste = _action("discard_keep"), _action("discard_waste", 1)
+    chosen, _result = _select_our_action((
+        (keep, Evaluation(0.2, Ledger((('hand', 0.2),), ()), False)),
+        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), False)),
+    ), 8)
+
+    assert chosen == keep
 
 
 def test_bench_fetch_and_evolution_do_not_claim_retreat_commutativity():

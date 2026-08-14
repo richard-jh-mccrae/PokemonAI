@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from .information import BellmanDeckProfile
 from .damage import compute_active_damage
 from .damage_context import SideFacts, damage_context
+from .strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes
 
 
@@ -195,7 +196,8 @@ class BoardPotential:
             deck_basic_by_type=deck_basic_by_type,
         )
 
-    def _attack_value(self, body, codes, defender, attacker_facts, defender_facts) -> float:
+    def _attack_value(self, body, codes, defender, attacker_facts, defender_facts, *,
+                      require_ready: bool = False) -> float:
         card_id = body.get("id")
         stat = self._stat(card_id)
         defender_stat = self._stat(defender.get("id")) if defender else None
@@ -212,6 +214,8 @@ class BoardPotential:
                 continue
             required = tuple(getattr(attack, "energyTypes", ()) or ())
             readiness = _pay_fraction(codes, required)
+            if require_ready and readiness < 1.0:
+                continue
             damage = max(float(compute_active_damage(
                              attack, stat, defender_stat, defender_tags, context=context)),
                          float(getattr(attack, "benchSnipe", 0) or 0))
@@ -253,7 +257,8 @@ class BoardPotential:
             variants.append(evolved)
         return tuple(variants)
 
-    def _readiness(self, me, opponent, *, opponent_moves_next: bool = False) -> float:
+    def _readiness(self, me, opponent, *, opponent_moves_next: bool = False,
+                   include_incoming: bool = True) -> float:
         mine = next((body for body in (me.get("active") or ()) if body), None)
         theirs = next((body for body in (opponent.get("active") or ()) if body), None)
         defenders = (self._reachable_defenders(
@@ -273,7 +278,7 @@ class BoardPotential:
         own = max(max(active_values, default=0.0),
                   BENCH_ATTACK_ACCESS_SHARE * max(bench_values, default=0.0))
         incoming_values = []
-        if mine is not None:
+        if include_incoming and mine is not None:
             for body in _bodies(opponent):
                 attacker_facts = self._side_facts(opponent, attacking_body=body)
                 incoming_values.append(self._attack_value(
@@ -283,6 +288,68 @@ class BoardPotential:
                        / OPPONENT_ROLE_WORTH_NORMALIZER))
         incoming = max(incoming_values, default=0.0)
         return own - incoming
+
+    def _attack_coverage(self, body, codes, me, opponent, *, require_ready=False) -> float:
+        active = next((target for target in (opponent.get("active") or ()) if target), None)
+        bench = tuple(target for target in (opponent.get("bench") or ()) if target)
+        if active is None and not bench:
+            return 0.0
+        attacker_facts = self._side_facts(me, attacking_body=body)
+        defender_facts = self._side_facts(opponent)
+        active_value = (self._attack_value(
+            body, codes, active, attacker_facts, defender_facts,
+            require_ready=require_ready) if active else 0.0)
+        next_value = max((self._attack_value(
+            body, codes, defender, attacker_facts, defender_facts,
+            require_ready=require_ready)
+                          for defender in bench), default=0.0)
+        return active_value + next_value
+
+    def _next_attachment_coverage(self, me, opponent) -> float:
+        active = next((body for body in (me.get("active") or ()) if body), None)
+        if active is None:
+            return 0.0
+        energy_types = []
+        for card in me.get("hand") or ():
+            stat = self._stat(card.get("id")) if card else None
+            if stat is None or not getattr(stat, "is_energy", False):
+                continue
+            energy_type = getattr(stat, "energyType", None)
+            if energy_type is not None:
+                energy_types.append(int(energy_type))
+        codes = _energy_codes(active)
+        return max((self._attack_ko_coverage(
+            active, [*codes, energy_type], me, opponent)
+                    for energy_type in energy_types), default=0.0)
+
+    def _attack_ko_coverage(self, body, codes, me, opponent) -> float:
+        defender = next((target for target in (opponent.get("active") or ()) if target), None)
+        if defender is None:
+            return 0.0
+        stat = self._stat(body.get("id"))
+        defender_stat = self._stat(defender.get("id"))
+        if stat is None or defender_stat is None:
+            return 0.0
+        attacker_facts = self._side_facts(me, attacking_body=body)
+        defender_facts = self._side_facts(opponent)
+        defender_tags = frozenset(self.registry.functions.get(int(defender.get("id", 0)), ()))
+        best = 0.0
+        for attack_id in getattr(stat, "attacks", ()) or ():
+            attack = self._attack(attack_id)
+            if attack is None or _pay_fraction(
+                    codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+                continue
+            damage = compute_active_damage(
+                attack, stat, defender_stat, defender_tags,
+                context=damage_context(attacker_facts, defender_facts))
+            if damage < int(defender.get("hp", MINIMUM_HP)):
+                continue
+            snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+            bench_prizes = max((self._prizes(target) for target in opponent.get("bench") or ()
+                                if target and snipe >= int(target.get("hp", MINIMUM_HP))),
+                               default=0)
+            best = max(best, float(self._prizes(defender) + bench_prizes))
+        return best
 
     def _multi_target_ko_ready(self, me, opponent) -> float:
         """Prize value of a currently ready attack that can KO Active and Bench together."""
@@ -428,7 +495,7 @@ class BoardPotential:
             self._side_facts(me, attacking_body=attacker), self._side_facts(opponent),
         ) >= self._prizes(defender)
 
-    def _energy_position(self, me, opponent) -> float:
+    def _energy_position(self, me, opponent, *, historical_context=None) -> float:
         """Usable attached-resource value, shaped by deployment urgency and survival.
 
         Basic lines concentrate resources until the Active covers the immediate KO; after that,
@@ -449,14 +516,13 @@ class BoardPotential:
             if not values:
                 values = [worth_to_prizes(self.registry.seeds.energy)] * min(
                     cap, len(_energy_codes(body)))
-            if self.isolated_selection:
-                # Once the Active already covers the immediate KO, diminishing returns preserve
-                # optionality across Basics.  Otherwise increasing returns concentrate resources
-                # toward deploying one Basic attacker; evolved bodies are already deployed.
-                diversify = active_ko_ready or bool(body.get("preEvolution"))
-                total += survival * sum(
-                    value / (index + 1) if diversify else value * (index + 1)
-                    for index, value in enumerate(values))
+            diversify = (not self.isolated_selection or active_ko_ready
+                          or bool(body.get("preEvolution")))
+            shaped = sum(value / (index + 1) if diversify else value * (index + 1)
+                         for index, value in enumerate(values))
+            if not self.isolated_selection or historical_context != _DAMAGE:
+                shaped *= self._attack_coverage(body, _energy_codes(body), me, opponent)
+            total += survival * shaped
         return total
 
     def _development(self, me) -> float:
@@ -466,7 +532,7 @@ class BoardPotential:
         improvement by the evolved body's prize liability so the term stays card- and deck-neutral.
         """
         return sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
-                   for body in (me.get("bench") or ()) if body and body.get("preEvolution"))
+                   for body in _bodies(me) if body.get("preEvolution"))
 
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()
@@ -607,21 +673,31 @@ class BoardPotential:
             game = self.scale.game if result == seat else -self.scale.game
             return Potential(game, (("game", game),))
         lethal_exposure = self._lethal_exposure(me, opponent)
+        historical_context = observation.get("bellmanHistoricalContext")
+        selection_context = (historical_context if historical_context is not None
+                             else (observation.get("select") or {}).get("context"))
+        promoted_after_attack = (self.isolated_selection
+                                 and historical_context == _TO_ACTIVE)
+        readiness = self._readiness(
+            me, opponent,
+            opponent_moves_next=int(observation.get("bellmanActor", seat)) != seat,
+            include_incoming=not promoted_after_attack)
+        if promoted_after_attack:
+            readiness = self._next_attachment_coverage(me, opponent)
         families = {
             "game": 0.0,
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
             "damage": (self._damage_progress(opponent)
                        - self._damage_progress(me) * (
                            1.0 if lethal_exposure < 0.0 else SAFE_DAMAGE_RESERVE_SHARE)),
-            "readiness": self._readiness(
-                me, opponent,
-                opponent_moves_next=int(observation.get("bellmanActor", seat)) != seat),
+            "readiness": readiness,
             "multi_target_ko": (0.0 if observation.get("bellmanHistoricalMain")
                                 else self._multi_target_ko_ready(me, opponent)),
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
             "board": self._board_resources(me),
-            "energy_position": self._energy_position(me, opponent),
+            "energy_position": self._energy_position(
+                me, opponent, historical_context=selection_context),
             "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
             "hand_demand": self._hand_demand(me),

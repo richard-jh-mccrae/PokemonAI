@@ -20,6 +20,8 @@ MINIMUM_BODY_HP = 10
 MINIMUM_ENERGY_UNITS = 1
 NEXT_STAGE_OFFSET = 1
 NEXT_TURN_OPTION_DISCOUNT = 0.75
+BENCH_HEAL_VALUE_SHARE = 0.25
+HEAL_DAMAGE_PER_VALUE = 200.0
 
 
 @dataclass(frozen=True)
@@ -220,6 +222,17 @@ class NeedModel:
             if energy_edges:
                 needs.append(Need("fund_attack", tuple(sorted(energy_edges.items()))))
 
+        heal_edges = {}
+        for card_id in self.registry.facts:
+            clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
+            gains = [self._heal_gain(observation, seat, clause)
+                     for clause in clauses if clause.get("kind") == "heal"]
+            gain = max(gains, default=0.0)
+            if gain > 0.0:
+                heal_edges[int(card_id)] = gain
+        if heal_edges:
+            needs.append(Need("heal_board", tuple(sorted(heal_edges.items()))))
+
         bench_space = max(0, int(mine.get("benchMax", DEFAULT_BENCH_CAPACITY))
                           - len(mine.get("bench") or ()))
         for line in self.registry.lines:
@@ -243,6 +256,57 @@ class NeedModel:
                 needs.extend(Need(f"deploy_line:{first_key + offset}", ((base, gain),))
                              for offset in range(missing))
         return tuple(needs)
+
+    def _heal_gain(self, observation, seat: int, clause: dict) -> float:
+        if clause.get("rider") not in (None, "bounce_energy_to_hand"):
+            return 0.0
+        restriction = clause.get("restriction")
+        if restriction not in (None, "active_only", "mega_only"):
+            return 0.0
+        condition = clause.get("condition")
+        if condition not in (None, "energy_3_plus", "remaining_hp_30_or_less",
+                             "played_supporter_this_turn"):
+            return 0.0
+        current = observation.get("current") or {}
+        players = current.get("players") or ()
+        mine = players[seat] if len(players) > seat else {}
+        candidates = list(body_rows(mine))
+        if restriction == "active_only":
+            candidates = [row for row in candidates if row[0] == "active"]
+        elif restriction == "mega_only":
+            candidates = [row for row in candidates
+                          if bool(getattr(self.stat(row[2].get("id")), "megaEx", False))]
+        if condition == "played_supporter_this_turn" and not current.get("supporterPlayed"):
+            return 0.0
+
+        def eligible(body):
+            if condition == "energy_3_plus" and len(body.get("energyCards") or ()) < 3:
+                return False
+            if condition == "remaining_hp_30_or_less" and int(body.get("hp", 0)) > 30:
+                return False
+            return int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0)))
+
+        candidates = [row for row in candidates if eligible(row[2])]
+        groups = (tuple(candidates),) if clause.get("each_of") else tuple((row,) for row in candidates)
+        best = 0.0
+        for group in groups:
+            healed = copy.deepcopy(observation)
+            gain = 0.0
+            for area, index, original in group:
+                body = healed["current"]["players"][seat][area][index]
+                maximum = int(body.get("maxHp", body.get("hp", 0)))
+                amount = maximum if clause.get("amount") == "all" else int(clause.get("amount", 0))
+                restored = min(maximum - int(original.get("hp", 0)), amount)
+                gain += restored / HEAL_DAMAGE_PER_VALUE * (
+                    1.0 if area == "active" else BENCH_HEAL_VALUE_SHARE)
+                body["hp"] = min(maximum, int(body.get("hp", 0)) + amount)
+                if clause.get("rider") == "bounce_energy_to_hand":
+                    healed["current"]["players"][seat].setdefault("hand", []).extend(
+                        body.get("energyCards") or ())
+                    body["energyCards"] = []
+                    body["energies"] = []
+            best = max(best, gain)
+        return best
 
     def coverage_slots(self, card_id: int, needs: tuple[Need, ...], *,
                        supporter_available: bool, discard_capacity: int,

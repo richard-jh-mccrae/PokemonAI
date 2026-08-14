@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .fetch import REACH, fetch_target_matches
 from common.strategy.context import _ACTIVE, _BENCH
 
 
@@ -54,6 +55,26 @@ def _pure_hidden_fetch(clauses) -> bool:
         clause.get("kind") == "fetch" and clause.get("zone") == "deck"
         and clause.get("dest", "hand") == "hand" and not prohibited.intersection(clause)
         for clause in clauses)
+
+
+def _dead_bench_fetch(state, player: dict, clauses, stats) -> bool:
+    bench_clauses = tuple(
+        clause for clause in clauses
+        if clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+        and clause.get("dest") == "bench"
+    )
+    if not bench_clauses or len(bench_clauses) != len(clauses) or stats is None:
+        return False
+    if len(player.get("bench") or ()) >= int(player.get("benchMax", 5)):
+        return True
+    deck_counts = tuple(getattr(state, "deck_counts", ()))
+    if not deck_counts:
+        return False
+    return not any(
+        count > 0 and fetch_target_matches(clause, stats.get(card_id), reading=REACH)
+        for clause in bench_clauses
+        for card_id, count in deck_counts
+    )
 
 
 def _actor_side(observation: dict) -> tuple[int, dict]:
@@ -142,16 +163,26 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
 
     card_id = int(card["id"])
     clauses = tuple(effects.clauses(card_id))
-    if _pure_hidden_fetch(clauses):
+    stat = stats.get(card_id) if stats is not None else None
+    consumes_allowance = bool(
+        stat is not None
+        and (getattr(stat, "is_supporter", False) or getattr(stat, "is_stadium", False))
+    )
+    dead_bench_fetch = _dead_bench_fetch(state, player, clauses, stats)
+    spends_resources = any(
+        clause.get("cost") or clause.get("cost_required") for clause in clauses
+    )
+    if _pure_hidden_fetch(clauses) and not consumes_allowance:
         return ActionFootprint((kind, card_token), barrier=True, information_first=True)
     clause_kinds = frozenset(str(clause.get("kind", "")) for clause in clauses)
     if (not clause_kinds or clause_kinds & INFORMATION_EFFECT_KINDS
             or not clause_kinds <= DECLARED_DETERMINISTIC_EFFECT_KINDS):
-        return ActionFootprint((kind, card_token), barrier=True)
+        return ActionFootprint((kind, card_token), barrier=True,
+                               commitment=consumes_allowance or dead_bench_fetch
+                               or spends_resources)
 
     reads = {f"hand:{card_token}"}
     writes = {f"hand:{card_token}"}
-    stat = stats.get(card_id) if stats is not None else None
     if stat is not None and getattr(stat, "is_supporter", False):
         reads.add("allowance:supporter")
         writes.add("allowance:supporter")
