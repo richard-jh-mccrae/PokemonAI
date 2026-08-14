@@ -5,11 +5,11 @@ Every shipped deck uses one system: `common.runtime.BellmanRuntime`.
 ## Language
 
 **Action Family**:
-Legal sibling choices that answer the same local question and may be ranked by one family equation.
+Legal sibling choices that answer the same local question.
 _Avoid_: Decision group, option bucket
 
 **Family Score**:
-An explainable within-family scheduling score. It orders search and never contributes to Bellman utility.
+An offline diagnostic from a bespoke equation. The Pilot does not compute or consume it.
 _Avoid_: Action value, policy value
 
 **Search Wave**:

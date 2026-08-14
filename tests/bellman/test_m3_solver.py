@@ -224,8 +224,7 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
     assert decision.diagnostics["production"]["needs_clock_scale"] == 1.0
     assert decision.diagnostics["production"]["root_branch_nodes"] == (3, 1, 2, 2)
     assert {call for call in graph.calls if call[0] == "focus-root"} == {
-        ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma"),
-        ("focus-root", "end")}
+        ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma")}
 
 
 def test_production_partial_order_reduction_skips_only_the_reverse_commutative_order():

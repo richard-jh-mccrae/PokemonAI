@@ -30,11 +30,11 @@ def test_profile_rejects_unknown_and_out_of_bounds_global_values():
         PilotProfile.resolve(global_values={"family.tie_margin": 99.0})
 
 
-def test_all_value_equations_default_to_shadow_only():
+def test_all_value_equations_default_to_disconnected():
     profile = PilotProfile.resolve()
 
     for family in ("attachment", "deployment", "evolution", "promote_retreat", "snipe"):
-        assert profile.get(f"family.{family}_shadow") == 1.0
+        assert profile.get(f"family.{family}_shadow") == 0.0
         assert profile.get(f"family.{family}_ordering") == 0.0
         assert profile.get(f"family.{family}_widening") == 0.0
 

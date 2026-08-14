@@ -8,6 +8,15 @@ from common.options import LegalAction
 from common.pilot_profile import PilotProfile
 
 
+def _equation_profile(**values):
+    enabled = {
+        f"family.{family}_shadow": 1.0
+        for family in ("attachment", "deployment", "evolution", "promote_retreat", "snipe")
+    }
+    enabled.update(values)
+    return PilotProfile.resolve(global_values=enabled)
+
+
 def _action(kind, index):
     return LegalAction(ActionIdentity(kind, (index,)), (index,), ((index,),), ())
 
@@ -36,7 +45,7 @@ def test_attachment_leader_near_tie_and_singleton_enter_before_distant_candidate
     }
 
     ranking = rank_actions(SimpleNamespace(), (bench, wally, ignition, water),
-                           _Provider(successors), _Oracle(), PilotProfile.resolve())
+                           _Provider(successors), _Oracle(), _equation_profile())
 
     rows = {candidate.action: candidate for candidate in ranking.candidates}
     assert rows[water].status == "leader"
@@ -50,7 +59,7 @@ def test_attachment_leader_near_tie_and_singleton_enter_before_distant_candidate
 def test_unscorable_attachment_abstains_into_first_wave():
     attachment = _action("attach", 0)
     ranking = rank_actions(SimpleNamespace(), (attachment,), _Provider({}), _Oracle(),
-                           PilotProfile.resolve())
+                           _equation_profile())
 
     assert ranking.candidates[0].status == "abstained"
     assert ranking.first_wave == (attachment,)
@@ -88,7 +97,7 @@ def test_every_historical_value_equation_emits_shadow_candidates():
     }
 
     ranking = rank_actions(before, (attach, evolve, retreat, deploy, snipe),
-                           _Provider(successors), _Oracle(), PilotProfile.resolve())
+                           _Provider(successors), _Oracle(), _equation_profile())
 
     rows = {candidate.action: candidate for candidate in ranking.candidates}
     assert {rows[action].family for action in successors} == {
@@ -110,7 +119,7 @@ def test_each_shadow_gate_and_coefficient_is_independent():
     ).candidates[0]
     tuned = rank_actions(
         before, (evolve,), provider, _Oracle(),
-        PilotProfile.resolve(global_values={"evolution.deploy_weight": 2.0}),
+        _equation_profile(**{"evolution.deploy_weight": 2.0}),
     ).candidates[0]
 
     assert disabled.status == "shadow_disabled"
@@ -125,9 +134,9 @@ def test_shadow_ordering_never_changes_runtime_order_until_its_family_gate_is_on
         high: Deterministic(SimpleNamespace(ledger=Ledger((("board", 0.9),), ()))),
     }
     actions = (low, play, high)
-    base = PilotProfile.resolve()
+    base = _equation_profile()
     ranking = rank_actions(SimpleNamespace(), actions, _Provider(successors), _Oracle(), base)
 
     assert apply_family_ordering(actions, ranking, base) == actions
-    enabled = PilotProfile.resolve(global_values={"family.attachment_ordering": 1.0})
+    enabled = _equation_profile(**{"family.attachment_ordering": 1.0})
     assert apply_family_ordering(actions, ranking, enabled) == (high, play, low)

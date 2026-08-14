@@ -20,6 +20,7 @@ from common import (
 from common.engine import CgpyTransitionProvider
 from common.strategy.context import _DRAW_COUNT
 from common.telemetry import to_record
+from common.value_equations import SCORERS
 from train.blunder.store import load_corrections
 
 
@@ -152,9 +153,21 @@ def test_runtime_emits_a_bounded_shadow_need_beam_without_changing_the_choice():
 
     assert decision.chosen == (1,)
     assert len(beam.focused) <= 8
-    assert {row.family for row in beam.focused} >= {"attachment"}
+    assert {row.family for row in beam.focused} >= {"attach"}
     assert beam.safety
     assert beam.elapsed_ms >= 0.0
+
+
+def test_runtime_never_calls_bespoke_value_equations(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise AssertionError("bespoke value equation executed")
+
+    for family in SCORERS:
+        monkeypatch.setitem(SCORERS, family, fail)
+
+    decision = runtime().decide(_obs(_fixture(60)))
+
+    assert decision.diagnostics["production"]["family_candidates"] == ()
 
 
 def test_post_attack_potential_keeps_the_root_players_perspective():

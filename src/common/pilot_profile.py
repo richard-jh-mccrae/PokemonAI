@@ -75,7 +75,7 @@ DEFINITIONS = (
     ParameterDefinition("family.near_tie_batch_size", "family_ranking", 1.0, 1.0, 64.0,
                         "actions", False),
     *(ParameterDefinition(f"family.{family}_{mode}", "family_ranking",
-                          1.0 if mode == "shadow" else 0.0, 0.0, 1.0,
+                          0.0, 0.0, 1.0,
                           "boolean", False, family=family)
       for family in ("attachment", "deployment", "evolution", "promote_retreat", "snipe")
       for mode in ("shadow", "ordering", "widening")),
@@ -132,7 +132,7 @@ DEFINITIONS = (
     ParameterDefinition("belief.unknown_mass", "belief", 1.0, 0.0, 1.0, "probability"),
     ParameterDefinition("plan_reuse.enabled", "plan_reuse", 1.0, 0.0, 1.0, "boolean", False),
     ParameterDefinition("scouting.posture_scale", "scouting", 1.0, 0.0, 2.0, "multiplier"),
-    ParameterDefinition("telemetry.family_detail", "diagnostics", 1.0, 0.0, 1.0,
+    ParameterDefinition("telemetry.family_detail", "diagnostics", 0.0, 0.0, 1.0,
                         "boolean", False),
 )
 

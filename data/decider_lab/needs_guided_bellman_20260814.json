@@ -17,9 +17,34 @@
     "error_note": "The same BellmanUnavailable deadline failures occur without plan reuse."
   },
   "needs_focus_first_100": {
-    "decision_changes_from_shadow": 11,
-    "later_wave_actions": 53,
+    "before_equation_disconnect": {
+      "decision_changes_from_shadow": 11,
+      "later_wave_actions": 53,
+      "equal_value_or_sequence_ties": [
+        "92900872-8", "92900872-12", "92900872-16", "92900872-30",
+        "92901879-6", "92901879-29", "92902825-11"
+      ],
+      "incomplete_budget_sensitive": [
+        "92900872-10", "92901879-67", "92901879-68", "92902825-6"
+      ]
+    },
+    "after_equation_disconnect": {
+      "decision_changes_from_shadow": 6,
+      "later_wave_actions": 55,
+      "shadow_total_ms": 34196.7444,
+      "focused_total_ms": 32908.9721,
+      "changed_frames": [
+        "92900872-16", "92900872-30", "92900872-80",
+        "92901879-29", "92901879-68", "92902825-11"
+      ]
+    },
     "activation_ready": false
+  },
+  "bespoke_equation_benchmark_first_100": {
+    "total_ms": 1766.132,
+    "median_ms": 5.508,
+    "p95_ms": 81.904,
+    "max_ms": 135.461
   },
   "production": {
     "plan_suffix_enabled": true,
