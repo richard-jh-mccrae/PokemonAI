@@ -12,9 +12,9 @@ from .algebra import (
 )
 from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
-from .commutativity import ActionFootprint, independent
+from .commutativity import ActionFootprint, independent, information_precedes
 from .options import LegalAction
-from .family_ranking import FamilyRanking, rank_actions
+from .family_ranking import FAMILIES, FamilyRanking, apply_family_ordering, rank_actions
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
 from .value import ValueOracle
@@ -87,10 +87,11 @@ class StateEvaluation:
 
 @dataclass(frozen=True)
 class SleepEvent:
-    """An earlier enabled action suppressed only on its commutative reverse-order path."""
+    """An action suppressed on a reverse-order path by a structural proof."""
 
     event: tuple[str, ...]
     footprint: ActionFootprint
+    persistent: bool = False
 
 
 def _combine(base: Ledger, continuation: float, extra: Ledger = Ledger()) -> Ledger:
@@ -372,6 +373,7 @@ class ProductionSolver(ReferenceSolver):
         self._budget = FairBudgetPrototype(limits.max_seconds)
         self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
         self.por_pruned = 0
+        self.information_pruned = 0
         self._structural_prunes: list[dict] = []
         self._family_rankings: dict[str, FamilyRanking] = {}
         self._completed_rounds = 0
@@ -382,6 +384,7 @@ class ProductionSolver(ReferenceSolver):
         self._root_branch_capped = []
         self._por_memo.clear()
         self.por_pruned = 0
+        self.information_pruned = 0
         self._structural_prunes.clear()
         self._family_rankings.clear()
         self._completed_rounds = 0
@@ -411,6 +414,7 @@ class ProductionSolver(ReferenceSolver):
             "cap_reached": any(self._root_branch_capped),
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
+            "information_first_permutations_pruned": self.information_pruned,
             "structural_prunes": tuple(self._structural_prunes),
             "profile_hash": self.profile.hash,
             "completed_rounds": self._completed_rounds,
@@ -447,15 +451,20 @@ class ProductionSolver(ReferenceSolver):
 
     @staticmethod
     def _sleep_key(sleep: tuple[SleepEvent, ...]) -> tuple[tuple[str, ...], ...]:
-        return tuple(sorted((event.event for event in sleep)))
+        return tuple(sorted((("persistent" if event.persistent else "commutative", *event.event)
+                             for event in sleep)))
 
     def _successor_sleep(self, sleep: tuple[SleepEvent, ...], earlier: list[ActionFootprint],
-                         current: ActionFootprint | None) -> tuple[SleepEvent, ...]:
+                         current: ActionFootprint | None,
+                         information: tuple[ActionFootprint, ...]) -> tuple[SleepEvent, ...]:
         if current is None or current.barrier:
             return ()
-        retained = [event for event in sleep if independent(event.footprint, current)]
+        retained = [event for event in sleep
+                    if event.persistent or independent(event.footprint, current)]
         retained.extend(SleepEvent(footprint.event, footprint)
                         for footprint in earlier if independent(footprint, current))
+        retained.extend(SleepEvent(footprint.event, footprint, True)
+                        for footprint in information if information_precedes(footprint, current))
         by_event = {event.event: event for event in retained}
         return tuple(by_event[event] for event in sorted(by_event))
 
@@ -490,27 +499,35 @@ class ProductionSolver(ReferenceSolver):
         footprints: dict[object, ActionFootprint | None] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             footprints = {action.identity: self._footprint(state, action) for action in actions}
-            asleep = {event.event for event in sleep}
+            asleep = {event.event: event for event in sleep}
             filtered = tuple(action for action in actions
                              if footprints[action.identity] is None
                              or footprints[action.identity].event not in asleep)
             for action in actions:
                 footprint = footprints[action.identity]
                 if footprint is not None and footprint.event in asleep:
+                    sleeping = asleep[footprint.event]
+                    proof_type = ("information_before_commitment" if sleeping.persistent
+                                  else "commutativity")
                     self._structural_prunes.append({
-                        "proof_type": "commutativity",
+                        "proof_type": proof_type,
                         "pruned": str(action.identity),
-                        "retained_event": footprint.event,
+                        "retained_event": sleeping.event,
                     })
-            self.por_pruned += len(actions) - len(filtered)
+                    if sleeping.persistent:
+                        self.information_pruned += 1
+                    else:
+                        self.por_pruned += 1
             actions = filtered
-            ordering = self.profile.get("family.attachment_ordering") >= 0.5
-            widening = self.profile.get("family.attachment_widening") >= 0.5
+            ordering = any(self.profile.get(f"family.{family}_ordering") >= 0.5
+                           for family in FAMILIES)
+            widening = any(self.profile.get(f"family.{family}_widening") >= 0.5
+                           for family in FAMILIES)
             if ordering or widening:
                 ranking = rank_actions(state, actions, self.provider, self.oracle, self.profile)
                 self._family_rankings[key] = ranking
             if ordering:
-                actions = ranking.ordered_actions
+                actions = apply_family_ordering(actions, ranking, self.profile)
         if self.provider.actor(state) is Actor.OURS:
             width = (self.production_limits.root_beam_width if key == self._root_key
                      else self.production_limits.beam_width if context == MAIN_DECISION_CONTEXT
@@ -531,24 +548,31 @@ class ProductionSolver(ReferenceSolver):
         child_sleeps: dict[object, tuple[SleepEvent, ...]] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             earlier = []
+            information = tuple(footprint for footprint in footprints.values()
+                                if footprint is not None and footprint.information_first)
             for action in actions:
                 footprint = footprints.get(action.identity)
-                child_sleeps[action.identity] = self._successor_sleep(sleep, earlier, footprint)
+                child_sleeps[action.identity] = self._successor_sleep(
+                    sleep, earlier, footprint, information)
                 if footprint is not None and not footprint.barrier:
                     earlier.append(footprint)
         else:
             child_sleeps = {action.identity: sleep for action in actions}
         if key == self._root_key:
             ranking = self._family_rankings.get(key)
-            action_waves = ({candidate.action: candidate.wave for candidate in ranking.candidates}
-                            if ranking is not None else {})
+            action_waves = ({
+                candidate.action: (candidate.wave if candidate.family in FAMILIES and
+                                   self.profile.get(
+                                       f"family.{candidate.family}_widening") >= 0.5 else 0)
+                for candidate in ranking.candidates
+            } if ranking is not None else {})
             results_list = []
             branch_nodes = []
             branch_capped = []
             original_limits = self.limits
             for index, action in enumerate(actions):
                 wave = action_waves.get(action, 0)
-                widening = self.profile.get("family.attachment_widening") >= 0.5
+                widening = wave > 0
                 probe_nodes = min(
                     self.production_limits.max_nodes,
                     max(1, self.production_limits.root_probe_nodes

@@ -36,6 +36,8 @@ def test_brief_projects_the_same_profile_to_html_and_csv():
     assert manifest["pilot_profile"]["hash"] in html
     assert "pilot_parameter" in csv_text
     assert "clock.remaining_600_seconds" in csv_text
+    assert "family.snipe_shadow" in csv_text
+    assert "promote_retreat.resource_cost_weight" in csv_text
 
 
 def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
@@ -47,6 +49,7 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert "common/native_engine.py" in names
         assert "common/needs.py" in names
         assert "common/refresh.py" in names
+        assert "common/value_equations.py" in names
         assert "common/engine.py" not in names
         assert any(name.startswith("cg/") for name in names)
         assert not any(name.startswith("common/bellman/") for name in names)

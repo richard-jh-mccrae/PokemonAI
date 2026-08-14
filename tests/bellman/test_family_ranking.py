@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from common import ActionIdentity, Deterministic, Ledger
-from common.family_ranking import rank_actions
+from common.family_ranking import apply_family_ordering, rank_actions
 from common.options import LegalAction
 from common.pilot_profile import PilotProfile
 
@@ -54,3 +54,80 @@ def test_unscorable_attachment_abstains_into_first_wave():
 
     assert ranking.candidates[0].status == "abstained"
     assert ranking.first_wave == (attachment,)
+
+
+def _state(*, bench=(), active=(), opponent_bench=()):
+    return SimpleNamespace(obs={"current": {"yourIndex": 0, "players": [
+        {"active": list(active), "bench": list(bench), "hand": []},
+        {"active": [], "bench": list(opponent_bench), "hand": []},
+    ]}})
+
+
+def test_every_historical_value_equation_emits_shadow_candidates():
+    before = _state(active=({"id": 1, "serial": 1, "hp": 60},),
+                    opponent_bench=({"id": 9, "serial": 9, "hp": 100},))
+    attach, evolve, retreat, deploy, snipe = (
+        _action(kind, index) for index, kind in enumerate(
+            ("attach", "evolve", "retreat", "play", "card")))
+    successors = {
+        attach: Deterministic(SimpleNamespace(
+            obs=before.obs, ledger=Ledger((("energy_position", 0.2),), ()))),
+        evolve: Deterministic(SimpleNamespace(
+            obs=before.obs, ledger=Ledger((("development", 0.3),), ()))),
+        retreat: Deterministic(SimpleNamespace(
+            obs=_state(active=({"id": 2, "serial": 2, "hp": 70},)).obs,
+            ledger=Ledger((("readiness", 0.4),), ()))),
+        deploy: Deterministic(SimpleNamespace(
+            obs=_state(bench=({"id": 3, "serial": 3, "hp": 70},),
+                       active=({"id": 1, "serial": 1, "hp": 60},)).obs,
+            ledger=Ledger((("board", 0.5),), ()))),
+        snipe: Deterministic(SimpleNamespace(
+            obs=_state(active=({"id": 1, "serial": 1, "hp": 60},),
+                       opponent_bench=({"id": 9, "serial": 9, "hp": 50},)).obs,
+            ledger=Ledger((("damage", 0.25), ("opponent_roles", 0.1)), ()))),
+    }
+
+    ranking = rank_actions(before, (attach, evolve, retreat, deploy, snipe),
+                           _Provider(successors), _Oracle(), PilotProfile.resolve())
+
+    rows = {candidate.action: candidate for candidate in ranking.candidates}
+    assert {rows[action].family for action in successors} == {
+        "attachment", "evolution", "promote_retreat", "deployment", "snipe",
+    }
+    assert all(rows[action].shadow for action in successors)
+    assert all(rows[action].score is not None for action in successors)
+
+
+def test_each_shadow_gate_and_coefficient_is_independent():
+    evolve = _action("evolve", 0)
+    before = _state()
+    provider = _Provider({evolve: Deterministic(SimpleNamespace(
+        obs=before.obs, ledger=Ledger((("development", 0.5),), ())))})
+
+    disabled = rank_actions(
+        before, (evolve,), provider, _Oracle(),
+        PilotProfile.resolve(global_values={"family.evolution_shadow": 0.0}),
+    ).candidates[0]
+    tuned = rank_actions(
+        before, (evolve,), provider, _Oracle(),
+        PilotProfile.resolve(global_values={"evolution.deploy_weight": 2.0}),
+    ).candidates[0]
+
+    assert disabled.status == "shadow_disabled"
+    assert disabled.score is None
+    assert tuned.score == 1.0
+
+
+def test_shadow_ordering_never_changes_runtime_order_until_its_family_gate_is_on():
+    low, play, high = _action("attach", 0), _action("play", 1), _action("attach", 2)
+    successors = {
+        low: Deterministic(SimpleNamespace(ledger=Ledger((("board", 0.1),), ()))),
+        high: Deterministic(SimpleNamespace(ledger=Ledger((("board", 0.9),), ()))),
+    }
+    actions = (low, play, high)
+    base = PilotProfile.resolve()
+    ranking = rank_actions(SimpleNamespace(), actions, _Provider(successors), _Oracle(), base)
+
+    assert apply_family_ordering(actions, ranking, base) == actions
+    enabled = PilotProfile.resolve(global_values={"family.attachment_ordering": 1.0})
+    assert apply_family_ordering(actions, ranking, enabled) == (high, play, low)

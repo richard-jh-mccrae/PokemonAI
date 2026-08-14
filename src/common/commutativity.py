@@ -29,6 +29,8 @@ class ActionFootprint:
     reads: frozenset[str] = frozenset()
     writes: frozenset[str] = frozenset()
     barrier: bool = False
+    information_first: bool = False
+    commitment: bool = False
 
 
 def independent(left: ActionFootprint, right: ActionFootprint) -> bool:
@@ -39,6 +41,19 @@ def independent(left: ActionFootprint, right: ActionFootprint) -> bool:
         left.writes & (right.reads | right.writes)
         or right.writes & (left.reads | left.writes)
     )
+
+
+def information_precedes(information: ActionFootprint, commitment: ActionFootprint) -> bool:
+    return (information.event != commitment.event and information.information_first
+            and commitment.commitment)
+
+
+def _pure_hidden_fetch(clauses) -> bool:
+    prohibited = {"cost", "cost_required", "rider", "trigger"}
+    return bool(clauses) and all(
+        clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+        and clause.get("dest", "hand") == "hand" and not prohibited.intersection(clause)
+        for clause in clauses)
 
 
 def _actor_side(observation: dict) -> tuple[int, dict]:
@@ -87,11 +102,7 @@ def _body_token(body, option: dict | None) -> str:
 
 
 def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootprint:
-    """Build a portable dependency declaration from action structure and effect clauses.
-
-    Returning a barrier is always safe: it merely forgoes reduction.  Only fully declared,
-    deterministic effects are admitted.
-    """
+    """Build dependencies from action structure; uncertain declarations become barriers."""
     observation = state.obs
     _seat, player = _actor_side(observation)
     option = _selected_option(observation, action)
@@ -102,7 +113,8 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
     kind = action.identity.kind
 
     if kind in OPAQUE_ACTION_KINDS:
-        return ActionFootprint((kind, *map(str, action.identity.parts)), barrier=True)
+        return ActionFootprint((kind, *map(str, action.identity.parts)), barrier=True,
+                               commitment=kind in {"attack", "retreat"})
 
     if kind == "attach":
         event = (kind, card_token, body_token)
@@ -112,6 +124,7 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
                        f"body:{body_token}:identity"}),
             frozenset({f"hand:{card_token}", "allowance:energy", "own:energy",
                        f"body:{body_token}:energy"}),
+            commitment=True,
         )
 
     if kind == "evolve":
@@ -121,6 +134,7 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
             event,
             frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
             frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
+            commitment=True,
         )
 
     if kind != "play" or not card or card.get("id") is None or effects is None:
@@ -128,6 +142,8 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
 
     card_id = int(card["id"])
     clauses = tuple(effects.clauses(card_id))
+    if _pure_hidden_fetch(clauses):
+        return ActionFootprint((kind, card_token), barrier=True, information_first=True)
     clause_kinds = frozenset(str(clause.get("kind", "")) for clause in clauses)
     if (not clause_kinds or clause_kinds & INFORMATION_EFFECT_KINDS
             or not clause_kinds <= DECLARED_DETERMINISTIC_EFFECT_KINDS):
@@ -161,7 +177,8 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
         writes.add("own:damage-modifiers")
     if "stadium_static" in clause_kinds:
         writes.add("field:stadium")
-    return ActionFootprint((kind, card_token), frozenset(reads), frozenset(writes))
+    return ActionFootprint((kind, card_token), frozenset(reads), frozenset(writes),
+                           commitment=True)
 
 
-__all__ = ("ActionFootprint", "action_footprint", "independent")
+__all__ = ("ActionFootprint", "action_footprint", "independent", "information_precedes")

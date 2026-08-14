@@ -294,7 +294,58 @@ def test_fetch_into_hand_is_an_information_barrier():
     fetch_footprint = action_footprint(state, fetch, effects=Effects())
 
     assert fetch_footprint.barrier
+    assert fetch_footprint.information_first
     assert not independent(attach_footprint, fetch_footprint)
+
+
+def test_shuffle_refresh_is_not_safe_information_first():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 1213}], "active": [], "bench": []},
+            {"hand": None, "active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [{"type": 7, "index": 0}]},
+    }
+    state = SimpleNamespace(obs=observation)
+    play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "draw", "amount": 4, "rider": "shuffle_both_hands"},)
+
+    footprint = action_footprint(state, play, effects=Effects())
+    assert footprint.barrier
+    assert not footprint.information_first
+
+
+def test_information_first_prunes_only_the_commitment_then_fetch_order():
+    root = _state("info-root")
+    after_attach = _state("after-attach", board=0.2)
+    after_fetch = _state("after-fetch", board=0.1)
+    finish = _state("info-finish", board=0.8)
+    attach, fetch, end = _action("attach"), _action("play", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"info-root": (attach, fetch, end), "after-attach": (fetch, end),
+         "after-fetch": (attach, end), "info-finish": (end,)},
+        {("info-root", "attach"): Deterministic(after_attach),
+         ("info-root", "play"): Deterministic(after_fetch),
+         ("after-attach", "play"): Deterministic(finish),
+         ("after-fetch", "attach"): Deterministic(finish)},
+        {"attach": ActionFootprint(("attach",), commitment=True),
+         "play": ActionFootprint(("play",), barrier=True, information_first=True),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "play"
+    assert ("after-attach", "play") not in graph.calls
+    assert ("after-fetch", "attach") in graph.calls
+    assert any(row["proof_type"] == "information_before_commitment"
+               for row in decision.diagnostics["production"]["structural_prunes"])
 
 
 def test_bench_fetch_and_evolution_do_not_claim_retreat_commutativity():
