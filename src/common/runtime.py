@@ -1,7 +1,9 @@
 """Bellman-only agent runtime shared by every deck."""
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
@@ -34,6 +36,17 @@ from common.value import ValueRegistry
 _ENGINE = object()
 
 
+def _pilot_overlay() -> tuple[dict[str, float], str]:
+    path = os.environ.get("AGENT_OVERLAY")
+    if not path:
+        return {}, ""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    values = payload.get("pilot", {})
+    if not isinstance(values, dict):
+        raise ValueError("AGENT_OVERLAY.pilot must be an object")
+    return {str(name): float(value) for name, value in values.items()}, str(Path(path).resolve())
+
+
 class BellmanRuntime:
     """Deployment shell: declarative pregame handling plus one Bellman planner."""
 
@@ -56,9 +69,12 @@ class BellmanRuntime:
         self.registry = ValueRegistry.from_strategy(
             strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
+        experiment, experiment_path = _pilot_overlay()
         self.pilot_profile = PilotProfile.resolve(
+            global_values=experiment,
             authored_deck=getattr(strategy, "pilot_adjustments", {}),
-            provenance=f"strategy:{strategy.name}",
+            provenance=(f"overlay:{experiment_path}" if experiment_path
+                        else f"strategy:{strategy.name}"),
         )
         self._plan_suffix = ()
         self.last_read = Read()
@@ -236,7 +252,8 @@ def make_agent(strategy):
         observation["own_prizes"] = own_cards.prize_export()
         decision = runtime.decide(observation)
         if telemetry_on:
-            telemetry.emit(decision, read=runtime.last_read)
+            seat = int((observation.get("current") or {}).get("yourIndex", 0))
+            telemetry.emit(decision, read=runtime.last_read, seat=seat)
         return list(decision.chosen)
 
     agent.runtime = runtime

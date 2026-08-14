@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from common.pilot_profile import DEFINITIONS, PilotProfile
+from common.runtime import _pilot_overlay
 
 
 def test_profile_layers_clamp_and_hash_stably():
@@ -43,3 +44,14 @@ def test_all_value_equations_default_to_shadow_only():
 ])
 def test_clock_profile_anchors_and_interpolation(remaining, expected):
     assert PilotProfile.resolve().planning_seconds(remaining) == pytest.approx(expected)
+
+
+def test_pilot_overlay_reads_experiment_values(tmp_path, monkeypatch):
+    path = tmp_path / "exhaustive.json"
+    path.write_text('{"pilot":{"search.max_nodes":100000}}', encoding="utf-8")
+    monkeypatch.setenv("AGENT_OVERLAY", str(path))
+
+    values, provenance = _pilot_overlay()
+
+    assert values == {"search.max_nodes": 100000.0}
+    assert provenance == str(path.resolve())

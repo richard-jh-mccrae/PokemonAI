@@ -1,0 +1,33 @@
+{
+  "pilot": {
+    "search.max_nodes": 100000,
+    "search.runtime_nodes_per_root": 100000,
+    "search.chance_max_nodes": 100000,
+    "search.reveal_max_nodes": 100000,
+    "search.beam_width": 256,
+    "search.root_beam_width": 256,
+    "search.effect_choice_width": 512,
+    "search.shallow_nodes": 10000,
+    "search.refinement_width": 64,
+    "search.uncertainty_margin": 10,
+    "clock.remaining_600_seconds": 90,
+    "clock.remaining_200_seconds": 90,
+    "clock.remaining_140_seconds": 90,
+    "clock.adaptive_enabled": 0,
+    "family.attachment_shadow": 1,
+    "family.deployment_shadow": 1,
+    "family.evolution_shadow": 1,
+    "family.promote_retreat_shadow": 1,
+    "family.snipe_shadow": 1,
+    "family.attachment_ordering": 0,
+    "family.deployment_ordering": 0,
+    "family.evolution_ordering": 0,
+    "family.promote_retreat_ordering": 0,
+    "family.snipe_ordering": 0,
+    "family.attachment_widening": 0,
+    "family.deployment_widening": 0,
+    "family.evolution_widening": 0,
+    "family.promote_retreat_widening": 0,
+    "family.snipe_widening": 0
+  }
+}
