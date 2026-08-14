@@ -11,6 +11,7 @@ from common.cards import CardFunctions
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
+from common.options import enumerate_legal_actions
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.pilot_profile import PilotProfile
@@ -202,10 +203,18 @@ class BellmanRuntime:
             invalidations = stats["invalidations"]
             invalidations[failure] = invalidations.get(failure, 0) + 1
             return None, failure
+        action = next((candidate for candidate in enumerate_legal_actions(state.obs)
+                       if candidate.identity == step.action), None)
+        if action is None:
+            self._plan_suffix = ()
+            failure = "planned_action_missing"
+            invalidations = stats["invalidations"]
+            invalidations[failure] = invalidations.get(failure, 0) + 1
+            return None, failure
         self._plan_suffix = self._plan_suffix[1:]
         stats["hits"] += 1
         return RootDecision(
-            step.chosen, step.action, step.value, True,
+            action.selection, action.identity, step.value, True,
             {"backend": "plan-suffix", "profile_hash": self.pilot_profile.hash,
              "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix),
                              "hits": stats["hits"],

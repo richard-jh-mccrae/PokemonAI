@@ -381,18 +381,24 @@ class NeedBeamBuilder:
         sources = tuple(sorted(set(
             source_id for source_id, _kinds in self.capabilities.entries)
             | set(int(card_id) for card_id in source_ids)))
+        root_needs = tuple(
+            (root, need, tuple(card_id for card_id, _value in need.direct
+                               if int(card_id) in available))
+            for root, need in zip(roots, needs)
+        )
+        for root, _need, eligible in root_needs:
+            if perf_counter() >= deadline:
+                return
+            if known_top and int(known_top[0][1]) in eligible:
+                edge = AccessEdge(None, "known_top_draw", (root.semantic_id,), 1,
+                                  True, 1.0, 1.0)
+                yield NeedPath((root.semantic_id,), (edge,), ("known_top",), (), 1,
+                               1.0, 1.0, "fragile")
         for source_id in sources:
             if perf_counter() >= deadline:
                 return
             clauses = tuple(self.model.effects.clauses(source_id)) if self.model.effects else ()
-            for root, need in zip(roots, needs):
-                eligible = tuple(card_id for card_id, _value in need.direct
-                                 if int(card_id) in available)
-                if known_top and int(known_top[0][1]) in eligible:
-                    edge = AccessEdge(None, "known_top_draw", (root.semantic_id,), 1,
-                                      True, 1.0, 1.0)
-                    yield NeedPath((root.semantic_id,), (edge,), ("known_top",), (), 1,
-                                   1.0, 1.0, "fragile")
+            for root, need, eligible in root_needs:
                 for clause in clauses:
                     kind = str(clause.get("kind") or "")
                     if kind == "fetch" and clause.get("zone") == "deck":

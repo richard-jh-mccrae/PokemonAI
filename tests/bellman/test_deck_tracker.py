@@ -47,8 +47,8 @@ def _tracker():
 
 def test_deck_tracker_owns_ordered_known_top_and_consumes_draws_once():
     tracker = _tracker()
-    tracker.observe(_obs(
-        _move(FIRST, 41), _move(SECOND, 42), effect=STACKER))
+    tracker.observe(_obs(effect=STACKER))
+    tracker.observe(_obs(_move(FIRST, 41), _move(SECOND, 42)))
     assert tracker.known_top_export() == ((41, FIRST), (42, SECOND))
 
     tracker.observe(_obs(_draw(FIRST, 41)))
@@ -66,15 +66,26 @@ def test_known_top_clears_on_shuffle_unknown_movement_or_serial_mismatch():
     )
     for event in cases:
         tracker = _tracker()
-        tracker.observe(_obs(_move(FIRST, 41), effect=STACKER))
+        tracker.observe(_obs(effect=STACKER))
+        tracker.observe(_obs(_move(FIRST, 41)))
         tracker.observe(_obs(event))
         assert tracker.known_top_export() is None
 
 
 def test_non_stacker_cannot_create_known_top():
     tracker = _tracker()
-    tracker.observe(_obs(_move(FIRST, 41), effect=SECOND))
+    tracker.observe(_obs(effect=SECOND))
+    tracker.observe(_obs(_move(FIRST, 41)))
     assert tracker.known_top_export() is None
+
+
+def test_known_top_uses_the_source_from_the_prompt_before_the_log_delta():
+    tracker = _tracker()
+
+    tracker.observe(_obs(effect=STACKER))
+    tracker.observe(_obs(_move(FIRST, 41), effect=SECOND))
+
+    assert tracker.known_top_export() == ((41, FIRST),)
 
 
 def test_known_top_participates_in_the_bellman_semantic_key():

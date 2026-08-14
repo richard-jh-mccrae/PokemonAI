@@ -39,6 +39,7 @@ class OwnCardModel:
             int(card_id) for card_id, clauses in table.items()
             if any(clause.get("dest") == "deck_top" for clause in clauses))
         self._known_top: tuple[tuple[int, int], ...] | None = None
+        self._resolving_source: int | None = None
         self._prizes: Counter | None = None       # exact prize multiset once anchored (else None)
         self._anchor_remaining: int | None = None  # prizes_remaining at last anchor
         self._last_turn: int | None = None
@@ -48,6 +49,7 @@ class OwnCardModel:
     def reset(self) -> None:
         """Forget all match state (a new game began)."""
         self._known_top = None
+        self._resolving_source = None
         self._prizes = None
         self._anchor_remaining = None
         self._takes = {}
@@ -69,6 +71,7 @@ class OwnCardModel:
         except Exception:
             self._prizes = None
             self._known_top = None
+            self._resolving_source = None
 
     # -- internals -------------------------------------------------------------------------------
     def _observe(self, obs: dict) -> None:
@@ -130,7 +133,7 @@ class OwnCardModel:
         resolving = next((int(entry["id"]) for entry in
                           (select.get("effect"), select.get("contextCard"))
                           if isinstance(entry, dict) and entry.get("id") is not None), None)
-        placing = resolving in self._stackers
+        placing = self._resolving_source in self._stackers
         belief = self._known_top
         for entry in obs.get("logs") or ():
             if not isinstance(entry, dict) or entry.get("playerIndex") != seat:
@@ -156,6 +159,7 @@ class OwnCardModel:
                 elif source == _AREA_DECK:
                     belief = None
         self._known_top = belief
+        self._resolving_source = resolving
 
     def _record_prize_takes(self, obs: dict, yi: int) -> None:
         """Accumulate MY prize takes from the log DELTA, keyed by ``serial`` so a replayed frame cannot

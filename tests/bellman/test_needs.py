@@ -186,6 +186,24 @@ def test_access_probability_reuses_exact_hypergeometric_classes():
     assert access_probability((1, 1, 2, 3), 0, (1,)) == 0.0
 
 
+def test_known_top_path_is_emitted_once_independent_of_available_sources():
+    model = _model()
+    builder = NeedBeamBuilder(
+        model, CapabilityIndex(((SUPPORTER, ("fetch",)), (GEAR, ("dig",))), ()))
+    need = Need("evolve:active:0", ((LINE_TOP, 1.0),))
+    root = builder._root(need)
+    state = SimpleNamespace(
+        deck_counts=((LINE_TOP, 1),),
+        obs={"known_top": ((41, LINE_TOP),),
+             "current": {"supporterPlayed": False, "players": [{"hand": []}, {}]}},
+        root_seat=0,
+    )
+
+    paths = tuple(builder._access_paths(state, (root,), (need,)))
+
+    assert sum(path.edges[0].capability == "known_top_draw" for path in paths) == 1
+
+
 def test_generic_roles_fall_back_but_brief_roles_propagate_down_the_line():
     model = _model()
     roles = {row.card_id: row for row in infer_pokemon_roles(
