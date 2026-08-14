@@ -74,7 +74,7 @@ def test_save_telemetry_writes_seat_specific_inspector_logs(tmp_path):
     replay = tmp_path / "42.json"
     replay.write_text("{}", encoding="utf-8")
 
-    _save_telemetry(tmp_path, 42, f"noise\n{line0}\n{line1}\n")
+    _save_telemetry(tmp_path, 42, [json.loads(line0[3:]), json.loads(line1[3:])])
 
     game = load_game(replay)
     assert game["live_records"] == [{"chosen": [0], "seat": 0}]

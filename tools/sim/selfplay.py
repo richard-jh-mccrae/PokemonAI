@@ -10,10 +10,9 @@ keys assume per-game uniqueness). Set `AGENT_OVERLAY` to mine a specific config'
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
-from contextlib import contextmanager, redirect_stderr
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -39,16 +38,14 @@ def tag_replay(replay: dict, *, episode_id: int, team_names: list[str]) -> dict:
     return {**replay, "info": info}
 
 
-def _save_telemetry(run_dir: Path, eid: int, output: str) -> None:
+def _save_telemetry(run_dir: Path, eid: int, captured: list[dict]) -> None:
     from common.telemetry import TAG
 
     by_seat = {0: [], 1: []}
-    for line in output.splitlines():
-        if not line.startswith(TAG):
-            continue
-        record = json.loads(line[len(TAG):].strip())
+    for record in captured:
         seat = record.get("seat")
         if seat in by_seat:
+            line = f"{TAG} " + json.dumps(record, separators=(",", ":"))
             by_seat[seat].append([{"stderr": line}])
     for seat, records in by_seat.items():
         if records:
@@ -87,14 +84,14 @@ def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, ove
     team_names = [f"{stem}#0", f"{stem}#1"]
     with _overlay_env(overlay):
         for i in range(n):
-            captured = io.StringIO()
-            with redirect_stderr(captured):
+            from common.telemetry import capture_records
+            with capture_records() as captured:
                 _statuses, env = _run_match(agent_dir, syspath_roots)
             eid = episode_id(stem, i)
             tagged = tag_replay(env.toJSON(), episode_id=eid, team_names=team_names)
             (run_dir / f"{eid}.json").write_text(json.dumps(tagged, ensure_ascii=False),
                                                  encoding="utf-8")
-            _save_telemetry(run_dir, eid, captured.getvalue())
+            _save_telemetry(run_dir, eid, captured)
     return run_dir
 
 

@@ -4,9 +4,12 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 
 TAG = "@T"
+_CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", default=None)
 
 
 def _wire(value):
@@ -43,8 +46,22 @@ def to_record(decision, *, read=None, seat=None) -> dict:
 
 
 def emit(decision, *, read=None, seat=None, out=None) -> None:
-    print(f"{TAG} " + json.dumps(to_record(decision, read=read, seat=seat), separators=(",", ":")),
+    record = to_record(decision, read=read, seat=seat)
+    captured = _CAPTURE.get()
+    if captured is not None:
+        captured.append(record)
+    print(f"{TAG} " + json.dumps(record, separators=(",", ":")),
           file=out or sys.stderr, flush=True)
 
 
-__all__ = ["TAG", "emit", "to_record"]
+@contextmanager
+def capture_records():
+    records = []
+    token = _CAPTURE.set(records)
+    try:
+        yield records
+    finally:
+        _CAPTURE.reset(token)
+
+
+__all__ = ["TAG", "capture_records", "emit", "to_record"]
