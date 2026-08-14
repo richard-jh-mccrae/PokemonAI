@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from common import Chance, DecisionState, Deterministic, NativeCgTransitionProvider, Terminal, Unknown
+from common import (
+    Chance, DecisionState, Deterministic, NativeCgTransitionProvider, Terminal, Unknown,
+    enumerate_legal_actions,
+)
 from common.runtime import build_runtime
 from common.native_engine import _hidden_signature
 
@@ -116,7 +119,7 @@ def test_production_provider_branches_a_live_native_search_without_hidden_zone_l
         battle_finish()
 
 
-def test_production_runtime_plays_a_card_instead_of_falling_back_to_end():
+def test_production_runtime_returns_a_legal_native_action_without_fallback():
     deck = _deck()
     observation, start = battle_start(list(deck), list(deck))
     try:
@@ -126,10 +129,11 @@ def test_production_runtime_plays_a_card_instead_of_falling_back_to_end():
             _strategy(), deck, scout=None, briefs=[],
             provider_factory=partial(NativeCgTransitionProvider, world_count=1),
         )
+        legal_selections = {action.selection for action in enumerate_legal_actions(observation)}
 
         decision = runtime.decide(observation)
 
-        assert decision.action.kind != "end"
+        assert decision.chosen in legal_selections
         assert decision.diagnostics["backend"] == "native-cg-bellman"
     finally:
         battle_finish()

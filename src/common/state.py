@@ -70,6 +70,8 @@ def _semantic(value):
 def _semantic_observation(observation: Mapping):
     normalized = _semantic(observation)
     current = normalized.get("current") or {}
+    if normalized.get("bellmanActor") == current.get("yourIndex"):
+        normalized.pop("bellmanActor", None)
     for player in current.get("players") or ():
         if not isinstance(player, dict):
             continue
@@ -88,6 +90,12 @@ def _semantic_observation(observation: Mapping):
     if isinstance(select, dict):
         select.pop("option", None)
         select.pop("deck", None)
+    return normalized
+
+
+def _plan_observation(observation: Mapping):
+    normalized = _semantic_observation(observation)
+    normalized.pop("search_begin_input", None)
     return normalized
 
 
@@ -194,6 +202,17 @@ class DecisionState:
 
         legal = tuple(action.identity for action in enumerate_legal_actions(self.obs))
         payload = (freeze(_semantic_observation(self.obs)), legal,
+                   self.root_seat, self.deck_name, self.deck_counts,
+                   self.prize_counts, self.budgets, self.belief,
+                   self.value_registry_identity)
+        return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
+
+    @cached_property
+    def plan_key(self) -> str:
+        from .options import enumerate_legal_actions
+
+        legal = tuple(action.identity for action in enumerate_legal_actions(self.obs))
+        payload = (freeze(_plan_observation(self.obs)), legal,
                    self.root_seat, self.deck_name, self.deck_counts,
                    self.prize_counts, self.budgets, self.belief,
                    self.value_registry_identity)

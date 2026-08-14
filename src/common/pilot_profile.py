@@ -75,7 +75,7 @@ DEFINITIONS = (
     ParameterDefinition("family.near_tie_batch_size", "family_ranking", 1.0, 1.0, 64.0,
                         "actions", False),
     *(ParameterDefinition(f"family.{family}_{mode}", "family_ranking",
-                          1.0 if mode == "shadow" else 0.0, 0.0, 1.0,
+                          0.0, 0.0, 1.0,
                           "boolean", False, family=family)
       for family in ("attachment", "deployment", "evolution", "promote_retreat", "snipe")
       for mode in ("shadow", "ordering", "widening")),
@@ -107,6 +107,18 @@ DEFINITIONS = (
                         "bellman_value"),
     ParameterDefinition("needs.heal_urgent_gain", "value_equations", 0.8, 0.0, 10.0,
                         "bellman_value"),
+    ParameterDefinition("needs.shadow_enabled", "needs_beam", 1.0, 0.0, 1.0,
+                        "boolean", False),
+    ParameterDefinition("needs.focus_enabled", "needs_beam", 0.0, 0.0, 1.0,
+                        "boolean", False),
+    ParameterDefinition("needs.focus_width", "needs_beam", 8.0, 1.0, 64.0,
+                        "actions"),
+    ParameterDefinition("needs.family_variants", "needs_beam", 2.0, 1.0, 16.0,
+                        "actions"),
+    ParameterDefinition("needs.horizon", "needs_beam", 2.0, 0.0, 6.0,
+                        "turns"),
+    ParameterDefinition("needs.max_ms", "needs_beam", 10.0, 0.1, 100.0,
+                        "milliseconds", False),
     ParameterDefinition("clock.remaining_600_seconds", "planning_clock", 30.0, 2.0, 3600.0,
                         "seconds", False),
     ParameterDefinition("clock.remaining_200_seconds", "planning_clock", 15.0, 2.0, 3600.0,
@@ -120,7 +132,7 @@ DEFINITIONS = (
     ParameterDefinition("belief.unknown_mass", "belief", 1.0, 0.0, 1.0, "probability"),
     ParameterDefinition("plan_reuse.enabled", "plan_reuse", 1.0, 0.0, 1.0, "boolean", False),
     ParameterDefinition("scouting.posture_scale", "scouting", 1.0, 0.0, 2.0, "multiplier"),
-    ParameterDefinition("telemetry.family_detail", "diagnostics", 1.0, 0.0, 1.0,
+    ParameterDefinition("telemetry.family_detail", "diagnostics", 0.0, 0.0, 1.0,
                         "boolean", False),
 )
 

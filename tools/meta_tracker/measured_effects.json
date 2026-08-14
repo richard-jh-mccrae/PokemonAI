@@ -1,0 +1,8 @@
+{
+"1117": [{"kind": "heal", "amount": 30}],
+"1153": [{"kind": "heal", "amount": 20, "restriction": "active_only"}],
+"1207": [{"kind": "draw", "amount": 4}],
+"1212": [{"kind": "heal", "amount": 70, "restriction": "active_only"}],
+"1224": [{"kind": "draw", "amount": 3}],
+"1236": [{"kind": "draw", "amount": 3}]
+}

@@ -5,11 +5,11 @@ Every shipped deck uses one system: `common.runtime.BellmanRuntime`.
 ## Language
 
 **Action Family**:
-Legal sibling choices that answer the same local question and may be ranked by one family equation.
+Legal sibling choices that answer the same local question.
 _Avoid_: Decision group, option bucket
 
 **Family Score**:
-An explainable within-family scheduling score. It orders search and never contributes to Bellman utility.
+An offline diagnostic from a bespoke equation. The Pilot does not compute or consume it.
 _Avoid_: Action value, policy value
 
 **Search Wave**:
@@ -32,6 +32,11 @@ _Avoid_: Any callback
 Permanent removal justified by semantic equivalence or coefficient-independent dominance.
 _Avoid_: Low score, clear loser
 
+**Need Beam**:
+Search-wave scheduling from metadata-connected demand, safety, hold, and explicit Unknown evidence.
+Bellman still probes and chooses among every legal root action.
+_Avoid_: Rules policy, replacement planner
+
 **Pilot Profile**:
 The resolved, versioned set of adjustable value, search, clock, belief, execution, and diagnostic parameters.
 _Avoid_: Constants, tuning blob
@@ -51,8 +56,8 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
-- `needs.py`: deck-neutral immediate demand, card-to-need assignment, and deterministic next-turn
-  option value for visible cards. It projects only rule clocks and known cards, never hidden draws;
+- `needs.py`: immutable demand/access paths compiled from stats, effects, tags, Brief roles, known
+  top-deck cards, and exact hypergeometric access. Its beam is shadow-only by default;
 - `refresh.py`: analytic shuffle-refresh commitments. It integrates need-coverage classes with exact
   hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
   never constructs or searches a hypothetical redraw;
@@ -66,7 +71,8 @@ The flattened Bellman core owns the decision model:
   an equal value probe; the two strongest incomplete continuations get the full pass. This shapes
   beam width only—turn depth remains uncapped;
 - `planner.py`: first-action Bellman commitment;
-- `runtime.py`: match-scoped deployment and declarative setup.
+- `runtime.py`: match-scoped deployment, guarded deterministic plan-suffix reuse, forced selections,
+  and declarative setup;
 
 Neutral retained services are Scouting, card/stat providers, card-function data, own-deck tracking,
 option equivalence, telemetry, and board-card traversal.

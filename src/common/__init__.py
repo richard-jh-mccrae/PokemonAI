@@ -23,12 +23,25 @@ from .algebra import (
 )
 from .native_engine import NativeCgTransitionProvider
 from .needs import (
+    AccessEdge,
+    ActionFocus,
+    CapabilityIndex,
     CoverageEdge,
     Need,
+    NeedBeam,
+    NeedBeamBuilder,
     NeedModel,
+    NeedPath,
+    NeedRoot,
+    PathFeatures,
+    PokemonRole,
     ResolvedAssignment,
     RetainedAssignment,
     RetainedOption,
+    UnknownAction,
+    access_probability,
+    infer_pokemon_roles,
+    opponent_threat_roots,
 )
 from .information import (
     BellmanDeckProfile,
@@ -54,14 +67,16 @@ from .state import DecisionState, OpponentBelief, TurnBudgets
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
-    "END_VALUE", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
+    "END_VALUE", "AccessEdge", "ActionFocus", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
     "BellmanTurnPlanner", "BellmanUnavailable", "BoardPotential", "CardFacts", "Chance",
-    "NativeCgTransitionProvider", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
+    "NativeCgTransitionProvider", "CapabilityIndex", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
     "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "PlanStep", "Potential",
-    "Need", "NeedModel", "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
+    "Need", "NeedBeam", "NeedBeamBuilder", "NeedModel", "NeedPath", "NeedRoot", "PathFeatures", "PokemonRole",
+    "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "RevealChoice", "RevealOutcome",
     "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TransitionProvider", "TurnBudgets",
-    "Unknown", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
+    "Unknown", "UnknownAction", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "PilotProfile", "enumerate_legal_actions",
-    "hypergeometric_classes", "opponent_belief", "reveal_sets",
+    "access_probability", "hypergeometric_classes", "infer_pokemon_roles", "opponent_belief",
+    "opponent_threat_roots", "reveal_sets",
 )

@@ -14,12 +14,13 @@ from cgpy.state import PokemonInPlay
 
 from common.engine import _own_prize_export
 from common import (
-    BoardPotential, DecisionState, Deterministic, ProductionLimits, ProductionSolver,
+    BoardPotential, DecisionState, Deterministic, PlanRequest, ProductionLimits, ProductionSolver,
     ReferenceSolver, Terminal, ValueOracle, ValueRegistry,
 )
 from common.engine import CgpyTransitionProvider
 from common.strategy.context import _DRAW_COUNT
 from common.telemetry import to_record
+from common.value_equations import SCORERS
 from train.blunder.store import load_corrections
 
 
@@ -104,6 +105,37 @@ def test_50hp_policy_commits_the_boss_ko_line_after_a_commutative_attach():
     assert deployed.decide(_obs(engine)).chosen == (0,)
 
 
+def test_runtime_reuses_the_solver_plan_suffix_without_replanning():
+    deployed = runtime()
+    engine = _fixture(50)
+    initial = _obs(engine)
+
+    first = deployed.decide(initial)
+    assert first.plan_suffix
+
+    planner = deployed._planner(initial)
+    request = PlanRequest(initial, deployed.deck, deployed.strategy.name)
+    state = planner.state_for(request)
+    provider = CgpyTransitionProvider(
+        state, registry=deployed.registry, effects=deployed.effects, stats=deployed.stats)
+    action = next(action for action in provider.actions(state) if action.identity == first.action)
+    predicted = provider.transition(state, action)
+    assert isinstance(predicted, Deterministic)
+    assert "search_begin_input" in predicted.state.obs
+
+    engine.step(first.chosen)
+    actual = _obs(engine)
+    actual.pop("search_begin_input")
+    actual_state = deployed._planner(actual).state_for(PlanRequest(
+        actual, deployed.deck, deployed.strategy.name))
+    assert predicted.state.semantic_key != actual_state.semantic_key
+    assert predicted.state.plan_key == actual_state.plan_key
+    second = deployed.decide(actual)
+
+    assert second.diagnostics["backend"] == "plan-suffix"
+    assert second.diagnostics["plan_suffix"]["planner_calls_avoided"] == 1
+
+
 def test_bellman_telemetry_contains_no_legacy_pilot_payload():
     record = to_record(runtime().decide(_obs(_fixture(60))))
 
@@ -113,6 +145,29 @@ def test_bellman_telemetry_contains_no_legacy_pilot_payload():
     }
     assert not ({"plan", "opts", "lethal", "planned", "margin", "composer", "posture"}
                 & set(record))
+
+
+def test_runtime_emits_a_bounded_shadow_need_beam_without_changing_the_choice():
+    decision = runtime().decide(_obs(_fixture(60)))
+    beam = decision.diagnostics["needs"]
+
+    assert decision.chosen == (1,)
+    assert len(beam.focused) <= 8
+    assert {row.family for row in beam.focused} >= {"attach"}
+    assert beam.safety
+    assert beam.elapsed_ms >= 0.0
+
+
+def test_runtime_never_calls_bespoke_value_equations(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise AssertionError("bespoke value equation executed")
+
+    for family in SCORERS:
+        monkeypatch.setitem(SCORERS, family, fail)
+
+    decision = runtime().decide(_obs(_fixture(60)))
+
+    assert decision.diagnostics["production"]["family_candidates"] == ()
 
 
 def test_post_attack_potential_keeps_the_root_players_perspective():
@@ -188,6 +243,20 @@ def test_turn_zero_uses_declarative_pregame_policy():
     decision = deployed.decide(observation)
     assert decision.chosen in ((0,), (1,))
     assert decision.diagnostics["backend"] == "declarative-pregame"
+
+
+def test_single_legal_selection_skips_bellman_search():
+    deployed = runtime()
+    observation = _obs(_fixture(60))
+    observation["select"] = {
+        "context": 7, "minCount": 1, "maxCount": 1,
+        "option": [{"type": 3, "area": 1, "index": 0, "playerIndex": 0}],
+    }
+
+    decision = deployed.decide(observation)
+
+    assert decision.chosen == (0,)
+    assert decision.diagnostics["backend"] == "forced-selection"
 
 
 def test_forkable_engine_turbo_flare_energy_menu_reconstructs_the_attack_rider():

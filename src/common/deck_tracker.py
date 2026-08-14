@@ -17,18 +17,29 @@ from __future__ import annotations
 
 from collections import Counter
 
+from cg.api import AreaType, LogType
 from common.board_cards import body_card_entries, card_id as _card_id
 
 _HAND, _DISCARD, _ACTIVE, _BENCH = "hand", "discard", "active", "bench"
 _AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .PRIZE (log zone codes)
+_AREA_DECK = int(AreaType.DECK)
+_CLEAR_TOP = frozenset({int(LogType.SHUFFLE), int(LogType.MOVE_CARD_REVERSE)})
+_DRAW = int(LogType.DRAW)
+_MOVE = int(LogType.MOVE_CARD)
 
 
 class OwnCardModel:
     """Feed every observation to :meth:`observe`; read :meth:`prize_export` for the exact prize multiset
     (None until a search anchors it). The consumer derives the deck from it."""
 
-    def __init__(self, deck) -> None:
+    def __init__(self, deck, *, effects=None) -> None:
         self.decklist: Counter = Counter(int(c) for c in deck)
+        table = getattr(effects, "_table", {}) if effects is not None else {}
+        self._stackers = frozenset(
+            int(card_id) for card_id, clauses in table.items()
+            if any(clause.get("dest") == "deck_top" for clause in clauses))
+        self._known_top: tuple[tuple[int, int], ...] | None = None
+        self._resolving_source: int | None = None
         self._prizes: Counter | None = None       # exact prize multiset once anchored (else None)
         self._anchor_remaining: int | None = None  # prizes_remaining at last anchor
         self._last_turn: int | None = None
@@ -37,6 +48,8 @@ class OwnCardModel:
 
     def reset(self) -> None:
         """Forget all match state (a new game began)."""
+        self._known_top = None
+        self._resolving_source = None
         self._prizes = None
         self._anchor_remaining = None
         self._takes = {}
@@ -47,6 +60,9 @@ class OwnCardModel:
         """The exact prize multiset as a plain ``{cardId: count}`` dict, or None if not yet known."""
         return dict(self._prizes) if self._prizes is not None else None
 
+    def known_top_export(self) -> tuple[tuple[int, int], ...] | None:
+        return self._known_top
+
     def observe(self, obs: dict) -> None:
         """Update the model from one observation. Never raises: on any error it drops the anchor
         (falls back to stateless bounds) rather than risk a false certainty or crashing the agent."""
@@ -54,6 +70,8 @@ class OwnCardModel:
             self._observe(obs)
         except Exception:
             self._prizes = None
+            self._known_top = None
+            self._resolving_source = None
 
     # -- internals -------------------------------------------------------------------------------
     def _observe(self, obs: dict) -> None:
@@ -72,6 +90,7 @@ class OwnCardModel:
         if self._last_turn is not None and turn is not None and turn < self._last_turn:
             self.reset()                           # turn went backwards -> new match (local harness)
         self._last_turn = turn
+        self._advance_known_top(obs, int(yi))
         self._record_prize_takes(obs, yi)
 
         visible = self._visible(me, select)
@@ -108,6 +127,39 @@ class OwnCardModel:
                 self._prizes = None                # ambiguous -> fall back until next reveal
         else:                                      # prizes grew -> impossible -> desync
             self._prizes = None
+
+    def _advance_known_top(self, obs: dict, seat: int) -> None:
+        select = obs.get("select") or {}
+        resolving = next((int(entry["id"]) for entry in
+                          (select.get("effect"), select.get("contextCard"))
+                          if isinstance(entry, dict) and entry.get("id") is not None), None)
+        placing = self._resolving_source in self._stackers
+        belief = self._known_top
+        for entry in obs.get("logs") or ():
+            if not isinstance(entry, dict) or entry.get("playerIndex") != seat:
+                continue
+            try:
+                kind = int(entry.get("type"))
+            except (TypeError, ValueError):
+                continue
+            if kind in _CLEAR_TOP:
+                belief = None
+            elif kind == _DRAW:
+                serial = entry.get("serial")
+                belief = (belief[1:] or None) if (belief and serial is not None
+                                                   and int(serial) == belief[0][0]) else None
+            elif kind == _MOVE:
+                source, destination = entry.get("fromArea"), entry.get("toArea")
+                if destination == _AREA_DECK:
+                    serial, card_id = entry.get("serial"), entry.get("cardId")
+                    if placing and serial is not None and card_id is not None:
+                        belief = (belief or ()) + ((int(serial), int(card_id)),)
+                    else:
+                        belief = None
+                elif source == _AREA_DECK:
+                    belief = None
+        self._known_top = belief
+        self._resolving_source = resolving
 
     def _record_prize_takes(self, obs: dict, yi: int) -> None:
         """Accumulate MY prize takes from the log DELTA, keyed by ``serial`` so a replayed frame cannot

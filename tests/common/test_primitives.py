@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from common import RootDecision
+import json
+
+from common import DecisionState, RootDecision
 from common.board_cards import body_card_ids
 from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, role_value
 from common.option_equivalence import class_representatives, fan_out
@@ -45,3 +47,61 @@ def test_telemetry_exposes_only_the_bellman_decision_contract():
         "bellman": True, "chosen": [2], "action": None, "value": 3.5,
         "complete": True, "diagnostics": {"backend": "test"}, "belief": None,
     }
+
+
+def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():
+    observation = {"current": {"yourIndex": 0, "players": []}, "search_begin_input": "opaque"}
+    without_blob = {"current": {"yourIndex": 0, "players": []}}
+
+    with_blob = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    without_blob = DecisionState.from_observation(without_blob, deck=(), deck_name="test")
+
+    assert with_blob.semantic_key != without_blob.semantic_key
+    assert with_blob.plan_key == without_blob.plan_key
+
+
+def test_live_telemetry_compacts_paths_without_losing_family_evidence():
+    candidate = {
+        "action": "ActionIdentity(kind='attach', parts=('" + "x" * 10_000 + "',))",
+        "family": "attachment", "features": {"ready": 1.0},
+        "contributions": {"ready": 2.5}, "score": 2.5, "gap": 0.0,
+        "wave": 0, "status": "leader", "shadow": True,
+    }
+    decision = RootDecision((2,), None, 3.5, True, {
+        "backend": "test",
+        "root": {"chosen_key": candidate["action"], "nodes": 12, "cache_hits": 3,
+                 "stopped_reason": "complete", "alternatives": [candidate] * 20},
+        "production": {"family_candidates": [candidate], "structural_prunes": [{
+            "proof_type": "commutativity", "pruned": candidate["action"],
+            "retained_event": "attach:active",
+        }]},
+        "needs": {
+            "focused": [{"action_key": "focus", "family": "attachment", "score": 0.8,
+                         "reason": "need_path", "path_ids": ["path"] * 100}],
+            "safety": [],
+            "unknown": [{"action_key": "unknown", "card_id": 999, "context": 0,
+                         "reason": "no_need_capability"}],
+            "paths": [{"large": "x" * 10_000}] * 20,
+            "features": [{"outcome": "take_prize", "deadline": 0}],
+            "elapsed_ms": 2.0, "exhausted": False,
+        },
+    })
+
+    record = to_record(decision, compact=True)
+    evidence = record["diagnostics"]["production"]["family_candidates"]
+
+    assert len(json.dumps(record)) < 2_000
+    assert evidence == [{
+        "action_key": evidence[0]["action_key"], "family": "attachment",
+        "features": {"ready": 1.0}, "contributions": {"ready": 2.5},
+        "score": 2.5, "gap": 0.0, "wave": 0, "status": "leader", "shadow": True,
+    }]
+    assert len(evidence[0]["action_key"]) == 20
+    assert record["diagnostics"]["production"]["structural_prunes"] == [{
+        "proof_type": "commutativity", "retained_event": "attach:active",
+        "pruned_key": evidence[0]["action_key"],
+    }]
+    needs = record["diagnostics"]["needs"]
+    assert needs["path_count"] == 20
+    assert needs["focused"][0]["path_count"] == 100
+    assert needs["unknown"][0]["card_id"] == 999

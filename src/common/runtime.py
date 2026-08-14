@@ -11,6 +11,7 @@ from common.cards import CardFunctions
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
+from common.options import enumerate_legal_actions
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.pilot_profile import PilotProfile
@@ -77,6 +78,7 @@ class BellmanRuntime:
                         else f"strategy:{strategy.name}"),
         )
         self._plan_suffix = ()
+        self._plan_reuse_stats = {"hits": 0, "planner_calls": 0, "invalidations": {}}
         self.last_read = Read()
 
     @staticmethod
@@ -180,6 +182,9 @@ class BellmanRuntime:
             profile=self.pilot_profile, **planner_kwargs)
 
     def _cached_decision(self, planner, request):
+        stats = getattr(self, "_plan_reuse_stats", None)
+        if stats is None:
+            stats = self._plan_reuse_stats = {"hits": 0, "planner_calls": 0, "invalidations": {}}
         if not self._plan_suffix or self.pilot_profile.get("plan_reuse.enabled") < 0.5:
             return None, "empty"
         step = self._plan_suffix[0]
@@ -190,19 +195,46 @@ class BellmanRuntime:
             (step.turn == int(current.get("turn", 0)), "turn_changed"),
             (step.seat == int(current.get("yourIndex", 0)), "seat_changed"),
             (step.legal_menu_digest == state.legal_menu_digest, "legal_menu_changed"),
-            (step.expected_state_key == state.semantic_key, "semantic_state_changed"),
+            (step.expected_state_key == state.plan_key, "semantic_state_changed"),
         )
         failure = next((reason for valid, reason in guards if not valid), None)
         if failure is not None:
             self._plan_suffix = ()
+            invalidations = stats["invalidations"]
+            invalidations[failure] = invalidations.get(failure, 0) + 1
+            return None, failure
+        action = next((candidate for candidate in enumerate_legal_actions(state.obs)
+                       if candidate.identity == step.action), None)
+        if action is None:
+            self._plan_suffix = ()
+            failure = "planned_action_missing"
+            invalidations = stats["invalidations"]
+            invalidations[failure] = invalidations.get(failure, 0) + 1
             return None, failure
         self._plan_suffix = self._plan_suffix[1:]
+        stats["hits"] += 1
         return RootDecision(
-            step.chosen, step.action, 0.0, True,
+            action.selection, action.identity, step.value, True,
             {"backend": "plan-suffix", "profile_hash": self.pilot_profile.hash,
-             "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix)}},
+             "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix),
+                             "hits": stats["hits"],
+                             "planner_calls_avoided": stats["hits"]}},
             self._plan_suffix,
         ), "hit"
+
+    def _forced_selection(self, observation):
+        select = observation.get("select") or {}
+        options = tuple(select.get("option") or ())
+        minimum = int(select.get("minCount", 0))
+        maximum = int(select.get("maxCount", len(options)))
+        if len(options) > 1 or minimum != maximum or minimum != len(options):
+            return None
+        self._plan_suffix = ()
+        return RootDecision(
+            tuple(range(len(options))), ActionIdentity(
+                "forced_selection", (int(select.get("context", -1)),)),
+            0.0, True, {"backend": "forced-selection", "context": select.get("context"),
+                        "option_count": len(options)})
 
     def decide(self, observation: dict) -> RootDecision:
         current = observation.get("current") or {}
@@ -215,12 +247,20 @@ class BellmanRuntime:
         cached, invalidation = self._cached_decision(planner, request)
         if cached is not None:
             return cached
+        forced = self._forced_selection(observation)
+        if forced is not None:
+            return forced
+        self._plan_reuse_stats["planner_calls"] += 1
         decision = planner.decide(request)
         self._plan_suffix = decision.plan_suffix
         diagnostics = dict(decision.diagnostics)
         diagnostics["plan_suffix"] = {
             "hit": False, "invalidation": invalidation,
             "cached_steps": len(self._plan_suffix),
+            "hits": self._plan_reuse_stats["hits"],
+            "planner_calls": self._plan_reuse_stats["planner_calls"],
+            "planner_calls_avoided": self._plan_reuse_stats["hits"],
+            "invalidations": dict(self._plan_reuse_stats["invalidations"]),
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics, decision.plan_suffix)
@@ -242,7 +282,7 @@ def make_agent(strategy):
     """Create the Kaggle ``agent(observation)`` hook."""
 
     runtime = build_runtime(strategy, _read_deck())
-    own_cards = OwnCardModel(runtime.deck)
+    own_cards = OwnCardModel(runtime.deck, effects=runtime.effects)
     telemetry_on = os.environ.get("AGENT_NO_TELEMETRY") != "1"
 
     def agent(observation: dict) -> list[int]:
@@ -250,6 +290,7 @@ def make_agent(strategy):
             return list(runtime.deck)
         own_cards.observe(observation)
         observation["own_prizes"] = own_cards.prize_export()
+        observation["known_top"] = own_cards.known_top_export()
         decision = runtime.decide(observation)
         if telemetry_on:
             seat = int((observation.get("current") or {}).get("yourIndex", 0))

@@ -32,6 +32,7 @@ def test_build_correction_embeds_snapshot_and_judgment():
     assert corr.decision["select_context"] == "Main"
     assert corr.decision["current"]["players"]        # full board travels along
     assert len(corr.decision["options"]) == len(d.options)
+    assert corr.decision["decision_seconds"] == d.decision_seconds
 
 
 def test_correct_must_be_legal_option_positions():

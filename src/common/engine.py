@@ -415,6 +415,8 @@ class CgpyTransitionProvider:
             viewer=state.root_seat, sbi_token=export_token(child.gs))
         observation["bellmanActor"] = int(child.select_seat)
         observation["own_prizes"] = _own_prize_export(child, state.root_seat)
+        if "known_top" in state.obs:
+            observation["known_top"] = state.obs["known_top"]
         return state.with_observation(observation)
 
     def _register_successor(self, state, child, action):

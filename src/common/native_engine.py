@@ -266,6 +266,8 @@ class NativeCgTransitionProvider:
                 player["hand"] = None
         if "own_prizes" in parent.obs:
             observation["own_prizes"] = parent.obs["own_prizes"]
+        if "known_top" in parent.obs:
+            observation["known_top"] = parent.obs["known_top"]
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
