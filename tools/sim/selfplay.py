@@ -72,7 +72,7 @@ def _overlay_env(overlay):
 
 
 def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, overlay=None,
-                    syspath_roots=()) -> Path:
+                    syspath_roots=(), configuration=None) -> Path:
     """Run `n` mirror games of `agent`, saving each as a tagged replay -> the run dir. Uses
     `check_agent._run_match`, the cabt-env path whose `env.toJSON()` carries the per-frame `obs`."""
     from sim.check_agent import _run_match  # lazy: pulls in kaggle_environments only when generating
@@ -86,7 +86,10 @@ def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, ove
         for i in range(n):
             from common.telemetry import capture_records
             with capture_records() as captured:
-                _statuses, env = _run_match(agent_dir, syspath_roots)
+                if configuration is None:
+                    _statuses, env = _run_match(agent_dir, syspath_roots)
+                else:
+                    _statuses, env = _run_match(agent_dir, syspath_roots, configuration=configuration)
             eid = episode_id(stem, i)
             tagged = tag_replay(env.toJSON(), episode_id=eid, team_names=team_names)
             (run_dir / f"{eid}.json").write_text(json.dumps(tagged, ensure_ascii=False),
@@ -113,11 +116,20 @@ def main(argv=None) -> int:
     ap.add_argument("--agents-root", default=str(repo / "src" / "agents"))
     ap.add_argument("--out", default=str(repo / "data" / "replays"),
                     help="corpus root (the run lands under <out>/selfplay/<stem>/)")
+    ap.add_argument("--decision-timeout", type=float, default=None,
+                    help="per-decision CABT actTimeout in seconds")
+    ap.add_argument("--no-match-timeout", action="store_true",
+                    help="disable the CABT run timeout (uses a JSON-safe effectively-unlimited value)")
     args = ap.parse_args(argv)
 
+    configuration = {}
+    if args.decision_timeout is not None:
+        configuration["actTimeout"] = args.decision_timeout
+    if args.no_match_timeout:
+        configuration["runTimeout"] = 1e100
     run_dir = generate_corpus(args.agent, args.games, agents_root=args.agents_root, out_root=args.out,
                               when=datetime.now(), sha=_git_short(), overlay=args.overlay,
-                              syspath_roots=[repo / "src"])
+                              syspath_roots=[repo / "src"], configuration=configuration or None)
     saved = len([path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name])
     print(f"Self-play Corpus: {saved} games -> {run_dir}")
     return 0

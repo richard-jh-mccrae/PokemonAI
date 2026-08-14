@@ -175,14 +175,14 @@ def _import_make():
     return make
 
 
-def _run_match(agent_dir: Path, syspath_roots):
+def _run_match(agent_dir: Path, syspath_roots, configuration=None):
     """One self-play cabt match; returns (statuses, env)."""
     make = _import_make()  # lazy + quiet: heavy dependency
 
     # agent_dir first so agent's own sibling modules (e.g. strategy.py) resolve, as on grader
     with _syspath([agent_dir, *syspath_roots]), _chdir(agent_dir):
         seats = [_load_agent(agent_dir, f"_seat{i}") for i in range(2)]
-        env = make("cabt")  # debug=False so env records agent errors as status=ERROR
+        env = make("cabt", configuration=configuration)  # debug=False so env records agent errors as status=ERROR
         env.run(seats)
     return [s["status"] for s in env.state], env
 

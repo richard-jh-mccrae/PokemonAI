@@ -114,3 +114,20 @@ def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, mon
                     when=WHEN, sha="abc", overlay=str(overlay))
     assert seen == [str(overlay.resolve())] * 2            # every game saw the overlay (absolute path)
     assert "AGENT_OVERLAY" not in os.environ               # restored after run -> no leak to later code
+
+
+def test_generate_corpus_forwards_cabt_timeouts(tmp_path, monkeypatch):
+    seen = []
+
+    class _FakeEnv:
+        def toJSON(self):
+            return {"steps": [[{"visualize": []}]], "info": {}}
+
+    def fake_run_match(agent_dir, syspath_roots, configuration=None):
+        seen.append(configuration)
+        return (["DONE", "DONE"], _FakeEnv())
+
+    monkeypatch.setattr("sim.check_agent._run_match", fake_run_match)
+    generate_corpus("mega_starmie", 1, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
+                    when=WHEN, sha="abc", configuration={"actTimeout": 180, "runTimeout": 1e100})
+    assert seen == [{"actTimeout": 180, "runTimeout": 1e100}]
