@@ -13,7 +13,7 @@ from pathlib import Path
 from meta_tracker.parse import load_replay
 
 from .provenance import build_identity
-from .telemetry_log import find_log_any, load_log
+from .telemetry_log import find_log_any, find_logs, load_log
 
 _REPLAY = re.compile(r"(?:episode-)?(\d+)(?:-replay)?\.json(?:\.gz)?$")
 
@@ -41,14 +41,15 @@ def load_game(path: Path | str) -> dict:
     own-seat (ADR-0019), and the build identity read off the directory stem."""
     path = Path(path)
     log_path, live_seat = find_log_any(path)
+    live_records_by_seat = {seat: load_log(log) for seat, log in find_logs(path).items()}
     bid = build_identity(path)
     return {
         "replay": load_replay(path),
         "live_records": load_log(log_path) if log_path else None,
         "live_seat": live_seat,
+        "live_records_by_seat": live_records_by_seat,
         "agent": bid["agent"],              # deck/build name from dir stem (auto-fills own tags)
         "agent_build": bid["agent_build"],
         "agent_version": bid["agent_version"],
         "built_at": bid["built_at"],
     }
-

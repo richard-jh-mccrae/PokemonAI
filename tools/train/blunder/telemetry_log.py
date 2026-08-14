@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import math
 import re
 from pathlib import Path
 
@@ -62,6 +63,30 @@ def find_log_any(replay_path: Path | str) -> tuple[Path | None, int | None]:
         if seat:
             return cand, int(seat.group(1))
     return None, None
+
+
+def find_logs(replay_path: Path | str) -> dict[int, Path]:
+    replay_path = Path(replay_path)
+    match = (re.search(r"episode-(\d+)-replay", replay_path.name)
+             or re.match(r"(\d+)\.", replay_path.name))
+    if not match:
+        return {}
+    found = {}
+    for candidate in sorted(replay_path.parent.glob(f"episode-{match.group(1)}-agent-*-logs.json")):
+        seat = re.search(r"-agent-(\d+)-logs", candidate.name)
+        if seat:
+            found[int(seat.group(1))] = candidate
+    return found
+
+
+def decision_seconds(record: dict | None) -> float | None:
+    if not isinstance(record, dict):
+        return None
+    value = record.get("decision_seconds")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) and value >= 0.0 else None
 
 
 def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> dict | None:

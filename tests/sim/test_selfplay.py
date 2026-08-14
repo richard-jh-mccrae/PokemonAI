@@ -91,6 +91,10 @@ def test_save_telemetry_writes_seat_specific_inspector_logs(tmp_path):
     game = load_game(replay)
     assert game["live_records"] == [{"chosen": [0], "seat": 0}]
     assert game["live_seat"] == 0
+    assert game["live_records_by_seat"] == {
+        0: [{"chosen": [0], "seat": 0}],
+        1: [{"chosen": [1], "seat": 1}],
+    }
 
 
 @pytest.mark.req("REQ-SIM-0009")

@@ -49,6 +49,14 @@ def test_telemetry_exposes_only_the_bellman_decision_contract():
     }
 
 
+def test_telemetry_records_whole_decision_duration():
+    decision = RootDecision((2,), None, 3.5, True, {"backend": "test"})
+
+    record = to_record(decision, decision_seconds=0.125)
+
+    assert record["decision_seconds"] == 0.125
+
+
 def test_search_session_resume_blob_is_not_part_of_plan_suffix_identity():
     observation = {"current": {"yourIndex": 0, "players": []}, "search_begin_input": "opaque"}
     without_blob = {"current": {"yourIndex": 0, "players": []}}

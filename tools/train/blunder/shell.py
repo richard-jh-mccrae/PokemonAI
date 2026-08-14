@@ -105,7 +105,8 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/frames.json"):
             game = _game()
             return _json(self, frames_payload(game["replay"], STATE.get("our_team"),
-                                              game.get("live_records"), game.get("live_seat")))
+                                              game.get("live_records"), game.get("live_seat"),
+                                              game.get("live_records_by_seat")))
         if self.path.startswith("/corrections.json"):
             return _json(self, list_corrections(_game()["replay"], STATE["store_path"]))
         if self.path.startswith("/games.json"):
@@ -187,6 +188,7 @@ class _Handler(BaseHTTPRequestHandler):
                 agent_build=game.get("agent_build"),
                 built_at=game.get("built_at"),
                 live_records=game.get("live_records"),
+                live_records_by_seat=game.get("live_records_by_seat"),
                 replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
                 posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)

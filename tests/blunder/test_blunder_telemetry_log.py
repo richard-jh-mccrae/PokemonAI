@@ -61,6 +61,8 @@ def test_record_correction_embeds_the_live_trace(tmp_path):
     decided) on the Correction, and it round-trips through the store."""
     replay = load_replay(REPLAY)
     records = load_log(LOG)
+    for record in records:
+        record["decision_seconds"] = 0.125
     d = _seat0_taggable(replay)
     correct = [next(i for i in range(len(d.options)) if i not in d.chosen)]
     store = tmp_path / "c.jsonl"
@@ -71,6 +73,7 @@ def test_record_correction_embeds_the_live_trace(tmp_path):
 
     assert rec.live_trace is not None
     assert rec.live_trace["chosen"] == d.chosen          # live record for this exact decision
+    assert rec.decision["decision_seconds"] == 0.125
     assert "fired" in rec.live_trace["opts"][0]
     [loaded] = load_corrections(store)
     assert loaded.live_trace == rec.live_trace           # survives the JSONL round-trip

@@ -105,3 +105,23 @@ def test_decision_time_reaches_both_shell_payloads_and_visible_ui():
     assert frames[-1]["decision_seconds"] is None
     assert "decision time" in _SHELL_HTML
     assert "decision_seconds" in _SHELL_HTML
+
+
+def test_frames_use_full_decision_telemetry_for_both_selfplay_seats():
+    replay = _timed_replay()
+    live_by_seat = {
+        0: [
+            {"bellman": True, "chosen": [0],
+             "diagnostics": {"needs": {"elapsed_ms": 123.0}}},
+            {"bellman": True, "chosen": [0], "decision_seconds": 0.456},
+        ],
+        1: [
+            {"bellman": True, "chosen": [0], "decision_seconds": 0.234},
+            {"bellman": True, "chosen": [0], "decision_seconds": 0.567},
+        ],
+    }
+
+    frames = frames_payload(replay, live_records_by_seat=live_by_seat)["frames"]
+
+    assert [frame["decision_seconds"] for frame in frames] == pytest.approx(
+        [2.5, 0.234, 0.456, 0.567, None])

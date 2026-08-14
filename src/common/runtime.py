@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
@@ -288,13 +289,15 @@ def make_agent(strategy):
     def agent(observation: dict) -> list[int]:
         if observation.get("select") is None:
             return list(runtime.deck)
+        started = perf_counter()
         own_cards.observe(observation)
         observation["own_prizes"] = own_cards.prize_export()
         observation["known_top"] = own_cards.known_top_export()
         decision = runtime.decide(observation)
         if telemetry_on:
             seat = int((observation.get("current") or {}).get("yourIndex", 0))
-            telemetry.emit(decision, read=runtime.last_read, seat=seat)
+            telemetry.emit(decision, read=runtime.last_read, seat=seat,
+                           decision_seconds=perf_counter() - started)
         return list(decision.chosen)
 
     agent.runtime = runtime

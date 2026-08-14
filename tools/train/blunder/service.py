@@ -6,6 +6,7 @@ the UI dropdowns consume, and turn one posted tag into a validated, logged Corre
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from .correction import (
@@ -15,7 +16,7 @@ from .decisions import Decision, iter_decisions
 from .decode import option_label
 from .seats import detect_seat
 from .store import DEFAULT_PATH, append_correction, load_corrections
-from .telemetry_log import record_for
+from .telemetry_log import decision_seconds as telemetry_decision_seconds, record_for
 
 
 def _labeled_options(decision: Decision) -> list[dict]:
@@ -58,7 +59,8 @@ def _film(replay: dict) -> list[dict]:
 
 
 def frames_payload(replay: dict, our_team: str | None = None,
-                   live_records: list[dict] | None = None, live_seat: int | None = None) -> dict:
+                   live_records: list[dict] | None = None, live_seat: int | None = None,
+                   live_records_by_seat: dict[int, list[dict]] | None = None) -> dict:
     """``step`` is 1-based like HEROZ's stepper; ``frame`` is the 0-based id a tag POSTs. ``live`` is
     the @T record the SHIPPED agent emitted at that decision (ADR-0019)."""
     info = replay.get("info") or {}
@@ -77,15 +79,22 @@ def frames_payload(replay: dict, our_team: str | None = None,
         else:
             options, chosen, selected_label = [], (raw.get("selected") or []), ""
         live = None
-        if live_records is not None and decision is not None and decision.seat == live_seat:
-            live = record_for(replay, live_records, seat=live_seat, frame=idx)
+        if decision is not None:
+            records = (live_records_by_seat or {}).get(decision.seat)
+            if records is None and live_records is not None and decision.seat == live_seat:
+                records = live_records
+            if records is not None:
+                live = record_for(replay, records, seat=decision.seat, frame=idx)
+        seconds = telemetry_decision_seconds(live)
+        if seconds is None and decision is not None and decision.decision_seconds != 0.0:
+            seconds = decision.decision_seconds
         frames.append({
             "step": idx + 1, "frame": idx,
             "turn": current.get("turn"), "seat": current.get("yourIndex"),
             "context": select.get("context"), "type": select.get("type"),
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
-            "decision_seconds": decision.decision_seconds if decision is not None else None,
+            "decision_seconds": seconds,
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
@@ -154,6 +163,7 @@ def record_correction(
     agent: str,
     store_path: Path | str = DEFAULT_PATH,
     live_records: list[dict] | None = None,
+    live_records_by_seat: dict[int, list[dict]] | None = None,
     replace_id: str | None = None,
     scope: str = "decision",
     **identity,
@@ -174,8 +184,12 @@ def record_correction(
             f"a correction already exists at this {scope} (episode {decision.episode_id}, "
             f"seat {decision.seat}, {where}) - edit or remove it first")
 
-    live_trace = (record_for(replay, live_records, seat=decision.seat, frame=frame)
-                  if live_records is not None else None)
+    seat_records = (live_records_by_seat or {}).get(decision.seat, live_records)
+    live_trace = (record_for(replay, seat_records, seat=decision.seat, frame=frame)
+                  if seat_records is not None else None)
+    live_seconds = telemetry_decision_seconds(live_trace)
+    if live_seconds is not None:
+        decision = replace(decision, decision_seconds=live_seconds)
     correction = build_correction(
         decision, source=source, agent=agent, correct=list(correct),
         category=category, rationale=rationale,
@@ -183,7 +197,7 @@ def record_correction(
         correct_label=_labels_for(decision, list(correct)),
         live_trace=live_trace,
         scope=scope,
-        span=build_span(replay, decision, scope=scope, live_records=live_records),
+        span=build_span(replay, decision, scope=scope, live_records=seat_records),
         **identity,
     )
     append_correction(correction, store_path)
