@@ -21,7 +21,7 @@ RUNTIME = runtime()
     ("dfc26070178c", (0,)),  # information action precedes the resolving attack
     ("8d91984d4430", (1,)),  # diversify acceleration across viable Basic attackers
     ("c7fd0670fb3e", (0,)),  # evolve the funded line
-    ("76e7d6d7539e", (4,)),  # retreat enables the stronger full-turn continuation
+    ("76e7d6d7539e", (0,)),  # heal returns the attached Energy before the attack line
     ("5ee5f49312b2", (1,)),  # analytic refresh commitment does not plan a hidden hand
     ("da72e53929f0", (1,)),  # same hidden-refresh boundary
     ("c8ee8ab3e82b", (1,)),  # turn annotation's own written line starts with Hilda
@@ -30,7 +30,7 @@ RUNTIME = runtime()
     ("188cceda7001", (1,)),  # Poffin creates a Turbo Flare recipient before attacking
     ("feafb8ef77c5", (0,)),  # information action before Turbo Flare
     ("496a7657096f", (2,)),  # exhaust the dead deterministic search before refreshing
-    ("baede6accfac", (5,)),  # full-turn search ties redundant pre-attack actions
+    ("baede6accfac", (2,)),  # free deterministic search precedes the ruled attack
     ("cb70b1405932", (4,)),  # expiring Energy is lost at End in either line
     ("79767ab416a7", (0,)),  # persistent basic Energy beats expiring Energy
     ("3c2afa3f1f28", (0,)),  # beneficial attack beats End

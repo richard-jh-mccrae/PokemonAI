@@ -1,5 +1,6 @@
 """Agent Check harness (tools/sim): contents -> legality -> playability -> deployability."""
 import importlib.util
+import json
 from pathlib import Path
 import zipfile
 
@@ -150,10 +151,20 @@ def test_legality_fails_with_the_specific_rule(tmp_path):
 
 
 @pytest.mark.req("REQ-SIM-0003")
-def test_playability_fixture_self_play_is_clean():
+def test_playability_fixture_self_play_is_clean(tmp_path, monkeypatch):
     require_kaggle_environments()
     from sim.check_agent import check_playability
 
+    overlay = tmp_path / "quick.json"
+    overlay.write_text(json.dumps({"pilot": {
+        "search.runtime_nodes_per_root": 8,
+        "search.beam_width": 4,
+        "search.root_beam_width": 4,
+        "search.shallow_nodes": 4,
+        "search.refinement_width": 1,
+        "clock.remaining_200_seconds": 2,
+    }}), encoding="utf-8")
+    monkeypatch.setenv("AGENT_OVERLAY", str(overlay))
     agent_dir = FIXTURE_AGENTS / "mega_starmie"   # shared common/cg resolve via src on sys.path
     result = check_playability(agent_dir, syspath_roots=[REPO / "src"], matches=2)
     assert result.ok, result.detail

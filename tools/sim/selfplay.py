@@ -38,6 +38,21 @@ def tag_replay(replay: dict, *, episode_id: int, team_names: list[str]) -> dict:
     return {**replay, "info": info}
 
 
+def _save_telemetry(run_dir: Path, eid: int, captured: list[dict]) -> None:
+    from common.telemetry import TAG
+
+    by_seat = {0: [], 1: []}
+    for record in captured:
+        seat = record.get("seat")
+        if seat in by_seat:
+            line = f"{TAG} " + json.dumps(record, separators=(",", ":"))
+            by_seat[seat].append([{"stderr": line}])
+    for seat, records in by_seat.items():
+        if records:
+            path = run_dir / f"episode-{eid}-agent-{seat}-logs.json"
+            path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+
 @contextmanager
 def _overlay_env(overlay):
     """Expose `overlay` as `AGENT_OVERLAY` for the in-process `env.run` games, then restore.
@@ -69,11 +84,14 @@ def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, ove
     team_names = [f"{stem}#0", f"{stem}#1"]
     with _overlay_env(overlay):
         for i in range(n):
-            _statuses, env = _run_match(agent_dir, syspath_roots)
+            from common.telemetry import capture_records
+            with capture_records() as captured:
+                _statuses, env = _run_match(agent_dir, syspath_roots)
             eid = episode_id(stem, i)
             tagged = tag_replay(env.toJSON(), episode_id=eid, team_names=team_names)
             (run_dir / f"{eid}.json").write_text(json.dumps(tagged, ensure_ascii=False),
                                                  encoding="utf-8")
+            _save_telemetry(run_dir, eid, captured)
     return run_dir
 
 
@@ -100,7 +118,7 @@ def main(argv=None) -> int:
     run_dir = generate_corpus(args.agent, args.games, agents_root=args.agents_root, out_root=args.out,
                               when=datetime.now(), sha=_git_short(), overlay=args.overlay,
                               syspath_roots=[repo / "src"])
-    saved = len(list(Path(run_dir).glob("*.json")))
+    saved = len([path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name])
     print(f"Self-play Corpus: {saved} games -> {run_dir}")
     return 0
 

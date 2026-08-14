@@ -199,6 +199,13 @@ class DecisionState:
                    self.value_registry_identity)
         return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
 
+    @cached_property
+    def legal_menu_digest(self) -> str:
+        from .options import enumerate_legal_actions
+
+        identities = tuple(action.identity for action in enumerate_legal_actions(self.obs))
+        return hashlib.sha256(repr(identities).encode("utf-8")).hexdigest()
+
     def with_observation(self, observation: Mapping) -> "DecisionState":
         successor = type(self).from_observation(
             observation, deck=self.deck, deck_name=self.deck_name, belief=self.belief,

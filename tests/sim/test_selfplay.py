@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 from conftest import require_kaggle_environments
 
-from sim.selfplay import episode_id, generate_corpus, run_stem, tag_replay
+from sim.selfplay import _save_telemetry, episode_id, generate_corpus, run_stem, tag_replay
 from train.blunder.decisions import iter_decisions
+from train.blunder.batch import discover_replays, load_game
 from train.blunder.provenance import build_identity
 from train.blunder.seats import detect_seat
 
@@ -56,15 +57,40 @@ def test_tag_replay_injects_ids_without_clobbering_the_film():
 @pytest.mark.req("REQ-SIM-0009")
 def test_generate_corpus_saves_bellman_correction_replays(tmp_path):
     require_kaggle_environments()
-    run_dir = generate_corpus("mega_starmie", 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
-                              when=WHEN, sha="abc1234", syspath_roots=[REPO / "src"])
-    files = sorted(run_dir.glob("*.json"))
-    assert len(files) == 2                                  # every game saved
+    overlay = tmp_path / "quick.json"
+    overlay.write_text(json.dumps({"pilot": {
+        "search.runtime_nodes_per_root": 8,
+        "search.beam_width": 4,
+        "search.root_beam_width": 4,
+        "search.shallow_nodes": 4,
+        "search.refinement_width": 1,
+        "clock.remaining_200_seconds": 2,
+    }}), encoding="utf-8")
+    run_dir = generate_corpus(
+        "mega_starmie", 1, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
+        when=WHEN, sha="abc1234", overlay=overlay, syspath_roots=[REPO / "src"],
+    )
+    files = discover_replays(run_dir)
+    assert len(files) == 1                                  # every game saved
     assert build_identity(files[0])["agent"] == "mega_starmie"   # path resolves -> not _UNFILED
     replay = json.loads(files[0].read_text(encoding="utf-8"))
     decisions = iter_decisions(replay)
     assert decisions                                       # film yields taggable decisions
     assert any(d.obs is not None for d in decisions)
+    assert load_game(files[0])["live_records"]             # Bellman trace joins in the inspector
+
+
+def test_save_telemetry_writes_seat_specific_inspector_logs(tmp_path):
+    line0 = '@T {"chosen":[0],"seat":0}'
+    line1 = '@T {"chosen":[1],"seat":1}'
+    replay = tmp_path / "42.json"
+    replay.write_text("{}", encoding="utf-8")
+
+    _save_telemetry(tmp_path, 42, [json.loads(line0[3:]), json.loads(line1[3:])])
+
+    game = load_game(replay)
+    assert game["live_records"] == [{"chosen": [0], "seat": 0}]
+    assert game["live_seat"] == 0
 
 
 @pytest.mark.req("REQ-SIM-0009")

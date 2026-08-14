@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .fetch import REACH, fetch_target_matches
 from common.strategy.context import _ACTIVE, _BENCH
 
 
@@ -29,6 +30,8 @@ class ActionFootprint:
     reads: frozenset[str] = frozenset()
     writes: frozenset[str] = frozenset()
     barrier: bool = False
+    information_first: bool = False
+    commitment: bool = False
 
 
 def independent(left: ActionFootprint, right: ActionFootprint) -> bool:
@@ -38,6 +41,39 @@ def independent(left: ActionFootprint, right: ActionFootprint) -> bool:
     return not (
         left.writes & (right.reads | right.writes)
         or right.writes & (left.reads | left.writes)
+    )
+
+
+def information_precedes(information: ActionFootprint, commitment: ActionFootprint) -> bool:
+    return (information.event != commitment.event and information.information_first
+            and commitment.commitment)
+
+
+def _pure_hidden_fetch(clauses) -> bool:
+    prohibited = {"cost", "cost_required", "rider", "trigger"}
+    return bool(clauses) and all(
+        clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+        and clause.get("dest", "hand") == "hand" and not prohibited.intersection(clause)
+        for clause in clauses)
+
+
+def _dead_bench_fetch(state, player: dict, clauses, stats) -> bool:
+    bench_clauses = tuple(
+        clause for clause in clauses
+        if clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+        and clause.get("dest") == "bench"
+    )
+    if not bench_clauses or len(bench_clauses) != len(clauses) or stats is None:
+        return False
+    if len(player.get("bench") or ()) >= int(player.get("benchMax", 5)):
+        return True
+    deck_counts = tuple(getattr(state, "deck_counts", ()))
+    if not deck_counts:
+        return False
+    return not any(
+        count > 0 and fetch_target_matches(clause, stats.get(card_id), reading=REACH)
+        for clause in bench_clauses
+        for card_id, count in deck_counts
     )
 
 
@@ -87,11 +123,7 @@ def _body_token(body, option: dict | None) -> str:
 
 
 def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootprint:
-    """Build a portable dependency declaration from action structure and effect clauses.
-
-    Returning a barrier is always safe: it merely forgoes reduction.  Only fully declared,
-    deterministic effects are admitted.
-    """
+    """Build dependencies from action structure; uncertain declarations become barriers."""
     observation = state.obs
     _seat, player = _actor_side(observation)
     option = _selected_option(observation, action)
@@ -102,7 +134,8 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
     kind = action.identity.kind
 
     if kind in OPAQUE_ACTION_KINDS:
-        return ActionFootprint((kind, *map(str, action.identity.parts)), barrier=True)
+        return ActionFootprint((kind, *map(str, action.identity.parts)), barrier=True,
+                               commitment=kind in {"attack", "retreat"})
 
     if kind == "attach":
         event = (kind, card_token, body_token)
@@ -112,6 +145,7 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
                        f"body:{body_token}:identity"}),
             frozenset({f"hand:{card_token}", "allowance:energy", "own:energy",
                        f"body:{body_token}:energy"}),
+            commitment=True,
         )
 
     if kind == "evolve":
@@ -121,6 +155,7 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
             event,
             frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
             frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
+            commitment=True,
         )
 
     if kind != "play" or not card or card.get("id") is None or effects is None:
@@ -128,14 +163,26 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
 
     card_id = int(card["id"])
     clauses = tuple(effects.clauses(card_id))
+    stat = stats.get(card_id) if stats is not None else None
+    consumes_allowance = bool(
+        stat is not None
+        and (getattr(stat, "is_supporter", False) or getattr(stat, "is_stadium", False))
+    )
+    dead_bench_fetch = _dead_bench_fetch(state, player, clauses, stats)
+    spends_resources = any(
+        clause.get("cost") or clause.get("cost_required") for clause in clauses
+    )
+    if _pure_hidden_fetch(clauses) and not consumes_allowance:
+        return ActionFootprint((kind, card_token), barrier=True, information_first=True)
     clause_kinds = frozenset(str(clause.get("kind", "")) for clause in clauses)
     if (not clause_kinds or clause_kinds & INFORMATION_EFFECT_KINDS
             or not clause_kinds <= DECLARED_DETERMINISTIC_EFFECT_KINDS):
-        return ActionFootprint((kind, card_token), barrier=True)
+        return ActionFootprint((kind, card_token), barrier=True,
+                               commitment=consumes_allowance or dead_bench_fetch
+                               or spends_resources)
 
     reads = {f"hand:{card_token}"}
     writes = {f"hand:{card_token}"}
-    stat = stats.get(card_id) if stats is not None else None
     if stat is not None and getattr(stat, "is_supporter", False):
         reads.add("allowance:supporter")
         writes.add("allowance:supporter")
@@ -161,7 +208,8 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
         writes.add("own:damage-modifiers")
     if "stadium_static" in clause_kinds:
         writes.add("field:stadium")
-    return ActionFootprint((kind, card_token), frozenset(reads), frozenset(writes))
+    return ActionFootprint((kind, card_token), frozenset(reads), frozenset(writes),
+                           commitment=True)
 
 
-__all__ = ("ActionFootprint", "action_footprint", "independent")
+__all__ = ("ActionFootprint", "action_footprint", "independent", "information_precedes")

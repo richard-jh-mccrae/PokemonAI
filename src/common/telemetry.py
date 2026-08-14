@@ -4,9 +4,12 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 
 TAG = "@T"
+_CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", default=None)
 
 
 def _wire(value):
@@ -21,11 +24,11 @@ def _wire(value):
     return value
 
 
-def to_record(decision, *, read=None) -> dict:
+def to_record(decision, *, read=None, seat=None) -> dict:
     """Serialize the complete Bellman explanation for one committed choice."""
 
     diagnostics = _wire(dict(decision.diagnostics))
-    return {
+    record = {
         "bellman": True,
         "chosen": list(decision.chosen),
         "action": _wire(decision.action),
@@ -37,11 +40,28 @@ def to_record(decision, *, read=None) -> dict:
             "unknown_mass": float(read.unknown_mass),
         } if read is not None and read.candidates else None),
     }
+    if seat is not None:
+        record["seat"] = int(seat)
+    return record
 
 
-def emit(decision, *, read=None, out=None) -> None:
-    print(f"{TAG} " + json.dumps(to_record(decision, read=read), separators=(",", ":")),
+def emit(decision, *, read=None, seat=None, out=None) -> None:
+    record = to_record(decision, read=read, seat=seat)
+    captured = _CAPTURE.get()
+    if captured is not None:
+        captured.append(record)
+    print(f"{TAG} " + json.dumps(record, separators=(",", ":")),
           file=out or sys.stderr, flush=True)
 
 
-__all__ = ["TAG", "emit", "to_record"]
+@contextmanager
+def capture_records():
+    records = []
+    token = _CAPTURE.set(records)
+    try:
+        yield records
+    finally:
+        _CAPTURE.reset(token)
+
+
+__all__ = ["TAG", "capture_records", "emit", "to_record"]

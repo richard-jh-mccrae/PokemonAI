@@ -345,6 +345,14 @@ for Mega Starmie only when the atomic activation gate passes. Structural game ru
 card facts, Needs, CombatMath, Scouting evidence, semantic identity, and ADR-TEMP-507's action-cost
 invariant remain authoritative substrate.
 
+## 2026-08-14 amendment: family-ranked allocation
+
+Production may use pure within-family equations to schedule which legal siblings receive bounded
+search work first. Family Scores never enter `Q`, compare different families, or permanently prune
+a line; only semantic equivalence, commutativity, or coefficient-independent proof may do that.
+Bellman successor value remains the sole policy owner. Attachment narrowing starts disabled and
+must clear the correction corpus before activation.
+
 ## Implementation outcome
 
 The atomic Mega Starmie cutover is complete. After Set-Up, every offered action and nested choice is

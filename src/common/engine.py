@@ -12,6 +12,7 @@ from .options import LegalAction, enumerate_legal_actions
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
+from .native_engine import _own_hidden_zones
 from .commutativity import action_footprint
 from .refresh import refresh_transition
 from .transition_value import end_has_forced_value_change
@@ -76,13 +77,8 @@ class CgpyTransitionProvider:
             players = current.get("players") or ()
             me = players[root.root_seat] if len(players) > root.root_seat else {}
             opp = players[1 - root.root_seat] if len(players) > 1 else {}
-            own_deck = _expand(root.deck_counts)
-            own_prize = _expand(root.prize_counts)
-            if len(own_prize) < len(me.get("prize") or ()):
-                pool = _take(root.deck, len(me.get("prize") or ()) + int(me.get("deckCount", 0)))
-                own_prize = pool[:len(me.get("prize") or ())]
-                own_deck = pool[len(own_prize):]
-            own_deck = _take(tuple(own_deck or root.deck), int(me.get("deckCount", 0)))
+            own_deck, own_prize = _own_hidden_zones(
+                root, me, world_index=0, world_count=1)
             filler = tuple(root.deck)
             engine = state_from_obs(
                 obs, own_deck, own_prize,

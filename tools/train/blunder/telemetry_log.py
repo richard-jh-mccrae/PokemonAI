@@ -77,7 +77,7 @@ def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> d
     record, decision = records[k], seat_decisions[k]
     if record.get("chosen") != decision.chosen:
         return None
-    if record.get("schema") not in {"bellman", "setup"} \
+    if not record.get("bellman") and record.get("schema") not in {"bellman", "setup"} \
             and len(record.get("opts", [])) != len(decision.options):
         return None
     return record
