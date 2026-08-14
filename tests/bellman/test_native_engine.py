@@ -52,6 +52,25 @@ def test_end_observation_can_preserve_the_actual_next_turn_actor():
     assert successor["bellmanActor"] == 1
 
 
+def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips():
+    known_hand = [{"id": 3, "serial": 10}, {"id": 1086, "serial": 20}]
+    parent_observation = {"current": {"yourIndex": 0, "players": [
+        {"deck": [], "prize": [], "hand": known_hand, "handCount": 2},
+        {"deck": [], "prize": [], "hand": None, "handCount": 4},
+    ]}, "select": {"context": 0, "option": []}}
+    native_successor = {"current": {"yourIndex": 1, "players": [
+        {"deck": [], "prize": [], "hand": None, "handCount": 2},
+        {"deck": [], "prize": [], "hand": [{"id": 1}] * 4, "handCount": 4},
+    ]}, "select": {"context": 0, "option": []}}
+    parent = DecisionState.from_observation(parent_observation, deck=(), deck_name="test")
+    provider = object.__new__(NativeCgTransitionProvider)
+
+    successor = provider._observation(native_successor, parent, actor_seat=1)
+
+    assert successor["current"]["players"][0]["hand"] == known_hand
+    assert successor["current"]["players"][1]["hand"] is None
+
+
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 if os.environ.get("CG_ENGINE") == "py":
     pytest.skip("production-provider test requires native cg", allow_module_level=True)

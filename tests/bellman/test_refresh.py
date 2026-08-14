@@ -151,6 +151,17 @@ def test_drawn_tutor_cannot_reuse_the_last_matching_target_drawn_beside_it():
     assert value == pytest.approx(1.0)
 
 
+def test_future_need_odds_use_one_root_value_for_every_covering_out():
+    evaluator = RefreshEvaluator(
+        _registry((REFRESH_CARD, LINE_TOP, FILLER)), _potential,
+        effects=CardEffects({}), stats=_stats())
+    needs = (Need("future", ((LINE_TOP, 0.2), (FILLER, 1.0))),)
+
+    normalized = evaluator._root_value(needs)
+
+    assert normalized[0].direct == ((LINE_TOP, 1.0), (FILLER, 1.0))
+
+
 def test_refresh_does_not_claim_a_need_already_held_and_playable_first():
     hidden = (LINE_TOP, LINE_TOP, *(FILLER for _ in range(8)))
     deck = (REFRESH_CARD, LINE_BASE, LINE_TOP, *hidden)
@@ -163,6 +174,24 @@ def test_refresh_does_not_claim_a_need_already_held_and_playable_first():
     assert "refresh_immediate_needs" not in dict(ledger.benefits)
     assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(0.2)
     assert branches[0]["needs"] == ()
+
+
+def test_refresh_does_not_charge_the_played_card_as_a_surrendered_option():
+    deck = (REFRESH_CARD, FILLER, *(FILLER for _ in range(10)))
+    state, registry = _state(deck, hand=(REFRESH_CARD, FILLER))
+
+    def hand_potential(observation):
+        hand = observation["current"]["players"][0].get("hand") or ()
+        value = 0.2 * len(hand)
+        return Potential(value, (("hand", value),))
+
+    evaluator = RefreshEvaluator(
+        registry, hand_potential, effects=CardEffects({}), stats=_stats())
+
+    ledger, _branches = evaluator.evaluate(
+        state, Refresh(REFRESH_CARD, ((6, 0),), False))
+
+    assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(0.2)
 
 
 def test_harlequin_style_coin_branches_are_averaged_without_draw_hands():
@@ -194,4 +223,6 @@ def test_refresh_charges_a_deterministic_next_turn_evolution_option():
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((6, 0),), False))
 
     assert dict(ledger.costs)["refresh_next_turn_options"] == pytest.approx(0.6)
+    assert dict(ledger.benefits)["refresh_next_turn_needs"] > 0.0
     assert branches[0]["retained_options"][0].startswith("evolve:")
+    assert branches[0]["next_turn_needs"] == ("evolve:bench:0",)

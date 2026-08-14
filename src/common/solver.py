@@ -160,6 +160,7 @@ class ReferenceSolver:
         self._memo.clear()
         self._active.clear()
         self.nodes = self.cache_hits = 0
+        self._root_key = state.semantic_key
         solved = self._state(state)
         if solved.action is None:
             raise RuntimeError(f"Bellman root has no complete legal action: {solved.evaluation.reason}")
@@ -337,12 +338,15 @@ class ReferenceSolver:
                 complete=all(result.complete for result in evaluated.values()))
         if isinstance(node, Refresh):
             try:
-                ledger, diagnostics = self.oracle.refresh_ledger(before, node)
+                ledger, diagnostics = self.oracle.refresh_ledger(
+                    before, node, include_next_turn=before.semantic_key == self._root_key)
             except (TypeError, ValueError) as exc:
                 return Evaluation(-math.inf, Ledger(), False,
                                   f"refresh valuation unavailable: {exc}")
-            return Evaluation(ledger.total, ledger, True, "analytic refresh gamble",
-                              diagnostics, decisions=1.0)
+            continuation = self._guaranteed_refresh_continuation(before)
+            combined = _combine(ledger, continuation.value)
+            return Evaluation(combined.total, combined, True, "analytic refresh gamble",
+                              diagnostics, decisions=1.0 + continuation.decisions)
         if isinstance(node, Chance):
             branches = [(edge, self._transition(before, action, edge.node, ()))
                         for edge in node.children]
@@ -366,6 +370,18 @@ class ReferenceSolver:
                                      "value": result.value}
                                     for edge, result in branches), decisions)
         return Evaluation(-math.inf, Ledger(), False, "undeclared transition result")
+
+    def _guaranteed_refresh_continuation(self, state: DecisionState) -> Evaluation:
+        candidates = []
+        for action in self.provider.actions(state):
+            if (action.identity.kind != "attack"
+                    or not self.oracle.refresh_attack_independent(state, action)):
+                continue
+            result = self._end_transition(state, action, self.provider.transition(state, action))
+            if result.complete and math.isfinite(result.value):
+                candidates.append(result)
+        return max(candidates, key=lambda result: _ordered_evaluation(result, Actor.OURS),
+                   default=Evaluation(0.0, Ledger(), True, "no guaranteed attack"))
 
 
 class ProductionSolver(ReferenceSolver):
@@ -683,6 +699,17 @@ class ProductionSolver(ReferenceSolver):
                     and self.oracle.need_coverage_ledger(state, action) is not None
                 )
                 if preparations:
+                    retained = []
+                    for action in actions:
+                        if not self.oracle.irrelevant_deterministic_fetch(state, action):
+                            retained.append(action)
+                            continue
+                        self._structural_prunes.append({
+                            "proof_type": "current_need_dominates_fetch",
+                            "pruned": str(action.identity),
+                            "retained_event": footprints[preparations[0].identity].event,
+                        })
+                    actions = tuple(retained)
                     retained = []
                     for action in actions:
                         footprint = footprints[action.identity]

@@ -100,6 +100,23 @@ def test_action_labels_do_not_change_the_same_state_transition_value():
         assert oracle.transition_ledger(state, state, ActionIdentity(kind)).total == 0.0
 
 
+def test_isolated_selection_realizes_the_larger_unmet_need_value(monkeypatch):
+    registry = _registry()
+    before_obs, after_obs = _obs([]), _obs([])
+    before_obs["select"]["context"] = 7
+    before_obs["current"]["looking"] = [{"id": LILLIE}]
+    before_obs["current"]["board"] = 0.0
+    after_obs["current"]["board"] = 0.1
+    oracle = ValueOracle(registry, _families)
+    monkeypatch.setattr(oracle, "reveal_choice_priority", lambda _before, _after: 0.8)
+
+    ledger = oracle.transition_ledger(
+        _state(before_obs, registry), _state(after_obs, registry), ActionIdentity("card"))
+
+    assert dict(ledger.benefits)["hand_demand"] == pytest.approx(0.8)
+    assert ledger.total == pytest.approx(0.9)
+
+
 def test_duplicate_hand_resources_are_linear_and_policy_free():
     registry = _registry()
     first = registry.hand_worth([LILLIE], _obs([LILLIE]))

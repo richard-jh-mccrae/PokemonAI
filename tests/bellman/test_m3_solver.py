@@ -8,7 +8,7 @@ import pytest
 from common import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
     NeedModel, PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
-    SearchLimits, Terminal,
+    Refresh, SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
 from common.commutativity import ActionFootprint, action_footprint, independent
@@ -141,6 +141,29 @@ def test_complete_line_continues_and_commits_only_first_action():
     assert decision.chosen == (0,)
     assert decision.value > 0.0
     assert decision.diagnostics["ledger"]["continuation"] > 0.0
+
+
+def test_analytic_refresh_keeps_a_guaranteed_attack_continuation(monkeypatch):
+    root, attacked = _state("root"), _state("attacked", board=0.5)
+    refresh, attack, end = _action("play"), _action("attack", 1), _action("end", 2)
+    graph = Graph(
+        {"root": (refresh, attack, end), "attacked": (end,)},
+        {("root", "play"): Refresh(CARD, ((6, 0),), False),
+         ("root", "attack"): Deterministic(attacked)},
+    )
+    oracle = _oracle()
+    monkeypatch.setattr(
+        oracle, "refresh_ledger",
+        lambda _state, _node, **_kwargs: (
+            Ledger((("refresh_immediate_needs", 0.1),), ()), ()),
+    )
+    monkeypatch.setattr(oracle, "refresh_attack_independent", lambda _state, _action: True)
+
+    decision = ReferenceSolver(graph, oracle).decide(root)
+
+    assert decision.action.kind == "play"
+    assert decision.value == pytest.approx(0.6)
+    assert decision.diagnostics["ledger"]["continuation"] == pytest.approx(0.5)
 
 
 def test_production_turn_search_has_no_depth_limit():

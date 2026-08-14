@@ -12,9 +12,9 @@ from bellman_helpers import runtime
 REPO = Path(__file__).resolve().parents[2]
 DECK = tuple(int(line) for line in (REPO / "src" / "agents" / "mega_starmie" /
                                     "deck.csv").read_text().split())
-EXPECTED_CORRECTION_ROWS = 333
-EXPECTED_SEMANTIC_ACTIONS = 1_985
-EXPECTED_SELECTION_INDICES = 2_411
+EXPECTED_CORRECTION_ROWS = 346
+EXPECTED_SEMANTIC_ACTIONS = 2_069
+EXPECTED_SELECTION_INDICES = 2_526
 MINIMUM_EXERCISED_CHANCE_NODES = 2
 
 

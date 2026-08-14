@@ -498,9 +498,8 @@ class BoardPotential:
     def _energy_position(self, me, opponent, *, historical_context=None) -> float:
         """Usable attached-resource value, shaped by deployment urgency and survival.
 
-        Basic lines concentrate resources until the Active covers the immediate KO; after that,
-        declining marginal value preserves optionality across viable attackers. Immediate attack
-        readiness remains a separate family.
+        Energy on an identical full-health backup is exposure while the Active's largest attack
+        remains unfunded; the Active's prize liability prices that delay.
         """
         total = 0.0
         active_ko_ready = self._active_ko_ready(me, opponent)
@@ -523,6 +522,22 @@ class BoardPotential:
             if not self.isolated_selection or historical_context != _DAMAGE:
                 shaped *= self._attack_coverage(body, _energy_codes(body), me, opponent)
             total += survival * shaped
+        active = next((body for body in (me.get("active") or ()) if body), None)
+        if active is not None and not self.isolated_selection:
+            cap = self._energy_cost_cap(int(active.get("id", 0)))
+            missing = max(0, cap - len(_energy_codes(active)))
+            active_maximum = max(
+                MINIMUM_HP, int(active.get("maxHp", active.get("hp", MINIMUM_HP))))
+            active_full = int(active.get("hp", 0)) >= active_maximum
+            if missing and active_full:
+                backups = tuple(body for body in (me.get("bench") or ()) if body
+                                and int(body.get("id", 0)) == int(active.get("id", 0))
+                                and int(body.get("hp", 0)) >= max(
+                                    MINIMUM_HP,
+                                    int(body.get("maxHp", body.get("hp", MINIMUM_HP)))))
+                stranded_units = sum(len(_energy_codes(body)) for body in backups)
+                total -= (self._prizes(active) * missing
+                          * min(1.0, stranded_units / max(1, cap)))
         return total
 
     def _development(self, me) -> float:

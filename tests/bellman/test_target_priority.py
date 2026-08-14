@@ -1,5 +1,6 @@
 from common import BoardPotential, CardFacts, ValueRegistry
 from common.scouting.provider import AttackStat, CardStat
+from copy import deepcopy
 
 
 class _Stats:
@@ -49,6 +50,25 @@ def test_energy_position_includes_basic_attackers_during_isolated_selections():
     families = dict(_potential(isolated_selection=True)(observation).families)
 
     assert families["energy_position"] > 0.0
+
+
+def test_full_health_active_is_funded_before_backup_energy_is_valued():
+    before = _observation(_body(1), _body(2))
+    before["current"]["players"][0]["bench"] = [_body(9, energy=False)]
+    active_attach = deepcopy(before)
+    active_attach["current"]["players"][0]["active"][0] = _body(9)
+    active_attach["current"]["players"][0]["active"][0]["energies"].append(3)
+    active_attach["current"]["players"][0]["active"][0]["energyCards"].append({"id": 3})
+    bench_attach = deepcopy(before)
+    bench_attach["current"]["players"][0]["bench"][0] = _body(9)
+
+    potential = _potential()
+    baseline = dict(potential(before).families)["energy_position"]
+    active_value = dict(potential(active_attach).families)["energy_position"]
+    bench_value = dict(potential(bench_attach).families)["energy_position"]
+
+    assert active_value > baseline
+    assert bench_value < baseline
 
 
 def test_snipe_progress_values_the_primary_attacker_above_the_backup():

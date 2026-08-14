@@ -258,6 +258,14 @@ class NativeCgTransitionProvider:
         current = observation.get("current") or {}
         current["yourIndex"] = parent.root_seat
         players = current.get("players") or ()
+        parent_players = (parent.obs.get("current") or {}).get("players") or ()
+        if 0 <= parent.root_seat < len(players) and 0 <= parent.root_seat < len(parent_players):
+            root_player = players[parent.root_seat] or {}
+            parent_player = parent_players[parent.root_seat] or {}
+            known_hand = parent_player.get("hand")
+            if (root_player.get("hand") is None and isinstance(known_hand, list)
+                    and len(known_hand) == int(root_player.get("handCount", -1))):
+                root_player["hand"] = _plain_native(known_hand)
         for seat, player in enumerate(players):
             if not player:
                 continue

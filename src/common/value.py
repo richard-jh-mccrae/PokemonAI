@@ -185,6 +185,7 @@ class ValueOracle:
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
         self._need_coverage_cache = {}
+        self._reveal_priority_cache = {}
         if refresh_evaluator is None and effects is not None and stats is not None:
             from .refresh import RefreshEvaluator
             refresh_evaluator = RefreshEvaluator(
@@ -213,16 +214,41 @@ class ValueOracle:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
+        if ((before.obs.get("current") or {}).get("looking") is not None
+                and int((before.obs.get("select") or {}).get("context", 0)) != 0):
+            need_value = self.reveal_choice_priority(before, after)
+            hand_delta = (sum(value for family, value in benefits if family == "hand_demand")
+                          - sum(value for family, value in costs if family == "hand_demand"))
+            if need_value > hand_delta:
+                benefits = [(family, value) for family, value in benefits
+                            if family != "hand_demand"]
+                costs = [(family, value) for family, value in costs
+                         if family != "hand_demand"]
+                benefits.append(("hand_demand", need_value))
         return Ledger(tuple(benefits), tuple(costs))
 
-    def refresh_ledger(self, state: DecisionState, node):
+    def refresh_ledger(self, state: DecisionState, node, *, include_next_turn=True):
         if self._refresh is None:
             raise ValueError("shuffle-refresh valuation requires effects and card facts")
-        return self._refresh.evaluate(state, node)
+        return self._refresh.evaluate(state, node, include_next_turn=include_next_turn)
+
+    def refresh_attack_independent(self, state: DecisionState, action) -> bool:
+        if self.stats is None or not hasattr(self.stats, "attack") or len(action.selection) != 1:
+            return False
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        index = action.selection[0]
+        option = options[index] if 0 <= index < len(options) else {}
+        attack_id = option.get("attackId")
+        attack = self.stats.attack(attack_id) if attack_id is not None else None
+        return bool(attack is not None and getattr(attack, "scaleVar", None) != "atk_hand"
+                    and not getattr(attack, "hiddenPerUnit", 0))
 
     def reveal_choice_priority(self, before: DecisionState, after: DecisionState) -> float:
         if self._refresh is None:
             return 0.0
+        key = before.semantic_key, after.semantic_key
+        if key in self._reveal_priority_cache:
+            return self._reveal_priority_cache[key]
         from collections import Counter
         from .needs import best_assignment
 
@@ -235,6 +261,7 @@ class ValueOracle:
             after_players[seat].get("hand") or ()) if card)
         added = list((after_hand - before_hand).elements())
         if not added:
+            self._reveal_priority_cache[key] = 0.0
             return 0.0
         needs = self._refresh.needs.immediate(before.obs, seat)
         targets = Counter(dict(before.deck_counts))
@@ -252,7 +279,9 @@ class ValueOracle:
             signatures(before_hand.elements()), len(needs), target_counts=targets).value
         expanded = best_assignment(
             signatures((*before_hand.elements(), *added)), len(needs), target_counts=targets).value
-        return max(0.0, expanded - baseline)
+        result = max(0.0, expanded - baseline)
+        self._reveal_priority_cache[key] = result
+        return result
 
     def reveal_node_priority(self, before: DecisionState, node) -> float:
         priorities = []
@@ -346,6 +375,20 @@ class ValueOracle:
             best = max(best, max(
                 (dict(need.direct).get(target_id, 0.0) for need in uncovered), default=0.0))
         return best
+
+    def irrelevant_deterministic_fetch(self, state: DecisionState, action) -> bool:
+        if self._refresh is None:
+            return False
+        from .refresh import played_card_id
+
+        card_id = played_card_id(state, action)
+        clauses = tuple(self._refresh.effects.clauses(card_id)) if card_id is not None else ()
+        return bool(clauses and all(
+            clause.get("kind") == "fetch" and clause.get("zone") == "deck"
+            and not any(clause.get(field) for field in
+                        ("cost", "cost_required", "dig", "rider", "trigger"))
+            for clause in clauses
+        ) and self.need_coverage_value(state, action) <= 0.0)
 
     def _played_need_coverage(self, state: DecisionState, action):
         if self._refresh is None:

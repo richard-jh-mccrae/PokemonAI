@@ -8,7 +8,7 @@ from math import comb
 
 from .algebra import Ledger, Refresh
 from .draws import draw_branches, draw_shape_problem
-from .needs import NeedModel, best_assignment
+from .needs import NEXT_TURN_OPTION_DISCOUNT, Need, NeedModel, best_assignment
 from .value import KNOWN_CARD_FLOOR, worth_to_prizes
 
 
@@ -96,7 +96,7 @@ def _sample_distribution(counts: Counter, draws: int):
 
 
 class RefreshEvaluator:
-    """Expected immediate-need coverage minus visible options surrendered with the hand."""
+    """Expected current and next-turn Need coverage minus surrendered visible options."""
 
     def __init__(self, registry, family_evaluator, *, effects=None, stats=None, need_model=None):
         self.registry = registry
@@ -106,7 +106,7 @@ class RefreshEvaluator:
         self.needs = need_model or NeedModel(
             registry, family_evaluator, effects=effects, stats=stats)
 
-    def evaluate(self, state, node: Refresh) -> tuple[Ledger, tuple[dict, ...]]:
+    def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
         observation = state.obs
         current = observation.get("current") or {}
         players = current.get("players") or ()
@@ -120,12 +120,16 @@ class RefreshEvaluator:
             returned.remove(int(node.card_id))
         except ValueError:
             pass
-        held_cost = self._held_option_cost(observation, state.root_seat)
+        held_cost = self._held_option_cost(
+            observation, state.root_seat, played_card_id=node.card_id)
         retained = self.needs.next_turn_retained(
             observation, state.root_seat, returned,
         )
+        next_turn = (self.needs.new_next_turn_needs(
+            observation, state.root_seat, current=immediate)
+                     if include_next_turn else ())
         branch_rows = []
-        weighted_needs = weighted_tactical = weighted_opponent = 0.0
+        weighted_needs = weighted_next_turn = weighted_tactical = weighted_opponent = 0.0
         branch_probability = 1.0 / len(node.draws)
         for own_draw, opponent_draw in node.draws:
             uncovered = self.needs.uncovered_by_hand(
@@ -139,6 +143,9 @@ class RefreshEvaluator:
                 state, uncovered, returned, int(own_draw),
                 supporter_available=state.budgets.supporter,
             )
+            next_turn_value = NEXT_TURN_OPTION_DISCOUNT * self._expected_need_value(
+                state, self._root_value(next_turn), returned, int(own_draw),
+                supporter_available=True)
             tactical = self._hand_size_tactical_delta(
                 observation, state.root_seat, int(own_draw), int(opponent_draw),
                 opponent_shuffles=node.opponent_shuffles,
@@ -150,12 +157,15 @@ class RefreshEvaluator:
                 - KNOWN_CARD_FLOOR * int(opponent_draw))
                               if node.opponent_shuffles else 0.0)
             weighted_needs += branch_probability * need_value
+            weighted_next_turn += branch_probability * next_turn_value
             weighted_tactical += branch_probability * tactical
             weighted_opponent += branch_probability * opponent_value
             branch_rows.append({
                 "own_draw": int(own_draw), "opponent_draw": int(opponent_draw),
                 "needs": tuple(need.key for need in uncovered),
                 "need_value": need_value, "hand_size_tactical": tactical,
+                "next_turn_needs": tuple(need.key for need in next_turn),
+                "next_turn_need_value": next_turn_value,
                 "opponent_hand": opponent_value,
             })
         benefits = {}
@@ -165,6 +175,7 @@ class RefreshEvaluator:
         if retained.value > 0.0:
             costs["refresh_next_turn_options"] = retained.value
         for label, value in (("refresh_immediate_needs", weighted_needs),
+                             ("refresh_next_turn_needs", weighted_next_turn),
                              ("refresh_hand_size_tactical", weighted_tactical),
                              ("refresh_opponent_hand", weighted_opponent)):
             if value > 0.0:
@@ -181,9 +192,26 @@ class RefreshEvaluator:
     def _potential(self, observation):
         return self.family_evaluator(observation)
 
-    def _held_option_cost(self, observation, seat: int) -> float:
-        before = _families(self._potential(observation))
-        stripped = copy.deepcopy(observation)
+    @staticmethod
+    def _root_value(needs):
+        normalized = []
+        for need in needs:
+            root_value = max((value for _card_id, value in need.direct), default=0.0)
+            normalized.append(Need(
+                need.key, tuple((card_id, root_value) for card_id, _value in need.direct),
+                need.timing))
+        return tuple(normalized)
+
+    def _held_option_cost(self, observation, seat: int, *, played_card_id: int) -> float:
+        retained = copy.deepcopy(observation)
+        hand = retained["current"]["players"][seat].get("hand") or []
+        played_index = next((index for index, card in enumerate(hand)
+                             if card and int(card.get("id", 0)) == int(played_card_id)), None)
+        if played_index is not None:
+            hand.pop(played_index)
+        retained["current"]["players"][seat]["handCount"] = len(hand)
+        before = _families(self._potential(retained))
+        stripped = copy.deepcopy(retained)
         player = stripped["current"]["players"][seat]
         player["hand"] = []
         player["handCount"] = 0

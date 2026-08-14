@@ -411,3 +411,17 @@ long-match tail and is not claimed passing.
 Submission collection preserves every emitted Bellman root ledger, branch diagnostic, cap, and
 alternative in `performance.jsonl` under `telemetry.diagnostics`, indexed by match and decision.
 The count/tier summary remains for dashboards, and raw Kaggle agent logs remain canonical.
+
+## 2026-08-14 amendment: terminal proof precedes Needs scheduling
+
+Status: Accepted design; not yet implemented.
+
+The implementation outcome's rejection of a separate terminal-win search is superseded. Exact,
+engine-verified same-turn wins are terminal proofs, not weighted Needs: a proven win dominates every
+development value and is selected before Needs can defer or prune its prefix. If no proof exists,
+Needs and exact odds schedule or admissibly prune branches, then Bellman evaluates the survivors.
+
+Prize count, KO yield, attack reach, and game termination remain one shared calculation. Needs uses
+them to express probabilistic or future win setup; the terminal prover uses them only to establish a
+guaranteed current-turn win. This keeps prize math out of competing implementations while preventing
+ordinary development demand from outweighing a certain victory.

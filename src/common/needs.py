@@ -941,6 +941,14 @@ class NeedModel:
 
         return best_retained_assignment(tuple(options))
 
+    def new_next_turn_needs(self, observation, seat: int, *, current=None) -> tuple[Need, ...]:
+        """Demands that first become actionable after turn allowances reset."""
+        current = self.immediate(observation, seat) if current is None else tuple(current)
+        if current:
+            return ()
+        projected = self._next_turn_observation(observation, seat, ())
+        return self.immediate(projected, seat)
+
     def _next_stage(self, card_id) -> int | None:
         card_id = int(card_id or 0)
         for line in self.registry.lines:
@@ -1000,6 +1008,7 @@ class NeedModel:
         current["energyAttached"] = False
         current["retreated"] = False
         current["stadiumPlayed"] = False
+        projected["bellmanActor"] = seat
         player = current["players"][seat]
         player["hand"] = [{"id": int(card_id)} for card_id in hand_ids]
         player["handCount"] = len(player["hand"])

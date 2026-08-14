@@ -474,7 +474,104 @@ LABELS_OBS = (
     "[pub] both players can see it",
     "[you] the asked seat's own hand",
     "this snapshot is the agent's own Observation, so nothing hidden from it appears at all — a "
-    "zone it cou…1033 tokens truncated…               for n, k in sorted(groups[cat].items(), key=lambda kv: kv[0].lower())]
+    "zone it could not see is absent or face-down.",
+)
+
+_CAT_SHORT = {"Pokemon": "Pkmn", "Item": "Item", "Tool": "Tool", "Supporter": "Supp",
+              "Stadium": "Stadium", "Basic Energy": "Basic E", "Special Energy": "Spec E"}
+
+_CAT_ORDER = ["Pokemon", "Basic Energy", "Special Energy", "Item", "Tool", "Supporter",
+              "Stadium", "?"]
+
+
+class _Out:
+    """A width-bounded line accumulator."""
+
+    def __init__(self, width: int = WIDTH):
+        self.width = max(20, int(width))
+        self.lines: list[str] = []
+
+    def raw(self, text: str = "") -> None:
+        self.lines.append(text)
+
+    def rule(self, label: str = "") -> None:
+        if not label:
+            self.raw("-" * self.width)
+            return
+        head = f"-- {label} "
+        if len(head) + 2 > self.width:
+            self.add(f"-- {label}")
+            return
+        self.raw(head + "-" * (self.width - len(head)))
+
+    def add(self, text, *, indent: int = 0, hang: int = 1, hard: bool = False) -> None:
+        pad = " " * indent
+        wrapped = textwrap.wrap(
+            str(text), width=self.width, initial_indent=pad,
+            subsequent_indent=" " * (indent + hang),
+            break_long_words=hard, break_on_hyphens=False)
+        self.lines.extend(wrapped or [pad + str(text)])
+
+    def path(self, text: str, *, indent: int = 0) -> None:
+        segments = [s + "/" for s in text.split("/")[:-1]] + [text.split("/")[-1]]
+        pad, room = " " * indent, max(4, self.width - indent)
+        line = ""
+        for segment in segments:
+            if len(segment) > room:
+                if line:
+                    self.raw(pad + line)
+                    line = ""
+                for chunk in textwrap.wrap(segment, width=room, break_long_words=True,
+                                           break_on_hyphens=False):
+                    self.raw(pad + chunk)
+                continue
+            if line and len(line) + len(segment) > room:
+                self.raw(pad + line)
+                line = segment
+            else:
+                line += segment
+        if line:
+            self.raw(pad + line)
+
+    def text(self) -> str:
+        return "\n".join(self.lines).rstrip() + "\n"
+
+
+def _rel(path) -> str:
+    if path is None:
+        return ""
+    try:
+        return Path(path).resolve().relative_to(REPO).as_posix()
+    except (ValueError, OSError):
+        return str(path)
+
+
+def _count_names(cards_list, cards: _Cards) -> list[str]:
+    counts: dict[str, int] = {}
+    for card in cards_list or ():
+        name = _card_name(card, cards)
+        counts[name] = counts.get(name, 0) + 1
+    return [f"{n} x{k}" if k > 1 else n
+            for n, k in sorted(counts.items(), key=lambda kv: kv[0].lower())]
+
+
+def _zone(out: _Out, cards_list, cards: _Cards, *, indent: int = 0) -> None:
+    if not cards_list:
+        out.add("(empty)", indent=indent)
+        return
+    groups: dict[str, dict[str, int]] = {}
+    unknown = 0
+    for card in cards_list:
+        if not isinstance(card, dict):
+            unknown += 1
+            continue
+        cat = _category(card, cards)
+        name = _card_name(card, cards)
+        groups.setdefault(cat, {})
+        groups[cat][name] = groups[cat].get(name, 0) + 1
+    for cat in sorted(groups, key=lambda c: (_CAT_ORDER.index(c) if c in _CAT_ORDER else 99, c)):
+        names = [f"{n} x{k}" if k > 1 else n
+                 for n, k in sorted(groups[cat].items(), key=lambda kv: kv[0].lower())]
         out.add(f"{_CAT_SHORT.get(cat, cat)}: " + ", ".join(names), indent=indent, hang=1)
     if unknown:
         out.add(f"{unknown} card(s) face down", indent=indent)
@@ -914,4 +1011,3 @@ def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRE
                 if episode_id is None or ep == episode_id:
                     keys.add(f"{ep}-{fr}")
     return sorted(keys, key=lambda k: tuple(int(p) for p in k.split("-")))
-
