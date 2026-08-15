@@ -128,6 +128,8 @@ def test_refresh_uses_exact_draw_odds_over_bellman_hand_value():
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((2, 0),), False))
 
     assert "refresh_expected_hand" not in dict(ledger.benefits)
+    assert dict(ledger.benefits)["refresh_board_access"] > 0.0
+    assert branches[0]["board_access_value"] > 0.0
     assert branches[0]["expected_hand_value"] == pytest.approx(0.08)
     assert branches[0]["hand_value_deviation"] > 0.08
     assert not any("need" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
@@ -144,7 +146,7 @@ def test_returned_cards_join_the_exact_refresh_draw_pool():
     assert deviation == pytest.approx(0.1)
 
 
-def test_refresh_does_not_claim_a_need_already_held_and_playable_first():
+def test_refresh_charges_a_guaranteed_need_already_held_and_playable_first():
     hidden = (LINE_TOP, LINE_TOP, *(FILLER for _ in range(8)))
     deck = (REFRESH_CARD, LINE_BASE, LINE_TOP, *hidden)
     state, registry = _state(deck, hand=(REFRESH_CARD, LINE_TOP))
@@ -153,7 +155,7 @@ def test_refresh_does_not_claim_a_need_already_held_and_playable_first():
 
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((6, 0),), False))
 
-    assert "refresh_immediate_needs" not in dict(ledger.benefits)
+    assert dict(ledger.costs)["refresh_held_needs"] == pytest.approx(1.0)
     assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(0.2)
     assert "expected_hand_value" in branches[0]
 

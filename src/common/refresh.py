@@ -7,6 +7,7 @@ from math import sqrt
 
 from .algebra import Ledger, Refresh
 from .draws import draw_branches, draw_shape_problem
+from .needs import NeedModel, access_probability
 from .value import KNOWN_CARD_FLOOR, worth_to_prizes
 
 
@@ -15,6 +16,7 @@ SHUFFLE_BOTH_HANDS_RIDER = "shuffle_both_hands"
 SHUFFLE_RIDERS = frozenset({SHUFFLE_OWN_HAND_RIDER, SHUFFLE_BOTH_HANDS_RIDER})
 HELD_OPTION_FAMILIES = frozenset({"hand", "hand_demand", "prize_plan"})
 HAND_SIZE_TACTICAL_FAMILIES = frozenset({"readiness"})
+FUTURE_PAYOFF_ACCESS_DISCOUNT = 0.75
 
 
 def played_card_id(state, action) -> int | None:
@@ -73,7 +75,7 @@ class RefreshEvaluator:
         self.family_evaluator = family_evaluator
         self.effects = effects
         self.stats = stats
-        self.needs = None
+        self.needs = NeedModel(registry, family_evaluator, effects=effects, stats=stats)
 
     def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
         observation = state.obs
@@ -90,12 +92,26 @@ class RefreshEvaluator:
             pass
         held_cost = self._held_option_cost(observation, state.root_seat)
         branch_rows = []
-        weighted_draw = weighted_tactical = weighted_opponent = 0.0
+        needs = tuple(need for need in self.needs.immediate(observation, state.root_seat)
+                      if need.timing == "immediate")
+        held_need_cost = self.needs.covered_by_hand_value(
+            needs, returned, supporter_available=state.budgets.supporter,
+            discard_capacity=max(0, len(returned) - 1),
+            available_targets=Counter(dict(state.deck_counts)),
+            observation=observation, seat=state.root_seat)
+        uncovered = self.needs.uncovered_by_hand(
+            needs, returned, supporter_available=state.budgets.supporter,
+            discard_capacity=max(0, len(returned) - 1),
+            available_targets=Counter(dict(state.deck_counts)),
+            observation=observation, seat=state.root_seat)
+        weighted_draw = weighted_access = weighted_tactical = weighted_opponent = 0.0
         branch_probability = 1.0 / len(node.draws)
         for own_draw, opponent_draw in node.draws:
             draw_mean, draw_deviation = self._draw_value_moments(
                 state, returned, int(own_draw))
             draw_value = max(0.0, draw_mean - draw_deviation)
+            access_value = self._expected_board_access(
+                state, uncovered, returned, int(own_draw))
             tactical = self._hand_size_tactical_delta(
                 observation, state.root_seat, int(own_draw), int(opponent_draw),
                 opponent_shuffles=node.opponent_shuffles,
@@ -107,6 +123,7 @@ class RefreshEvaluator:
                 - KNOWN_CARD_FLOOR * int(opponent_draw))
                               if node.opponent_shuffles else 0.0)
             weighted_draw += branch_probability * draw_value
+            weighted_access += branch_probability * access_value
             weighted_tactical += branch_probability * tactical
             weighted_opponent += branch_probability * opponent_value
             branch_rows.append({
@@ -114,6 +131,7 @@ class RefreshEvaluator:
                 "expected_hand_value": draw_mean,
                 "hand_value_deviation": draw_deviation,
                 "lower_confidence_hand_value": draw_value,
+                "board_access_value": access_value,
                 "hand_size_tactical": tactical,
                 "opponent_hand": opponent_value,
             })
@@ -121,7 +139,10 @@ class RefreshEvaluator:
         costs = {}
         if held_cost > 0.0:
             costs["refresh_held_options"] = held_cost
-        for label, value in (("refresh_expected_hand", weighted_draw),
+        if held_need_cost > 0.0:
+            costs["refresh_held_needs"] = held_need_cost
+        for label, value in (("refresh_board_access", weighted_access),
+                             ("refresh_expected_hand", weighted_draw),
                              ("refresh_hand_size_tactical", weighted_tactical),
                              ("refresh_opponent_hand", weighted_opponent)):
             if value > 0.0:
@@ -179,6 +200,36 @@ class RefreshEvaluator:
             (value - population_mean) ** 2 for value in population) / total
         variance = sample * (total - sample) / (total - 1) * population_variance
         return mean, sqrt(max(0.0, variance))
+
+    def _expected_board_access(self, state, needs, returned, draws: int) -> float:
+        if not needs or draws <= 0:
+            return 0.0
+        counts = Counter({int(card_id): int(count) for card_id, count in state.deck_counts})
+        counts.update(int(card_id) for card_id in returned)
+        pool = tuple(card_id for card_id, count in counts.items() for _ in range(count))
+        values = [0.0] * len(needs)
+        eligible = [set() for _need in needs]
+        for card_id in counts:
+            tokens = self.needs.coverage_slots(
+                card_id, needs, supporter_available=state.budgets.supporter,
+                discard_capacity=max(0, int(draws) - 1), available_targets=counts,
+                recipient_units=self.needs.energy_units_by_recipient(
+                    state.obs, state.root_seat, card_id), resource_group=f"draw:{card_id}")
+            for token in tokens:
+                for edge in token:
+                    eligible[edge.need_index].add(card_id)
+                    need = needs[edge.need_index]
+                    payoff = 0.0
+                    if need.capability == "deploy":
+                        line = next((line for line in self.registry.lines
+                                     if card_id in line[:-1]), ())
+                        if line:
+                            payoff = (FUTURE_PAYOFF_ACCESS_DISCOUNT
+                                      * self.registry.prizes(line[-1]))
+                    values[edge.need_index] = max(
+                        values[edge.need_index], edge.value + payoff)
+        return sum(access_probability(pool, draws, card_ids) * values[index]
+                   for index, card_ids in enumerate(eligible))
 
     def _hand_size_tactical_delta(self, observation, seat: int, own_draw: int,
                                   opponent_draw: int, *, opponent_shuffles: bool) -> float:

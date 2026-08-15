@@ -1,5 +1,5 @@
 from common import BoardPotential, CardFacts, ValueRegistry
-from common.scouting.provider import AttackStat, CardStat
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from copy import deepcopy
 
 
@@ -92,6 +92,34 @@ def test_multi_unit_energy_saturates_attack_without_valuing_a_fourth_unit():
     after_energy = dict(potential(after).families)["energy_position"]
 
     assert after_energy < before_energy
+
+
+def test_hand_value_requires_a_recipient_for_evolution_but_retains_future_energy():
+    base, top, energy = 20, 21, 22
+    stats = DictCardStatProvider({
+        base: CardStat(base, name="Base", hp=60, stage="basic", attacks=(10,)),
+        top: CardStat(top, name="Top", hp=120, stage="stage1", evolvesFrom="Base",
+                      attacks=(10,)),
+        energy: CardStat(energy, cardType=5, energyType=3),
+    }, attacks={10: AttackStat(10, energyTypes=(3,), damage=100)})
+    registry = ValueRegistry(
+        roles={base: ("win_condition_base",), top: ("win_condition",)},
+        facts={base: CardFacts(pokemon=True, stage="basic"),
+               top: CardFacts(pokemon=True, stage="stage1"),
+               energy: CardFacts(typed_basic_energy=True)},
+        lines=((base, top),), line_pairs=((base, top),))
+    potential = BoardPotential(stats, registry=registry, root_seat=0)
+    player = {"active": [_body(base)], "bench": [],
+              "hand": [{"id": top}, {"id": energy}], "prize": [None] * 6}
+    player["active"][0]["energies"] = [3]
+    player["active"][0]["energyCards"] = [{"id": energy}]
+
+    assert potential._held_card_usable(player, top) is True
+    assert potential._held_card_usable(player, energy) is False
+    isolated = BoardPotential(stats, registry=registry, root_seat=0, isolated_selection=True)
+    assert isolated._held_card_usable(player, energy) is True
+    player["active"] = [_body(9)]
+    assert potential._held_card_usable(player, top) is False
 
 
 def test_snipe_progress_values_the_primary_attacker_above_the_backup():

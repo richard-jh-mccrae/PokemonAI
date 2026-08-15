@@ -9,7 +9,7 @@ from .algebra import (
     WeightedEdge,
 )
 from .options import LegalAction, enumerate_legal_actions
-from .state import DecisionState
+from .state import DecisionState, freeze
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
@@ -173,7 +173,18 @@ class CgpyTransitionProvider:
             child.step(list(action.selection))
             if child.gs.pending is not None and int(child.gs.pending.context) == MANUAL_COIN_CONTEXT:
                 return self._coin_transition(state, child, action)
-            return self._register_successor(state, child, action)
+            successor = self._register_successor(state, child, action)
+            if (action.identity.kind in {"ability", "skill"}
+                    and not self.terminal_action_supported(state, action)
+                    and isinstance(successor, Deterministic)):
+                before = copy.deepcopy((state.obs.get("current") or {}))
+                after = copy.deepcopy((successor.state.obs.get("current") or {}))
+                before.pop("turnActionCount", None)
+                after.pop("turnActionCount", None)
+                if freeze(before) == freeze(after):
+                    return Unknown("unsupported ability produced no observable effect",
+                                   str(action.identity))
+            return successor
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
 

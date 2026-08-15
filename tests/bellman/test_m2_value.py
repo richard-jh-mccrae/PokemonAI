@@ -5,6 +5,8 @@ from copy import deepcopy
 import pytest
 
 from common import ActionIdentity, DecisionState
+from common.effects import CardEffects
+from common.scouting.provider import CardStat, DictCardStatProvider
 from common.value import CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry
 
 
@@ -57,12 +59,13 @@ def test_portable_worth_is_shared_and_overrides_only_raise():
     assert _registry({HAMMER: 11.0}).worth(HAMMER) == 11.0
 
 
-def test_unused_hand_card_has_no_terminal_turn_wealth():
+def test_consumed_play_preserves_portable_option_cost_when_engine_omits_discard():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     before = _state(_obs([HAMMER]), registry)
     after = _state(_obs([]), registry)
     play = oracle.transition_ledger(before, after, ActionIdentity("play", (HAMMER,)))
-    assert play.total == 0.0
+    assert dict(play.costs)["discarded_options"] == pytest.approx(
+        registry.worth(HAMMER) / 120.0)
     assert oracle.transition_ledger(before, before, ActionIdentity("end")).total == 0.0
 
 
@@ -89,7 +92,9 @@ def test_realized_board_benefit_is_counted_once():
                                       ActionIdentity("play", (HAMMER,)))
     assert dict(ledger.benefits)["board"] == pytest.approx(0.10)
     assert "hand" not in dict(ledger.costs)
-    assert ledger.total == pytest.approx(0.10)
+    assert dict(ledger.costs)["discarded_options"] == pytest.approx(
+        registry.worth(HAMMER) / 120.0)
+    assert ledger.total == pytest.approx(0.05)
 
 
 def test_acquisition_enables_continuation_without_becoming_terminal_hand_wealth():
@@ -100,7 +105,7 @@ def test_acquisition_enables_continuation_without_becoming_terminal_hand_wealth(
     consumed = oracle.transition_ledger(root, consumed_state, ActionIdentity("play"))
     restored = oracle.transition_ledger(consumed_state, restored_state, ActionIdentity("card"))
     assert "hand" not in dict(restored.benefits)
-    assert consumed.total + restored.total == pytest.approx(0.0)
+    assert consumed.total + restored.total == pytest.approx(-registry.worth(LILLIE) / 120.0)
 
     empty_root = _state(_obs([]), registry)
     acquired_state = empty_root.with_observation(_obs([LILLIE]))
@@ -166,6 +171,40 @@ def test_held_worth_does_not_embed_board_state_policy():
     ledger = ValueOracle(registry, _families).transition_ledger(
         before, after, ActionIdentity("play", (RUSH_EVOLUTION,)))
     assert "hand" not in dict(ledger.costs)
+
+
+def test_fetching_an_evolution_without_a_recipient_charges_the_stranded_line():
+    registry = ValueRegistry(
+        roles={LINE_BASE: ("win_condition_base",), LINE_TOP: ("win_condition",)},
+        functions={RUSH_EVOLUTION: ("search",)},
+        facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
+               LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
+               RUSH_EVOLUTION: CardFacts()},
+        line_pairs=((LINE_BASE, LINE_TOP),), lines=((LINE_BASE, LINE_TOP),))
+    stats = DictCardStatProvider({
+        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
+        LINE_TOP: CardStat(LINE_TOP, name="Top", hp=330, stage="stage1",
+                           evolvesFrom="Base", megaEx=True),
+        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, cardType=1),
+    })
+    before = DecisionState.from_observation(
+        _obs([RUSH_EVOLUTION]), deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION),
+        deck_name="test", value_registry_identity=registry.identity)
+    after = before.with_observation(_obs([]))
+    oracle = ValueOracle(
+        registry, _families,
+        effects=CardEffects({RUSH_EVOLUTION: [{
+            "kind": "fetch", "target": "mega", "zone": "deck",
+        }]}), stats=stats)
+    action = ActionIdentity(
+        "play", ('[0,{"type":7},[[2,{"id":22,"playerIndex":0}]]]',))
+
+    costs = dict(oracle.transition_ledger(before, after, action).costs)
+
+    assert costs["discarded_options"] == pytest.approx(registry.prizes(RUSH_EVOLUTION))
+    assert costs["stranded_fetch"] == pytest.approx(
+        registry.prizes(RUSH_EVOLUTION)
+        + registry.prizes(LINE_BASE) + registry.prizes(LINE_TOP))
 
 
 def test_every_required_consequence_has_one_named_family_owner():

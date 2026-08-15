@@ -463,6 +463,25 @@ class BoardPotential:
                     for card_job, values in jobs.items())
         return float(worth_to_prizes(worth))
 
+    def _held_card_usable(self, me, card_id: int) -> bool:
+        stat = self._stat(card_id)
+        if stat is None:
+            return True
+        bodies = _bodies(me)
+        if getattr(stat, "is_energy", False):
+            return self.isolated_selection or any(
+                len(_energy_codes(body)) < self._energy_cost_cap(int(body.get("id", 0)))
+                for body in bodies)
+        evolves_from = getattr(stat, "evolvesFrom", None)
+        if not evolves_from:
+            return True
+        parent = self.registry.line_parents.get(int(card_id))
+        return any(
+            (parent is not None and int(body.get("id", 0)) == int(parent))
+            or getattr(self._stat(body.get("id")), "name", None) == evolves_from
+            for body in bodies
+        )
+
     def _energy_cost_cap(self, card_id: int) -> int:
         candidates = [int(card_id)]
         if hasattr(self.stats, "forward_card_ids"):
@@ -566,6 +585,8 @@ class BoardPotential:
             if not card or card.get("id") is None:
                 continue
             card_id = int(card["id"])
+            if not self._held_card_usable(me, card_id):
+                continue
             facts = self.registry.facts.get(card_id)
             tags = self.registry.functions.get(card_id, ())
             if (setup_complete and "opener" in tags
@@ -596,6 +617,8 @@ class BoardPotential:
             if not card or card.get("id") is None:
                 continue
             card_id = int(card["id"])
+            if not self._held_card_usable(me, card_id):
+                continue
             job = self._resource_job(card_id)
             capacity = capacities.get(job, 1)
             if occupied[job] + seen[job] < capacity:

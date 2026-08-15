@@ -1285,6 +1285,25 @@ class NeedModel:
         return tuple(need for index, need in enumerate(needs)
                      if not assignment.covered_mask & (1 << index))
 
+    def covered_by_hand_value(self, needs: tuple[Need, ...], hand_ids, *,
+                              supporter_available: bool, discard_capacity: int,
+                              available_targets=None, observation=None, seat: int = 0) -> float:
+        signatures = []
+        for resource_index, card_id in enumerate(hand_ids):
+            stat = self.stat(card_id)
+            recipient_units = (self.energy_units_by_recipient(observation, seat, card_id)
+                               if observation is not None and stat is not None
+                               and getattr(stat, "is_energy", False) else None)
+            signatures.extend(self.coverage_slots(
+                int(card_id), needs,
+                supporter_available=supporter_available,
+                discard_capacity=discard_capacity,
+                available_targets=available_targets,
+                recipient_units=recipient_units,
+                resource_group=f"held:{resource_index}"))
+        return best_assignment(
+            signatures, len(needs), target_counts=available_targets).value
+
     def next_turn_retained(self, observation, seat: int, hand_ids) -> RetainedAssignment:
         """Value deterministic next-turn uses of cards already visible now."""
         projected = self._next_turn_observation(observation, seat, hand_ids)

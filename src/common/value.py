@@ -14,6 +14,7 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
+from .fetch import DEADNESS, fetch_target_matches
 from .state import DecisionState
 
 
@@ -173,7 +174,7 @@ class Potential:
 
 
 class ValueOracle:
-    """Differences a state utility once per transition; it never inspects action semantics."""
+    """Differences state utility and charges irreversible action opportunity costs once."""
 
     def __init__(self, registry: ValueRegistry,
                  family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
@@ -213,14 +214,96 @@ class ValueOracle:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
-        discard_cost = self._discarded_option_cost(before, after)
+        discard_cost = self._spent_option_cost(before, after, action)
         represented = sum(value for family, value in costs
                           if family in {"hand", "hand_demand"})
         if discard_cost > represented:
             costs.append(("discarded_options", discard_cost - represented))
+        stranded = self._stranded_fetch_cost(before, after, action)
+        if stranded > 0.0:
+            costs.append(("stranded_fetch", stranded))
         return Ledger(tuple(benefits), tuple(costs))
 
-    def _discarded_option_cost(self, before: DecisionState, after: DecisionState) -> float:
+    def _stranded_fetch_cost(self, state: DecisionState, after: DecisionState,
+                             action: ActionIdentity) -> float:
+        if (action.kind not in {"play", "ability", "skill"}
+                or self.effects is None or self.stats is None):
+            return 0.0
+
+        def card_ids(value):
+            if isinstance(value, dict):
+                if value.get("id") is not None:
+                    yield int(value["id"])
+                for child in value.values():
+                    yield from card_ids(child)
+            elif isinstance(value, (list, tuple)):
+                for child in value:
+                    yield from card_ids(child)
+
+        try:
+            decoded = tuple(json.loads(part) for part in action.parts if isinstance(part, str))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return 0.0
+        card_id = next(card_ids(decoded), None) if action.kind == "play" else None
+        if card_id is None and action.kind in {"ability", "skill"} and decoded:
+            option = next((value for value in decoded[0] if isinstance(value, dict)), {})
+            area = option.get("inPlayArea", option.get("area"))
+            index = option.get("inPlayIndex", option.get("index"))
+            current = state.obs.get("current") or {}
+            if area == 7:
+                cards = current.get("stadium") or ()
+            else:
+                players = current.get("players") or ()
+                mine = players[state.root_seat] if state.root_seat < len(players) else {}
+                cards = (mine.get("active") or () if area == 4 else
+                         mine.get("bench") or () if area == 5 else ())
+            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
+                card_id = int(cards[index]["id"])
+        clauses = tuple(self.effects.clauses(card_id)) if card_id is not None else ()
+        fetches = tuple(clause for clause in clauses
+                        if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+        if not fetches or len(fetches) != len(clauses):
+            return 0.0
+        players = (state.obs.get("current") or {}).get("players") or ()
+        mine = players[state.root_seat] if state.root_seat < len(players) else {}
+        bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
+        body_ids = {int(body["id"]) for body in bodies if body and body.get("id") is not None}
+        available = dict(state.deck_counts)
+
+        def hand_ids(value):
+            players = (value.obs.get("current") or {}).get("players") or ()
+            player = players[value.root_seat] if value.root_seat < len(players) else {}
+            return Counter(int(card["id"]) for card in (player.get("hand") or ()) if card)
+
+        acquired = hand_ids(after) - hand_ids(state)
+        stranded = []
+        for clause in fetches:
+            targets = tuple(acquired) if acquired else tuple(
+                    int(target_id) for target_id, count in available.items()
+                    if count > 0 and fetch_target_matches(
+                        clause, self.stats.get(target_id), reading=DEADNESS)
+                    and (not clause.get("name_family") or clause["name_family"] in
+                         str(getattr(self.stats.get(target_id), "name", ""))))
+            if not targets:
+                continue
+            if any(not getattr(self.stats.get(target_id), "evolvesFrom", None)
+                   for target_id in targets):
+                return 0.0
+            playable = {
+                int(top): int(base) for top, base in self.registry.line_parents.items()
+                if int(top) in targets
+            }
+            if any(base in body_ids for base in playable.values()):
+                return 0.0
+            for target_id in targets:
+                line = next((line for line in self.registry.lines if target_id in line), ())
+                cards = line[:line.index(target_id) + 1] if line else (target_id,)
+                stranded.append(sum(self.registry.prizes(value) for value in cards))
+        return max(stranded, default=0.0) + (
+            self.registry.prizes(card_id) if stranded and action.kind == "play" else 0.0)
+
+    def _spent_option_cost(self, before: DecisionState, after: DecisionState,
+                           action: ActionIdentity) -> float:
         def zones(state):
             players = ((state.obs.get("current") or {}).get("players") or ())
             player = players[state.root_seat] if len(players) > state.root_seat else {}
@@ -233,8 +316,9 @@ class ValueOracle:
             return keys(player.get("hand")), keys(player.get("discard"))
 
         before_hand, before_discard = zones(before)
-        _after_hand, after_discard = zones(after)
-        moved = (after_discard - before_discard) & before_hand
+        after_hand, after_discard = zones(after)
+        moved = ((before_hand - after_hand) if action.kind == "play" else
+                 (after_discard - before_discard) & before_hand)
         worth = sum(self.registry.worth(card_id) * count
                     for (card_id, _serial), count in moved.items())
         return worth_to_prizes(worth)
