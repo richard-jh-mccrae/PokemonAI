@@ -62,12 +62,12 @@ def test_pilot_overlay_reads_packaged_runtime_config(tmp_path, monkeypatch):
     common_dir = tmp_path / "common"
     common_dir.mkdir()
     (tmp_path / "runtime_config.json").write_text(
-        '{"pilot":{"needs.focus_enabled":0}}', encoding="utf-8")
+        '{"pilot":{"strategy.focus_enabled":0}}', encoding="utf-8")
     monkeypatch.setattr(runtime_module, "__file__", str(common_dir / "runtime.py"))
     monkeypatch.delenv("AGENT_OVERLAY", raising=False)
-    monkeypatch.delenv("AGENT_NEEDS_ENABLED", raising=False)
+    monkeypatch.delenv("AGENT_STRATEGY_ENABLED", raising=False)
     values, provenance = runtime_module._pilot_overlay()
-    assert values == {"needs.focus_enabled": 0.0}
+    assert values == {"strategy.focus_enabled": 0.0}
     assert provenance.endswith("runtime_config.json")
 
 

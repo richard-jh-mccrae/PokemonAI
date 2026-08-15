@@ -24,9 +24,9 @@ ROLE_TIER: dict[str, float] = {
     "win_condition_stage": WIN_CONDITION_STAGE_TIER,
     "evolution_base": 20.0,
     "engine": 12.0,
+    "support_pokemon": 12.0,
     "accel_source": 12.0,
     "counter_mover": 12.0,        # a damage-relay Ability body (Munkidori) — the engine band
-    "tutor": 10.0,
 }
 
 # Scouting Brief vocabulary aliases into the same semantic Worth currency. These translate role

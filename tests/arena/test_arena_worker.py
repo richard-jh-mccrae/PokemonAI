@@ -1,7 +1,7 @@
 """Arena match worker (ADR-0058): one subprocess = one PvC Match on the cabt env.
 
 Drives the real worker process through its stdio protocol — a scripted 'human'
-plays the Visitor seat against the real mega_starmie agent. Needs the native
+plays the Visitor seat against the real mega_starmie agent. Requires the native
 engine + kaggle_environments (both CI-provisioned); skips cleanly without them.
 """
 import json

@@ -21,7 +21,7 @@ and is excluded from submissions. Both adapters enter the same state, ledger, va
 solver contracts.
 
 Shuffle-refresh cards are a deliberate exception to successor-state expansion. The solver does not
-invent a shuffled hand and play a hypothetical remainder of the turn. `common.needs` derives
+invent a shuffled hand and play a hypothetical remainder of the turn. `common.demand` derives
 immediate unmet jobs, direct/fetch coverage, and deterministic next-turn options for visible cards.
 The next-turn projection advances only evolution legality for known cards; future Supporter effects
 remain in the normal hand family until a generic effect-outcome evaluator exists. It never predicts
@@ -32,7 +32,7 @@ callback replans from reality.
 
 This keeps refresh decisions inside the Bellman ledger without turning random cards into an
 imaginary turn. It also makes useful non-Supporter plays naturally precede a refresh: realizing a
-known option removes its shuffle-away cost, while a need already satisfiable from hand receives no
+known option removes its shuffle-away cost, while a Demand Slot already satisfiable from hand receives no
 draw credit.
 
 No incomplete result or adapter failure falls back to another strategy system.

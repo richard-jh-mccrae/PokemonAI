@@ -22,26 +22,16 @@ from .algebra import (
     Unknown,
 )
 from .native_engine import NativeCgTransitionProvider
-from .needs import (
-    AccessEdge,
+from .demand import (
     ActionFocus,
-    CapabilityIndex,
     CoverageEdge,
-    Need,
-    NeedBeam,
-    NeedBeamBuilder,
-    NeedModel,
-    NeedPath,
-    NeedRoot,
-    PathFeatures,
-    PokemonRole,
+    DemandSlot,
+    StrategyBeam,
+    DemandModel,
     ResolvedAssignment,
     RetainedAssignment,
     RetainedOption,
-    UnknownAction,
     access_probability,
-    infer_pokemon_roles,
-    opponent_threat_roots,
 )
 from .information import (
     BellmanDeckProfile,
@@ -68,17 +58,16 @@ from .terminal import ProofStep, TerminalLimits, TerminalProof, TerminalProver
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
-    "END_VALUE", "AccessEdge", "ActionFocus", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
+    "END_VALUE", "ActionFocus", "ActionIdentity", "Actor", "BellmanDeckProfile", "BellmanPlanner",
     "BellmanTurnPlanner", "BellmanUnavailable", "BoardPotential", "CardFacts", "Chance",
-    "NativeCgTransitionProvider", "CapabilityIndex", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
+    "NativeCgTransitionProvider", "Choice", "CoverageEdge", "DecisionState", "Deterministic", "DrawClass",
     "Ledger", "LegalAction", "OpponentBelief", "OutcomeGroup", "PlanRequest", "PlanStep", "Potential",
-    "Need", "NeedBeam", "NeedBeamBuilder", "NeedModel", "NeedPath", "NeedRoot", "PathFeatures", "PokemonRole",
+    "DemandSlot", "StrategyBeam", "DemandModel",
     "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "RevealChoice", "RevealOutcome",
     "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TerminalLimits", "TerminalProof",
     "TerminalProver", "ProofStep", "TransitionProvider", "TurnBudgets",
-    "Unknown", "UnknownAction", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
+    "Unknown", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "PilotProfile", "enumerate_legal_actions",
-    "access_probability", "hypergeometric_classes", "infer_pokemon_roles", "opponent_belief",
-    "opponent_threat_roots", "reveal_sets",
+    "access_probability", "hypergeometric_classes", "opponent_belief", "reveal_sets",
 )

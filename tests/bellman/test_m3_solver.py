@@ -8,12 +8,12 @@ import pytest
 
 from common import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
-    NeedModel, PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
+    PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
     Refresh, SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
 from common.commutativity import ActionFootprint, action_footprint, independent
-from common.needs import ActionFocus, NeedBeam, semantic_action_key
+from common.demand import ActionFocus, StrategyBeam, semantic_action_key
 from common.options import LegalAction, enumerate_legal_actions
 import common.solver as solver_module
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
@@ -179,7 +179,7 @@ def test_analytic_refresh_keeps_a_guaranteed_attack_continuation(monkeypatch):
     monkeypatch.setattr(
         oracle, "refresh_ledger",
         lambda _state, _node, **_kwargs: (
-            Ledger((("refresh_immediate_needs", 0.1),), ()), ()),
+            Ledger((("refresh_immediate_demands", 0.1),), ()), ()),
     )
     monkeypatch.setattr(oracle, "refresh_attack_independent", lambda _state, _action: True)
 
@@ -238,7 +238,7 @@ def test_production_turn_search_has_no_depth_limit():
     assert "max_depth" not in decision.diagnostics["production"]
 
 
-def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkeypatch):
+def test_strategy_focus_schedules_every_root_without_deleting_a_legal_branch(monkeypatch):
     root = _state("focus-root")
     alpha = _state("alpha", board=0.5)
     alpha_finish = _state("alpha-finish", board=0.6)
@@ -253,25 +253,22 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
 
         def build(self, _state, _actions, ranking=None):
             del ranking
-            return NeedBeam(
+            return StrategyBeam(
                 focused=(ActionFocus(
-                    semantic_action_key(first), "play", (), 1.0, "current need"),),
+                    semantic_action_key(first), "play", (), 1.0, "strategy hint"),),
                 safety=(ActionFocus(
                     semantic_action_key(end), "end", (), 0.0, "turn boundary"),),
                 unknown=(), paths=(), features=(), elapsed_ms=0.0, exhausted=False,
                 inactive=(
                     ActionFocus(semantic_action_key(second), "play", (), 0.0,
-                                "no current need"),
+                                "no strategy hint"),
                     ActionFocus(semantic_action_key(third), "play", (), 0.0,
-                                "no current need"),
+                                "no strategy hint"),
                 ),
             )
 
     monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FixedBeamBuilder)
     oracle = _oracle()
-    oracle.needs = NeedModel(REGISTRY, lambda obs: Potential(
-        float(obs["current"].get("board", 0.0)),
-        (("board", float(obs["current"].get("board", 0.0))),)))
     graph = FootprintedGraph(
             {"focus-root": (first, second, third, end),
              "alpha": (first, end), "alpha-finish": (end,),
@@ -287,21 +284,21 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
         graph,
         oracle,
         limits=ProductionLimits(max_nodes=50),
-        profile=PilotProfile.resolve(global_values={"needs.focus_enabled": 1.0}),
-        needs_snapshot=object(),
+        profile=PilotProfile.resolve(global_values={"strategy.focus_enabled": 1.0}),
+        strategy_snapshot=object(),
     )
 
     decision = solver.decide(root)
 
     assert decision.action.kind == "alpha"
-    assert decision.diagnostics["production"]["needs_later_wave"] == 2
-    assert decision.diagnostics["production"]["needs_clock_scale"] == 1.0
+    assert decision.diagnostics["production"]["strategy_later_wave"] == 2
+    assert decision.diagnostics["production"]["strategy_clock_scale"] == 1.0
     assert decision.diagnostics["production"]["root_branch_nodes"] == (3, 1, 2, 2)
     assert {call for call in graph.calls if call[0] == "focus-root"} == {
         ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma")}
 
 
-def test_exhaustive_needs_on_and_off_choose_the_same_policy(monkeypatch):
+def test_exhaustive_strategy_on_and_off_choose_the_same_policy(monkeypatch):
     root = _state("ab-root")
     weak = _state("ab-weak", board=0.2)
     strong = _state("ab-strong", board=0.7)
@@ -312,7 +309,7 @@ def test_exhaustive_needs_on_and_off_choose_the_same_policy(monkeypatch):
             pass
 
         def build(self, _state, _actions, ranking=None):
-            return NeedBeam(
+            return StrategyBeam(
                 (ActionFocus(semantic_action_key(first), "alpha", (), 1.0, "strategy_hint"),),
                 (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
                 (), (), (), 0.0, False,
@@ -326,8 +323,8 @@ def test_exhaustive_needs_on_and_off_choose_the_same_policy(monkeypatch):
     )
     limits = ProductionLimits(max_nodes=50, root_probe_nodes=50, root_refinement_width=3)
 
-    on = ProductionSolver(graph, _oracle(), limits=limits, needs_snapshot=object()).decide(root)
-    off = ProductionSolver(graph, _oracle(), limits=limits, needs_snapshot=None).decide(root)
+    on = ProductionSolver(graph, _oracle(), limits=limits, strategy_snapshot=object()).decide(root)
+    off = ProductionSolver(graph, _oracle(), limits=limits, strategy_snapshot=None).decide(root)
 
     assert on.complete and off.complete
     assert on.action == off.action == second.identity
@@ -797,17 +794,17 @@ def test_information_first_ordering_does_not_delete_commitment_first():
     assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 0
 
 
-def test_immediate_need_preparation_never_deletes_a_commitment_without_a_bound():
-    root = _state("need-root")
+def test_immediate_demand_preparation_never_deletes_a_commitment_without_a_bound():
+    root = _state("demand-root")
     after_setup = _state("after-setup", board=0.1)
     after_attach = _state("after-attach", board=0.2)
-    finish = _state("need-finish", board=0.8)
+    finish = _state("demand-finish", board=0.8)
     attach, setup, end = _action("attach"), _action("play", 1), _action("end", 2)
     graph = FootprintedGraph(
-        {"need-root": (attach, setup, end), "after-attach": (setup, end),
-         "after-setup": (attach, end), "need-finish": (end,)},
-        {("need-root", "attach"): Deterministic(after_attach),
-         ("need-root", "play"): Deterministic(after_setup),
+        {"demand-root": (attach, setup, end), "after-attach": (setup, end),
+         "after-setup": (attach, end), "demand-finish": (end,)},
+        {("demand-root", "attach"): Deterministic(after_attach),
+         ("demand-root", "play"): Deterministic(after_setup),
          ("after-attach", "play"): Deterministic(finish),
          ("after-setup", "attach"): Deterministic(finish)},
         {"attach": ActionFootprint(("attach",), commitment=True),
@@ -815,7 +812,7 @@ def test_immediate_need_preparation_never_deletes_a_commitment_without_a_bound()
          "end": ActionFootprint(("end",), barrier=True)},
     )
     oracle = _oracle()
-    oracle.need_coverage_ledger = lambda _state, action: (
+    oracle.demand_coverage_ledger = lambda _state, action: (
         ("deployment", Ledger((("board", 0.2),), ()))
         if action.identity.kind == "play" else None)
 
@@ -824,13 +821,13 @@ def test_immediate_need_preparation_never_deletes_a_commitment_without_a_bound()
     ).decide(root)
 
     assert decision.action == ReferenceSolver(graph, oracle).decide(root).action
-    assert ("need-root", "attach") in graph.calls
-    assert ("need-root", "play") in graph.calls
-    assert not any(row["proof_type"] == "needs_before_commitment"
+    assert ("demand-root", "attach") in graph.calls
+    assert ("demand-root", "play") in graph.calls
+    assert not any(row["proof_type"] == "strategy_before_commitment"
                    for row in decision.diagnostics["production"]["structural_prunes"])
 
 
-def test_urgent_heal_retains_free_recovery_that_fills_a_need():
+def test_urgent_heal_retains_free_recovery_that_fills_a_demand():
     root = _state("heal-root")
     recovered = _state("recovered", board=0.1)
     healed = _state("healed", board=0.2)
@@ -848,9 +845,9 @@ def test_urgent_heal_retains_free_recovery_that_fills_a_need():
     )
     oracle = _oracle()
     oracle.heal_repositions_energy = lambda _state, action: action.identity.kind == "heal"
-    oracle.heal_need_value = lambda _state, action: (
+    oracle.heal_demand_value = lambda _state, action: (
         1.0 if action.identity.kind == "heal" else None)
-    oracle.recovery_need_value = lambda _state, action: (
+    oracle.recovery_demand_value = lambda _state, action: (
         0.5 if action.identity.kind == "recover" else 0.0)
 
     decision = ProductionSolver(
@@ -872,7 +869,7 @@ def test_reserved_recovery_does_not_leave_refinement_width_unused():
          ("reserve-root", "explore"): Deterministic(explored)},
     )
     oracle = _oracle()
-    oracle.recovery_need_value = lambda _state, action: (
+    oracle.recovery_demand_value = lambda _state, action: (
         0.1 if action.identity.kind == "recover" else 0.0)
 
     decision = ProductionSolver(
@@ -956,9 +953,9 @@ def test_information_orders_before_heal_without_blocking_later_widening():
     )
     oracle = _oracle()
     oracle.heal_repositions_energy = lambda _state, action: action.identity.kind == "heal"
-    oracle.heal_need_value = lambda _state, action: (
+    oracle.heal_demand_value = lambda _state, action: (
         1.0 if action.identity.kind == "heal" else None)
-    oracle.need_coverage_value = lambda _state, action: (
+    oracle.demand_coverage_value = lambda _state, action: (
         1.0 if action.identity.kind == "play" else 0.0)
 
     ProductionSolver(

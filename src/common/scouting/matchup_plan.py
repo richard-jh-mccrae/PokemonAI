@@ -65,7 +65,7 @@ ROLE_REGISTRY: dict[str, Role] = {
     "enabler": Role(
         40, "a body that assists the key Pokémon in HOW it attacks — damage boosts, a free-retreat "
             "grant, ability fuel (the Solrock/Lunatone shape). Below `attacker` because removing "
-            "the attacker is the more direct answer. Needs no new Function Tag: every input is "
+            "the attacker is the more direct answer. Requires no new Function Tag: every input is "
             "already a parsed `CardStat` field. The Read does not emit it — no dossier does the "
             "derivation — so it is derived-or-curated.", (DERIVED_BY, BRIEF_BY)),
     "engine": Role(

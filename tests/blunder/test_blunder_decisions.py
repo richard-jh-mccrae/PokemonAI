@@ -112,7 +112,7 @@ def test_frames_use_full_decision_telemetry_for_both_selfplay_seats():
     live_by_seat = {
         0: [
             {"bellman": True, "chosen": [0],
-             "diagnostics": {"needs": {"elapsed_ms": 123.0}}},
+             "diagnostics": {"strategy_beam": {"elapsed_ms": 123.0}}},
             {"bellman": True, "chosen": [0], "decision_seconds": 0.456},
         ],
         1: [

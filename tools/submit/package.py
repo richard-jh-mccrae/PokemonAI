@@ -64,7 +64,7 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
 def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True,
             prev_deck: dict | None = None, prev_build_id: int | None = None,
             prev_hyps: dict | None = None, overlay: Path | str | None = None,
-            needs_enabled: bool | None = None) -> Path:
+            strategy_enabled: bool | None = None) -> Path:
     """Stage `dist/<name>/` and zip it -> the zip path. Only the ZIP carries the stamp, so a build
     history accumulates while the staged dir is scratch. Shared runtime packages always come from
     `src/`."""
@@ -92,9 +92,9 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
         pilot_values = payload.get("pilot", {})
         if not isinstance(pilot_values, dict):
             raise ValueError("overlay pilot must be an object")
-    if needs_enabled is not None:
+    if strategy_enabled is not None:
         pilot_values = {**(pilot_values or {}),
-                        "needs.focus_enabled": 1.0 if needs_enabled else 0.0}
+                        "strategy.focus_enabled": 1.0 if strategy_enabled else 0.0}
     if pilot_values:
         (stage / "runtime_config.json").write_text(
             json.dumps({"pilot": pilot_values}, sort_keys=True), encoding="utf-8")
@@ -118,12 +118,12 @@ def main() -> None:
                     help="name the zip <name>.zip (omit the datetime/githash stamp)")
     ap.add_argument("--overlay", default=None,
                     help="pilot overlay JSON recorded in the packaged brief")
-    ap.add_argument("--needs", choices=("on", "off"), default=None,
-                    help="record the canonical Needs beam A/B toggle")
+    ap.add_argument("--strategy", choices=("on", "off"), default=None,
+                    help="record the canonical Strategy beam A/B toggle")
     args = ap.parse_args()
     zip_path = package(
         args.name, Path(args.out), stamp=not args.no_stamp, overlay=args.overlay,
-        needs_enabled=None if args.needs is None else args.needs == "on")
+        strategy_enabled=None if args.strategy is None else args.strategy == "on")
     print(f"packaged -> {zip_path}")
 
 

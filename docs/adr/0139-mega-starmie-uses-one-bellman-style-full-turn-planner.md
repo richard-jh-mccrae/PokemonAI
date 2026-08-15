@@ -5,7 +5,7 @@ Status: Accepted and implemented for Mega Starmie, Mega Lucario, and Dragapult.
 ## Context
 
 The former shipped Pilot was a rules-heavy hybrid. Legal-option generation, tactical deciders,
-Needs, hypothesis rungs, goal ladders, Composer, planner overrides, and doctrine ordering can each
+Strategies, hypothesis rungs, goal ladders, Composer, planner overrides, and doctrine ordering can each
 own part of the same choice. Several layers are incomplete or dark, and a locally sensible score can
 be overwritten by a different subsystem that prices a different part of the line. The result is not
 one optimization problem and cannot explain a turn with one conserved ledger.
@@ -71,7 +71,7 @@ The Bellman path must not consult strategic outputs from:
 - `_finish_turn_last` or other doctrine ordering.
 
 Neutral substrate may be reused: engine legal options, immutable state construction, canonical
-option identity, card/effect facts, CombatMath, Needs, hypergeometric odds, Scouting facts, semantic
+option identity, card/effect facts, CombatMath, Strategies, hypergeometric odds, Scouting facts, semantic
 state identity, and diagnostics. Reuse does not grant the old component decision ownership.
 
 Mega Lucario and Dragapult remain on the legacy Pilot during this prototype. The Bellman kernel is
@@ -172,9 +172,9 @@ a deck may raise it, never lower it. These are explicit seed parameters for late
 action-specific rules. Training may calibrate parameters after the prototype; it may not replace the
 Bellman ownership contract.
 
-### 6. Needs are causal marginal demand
+### 6. Demand Slots are causal marginal demand
 
-Needs supplies marginal demand to the value function; it never chooses an action. A need is derived
+`DemandModel` supplies recipient-specific demand to access and retained-option value; it never chooses an action. A Demand Slot is derived
 from legal dependency chains rather than a flat deck wish list. For Mega Starmie:
 
 ```
@@ -194,7 +194,7 @@ match objectives. They should not add tactical `if/else` branches to the solver.
 Known uncertainty is evaluated according to when its information becomes actionable. A revealed
 choice is an outcome distribution with successor search. A hidden shuffle-refresh is instead an
 analytic commitment: exact hypergeometric classes measure whether the redraw satisfies current board
-needs, while the known hand supplies the opportunity cost. No drawn hand is invented.
+demands, while the known hand supplies the opportunity cost. No drawn hand is invented.
 
 Lillie's Determination and other shuffle-refresh effects follow this boundary:
 
@@ -252,7 +252,7 @@ The live production transition provider uses the shipped native `cg` engine. `cg
 offline diagnostic/reference adapter and is excluded from submissions. Coins, reveal windows, and
 actor choices are transition algebra, not card-name handlers. A reveal is
 `chance(revealed set) -> max(legal revealed continuation)`; static Worth never chooses the card.
-Known reveal sets use exact hypergeometric mass. Shuffle-refreshes use exact semantic need classes
+Known reveal sets use exact hypergeometric mass. Shuffle-refreshes use exact semantic demand classes
 and terminate at an analytic ledger; neither production nor offline search creates a hypothetical
 redraw continuation.
 
@@ -342,7 +342,7 @@ problem. Deck transfer becomes data/causal declaration work instead of copied ta
 ADR-0031, ADR-0037, ADR-0095's legacy ordering fallback, and the current Composer/planner overrides
 remain historical and continue to govern unmigrated decks. They are superseded as strategic owners
 for Mega Starmie only when the atomic activation gate passes. Structural game rules, setup policy,
-card facts, Needs, CombatMath, Scouting evidence, semantic identity, and ADR-TEMP-507's action-cost
+card facts, Strategies, CombatMath, Scouting evidence, semantic identity, and ADR-TEMP-507's action-cost
 invariant remain authoritative substrate.
 
 ## 2026-08-14 amendment: family-ranked allocation
@@ -413,20 +413,20 @@ Submission collection preserves every emitted Bellman root ledger, branch diagno
 alternative in `performance.jsonl` under `telemetry.diagnostics`, indexed by match and decision.
 The count/tier summary remains for dashboards, and raw Kaggle agent logs remain canonical.
 
-## 2026-08-14 amendment: terminal proof precedes Needs scheduling
+## 2026-08-14 amendment: terminal proof precedes Strategies scheduling
 
 Status: Accepted and built 2026-08-14.
 
 The implementation outcome's rejection of a separate terminal-win search is superseded. Exact,
-engine-verified same-turn wins are terminal proofs, not weighted Needs: a proven win dominates every
-development value and is selected before Needs can defer or prune its prefix. If no proof exists,
-Needs and exact odds schedule or admissibly prune branches, then Bellman evaluates the survivors.
+engine-verified same-turn wins are terminal proofs, not weighted Strategies: a proven win dominates every
+development value and is selected before Strategies schedule a prefix. If no proof exists, Strategies and
+exact odds schedule the first beam; Bellman alone widens, proves bounds, and selects among completed paths.
 
-Prize count, KO yield, attack reach, and game termination remain one shared calculation. Needs uses
-them to express probabilistic or future win setup; the terminal prover uses them only to establish a
+Prize count, KO yield, attack reach, and game termination remain one shared calculation. Bellman uses
+them to value probabilistic or future win setup; the terminal prover uses them only to establish a
 guaranteed current-turn win. This keeps prize math out of competing implementations while preventing
 ordinary development demand from outweighing a certain victory.
 
 The implementation contract, recovered-solver review, bound proof obligations, and acceptance gates are
 specified in
-[`terminal-proof-needs-bounded-bellman.md`](../plans/terminal-proof-needs-bounded-bellman.md).
+[`terminal-proof-strategy-guided-bellman.md`](../plans/terminal-proof-strategy-guided-bellman.md).

@@ -62,7 +62,7 @@ def test_20260812_sequence_and_target_corrections():
         "0a482197b23f": [0],       # either identical Salvatore copy of corrected option 2
         "995549cd76ee": [0],       # evolve the loaded Staryu
         "03fae5aa66e0": [5],       # Ultra Ball begins the proved same-turn game win
-        "71cf48e4701c": [6],       # Needs establishes Staryu; Pokégear is a free prefix
+        "71cf48e4701c": [6],       # Strategy establishes Staryu; Pokégear is a free prefix
         "4eaf233ccb54": [0, 1],    # discard duplicate tutor access; retain live Hammer
         "5972e5096b0c": [0],       # damage the scouted Alakazam win condition
     }

@@ -25,6 +25,7 @@ def test_portable_worth_is_independent_of_a_legacy_value_stack():
     assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
     assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER
     assert role_value([]) == 0.0
+    assert role_value(["primary_attacker"]) > role_value(["support_pokemon"])
 
 
 def test_board_card_walk_uses_attached_cards_not_energy_units():
@@ -83,12 +84,12 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
             "proof_type": "commutativity", "pruned": candidate["action"],
             "retained_event": "attach:active",
         }]},
-        "needs": {
+        "strategy_beam": {
             "focused": [{"action_key": "focus", "family": "attachment", "score": 0.8,
-                         "reason": "need_path", "path_ids": ["path"] * 100}],
+                         "reason": "strategy_hint", "path_ids": ["path"] * 100}],
             "safety": [],
             "unknown": [{"action_key": "unknown", "card_id": 999, "context": 0,
-                         "reason": "no_need_capability"}],
+                         "reason": "no_strategy_hint"}],
             "paths": [{"large": "x" * 10_000}] * 20,
             "features": [{"outcome": "take_prize", "deadline": 0}],
             "elapsed_ms": 2.0, "exhausted": False,
@@ -109,7 +110,7 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
         "proof_type": "commutativity", "retained_event": "attach:active",
         "pruned_key": evidence[0]["action_key"],
     }]
-    needs = record["diagnostics"]["needs"]
-    assert needs["path_count"] == 20
-    assert needs["focused"][0]["path_count"] == 100
-    assert needs["unknown"][0]["card_id"] == 999
+    strategy_beam = record["diagnostics"]["strategy_beam"]
+    assert strategy_beam["path_count"] == 20
+    assert strategy_beam["focused"][0]["path_count"] == 100
+    assert strategy_beam["unknown"][0]["card_id"] == 999

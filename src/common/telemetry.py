@@ -37,9 +37,9 @@ def _compact_family(candidate: dict) -> dict:
     }
 
 
-def _compact_needs(needs: dict) -> dict:
-    focused = needs.get("focused") or ()
-    safety = needs.get("safety") or ()
+def _compact_strategy_beam(beam: dict) -> dict:
+    focused = beam.get("focused") or ()
+    safety = beam.get("safety") or ()
     return {
         "focused": [{
             "action_key": row.get("action_key"), "family": row.get("family"),
@@ -50,14 +50,14 @@ def _compact_needs(needs: dict) -> dict:
             "action_key": row.get("action_key"), "family": row.get("family"),
             "reason": row.get("reason"),
         } for row in safety],
-        "unknown": list(needs.get("unknown") or ()),
+        "unknown": list(beam.get("unknown") or ()),
         "held": [{"action_key": row.get("action_key"), "family": row.get("family"),
-                  "reason": row.get("reason")} for row in needs.get("held") or ()],
+                  "reason": row.get("reason")} for row in beam.get("held") or ()],
         "inactive": [{"action_key": row.get("action_key"), "family": row.get("family"),
-                      "reason": row.get("reason")} for row in needs.get("inactive") or ()],
-        "features": list(needs.get("features") or ()),
-        "path_count": len(needs.get("paths") or ()),
-        "elapsed_ms": needs.get("elapsed_ms"), "exhausted": needs.get("exhausted"),
+                      "reason": row.get("reason")} for row in beam.get("inactive") or ()],
+        "features": list(beam.get("features") or ()),
+        "path_count": len(beam.get("paths") or ()),
+        "elapsed_ms": beam.get("elapsed_ms"), "exhausted": beam.get("exhausted"),
     }
 
 
@@ -87,9 +87,9 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
             } for row in prunes if isinstance(row, dict)],
             "family_candidates": [_compact_family(row) for row in family],
         }
-    needs = diagnostics.get("needs")
-    if isinstance(needs, dict):
-        compact["needs"] = _compact_needs(needs)
+    strategy_beam = diagnostics.get("strategy_beam")
+    if isinstance(strategy_beam, dict):
+        compact["strategy_beam"] = _compact_strategy_beam(strategy_beam)
     return compact
 
 

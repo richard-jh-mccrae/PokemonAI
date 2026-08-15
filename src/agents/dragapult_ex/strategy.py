@@ -15,13 +15,9 @@ ROLES = Roles({
     DRAKLOAK: ["engine"],
     MUNKIDORI: ["counter_mover"],
     FEZANDIPITI_EX: ["engine"],
-    MEOWTH_EX: ["engine", "tutor"],
-    BUDEW: ["disruption"],
-    CRISPIN: ["accel_source"],
-    NIGHT_STRETCHER: ["recovery"],
-    CRUSHING_HAMMER: ["disruption"],
-    BOSS_ORDERS: ["gust"],
-    RISKY_RUINS: ["disruption"],
+    MEOWTH_EX: ["engine"],
+    DUNSPARCE: ["support_pokemon"],
+    BUDEW: ["support_pokemon"],
 }, evolves={DREEPY: DRAKLOAK, DRAKLOAK: DRAGAPULT_EX}, ready={DRAGAPULT_EX: 2})
 
 

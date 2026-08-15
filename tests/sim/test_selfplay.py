@@ -34,12 +34,12 @@ def test_run_stem_distinguishes_an_overlay_corpus():
     assert build_identity(f"x/{ov}/1.json")["agent"] == "mega_starmie"   # still provenance-resolvable
 
 
-def test_run_stem_labels_the_canonical_needs_variants():
-    on = run_stem("mega_starmie", WHEN, "577f603", needs_enabled=True)
-    off = run_stem("mega_starmie", WHEN, "577f603", needs_enabled=False)
+def test_run_stem_labels_the_canonical_strategy_variants():
+    on = run_stem("mega_starmie", WHEN, "577f603", strategy_enabled=True)
+    off = run_stem("mega_starmie", WHEN, "577f603", strategy_enabled=False)
 
-    assert on.endswith("-needs-on")
-    assert off.endswith("-needs-off")
+    assert on.endswith("-strategy-on")
+    assert off.endswith("-strategy-off")
     assert on != off
 
 

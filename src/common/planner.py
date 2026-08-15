@@ -54,7 +54,7 @@ class BellmanTurnPlanner:
                  belief: OpponentBelief | None = None,
                  limits: ProductionLimits | None = None,
                  profile: PilotProfile = DEFAULT_PILOT_PROFILE,
-                 provider_factory=NativeCgTransitionProvider, needs_snapshot=None):
+                 provider_factory=NativeCgTransitionProvider, strategy_snapshot=None):
         self.registry = registry
         self.family_evaluator = family_evaluator
         self.effects = effects
@@ -63,7 +63,7 @@ class BellmanTurnPlanner:
         self.limits = limits or _limits_from_profile(profile)
         self.profile = profile
         self.provider_factory = provider_factory
-        self.needs_snapshot = needs_snapshot
+        self.strategy_snapshot = strategy_snapshot
         self.last_terminal_diagnostics = {
             "attempted": False, "result": "skipped", "reason": "not_run"}
         self._prechecked = None
@@ -167,7 +167,7 @@ class BellmanTurnPlanner:
         solver = ProductionSolver(
             provider, ValueOracle(
                 self.registry, self.family_evaluator, effects=self.effects, stats=self.stats),
-            limits=epoch_limits, profile=self.profile, needs_snapshot=self.needs_snapshot)
+            limits=epoch_limits, profile=self.profile, strategy_snapshot=self.strategy_snapshot)
         try:
             decision = solver.decide(state)
         except RuntimeError as exc:

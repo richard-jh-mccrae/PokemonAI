@@ -32,8 +32,8 @@ from common.strategy.context import (
     _SETUP_BENCH,
     _YES,
 )
-from common.strategy.needs import (
-    GENERAL_NEEDS_STRATEGIES, activate_need_strategies, resolve_need_strategies,
+from common.strategy.strategies import (
+    GENERAL_STRATEGIES, activate_strategies, resolve_strategies,
 )
 from common.value import ValueRegistry
 from common.terminal import proof_lock_step
@@ -60,12 +60,13 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
             raise ValueError("AGENT_OVERLAY.pilot must be an object")
         values = {**values, **overrides}
         provenance = str(Path(path).resolve())
-    needs = os.environ.get("AGENT_NEEDS_ENABLED")
-    if needs is not None:
-        if needs not in {"0", "1"}:
-            raise ValueError("AGENT_NEEDS_ENABLED must be 0 or 1")
-        values = {**values, "needs.focus_enabled": float(needs)}
-        provenance = f"{provenance};needs:{needs}" if provenance else f"needs:{needs}"
+    strategy_enabled = os.environ.get("AGENT_STRATEGY_ENABLED")
+    if strategy_enabled is not None:
+        if strategy_enabled not in {"0", "1"}:
+            raise ValueError("AGENT_STRATEGY_ENABLED must be 0 or 1")
+        values = {**values, "strategy.focus_enabled": float(strategy_enabled)}
+        marker = f"strategy:{strategy_enabled}"
+        provenance = f"{provenance};{marker}" if provenance else marker
     return {str(name): float(value) for name, value in values.items()}, provenance
 
 
@@ -98,13 +99,10 @@ class BellmanRuntime:
             provenance=(f"overlay:{experiment_path}" if experiment_path
                         else f"strategy:{strategy.name}"),
         )
-        self.needs_strategies = resolve_need_strategies(
-            GENERAL_NEEDS_STRATEGIES,
-            getattr(strategy, "needs_strategies", ()),
-            getattr(strategy, "needs_overrides", ()),
-        )
-        self._needs_snapshot = None
-        self._needs_history = ()
+        self.strategies = None
+        self._strategy_snapshot = None
+        self.last_brief = None
+        self.opponent_role_worth = {}
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
@@ -192,16 +190,18 @@ class BellmanRuntime:
         self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
         gamma = posture_gamma(self.last_read)
         brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
+        self.last_brief = brief
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
         belief = opponent_belief(
             observation, candidates=self.last_read.candidates,
             properties=(brief.opponent_properties if brief is not None else None))
+        self.opponent_role_worth = resolve_scouted_role_worth(
+            self.last_read, getattr(self.scout, "artifact", None), self.stats,
+            briefs=self.briefs)
         potential = BoardPotential(
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
-            opponent_role_worth=resolve_scouted_role_worth(
-                self.last_read, getattr(self.scout, "artifact", None), self.stats,
-                briefs=self.briefs),
+            opponent_role_worth=self.opponent_role_worth,
             isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0)
         planner_kwargs = {}
         if self.provider_factory is not None:
@@ -213,20 +213,21 @@ class BellmanRuntime:
             effects=self.effects, stats=self.stats, belief=belief,
             profile=self.pilot_profile, **planner_kwargs)
 
-    def _turn_needs(self, observation):
-        current = observation.get("current") or {}
-        key = (int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
-        history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
-                        for row in observation.get("logs") or ())
-        cached = self._needs_snapshot
-        same_history = (len(history) >= len(self._needs_history)
-                        and history[:len(self._needs_history)] == self._needs_history)
-        if cached is not None and (cached.turn, cached.seat) == key and same_history:
-            return cached
-        self._needs_snapshot = activate_need_strategies(
-            observation, self.needs_strategies, roles=self.strategy.roles, stats=self.stats)
-        self._needs_history = history
-        return self._needs_snapshot
+    def _planning_epoch_strategy(self, observation):
+        self.strategies = resolve_strategies(
+            GENERAL_STRATEGIES,
+            getattr(self.strategy, "strategies", ()),
+            getattr(self.last_brief, "strategies", ()) if self.last_brief is not None else (),
+            getattr(self.strategy, "strategy_overrides", ()),
+        )
+        candidate = activate_strategies(
+            observation, self.strategies, roles=self.strategy.roles, stats=self.stats,
+            opponent_role_worth=self.opponent_role_worth)
+        if (self._strategy_snapshot is not None
+                and self._strategy_snapshot.snapshot_id == candidate.snapshot_id):
+            return self._strategy_snapshot
+        self._strategy_snapshot = candidate
+        return candidate
 
     def _cached_decision(self, planner, request):
         stats = getattr(self, "_plan_reuse_stats", None)
@@ -336,7 +337,7 @@ class BellmanRuntime:
             self._proof_suffix = ()
             self._proof_id = ""
             self.last_read = Read()
-            self._needs_snapshot = None
+            self._strategy_snapshot = None
             return self._pregame(observation)
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
@@ -358,9 +359,9 @@ class BellmanRuntime:
             planner.discard_precheck()
             return self._with_proof_invalidation(cached, _proof_invalidation)
         self._plan_reuse_stats["planner_calls"] += 1
-        planner.needs_snapshot = (
-            self._turn_needs(observation)
-            if self.pilot_profile.get("needs.focus_enabled") >= 0.5 else None)
+        planner.strategy_snapshot = (
+            self._planning_epoch_strategy(observation)
+            if self.pilot_profile.get("strategy.focus_enabled") >= 0.5 else None)
         decision = planner.decide(request, terminal_checked=True)
         self._proof_suffix = ()
         self._proof_id = ""

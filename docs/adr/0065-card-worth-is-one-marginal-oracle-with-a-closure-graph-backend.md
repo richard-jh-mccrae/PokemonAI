@@ -158,7 +158,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   a no-op (no pin moved). Suite + corpus green (3105).
 - **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `ADR-0065`).**
   The successor to the gate stack the user flagged as brittle ("more and more gates that begin to
-  undermine each other"): needs reified as deadline-tagged SLOTS (`common/needs.py`, the fifth
+  undermine each other"): needs reified as deadline-tagged SLOTS (`common/demand.py`, the fifth
   glossary term), a card's keep-value its MARGINAL slot coverage under EXACT bitmask-DP assignment —
   so multi-copies, energy-attached, doom, quotas, fuel and deploy-now are slot PROPERTIES resolved
   GLOBALLY in one assignment, not pairwise-composed gates. WP-N1 the module + the two soundness nets

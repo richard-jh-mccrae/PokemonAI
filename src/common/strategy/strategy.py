@@ -1,14 +1,14 @@
 """Deck declarations consumed by the Bellman runtime.
 
-Decks provide facts: roles, evolution relationships, starter order, partner
-dependencies, prize routes, and upward-only Worth overrides.  Tactical rules and
-weighted hypotheses do not belong at this boundary.
+Decks provide Pokémon Roles, Strategies, evolution relationships, starter order,
+partner dependencies, prize routes, and upward-only Worth overrides. Tactical
+action values do not belong at this boundary.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .needs import NeedStrategy, StrategyOverride
+from .strategies import StrategyHint, StrategyOverride
 
 
 STANDARD_PRIZES_TO_WIN = 6
@@ -49,7 +49,7 @@ class PrizePlan:
 
 
 class Roles(dict):
-    """Card roles plus ``source -> target`` evolution relationships."""
+    """Pokémon doctrine roles plus ``source -> target`` evolution relationships."""
 
     _LINE_ROLE_PRIORITY = ("win_condition", "primary_attacker", "secondary_attacker")
 
@@ -116,8 +116,8 @@ class Strategy:
     worth_overrides: dict[int, float] = field(default_factory=dict)
     pilot_adjustments: dict[str, float] = field(default_factory=dict)
     prize_plan: PrizePlan | None = None
-    needs_strategies: tuple[NeedStrategy, ...] = ()
-    needs_overrides: tuple[StrategyOverride, ...] = ()
+    strategies: tuple[StrategyHint, ...] = ()
+    strategy_overrides: tuple[StrategyOverride, ...] = ()
     lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -128,8 +128,8 @@ class Strategy:
                                 for card_id, value in self.worth_overrides.items()}
         self.pilot_adjustments = {str(name): float(value)
                                   for name, value in self.pilot_adjustments.items()}
-        self.needs_strategies = tuple(self.needs_strategies)
-        self.needs_overrides = tuple(self.needs_overrides)
+        self.strategies = tuple(self.strategies)
+        self.strategy_overrides = tuple(self.strategy_overrides)
         self.lines = tuple(self.roles.lines)
 
 

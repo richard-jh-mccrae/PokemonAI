@@ -11,12 +11,12 @@
     "wall_clock_reduction_on_hit_frames": 0.987341,
     "decision_changes": 0
   },
-  "needs_shadow": {
+  "strategy_shadow": {
     "unknown_actions": 0,
     "mirror_errors": 4,
     "error_note": "The same BellmanUnavailable deadline failures occur without plan reuse."
   },
-  "needs_focus_first_100": {
+  "strategy_focus_first_100": {
     "before_equation_disconnect": {
       "decision_changes_from_shadow": 11,
       "later_wave_actions": 53,
@@ -48,7 +48,7 @@
   },
   "production": {
     "plan_suffix_enabled": true,
-    "needs_shadow_enabled": true,
+    "strategy_shadow_enabled": true,
     "needs_focus_enabled": false
   }
 }

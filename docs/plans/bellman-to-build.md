@@ -2,31 +2,31 @@
 
 Status: implemented and verified 2026-08-13.
 
-## 1. Extract a clean, shared needs model — implemented
+## 1. Extract a clean, shared demands model — implemented
 
 ### Purpose
 
-Give Bellman one deck-neutral representation of what the real board needs and which known cards can
-satisfy each need. `src/common/refresh.py` currently owns a private immediate-needs representation;
-the legacy top-level `needs.py` is reference material only and must never be moved into production
+Give Bellman one deck-neutral representation of what the real board demands and which known cards can
+satisfy each demand. `src/common/refresh.py` currently owns a private immediate-demands representation;
+the legacy retired demand prototype is reference material only and must never be moved into production
 unchanged.
 
 ### Design
 
-- Create `src/common/needs.py` with immutable need, coverage-edge, and resolved-assignment records.
-- Move generic immediate-need discovery and maximum non-duplicated card-to-need assignment out of
+- Create `src/common/demand.py` with immutable demand, coverage-edge, and resolved-assignment records.
+- Move generic immediate-demand discovery and maximum non-duplicated card-to-demand assignment out of
   `refresh.py`.
 - Derive demand only from observable board state, turn budgets, card stats/effects/functions, and
   deck-local declarations such as evolution lines and prize routes.
-- Let direct cards and generic fetch effects cover needs. One card may satisfy at most one need in a
+- Let direct cards and generic fetch effects cover demands. One card may satisfy at most one demand in a
   chosen assignment unless its printed effect explicitly supplies multiple independent resources.
 - Express all tunable values as descriptive module-level constants or existing value families.
-- Keep probability calculations and the commit/decline decision in `refresh.py`; `needs.py` describes
+- Keep probability calculations and the commit/decline decision in `refresh.py`; `demand.py` describes
   demand and coverage, not action policy.
 
 ### Migration rule
 
-Use the top-level `needs.py` only as conceptual and test inspiration. Do not copy its deleted
+Use the retired demand prototype only as conceptual and test inspiration. Do not copy its deleted
 `common.deciders` dependencies, bespoke gates, named-card assumptions, tuned legacy equations, or
 hypothetical-grab logic. Remove the top-level file after every retained concept has an equivalent
 test or has been deliberately rejected.
@@ -38,7 +38,7 @@ test or has been deliberately rejected.
 - No hypothetical hand, draw order, or post-redraw continuation is constructed.
 - Submission packaging includes the clean module and excludes the legacy file.
 
-## 2. Add deterministic next-turn retained-hand needs — partial implementation
+## 2. Add deterministic next-turn retained-hand demands — partial implementation
 
 ### Purpose
 
@@ -50,7 +50,7 @@ turn. Known Supporters remain valued by the ordinary hand family.
 
 - Derive next-turn eligibility from the real board and deterministic rule clocks: evolution age,
   reset turn budgets, declared evolution lines, printed card functions/effects, and prize routes.
-- Create next-turn need slots and coverage edges for known evolution cards already in hand.
+- Create next-turn demand slots and coverage edges for known evolution cards already in hand.
 - Reserve multi-card, effect-specific combinations for a generic effect-outcome evaluator; do not
   introduce a per-effect rule inside Bellman merely to value one Supporter pairing.
 - Discount next-turn value with one documented, descriptive factor in the common value currency.
@@ -62,13 +62,13 @@ turn. Known Supporters remain valued by the ordinary hand family.
 The refresh decision remains expected benefit minus opportunity cost:
 
 ```text
-exact hypergeometric value of immediate needs
+exact hypergeometric value of immediate demands
 + deterministic printed refresh effects
 - immediate and next-turn known-hand option value
 ```
 
 There is no fixed probability threshold. The break-even probability remains a consequence of the
-need value and the hand value at risk.
+demand value and the hand value at risk.
 
 ### Prohibited
 
@@ -87,7 +87,7 @@ need value and the hand value at risk.
   disappears.
 - Immediate useful non-Supporters remain preferable before refresh when their real transition value
   warrants it.
-- The same inputs always produce the same needs graph and value; no RNG or engine stepping occurs.
+- The same inputs always produce the same demands graph and value; no RNG or engine stepping occurs.
 - Native bundle, Bellman, correction, and submission-boundary tests pass.
 
 ## 3. Final five-match parallel mirror validation — implemented and passed

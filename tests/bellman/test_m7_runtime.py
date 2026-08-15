@@ -162,14 +162,14 @@ def test_bellman_telemetry_records_explicit_limit_and_deadline_event():
 
 def test_runtime_records_bounded_strategy_guidance_without_changing_the_choice():
     decision = runtime().decide(_obs(_fixture(60)))
-    beam = decision.diagnostics["needs"]
+    beam = decision.diagnostics["strategy_beam"]
 
     assert decision.chosen == (1,)
     assert len(beam.focused) <= 8
     assert beam.focused
     assert beam.safety
     assert beam.elapsed_ms >= 0.0
-    assert decision.diagnostics["needs_snapshot"].strategy_hash
+    assert decision.diagnostics["strategy_snapshot"].strategy_hash
 
 
 def test_turn_needs_cache_does_not_cross_an_unrelated_action_history():
