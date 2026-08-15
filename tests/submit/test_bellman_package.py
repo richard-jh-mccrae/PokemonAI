@@ -19,6 +19,7 @@ def test_manifest_describes_declarations_and_bellman_only():
     manifest = build_manifest(REPO / "src" / "agents" / "mega_starmie",
                               git_hash="abc123", cards={})
     assert manifest["system"] == "bellman"
+    assert manifest["strategy"]["roles"]["1030"] == ["primary_attacker"]
     assert manifest["strategy"]["roles"]["1031"] == ["primary_attacker"]
     assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
     assert summary(manifest)["system"] == "bellman"
@@ -29,7 +30,7 @@ def test_manifest_describes_declarations_and_bellman_only():
     assert catalog["enabled"] is True
     assert catalog["odds_enabled"] is True
     assert catalog["resolved"]["effective"]
-    assert any(row["identifier"] == "mega_starmie.evolve_benched_staryu"
+    assert any(row["identifier"] == "mega_starmie.establish_benched_staryu_before_turbo_flare"
                for row in catalog["resolved"]["deck"])
 
 

@@ -16,6 +16,7 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 # Sparse deck intent over portable card facts.
 ROLES = Roles({
     MEGA_STARMIE_EX: ["primary_attacker"],
+    STARYU: ["primary_attacker"],
     CINDERACE: ["accel_source"],
 })
 
@@ -32,19 +33,6 @@ STRATEGY = Strategy(
     params={"preferred_start": "second"},  # turbo: attack T1
     strategies=(
         StrategyHint(
-            "mega_starmie.fund_active_cinderace",
-            "deck",
-            (
-                ActivationCondition("own.active.card_id", "eq", CINDERACE),
-                ActivationCondition("own.active.can_attack", "eq", False),
-            ),
-            (DesiredFact("fund_attack", "own.active"),),
-            "own.active",
-            "immediate",
-            "high",
-            "mega_starmie.strategy",
-        ),
-        StrategyHint(
             "mega_starmie.establish_benched_staryu_before_turbo_flare",
             "deck",
             (
@@ -57,17 +45,6 @@ STRATEGY = Strategy(
             "own.bench",
             "immediate",
             "high",
-            "mega_starmie.strategy",
-        ),
-        StrategyHint(
-            "mega_starmie.evolve_benched_staryu",
-            "deck",
-            (
-                ActivationCondition("own.active.role", "contains", "accel_source"),
-                ActivationCondition("own.bench.evolvable_count", "gt", 0),
-            ),
-            (DesiredFact("evolve", "own.bench.evolvable:first"),),
-            "own.bench.evolvable:first", "this_turn", "medium",
             "mega_starmie.strategy",
         ),
         StrategyHint(
