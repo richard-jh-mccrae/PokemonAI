@@ -1,45 +1,12 @@
 {
   "slug": "archaludon_ex_cinderace",
-  "covers": [
-    "Archaludon ex / Cinderace"
-  ],
-  "opponent_properties": {
-    "opp_is_heal_wall": true,
-    "opp_accel_dependent": true,
-    "opp_tempo": "slow"
-  },
+  "covers": ["Archaludon ex / Cinderace"],
+  "opponent_properties": {"opp_is_heal_wall": true, "opp_accel_dependent": true, "opp_tempo": "slow"},
   "pokemon": [
-    {
-      "card": "Archaludon ex",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Cinderace",
-      "roles": [
-        "backup_attacker",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Duraludon",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Relicanth",
-      "roles": [
-        "backup_attacker",
-        "support_pokemon"
-      ]
-    }
+    {"card": "Archaludon ex", "roles": ["primary_attacker"]},
+    {"card": "Cinderace", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Duraludon", "roles": ["primary_attacker"]},
+    {"card": "Relicanth", "roles": ["backup_attacker", "support_pokemon"]}
   ],
-  "key_cards": [
-    {
-      "card": "Ignition Energy",
-      "role": "burst_accel"
-    }
-  ]
+  "key_cards": [{"card": "Ignition Energy", "role": "burst_accel"}]
 }

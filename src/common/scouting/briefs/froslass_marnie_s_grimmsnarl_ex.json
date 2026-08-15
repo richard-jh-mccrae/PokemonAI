@@ -1,71 +1,21 @@
 {
   "slug": "froslass_marnie_s_grimmsnarl_ex",
   "label": "Froslass / Marnie's Grimmsnarl ex",
-  "covers": [
-    "Froslass / Marnie's Grimmsnarl ex"
-  ],
+  "covers": ["Froslass / Marnie's Grimmsnarl ex"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "midrange",
-    "opp_spreads_bench": true,
-    "opp_comeback_disruptor": true
-  },
+  "opponent_properties": {"opp_tempo": "midrange", "opp_spreads_bench": true, "opp_comeback_disruptor": true},
   "pokemon": [
-    {
-      "card": "Froslass",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Marnie's Grimmsnarl ex",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Marnie's Impidimp",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Marnie's Morgrem",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Munkidori",
-      "roles": [
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Snorunt",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Froslass", "roles": ["backup_attacker", "disruption_target", "support_pokemon"]},
+    {"card": "Marnie's Grimmsnarl ex", "roles": ["primary_attacker"]},
+    {"card": "Marnie's Impidimp", "roles": ["primary_attacker"]},
+    {"card": "Marnie's Morgrem", "roles": ["primary_attacker"]},
+    {"card": "Munkidori", "roles": ["disruption_target"]},
+    {"card": "Snorunt", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Rare Candy",
-      "role": "rush_evolve"
-    },
-    {
-      "card": "Spikemuth Gym",
-      "role": "line_search"
-    },
-    {
-      "card": "Unfair Stamp",
-      "role": "comeback_hand_reset"
-    },
-    {
-      "card": "Boss's Orders",
-      "role": "gust"
-    }
+    {"card": "Rare Candy", "role": "rush_evolve"},
+    {"card": "Spikemuth Gym", "role": "line_search"},
+    {"card": "Unfair Stamp", "role": "comeback_hand_reset"},
+    {"card": "Boss's Orders", "role": "gust"}
   ]
 }

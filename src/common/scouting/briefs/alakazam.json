@@ -1,63 +1,15 @@
 {
   "slug": "alakazam",
-  "covers": [
-    "Alakazam",
-    "Alakazam / Frillish"
-  ],
-  "opponent_properties": {
-    "opp_hand_size_attacker": true,
-    "opp_single_prize": true,
-    "opp_tempo": "midrange"
-  },
+  "covers": ["Alakazam", "Alakazam / Frillish"],
+  "opponent_properties": {"opp_hand_size_attacker": true, "opp_single_prize": true, "opp_tempo": "midrange"},
   "pokemon": [
-    {
-      "card": "Abra",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Alakazam",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Kadabra",
-      "roles": [
-        "primary_attacker",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Dunsparce",
-      "roles": []
-    },
-    {
-      "card": "Dudunsparce",
-      "roles": []
-    },
-    {
-      "card": "Frillish",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Team Rocket's Articuno",
-      "roles": [
-        "support_pokemon"
-      ]
-    }
+    {"card": "Abra", "roles": ["primary_attacker"]},
+    {"card": "Alakazam", "roles": ["primary_attacker"]},
+    {"card": "Kadabra", "roles": ["primary_attacker", "support_pokemon"]},
+    {"card": "Dunsparce", "roles": []},
+    {"card": "Dudunsparce", "roles": []},
+    {"card": "Frillish", "roles": ["backup_attacker"]},
+    {"card": "Team Rocket's Articuno", "roles": ["support_pokemon"]}
   ],
-  "key_cards": [
-    {
-      "card": "Boss's Orders",
-      "role": "gust"
-    },
-    {
-      "card": "Enhanced Hammer",
-      "role": "special_energy_denial"
-    }
-  ]
+  "key_cards": [{"card": "Boss's Orders", "role": "gust"}, {"card": "Enhanced Hammer", "role": "special_energy_denial"}]
 }

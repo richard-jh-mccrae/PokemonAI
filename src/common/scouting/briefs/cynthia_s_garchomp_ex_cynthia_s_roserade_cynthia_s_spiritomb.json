@@ -1,9 +1,7 @@
 {
   "slug": "cynthia_s_garchomp_ex_cynthia_s_roserade_cynthia_s_spiritomb",
   "label": "Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb",
-  "covers": [
-    "Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb"
-  ],
+  "covers": ["Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb"],
   "authored": "2026-08-12",
   "opponent_properties": {
     "opp_tempo": "midrange",
@@ -12,59 +10,16 @@
     "opp_comeback_disruptor": true
   },
   "pokemon": [
-    {
-      "card": "Cynthia's Gabite",
-      "roles": [
-        "primary_attacker",
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Cynthia's Garchomp ex",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Cynthia's Gible",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Cynthia's Roselia",
-      "roles": [
-        "backup_attacker",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Cynthia's Roserade",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Cynthia's Spiritomb",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Cynthia's Gabite", "roles": ["primary_attacker", "disruption_target"]},
+    {"card": "Cynthia's Garchomp ex", "roles": ["primary_attacker"]},
+    {"card": "Cynthia's Gible", "roles": ["primary_attacker"]},
+    {"card": "Cynthia's Roselia", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Cynthia's Roserade", "roles": ["backup_attacker", "disruption_target", "support_pokemon"]},
+    {"card": "Cynthia's Spiritomb", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Cynthia's Power Weight",
-      "role": "bulk_boost"
-    },
-    {
-      "card": "Rock Fighting Energy",
-      "role": "attack_effect_protection"
-    },
-    {
-      "card": "Unfair Stamp",
-      "role": "comeback_hand_disruption"
-    }
+    {"card": "Cynthia's Power Weight", "role": "bulk_boost"},
+    {"card": "Rock Fighting Energy", "role": "attack_effect_protection"},
+    {"card": "Unfair Stamp", "role": "comeback_hand_disruption"}
   ]
 }

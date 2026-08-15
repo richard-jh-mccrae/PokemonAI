@@ -1,58 +1,17 @@
 {
   "slug": "cinderace_mega_starmie_ex",
-  "covers": [
-    "Cinderace / Mega Froslass ex / Mega Starmie ex",
-    "Cinderace / Mega Starmie ex"
-  ],
-  "opponent_properties": {
-    "opp_tempo": "fast",
-    "opp_pierces_active_effects": true
-  },
+  "covers": ["Cinderace / Mega Froslass ex / Mega Starmie ex", "Cinderace / Mega Starmie ex"],
+  "opponent_properties": {"opp_tempo": "fast", "opp_pierces_active_effects": true},
   "pokemon": [
-    {
-      "card": "Cinderace",
-      "roles": [
-        "backup_attacker",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Mega Starmie ex",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Staryu",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Mega Froslass ex",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Snorunt",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Cinderace", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Mega Starmie ex", "roles": ["primary_attacker"]},
+    {"card": "Staryu", "roles": ["primary_attacker"]},
+    {"card": "Mega Froslass ex", "roles": ["backup_attacker"]},
+    {"card": "Snorunt", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Ignition Energy",
-      "role": "burst_accel"
-    },
-    {
-      "card": "Salvatore",
-      "role": "rush_evolve"
-    },
-    {
-      "card": "Wally's Compassion",
-      "role": "heal_reset"
-    }
+    {"card": "Ignition Energy", "role": "burst_accel"},
+    {"card": "Salvatore", "role": "rush_evolve"},
+    {"card": "Wally's Compassion", "role": "heal_reset"}
   ]
 }

@@ -1,92 +1,24 @@
 {
   "slug": "dipplin_thwackey_volbeat",
   "label": "Dipplin / Thwackey / Volbeat",
-  "covers": [
-    "Dipplin / Thwackey",
-    "Dipplin / Thwackey / Volbeat"
-  ],
+  "covers": ["Dipplin / Thwackey", "Dipplin / Thwackey / Volbeat"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "fast",
-    "opp_donk_vulnerable": true,
-    "opp_comeback_disruptor": true
-  },
+  "opponent_properties": {"opp_tempo": "fast", "opp_donk_vulnerable": true, "opp_comeback_disruptor": true},
   "pokemon": [
-    {
-      "card": "Applin",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Dipplin",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Fezandipiti ex",
-      "roles": [
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Grookey",
-      "roles": [
-        "backup_attacker",
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Thwackey",
-      "roles": [
-        "backup_attacker",
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Goldeen",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Seaking",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Psyduck",
-      "roles": [
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Rellor",
-      "roles": [
-        "support_pokemon"
-      ]
-    },
-    {
-      "card": "Rabsca",
-      "roles": [
-        "support_pokemon"
-      ]
-    }
+    {"card": "Applin", "roles": ["primary_attacker"]},
+    {"card": "Dipplin", "roles": ["primary_attacker"]},
+    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
+    {"card": "Grookey", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Thwackey", "roles": ["backup_attacker", "disruption_target"]},
+    {"card": "Goldeen", "roles": ["backup_attacker"]},
+    {"card": "Seaking", "roles": ["backup_attacker"]},
+    {"card": "Psyduck", "roles": ["support_pokemon"]},
+    {"card": "Rellor", "roles": ["support_pokemon"]},
+    {"card": "Rabsca", "roles": ["support_pokemon"]}
   ],
   "key_cards": [
-    {
-      "card": "Festival Grounds",
-      "role": "stadium_gate"
-    },
-    {
-      "card": "Brave Bangle",
-      "role": "ex_damage_boost"
-    },
-    {
-      "card": "Unfair Stamp",
-      "role": "comeback_hand_disruption"
-    }
+    {"card": "Festival Grounds", "role": "stadium_gate"},
+    {"card": "Brave Bangle", "role": "ex_damage_boost"},
+    {"card": "Unfair Stamp", "role": "comeback_hand_disruption"}
   ]
 }

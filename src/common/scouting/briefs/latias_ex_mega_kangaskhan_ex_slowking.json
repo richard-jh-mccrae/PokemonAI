@@ -1,118 +1,29 @@
 {
   "slug": "latias_ex_mega_kangaskhan_ex_slowking",
   "label": "Latias ex / Mega Kangaskhan ex / Slowking",
-  "covers": [
-    "Latias ex / Mega Kangaskhan ex / Slowking"
-  ],
+  "covers": ["Latias ex / Mega Kangaskhan ex / Slowking"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "midrange",
-    "opp_is_engine_dependent": true
-  },
+  "opponent_properties": {"opp_tempo": "midrange", "opp_is_engine_dependent": true},
   "pokemon": [
-    {
-      "card": "Annihilape",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Conkeldurr",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Gurdurr",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Fezandipiti ex",
-      "roles": [
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Kyurem",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Latias ex",
-      "roles": [
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Mega Kangaskhan ex",
-      "roles": [
-        "primary_attacker",
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Mankey",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Meowth ex",
-      "roles": [
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Primeape",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Slowking",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Slowpoke",
-      "roles": [
-        "primary_attacker"
-      ]
-    },
-    {
-      "card": "Smoochum",
-      "roles": [
-        "accel_source",
-        "disruption_target"
-      ]
-    },
-    {
-      "card": "Timburr",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Annihilape", "roles": ["backup_attacker"]},
+    {"card": "Conkeldurr", "roles": ["backup_attacker"]},
+    {"card": "Gurdurr", "roles": ["backup_attacker"]},
+    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
+    {"card": "Kyurem", "roles": ["backup_attacker"]},
+    {"card": "Latias ex", "roles": ["disruption_target"]},
+    {"card": "Mega Kangaskhan ex", "roles": ["primary_attacker", "disruption_target"]},
+    {"card": "Mankey", "roles": ["backup_attacker"]},
+    {"card": "Meowth ex", "roles": ["disruption_target"]},
+    {"card": "Primeape", "roles": ["backup_attacker"]},
+    {"card": "Slowking", "roles": ["primary_attacker"]},
+    {"card": "Slowpoke", "roles": ["primary_attacker"]},
+    {"card": "Smoochum", "roles": ["accel_source", "disruption_target"]},
+    {"card": "Timburr", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Academy at Night",
-      "role": "topdeck_gate"
-    },
-    {
-      "card": "Ciphermaniac's Codebreaking",
-      "role": "topdeck_backup"
-    },
-    {
-      "card": "Wondrous Patch",
-      "role": "energy_accel"
-    },
-    {
-      "card": "Prime Catcher",
-      "role": "gust_and_switch"
-    }
+    {"card": "Academy at Night", "role": "topdeck_gate"},
+    {"card": "Ciphermaniac's Codebreaking", "role": "topdeck_backup"},
+    {"card": "Wondrous Patch", "role": "energy_accel"},
+    {"card": "Prime Catcher", "role": "gust_and_switch"}
   ]
 }
