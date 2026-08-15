@@ -613,6 +613,47 @@ def test_reserved_recovery_does_not_leave_refinement_width_unused():
                decision.diagnostics["production"]["root_branch_nodes"]) == 2
 
 
+def test_urgent_heal_refines_before_information_when_only_one_slot_remains():
+    root = _state("priority-root")
+    healed = _state("priority-healed", board=0.1)
+    informed = _state("priority-informed", board=0.2)
+    healed_finish = _state("priority-healed-finish", board=1.0)
+    informed_finish = _state("priority-informed-finish", board=0.9)
+    heal, information, end = _action("heal"), _action("play", 1), _action("end", 2)
+    finish_heal, finish_information = _action("finish_heal"), _action("finish_information")
+    graph = FootprintedGraph(
+        {"priority-root": (heal, information, end),
+         "priority-healed": (finish_heal, end),
+         "priority-informed": (finish_information, end),
+         "priority-healed-finish": (end,), "priority-informed-finish": (end,)},
+        {("priority-root", "heal"): Deterministic(healed),
+         ("priority-root", "play"): Deterministic(informed),
+         ("priority-healed", "finish_heal"): Terminal(healed_finish, "resolved"),
+         ("priority-informed", "finish_information"): Terminal(
+             informed_finish, "resolved")},
+        {"heal": ActionFootprint(("heal",), commitment=True),
+         "play": ActionFootprint(("information",), information_first=True),
+         "finish_heal": ActionFootprint(("finish_heal",)),
+         "finish_information": ActionFootprint(("finish_information",)),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+    oracle = _oracle()
+    oracle.heal_repositions_energy = lambda _state, action: action.identity.kind == "heal"
+    oracle.heal_need_value = lambda _state, action: (
+        1.0 if action.identity.kind == "heal" else None)
+    oracle.need_coverage_value = lambda _state, action: (
+        1.0 if action.identity.kind == "play" else 0.0)
+
+    ProductionSolver(
+        graph, oracle,
+        limits=ProductionLimits(
+            max_nodes=10, root_probe_nodes=1, root_refinement_width=1),
+    ).decide(root)
+
+    assert ("priority-healed", "finish_heal") in graph.calls
+    assert ("priority-informed", "finish_information") not in graph.calls
+
+
 def test_incomplete_forced_discard_uses_stable_immediate_value_fallback():
     from common.solver import Evaluation, _select_our_action
 
@@ -989,6 +1030,33 @@ def test_opponent_min_and_known_chance_are_recursive_nodes():
         WeightedEdge(0.25, "bad", Deterministic(bad)),
     ))
     assert ReferenceSolver(graph, _oracle()).decide(root).action.kind == "play"
+
+
+def test_bounded_own_choice_keeps_a_finite_lower_bound_from_one_legal_branch():
+    root = _state("choice-lower-root")
+    exact = _state("choice-lower-exact", board=0.5)
+    unresolved = _state("choice-lower-unresolved")
+    finish = _state("choice-lower-finish", board=0.8)
+    choose, forced, end = _action("play"), _action("forced"), _action("end", 1)
+    graph = Graph(
+        {"choice-lower-root": (choose, end),
+         "choice-lower-unresolved": (forced,), "choice-lower-finish": (end,)},
+        {("choice-lower-root", "play"): Choice(Actor.OURS, (
+            Edge("known", Terminal(exact, "resolved")),
+            Edge("unresolved", Deterministic(unresolved)))),
+         ("choice-lower-root", "end"): Terminal(root, "End exact zero"),
+         ("choice-lower-unresolved", "forced"): Terminal(finish, "resolved")},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(
+            max_nodes=1, root_probe_nodes=1, root_refinement_width=0),
+    ).decide(root)
+
+    assert decision.action.kind == "play"
+    assert decision.value == pytest.approx(0.5)
+    assert not decision.complete
 
 
 def test_reveal_choice_uses_remaining_turn_value_not_static_card_precedence():

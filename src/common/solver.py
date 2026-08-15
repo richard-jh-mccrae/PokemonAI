@@ -316,7 +316,8 @@ class ReferenceSolver:
             branches = [(edge, self._transition(before, action, edge.node, sleep))
                         for edge in node.children]
             finite = [(edge, result) for edge, result in branches if math.isfinite(result.value)]
-            if len(finite) != len(branches) or not finite:
+            if (not finite
+                    or (node.actor is Actor.OPPONENT and len(finite) != len(branches))):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete choice branch",
                                   tuple({"label": edge.label, "complete": result.complete,
                                          "value": result.value, "reason": result.reason}
@@ -324,7 +325,8 @@ class ReferenceSolver:
             chooser = max if node.actor is Actor.OURS else min
             edge, result = chooser(
                 finite, key=lambda pair: _ordered_evaluation(pair[1], node.actor))
-            proven = all(evaluated.complete for _child, evaluated in branches)
+            proven = (len(finite) == len(branches)
+                      and all(evaluated.complete for _child, evaluated in branches))
             return Evaluation(result.value, result.ledger, proven,
                               (result.reason if result.reason == TERMINAL_WIN_REASON
                                else f"{node.actor.value} chose {edge.label}"),
@@ -902,7 +904,7 @@ class ProductionSolver(ReferenceSolver):
                 key=lambda row: self.oracle.need_coverage_value(state, row[1]),
                 default=None,
             )
-            reserved = (information_candidate, recovery_need, urgent_heal, evolution_need)
+            reserved = (urgent_heal, information_candidate, recovery_need, evolution_need)
             if not any(reserved):
                 reserved = (deterministic_need,)
             for candidate in reserved:
