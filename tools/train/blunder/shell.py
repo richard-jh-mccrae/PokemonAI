@@ -288,9 +288,9 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
    <button id="gprev">◀</button><b id="gpos">1/1</b>
    <span style="color:#888">ep <span id="gep">?</span></span><button id="gnext">▶</button>
   </span>
-  <span class="hint">read the step X/N from the viewer → type it on the right →</span>
+  <span class="hint">board follows the selected step</span>
  </div>
- <iframe id="viewer" name="viewer" src="about:blank"></iframe>
+ <iframe id="viewer" name="viewer" src="/viewer/"></iframe>
 </div>
 <div id="right">
  <div id="ids"></div>
@@ -334,8 +334,9 @@ _SHELL_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>blunder
  <div id="list"></div>
 </div>
 <script>
-let FR=[],META={},i=0,replayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
+let FR=[],META={},i=0,replayObj=null,viewerReplayObj=null,saved=0,total=0,teamNames=[],editingId=null,LIST=[];
 let CFSESSION=null,CFPAYLOAD=null;
+let plainReady=false,plainLoaded=false;
 const $=id=>document.getElementById(id);
 const FORM=['scope','category','correct','source','attribution','critical','posture_wrong','rationale','save'];
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -352,7 +353,7 @@ const pname=s=>(teamNames&&teamNames[s])||('Player '+s);
 
 function openColorful(target){
   if(!replayObj) return;
-  const r=replayObj, vl=r.steps[0][0].visualize, seat=viewSeat();
+  const r=viewerReplayObj||replayObj, vl=r.steps[0][0].visualize, seat=viewSeat();
   for(let a=0;a<vl.length;a++)for(let j=0;j<2;j++){
     try{vl[a].current.players[j].ramainingTime=r.steps[a][j].observation.remainingOverageTime;}catch(e){}}
   vl[0].ps=(r.info&&r.info.TeamNames)||['0','1'];
@@ -363,6 +364,60 @@ function openColorful(target){
   const inp=document.createElement('input'); inp.type='hidden'; inp.name='json'; inp.value=JSON.stringify(vl);
   f.appendChild(inp); document.body.appendChild(f); f.submit(); f.remove();
 }
+function normalizeViewerReplay(replay){
+  const copy=JSON.parse(JSON.stringify(replay));
+  const frames=copy?.steps?.[0]?.[0]?.visualize||[];
+  for(const frame of frames){
+    const current=frame.current||{};
+    current.stadium=Array.isArray(current.stadium)?current.stadium:[];
+    for(const player of current.players||[]){
+      for(const area of ['active','bench','discard','prize'])
+        player[area]=Array.isArray(player[area])?player[area]:[];
+      if(!Array.isArray(player.hand))
+        player.hand=Array.from({length:Number(player.handCount)||0},()=>({name:'Hidden'}));
+      for(const card of [...player.active,...player.bench,...player.hand,...player.discard,...current.stadium]){
+        if(!card) continue;
+        if(card.name==null) card.name='Hidden';
+        if(!Array.isArray(card.energies)) card.energies=[];
+      }
+    }
+  }
+  return copy;
+}
+function postPlain(){
+  if(!plainReady||!viewerReplayObj) return;
+  const payload=plainLoaded?{step:i}:{
+    replay:viewerReplayObj, agents:teamNames.map(name=>({name})), step:i, parentHandlesUi:true};
+  $('viewer').contentWindow.postMessage(payload,location.origin);
+  plainLoaded=true;
+}
+function openPlain(force=false){
+  plainLoaded=false;
+  if(new URL($('viewer').src,location.href).pathname!=='/viewer/'){
+    plainReady=false; $('viewer').src='/viewer/';
+  }else if(force){
+    plainReady=false; $('viewer').contentWindow.location.reload();
+  }else if(plainReady) postPlain();
+}
+function watchPlainControls(){
+  const doc=$('viewer').contentDocument;
+  if(!doc||doc.documentElement.dataset.shellWatching) return;
+  doc.documentElement.dataset.shellWatching='1';
+  const tidy=()=>{
+    const seen=new Set();
+    for(const button of doc.querySelectorAll('button')){
+      const key=button.textContent+'|'+button.style.left+'|'+button.style.top;
+      if(seen.has(key)) button.remove(); else seen.add(key);
+    }
+  };
+  new MutationObserver(tidy).observe(doc.documentElement,{childList:true,subtree:true});
+  tidy();
+}
+window.addEventListener('message',event=>{
+  if(event.source===$('viewer').contentWindow&&event.data&&event.data.ready){
+    plainReady=true; watchPlainControls(); postPlain();
+  }
+});
 // A scoped tag (turn, ADR-0049) shares its Anchor step with the Decision tags inside it, so
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
@@ -499,7 +554,7 @@ async function boot(){
   $('rationale').oninput=syncCrit;
   $('scope').onchange=applyScope;
   $('correct').onchange=()=>{updateFired();if(CFSESSION||CFPAYLOAD)resetCF();};
-  $('analyze').onchange=()=>{openColorful('viewer'); fillPick(); show(i);};
+  $('analyze').onchange=()=>{fillPick(); show(i);};
   $('gprev').onclick=()=>switchGame(-1); $('gnext').onclick=()=>switchGame(1);
   loadGame();
 }
@@ -510,6 +565,7 @@ async function loadGame(){
   const p=await (await fetch('/frames.json')).json();
   FR=p.frames; total=p.total; teamNames=p.team_names||[];
   replayObj=await (await fetch('/replay.json')).json();
+  viewerReplayObj=normalizeViewerReplay(replayObj);
   const seat=(g.own_seat!=null?g.own_seat:(p.seat!=null?p.seat:0));
   $('ids').innerHTML=`ep <b>${p.episode_id??'?'}</b> · sub <b>${META.submission_id??'—'}</b> · own seat <b>${g.own_seat??p.seat??'(none)'}</b>`;
   $('analyze').innerHTML='';
@@ -520,7 +576,7 @@ async function loadGame(){
   $('step').max=total; $('oftotal').textContent='/'+total;
   fillPick();
   editingId=null;
-  openColorful('viewer'); show(0); refreshList();
+  openPlain(); show(0); refreshList();
 }
 async function switchGame(d){
   const g=await (await fetch('/games.json')).json();
@@ -604,6 +660,7 @@ function show(n){
   $('msg').className=''; $('msg').textContent=f.taggable?'':'(not a taggable frame — step to a decision)';
   fillScope(f);                        // anchor must be a Decision, whatever the scope
   syncCrit();
+  postPlain();
 }
 function pickOption(f,k){
   // Our-agent decisions stand out: ▶ marker + bold (bold on <option> is browser-dependent, the
@@ -624,7 +681,7 @@ $('prev').onclick=()=>show(i-1); $('next').onclick=()=>show(i+1);
 $('pick').onchange=e=>show(+e.target.value);
 $('step').onchange=e=>gotoStep(+e.target.value);
 $('reload').onclick=()=>openColorful('viewer'); $('tab').onclick=()=>openColorful('_blank');
-$('plain').onclick=()=>{$('viewer').src='/viewer/';};
+$('plain').onclick=()=>openPlain(true);
 $('save').onclick=async()=>{
   const f=FR[i], scope=$('scope').value, own=isOwn(f.seat);
   const correct=[...$('correct').selectedOptions].map(o=>+o.value);

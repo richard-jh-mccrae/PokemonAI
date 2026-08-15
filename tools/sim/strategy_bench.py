@@ -20,6 +20,12 @@ def default_jobs() -> int:
     return max(1, (os.cpu_count() or 2) - 2)
 
 
+def _agent_decision_seconds(decision_timeout: float) -> float:
+    timeout = float(decision_timeout)
+    grace = min(5.0, max(0.25, timeout * 0.05))
+    return max(0.1, timeout - grace)
+
+
 def _percentile(values, fraction):
     values = sorted(float(value) for value in values)
     if not values:
@@ -152,9 +158,12 @@ def format_report(payload: dict, hotspot_count=10) -> str:
     lines = [
         f"Strategy Bench -- {config['mode']} -- {len(payload['matches'])} matches -- "
         f"{config.get('jobs', 1)} jobs",
-        f"Decision timeout {config['decision_timeout']}s | match timeout {config['match_timeout']}s",
+        f"Decision timeout {config['decision_timeout']}s | agent budget "
+        f"{_agent_decision_seconds(config['decision_timeout']):g}s | "
+        f"match timeout {config['match_timeout']}s",
         f"Seat wins {wins[0]}-{wins[1]} | draws {sum(row['winner_seat'] is None for row in matches)} | "
         f"decision timeouts {sum(bool(row['timed_out']) for row in matches)} | "
+        f"agent crashes {sum(bool(row.get('crashed')) for row in matches)} | "
         f"match timeouts {sum(row['match_deadline_hit'] for row in matches)}",
         f"Decisions {summary['decisions']} | measured Bellman searches "
         f"{summary['stabilized_decisions']} | deadline hits {summary['deadline_hits']}",
@@ -183,6 +192,10 @@ def format_report(payload: dict, hotspot_count=10) -> str:
             f"   Strategy wave: {row.get('strategy_wave') or 'unavailable'}",
             f"   Strategy focus position: {_focus(row)}",
         ))
+    failures = [row for row in matches if row.get("failure")]
+    if failures:
+        lines.extend(("", "Match failures:", *(
+            f"Match {row['match']}: {row['failure']}" for row in failures)))
     return "\n".join(lines)
 
 
@@ -219,7 +232,7 @@ def _run_match_job(task: dict) -> dict:
             raise ValueError(f"unknown working-tree agent {name!r}")
     servers = tuple(AgentServer(
         directory, [REPO / "src"], capture_telemetry=True,
-        decision_seconds=config["decision_timeout"]) for directory in dirs)
+        decision_seconds=_agent_decision_seconds(config["decision_timeout"])) for directory in dirs)
     recorder = MatchRecorder()
     captured = []
     started = monotonic()
@@ -239,6 +252,7 @@ def _run_match_job(task: dict) -> dict:
             "match": index, "contestants": names, "winner_seat": result.winner,
             "crashed": result.crashed, "timed_out": result.timed_out,
             "match_deadline_hit": result.match_deadline_hit, "seconds": elapsed,
+            "failure": result.failure,
             "replay": replay_path.name,
         },
         "decisions": decision_metrics(captured, match_index=index, contestants=names),

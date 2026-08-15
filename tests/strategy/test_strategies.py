@@ -273,6 +273,27 @@ def test_live_odds_refresh_against_the_cached_turn_snapshot():
     assert unreachable.focused == ()
 
 
+def test_heal_hint_ignores_play_actions_without_a_source_card():
+    hint = SimpleNamespace(
+        kind="heal", target_card_ids=(), recipient_serial=None,
+        strategy_id="deck.heal", deadline="this_turn", confidence="high")
+    snapshot = SimpleNamespace(hints=(hint,))
+    action = SimpleNamespace(identity=SimpleNamespace(kind="play"), selection=(0,))
+    state = SimpleNamespace(
+        obs={"select": {"option": [{}]}, "current": {"players": [{}, {}]}},
+        root_seat=0, deck_counts=())
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            assert card_id is not None
+            return ()
+
+    beam = StrategyBeamBuilder(snapshot, effects=Effects()).build(state, [action])
+
+    assert beam.focused == ()
+
+
 def test_information_hint_includes_free_search_but_excludes_discard_commitments():
     rule = StrategyHint(
         "general.information", "general",
