@@ -319,6 +319,46 @@ def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace()
     assert chosen == information
 
 
+def test_equal_commutative_lines_choose_the_canonical_prefix():
+    from common.solver import Evaluation
+
+    commitment, information = _action("attach"), _action("play", 1)
+    commitment_result = Evaluation(1.0, Ledger(), True, decisions=3.0)
+    information_result = Evaluation(1.0, Ledger(), True, decisions=2.0)
+    graph = FootprintedGraph({}, {}, {
+        "attach": ActionFootprint(("attach",), writes=frozenset({"energy"})),
+        "play": ActionFootprint(("play",), writes=frozenset({"hand"})),
+    })
+    solver = ProductionSolver(graph, _oracle())
+    solver._diamond_commutes = lambda *_args: False
+
+    chosen, _result = solver._select_our_action(_state("root"), (
+        (information, information_result), (commitment, commitment_result)), 0)
+
+    assert chosen == commitment
+
+
+def test_equal_terminal_line_uses_the_shorter_continuation():
+    from common.solver import Evaluation
+
+    commitment, attack = _action("attach"), _action("attack", 1)
+    commitment_result = Evaluation(1.0, Ledger(), True, decisions=3.0)
+    attack_result = Evaluation(1.0, Ledger(), True, decisions=2.0)
+    graph = FootprintedGraph({}, {}, {
+        "attach": ActionFootprint(
+            ("attach",), writes=frozenset({"energy"})),
+        "attack": ActionFootprint(
+            ("attack",), reads=frozenset({"energy"}), writes=frozenset({"turn"})),
+    })
+    solver = ProductionSolver(graph, _oracle())
+    solver._diamond_commutes = lambda *_args: False
+
+    chosen, _result = solver._select_our_action(_state("root"), (
+        (commitment, commitment_result), (attack, attack_result)), 0)
+
+    assert chosen == attack
+
+
 def test_production_partial_order_reduction_skips_only_the_reverse_commutative_order():
     root = _state("root")
     after_alpha = _state("after-alpha", board=0.1)

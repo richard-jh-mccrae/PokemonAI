@@ -56,7 +56,7 @@ def test_20260812_sequence_and_target_corrections():
         REPO / "data" / "corrections" / "mega_starmie_20260812_1a37dbb5" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        "9e502ba97ac7": [1],       # Pokégear has useful Supporter access before the attack
+        "9e502ba97ac7": [0],       # live Mega Signal thins its target before Pokégear
         "e4fae85fcf63": [0],       # free deterministic search, then the ruled attack over End
         "fa978d4e6fe4": [0],       # damage the scouted evolving win condition
         "0a482197b23f": [0],       # either identical Salvatore copy of corrected option 2
@@ -78,4 +78,4 @@ def test_20260812_sequence_and_target_corrections():
         elif record["id"] == "71cf48e4701c":
             assert chosen in {(2,), (6,)}
         else:
-            assert chosen == tuple(expected[record["id"]])
+            assert chosen == tuple(expected[record["id"]]), record["id"]

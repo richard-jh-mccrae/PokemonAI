@@ -581,25 +581,53 @@ class ProductionSolver(ReferenceSolver):
         key = (state.semantic_key, *events)
         if key in self._diamond_cache:
             return self._diamond_cache[key]
-        answer = False
+        def leaves(node, weight=1.0, seen=frozenset()):
+            if isinstance(node, Deterministic):
+                context = int((node.state.obs.get("select") or {}).get("context", -1))
+                if context != MAIN_DECISION_CONTEXT:
+                    if node.state.semantic_key in seen:
+                        return None
+                    forced = self.provider.actions(node.state)
+                    if len(forced) != 1:
+                        return None
+                    return leaves(
+                        self._provider_transition(node.state, forced[0]), weight,
+                        seen | {node.state.semantic_key})
+                return ((weight, node.state),)
+            if isinstance(node, Chance):
+                result = []
+                for edge in node.children:
+                    branch = leaves(edge.node, weight * edge.probability, seen)
+                    if branch is None:
+                        return None
+                    result.extend(branch)
+                return tuple(result)
+            return None
+
+        def sequence(node, event):
+            first = leaves(node)
+            if first is None:
+                return None
+            outcomes = {}
+            for probability, child in first:
+                action, _footprint = self._action_with_event(child, event)
+                if action is None:
+                    return None
+                second = leaves(self._provider_transition(child, action), probability)
+                if second is None:
+                    return None
+                for branch_probability, final in second:
+                    signature = (
+                        final.semantic_key, final.legal_menu_digest, self.provider.actor(final))
+                    outcomes[signature] = outcomes.get(signature, 0.0) + branch_probability
+            return tuple(sorted((signature, round(probability, VALUE_TIE_DECIMALS))
+                                for signature, probability in outcomes.items()))
+
         left_node = self._provider_transition(state, left)
         right_node = self._provider_transition(state, right)
-        if isinstance(left_node, Deterministic) and isinstance(right_node, Deterministic):
-            right_after_left, _ = self._action_with_event(
-                left_node.state, right_footprint.event)
-            left_after_right, _ = self._action_with_event(
-                right_node.state, left_footprint.event)
-            if right_after_left is not None and left_after_right is not None:
-                left_then_right = self._provider_transition(left_node.state, right_after_left)
-                right_then_left = self._provider_transition(right_node.state, left_after_right)
-                if isinstance(left_then_right, Deterministic) and isinstance(
-                        right_then_left, Deterministic):
-                    x, y = left_then_right.state, right_then_left.state
-                    answer = (
-                        x.semantic_key == y.semantic_key
-                        and x.legal_menu_digest == y.legal_menu_digest
-                        and self.provider.actor(x) is self.provider.actor(y)
-                    )
+        left_then_right = sequence(left_node, right_footprint.event)
+        right_then_left = sequence(right_node, left_footprint.event)
+        answer = left_then_right is not None and left_then_right == right_then_left
         self._diamond_cache[key] = answer
         return answer
 
@@ -615,6 +643,30 @@ class ProductionSolver(ReferenceSolver):
         if self._diamond_commutes(state, left, right, left_footprint, right_footprint):
             return True, "diamond_commutativity"
         return False, ""
+
+    def _select_our_action(self, state: DecisionState, finite, context: int):
+        selected = _select_our_action(finite, context)
+        selected_action, selected_result = selected
+        if not selected_result.complete:
+            return selected
+        leaders = tuple(
+            pair for pair in finite
+            if pair[1].complete
+            and round(pair[1].value, VALUE_TIE_DECIMALS) == round(
+                selected_result.value, VALUE_TIE_DECIMALS)
+        )
+        selected_footprint = self._footprint(state, selected_action)
+        if selected_footprint is None:
+            return selected
+        for candidate in sorted(leaders, key=lambda pair: _commutative_order(pair[0])):
+            action, result = candidate
+            if action == selected_action:
+                return selected
+            footprint = self._footprint(state, action)
+            if footprint is not None and self._commutes(
+                    state, action, selected_action, footprint, selected_footprint)[0]:
+                return action, result
+        return selected
 
     def _successor_sleep(self, state: DecisionState, sleep: tuple[SleepEvent, ...],
                          earlier: list[tuple[LegalAction, ActionFootprint]],
@@ -896,7 +948,7 @@ class ProductionSolver(ReferenceSolver):
                 finite_results = tuple(
                     (action, result) for action, result in results_list
                     if math.isfinite(result.value))
-                incumbent = (_select_our_action(finite_results, context)
+                incumbent = (self._select_our_action(state, finite_results, context)
                              if finite_results else None)
                 bounded = []
                 for row in incomplete:
@@ -1071,7 +1123,7 @@ class ProductionSolver(ReferenceSolver):
                     finite_results = tuple(
                         (candidate, evaluated) for candidate, evaluated in results_list
                         if math.isfinite(evaluated.value))
-                    incumbent = _select_our_action(finite_results, context)
+                    incumbent = self._select_our_action(state, finite_results, context)
             results = tuple(results_list)
         self._active.remove(memo_key)
         finite = [(action, result) for action, result in results if math.isfinite(result.value)]
@@ -1081,7 +1133,7 @@ class ProductionSolver(ReferenceSolver):
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:
-                action, result = _select_our_action(finite, context)
+                action, result = self._select_our_action(state, finite, context)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
