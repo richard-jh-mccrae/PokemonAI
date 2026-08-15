@@ -352,7 +352,7 @@ GENERAL_STRATEGIES = (
         "general.fund_active_attacker",
         "general",
         (
-            ActivationCondition("own.active.role", "contains", "win_condition"),
+            ActivationCondition("own.active.role", "contains", "primary_attacker"),
             ActivationCondition("own.active.full_health", "eq", True),
             ActivationCondition("own.active.attack_ready", "eq", False),
         ),
@@ -378,7 +378,7 @@ GENERAL_STRATEGIES = (
         "general.heal_damaged_active_attacker",
         "general",
         (
-            ActivationCondition("own.active.role", "contains", "win_condition"),
+            ActivationCondition("own.active.role", "contains", "primary_attacker"),
             ActivationCondition("own.active.hp_fraction", "lt", 0.70),
         ),
         (DesiredFact("heal", "own.active"),),

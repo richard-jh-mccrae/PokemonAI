@@ -9,12 +9,12 @@ FIGHTING_GONG, BOSS_ORDERS, AIR_BALLOON = 1142, 1182, 1174
 
 
 ROLES = Roles({
-    MEGA_LUCARIO_EX: ["win_condition", "primary_attacker", "accel_source"],
-    SOLROCK: ["secondary_attacker", "engine"],
+    MEGA_LUCARIO_EX: ["primary_attacker", "accel_source"],
+    SOLROCK: ["backup_attacker", "engine"],
     LUNATONE: ["engine"],
-    HARIYAMA: ["secondary_attacker"],
+    HARIYAMA: ["backup_attacker"],
     MEOWTH_EX: ["engine"],
-}, evolves={RIOLU: MEGA_LUCARIO_EX, MAKUHITA: HARIYAMA})
+})
 
 
 STRATEGY = Strategy(

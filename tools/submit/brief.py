@@ -10,6 +10,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from submit.package import REPO, _git_hash, artifact_stem
 from common.pilot_profile import PilotProfile
@@ -48,11 +49,14 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
     return {"size": len(ids), "cards": rows}
 
 
-def _strategy(strategy) -> dict:
-    roles = {str(card_id): list(names) for card_id, names in sorted(strategy.roles.items())}
+def _strategy(strategy, deck, cards) -> dict:
+    stats = SimpleNamespace(get=lambda card_id: (
+        SimpleNamespace(**cards[int(card_id)]) if int(card_id) in cards else None))
+    resolved_roles = strategy.roles.resolve(deck, stats)
+    roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}
-             for line in strategy.lines]
+             for line in resolved_roles.lines]
     prize_plan = None if strategy.prize_plan is None else {
         "routes": [list(route) for route in strategy.prize_plan.routes],
         "prizes_to_win": strategy.prize_plan.prizes_to_win,
@@ -80,6 +84,9 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     git_hash = _git_hash(REPO) if git_hash is None else git_hash
     agent_name = agent_name or agent_dir.name
     strategy = _load_strategy(agent_dir)
+    cards = _card_index() if cards is None else cards
+    deck = _deck(agent_dir, cards)
+    deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
     pilot_profile = PilotProfile.resolve(
         global_values=pilot_values,
         authored_deck=strategy.pilot_adjustments,
@@ -96,8 +103,8 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
             "artifact": artifact_stem(agent_name, when=when, git_hash=git_hash),
         },
         "system": "bellman",
-        "deck": _deck(agent_dir, cards),
-        "strategy": _strategy(strategy),
+        "deck": deck,
+        "strategy": _strategy(strategy, deck_ids, cards),
         "strategy_catalog": {
             "enabled": pilot_profile.get("strategy.focus_enabled") >= 0.5,
             "odds_enabled": True,

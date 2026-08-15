@@ -150,7 +150,7 @@ def _dossier_intel(build, cards):
         ((c, cards.get(c, {}).get("maxDamage", 0)) for c in set(build) if is_attacker(cards.get(c, {}))),
         key=lambda x: x[1], reverse=True,
     )
-    threats = [{"cardId": c, "role": "attacker"} for c, _ in attackers[:6]]
+    threats = [{"cardId": c, "role": "backup_attacker"} for c, _ in attackers[:6]]
 
     targets: list[dict] = []
     seen: set[int] = set()
@@ -160,7 +160,7 @@ def _dossier_intel(build, cards):
                 targets.append({"cardId": c, "role": "fragile_preevo"})
                 seen.add(c)
         if is_exclass(cards.get(ln.top_id, {})) and ln.top_id not in seen:
-            targets.append({"cardId": ln.top_id, "role": "prize_liability"})
+            targets.append({"cardId": ln.top_id, "role": "primary_attacker"})
             seen.add(ln.top_id)
     for c in set(build):
         name = cards.get(c, {}).get("name", "")

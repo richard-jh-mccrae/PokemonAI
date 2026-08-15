@@ -19,7 +19,7 @@ def test_manifest_describes_declarations_and_bellman_only():
     manifest = build_manifest(REPO / "src" / "agents" / "mega_starmie",
                               git_hash="abc123", cards={})
     assert manifest["system"] == "bellman"
-    assert manifest["strategy"]["roles"]["1031"] == ["win_condition", "primary_attacker"]
+    assert manifest["strategy"]["roles"]["1031"] == ["primary_attacker"]
     assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
     assert summary(manifest)["system"] == "bellman"
     assert manifest["pilot_profile"]["hash"]

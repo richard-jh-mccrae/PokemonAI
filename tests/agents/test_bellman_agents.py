@@ -52,4 +52,5 @@ def test_deck_declarations_are_the_only_per_deck_policy_surface():
     starmie, lucario, dragapult = (_strategy(name) for name in AGENTS[::-1])
     assert starmie.prize_plan is not None
     assert lucario.partners
-    assert dragapult.lines[0].path == (119, 120, 121)
+    assert dragapult.roles[121] == ["primary_attacker"]
+    assert dragapult.roles.evolves == {}

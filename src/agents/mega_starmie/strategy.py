@@ -15,9 +15,9 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
 # Sparse deck intent over portable card facts.
 ROLES = Roles({
-    MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
+    MEGA_STARMIE_EX: ["primary_attacker"],
     CINDERACE: ["accel_source"],
-}, evolves={STARYU: MEGA_STARMIE_EX})
+})
 
 STRATEGY = Strategy(
     name="mega_starmie",

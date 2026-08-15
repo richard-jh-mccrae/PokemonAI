@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .card_worth import function_role
 from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
 from .damage import compute_active_damage
@@ -428,7 +429,9 @@ class BoardPotential:
                                  if not str(tag).startswith("provides:")))
         facts = self.registry.facts.get(card_id)
         category = "pokemon" if facts is not None and facts.pokemon else "card"
+        intrinsic_role = function_role(functions)
         result = (("role", roles[0], category) if roles else
+                  ("role", intrinsic_role, category) if intrinsic_role else
                   ("function", functions[0], category) if functions else
                   ("card", card_id, category))
         self._resource_job_cache[card_id] = result

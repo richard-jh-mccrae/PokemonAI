@@ -95,7 +95,7 @@
 ### S6 · Four 2-prize ex bodies — three are NON-Tera and gustable
 - **Weakness:** Fezandipiti ex (210, **Fighting** weak), Latias ex (210, **Darkness** weak), Meowth ex (170) all sit on the Bench as **2-prize** ex with **no Tera protection** — gustable and KO-able. Their weaknesses are auto-derived by the Dossier.
 - **Exploit:** **gust a benched support ex and KO it for 2 prizes** while removing its job — Fezandipiti's recovery+finisher, Latias's pivot, Meowth's toolbox body. A 2-for-1 prize swing the deck can't insure (only Dragapult is Tera-protected).
-- **Maps to:** `target: Fezandipiti ex` `prize_liability`, `target: Latias ex` `prize_liability`, `target: Meowth ex` `prize_liability`.
+- **Maps to:** `target: Fezandipiti ex` `primary_attacker`, `target: Latias ex` `primary_attacker`, `target: Meowth ex` `primary_attacker`.
 
 ### S7 · Budew item-lock is a one-turn tax on a 30-HP body
 - **Weakness:** Itchy Pollen locks our **Items** for one turn — real vs item-heavy engines (Ball / Candy / Poffin) — but Budew is **30 HP / 1 prize / Fire weak / retreat 0**, and locking costs *them* a develop turn.
@@ -111,15 +111,15 @@
 
 - **Threats** (attackers/disruption to respect):
   - `Dragapult ex` — the wincon. Phantom Dive flat 200 Active + 60 Bench spread every turn, taking prizes on two axes; 320 HP, NO weakness, **Tera (benched copies untouchable)**, 2 prizes. Out-HP the flat 200; even-trade it only when reachable; deny it at the pre-evo stage.
-  - `Fezandipiti ex` — recovery + finisher: Flip the Script (draw 3 after a KO) refuels; Cruel Arrow (CCC, 100 free-aim, ignores Bench W/R) converts spread into prizes (situational at 3 energy). Also a `prize_liability` target.
-  - `Latias ex` — Eon Blade (PPC, 200) one-off OHKO window (self-locks after); Skyliner grants their Basics free retreat. Respect the single Eon Blade turn; don't leave a ≤200-HP body Active into it. Also a `prize_liability` target.
+  - `Fezandipiti ex` — recovery + finisher: Flip the Script (draw 3 after a KO) refuels; Cruel Arrow (CCC, 100 free-aim, ignores Bench W/R) converts spread into prizes (situational at 3 energy). Also a `primary_attacker` target.
+  - `Latias ex` — Eon Blade (PPC, 200) one-off OHKO window (self-locks after); Skyliner grants their Basics free retreat. Respect the single Eon Blade turn; don't leave a ≤200-HP body Active into it. Also a `primary_attacker` target.
   - `Budew` — Itchy Pollen locks our Items for a turn (30 HP, Fire weak, retreat 0). Play around the lock; OHKO to stop repeats.
 - **Targets** (disrupt / snipe), by role:
   - `fragile_preevo`: `Dreepy` — 70 HP / 1 prize base of the line; KO before it evolves (clear multiples vs 4-4-3). Not Tera — valid target.
   - `fragile_preevo`: `Drakloak` — 90 HP / 1 prize Stage 1; also the Recon Directive dig engine + rebuild hop. Snipe/gust to strip consistency and delay the wall. Not Tera.
-  - `prize_liability`: `Fezandipiti ex` — 210 HP / 2 prizes / Fighting weak; gust+KO banks 2 prizes and deletes recovery+finisher. Not Tera.
-  - `prize_liability`: `Latias ex` — 210 HP / 2 prizes / Darkness weak; gust+KO banks 2 prizes and strips pivot mobility. Not Tera.
-  - `prize_liability`: `Meowth ex` — 170 HP / 2 prizes / Fighting weak; toolbox value is banked on entry, so punish the soft body (gust/snipe for 2) before Tuck Tail bounces it. Not Tera.
+  - `primary_attacker`: `Fezandipiti ex` — 210 HP / 2 prizes / Fighting weak; gust+KO banks 2 prizes and deletes recovery+finisher. Not Tera.
+  - `primary_attacker`: `Latias ex` — 210 HP / 2 prizes / Darkness weak; gust+KO banks 2 prizes and strips pivot mobility. Not Tera.
+  - `primary_attacker`: `Meowth ex` — 170 HP / 2 prizes / Fighting weak; toolbox value is banked on entry, so punish the soft body (gust/snipe for 2) before Tuck Tail bounces it. Not Tera.
   - *(No `engine`-role target: consistency is distributed + banked; Drakloak's engine-ness is folded into its `fragile_preevo` why. See §7 D3.)*
 
 ## 5 · Objective counterplay summary  *(DRAFT)*
@@ -144,9 +144,9 @@ threats = [
 targets = [
   { "card": "Dreepy",        "role": "fragile_preevo",  "why": "..." },
   { "card": "Drakloak",      "role": "fragile_preevo",  "why": "..." },
-  { "card": "Fezandipiti ex","role": "prize_liability", "why": "..." },
-  { "card": "Latias ex",     "role": "prize_liability", "why": "..." },
-  { "card": "Meowth ex",     "role": "prize_liability", "why": "..." }
+  { "card": "Fezandipiti ex","role": "primary_attacker", "why": "..." },
+  { "card": "Latias ex",     "role": "primary_attacker", "why": "..." },
+  { "card": "Meowth ex",     "role": "primary_attacker", "why": "..." }
 ]
 ```
 

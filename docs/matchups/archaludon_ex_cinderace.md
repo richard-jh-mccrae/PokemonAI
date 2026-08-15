@@ -99,7 +99,7 @@ used; this Cinderace list's engine facts are authoritative.
   idle copy Active). Fire ×2 collapses 300 HP to a ~165-base one-shot (through Full Metal Lab). This is the
   only realistic path through the tank stack.
 - **Maps to:** `threat: Archaludon ex` (weakness-suppression window) + `target: Archaludon ex` role
-  `prize_liability` (hit it in an off-window for the 2-prize swing).
+  `primary_attacker` (hit it in an off-window for the 2-prize swing).
 
 ### Seam 2 — It's a heal-wall: chip is worthless, only burst counts
 - **Weakness:** Full Metal Lab (−30) + Jumbo Ice Cream (heal 80 from a 3+-energy Active) + retreat-to-bench
@@ -172,7 +172,7 @@ used; this Cinderace list's engine facts are authoritative.
   - `engine`: `Relicanth` — the lone Raging-Hammer enabler (Memory Dive); 100 HP Fighting Basic, not Metal
     (Full Metal Lab doesn't shield it). **Secondary/situational** — only in a grind. Snipe to cap Archaludon
     at flat-220 and re-open the chip-then-finish line.
-  - `prize_liability`: `Archaludon ex` — 2 prizes, the payoff; hit it in a Metal-Defender-OFF window (live
+  - `primary_attacker`: `Archaludon ex` — 2 prizes, the payoff; hit it in a Metal-Defender-OFF window (live
     ×2) for the biggest swing.
 
 ## 5 · Objective counterplay summary
@@ -207,7 +207,7 @@ targets = [
   { "card": "Duraludon",     "role": "fragile_preevo",  "why": "130 HP Basic, Fire x2; the wall before it evolves — KO Active pre-evo." },
   { "card": "Cinderace",     "role": "engine",          "why": "Sole accelerator, setup-only, unrecoverable once KO'd; 160 HP, Water x2 (primary)." },
   { "card": "Relicanth",     "role": "engine",          "why": "Lone Raging-Hammer enabler (Memory Dive); 100 HP, not Metal so Full Metal Lab doesn't shield it (secondary/situational)." },
-  { "card": "Archaludon ex", "role": "prize_liability", "why": "2 prizes, the payoff; hit in a Metal-Defender-OFF window (live x2)." }
+  { "card": "Archaludon ex", "role": "primary_attacker", "why": "2 prizes, the payoff; hit in a Metal-Defender-OFF window (live x2)." }
 ]
 ```
 

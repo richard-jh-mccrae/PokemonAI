@@ -116,7 +116,7 @@ def test_strategy_snapshot_is_hand_independent_and_recipient_specific():
         "own.active", "this_turn", "high", "deck",
     )
     resolved = resolve_strategies((), (rule,), ())
-    roles = Roles({11: ["win_condition"]}, evolves={10: 11})
+    roles = Roles({11: ["primary_attacker"]}, evolves={10: 11})
 
     left = activate_strategies(_observation(hand=[]), resolved, roles=roles)
     right = activate_strategies(_observation(hand=[{"id": 11}]), resolved, roles=roles)
@@ -197,7 +197,7 @@ def test_strategy_beam_targets_the_declared_recipient_without_pruning_other_acti
         (DesiredFact("evolve", "own.active"),),
         "own.active", "this_turn", "high", "deck",
     )
-    roles = Roles({11: ["win_condition"]}, evolves={10: 11})
+    roles = Roles({11: ["primary_attacker"]}, evolves={10: 11})
     observation = _observation(hand=[{"id": 11, "serial": 99}])
     observation["current"]["players"][0]["bench"] = [
         {"id": 10, "serial": 78, "energies": []},
@@ -229,7 +229,7 @@ def test_live_odds_refresh_against_the_cached_turn_snapshot():
         (DesiredFact("evolve", "own.active"),),
         "own.active", "this_turn", "high", "deck",
     )
-    roles = Roles({11: ["win_condition"]}, evolves={10: 11})
+    roles = Roles({11: ["primary_attacker"]}, evolves={10: 11})
     observation = _observation(hand=[{"id": 50, "serial": 99}])
     observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
     snapshot = activate_strategies(

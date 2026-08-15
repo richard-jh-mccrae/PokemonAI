@@ -27,7 +27,7 @@ class Line:
 
     path: tuple[int, ...]
     payoff: int
-    role: str = "win_condition"
+    role: str = "primary_attacker"
     ready: Ready = Ready()
 
 
@@ -51,7 +51,7 @@ class PrizePlan:
 class Roles(dict):
     """Pokémon doctrine roles plus ``source -> target`` evolution relationships."""
 
-    _LINE_ROLE_PRIORITY = ("win_condition", "primary_attacker", "secondary_attacker")
+    _LINE_ROLE_PRIORITY = ("primary_attacker", "backup_attacker")
 
     def __init__(self, cards=None, *, evolves=None, ready=None):
         super().__init__({int(card_id): list(card_roles)
@@ -63,15 +63,44 @@ class Roles(dict):
             for card_id, threshold in (ready or {}).items()
         }
         self._lines = self._normalize_lines()
-        for line in self._lines:
-            base_role = "win_condition_base" if line.role == "win_condition" else "evolution_base"
-            base_roles = self.setdefault(line.path[0], [])
-            if base_role not in base_roles:
-                base_roles.append(base_role)
 
     @property
     def lines(self) -> tuple[Line, ...]:
         return self._lines
+
+    def resolve(self, deck, stats) -> "Roles":
+        if self.evolves:
+            return self
+        card_ids = tuple(sorted(set(int(card_id) for card_id in deck)))
+        names = {}
+        for card_id in card_ids:
+            stat = stats.get(card_id) if stats is not None else None
+            name = getattr(stat, "name", None)
+            if name:
+                names.setdefault(str(name), []).append(card_id)
+        evolves = {}
+        for target in card_ids:
+            stat = stats.get(target) if stats is not None else None
+            parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
+            if len(parents) == 1:
+                evolves[int(parents[0])] = target
+        cards = {card_id: list(card_roles) for card_id, card_roles in self.items()}
+        relevant = {
+            card_id for card_id, card_roles in cards.items()
+            if any(role in card_roles for role in self._LINE_ROLE_PRIORITY)
+        }
+        changed = True
+        while changed:
+            changed = False
+            for source, target in evolves.items():
+                if target in relevant and source not in relevant:
+                    relevant.add(source)
+                    changed = True
+        evolves = {
+            source: target for source, target in evolves.items()
+            if source in relevant and target in relevant
+        }
+        return Roles(cards, evolves=evolves, ready=self.ready)
 
     def _normalize_lines(self) -> tuple[Line, ...]:
         if not self.evolves:
@@ -94,8 +123,6 @@ class Roles(dict):
             payoff_roles = set(self.get(payoff, ()))
             role = next((candidate for candidate in self._LINE_ROLE_PRIORITY
                          if candidate in payoff_roles), None)
-            if role == "primary_attacker":
-                role = "win_condition"
             if role is None:
                 raise ValueError(f"evolution payoff {payoff} requires an attacker role")
             lines.append(Line(tuple(path), payoff, role, self.ready.get(payoff, Ready())))

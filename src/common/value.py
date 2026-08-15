@@ -9,7 +9,8 @@ import math
 from typing import Callable, Mapping
 
 from common.card_worth import (
-    ACE_SPEC_TIER, ENERGY_TIER, FUNCTION_TIER, KNOWN_CARD_FLOOR, ROLE_TIER, TAG_TIER, role_value,
+    ACE_SPEC_TIER, ATTACKER_LINE_BASE_TIER, ENERGY_TIER, FUNCTION_TIER, KNOWN_CARD_FLOOR,
+    ROLE_TIER, TAG_TIER, role_value,
 )
 
 from .algebra import Ledger
@@ -104,6 +105,7 @@ class WorthSeeds:
     energy: float = ENERGY_TIER
     ace_spec: float = ACE_SPEC_TIER
     known_floor: float = KNOWN_CARD_FLOOR
+    attacker_line_base: float = ATTACKER_LINE_BASE_TIER
     prize_rate: float = 1.0 / WORTH_PER_PRIZE
 
 
@@ -118,10 +120,6 @@ class ValueRegistry:
                  prize_routes=(), prizes_to_win=None,
                  seeds: WorthSeeds = WorthSeeds()):
         self.roles = {int(key): tuple(value) for key, value in (roles or {}).items()}
-        for card_id in line_bases:
-            card_roles = self.roles.get(int(card_id), ())
-            if "win_condition_base" not in card_roles:
-                self.roles[int(card_id)] = (*card_roles, "win_condition_base")
         self.functions = {int(key): tuple(value) for key, value in (functions or {}).items()}
         self.facts = {int(key): value for key, value in (facts or {}).items()}
         self.overrides = {int(key): max(0.0, float(value)) for key, value in (overrides or {}).items()}
@@ -135,10 +133,10 @@ class ValueRegistry:
         self.seeds = seeds
 
     @classmethod
-    def from_strategy(cls, *, strategy, stats, functions, deck) -> "ValueRegistry":
+    def from_strategy(cls, *, strategy, stats, functions, deck, roles=None) -> "ValueRegistry":
         card_ids = set(int(card_id) for card_id in deck)
-        roles = {card_id: tuple((getattr(strategy, "roles", {}) or {}).get(card_id, ()))
-                 for card_id in card_ids}
+        roles = roles or getattr(strategy, "roles", {}) or {}
+        role_rows = {card_id: tuple(roles.get(card_id, ())) for card_id in card_ids}
         tags = {card_id: tuple(functions.tags(card_id)) if functions else () for card_id in card_ids}
         facts = {}
         for card_id in card_ids:
@@ -157,14 +155,14 @@ class ValueRegistry:
                 bench_damage=max((int(getattr(attack, "benchSnipe", 0) or 0)
                                   for attack in attacks if attack is not None), default=0),
             )
-        declarations = tuple(line for line in getattr(strategy, "lines", ()) if line.path)
+        declarations = tuple(line for line in getattr(roles, "lines", ()) if line.path)
         lines = tuple(tuple(line.path) for line in declarations)
         line_bases = tuple(line.path[0] for line in declarations
-                           if getattr(line, "role", "win_condition") == "win_condition")
+                           if getattr(line, "role", "primary_attacker") == "primary_attacker")
         line_pairs = tuple((line[0], line[-1]) for line in lines
                            if len(line) >= MIN_EVOLUTION_LINE_LENGTH)
         prize_plan = getattr(strategy, "prize_plan", None)
-        return cls(roles=roles, functions=tags, facts=facts,
+        return cls(roles=role_rows, functions=tags, facts=facts,
                    overrides=getattr(strategy, "worth_overrides", {}) or {},
                    line_bases=line_bases, line_pairs=line_pairs, lines=lines,
                    partners=getattr(strategy, "partners", {}) or {},
@@ -175,12 +173,14 @@ class ValueRegistry:
     def worth(self, card_id: int) -> float:
         card_id = int(card_id)
         facts = self.facts.get(card_id, CardFacts(known=False))
-        return float(role_value(
+        intrinsic_line = self.seeds.attacker_line_base if any(
+            line and card_id == line[0] for line in self.lines) else 0.0
+        return float(max(intrinsic_line, role_value(
             self.roles.get(card_id, ()), is_ace_spec=facts.ace_spec,
             is_typed_basic_energy=facts.typed_basic_energy,
             tags=self.functions.get(card_id, ()), is_known_card=facts.known,
             worth_override=self.overrides.get(card_id, 0.0),
-        ))
+        )))
 
     def prizes(self, card_id: int) -> float:
         return float(worth_to_prizes(self.worth(card_id)))

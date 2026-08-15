@@ -94,7 +94,7 @@ def test_resolve_brief_cards_maps_names_to_ids_and_roles():
     name_ids = {"Mega Lucario ex": {678}, "Hariyama": {679}}
     threat_ids, target_roles = resolve_brief_cards(_ml_brief(), lambda n: name_ids.get(n, ()))
     assert threat_ids == frozenset({678, 679})
-    assert target_roles == {678: "prize_liability", 679: "attacker"}
+    assert target_roles == {678: "primary_attacker", 679: "backup_attacker"}
 
 
 def test_resolve_brief_cards_skips_unresolvable_names():
@@ -103,21 +103,21 @@ def test_resolve_brief_cards_skips_unresolvable_names():
                             {"card": "Ghost Card", "roles": ["support"]}]),
         lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
-    assert target_roles == {678: "prize_liability"}  # unresolved support is dropped
+    assert target_roles == {678: "primary_attacker"}  # unresolved support is dropped
 
 
 def test_resolve_brief_cards_maps_a_name_to_all_its_ids():
     _, target_roles = resolve_brief_cards(
         _ml_brief(pokemon=[{"card": "Hariyama", "roles": ["backup_attacker"]}]),
         lambda n: {"Hariyama": {679, 6791}}.get(n, ()))
-    assert target_roles == {679: "attacker", 6791: "attacker"}
+    assert target_roles == {679: "backup_attacker", 6791: "backup_attacker"}
 
 
 def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
     brief = _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["primary_attacker"]}])
     threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
-    assert target_roles == {678: "prize_liability"}
+    assert target_roles == {678: "primary_attacker"}
 
 
 def test_bellman_role_worth_expands_primary_attacker_to_its_ancestors():
@@ -226,7 +226,7 @@ def _ancestor_names(prov, cid: int) -> set[str]:
 
 
 @pytest.mark.req("REQ-BRIEF-0002")
-def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
+def test_shipped_briefs_make_every_primary_attacker_a_primary_attacker():
     """A primary attacker and every earlier evolution are the curated matchup payoff."""
     prov = EngineCardStatProvider()
     for brief in load_briefs():
@@ -237,11 +237,11 @@ def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
         assert primaries, f"{brief.slug}: Brief has no primary attacker"
         for name in primaries:
             ids = prov.ids_for_name(name) or ()
-            assert any(target_roles.get(cid) == "prize_liability" for cid in ids), (
-                f"{brief.slug}: primary attacker {name!r} must resolve to prize_liability")
+            assert any(target_roles.get(cid) == "primary_attacker" for cid in ids), (
+                f"{brief.slug}: primary attacker {name!r} must resolve to primary_attacker")
             ancestor_names = set().union(*(_ancestor_names(prov, card_id) for card_id in ids))
             for ancestor_name in ancestor_names:
-                assert all(target_roles.get(card_id) == "prize_liability"
+                assert all(target_roles.get(card_id) == "primary_attacker"
                            for card_id in prov.ids_for_name(ancestor_name)), (
                     f"{brief.slug}: {ancestor_name!r} must inherit primary-attacker priority")
 
@@ -264,7 +264,7 @@ def test_multiple_primary_attackers_are_supported():
         {"card": "Hariyama", "roles": ["primary_attacker"]},
     ])
     _, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Hariyama": {679}}.get(n, ()))
-    assert roles == {678: "prize_liability", 679: "prize_liability"}
+    assert roles == {678: "primary_attacker", 679: "primary_attacker"}
 
 
 def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
@@ -289,4 +289,4 @@ def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
         forward_ids=lambda card_id: forward[card_id])
 
     assert threats == frozenset({1, 2, 3})
-    assert roles == {1: "prize_liability", 2: "prize_liability", 3: "prize_liability"}
+    assert roles == {1: "primary_attacker", 2: "primary_attacker", 3: "primary_attacker"}

@@ -75,7 +75,7 @@ errors** (Staryu 50 HP / "+20") — engine facts used throughout.
 ### S1 · Lightning weakness ×2 on the payoff
 - **Weakness:** Mega Starmie ex's 330 HP is its *only* defense — no passive reduction. Lightning ×2 halves the raw damage needed: **~165 raw = 330 OHKO**. (Staryu is Lightning ×2 too.)
 - **Exploit:** any Lightning source drastically lowers the bar to a one-turn, 3-prize KO. Even non-Lightning decks note the 330-flat ceiling: a true OHKO number, not a wall.
-- **Maps to:** `target: Mega Starmie ex` role `prize_liability` (why cites Lightning ×2). Weakness itself is auto-derived by the Dossier → **no property**.
+- **Maps to:** `target: Mega Starmie ex` role `primary_attacker` (why cites Lightning ×2). Weakness itself is auto-derived by the Dossier → **no property**.
 
 ### S2 · The whole payoff funnels through one fragile pre-evo
 - **Weakness:** `Staryu → Mega Starmie ex` is a single hop, but Staryu is 70 HP / 1 prize / Lightning ×2, only **3 copies**, **no un-evolve or replacement path**. Kill a Staryu the turn it lands (before Salvatore/Mega Signal rush-evolve) → deny a full 3-prize Mega for a 1-prize trade; permanently taxes a 3-line deck.
@@ -109,7 +109,7 @@ errors** (Staryu 50 HP / "+20") — engine facts used throughout.
   - `Cinderace` — the tempo threat (not a payoff): Turbo Flare ({C}, 50) accelerates ≤3 Water, bringing the Mega online a turn early. Soft body (160 HP, Water ×2, 1 prize). Respect the **accel**, not the attack.
 - **Targets** (disrupt / snipe), by role:
   - `fragile_preevo`: `Staryu` — 70 HP / 1 prize / Lightning ×2, sole foundation for the 3-prize Mega, only 3 copies, no replacement. Snipe/gust the turn it lands, before rush-evolve. Highest-leverage early play.
-  - `prize_liability`: `Mega Starmie ex` — 3 prizes, Lightning ×2 → trading into it is prize-positive. Answer with a Lightning OHKO or kill it pre-evolution. Do **not** rely on effect-walls vs Nebula.
+  - `primary_attacker`: `Mega Starmie ex` — 3 prizes, Lightning ×2 → trading into it is prize-positive. Answer with a Lightning OHKO or kill it pre-evolution. Do **not** rely on effect-walls vs Nebula.
   - `engine`: `Cinderace` — the one-and-only accelerator; KO yields 1 prize and it's usually already fired. Prefer denying the distributed Water / racing the Staryu over spending resources on the body.
 
 ## 5 · Objective counterplay summary
@@ -136,7 +136,7 @@ threats = [
 ]
 targets = [
   { "card": "Staryu",          "role": "fragile_preevo",  "why": "..." },
-  { "card": "Mega Starmie ex", "role": "prize_liability", "why": "..." },
+  { "card": "Mega Starmie ex", "role": "primary_attacker", "why": "..." },
   { "card": "Cinderace",       "role": "engine",          "why": "..." }
 ]
 ```

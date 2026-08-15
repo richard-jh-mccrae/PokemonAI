@@ -73,9 +73,17 @@ Bellman later widens into every unresolved legal path and owns the final choice.
 _Avoid_: Pruning rule, replacement planner
 
 **Pokémon Role**:
-Deck or scouting doctrine describing a Pokémon's strategic job, such as primary attacker or support.
+Deck or scouting doctrine describing a Pokémon's strategic job, such as primary attacker, backup attacker, or support.
 Roles contribute to development, preservation, and KO value.
-_Avoid_: Trainer function, Strategy
+_Avoid_: Win condition, secondary attacker, Trainer function, Strategy
+
+**Pre-evolution Role**:
+Scouting doctrine marking an undeveloped Pokémon whose known evolution line makes it a valuable denial target.
+_Avoid_: Win condition base, automatic deck Role
+
+**Evolution Relationship**:
+The intrinsic ancestry between Pokémon cards. It comes from card facts and is not deck doctrine.
+_Avoid_: Authored evolution map, Pokémon Role
 
 **Card Function**:
 An intrinsic Trainer or Energy capability shared across decks, such as search, draw, gust, or acceleration.
@@ -104,7 +112,7 @@ There is no rules-pipeline fallback.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
-- Pokémon Roles and evolution relationships;
+- Pokémon Roles; evolution relationships are derived from card facts;
 - Deck Strategies and explicit General Strategy overrides;
 - starter priority and preferred first/second turn;
 - partner dependencies;

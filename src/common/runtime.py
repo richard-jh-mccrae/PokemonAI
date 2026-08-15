@@ -83,6 +83,7 @@ class BellmanRuntime:
         self.stats = stats
         self.functions = CardFunctions.load() if functions is _ENGINE else functions
         self.effects = CardEffects.load()
+        self.roles = strategy.roles.resolve(self.deck, self.stats)
         if scout is _ENGINE:
             scout = Scout(load_artifact(), provider=self.stats)
         self.scout = scout
@@ -90,7 +91,8 @@ class BellmanRuntime:
         self.provider_factory = provider_factory
         self.limits = limits
         self.registry = ValueRegistry.from_strategy(
-            strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck)
+            strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck,
+            roles=self.roles)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
         experiment, experiment_path = _pilot_overlay()
         self.pilot_profile = PilotProfile.resolve(
@@ -221,7 +223,7 @@ class BellmanRuntime:
             getattr(self.strategy, "strategy_overrides", ()),
         )
         candidate = activate_strategies(
-            observation, self.strategies, roles=self.strategy.roles, stats=self.stats,
+            observation, self.strategies, roles=self.roles, stats=self.stats,
             opponent_role_worth=self.opponent_role_worth)
         if (self._strategy_snapshot is not None
                 and self._strategy_snapshot.snapshot_id == candidate.snapshot_id):

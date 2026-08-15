@@ -86,15 +86,15 @@ class Scout:
             st = self.provider.get(cid) if self.provider else None
             targets.append(Intel(cardId=cid, role=self._target_role(st), seen=True))
             if st and st.maxDamage > 0:
-                threats.append(Intel(cardId=cid, role="attacker", seen=True))
+                threats.append(Intel(cardId=cid, role="backup_attacker", seen=True))
         return threats, targets
 
     @staticmethod
     def _target_role(st) -> str:
         if st and st.is_ex_body:
-            return "prize_liability"
+            return "primary_attacker"
         if st and st.maxDamage > 0:
-            return "attacker"
+            return "backup_attacker"
         if st:
             return "support"
         return "unknown"

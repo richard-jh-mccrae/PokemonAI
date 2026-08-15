@@ -103,7 +103,7 @@ def test_hand_value_requires_a_recipient_for_evolution_but_retains_future_energy
         energy: CardStat(energy, cardType=5, energyType=3),
     }, attacks={10: AttackStat(10, energyTypes=(3,), damage=100)})
     registry = ValueRegistry(
-        roles={base: ("win_condition_base",), top: ("win_condition",)},
+        roles={base: ("primary_attacker",), top: ("primary_attacker",)},
         facts={base: CardFacts(pokemon=True, stage="basic"),
                top: CardFacts(pokemon=True, stage="stage1"),
                energy: CardFacts(typed_basic_energy=True)},

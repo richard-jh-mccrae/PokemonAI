@@ -166,7 +166,7 @@ spread, Team Rocket's Articuno) is directional web opinion, not engine-decidable
     Battle Cage caveat — route the hit through the Active.
   - **Anti-target (do NOT snipe):** `Dudunsparce` — Run Away Draw refunds any KO/gust (self-shuffles back).
     Hit the hand-size seam instead. (Flagged in the Brief target reasoning, not listed as a target row.)
-  - `prize_liability`: **none** — the deck runs no ex / Mega-ex; no multi-prize body to farm.
+  - `primary_attacker`: **none** — the deck runs no ex / Mega-ex; no multi-prize body to farm.
 
 ## 5 · Objective counterplay summary
 

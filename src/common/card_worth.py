@@ -12,17 +12,15 @@ from typing import NewType
 #: retaining float arithmetic at runtime.
 Worth = NewType("Worth", float)
 
-WIN_CONDITION_TIER = 30.0
-WIN_CONDITION_BASE_TIER = 25.0
-WIN_CONDITION_STAGE_TIER = WIN_CONDITION_TIER
+PRIMARY_ATTACKER_TIER = 30.0
+BACKUP_ATTACKER_TIER = 20.0
+ATTACKER_LINE_BASE_TIER = 25.0
+PREEVOLUTION_TIER = 25.0
 
 ROLE_TIER: dict[str, float] = {
-    "win_condition": WIN_CONDITION_TIER,
-    "primary_attacker": WIN_CONDITION_TIER,
-    "secondary_attacker": 20.0,
-    "win_condition_base": WIN_CONDITION_BASE_TIER,
-    "win_condition_stage": WIN_CONDITION_STAGE_TIER,
-    "evolution_base": 20.0,
+    "primary_attacker": PRIMARY_ATTACKER_TIER,
+    "backup_attacker": BACKUP_ATTACKER_TIER,
+    "preevolution": PREEVOLUTION_TIER,
     "engine": 12.0,
     "support_pokemon": 12.0,
     "accel_source": 12.0,
@@ -32,13 +30,7 @@ ROLE_TIER: dict[str, float] = {
 # Scouting Brief vocabulary aliases into the same semantic Worth currency. These translate role
 # names only; they do not identify cards or prescribe an action.
 ROLE_ALIASES: dict[str, str] = {
-    "wincon": "win_condition",
-    "wincon_base": "win_condition_base",
-    "wincon_stage": "win_condition_stage",
-    "prize_liability": "win_condition",
-    "fragile_preevo": "win_condition_base",
-    "attacker": "secondary_attacker",
-    "backup_attacker": "secondary_attacker",
+    "fragile_preevo": "preevolution",
     "threat": "primary_attacker",
     "draw_engine": "engine",
     "energy_accel": "accel_source",
@@ -77,6 +69,20 @@ TAG_TIER: dict[str, float] = {
                                   # damage swing. Hammer's portable denial function is 6 below.
     "recycle": 10.0,
 }
+
+_FUNCTION_ROLES = (
+    ("accel_source", frozenset({"discard_eot", "provides_evo:3"})),
+    ("tutor", frozenset({"bench_fill", "rush_evolve", "tutor_energy", "tutor_mega",
+                          "tutor_pokemon", "tutor_trainer"})),
+    ("disruption", frozenset({"energy_denial", "hand_disruption", "item_lock"})),
+    ("gust", frozenset({"gust"})),
+    ("recovery", frozenset({"clutch_heal", "heal", "recycle"})),
+)
+
+
+def function_role(tags) -> str | None:
+    tags = frozenset(str(tag) for tag in tags)
+    return next((role for role, markers in _FUNCTION_ROLES if tags & markers), None)
 
 
 def role_value(roles, is_ace_spec: bool = False, is_typed_basic_energy: bool = False,

@@ -40,7 +40,7 @@ class Role:
 #: **The closed role vocabulary.** Positive = target sooner, negative = leave alone. Magnitudes sit
 #: above the snipe/gust rungs but well below KO_SCORE, and the ORDER is the load-bearing part.
 ROLE_REGISTRY: dict[str, Role] = {
-    "prize_liability": Role(
+    "primary_attacker": Role(
         100, "a primary attacker or multi-prize liability — KO/gust it", (DERIVED_BY, READ_BY, BRIEF_BY)),
     "fragile_preevo": Role(
         90, "a pre-evolution with a threatening forward line — deny it before it comes online",
@@ -49,7 +49,7 @@ ROLE_REGISTRY: dict[str, Role] = {
         60, "their key supporter/enabler the Brief says to REMOVE (the 'hunt an engine' role). "
             "Curated ONLY: an explicit human claim about this matchup outranks a derived one, and "
             "nothing derives it — that is what the role means.", (BRIEF_BY,)),
-    "attacker": Role(
+    "backup_attacker": Role(
         50, "a body whose line actually attacks. **530 shipped dossier assignments resolved to 0 "
             "before Issue #395** — the largest role population in the artifact, inert. Stated "
             "precisely, because the headline is easy to over-read: what changed is that the STRING "
@@ -64,7 +64,7 @@ ROLE_REGISTRY: dict[str, Role] = {
         (DERIVED_BY, READ_BY, BRIEF_BY)),
     "enabler": Role(
         40, "a body that assists the key Pokémon in HOW it attacks — damage boosts, a free-retreat "
-            "grant, ability fuel (the Solrock/Lunatone shape). Below `attacker` because removing "
+            "grant, ability fuel (the Solrock/Lunatone shape). Below `backup_attacker` because removing "
             "the attacker is the more direct answer. Requires no new Function Tag: every input is "
             "already a parsed `CardStat` field. The Read does not emit it — no dossier does the "
             "derivation — so it is derived-or-curated.", (DERIVED_BY, BRIEF_BY)),
@@ -88,7 +88,7 @@ ROLE_REGISTRY: dict[str, Role] = {
              "(D4): a 1-prize utility body (Dudunsparce / Budew class) is a poor place to spend "
              "removal, but a 2- or 3-prize engine is a PRIME one and the prizes are the reason. "
              "Before the gate this fired on Mega Kangaskhan ex (3 prizes) and Fezandipiti ex (2), "
-             "unscaled by γ and written AFTER Read-Intel, so it overwrote the `prize_liability` the "
+             "unscaled by γ and written AFTER Read-Intel, so it overwrote the `primary_attacker` the "
              "dossier had correctly assigned. The Read does not emit it; `Scout._target_role` has "
              "no such branch.", (DERIVED_BY, BRIEF_BY)),
 }
@@ -123,7 +123,7 @@ def roles_in_dossiers(dossiers: Mapping) -> list[str]:
 def roles_in_brief(brief: Mapping) -> list[str]:
     """The compact Brief's Pokémon roles, reduced to the Pilot target-role vocabulary."""
     doctrine_target_roles = {
-        "primary_attacker": "prize_liability", "backup_attacker": "attacker",
+        "primary_attacker": "primary_attacker", "backup_attacker": "backup_attacker",
         "disruption_target": "disruption_target", "support": "engine",
         "energy_accel": "engine", "draw_engine": "engine",
     }
@@ -157,11 +157,11 @@ def derive_general_roles(facts: Mapping[int, BodyFacts]) -> dict[int, str]:
         if (_UTILITY_TAGS & tags) and f.prize_value == 1:
             out[cid] = "avoid"
         elif f.prize_value >= 2:
-            out[cid] = "prize_liability"
+            out[cid] = "primary_attacker"
         elif f.forward_damage > 0:
             out[cid] = "fragile_preevo"
         elif f.own_damage > 0:
-            out[cid] = "attacker"
+            out[cid] = "backup_attacker"
         elif f.damage_boost or f.grants_free_retreat or f.ability_fuel:
             out[cid] = "enabler"
         elif _ENGINE_TAGS & tags:

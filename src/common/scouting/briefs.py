@@ -75,7 +75,7 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
 
 
 _TARGET_ROLE = {
-    "primary_attacker": "prize_liability", "backup_attacker": "attacker",
+    "primary_attacker": "primary_attacker", "backup_attacker": "backup_attacker",
     "disruption_target": "disruption_target", "support": "engine",
     "energy_accel": "engine", "draw_engine": "engine",
 }
@@ -174,7 +174,7 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
                             candidate_worth.get(card_id, 0.0), worth * payoff_prizes)
             primary_worth = role_value(("primary_attacker",))
             for card_id, role in target_roles.items():
-                if role == "prize_liability":
+                if role == "primary_attacker":
                     candidate_worth[int(card_id)] = max(
                         candidate_worth.get(int(card_id), 0.0), primary_worth)
             for card_id, worth in candidate_worth.items():
@@ -187,6 +187,6 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
         for card_id, roles in roles_by_card.items():
             stat = stats.get(card_id) if stats is not None else None
             if "fragile_preevo" in roles and getattr(stat, "stage", None) not in (None, "basic"):
-                roles = {*roles, "wincon_stage"}
+                roles = {*roles, "primary_attacker"}
             expected[card_id] = expected.get(card_id, 0.0) + float(probability) * role_value(roles)
     return expected

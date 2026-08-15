@@ -37,7 +37,7 @@ The two levers this wires, and the dispositions of everything else on the Brief 
   energized live attacker still outranks the engine body). Built now with zero true-asserting Briefs
   (the shipped Lucario Brief judged it FALSE): the registry carries no unwired key, and the next Brief
   asserting true gets a live lever with zero code.
-- **Covered — no lever (recorded in docs/scouting.md).** `prize_liability` targets: `_prize_value`
+- **Covered — no lever (recorded in docs/scouting.md).** `primary_attacker` targets: `_prize_value`
   reads ex/Mega off `CardStat`, `gust_best_ko_prizes` already drags up the max-prize KO-able body, the
   Lethal Solver does prize math, and `stall_target_is_keystone` already strands an un-KO-able key
   attacker. `threats`: the rank sees them by printed damage; the defensive half is the shipped

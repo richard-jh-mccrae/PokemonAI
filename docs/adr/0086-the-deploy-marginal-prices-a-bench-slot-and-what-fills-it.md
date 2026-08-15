@@ -470,7 +470,7 @@ more frames cannot change this", which is a RULING — this ADR is its artifact)
 - 508 ruled records; **11** deploy-involved frames in the tracked `data/corrections/` corpus (19
   counting the `tests/fixtures/corrections/` duplicates); **2** cross-scale candidates, both from
   episode 83661652.
-- **Both sides price NONZERO** — Riolu carries `win_condition_base` → `ROLE_TIER` **20.0**, against
+- **Both sides price NONZERO** — Riolu carries `primary_attacker` → `ROLE_TIER` **20.0**, against
   Lunatone's Power Gem **50**. So this is NOT deny's failure mode; the rate does not divide out, and
   the resulting `rate > 2.50` would even discriminate (it excludes the trainer pair at ~1.0 and is
   consistent with the derived energy pair at ~6.7).

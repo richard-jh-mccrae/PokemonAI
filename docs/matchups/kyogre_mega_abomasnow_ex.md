@@ -58,12 +58,12 @@ Parallel sweep (4 angles) + 6 per-card deep-dives + adversarial verify vs engine
 ### Seam 1 — Line-wide Metal weakness (×2)
 - **Weakness:** both Snover (90 HP) and Mega Abomasnow ex (350 HP) are weak to **Metal**, no resistance. Kyogre is separately weak to **Lightning**.
 - **Exploit:** a Metal attacker halves the wall — 175 KOs the Mega for **3 prizes**; any Snover dies trivially. Weakness KOs faster than their drawing can restock.
-- **Maps to:** structural (auto-Dossier reads weakness from CardStat); carried in the `prize_liability` target `why`. No new key.
+- **Maps to:** structural (auto-Dossier reads weakness from CardStat); carried in the `primary_attacker` target `why`. No new key.
 
 ### Seam 2 — Mega Abomasnow ex is a 3-prize liability
 - **Weakness:** the wall IS the deck and it's a **Mega-ex = 3 prizes** on KO.
 - **Exploit:** one clean KO = half your prize requirement. Prioritise it over 1-prize bodies. Unlike a heal-wall, **chip sticks** (no healing in the list) — weakness/burst just closes faster; grinding it is fine, not wasted.
-- **Maps to:** `target: Mega Abomasnow ex` role `prize_liability`.
+- **Maps to:** `target: Mega Abomasnow ex` role `primary_attacker`.
 
 ### Seam 3 — No gust / no switch / brutal retreat
 - **Weakness:** zero gust, switch, or hand-disruption in all 60; retreat Snover 3 / Kyogre 3 / **Abomasnow 4**. Purely reactive.
@@ -103,7 +103,7 @@ Parallel sweep (4 angles) + 6 per-card deep-dives + adversarial verify vs engine
   - **Maximum Belt** — ACE SPEC (Tool, not an attacker) that adds +50 vs our **Active ex only** → flips 2HKO→OHKO on our ex bodies. Play around by seating a non-ex Active. _(Flagged: a Tool as a `threat`; listed for visibility since it changes our survival math — fold into the Mega's `why` if we prefer threats = attackers only.)_
 - **Targets:**
   - `fragile_preevo`: **Snover** — 90-HP sole line to the wincon; snipe pre-evolution (Metal OHKOs), deny the 3-prize Mega for a 1-prize trade. **WIRED (brief_preevo, default ON).**
-  - `prize_liability`: **Mega Abomasnow ex** — 3-prize Mega-ex, Metal-weak, retreat 4; once Active/trapped it can't reposition → focus-fire.
+  - `primary_attacker`: **Mega Abomasnow ex** — 3-prize Mega-ex, Metal-weak, retreat 4; once Active/trapped it can't reposition → focus-fire.
 
 ## 5 · Objective counterplay summary
 
@@ -132,7 +132,7 @@ threats = [
 
 targets = [
   { "card": "Snover",            "role": "fragile_preevo",  "why": "90 HP sole line to the wincon; single hop, must survive a turn to evolve. Snipe pre-evolution (Metal OHKOs); deny the 3-prize Mega for a 1-prize trade. Deck cannot switch it away." },
-  { "card": "Mega Abomasnow ex", "role": "prize_liability", "why": "3-prize Mega-ex, Metal-weak (175 KOs), retreat 4; once Active/trapped it cannot reposition. Chip sticks (no heal) -> focus-fire." }
+  { "card": "Mega Abomasnow ex", "role": "primary_attacker", "why": "3-prize Mega-ex, Metal-weak (175 KOs), retreat 4; once Active/trapped it cannot reposition. Chip sticks (no heal) -> focus-fire." }
 ]
 ```
 

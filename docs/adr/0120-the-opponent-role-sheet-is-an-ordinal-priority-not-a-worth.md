@@ -21,7 +21,7 @@ measured from shipped data, are reproducible offline, and are independent of eac
 `_ROLE_PRIORITY.get(role or "", 0)` and `attacker` was not in the table, so every one of those
 assignments resolved to 0 with **no error, no log and no test**. `Scout._target_role` emits two more
 (`support`, `unknown`) that were equally absent. *Positive control:* the same walk reported
-`fragile_preevo` (221), `prize_liability` (182) and `engine` (46) as consumed, so the instrument
+`fragile_preevo` (221), `primary_attacker` (182) and `engine` (46) as consumed, so the instrument
 distinguished the two cases.
 
 **Fact 2 — the `avoid` −80 steer was firing on the opposite card class.** `pilot._draw_engine_ids`
@@ -36,7 +36,7 @@ Meowth ex           1071   170 HP   2 prizes   search, supporter_tutor -> escape
 
 Its provenance is `_GENERAL`, so it fired **unscaled by γ** — full strength against an opponent we
 had not recognised — and `build_matchup_plan` writes that tier **after** Read-Intel, so it
-**overwrote** the `prize_liability` the dossier had correctly assigned. Every existing test of the
+**overwrote** the `primary_attacker` the dossier had correctly assigned. Every existing test of the
 rule passed card id 66, the one card where it is correct, and the derivation had **no direct test at
 all**. The developer's ruling: *"Prize math must be a part of the equation. If they have a wall and
 draw engine like Mega Kangaskhan, and we can KO it, that's 3 prize cards… a key strategy of the
@@ -109,7 +109,7 @@ its own permission.
 
 | role | priority | change | reason |
 |---|---|---|---|
-| `prize_liability` | 100 | — | the wincon body itself |
+| `primary_attacker` | 100 | — | the wincon body itself |
 | `fragile_preevo` | 90 | — | its pre-evolution — deny the wincon before it comes online |
 | `disruption_target` | 60 | — | Brief-curated "remove this"; an explicit human claim outranks a derived one |
 | **`attacker`** | **50** | **NEW** | 530 shipped dossier assignments stop resolving to 0 |
@@ -132,7 +132,7 @@ damage ceilings `_threat_damage_pair` already computes, and three parsed `CardSt
 (`damageBoost`, `retreatFreeGrant`, `abilityEnergyTypes`) that make `enabler` derivable with **no new
 Function Tag**.
 
-First match wins, and the order is itself the ruling: `avoid` → `prize_liability` → `fragile_preevo`
+First match wins, and the order is itself the ruling: `avoid` → `primary_attacker` → `fragile_preevo`
 → `attacker` → `enabler` → `engine`. `avoid` is first because a utility body's incidental attack does
 not make it an attacker — Dudunsparce hits for 90 and is still not what removal is for.
 
@@ -156,8 +156,8 @@ and, being γ-independent, supersedes the dossier's claim; the dossier's 530 rem
 for the predicted entries the derivation cannot see. Both are corrections of the same defect, and
 the precise statement is the one in `ROLE_REGISTRY["attacker"]`.
 
-`prize_liability` derived from `prize_value >= 2` **over-claims on a 2-prize support ex** — the
-matchup-genie playbook's *"`prize_liability` means THE WINCON, not any fat multi-prize body"*. That is
+`primary_attacker` derived from `prize_value >= 2` **over-claims on a 2-prize support ex** — the
+matchup-genie playbook's *"`primary_attacker` means THE WINCON, not any fat multi-prize body"*. That is
 accepted rather than papered over: `Scout._target_role` already derives exactly this from
 `is_ex_body`, so it is precedent rather than invention, and correcting it is the curated Brief's job.
 That is the derive-first / Brief-corrects split the tier order already encodes.

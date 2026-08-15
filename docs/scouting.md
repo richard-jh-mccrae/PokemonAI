@@ -87,7 +87,7 @@ Two layers, so the Read is useful even off-meta:
 `evolution_paths` resolve from the dossier's evolution lines when recognized, else fall
 back to the engine's `evolvesFrom` chain (observed Riolu → Mega Lucario ex — a SINGLE hop; there is
 no "Lucario" in this set — regardless of
-recognition). Target `role ∈ {engine, fragile_preevo, prize_liability, attacker}`.
+recognition). Target `role ∈ {engine, fragile_preevo, primary_attacker, attacker}`.
 
 ## The artifact
 
@@ -153,7 +153,7 @@ it is five lines calling `make_agent` (ADR-0055, pinned by `tests/agents/test_ag
 |---|---|---|
 | target `fragile_preevo` | tier-crossing snipe-rank boost in `_body_threat_rank` (snipe rules + planner key-threat rung inherit) + gust-target tie-break | `matchup_targeting` |
 | target `engine` + `opp_is_engine_dependent` | sub-tier snipe-rank boost + gust tie-break, hard-gated on the asserted bool | `matchup_targeting` |
-| target `prize_liability` | **covered, no lever** — `_prize_value` (ex/Mega off CardStat), `gust_best_ko_prizes`, the Lethal Solver's prize math and `stall_target_is_keystone` already act on prize-heavy bodies | — |
+| target `primary_attacker` | **covered, no lever** — `_prize_value` (ex/Mega off CardStat), `gust_best_ko_prizes`, the Lethal Solver's prize math and `stall_target_is_keystone` already act on prize-heavy bodies | — |
 | `threats` (`brief_threat_ids`) | **covered, no lever** — the threat rank sees attackers by printed damage; the defensive half is `active_doomed`'s forward-doom | — |
 | `opp_donk_vulnerable` | **deferred** — the snipe half is delivered by the `fragile_preevo` lever; the residual "early aggression" half awaits a true-asserting Brief + correction evidence | — |
 | `opp_tempo` | **deferred** — race/stabilize collides with ADR-0026's killed framings (a prior must not drive the Plan) and would double-count Lever A favorability | — |

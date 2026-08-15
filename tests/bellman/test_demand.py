@@ -58,7 +58,7 @@ def _observation(hand, *, appeared=True, body=True):
 
 def _model():
     registry = ValueRegistry(
-        roles={LINE_TOP: ("win_condition",)},
+        roles={LINE_TOP: ("primary_attacker",)},
         facts={
             LINE_BASE: CardFacts(pokemon=True, stage="basic"),
             LINE_TOP: CardFacts(pokemon=True, stage="stage1"),

@@ -57,7 +57,7 @@ def _observation(hand, *, deck_count=10):
 
 def _registry(deck):
     return ValueRegistry(
-        roles={LINE_BASE: ("win_condition_base",), LINE_TOP: ("win_condition",)},
+        roles={LINE_BASE: ("primary_attacker",), LINE_TOP: ("primary_attacker",)},
         functions={REFRESH_CARD: ("draw", "shuffle_hand"),
                    POKEMON_TUTOR: ("search", "tutor_pokemon")},
         facts={card_id: CardFacts(pokemon=card_id in (LINE_BASE, LINE_TOP),

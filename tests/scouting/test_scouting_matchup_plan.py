@@ -32,7 +32,7 @@ def _facts(cid, prize, *tags):
 
 def test_brief_primary_and_derived_preevo_outrank_a_plain_body():
     # Doctrine: the Brief names the ready primary; card facts name its developing pre-evo.
-    plan = build_matchup_plan(brief_roles={1031: "prize_liability"},
+    plan = build_matchup_plan(brief_roles={1031: "primary_attacker"},
                               general_roles={1030: "fragile_preevo"}, gamma=1.0)
     assert plan.priority(1031) > 0                    # primary body is a target
     assert plan.priority(1030) > 0                    # its pre-evo is a target
@@ -41,7 +41,7 @@ def test_brief_primary_and_derived_preevo_outrank_a_plain_body():
 
 
 def test_avoid_role_is_a_negative_priority():
-    plan = build_matchup_plan(brief_roles={66: "avoid", 1031: "prize_liability"}, gamma=1.0)
+    plan = build_matchup_plan(brief_roles={66: "avoid", 1031: "primary_attacker"}, gamma=1.0)
     assert plan.priority(66) < 0
     assert plan.priority(66) < plan.priority(1031)
 
@@ -54,9 +54,9 @@ def test_general_draw_engine_is_avoided_without_a_read():
 
 
 def test_general_avoid_beats_read_intel_attacker():
-    # The Read labels any body with a printed attack "attacker"; the general card fact must win.
+    # The Read labels any body with a printed attack "backup_attacker"; the general card fact must win.
     general = derive_general_roles(_facts(DUDUNSPARCE, 1, "draw"))
-    plan = build_matchup_plan(read_roles={DUDUNSPARCE: "attacker"}, general_roles=general, gamma=1.0)
+    plan = build_matchup_plan(read_roles={DUDUNSPARCE: "backup_attacker"}, general_roles=general, gamma=1.0)
     assert plan.priority(DUDUNSPARCE) < 0
 
 
@@ -70,7 +70,7 @@ def test_curated_brief_overrides_the_general_engine_fact():
 
 def test_matchup_claims_are_silent_at_zero_gamma():
     # ADR-0051 invariant: an unrecognized opponent gets NO matchup override, only card facts.
-    plan = build_matchup_plan(brief_roles={1031: "prize_liability"}, read_roles={5: "attacker"},
+    plan = build_matchup_plan(brief_roles={1031: "primary_attacker"}, read_roles={5: "backup_attacker"},
                               general_roles=derive_general_roles(_facts(DUDUNSPARCE, 1, "draw")),
                               gamma=0.0)
     assert plan.priority(1031) == 0.0        # Brief claim silent
@@ -79,8 +79,8 @@ def test_matchup_claims_are_silent_at_zero_gamma():
 
 
 def test_matchup_priority_scales_with_confidence():
-    weak = build_matchup_plan(brief_roles={1031: "prize_liability"}, gamma=0.3)
-    strong = build_matchup_plan(brief_roles={1031: "prize_liability"}, gamma=1.0)
+    weak = build_matchup_plan(brief_roles={1031: "primary_attacker"}, gamma=0.3)
+    strong = build_matchup_plan(brief_roles={1031: "primary_attacker"}, gamma=1.0)
     assert 0 < weak.priority(1031) < strong.priority(1031)
 
 
@@ -108,7 +108,7 @@ def test_every_role_string_in_the_shipped_artifacts_is_declared():
         % undeclared_roles(brief_roles))
 
     # The walk really reached `attacker` — the string the whole lint exists for.
-    assert "attacker" in dossier_roles, dossier_roles
+    assert "backup_attacker" in dossier_roles, dossier_roles
     # Per store, not pooled: a role only the Read emits must not become legal in a hand-written Brief.
     for role in dossier_roles:
         assert READ_BY in ROLE_REGISTRY[role].assigners, (role, ROLE_REGISTRY[role].assigners)
@@ -125,7 +125,7 @@ def test_the_role_vocabulary_audit_actually_bites_with_a_positive_control():
                                 "card_inclusion": {"1": 0.5}}}
     assert roles_in_dossiers(fabricated) == ["__typo__", "engine"]      # …and skips non-role blocks
     assert undeclared_roles(roles_in_dossiers(fabricated)) == ["__typo__"]
-    assert roles_in_brief({"pokemon": [{"roles": ["primary_attacker", "support"]}]}) == ["engine", "prize_liability"]
+    assert roles_in_brief({"pokemon": [{"roles": ["primary_attacker", "support"]}]}) == ["engine", "primary_attacker"]
     # the real stores stay green on this same run, so the bite is discrimination, not a red-on-all
     assert undeclared_roles(roles_in_dossiers(load_artifact().dossiers)) == []
 
@@ -144,8 +144,8 @@ def test_the_registry_is_a_well_formed_ordinal_ladder():
     """The ORDER is the load-bearing part (D1's ordinal finding), so it is asserted directly rather
     than left implied by the numbers."""
     p = {name: r.priority for name, r in ROLE_REGISTRY.items()}
-    assert p["prize_liability"] > p["fragile_preevo"] > p["disruption_target"] \
-        > p["attacker"] > p["enabler"] > p["engine"] == 0 > p["avoid"]
+    assert p["primary_attacker"] > p["fragile_preevo"] > p["disruption_target"] \
+        > p["backup_attacker"] > p["enabler"] > p["engine"] == 0 > p["avoid"]
     # Every role says why it sits there, and names at least one tier allowed to assign it.
     assert [r for r, e in ROLE_REGISTRY.items() if not e.reason.strip()] == []
     assert [r for r, e in ROLE_REGISTRY.items()
@@ -155,9 +155,9 @@ def test_the_registry_is_a_well_formed_ordinal_ladder():
 def test_the_530_shipped_attacker_assignments_are_no_longer_inert():
     """Rank asserted relative to its neighbours, not as a magnitude: attacking is a real steer but
     not automatically a better removal target than the primary attacker or its fragile pre-evolution."""
-    assert role_priority("attacker") > 0
-    assert role_priority("prize_liability") > role_priority("attacker") > role_priority("engine")
-    plan = build_matchup_plan(read_roles={345: "attacker"}, gamma=1.0)
+    assert role_priority("backup_attacker") > 0
+    assert role_priority("primary_attacker") > role_priority("backup_attacker") > role_priority("engine")
+    plan = build_matchup_plan(read_roles={345: "backup_attacker"}, gamma=1.0)
     assert plan.priority(345) > 0
     # 0 is the fallback for a body with NO role — no longer also the fallback for a forgotten one.
     assert plan.priority(999) == 0.0
@@ -174,34 +174,34 @@ def test_avoid_still_fires_on_a_one_prize_draw_engine():
 
 def test_avoid_no_longer_fires_on_fezandipiti_ex_two_prizes():
     """210 HP, Pokémon ex, `draw` tag — but two prizes, so the chip-then-gust line is a TARGET."""
-    assert derive_general_roles(_facts(FEZANDIPITI, 2, "draw")) == {FEZANDIPITI: "prize_liability"}
-    assert role_priority("prize_liability") > 0
+    assert derive_general_roles(_facts(FEZANDIPITI, 2, "draw")) == {FEZANDIPITI: "primary_attacker"}
+    assert role_priority("primary_attacker") > 0
 
 
 def test_avoid_no_longer_fires_on_mega_kangaskhan_ex_three_prizes():
     """Three utility tags do not save a 3-prize body: the gate is the prize count."""
     roles = derive_general_roles(_facts(MEGA_KANGASKHAN, 3, "draw", "stall", "dig:2"))
-    assert roles == {MEGA_KANGASKHAN: "prize_liability"}
+    assert roles == {MEGA_KANGASKHAN: "primary_attacker"}
 
 
-def test_the_general_tier_no_longer_overwrites_the_dossiers_prize_liability():
+def test_the_general_tier_no_longer_overwrites_the_dossiers_primary_attacker():
     """`_GENERAL` fires UNSCALED by γ and is written AFTER Read-Intel, so an over-broad general rule
     overwrites a correct dossier role at full strength against an unrecognised opponent."""
     general = derive_general_roles(_facts(MEGA_KANGASKHAN, 3, "draw", "stall"))
-    plan = build_matchup_plan(read_roles={MEGA_KANGASKHAN: "prize_liability"},
+    plan = build_matchup_plan(read_roles={MEGA_KANGASKHAN: "primary_attacker"},
                               general_roles=general, gamma=1.0)
-    assert plan.role(MEGA_KANGASKHAN) == "prize_liability"
+    assert plan.role(MEGA_KANGASKHAN) == "primary_attacker"
     assert plan.priority(MEGA_KANGASKHAN) > 0
     # Positive control: the general tier still WINS where it fires, so the survival above is the
     # gate declining rather than the tier order silently changing.
     still = derive_general_roles(_facts(DUDUNSPARCE, 1, "draw"))
-    overwritten = build_matchup_plan(read_roles={DUDUNSPARCE: "prize_liability"},
+    overwritten = build_matchup_plan(read_roles={DUDUNSPARCE: "primary_attacker"},
                                      general_roles=still, gamma=1.0)
     assert overwritten.role(DUDUNSPARCE) == "avoid"
 
 
 def test_the_avoid_inconsistency_between_two_prize_engines_is_gone():
-    """`prize_liability` on a 2-prize SUPPORT ex is an over-claim card facts cannot avoid; correcting
+    """`primary_attacker` on a 2-prize SUPPORT ex is an over-claim card facts cannot avoid; correcting
     it is the curated Brief's job (derive-first, Brief-corrects)."""
     meowth = derive_general_roles(_facts(1071, 2, "search", "supporter_tutor"))[1071]
     assert meowth == derive_general_roles(_facts(FEZANDIPITI, 2, "draw"))[FEZANDIPITI]
@@ -223,7 +223,7 @@ def test_the_derived_tier_names_every_role_it_declares_a_general_tier_for():
     of a role assigned in the data that the table forgot."""
     one_of_each = {
         1: _body(prize=1, tags=("draw",)),                       # avoid
-        2: _body(prize=2),                                       # prize_liability
+        2: _body(prize=2),                                       # primary_attacker
         3: _body(prize=1, fwd=120),                              # fragile_preevo
         4: _body(prize=1, own=120),                              # attacker
         5: _body(prize=1, boost=30),                             # enabler
@@ -244,7 +244,7 @@ def test_the_worked_example_re_maps_the_way_the_developer_ruled_it():
         dwebble: _body(prize=1, fwd=120),
         mega: _body(prize=3, tags=("draw", "stall", "dig:2"), own=200),
     })
-    assert roles == {crustle: "attacker", dwebble: "fragile_preevo", mega: "prize_liability"}
+    assert roles == {crustle: "backup_attacker", dwebble: "fragile_preevo", mega: "primary_attacker"}
     assert all(role_priority(r) > 0 for r in roles.values())
     assert role_priority(roles[mega]) > role_priority(roles[dwebble]) \
         > role_priority(roles[crustle])
@@ -257,7 +257,7 @@ def test_a_utility_bodys_incidental_attack_does_not_make_it_an_attacker():
         == {66: "avoid"}
     # Positive control: strip the utility tags and the SAME body is an attacker, so the result
     # above is the ordering rule firing rather than the damage fact going unread.
-    assert derive_general_roles({66: _body(prize=1, own=90)}) == {66: "attacker"}
+    assert derive_general_roles({66: _body(prize=1, own=90)}) == {66: "backup_attacker"}
 
 
 def test_an_energy_accel_body_is_never_avoided_because_it_accelerates_by_attacking():
@@ -265,7 +265,7 @@ def test_an_energy_accel_body_is_never_avoided_because_it_accelerates_by_attacki
     1-prize `energy_accel` body like Cinderace, a deck's MAIN attacker. Only the −80 is narrowed."""
     assert derive_general_roles({1: _body(prize=1, tags=("energy_accel",))}) == {1: "engine"}
     assert derive_general_roles({1: _body(prize=1, tags=("energy_accel",), own=120)}) \
-        == {1: "attacker"}
+        == {1: "backup_attacker"}
     # a body carrying BOTH still avoids — a narrowing of the trigger, not a hole in it
     assert derive_general_roles({1: _body(prize=1, tags=("energy_accel", "draw"))}) == {1: "avoid"}
 
@@ -275,7 +275,7 @@ def test_enabler_is_derived_from_card_facts_that_already_ship():
     assert derive_general_roles({1: _body(boost=30)}) == {1: "enabler"}
     assert derive_general_roles({2: _body(retreat=True)}) == {2: "enabler"}
     assert derive_general_roles({3: _body(fuel=True)}) == {3: "enabler"}
-    assert role_priority("attacker") > role_priority("enabler") > role_priority("engine")
+    assert role_priority("backup_attacker") > role_priority("enabler") > role_priority("engine")
     assert derive_general_roles({4: _body()}) == {}     # no fact -> silence, not a guess
 
 
