@@ -1,104 +1,26 @@
 {
   "slug": "hydrapple_ex_meganium_teal_mask_ogerpon_ex",
   "label": "Hydrapple ex / Meganium / Teal Mask Ogerpon ex",
-  "covers": [
-    "Hydrapple ex / Meganium / Teal Mask Ogerpon ex",
-    "Teal Mask Ogerpon ex"
-  ],
+  "covers": ["Hydrapple ex / Meganium / Teal Mask Ogerpon ex", "Teal Mask Ogerpon ex"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "midrange",
-    "opp_comeback_disruptor": true
-  },
+  "opponent_properties": {"opp_tempo": "midrange", "opp_comeback_disruptor": true},
   "pokemon": [
-    {
-      "card": "Applin",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Bayleef",
-      "roles": [
-        "backup_attacker",
-        "support"
-      ]
-    },
-    {
-      "card": "Chikorita",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Dipplin",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Fezandipiti ex",
-      "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Hydrapple ex",
-      "roles": [
-        "primary_attacker",
-        "energy_accel",
-        "threat"
-      ]
-    },
-    {
-      "card": "Meganium",
-      "roles": [
-        "backup_attacker",
-        "energy_accel",
-        "disruption_target",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Meowth ex",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
-      ]
-    },
-    {
-      "card": "Teal Mask Ogerpon ex",
-      "roles": [
-        "primary_attacker",
-        "energy_accel",
-        "disruption_target",
-        "support",
-        "threat"
-      ]
-    }
+    {"card": "Applin", "roles": ["primary_attacker"]},
+    {"card": "Bayleef", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Chikorita", "roles": ["backup_attacker"]},
+    {"card": "Dipplin", "roles": ["primary_attacker"]},
+    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
+    {"card": "Hydrapple ex", "roles": ["primary_attacker", "accel_source"]},
+    {"card": "Meganium", "roles": ["backup_attacker", "accel_source", "disruption_target", "support_pokemon"]},
+    {"card": "Meowth ex", "roles": ["disruption_target"]},
+    {"card": "Teal Mask Ogerpon ex", "roles": ["primary_attacker", "disruption_target"]},
+    {"card": "Celebi", "roles": ["support_pokemon"]},
+    {"card": "Tapu Bulu", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Forest of Vitality",
-      "role": "evolution_compression"
-    },
-    {
-      "card": "Bug Catching Set",
-      "role": "grass_energy_dig"
-    },
-    {
-      "card": "Unfair Stamp",
-      "role": "post_ko_hand_disruption"
-    },
-    {
-      "card": "Boss's Orders",
-      "role": "gust"
-    }
+    {"card": "Forest of Vitality", "role": "evolution_compression"},
+    {"card": "Bug Catching Set", "role": "grass_energy_dig"},
+    {"card": "Unfair Stamp", "role": "post_ko_hand_disruption"},
+    {"card": "Boss's Orders", "role": "gust"}
   ]
 }

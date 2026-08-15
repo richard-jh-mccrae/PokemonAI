@@ -15,15 +15,10 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 # Per-deck Role overlay on universal Function Tags (sparse — only deck-intentional cards).
 # Roles ARE the deck's opt-in to the role-keyed General Strategy rules.
 ROLES = Roles({
-    MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
-    CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
-    # (the `starter` Role was retired by ADR-0079; the openers are STRATEGY.starter_priority below)
-    IGNITION_ENERGY: ["accel_source"],           # CCC on an Evolution = one-attach Nebula Beam
-    MEGA_SIGNAL: ["tutor"], SALVATORE: ["tutor"], HILDA: ["tutor"],
-    BUDDY_POFFIN: ["tutor"], ULTRA_BALL: ["tutor"],
-    CRUSHING_HAMMER: ["disruption"], BOSS_ORDERS: ["gust"],
-    WALLYS: ["recovery"], NIGHT_STRETCHER: ["recovery"],
-}, evolves={STARYU: MEGA_STARMIE_EX})
+    MEGA_STARMIE_EX: ["primary_attacker"],
+    STARYU: ["primary_attacker"],
+    CINDERACE: ["accel_source"],
+})
 
 STRATEGY = Strategy(
     name="mega_starmie",

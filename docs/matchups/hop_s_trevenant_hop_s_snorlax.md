@@ -184,7 +184,7 @@ Energy) **not in this 60-card list** — treat splash/switch-enabler commentary 
   - `fragile_preevo`: `Hop's Phantump` — 70 HP, 1 prize, Darkness ×2, base of the **only** wincon line;
     snipe/gust in the evolution window to deny a Trevenant prize-free. **The one target row** — it arms the
     live `brief_preevo` lever at the high-value wincon pre-evo.
-  - `prize_liability`: **none** — no ex / Mega-ex.
+  - `primary_attacker`: **none** — no ex / Mega-ex.
   - **Anti-targets (do NOT list / snipe):**
     - `Dudunsparce` / `Dunsparce` — the redundant, self-recurring draw line; Dudunsparce refunds any KO/gust
       (Run Away Draw) and denying one node is low-value. Ability-lock is the only clean off-switch.

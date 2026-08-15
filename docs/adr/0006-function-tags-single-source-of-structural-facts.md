@@ -14,7 +14,7 @@ produce-once/consume-as-context principle stands for behavioral tags.
 > `card_functions.json`. The table now carries **only behavioral function** (draw / search / heal /
 > poison / spread / …). The rest of this ADR still holds for *those* facts: `cards.py` predicates
 > stay canonical for **offline** use, "produce once → consume as context" still governs tags→roles,
-> and the runtime `prize_liability` role reads `CardData.ex`/`megaEx` **directly** rather than a
+> and the runtime `primary_attacker` role reads `CardData.ex`/`megaEx` **directly** rather than a
 > `prize_swing` tag. **Depth 1** (the `is_exclass`→tag reuse) is reverted; Depth 2/3 apply to
 > behavioral tags only. The original decision is kept below for the record.
 
@@ -35,7 +35,7 @@ widen the divergence — the same fact spelled differently in each layer, drifti
   (+ engine probe + curated override) into **Function Tags** — the canonical per-card
   structural vocabulary, compiled offline and shipped as `card_functions.json` for O(1)
   runtime lookup (the same offline-produce / runtime-consume split as ADR-0003).
-- **Roles** (`attacker` / `prize_liability` / `engine`, in dossiers and the Read) are
+- **Roles** (`attacker` / `primary_attacker` / `engine`, in dossiers and the Read) are
   Function Tags surfaced in a threat/target slot — *derived from the tags*, never
   re-derived from raw fields or stats. `fragile_preevo` is the lone exception: it is
   evolution-line-*position*, not a card-intrinsic fact, so it stays bespoke.

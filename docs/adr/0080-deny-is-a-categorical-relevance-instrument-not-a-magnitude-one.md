@@ -124,7 +124,7 @@ same source rather than derive a second, per the `_build_standing` / `_affords` 
 fact lesson. The `Ability Fuel` term in `src/common/CONTEXT.md` covers both readings.
 
 **Why derived rather than Brief-first: the Brief-free fallback ranks the doctrine BACKWARDS.**
-`Scout._target_role` classifies `prize_liability` (an *ex* body) > `attacker` (`maxDamage > 0`) >
+`Scout._target_role` classifies `primary_attacker` (an *ex* body) > `attacker` (`maxDamage > 0`) >
 `support`. Against an unbriefed deck that puts **Meowth ex top** — the body the doctrine says to
 ignore — and makes **Riolu and Solrock indistinguishable**, both merely "attacker". Only 8 Briefs
 exist and the Kaggle grader is an unknown deck by default. This also puts the knowledge at the seam

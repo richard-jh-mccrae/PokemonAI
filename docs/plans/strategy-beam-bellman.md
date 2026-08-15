@@ -1,16 +1,16 @@
-# Needs as a strategy beam for Bellman
+# Strategy-guided Bellman beam
 
-Status: implementation in progress
+Status: implemented
 
-This specification replaces the per-state, additive-value interpretation of Needs in
-`terminal-proof-needs-bounded-bellman.md`. Its terminal-proof requirements remain in force.
+This specification replaces the per-state, additive-value interpretation of demand in
+`terminal-proof-strategy-guided-bellman.md`. Its terminal-proof requirements remain in force.
 
 ## Intent
 
-Bellman owns strategic value. With a correct model and sufficient search, it must choose the same policy whether
-Needs is enabled or disabled.
+Bellman owns value and final choice. With sufficient search, it chooses the same policy whether Strategy guidance
+is enabled or disabled.
 
-Needs exists to help bounded Bellman find strong lines sooner. It compiles authored general and deck-specific
+Strategies help bounded Bellman find strong lines sooner. It compiles authored General, Deck, and matched Opponent
 strategy into a small, state-specific first-search beam. It does not define utility, duplicate lethal analysis, or
 delete a line merely because that line does not match an authored strategy.
 
@@ -21,33 +21,33 @@ The runtime order is:
 
 ```text
 same-turn Terminal Proof
-→ turn-start Needs strategy snapshot
+→ Planning-Epoch Strategy Snapshot
 → live Odds/access overlay
 → structural duplicate and dominance proofs
-→ Needs-ordered bounded Bellman
+→ Strategy-ordered bounded Bellman
 → iterative widening of every unresolved line
 ```
 
 ## Core invariants
 
-1. Exhaustive Needs ON and Needs OFF choose the same Bellman policy.
-2. Needs changes exploration order only.
-3. Needs contributes no independent reward or penalty.
-4. Needs cannot independently prune a legal branch.
+1. Exhaustive Strategy ON and Strategy OFF choose the same Bellman policy.
+2. Strategies change exploration order only.
+3. Strategies contribute no independent reward or penalty.
+4. Strategies cannot independently prune a legal branch.
 5. Odds contributes probabilities and reachability, not additive utility.
 6. Unknown evidence fails open: Bellman retains and eventually widens the line.
 7. Every deletion names an independent legality, equivalence, dominance, or admissible-bound proof.
-8. A deck may have no confident Need guidance for a turn.
+8. A deck may have no confident Strategy guidance for a turn.
 
 ## Authored strategy contract
 
-General and deck-specific Needs strategies use one declarative, serializable interface. Arbitrary callbacks are not
+General, deck-specific, and opponent Strategies use one declarative, serializable interface. Arbitrary callbacks are not
 allowed because runtime behavior, tests, A/B identity, and the submission brief must consume the same source.
 
 Each authored strategy declares:
 
 - a stable identifier;
-- its general or deck scope;
+- its general, deck, or opponent scope;
 - board and match activation conditions;
 - desired board facts;
 - a recipient selector;
@@ -63,33 +63,33 @@ Strategies describe desired facts, not action scripts. They do not carry indepen
 weights. Stable deck roles and relationships may guide activation; matchup sequences and card-specific ordering do
 not belong in this contract.
 
-General strategies apply by default. Deck strategies may add guidance. A deck may disable or narrow a general
+General strategies apply by default. Deck and matched Opponent strategies may add guidance. A deck may disable or narrow a general
 strategy only through an explicit override referencing the general strategy's stable identifier. Resolution never
 silently replaces a strategy by name or priority.
 
 The resolved strategy set has a stable content hash. The runtime and submission manifest consume that exact resolved
 set.
 
-## Turn-start Needs snapshot
+## Strategy Snapshot
 
-Needs runs once at the first controllable decision of each own turn, after mandatory turn-start resolution. The
-result is cached for the remainder of that turn.
+General, Deck, and matched Opponent Strategies resolve at the first controllable decision of each turn. Their
+activation becomes the Planning-Epoch Strategy Snapshot. A newly revealed strategy-relevant fact ends that epoch;
+the three layers combine again against the new known state. Hand changes that do not affect activation reuse the
+same snapshot while Odds updates against current access.
 
-The snapshot is hand-independent. Drawing, searching, recovering, or revealing cards does not redefine the turn's
-Needs. Those events update Odds against the existing snapshot.
-
-Each active hint identifies desired board facts for a specific recipient and deadline. A hint may become satisfied,
+Each active hint identifies desired board facts for a specific recipient and deadline. Match strength ranges from
+zero to strong based on condition fit and the action's live probability of advancing that fact. A hint may become satisfied,
 obsolete, or unreachable as Bellman walks a branch. Those are cheap branch-local status updates; they do not rebuild
 the strategy snapshot.
 
 If a branch makes a hint unreachable, that branch stops receiving the hint's priority. It is not penalized or pruned
 for doing so. Bellman determines whether the alternative state is stronger.
 
-Needs may abstain when strategy is ambiguous. Complex tradeoffs, such as investing in a support engine versus a
+Strategies may abstain when strategy is ambiguous. Complex tradeoffs, such as investing in a support engine versus a
 future attacker, remain Bellman decisions unless authored conditions identify a high-confidence beam without
 assigning final value.
 
-## Needs beam formation
+## Strategy beam formation
 
 Activated strategies form a small first-search frontier. Ordering uses only:
 
@@ -98,7 +98,7 @@ Activated strategies form a small first-search frontier. Ordering uses only:
 3. current probability of satisfying the desired facts;
 4. the marginal access improvement offered by a legal action.
 
-Needs does not simulate board-potential deltas to rank strategies. It does not enumerate every positive evolution,
+Strategy guidance does not simulate board-potential deltas to rank strategies. It does not enumerate every positive evolution,
 attachment, heal, deployment, denial, or future development operation.
 
 Several non-dominated strategy hints may share the first beam. Bellman gives those hints fair shallow evaluation and
@@ -106,11 +106,11 @@ then refines the strongest executable results. Ambiguous states may produce an e
 
 ## Odds and access
 
-Odds is evaluated against the cached turn snapshot. It refreshes when visible access facts change, including hand,
+Odds is evaluated against the current Planning-Epoch Strategy Snapshot. It refreshes when visible access facts change, including hand,
 deck knowledge, discard, known top cards, reveals, and remaining access resources.
 
 For each relevant action, Odds may report the marginal probability of satisfying a hint before its deadline. An
-access action with no live target or no probability improvement receives no Needs priority.
+access action with no live target or no probability improvement receives no Strategies priority.
 
 Odds may also:
 
@@ -124,18 +124,19 @@ access can reach.
 
 ## Bellman allocation and widening
 
-Bellman searches the Needs beam first and obtains an executable lower bound. Non-Need root actions initially receive
+Bellman searches the Strategy Beam first and obtains several completed, executable paths. Outside root actions initially receive
 a cheap admissible upper-bound check rather than an equal deep search.
 
 An outside action is deleted only when its upper bound cannot beat the incumbent lower bound under Bellman's exact
 tie rules. Infinite or unresolved bounds require widening. With unlimited wall clock, every unresolved legal line is
 eventually evaluated.
 
-This preserves the anytime benefit of authored strategy without turning the beam into a second policy engine.
+Bellman then widens into unresolved legal paths until their own bounds prove they cannot beat the incumbent or the
+decision timeout expires. The best completed path is always the safe decision. Strategy satisfaction never stops search.
 
 ## Bellman upper bound
 
-Needs is removed from additive Bellman bounds. The upper bound is:
+Strategies are absent from additive Bellman bounds. The upper bound is:
 
 \[
 Q_U(s,a)=\Delta V(s,a)+U_{reachable}(s')
@@ -150,7 +151,7 @@ Terminal Proof supplies a three-valued result:
 - refuted: terminal win value is unavailable to that proved scope;
 - unknown: retain the terminal ceiling and widen conservatively.
 
-Needs does not recreate prize or same-turn win logic. A terminal value is removed only by a conclusive proof result,
+Strategy guidance does not recreate prize or same-turn win logic. A terminal value is removed only by a conclusive proof result,
 not by failure to find a proof within a cap.
 
 ## Structural search reduction
@@ -184,30 +185,31 @@ actions are not called commutative merely because one fixed outcome reaches the 
 Information-before-commit spans three owners:
 
 - authored general strategy states the preference;
-- Needs identifies which information is relevant;
+- Strategy guidance identifies which information is relevant;
 - Odds measures the access improvement.
 
 The reverse order is deleted only by a structural dominance proof. Information-first must preserve every downstream
 commitment choice, consume no conflicting resource, introduce no harmful state change, and retain every result
 reachable by committing first.
 
-When those obligations are unresolved, Needs/Odds may order information first, but Bellman retains both lines.
+When those obligations are unresolved, Strategies/Odds may order information first, but Bellman retains both lines.
 
 ## Submission strategy interface
 
 `common.strategy` remains the owner of deck declarations. The shared general strategy registry and each deck's
-declarations resolve through the same serializable Needs strategy type.
+declarations resolve through the same serializable Strategy type.
 
 Every submission manifest and `brief.html` includes:
 
 - the authored general strategies;
 - the deck-specific strategies;
+- matched opponent strategies supplied by Scouting Briefs;
 - explicit deck overrides;
 - the resolved effective strategy set;
 - stable strategy identifiers and provenance;
 - activation conditions and desired facts in human-readable form;
 - the resolved strategy-set hash;
-- the Needs ON/OFF state;
+- the Strategy ON/OFF state;
 - the Odds state and Bellman profile hash.
 
 The rendered brief is a projection of the same manifest consumed by packaging tests. It is not maintained as a
@@ -217,30 +219,30 @@ second prose copy.
 
 Runtime telemetry exposes enough evidence to review search behavior without feeding diagnostics back into policy:
 
-- turn snapshot identity and strategy-set hash;
+- Planning-Epoch snapshot identity and strategy-set hash;
 - activated, inactive, and abstained strategy identifiers;
 - cached hint status changes;
 - Odds and marginal access changes;
 - first-beam actions and widening events;
 - commutativity, dominance, and admissible-bound proofs;
 - terminal-proof status;
-- time attributed to Needs, Odds, structural reduction, and Bellman;
+- time attributed to Strategies, Odds, structural reduction, and Bellman;
 - planner calls and guarded continuation reuse.
 
-## Needs A/B contract
+## Strategies A/B contract
 
-The canonical comparison changes only the Needs strategy beam.
+The canonical comparison changes only the Strategy beam.
 
-Needs ON enables authored strategy activation and beam ordering. Needs OFF disables that activation and ordering.
+Strategy ON enables authored strategy activation and beam ordering. Strategy OFF disables that activation and ordering.
 Both variants retain Odds, Terminal Proof, structural reduction, Bellman limits, value parameters, and the same
 resolved strategy catalog.
 
-Both artifacts record Needs state, Odds state, strategy-set hash, and Bellman profile hash in `brief.html`. Paired
+Both artifacts record Strategy state, Odds state, strategy-set hash, and Bellman profile hash in `brief.html`. Paired
 matches use the same seeds, seats, decks, artifact inputs, and limits.
 
 A/B reporting covers decision latency, match latency, callback distribution, beam and widening counts, correction
 agreement, policy differences, and match outcomes. Odds-only experiments are separate and cannot be labeled as the
-canonical Needs comparison.
+canonical Strategy comparison.
 
 ## Implementation validation workflow
 
@@ -273,7 +275,7 @@ The report also states match count, decision count, and missing-sample counts. L
 observed seconds, and the declared limit when available. Statistics use finite valid samples only and never replace
 missing values with zero.
 
-The analyzer supports a machine-readable JSON form for paired Needs A/B comparison. Text and JSON are projections of
+The analyzer supports a machine-readable JSON form for paired Strategies A/B comparison. Text and JSON are projections of
 the same calculated report.
 
 Exact match wall time must come from explicit replay metadata or a timing sidecar written by the match runner. It is
@@ -289,20 +291,20 @@ After implementation, the handoff gives the user:
 1. the manual command that produces mirror replays, logs, and explicit match timing;
 2. the analyzer command for that output directory;
 3. the expected report shape;
-4. the corresponding Needs OFF commands for a paired comparison.
+4. the corresponding Strategy OFF commands for a paired comparison.
 
 ## Acceptance gates
 
 The implementation is not releasable until all of these hold:
 
-1. Exhaustive differential tests prove Needs ON and OFF choose the same completed policy.
-2. Hand and access changes update Odds without rebuilding the turn Needs snapshot.
-3. A turn may produce no Needs guidance and still execute ordinary Bellman.
-4. No Need hint enters utility, transition ledgers, or additive upper bounds.
+1. Exhaustive differential tests prove Strategy ON and OFF choose the same completed policy.
+2. Strategy-relevant new facts rebuild the Planning-Epoch Strategy Snapshot; access-only changes update Odds.
+3. A turn may produce no Strategy guidance and still execute ordinary Bellman.
+4. No Strategy hint enters utility, transition ledgers, or additive upper bounds.
 5. Every branch deletion records an independent proof and executable incumbent where applicable.
 6. Static and diamond commutativity tests preserve exact reference-solver policy.
 7. Strategy resolution, overrides, hashes, and `brief.html` rendering share one manifest source.
-8. Needs ON/OFF A/B artifacts differ only in the declared Needs toggle and derived identity.
+8. Strategy ON/OFF A/B artifacts differ only in the declared Strategy toggle and derived identity.
 9. Existing human correction gates remain blocking.
 10. Replay timing fixtures verify aggregation, missing samples, explicit limit hits, and frame attribution.
 11. The packaged native five-match mirror gate remains a user-run final measurement.
@@ -310,5 +312,5 @@ The implementation is not releasable until all of these hold:
 ## Deferred work
 
 Multi-turn Bellman is the intended consumer of the saved wall clock, but its horizon, opponent policy, and terminal
-value model are outside this specification. Needs must not encode future-turn strategy to compensate for a missing
+value model are outside this specification. Strategies must not encode future-turn strategy to compensate for a missing
 multi-turn Bellman implementation.

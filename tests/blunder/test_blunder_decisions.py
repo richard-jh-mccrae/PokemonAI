@@ -112,7 +112,7 @@ def test_frames_use_full_decision_telemetry_for_both_selfplay_seats():
     live_by_seat = {
         0: [
             {"bellman": True, "chosen": [0],
-             "diagnostics": {"needs": {"elapsed_ms": 123.0}}},
+             "diagnostics": {"strategy_beam": {"elapsed_ms": 123.0}}},
             {"bellman": True, "chosen": [0], "decision_seconds": 0.456},
         ],
         1: [
@@ -125,3 +125,26 @@ def test_frames_use_full_decision_telemetry_for_both_selfplay_seats():
 
     assert [frame["decision_seconds"] for frame in frames] == pytest.approx(
         [2.5, 0.234, 0.456, 0.567, None])
+
+
+def test_frames_and_shell_show_strategy_search_timing():
+    replay = _timed_replay()
+    final = {
+        "search_seconds": 60.0, "first_found_seconds": 5.1,
+        "stabilized_seconds": 5.1, "strategy_wave": "first",
+        "strategy_focus_position": 3, "strategy_focus_count": 8,
+    }
+    live = {0: [{"bellman": True, "chosen": [0],
+                 "diagnostics": {
+                     "terminal_proof": {"attempted": True, "elapsed_ms": 125.0},
+                     "production": {"final_incumbent": final},
+                 }},
+                {"bellman": True, "chosen": [0]}]}
+
+    frames = frames_payload(replay, live_records_by_seat=live)["frames"]
+
+    assert frames[0]["search_timing"]["remaining_seconds"] == pytest.approx(54.9)
+    assert frames[0]["lethal_proof_seconds"] == pytest.approx(0.125)
+    assert "Lethal solver" in _SHELL_HTML
+    assert "Final sequence first found" in _SHELL_HTML
+    assert "Strategy focus position" in _SHELL_HTML

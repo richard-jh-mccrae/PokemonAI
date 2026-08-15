@@ -17,7 +17,7 @@ the data products **in order** (each step reads the previous output):
    **re-run without `--fresh` a few times** to accumulate the rng-gated tags
    (recycle/heal/energy_accel — coverage is monotonic, see `docs/card-functions.md`).
 3. **`python tools/build_scouting_artifact.py`** — recompile the scouting artifact
-   (`common/scouting/artifact.json`). Needs the meta store; run the daily fetch first if stale.
+   (`common/scouting/artifact.json`). Requires the meta store; run the daily fetch first if stale.
 4. **Re-validate decks**: `python tools/deck_convert.py to-csv <deck.txt> <name>` hard-fails on
    now-illegal cards; then `python tools/sim/check_agent.py <name>`.
 5. **`python tools/submit_agent.py build <name>`** — re-bundle for submission.

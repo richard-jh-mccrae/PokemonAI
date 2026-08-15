@@ -8,7 +8,7 @@ Related: ADR-0026 (the Read / γ), ADR-0027 (Matchup Briefs), ADR-0038 (γ-gated
 Recognition works — the Scout produces a confident Read (γ→1 as cards reveal) and `/matchup-genie`
 authors correct Briefs. But the Pilot *consumed* that knowledge as a faint tie-break: the Brief
 `fragile_preevo` role flipped one +30 positional rung, `engine` was kill-switched off, and
-`prize_liability` had **no consumer at all**. Meanwhile the generic fallback threat model inverts on
+`primary_attacker` had **no consumer at all**. Meanwhile the generic fallback threat model inverts on
 real boards — `forward_max_damage` is name-keyed, so a phantom `Dudunsparce ex` (150) inflated a draw
 engine's line while a hand-size wincon (Alakazam, printed 0) read as harmless. Net effect the user
 observed on mega_starmie: the agent sniped draw engines over win-condition lines. The knowledge was
@@ -33,7 +33,7 @@ roles, `Read.targets` → Intel roles); the plan is a pure composition + scale.
 
 ### Role → priority seed (`_ROLE_PRIORITY`, ladder-tunable)
 
-`prize_liability` 100 · `fragile_preevo` 90 · `disruption_target` 60 · `engine` 0 (neutral — a plain
+`primary_attacker` 100 · `fragile_preevo` 90 · `disruption_target` 60 · `engine` 0 (neutral — a plain
 accelerant is a poor target; `disruption_target` is the *explicit* "hunt an engine" role) · `avoid` −80.
 Magnitudes sit above the positional snipe rungs (Σ≲150) but below `KO_SCORE` (1000): scaled into the
 tactical band by `_MATCHUP_PRIORITY_SCALE` (×5) at the consumer.
@@ -96,7 +96,7 @@ feedback, not gauntlet A/B.
     touch my hand), where the don't-gift guard is merely conservative — relaxing it for one-sided
     disruption (pure upside) is a follow-up.
   - *Gust-to-KO toward the wincon* — `_gust_wincon_denial` (`doctrine_gust.py`, `_WINCON_DENIAL_PRIZES`
-    1.5 × γ): a `fragile_preevo` / `prize_liability` gust target is worth ~1.5 extra effective prizes,
+    1.5 × γ): a `fragile_preevo` / `primary_attacker` gust target is worth ~1.5 extra effective prizes,
     so the gust drags the 1-prize crib wincon up over a bigger INERT body (a fragile-wincon matchup is
     won by denying the line, not prize count — the user's call). A moderate small-integer-band bump, NOT
     the ×5 snipe override: it sits above a plain prize gap but below the live-threat denial term

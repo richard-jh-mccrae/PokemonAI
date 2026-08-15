@@ -154,7 +154,7 @@ def terminal_effects_supported(state: DecisionState, action: LegalAction, *,
 
 
 class TerminalProver:
-    """Find a guaranteed win before Needs or Bellman may rank ordinary actions."""
+    """Find a guaranteed win before Strategies or Bellman rank ordinary actions."""
 
     def __init__(self, provider, *, limits: TerminalLimits, profile_hash: str = ""):
         self.provider = provider

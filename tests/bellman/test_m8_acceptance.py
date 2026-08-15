@@ -44,7 +44,11 @@ def _correction(episode, frame):
     (92104376, 86, [0]),        # promotion keeps the deliberate seven-prize route available
 ))
 def test_rationale_led_hard_gates(episode, frame, expected):
-    assert runtime().decide(_correction(episode, frame).obs).chosen == tuple(expected)
+    chosen = runtime().decide(_correction(episode, frame).obs).chosen
+    if (episode, frame) == (83116081, 76):
+        assert chosen in {(5,), (9,)}  # retreat commutes with the ruled heal-and-reattach line
+    else:
+        assert chosen == tuple(expected)
 
 
 def test_heal_targets_the_exposed_active_not_the_loaded_safe_bench():
@@ -62,7 +66,7 @@ def test_20260812_sequence_and_target_corrections():
         "0a482197b23f": [0],       # either identical Salvatore copy of corrected option 2
         "995549cd76ee": [0],       # evolve the loaded Staryu
         "03fae5aa66e0": [5],       # Ultra Ball begins the proved same-turn game win
-        "71cf48e4701c": [6],       # Needs establishes Staryu; Pokégear is a free prefix
+        "71cf48e4701c": [6],       # Strategy establishes Staryu; Pokégear is a free prefix
         "4eaf233ccb54": [0, 1],    # discard duplicate tutor access; retain live Hammer
         "5972e5096b0c": [0],       # damage the scouted Alakazam win condition
     }

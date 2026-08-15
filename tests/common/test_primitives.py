@@ -4,27 +4,53 @@ import json
 
 from common import DecisionState, RootDecision
 from common.board_cards import body_card_ids
-from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, role_value
+from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
 from common.option_equivalence import class_representatives, fan_out
 from common.strategy import PrizePlan, Roles, Strategy
 from common.telemetry import to_record
 
 
 def test_declarative_roles_derive_a_complete_evolution_line():
-    roles = Roles({12: ["win_condition", "primary_attacker"]},
+    roles = Roles({12: ["primary_attacker"]},
                   evolves={10: 11, 11: 12}, ready={12: 2})
     strategy = Strategy(name="test", roles=roles, prize_plan=PrizePlan([[12, 12]]))
-    assert roles[10] == ["win_condition_base"]
+    assert 10 not in roles
     assert strategy.lines[0].path == (10, 11, 12)
     assert strategy.lines[0].ready.energy == 2
     assert strategy.prize_plan.prizes_to_win == 6
 
 
+def test_card_tags_resolve_roles_across_an_evolution_line():
+    class Stats:
+        rows = {
+            10: type("Stat", (), {"name": "Base", "evolvesFrom": None})(),
+            11: type("Stat", (), {"name": "Stage", "evolvesFrom": "Base"})(),
+            12: type("Stat", (), {"name": "Top", "evolvesFrom": "Stage"})(),
+        }
+
+        def get(self, card_id):
+            return self.rows.get(card_id)
+
+    roles = Roles({12: ["primary_attacker"]}, ready={12: 2}).resolve((10, 11, 12), Stats())
+
+    assert roles.evolves == {10: 11, 11: 12}
+    assert 10 not in roles and 11 not in roles
+    assert roles[12] == ["primary_attacker"]
+    assert roles.lines[0].path == (10, 11, 12)
+
+
 def test_portable_worth_is_independent_of_a_legacy_value_stack():
-    assert role_value(["win_condition", "engine"]) == ROLE_TIER["win_condition"]
+    assert role_value(["primary_attacker", "engine"]) == ROLE_TIER["primary_attacker"]
     assert role_value([], is_typed_basic_energy=True) == ENERGY_TIER
     assert role_value(["engine"], is_ace_spec=True) == ACE_SPEC_TIER
     assert role_value([]) == 0.0
+    assert role_value(["primary_attacker"]) > role_value(["support_pokemon"])
+
+
+def test_intrinsic_card_functions_resolve_to_general_roles():
+    assert function_role(("search", "tutor_pokemon")) == "tutor"
+    assert function_role(("energy_denial", "coin")) == "disruption"
+    assert function_role(("draw", "dig")) is None
 
 
 def test_board_card_walk_uses_attached_cards_not_energy_units():
@@ -83,12 +109,12 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
             "proof_type": "commutativity", "pruned": candidate["action"],
             "retained_event": "attach:active",
         }]},
-        "needs": {
+        "strategy_beam": {
             "focused": [{"action_key": "focus", "family": "attachment", "score": 0.8,
-                         "reason": "need_path", "path_ids": ["path"] * 100}],
+                         "reason": "strategy_hint", "path_ids": ["path"] * 100}],
             "safety": [],
             "unknown": [{"action_key": "unknown", "card_id": 999, "context": 0,
-                         "reason": "no_need_capability"}],
+                         "reason": "no_strategy_hint"}],
             "paths": [{"large": "x" * 10_000}] * 20,
             "features": [{"outcome": "take_prize", "deadline": 0}],
             "elapsed_ms": 2.0, "exhausted": False,
@@ -109,7 +135,7 @@ def test_live_telemetry_compacts_paths_without_losing_family_evidence():
         "proof_type": "commutativity", "retained_event": "attach:active",
         "pruned_key": evidence[0]["action_key"],
     }]
-    needs = record["diagnostics"]["needs"]
-    assert needs["path_count"] == 20
-    assert needs["focused"][0]["path_count"] == 100
-    assert needs["unknown"][0]["card_id"] == 999
+    strategy_beam = record["diagnostics"]["strategy_beam"]
+    assert strategy_beam["path_count"] == 20
+    assert strategy_beam["focused"][0]["path_count"] == 100
+    assert strategy_beam["unknown"][0]["card_id"] == 999

@@ -19,18 +19,19 @@ def test_manifest_describes_declarations_and_bellman_only():
     manifest = build_manifest(REPO / "src" / "agents" / "mega_starmie",
                               git_hash="abc123", cards={})
     assert manifest["system"] == "bellman"
-    assert manifest["strategy"]["roles"]["1031"] == ["win_condition", "primary_attacker"]
+    assert manifest["strategy"]["roles"]["1030"] == ["primary_attacker"]
+    assert manifest["strategy"]["roles"]["1031"] == ["primary_attacker"]
     assert manifest["strategy"]["prize_plan"]["prizes_to_win"] == 6
     assert summary(manifest)["system"] == "bellman"
     assert manifest["pilot_profile"]["hash"]
     assert "planning_clock" in manifest["pilot_profile"]["groups"]
-    needs = manifest["needs_strategy"]
-    assert needs["resolved"]["content_hash"]
-    assert needs["enabled"] is True
-    assert needs["odds_enabled"] is True
-    assert needs["resolved"]["effective"]
-    assert any(row["identifier"] == "mega_starmie.evolve_benched_staryu"
-               for row in needs["resolved"]["deck"])
+    catalog = manifest["strategy_catalog"]
+    assert catalog["resolved"]["content_hash"]
+    assert catalog["enabled"] is True
+    assert catalog["odds_enabled"] is True
+    assert catalog["resolved"]["effective"]
+    assert any(row["identifier"] == "mega_starmie.establish_benched_staryu_before_turbo_flare"
+               for row in catalog["resolved"]["deck"])
 
 
 def test_brief_projects_the_same_profile_to_html_and_csv():
@@ -45,25 +46,25 @@ def test_brief_projects_the_same_profile_to_html_and_csv():
     assert "clock.remaining_600_seconds" in csv_text
     assert "family.snipe_shadow" in csv_text
     assert "promote_retreat.resource_cost_weight" in csv_text
-    assert "Needs strategy beam" in html
-    assert manifest["needs_strategy"]["resolved"]["content_hash"] in html
+    assert "Strategy beam" in html
+    assert manifest["strategy_catalog"]["resolved"]["content_hash"] in html
     assert "own.active" in html
 
 
-def test_needs_off_manifest_keeps_odds_and_the_same_resolved_strategy_catalog():
+def test_strategy_off_manifest_keeps_odds_and_the_same_resolved_catalog():
     enabled = build_manifest(REPO / "src" / "agents" / "mega_starmie",
                              git_hash="abc123", cards={})
     disabled = build_manifest(
         REPO / "src" / "agents" / "mega_starmie",
         git_hash="abc123", cards={},
-        pilot_values={"needs.focus_enabled": 0.0},
+        pilot_values={"strategy.focus_enabled": 0.0},
     )
 
-    assert enabled["needs_strategy"]["enabled"] is True
-    assert disabled["needs_strategy"]["enabled"] is False
-    assert disabled["needs_strategy"]["odds_enabled"] is True
-    assert (enabled["needs_strategy"]["resolved"]["content_hash"]
-            == disabled["needs_strategy"]["resolved"]["content_hash"])
+    assert enabled["strategy_catalog"]["enabled"] is True
+    assert disabled["strategy_catalog"]["enabled"] is False
+    assert disabled["strategy_catalog"]["odds_enabled"] is True
+    assert (enabled["strategy_catalog"]["resolved"]["content_hash"]
+            == disabled["strategy_catalog"]["resolved"]["content_hash"])
 
 
 def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
@@ -73,7 +74,7 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert "common/runtime.py" in names
         assert "common/planner.py" in names
         assert "common/native_engine.py" in names
-        assert "common/needs.py" in names
+        assert "common/demand.py" in names
         assert "common/refresh.py" in names
         assert "common/value_equations.py" in names
         assert "common/engine.py" not in names
@@ -87,11 +88,11 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert '"system": "bellman"' in manifest_text
 
 
-def test_package_bakes_needs_toggle_into_runtime_config(tmp_path):
-    archive = package("mega_starmie", tmp_path, stamp=False, needs_enabled=False)
+def test_package_bakes_strategy_toggle_into_runtime_config(tmp_path):
+    archive = package("mega_starmie", tmp_path, stamp=False, strategy_enabled=False)
     with zipfile.ZipFile(archive) as bundle:
         config = json.loads(bundle.read("runtime_config.json"))
-    assert config == {"pilot": {"needs.focus_enabled": 0.0}}
+    assert config == {"pilot": {"strategy.focus_enabled": 0.0}}
 
 
 @pytest.mark.parametrize("agent_name", SHIPPABLE_AGENTS)

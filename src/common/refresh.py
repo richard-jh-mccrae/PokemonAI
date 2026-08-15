@@ -7,7 +7,7 @@ from math import sqrt
 
 from .algebra import Ledger, Refresh
 from .draws import draw_branches, draw_shape_problem
-from .needs import NeedModel, access_probability
+from .demand import DemandModel, access_probability
 from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
 
 
@@ -75,7 +75,7 @@ class RefreshEvaluator:
         self.family_evaluator = family_evaluator
         self.effects = effects
         self.stats = stats
-        self.needs = NeedModel(registry, family_evaluator, effects=effects, stats=stats)
+        self.demand = DemandModel(registry, family_evaluator, effects=effects, stats=stats)
 
     def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
         observation = state.obs
@@ -92,15 +92,15 @@ class RefreshEvaluator:
             pass
         held_cost = self._held_option_cost(state, node.card_id)
         branch_rows = []
-        needs = tuple(need for need in self.needs.immediate(observation, state.root_seat)
-                      if need.timing == "immediate")
-        held_need_cost = self.needs.covered_by_hand_value(
-            needs, returned, supporter_available=state.budgets.supporter,
+        demands = tuple(demand for demand in self.demand.immediate(observation, state.root_seat)
+                        if demand.timing == "immediate")
+        held_demand_cost = self.demand.covered_by_hand_value(
+            demands, returned, supporter_available=state.budgets.supporter,
             discard_capacity=max(0, len(returned) - 1),
             available_targets=Counter(dict(state.deck_counts)),
             observation=observation, seat=state.root_seat)
-        uncovered = self.needs.uncovered_by_hand(
-            needs, returned, supporter_available=state.budgets.supporter,
+        uncovered = self.demand.uncovered_by_hand(
+            demands, returned, supporter_available=state.budgets.supporter,
             discard_capacity=max(0, len(returned) - 1),
             available_targets=Counter(dict(state.deck_counts)),
             observation=observation, seat=state.root_seat)
@@ -129,7 +129,7 @@ class RefreshEvaluator:
                 "hand_value_deviation": draw_deviation,
                 "lower_confidence_hand_value": draw_value,
                 "board_access_value": access_value,
-                "held_need_value": held_need_cost,
+                "held_demand_value": held_demand_cost,
                 "hand_size_tactical": tactical,
                 "opponent_hand": opponent_value,
             })
@@ -217,33 +217,33 @@ class RefreshEvaluator:
         variance = sample * (total - sample) / (total - 1) * population_variance
         return mean, sqrt(max(0.0, variance))
 
-    def _expected_board_access(self, state, needs, returned, draws: int) -> float:
-        if not needs or draws <= 0:
+    def _expected_board_access(self, state, demands, returned, draws: int) -> float:
+        if not demands or draws <= 0:
             return 0.0
         counts = Counter({int(card_id): int(count) for card_id, count in state.deck_counts})
         counts.update(int(card_id) for card_id in returned)
         pool = tuple(card_id for card_id, count in counts.items() for _ in range(count))
-        values = [0.0] * len(needs)
-        eligible = [set() for _need in needs]
+        values = [0.0] * len(demands)
+        eligible = [set() for _demand in demands]
         for card_id in counts:
-            tokens = self.needs.coverage_slots(
-                card_id, needs, supporter_available=state.budgets.supporter,
+            tokens = self.demand.coverage_slots(
+                card_id, demands, supporter_available=state.budgets.supporter,
                 discard_capacity=max(0, int(draws) - 1), available_targets=counts,
-                recipient_units=self.needs.energy_units_by_recipient(
+                recipient_units=self.demand.energy_units_by_recipient(
                     state.obs, state.root_seat, card_id), resource_group=f"draw:{card_id}")
             for token in tokens:
                 for edge in token:
-                    eligible[edge.need_index].add(card_id)
-                    need = needs[edge.need_index]
+                    eligible[edge.demand_index].add(card_id)
+                    demand = demands[edge.demand_index]
                     payoff = 0.0
-                    if need.capability == "deploy":
+                    if demand.capability == "deploy":
                         line = next((line for line in self.registry.lines
                                      if card_id in line[:-1]), ())
                         if line:
                             payoff = (FUTURE_PAYOFF_ACCESS_DISCOUNT
                                       * self.registry.prizes(line[-1]))
-                    values[edge.need_index] = max(
-                        values[edge.need_index], edge.value + payoff)
+                    values[edge.demand_index] = max(
+                        values[edge.demand_index], edge.value + payoff)
         return sum(access_probability(pool, draws, card_ids) * values[index]
                    for index, card_ids in enumerate(eligible))
 

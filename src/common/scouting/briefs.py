@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from common.card_worth import role_value
+from common.pokemon_roles import general_pokemon_roles
+from common.strategy.strategies import StrategyHint, strategy_hint_from_dict
 
 from .read import Read
 
@@ -24,6 +26,7 @@ class Brief:
     opponent_properties: dict = field(default_factory=dict)  # lever keys (opponent_properties.json, same dir)
     pokemon: list[dict] = field(default_factory=list)         # {card, roles: [compact doctrine roles]}
     key_cards: list[dict] = field(default_factory=list)       # {card, role}
+    strategies: tuple[StrategyHint, ...] = ()
 
 
 def _brief_from(raw: dict) -> Brief | None:
@@ -31,11 +34,19 @@ def _brief_from(raw: dict) -> Brief | None:
     slug, covers = raw.get("slug"), raw.get("covers")
     if not slug or not isinstance(covers, list) or not covers:
         return None
+    provenance = f"scouting.brief:{slug}"
+    try:
+        strategies = tuple(
+            strategy_hint_from_dict(row, scope="opponent", provenance=provenance)
+            for row in raw.get("strategies") or ())
+    except (KeyError, TypeError, ValueError):
+        return None
     return Brief(
         slug=slug, label=raw.get("label", slug), covers=[str(c) for c in covers],
         opponent_properties=raw.get("opponent_properties") or {},
         pokemon=raw.get("pokemon") or [],
         key_cards=raw.get("key_cards") or [],
+        strategies=strategies,
     )
 
 
@@ -65,14 +76,14 @@ def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
 
 
 _TARGET_ROLE = {
-    "primary_attacker": "prize_liability", "backup_attacker": "attacker",
-    "disruption_target": "disruption_target", "support": "engine",
-    "energy_accel": "engine", "draw_engine": "engine",
+    "primary_attacker": "primary_attacker", "backup_attacker": "backup_attacker",
+    "disruption_target": "disruption_target", "support_pokemon": "support_pokemon",
+    "accel_source": "accel_source", "engine": "engine", "counter_mover": "counter_mover",
 }
 _TARGET_ROLE_ORDER = ("primary_attacker", "disruption_target", "backup_attacker",
-                      "energy_accel", "draw_engine", "support")
+                      "accel_source", "counter_mover", "engine", "support_pokemon")
 _THREAT_ROLES = frozenset({
-    "threat", "primary_attacker", "backup_attacker", "disruption",
+    "primary_attacker", "backup_attacker", "disruption_target",
 })
 
 
@@ -97,7 +108,7 @@ def _evolution_line(card_ids, ids_for_name, stat_for_id, forward_ids) -> frozens
 
 
 def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
-                        forward_ids=None) -> tuple[frozenset[int], dict[int, str]]:
+                        forward_ids=None, functions=None) -> tuple[frozenset[int], dict[int, str]]:
     """Resolve compact Pokémon doctrine into Bellman threat ids and target roles.
 
     Key trainer cards document how a body becomes dangerous; they never create a target on their
@@ -109,6 +120,10 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
     for entry in brief.pokemon or []:
         roles = tuple(entry.get("roles") or ())
         ids = {int(card_id) for card_id in ids_for_name(entry.get("card", "")) or ()}
+        if stat_for_id is not None:
+            generic = general_pokemon_roles(ids, _StatLookup(stat_for_id, forward_ids), functions)
+            for card_id, card_roles in generic.items():
+                role_claims.setdefault(card_id, set()).update(card_roles)
         if _THREAT_ROLES.intersection(roles):
             threat_ids.update(ids)
         for card_id in ids:
@@ -133,7 +148,13 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
     return frozenset(threat_ids), target_roles
 
 
-def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=()) -> dict[int, float]:
+class _StatLookup:
+    def __init__(self, get, forward_card_ids=None):
+        self.get = get
+        self.forward_card_ids = forward_card_ids or (lambda _card_id: ())
+
+
+def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=(), functions=None) -> dict[int, float]:
     """Posterior expected role Worth from authored Briefs, with dossier targets as fallback."""
     expected: dict[int, float] = {}
     dossiers = getattr(artifact, "dossiers", {}) if artifact is not None else {}
@@ -143,13 +164,15 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
         if brief is not None and ids_for_name is not None:
             _threat_ids, target_roles = resolve_brief_cards(
                 brief, ids_for_name, stat_for_id=getattr(stats, "get", None),
-                forward_ids=getattr(stats, "forward_card_ids", None))
+                forward_ids=getattr(stats, "forward_card_ids", None), functions=functions)
             candidate_worth: dict[int, float] = {}
             for row in brief.pokemon or ():
                 roles = tuple(row.get("roles") or ())
-                worth = role_value(roles)
                 row_ids = {int(card_id) for card_id in ids_for_name(row.get("card", "")) or ()}
+                generic = general_pokemon_roles(row_ids, stats, functions)
                 for card_id in row_ids:
+                    combined = tuple(dict.fromkeys((*generic.get(card_id, ()), *roles)))
+                    worth = role_value(combined)
                     candidate_worth[int(card_id)] = max(
                         candidate_worth.get(int(card_id), 0.0), worth)
                 if "primary_attacker" in roles:
@@ -164,7 +187,7 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
                             candidate_worth.get(card_id, 0.0), worth * payoff_prizes)
             primary_worth = role_value(("primary_attacker",))
             for card_id, role in target_roles.items():
-                if role == "prize_liability":
+                if role == "primary_attacker":
                     candidate_worth[int(card_id)] = max(
                         candidate_worth.get(int(card_id), 0.0), primary_worth)
             for card_id, worth in candidate_worth.items():
@@ -177,6 +200,6 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=())
         for card_id, roles in roles_by_card.items():
             stat = stats.get(card_id) if stats is not None else None
             if "fragile_preevo" in roles and getattr(stat, "stage", None) not in (None, "basic"):
-                roles = {*roles, "wincon_stage"}
+                roles = {*roles, "primary_attacker"}
             expected[card_id] = expected.get(card_id, 0.0) + float(probability) * role_value(roles)
     return expected

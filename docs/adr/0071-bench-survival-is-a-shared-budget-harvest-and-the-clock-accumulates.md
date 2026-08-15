@@ -127,11 +127,11 @@ Pokémon takes prizes exactly as an Active one does (`rules.md` §6), so the obj
 `best_ko_subset`'s existing prize argmax and its cheapest-set tiebreak verbatim — one implementation
 of one fact. The comparator then gains a third key, after `prize` and before `cost`: the count of my
 bodies carrying `_ATTACKER_ROLES` (`context.py:84` — `win_condition`, `primary_attacker`,
-`secondary_attacker`, `win_condition_base`, `accel_source`), deck-declared via `strategy.roles`, so a
+`secondary_attacker`, `primary_attacker`, `accel_source`), deck-declared via `strategy.roles`, so a
 deck declaring no roles degrades to pure prize-max (`planner.py:66-67`'s existing fallback).
 
 The narrow `_WINCON_ROLES` was verified **inert** on the Bench: in `dragapult_ex`'s `ROLES`, Dreepy is
-`win_condition_base`, Munkidori is `counter_mover`, and Dunsparce carries no Role at all — the
+`primary_attacker`, Munkidori is `counter_mover`, and Dunsparce carries no Role at all — the
 wincon itself is usually Active or in hand. This is a *preference*, not a magnitude: it cannot
 express "they would forfeit a prize to kill my engine". That mirrors the discipline this codebase
 already set for the symmetric case — `opponent_target_value`'s survival term is deliberately

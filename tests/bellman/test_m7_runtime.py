@@ -162,25 +162,25 @@ def test_bellman_telemetry_records_explicit_limit_and_deadline_event():
 
 def test_runtime_records_bounded_strategy_guidance_without_changing_the_choice():
     decision = runtime().decide(_obs(_fixture(60)))
-    beam = decision.diagnostics["needs"]
+    beam = decision.diagnostics["strategy_beam"]
 
     assert decision.chosen == (1,)
     assert len(beam.focused) <= 8
     assert beam.focused
     assert beam.safety
     assert beam.elapsed_ms >= 0.0
-    assert decision.diagnostics["needs_snapshot"].strategy_hash
+    assert decision.diagnostics["strategy_snapshot"].strategy_hash
 
 
-def test_turn_needs_cache_does_not_cross_an_unrelated_action_history():
+def test_strategy_cache_does_not_cross_an_unrelated_action_history():
     deployed = runtime()
     first = _obs(_fixture(60))
     first["logs"] = [{"type": 2, "playerIndex": 0, "marker": "first"}]
     second = _obs(_fixture(60))
     second["logs"] = [{"type": 2, "playerIndex": 0, "marker": "second"}]
 
-    left = deployed._turn_needs(first)
-    right = deployed._turn_needs(second)
+    left = deployed._planning_epoch_strategy(first)
+    right = deployed._planning_epoch_strategy(second)
 
     assert left is not right
     assert left.snapshot_id == right.snapshot_id
@@ -217,9 +217,8 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        # Bench Staryu directly. The no-op Ability-first permutation has identical utility but
-        # one extra decision, so the solver's documented exact-tie objective removes it.
-        "eb4fb1f19691": [2],
+        # Lillie reaches the higher Bellman end state; Strategy does not force direct Staryu.
+        "eb4fb1f19691": [0],
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
         "3730b43d89a5": [3],  # Human critical ruling: Water to Cinderace for Turbo Flare.
     }

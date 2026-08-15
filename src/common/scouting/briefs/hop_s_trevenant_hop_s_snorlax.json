@@ -13,40 +13,15 @@
     "opp_effect_immune_bodies": true
   },
   "pokemon": [
-    {
-      "card": "Hop's Phantump",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Hop's Snorlax",
-      "roles": [
-        "backup_attacker",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Hop's Trevenant",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    }
+    {"card": "Hop's Phantump", "roles": ["primary_attacker"]},
+    {"card": "Hop’s Snorlax", "roles": ["backup_attacker", "support_pokemon"]},
+    {"card": "Hop's Trevenant", "roles": ["primary_attacker"]},
+    {"card": "Dunsparce", "roles": []},
+    {"card": "Dudunsparce", "roles": []}
   ],
   "key_cards": [
-    {
-      "card": "Hop's Choice Band",
-      "role": "damage_boost"
-    },
-    {
-      "card": "Postwick",
-      "role": "damage_boost"
-    },
-    {
-      "card": "Boss's Orders",
-      "role": "gust"
-    }
+    {"card": "Hop's Choice Band", "role": "damage_boost"},
+    {"card": "Postwick", "role": "damage_boost"},
+    {"card": "Boss's Orders", "role": "gust"}
   ]
 }

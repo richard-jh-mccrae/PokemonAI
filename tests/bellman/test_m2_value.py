@@ -178,7 +178,7 @@ def test_held_worth_does_not_embed_board_state_policy():
 
 def test_fetching_an_evolution_without_a_recipient_charges_the_stranded_line():
     registry = ValueRegistry(
-        roles={LINE_BASE: ("win_condition_base",), LINE_TOP: ("win_condition",)},
+        roles={LINE_BASE: ("primary_attacker",), LINE_TOP: ("primary_attacker",)},
         functions={RUSH_EVOLUTION: ("search",)},
         facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
                LINE_TOP: CardFacts(pokemon=True, stage="stage1"),

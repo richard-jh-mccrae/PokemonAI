@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 class Intel:
     """An objective threat or target on the opponent's side."""
     cardId: int
-    role: str            # e.g. attacker / engine / fragile_preevo / prize_liability
+    role: str            # e.g. primary_attacker / backup_attacker / engine / fragile_preevo
     seen: bool           # True = on the board now; False = predicted/expected
 
 

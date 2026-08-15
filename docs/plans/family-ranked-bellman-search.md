@@ -4,9 +4,9 @@ Status: attachment vertical slice implemented 2026-08-14; ordering, widening, an
 remain shadow-disabled after the newest correction corpus blocked activation.
 
 The accepted follow-up specification
-[`terminal-proof-needs-bounded-bellman.md`](terminal-proof-needs-bounded-bellman.md) supersedes this
-document's prohibition on permanent Needs pruning. Family Scores remain scheduling-only; only an
-admissible Bellman upper-bound proof may delete a Needs-guided branch.
+[`terminal-proof-strategy-guided-bellman.md`](terminal-proof-strategy-guided-bellman.md) supersedes this
+document's prohibition on permanent Strategies pruning. Family Scores remain scheduling-only; only an
+admissible Bellman upper-bound proof may delete a Strategies-guided branch.
 
 ## Objective
 

@@ -11,7 +11,7 @@ import math
 import re
 from pathlib import Path
 
-from common.telemetry import TAG
+from common.telemetry import TAG, lethal_proof_seconds
 
 from .decisions import iter_decisions
 
@@ -87,6 +87,29 @@ def decision_seconds(record: dict | None) -> float | None:
         return None
     value = float(value)
     return value if math.isfinite(value) and value >= 0.0 else None
+
+
+def search_timing(record: dict | None) -> dict | None:
+    if not isinstance(record, dict):
+        return None
+    production = (record.get("diagnostics") or {}).get("production") or {}
+    incumbent = production.get("final_incumbent") or {}
+    total = incumbent.get("search_seconds", decision_seconds(record))
+    first = incumbent.get("first_found_seconds")
+    stable = incumbent.get("stabilized_seconds")
+    values = (total, first, stable)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float))
+           or not math.isfinite(value) or value < 0.0 for value in values):
+        return None
+    return {
+        "total_seconds": float(total),
+        "first_found_seconds": float(first),
+        "stabilized_seconds": float(stable),
+        "strategy_wave": incumbent.get("strategy_wave"),
+        "strategy_focus_position": incumbent.get("strategy_focus_position"),
+        "strategy_focus_count": incumbent.get("strategy_focus_count"),
+        "remaining_seconds": round(max(0.0, float(total) - float(stable)), 9),
+    }
 
 
 def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> dict | None:

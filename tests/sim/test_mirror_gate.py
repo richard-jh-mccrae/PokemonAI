@@ -148,3 +148,31 @@ def test_exact_artifact_with_offline_engine_name_is_rejected(tmp_path):
 
     with pytest.raises(RuntimeError, match="offline-only cgpy"):
         run_mirror("agent", games=1, workers=1, artifact=artifact)
+
+
+def test_mirror_agent_accepts_battle_callback_timeout(tmp_path, monkeypatch):
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "main.py").write_text("def agent(obs): return 0\n")
+
+    class AgentServer:
+        def __init__(self, _bundle):
+            self.proc = None
+
+        def act(self, _obs, timeout=None):
+            return timeout
+
+        def close(self):
+            pass
+
+    def play(left, _right, _left_deck, _right_deck, _seat):
+        assert left.act({"step": 1, "current": {"turn": 1}}, timeout=7.0) == 7.0
+        return type("Result", (), {"winner": 0, "crashed": ()})()
+
+    monkeypatch.setattr("sim.battle.AgentServer", AgentServer)
+    monkeypatch.setattr("sim.battle._play_seated", play)
+    monkeypatch.setattr("sim.battle.read_deck", lambda _bundle: ())
+
+    result = mirror_gate._one_match(bundle, a_seat=0)
+
+    assert result["crashed"] == []

@@ -1,4 +1,4 @@
-"""Paired unrestricted/shadow and Needs-focused replay mirror."""
+"""Paired unrestricted and Strategy-focused replay mirror."""
 from __future__ import annotations
 
 import argparse
@@ -24,21 +24,21 @@ from train.blunder.decisions import iter_decisions  # noqa: E402
 
 def _runtime(focused: bool, *, reuse=True, planning_seconds=None):
     agent = REPO / "src" / "agents" / "mega_starmie"
-    spec = importlib.util.spec_from_file_location("_needs_lab_strategy", agent / "strategy.py")
+    spec = importlib.util.spec_from_file_location("_strategy_lab_strategy", agent / "strategy.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     deck = tuple(int(value) for value in (agent / "deck.csv").read_text().split())
     runtime = build_runtime(
         module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
-    values = {"needs.focus_enabled": float(focused),
+    values = {"strategy.focus_enabled": float(focused),
               "plan_reuse.enabled": float(reuse)}
     if planning_seconds is not None:
         values.update({"clock.adaptive_enabled": 0.0,
                        "clock.remaining_200_seconds": float(planning_seconds)})
     runtime.pilot_profile = PilotProfile.resolve(
         global_values=values,
-        authored_deck=getattr(module.STRATEGY, "pilot_adjustments", {}),
-        provenance="needs-lab")
+        authored_deck_overrides=getattr(module.STRATEGY, "pilot_overrides", {}),
+        provenance="strategy-lab")
     return runtime, OwnCardModel(deck, effects=runtime.effects)
 
 
@@ -125,7 +125,7 @@ def run(replay_dir: Path, *, limit=None, episode=None, frame=None,
                     elapsed = (time.perf_counter() - started) * 1000.0
                     production = result.diagnostics.get("production") or {}
                     suffix = result.diagnostics.get("plan_suffix") or {}
-                    beam = result.diagnostics.get("needs")
+                    beam = result.diagnostics.get("strategy_beam")
                     modes[name].append({
                         "episode": decision.episode_id, "frame": decision.frame,
                         "recorded": decision.chosen, "chosen": list(result.chosen),
@@ -134,8 +134,8 @@ def run(replay_dir: Path, *, limit=None, episode=None, frame=None,
                             repr(result.action).encode("utf-8")).hexdigest()[:20],
                         "milliseconds": elapsed,
                         "nodes": sum(production.get("root_branch_nodes") or ()),
-                        "deferred": production.get("needs_later_wave", 0),
-                        "clock_scale": production.get("needs_clock_scale", 1.0),
+                        "deferred": production.get("strategy_later_wave", 0),
+                        "clock_scale": production.get("strategy_clock_scale", 1.0),
                         "suffix_hit": result.diagnostics.get("backend") == "plan-suffix",
                         "cached_steps": suffix.get("cached_steps", 0),
                         "suffix_invalidation": suffix.get("invalidation"),

@@ -6,10 +6,12 @@ import hashlib
 import json
 
 
-_SCOPES = frozenset({"general", "deck"})
+_SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
 _CONFIDENCE = frozenset({"high", "medium", "low"})
-_OPERATORS = frozenset({"eq", "ne", "lt", "le", "gt", "ge", "contains", "missing"})
+_OPERATORS = frozenset({
+    "eq", "ne", "lt", "le", "gt", "ge", "contains", "not_contains", "missing",
+})
 
 
 @dataclass(frozen=True)
@@ -20,7 +22,7 @@ class ActivationCondition:
 
     def __post_init__(self) -> None:
         if not self.fact or self.operator not in _OPERATORS:
-            raise ValueError("invalid Needs activation condition")
+            raise ValueError("invalid strategy activation condition")
 
 
 @dataclass(frozen=True)
@@ -28,15 +30,18 @@ class DesiredFact:
     kind: str
     recipient: str
     amount: int = 1
+    target_card_ids: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.kind or not self.recipient or int(self.amount) <= 0:
             raise ValueError("invalid desired board fact")
         object.__setattr__(self, "amount", int(self.amount))
+        object.__setattr__(self, "target_card_ids", tuple(
+            int(card_id) for card_id in self.target_card_ids))
 
 
 @dataclass(frozen=True)
-class NeedStrategy:
+class StrategyHint:
     identifier: str
     scope: str
     conditions: tuple[ActivationCondition, ...]
@@ -51,11 +56,11 @@ class NeedStrategy:
         if (not self.identifier or self.scope not in _SCOPES or not self.recipient_selector
                 or self.deadline not in _DEADLINES or self.confidence not in _CONFIDENCE
                 or not self.provenance or not self.desired_facts):
-            raise ValueError("invalid Needs strategy declaration")
+            raise ValueError("invalid strategy declaration")
         object.__setattr__(self, "conditions", tuple(self.conditions))
         object.__setattr__(self, "desired_facts", tuple(self.desired_facts))
         if any(fact.recipient != self.recipient_selector for fact in self.desired_facts):
-            raise ValueError("Needs desired fact recipient must match strategy recipient_selector")
+            raise ValueError("desired fact recipient must match strategy recipient selector")
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -69,7 +74,7 @@ class StrategyOverride:
 
     def __post_init__(self) -> None:
         if not self.strategy_id or (self.enabled is None and not self.additional_conditions):
-            raise ValueError("empty Needs strategy override")
+            raise ValueError("empty strategy override")
         object.__setattr__(self, "additional_conditions", tuple(self.additional_conditions))
 
     def as_dict(self) -> dict:
@@ -77,17 +82,19 @@ class StrategyOverride:
 
 
 @dataclass(frozen=True)
-class ResolvedNeedStrategies:
-    general: tuple[NeedStrategy, ...]
-    deck: tuple[NeedStrategy, ...]
+class ResolvedStrategies:
+    general: tuple[StrategyHint, ...]
+    deck: tuple[StrategyHint, ...]
+    opponent: tuple[StrategyHint, ...]
     overrides: tuple[StrategyOverride, ...]
-    effective: tuple[NeedStrategy, ...]
+    effective: tuple[StrategyHint, ...]
     content_hash: str
 
     def as_dict(self) -> dict:
         return {
             "general": [row.as_dict() for row in self.general],
             "deck": [row.as_dict() for row in self.deck],
+            "opponent": [row.as_dict() for row in self.opponent],
             "overrides": [row.as_dict() for row in self.overrides],
             "effective": [row.as_dict() for row in self.effective],
             "content_hash": self.content_hash,
@@ -95,7 +102,7 @@ class ResolvedNeedStrategies:
 
 
 @dataclass(frozen=True)
-class ActivatedNeed:
+class ActivatedStrategy:
     strategy_id: str
     kind: str
     recipient: str
@@ -107,14 +114,29 @@ class ActivatedNeed:
 
 
 @dataclass(frozen=True)
-class TurnNeedSnapshot:
+class StrategySnapshot:
     turn: int
     seat: int
     strategy_hash: str
     snapshot_id: str
     active_ids: tuple[str, ...]
     inactive_ids: tuple[str, ...]
-    hints: tuple[ActivatedNeed, ...]
+    hints: tuple[ActivatedStrategy, ...]
+
+
+def strategy_hint_from_dict(raw: dict, *, scope: str, provenance: str) -> StrategyHint:
+    """Build one serialized Strategy Hint with caller-owned scope and provenance."""
+    return StrategyHint(
+        identifier=str(raw["identifier"]),
+        scope=scope,
+        conditions=tuple(ActivationCondition(**row) for row in raw.get("conditions", ())),
+        desired_facts=tuple(DesiredFact(**row) for row in raw.get("desired_facts", ())),
+        recipient_selector=str(raw["recipient_selector"]),
+        deadline=str(raw["deadline"]),
+        confidence=str(raw["confidence"]),
+        provenance=provenance,
+        enabled=bool(raw.get("enabled", True)),
+    )
 
 
 def _player(observation: dict, seat: int) -> dict:
@@ -147,7 +169,8 @@ def _attack_ready(body: dict, stats) -> bool:
                for cost in requirements)
 
 
-def _visible_facts(observation: dict, *, roles, stats=None) -> tuple[dict, dict]:
+def _visible_facts(observation: dict, *, roles, stats=None,
+                   opponent_role_worth=None) -> dict:
     current = observation.get("current") or {}
     seat = int(current.get("yourIndex", 0))
     player = _player(observation, seat)
@@ -155,11 +178,15 @@ def _visible_facts(observation: dict, *, roles, stats=None) -> tuple[dict, dict]
     card_id = int(active["id"]) if active.get("id") is not None else None
     card_roles = tuple(roles.get(card_id, ())) if card_id is not None else ()
     bench = tuple(body for body in player.get("bench") or () if body)
-    board = ((active,) if active else ()) + bench
+    opponent = _player(observation, 1 - seat)
+    opponent_bench = tuple(body for body in opponent.get("bench") or () if body)
+    opponent_role_worth = opponent_role_worth or {}
     options = tuple((observation.get("select") or {}).get("option") or ())
     facts = {
         "own.active.card_id": card_id,
         "own.active.role": card_roles,
+        "own.active.is_attacker": bool(
+            {"primary_attacker", "backup_attacker"}.intersection(card_roles)),
         "own.active.energy_count": len(active.get("energies") or ()),
         "own.active.full_health": (
             bool(active)
@@ -173,23 +200,41 @@ def _visible_facts(observation: dict, *, roles, stats=None) -> tuple[dict, dict]
         "own.active.evolvable": card_id in roles.evolves if card_id is not None else False,
         "own.bench.evolvable_count": sum(
             1 for body in bench if body.get("id") in roles.evolves),
-        "own.board.evolvable_count": sum(
-            1 for body in board if body.get("id") in roles.evolves),
+        "own.bench.card_ids": tuple(int(body.get("id", 0)) for body in bench),
+        "own.bench.space": max(0, int(player.get("benchMax", 5)) - len(bench)),
+        "opponent.bench.card_ids": tuple(
+            int(body.get("id", 0)) for body in opponent_bench),
+        "opponent.bench.role_target_count": sum(
+            float(opponent_role_worth.get(int(body.get("id", 0)), 0.0)) > 0.0
+            for body in opponent_bench),
         "turn.commitment_available": (
             not bool(current.get("energyAttached"))
             or (card_id in roles.evolves if card_id is not None else False)
         ),
     }
-    return facts, active
+    return facts
 
 
-def _recipient_body(observation: dict, seat: int, selector: str, roles) -> dict:
+def _recipient_body(observation: dict, seat: int, selector: str, roles,
+                    opponent_role_worth=None) -> dict:
     player = _player(observation, seat)
     if selector == "own.active":
         return _active_body(player)
     if selector == "own.bench.evolvable:first":
         return next((body for body in player.get("bench") or ()
                      if body and body.get("id") in roles.evolves), {})
+    if selector == "opponent.bench.highest_role":
+        opponent = _player(observation, 1 - seat)
+        worth = opponent_role_worth or {}
+        return max(
+            (body for body in opponent.get("bench") or () if body),
+            key=lambda body: (
+                float(worth.get(int(body.get("id", 0)), 0.0)),
+                -int(body.get("hp", 0)),
+                -int(body.get("serial", body.get("id", 0))),
+            ),
+            default={},
+        )
     return {}
 
 
@@ -205,6 +250,7 @@ def _condition_matches(condition: ActivationCondition, facts: dict) -> bool:
         "gt": lambda: present and actual > expected,
         "ge": lambda: present and actual >= expected,
         "contains": lambda: present and expected in actual,
+        "not_contains": lambda: present and expected not in actual,
         "missing": lambda: not present,
     }
     try:
@@ -213,12 +259,14 @@ def _condition_matches(condition: ActivationCondition, facts: dict) -> bool:
         return False
 
 
-def activate_need_strategies(observation: dict, resolved: ResolvedNeedStrategies, *, roles,
-                             stats=None) -> TurnNeedSnapshot:
+def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, roles,
+                        stats=None, opponent_role_worth=None) -> StrategySnapshot:
     current = observation.get("current") or {}
     turn = int(current.get("turn", 0))
     seat = int(current.get("yourIndex", 0))
-    facts, active = _visible_facts(observation, roles=roles, stats=stats)
+    facts = _visible_facts(
+        observation, roles=roles, stats=stats,
+        opponent_role_worth=opponent_role_worth)
     active_rows = tuple(
         row for row in resolved.effective
         if all(_condition_matches(condition, facts) for condition in row.conditions)
@@ -229,17 +277,17 @@ def activate_need_strategies(observation: dict, resolved: ResolvedNeedStrategies
     hints = []
     for row in active_rows:
         for desired in row.desired_facts:
-            recipient_body = _recipient_body(observation, seat, desired.recipient, roles)
+            recipient_body = _recipient_body(
+                observation, seat, desired.recipient, roles, opponent_role_worth)
             recipient_card_id = (int(recipient_body["id"])
                                  if recipient_body.get("id") is not None else None)
             recipient_serial = (int(recipient_body["serial"])
                                 if recipient_body.get("serial") is not None else None)
-            targets = ()
-            if desired.kind == "evolve" and recipient_card_id in roles.evolves:
+            targets = desired.target_card_ids
+            if (not targets and desired.kind == "evolve"
+                    and recipient_card_id in roles.evolves):
                 targets = (int(roles.evolves[recipient_card_id]),)
-            elif desired.kind == "deploy":
-                targets = tuple(sorted(int(card_id) for card_id in roles.evolves))
-            hints.append(ActivatedNeed(
+            hints.append(ActivatedStrategy(
                 row.identifier, desired.kind, desired.recipient,
                 recipient_card_id, recipient_serial,
                 targets, row.deadline, row.confidence,
@@ -255,26 +303,27 @@ def activate_need_strategies(observation: dict, resolved: ResolvedNeedStrategies
     snapshot_id = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-    return TurnNeedSnapshot(
+    return StrategySnapshot(
         turn, seat, resolved.content_hash, snapshot_id,
         active_ids, inactive_ids, tuple(hints),
     )
 
 
-def resolve_need_strategies(general, deck, overrides) -> ResolvedNeedStrategies:
+def resolve_strategies(general, deck=(), opponent=(), overrides=()) -> ResolvedStrategies:
     general = tuple(general)
     deck = tuple(deck)
+    opponent = tuple(opponent)
     overrides = tuple(overrides)
-    declared = (*general, *deck)
+    declared = (*general, *deck, *opponent)
     by_id = {row.identifier: row for row in declared}
     if len(by_id) != len(declared):
-        raise ValueError("duplicate Needs strategy identifier")
+        raise ValueError("duplicate strategy identifier")
     unknown = {row.strategy_id for row in overrides} - set(by_id)
     if unknown:
-        raise ValueError(f"unknown Needs strategy override: {sorted(unknown)}")
+        raise ValueError(f"unknown strategy override: {sorted(unknown)}")
     override_by_id = {row.strategy_id: row for row in overrides}
     if len(override_by_id) != len(overrides):
-        raise ValueError("duplicate Needs strategy override")
+        raise ValueError("duplicate strategy override")
     effective = []
     for row in declared:
         override = override_by_id.get(row.identifier)
@@ -290,21 +339,22 @@ def resolve_need_strategies(general, deck, overrides) -> ResolvedNeedStrategies:
     payload = {
         "general": [row.as_dict() for row in general],
         "deck": [row.as_dict() for row in deck],
+        "opponent": [row.as_dict() for row in opponent],
         "overrides": [row.as_dict() for row in overrides],
         "effective": [row.as_dict() for row in effective],
     }
     content_hash = hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
-    return ResolvedNeedStrategies(general, deck, overrides, effective, content_hash)
+    return ResolvedStrategies(general, deck, opponent, overrides, effective, content_hash)
 
 
-GENERAL_NEEDS_STRATEGIES = (
-    NeedStrategy(
+GENERAL_STRATEGIES = (
+    StrategyHint(
         "general.fund_active_attacker",
         "general",
         (
-            ActivationCondition("own.active.role", "contains", "win_condition"),
+            ActivationCondition("own.active.is_attacker", "eq", True),
             ActivationCondition("own.active.full_health", "eq", True),
             ActivationCondition("own.active.attack_ready", "eq", False),
         ),
@@ -314,7 +364,7 @@ GENERAL_NEEDS_STRATEGIES = (
         "high",
         "shared-general",
     ),
-    NeedStrategy(
+    StrategyHint(
         "general.evolve_active_attacker",
         "general",
         (
@@ -326,11 +376,11 @@ GENERAL_NEEDS_STRATEGIES = (
         "high",
         "shared-general",
     ),
-    NeedStrategy(
+    StrategyHint(
         "general.heal_damaged_active_attacker",
         "general",
         (
-            ActivationCondition("own.active.role", "contains", "win_condition"),
+            ActivationCondition("own.active.role", "contains", "primary_attacker"),
             ActivationCondition("own.active.hp_fraction", "lt", 0.70),
         ),
         (DesiredFact("heal", "own.active"),),
@@ -339,11 +389,11 @@ GENERAL_NEEDS_STRATEGIES = (
         "high",
         "shared-general",
     ),
-    NeedStrategy(
-        "general.information_before_commitment",
+    StrategyHint(
+        "general.low_cost_information_access_before_commitment",
         "general",
         (ActivationCondition("turn.commitment_available", "eq", True),),
-        (DesiredFact("relevant_information", "turn"),),
+        (DesiredFact("low_cost_information_access", "turn"),),
         "turn",
         "immediate",
         "high",
@@ -353,7 +403,7 @@ GENERAL_NEEDS_STRATEGIES = (
 
 
 __all__ = (
-    "ActivationCondition", "DesiredFact", "GENERAL_NEEDS_STRATEGIES", "NeedStrategy",
-    "ActivatedNeed", "ResolvedNeedStrategies", "StrategyOverride", "TurnNeedSnapshot",
-    "activate_need_strategies", "resolve_need_strategies",
+    "ActivationCondition", "DesiredFact", "GENERAL_STRATEGIES", "StrategyHint",
+    "ActivatedStrategy", "ResolvedStrategies", "StrategyOverride", "StrategySnapshot",
+    "activate_strategies", "resolve_strategies", "strategy_hint_from_dict",
 )

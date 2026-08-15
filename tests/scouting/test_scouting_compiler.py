@@ -97,7 +97,7 @@ def test_dossier_has_evolution_lines_and_roles():
     assert any(line[-1] == MEGA and RIOLU in line for line in doss["evolution_lines"])
     assert MEGA in {t["cardId"] for t in doss["threats"]}          # big attacker
     roles = {t["cardId"]: t["role"] for t in doss["targets"]}
-    assert roles.get(MEGA) == "prize_liability"                    # ex/Mega
+    assert roles.get(MEGA) == "primary_attacker"                    # ex/Mega
     assert roles.get(RIOLU) == "fragile_preevo"                    # pre-evo of win-con
 
 

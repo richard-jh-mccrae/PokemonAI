@@ -1,50 +1,16 @@
 {
   "slug": "kyogre_mega_abomasnow_ex",
-  "covers": [
-    "Jynx / Kyogre / Mega Abomasnow ex",
-    "Kyogre / Mega Abomasnow ex",
-    "Mega Abomasnow ex"
-  ],
-  "opponent_properties": {
-    "opp_tempo": "slow",
-    "opp_no_pivot": true,
-    "opp_deckout_vulnerable": true
-  },
+  "covers": ["Jynx / Kyogre / Mega Abomasnow ex", "Kyogre / Mega Abomasnow ex", "Mega Abomasnow ex"],
+  "opponent_properties": {"opp_tempo": "slow", "opp_no_pivot": true, "opp_deckout_vulnerable": true},
   "pokemon": [
-    {
-      "card": "Kyogre",
-      "roles": [
-        "primary_attacker",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Mega Abomasnow ex",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Snover",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Kyogre", "roles": ["primary_attacker", "support_pokemon"]},
+    {"card": "Mega Abomasnow ex", "roles": ["primary_attacker"]},
+    {"card": "Snover", "roles": ["primary_attacker"]},
+    {"card": "Jynx", "roles": ["support_pokemon"]}
   ],
   "key_cards": [
-    {
-      "card": "Waitress",
-      "role": "energy_accel"
-    },
-    {
-      "card": "Maximum Belt",
-      "role": "damage_boost"
-    },
-    {
-      "card": "Mega Signal",
-      "role": "primary_attacker_search"
-    }
+    {"card": "Waitress", "role": "energy_accel"},
+    {"card": "Maximum Belt", "role": "damage_boost"},
+    {"card": "Mega Signal", "role": "primary_attacker_search"}
   ]
 }

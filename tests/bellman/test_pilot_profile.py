@@ -6,28 +6,30 @@ from common.pilot_profile import DEFINITIONS, PilotProfile
 from common.runtime import _pilot_overlay
 
 
-def test_profile_layers_clamp_and_hash_stably():
+def test_authored_deck_value_overwrites_global_and_learned_layers():
     first = PilotProfile.resolve(
         global_values={"family.tie_margin": 0.2},
         deck_learned={"family.tie_margin": 0.1},
-        authored_deck={"family.tie_margin": -0.05},
+        authored_deck_overrides={"family.tie_margin": 0.05},
     )
     second = PilotProfile.resolve(
-        authored_deck={"family.tie_margin": -0.05},
+        authored_deck_overrides={"family.tie_margin": 0.05},
         deck_learned={"family.tie_margin": 0.1},
         global_values={"family.tie_margin": 0.2},
     )
 
-    assert first.get("family.tie_margin") == pytest.approx(0.25)
+    assert first.get("family.tie_margin") == pytest.approx(0.05)
     assert first.hash == second.hash
     assert len({definition.name for definition in DEFINITIONS}) == len(DEFINITIONS)
 
 
 def test_profile_rejects_unknown_and_out_of_bounds_global_values():
     with pytest.raises(ValueError, match="unknown"):
-        PilotProfile.resolve(authored_deck={"missing.parameter": 1.0})
+        PilotProfile.resolve(authored_deck_overrides={"missing.parameter": 1.0})
     with pytest.raises(ValueError, match="out of bounds"):
         PilotProfile.resolve(global_values={"family.tie_margin": 99.0})
+    with pytest.raises(ValueError, match="authored override"):
+        PilotProfile.resolve(authored_deck_overrides={"family.tie_margin": 99.0})
 
 
 def test_all_value_equations_default_to_disconnected():
@@ -62,12 +64,12 @@ def test_pilot_overlay_reads_packaged_runtime_config(tmp_path, monkeypatch):
     common_dir = tmp_path / "common"
     common_dir.mkdir()
     (tmp_path / "runtime_config.json").write_text(
-        '{"pilot":{"needs.focus_enabled":0}}', encoding="utf-8")
+        '{"pilot":{"strategy.focus_enabled":0}}', encoding="utf-8")
     monkeypatch.setattr(runtime_module, "__file__", str(common_dir / "runtime.py"))
     monkeypatch.delenv("AGENT_OVERLAY", raising=False)
-    monkeypatch.delenv("AGENT_NEEDS_ENABLED", raising=False)
+    monkeypatch.delenv("AGENT_STRATEGY_ENABLED", raising=False)
     values, provenance = runtime_module._pilot_overlay()
-    assert values == {"needs.focus_enabled": 0.0}
+    assert values == {"strategy.focus_enabled": 0.0}
     assert provenance.endswith("runtime_config.json")
 
 
@@ -75,3 +77,16 @@ def test_offline_clock_accepts_an_exhaustive_budget():
     assert PilotProfile.resolve(
         global_values={"clock.remaining_200_seconds": 600}
     ).get("clock.remaining_200_seconds") == 600
+
+
+def test_completed_candidate_harvest_defaults_are_central_and_tunable():
+    definitions = {row.name: row for row in DEFINITIONS}
+    profile = PilotProfile.resolve(global_values={
+        "search.completed_candidate_target": 5,
+        "search.completed_candidate_time_share": 0.35,
+    })
+
+    assert definitions["search.completed_candidate_target"].default == 3.0
+    assert definitions["search.completed_candidate_time_share"].default == 0.20
+    assert profile.get("search.completed_candidate_target") == 5
+    assert profile.get("search.completed_candidate_time_share") == pytest.approx(0.35)

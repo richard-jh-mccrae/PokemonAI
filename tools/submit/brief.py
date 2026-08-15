@@ -10,10 +10,12 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from submit.package import REPO, _git_hash, artifact_stem
+from common.cards import CardFunctions
 from common.pilot_profile import PilotProfile
-from common.strategy.needs import GENERAL_NEEDS_STRATEGIES, resolve_need_strategies
+from common.strategy.strategies import GENERAL_STRATEGIES, resolve_strategies
 
 
 def _load_strategy(agent_dir: Path):
@@ -48,11 +50,14 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
     return {"size": len(ids), "cards": rows}
 
 
-def _strategy(strategy) -> dict:
-    roles = {str(card_id): list(names) for card_id, names in sorted(strategy.roles.items())}
+def _strategy(strategy, deck, cards) -> dict:
+    stats = SimpleNamespace(get=lambda card_id: (
+        SimpleNamespace(**cards[int(card_id)]) if int(card_id) in cards else None))
+    resolved_roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+    roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}
-             for line in strategy.lines]
+             for line in resolved_roles.lines]
     prize_plan = None if strategy.prize_plan is None else {
         "routes": [list(route) for route in strategy.prize_plan.routes],
         "prizes_to_win": strategy.prize_plan.prizes_to_win,
@@ -66,7 +71,7 @@ def _strategy(strategy) -> dict:
                      for card_id, partners in sorted(strategy.partners.items())},
         "worth_overrides": {str(card_id): value
                             for card_id, value in sorted(strategy.worth_overrides.items())},
-        "pilot_adjustments": dict(strategy.pilot_adjustments),
+        "pilot_overrides": dict(strategy.pilot_overrides),
         "prize_plan": prize_plan,
         "params": dict(strategy.params),
     }
@@ -80,14 +85,18 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     git_hash = _git_hash(REPO) if git_hash is None else git_hash
     agent_name = agent_name or agent_dir.name
     strategy = _load_strategy(agent_dir)
+    cards = _card_index() if cards is None else cards
+    deck = _deck(agent_dir, cards)
+    deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
     pilot_profile = PilotProfile.resolve(
         global_values=pilot_values,
-        authored_deck=strategy.pilot_adjustments,
+        authored_deck_overrides=strategy.pilot_overrides,
         provenance=f"strategy:{strategy.name}")
-    needs_strategy = resolve_need_strategies(
-        GENERAL_NEEDS_STRATEGIES, strategy.needs_strategies, strategy.needs_overrides)
+    strategy_catalog = resolve_strategies(
+        GENERAL_STRATEGIES, strategy.strategies,
+        overrides=strategy.strategy_overrides)
     return {
-        "schema_version": 5,
+        "schema_version": 6,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),
@@ -95,12 +104,12 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
             "artifact": artifact_stem(agent_name, when=when, git_hash=git_hash),
         },
         "system": "bellman",
-        "deck": _deck(agent_dir, cards),
-        "strategy": _strategy(strategy),
-        "needs_strategy": {
-            "enabled": pilot_profile.get("needs.focus_enabled") >= 0.5,
+        "deck": deck,
+        "strategy": _strategy(strategy, deck_ids, cards),
+        "strategy_catalog": {
+            "enabled": pilot_profile.get("strategy.focus_enabled") >= 0.5,
             "odds_enabled": True,
-            "resolved": needs_strategy.as_dict(),
+            "resolved": strategy_catalog.as_dict(),
         },
         "pilot_profile": pilot_profile.as_dict(),
         "safety_bounds": {
@@ -121,7 +130,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
 def render_brief_csv(manifest: dict) -> str:
     fields = ("schema_version", "agent", "artifact", "system", "record_type", "card_id",
               "value", "name", "group", "family", "global", "deck_learned_adjustment",
-              "authored_deck_adjustment", "effective", "minimum", "maximum", "units",
+              "authored_deck_override", "effective", "minimum", "maximum", "units",
               "learnable", "provenance")
     provenance = manifest["provenance"]
     common = {"schema_version": manifest["schema_version"], "agent": provenance["agent"],
@@ -151,16 +160,16 @@ def render_brief(manifest: dict, **_ignored) -> str:
         f"<li><code>{html.escape(card_id)}</code>: {html.escape(', '.join(roles))}</li>"
         for card_id, roles in strategy["roles"].items())
     customized = sum(
-        row["deck_learned_adjustment"] != 0 or row["authored_deck_adjustment"] != 0
+        row["deck_learned_adjustment"] != 0 or row["authored_deck_override"] is not None
         for rows in manifest["pilot_profile"]["groups"].values() for row in rows)
     profile_sections = []
     for group, rows in manifest["pilot_profile"]["groups"].items():
         rendered = "".join(
             ("<tr class='custom' >" if (row["deck_learned_adjustment"] != 0
-                                        or row["authored_deck_adjustment"] != 0) else "<tr>")
+                                        or row["authored_deck_override"] is not None) else "<tr>")
             + "".join(f"<td>{html.escape(str(row[key]))}</td>" for key in (
                 "name", "family", "global", "deck_learned_adjustment",
-                "authored_deck_adjustment", "effective", "minimum", "maximum", "units"))
+                "authored_deck_override", "effective", "minimum", "maximum", "units"))
             + "</tr>" for row in rows)
         profile_sections.append(
             f"<details><summary>{html.escape(group)} ({len(rows)})</summary>"
@@ -171,13 +180,13 @@ def render_brief(manifest: dict, **_ignored) -> str:
     safety_rows = "".join(
         f"<li><code>{html.escape(name)}</code>: {row['value']} {html.escape(row['units'])}</li>"
         for name, row in manifest["safety_bounds"].items())
-    needs = manifest["needs_strategy"]
+    strategy_catalog = manifest["strategy_catalog"]
     effective_rows = "".join(
         f"<li><code>{html.escape(row['identifier'])}</code> · "
         f"{html.escape(row['deadline'])} · {html.escape(row['confidence'])}<br>"
         f"when {html.escape(str(row['conditions']))}<br>"
         f"seek {html.escape(str(row['desired_facts']))}</li>"
-        for row in needs["resolved"]["effective"])
+        for row in strategy_catalog["resolved"]["effective"])
     return (
         "<!doctype html>\n<html lang='en'><head><meta charset='utf-8'>"
         f"<title>Bellman Agent Brief — {html.escape(provenance['agent'])}</title>"
@@ -190,9 +199,9 @@ def render_brief(manifest: dict, **_ignored) -> str:
         f"<code>{html.escape(provenance['git_hash'])}</code></p>"
         f"<h2>Deck roles</h2><ul>{role_rows}</ul>"
         f"<h2>Starter priority</h2><p>{html.escape(str(strategy['starter_priority']))}</p>"
-        f"<h2>Needs strategy beam</h2><p>{'ON' if needs['enabled'] else 'OFF'} · "
-        f"Odds {'ON' if needs['odds_enabled'] else 'OFF'} · "
-        f"<code>{needs['resolved']['content_hash']}</code></p><ul>{effective_rows}</ul>"
+        f"<h2>Strategy beam</h2><p>{'ON' if strategy_catalog['enabled'] else 'OFF'} · "
+        f"Odds {'ON' if strategy_catalog['odds_enabled'] else 'OFF'} · "
+        f"<code>{strategy_catalog['resolved']['content_hash']}</code></p><ul>{effective_rows}</ul>"
         f"<h2>Pilot profile</h2><p><code>{manifest['pilot_profile']['hash']}</code> · "
         f"{customized} deck-customized parameters</p>{''.join(profile_sections)}"
         f"<details><summary>Read-only safety bounds</summary><ul>{safety_rows}</ul></details>"

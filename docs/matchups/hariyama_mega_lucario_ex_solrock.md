@@ -109,7 +109,7 @@ meta, not the physical TCG):
   (docs/rules.md L113). ~**170** effective Psychic damage OHKOs the Mega and claims **3 prizes** in one hit.
 - **Exploit:** lead Psychic damage into *any* body; the whole board is target-rich. A Psychic OHKO on the
   Mega is a 3-for-(1 or 2) prize swing — the single best exchange available.
-- **Maps to:** `target: Mega Lucario ex` role `prize_liability`; weakness itself is **auto-Dossier-derivable**
+- **Maps to:** `target: Mega Lucario ex` role `primary_attacker`; weakness itself is **auto-Dossier-derivable**
   (a card-stat) → **no new `opponent_properties` key** needed.
 
 ### Seam 2 — 3-prize payoff rides on a fragile 80-HP Riolu (single hop, no intermediate)
@@ -178,7 +178,7 @@ meta, not the physical TCG):
 - **Targets** (what to disrupt or snipe), by role:
   - `fragile_preevo`: `Riolu` — 80 HP, sole single-hop path to the 3-prize Mega; snipe before it evolves.
   - `fragile_preevo`: `Makuhita` — 80 HP, sole path to the 210 gust-attacker Hariyama.
-  - `prize_liability`: `Mega Lucario ex` — Mega-ex = 3 prizes, Psychic-weak (~170 to OHKO); force it Active
+  - `primary_attacker`: `Mega Lucario ex` — Mega-ex = 3 prizes, Psychic-weak (~170 to OHKO); force it Active
     / OHKO via weakness for a game-swinging prize haul.
   - `engine`: `Solrock` — the higher-value engine half: enables Lunar Cycle draw **and** is the Cosmic Beam
     attacker; KO breaks both.
@@ -210,7 +210,7 @@ opponent_properties = {
 }
 threats = [ Mega Lucario ex, Hariyama ]
 targets = [ Riolu (fragile_preevo), Makuhita (fragile_preevo),
-            Mega Lucario ex (prize_liability), Solrock (engine), Lunatone (engine) ]
+            Mega Lucario ex (primary_attacker), Solrock (engine), Lunatone (engine) ]
 ```
 
 No new `opponent_properties` key minted — the two type-weaknesses are auto-Dossier-derivable, and the

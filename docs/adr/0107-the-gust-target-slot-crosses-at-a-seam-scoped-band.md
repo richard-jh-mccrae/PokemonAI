@@ -174,7 +174,7 @@ now has a fourth row to reconcile against, and the sharpest one.
 
 ## Decision 4 — the conversion lives at the CALL SITE, and the slot factory says so
 
-`common.needs` imports `card_worth` and `strategy.context` (both leaves) and must never import
+`common.demand` imports `card_worth` and `strategy.context` (both leaves) and must never import
 `common.currency`, because `currency` imports `needs` for the ceiling — one arrow, one direction. So
 the crossing cannot live inside `needs.gust_target_slot` without inverting it.
 

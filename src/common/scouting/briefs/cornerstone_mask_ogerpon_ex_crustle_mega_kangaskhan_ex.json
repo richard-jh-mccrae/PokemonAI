@@ -1,10 +1,7 @@
 {
   "slug": "cornerstone_mask_ogerpon_ex_crustle_mega_kangaskhan_ex",
   "label": "Cornerstone Mask Ogerpon ex / Crustle / Mega Kangaskhan ex",
-  "covers": [
-    "Cornerstone Mask Ogerpon ex / Crustle / Mega Kangaskhan ex",
-    "Crustle / Mega Kangaskhan ex"
-  ],
+  "covers": ["Cornerstone Mask Ogerpon ex / Crustle / Mega Kangaskhan ex", "Crustle / Mega Kangaskhan ex"],
   "authored": "2026-08-12",
   "opponent_properties": {
     "opp_tempo": "slow",
@@ -14,63 +11,20 @@
     "opp_pierces_active_effects": true
   },
   "pokemon": [
-    {
-      "card": "Cornerstone Mask Ogerpon ex",
-      "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
-      ]
-    },
-    {
-      "card": "Crustle",
-      "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
-      ]
-    },
-    {
-      "card": "Dwebble",
-      "roles": [
-        "backup_attacker",
-        "starter"
-      ]
-    },
-    {
-      "card": "Mega Kangaskhan ex",
-      "roles": [
-        "primary_attacker",
-        "wall",
-        "draw_engine",
-        "threat"
-      ]
-    }
+    {"card": "Cornerstone Mask Ogerpon ex", "roles": ["primary_attacker"]},
+    {"card": "Crustle", "roles": ["primary_attacker"]},
+    {"card": "Dwebble", "roles": ["primary_attacker"]},
+    {"card": "Mega Kangaskhan ex", "roles": ["primary_attacker"]},
+    {"card": "Budew", "roles": []},
+    {"card": "Fezandipiti ex", "roles": []},
+    {"card": "Meowth ex", "roles": []}
   ],
   "key_cards": [
-    {
-      "card": "Crushing Hammer",
-      "role": "energy_denial"
-    },
-    {
-      "card": "Jumbo Ice Cream",
-      "role": "active_healing"
-    },
-    {
-      "card": "Battle Cage",
-      "role": "bench_counter_guard"
-    },
-    {
-      "card": "Mist Energy",
-      "role": "attack_effect_immunity"
-    },
-    {
-      "card": "Rock Fighting Energy",
-      "role": "attack_effect_immunity"
-    },
-    {
-      "card": "Hero's Cape",
-      "role": "hp_boost"
-    }
+    {"card": "Crushing Hammer", "role": "energy_denial"},
+    {"card": "Jumbo Ice Cream", "role": "active_healing"},
+    {"card": "Battle Cage", "role": "bench_counter_guard"},
+    {"card": "Mist Energy", "role": "attack_effect_immunity"},
+    {"card": "Rock Fighting Energy", "role": "attack_effect_immunity"},
+    {"card": "Hero's Cape", "role": "hp_boost"}
   ]
 }

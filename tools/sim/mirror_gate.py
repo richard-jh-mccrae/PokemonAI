@@ -100,23 +100,29 @@ def _one_match(bundle: Path, *, a_seat: int) -> dict:
     callback_lock = Lock()
 
     class TimedAgentServer(AgentServer):
-        def act(self, obs):
+        def act(self, obs, timeout=None):
             started = monotonic()
             outcome = []
+            callback_timeout = min(
+                MAX_CALLBACK_SECONDS,
+                float(timeout) if timeout is not None and float(timeout) > 0
+                else MAX_CALLBACK_SECONDS,
+            )
 
             def invoke():
-                outcome.append(super(TimedAgentServer, self).act(obs))
+                outcome.append(super(TimedAgentServer, self).act(
+                    obs, timeout=callback_timeout))
 
             worker = Thread(target=invoke, daemon=True)
             worker.start()
-            worker.join(MAX_CALLBACK_SECONDS)
+            worker.join(callback_timeout)
             try:
                 if worker.is_alive():
                     self.proc.kill()
                     self.proc.wait(timeout=PROCESS_SHUTDOWN_SECONDS)
                     worker.join(PROCESS_SHUTDOWN_SECONDS)
                     raise RuntimeError(
-                        f"agent callback exceeded {MAX_CALLBACK_SECONDS:.1f}s at "
+                        f"agent callback exceeded {callback_timeout:.1f}s at "
                         f"step={obs.get('step')} turn={(obs.get('current') or {}).get('turn')}")
                 if not outcome:
                     raise RuntimeError("agent callback ended without a result")

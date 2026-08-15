@@ -522,6 +522,18 @@ function show(n){
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
   if(f.taggable) h+=`<div class="timing">decision time: <b>${f.decision_seconds==null?'unavailable':f.decision_seconds.toFixed(3)+'s'}</b></div>`;
+  if(f.lethal_proof_seconds!=null) h+=`<div class="timing">Lethal solver: <b>${f.lethal_proof_seconds.toFixed(3)}s</b></div>`;
+  if(f.search_timing){
+    const S=f.search_timing, sec=x=>Number(x).toFixed(1)+'s';
+    const focus=S.strategy_focus_position==null?'not focused':`${S.strategy_focus_position} of ${S.strategy_focus_count}`;
+    h+=`<div class="live"><b>Bellman search timing</b>`+
+      `<div>Total search: <b>${sec(S.total_seconds)}</b></div>`+
+      `<div>Final sequence first found: <b>${sec(S.first_found_seconds)}</b></div>`+
+      `<div>Final sequence stabilized: <b>${sec(S.stabilized_seconds)}</b></div>`+
+      `<div>Strategy wave: <b>${esc(S.strategy_wave||'unavailable')}</b></div>`+
+      `<div>Strategy focus position: <b>${focus}</b></div>`+
+      `<div>Remaining search after answer: <b>${sec(S.remaining_seconds)}</b></div></div>`;
+  }
   if(f.selected_label) h+=`<div>engine selected: <b>${f.selected_label}</b></div>`;
   if(f.live){
     // The shipped agent's @T record for this decision (ADR-0019): how it ACTUALLY decided. A

@@ -4,7 +4,7 @@ Turbo Mega Starmie ex: open Cinderace (Explosiveness), Turbo Flare to load the B
 Staryu -> Mega Starmie ex, then fire Nebula Beam (one Ignition Energy on an Evolution = CCC).
 """
 from common.strategy import (
-    ActivationCondition, DesiredFact, NeedStrategy, PrizePlan, Roles, Strategy,
+    ActivationCondition, DesiredFact, StrategyHint, PrizePlan, Roles, Strategy,
 )
 
 # Card ids — mega_starmie/deck.csv.
@@ -15,14 +15,10 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 
 # Sparse deck intent over portable card facts.
 ROLES = Roles({
-    MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
-    CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
-    IGNITION_ENERGY: ["accel_source"],           # CCC on an Evolution = one-attach Nebula Beam
-    MEGA_SIGNAL: ["tutor"], SALVATORE: ["tutor"], HILDA: ["tutor"],
-    BUDDY_POFFIN: ["tutor"], ULTRA_BALL: ["tutor"],
-    CRUSHING_HAMMER: ["disruption"], BOSS_ORDERS: ["gust"],
-    WALLYS: ["recovery"], NIGHT_STRETCHER: ["recovery"],
-}, evolves={STARYU: MEGA_STARMIE_EX})
+    MEGA_STARMIE_EX: ["primary_attacker"],
+    STARYU: ["primary_attacker"],
+    CINDERACE: ["backup_attacker", "accel_source"],
+})
 
 STRATEGY = Strategy(
     name="mega_starmie",
@@ -35,41 +31,31 @@ STRATEGY = Strategy(
         (MEGA_STARMIE_EX, CINDERACE, MEGA_STARMIE_EX),
     )),
     params={"preferred_start": "second"},  # turbo: attack T1
-    needs_strategies=(
-        NeedStrategy(
-            "mega_starmie.fund_active_cinderace",
+    strategies=(
+        StrategyHint(
+            "mega_starmie.establish_benched_staryu_before_turbo_flare",
             "deck",
             (
                 ActivationCondition("own.active.card_id", "eq", CINDERACE),
-                ActivationCondition("own.active.can_attack", "eq", False),
+                ActivationCondition("own.active.attack_ready", "eq", True),
+                ActivationCondition("own.bench.space", "gt", 0),
+                ActivationCondition("own.bench.card_ids", "not_contains", STARYU),
             ),
-            (DesiredFact("fund_attack", "own.active"),),
-            "own.active",
+            (DesiredFact("deploy", "own.bench", target_card_ids=(STARYU,)),),
+            "own.bench",
             "immediate",
             "high",
             "mega_starmie.strategy",
         ),
-        NeedStrategy(
-            "mega_starmie.evolve_benched_staryu",
+        StrategyHint(
+            "mega_starmie.soften_role_target_for_nebula_beam",
             "deck",
             (
-                ActivationCondition("own.active.role", "contains", "accel_source"),
-                ActivationCondition("own.bench.evolvable_count", "gt", 0),
+                ActivationCondition("own.active.card_id", "eq", MEGA_STARMIE_EX),
+                ActivationCondition("opponent.bench.role_target_count", "gt", 0),
             ),
-            (DesiredFact("evolve", "own.bench.evolvable:first"),),
-            "own.bench.evolvable:first",
-            "this_turn",
-            "medium",
-            "mega_starmie.strategy",
-        ),
-        NeedStrategy(
-            "mega_starmie.deploy_backup_staryu",
-            "deck",
-            (ActivationCondition("own.board.evolvable_count", "eq", 0),),
-            (DesiredFact("deploy", "turn"),),
-            "turn",
-            "this_turn",
-            "high",
+            (DesiredFact("damage_setup", "opponent.bench.highest_role"),),
+            "opponent.bench.highest_role", "this_turn", "medium",
             "mega_starmie.strategy",
         ),
     ),

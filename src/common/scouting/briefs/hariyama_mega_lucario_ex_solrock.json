@@ -6,61 +6,14 @@
     "Mega Lucario ex",
     "Lunatone / Mega Lucario ex / Solrock"
   ],
-  "opponent_properties": {
-    "opp_tempo": "midrange"
-  },
+  "opponent_properties": {"opp_tempo": "midrange"},
   "pokemon": [
-    {
-      "card": "Hariyama",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Lunatone",
-      "roles": [
-        "backup_attacker",
-        "energy_accel",
-        "support"
-      ]
-    },
-    {
-      "card": "Makuhita",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Mega Lucario ex",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Riolu",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Solrock",
-      "roles": [
-        "backup_attacker",
-        "energy_accel",
-        "support"
-      ]
-    }
+    {"card": "Hariyama", "roles": ["backup_attacker"]},
+    {"card": "Lunatone", "roles": ["backup_attacker", "accel_source"]},
+    {"card": "Makuhita", "roles": ["backup_attacker"]},
+    {"card": "Mega Lucario ex", "roles": ["primary_attacker"]},
+    {"card": "Riolu", "roles": ["primary_attacker"]},
+    {"card": "Solrock", "roles": ["backup_attacker", "accel_source", "support_pokemon"]}
   ],
-  "key_cards": [
-    {
-      "card": "Fighting Gong",
-      "role": "energy_search"
-    },
-    {
-      "card": "Ignition Energy",
-      "role": "burst_accel"
-    }
-  ]
+  "key_cards": [{"card": "Fighting Gong", "role": "energy_search"}, {"card": "Ignition Energy", "role": "burst_accel"}]
 }

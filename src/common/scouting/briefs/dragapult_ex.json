@@ -1,10 +1,6 @@
 {
   "slug": "dragapult_ex",
-  "covers": [
-    "Dragapult ex",
-    "Dragapult ex / Dusknoir",
-    "Dragapult ex / Dusknoir / N's Zoroark ex"
-  ],
+  "covers": ["Dragapult ex", "Dragapult ex / Dusknoir", "Dragapult ex / Dusknoir / N's Zoroark ex"],
   "opponent_properties": {
     "opp_tempo": "midrange",
     "opp_spreads_bench": true,
@@ -12,78 +8,18 @@
     "opp_comeback_disruptor": true
   },
   "pokemon": [
-    {
-      "card": "Budew",
-      "roles": [
-        "backup_attacker",
-        "disruption",
-        "threat"
-      ]
-    },
-    {
-      "card": "Dragapult ex",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Drakloak",
-      "roles": [
-        "backup_attacker",
-        "draw_engine"
-      ]
-    },
-    {
-      "card": "Dreepy",
-      "roles": [
-        "backup_attacker"
-      ]
-    },
-    {
-      "card": "Fezandipiti ex",
-      "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Latias ex",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support",
-        "threat"
-      ]
-    },
-    {
-      "card": "Meowth ex",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
-      ]
-    },
-    {
-      "card": "Munkidori",
-      "roles": [
-        "backup_attacker",
-        "support",
-        "threat"
-      ]
-    }
+    {"card": "Budew", "roles": []},
+    {"card": "Dragapult ex", "roles": ["primary_attacker"]},
+    {"card": "Drakloak", "roles": ["primary_attacker"]},
+    {"card": "Dreepy", "roles": ["primary_attacker"]},
+    {"card": "Fezandipiti ex", "roles": ["disruption_target"]},
+    {"card": "Latias ex", "roles": ["disruption_target"]},
+    {"card": "Meowth ex", "roles": ["disruption_target"]},
+    {"card": "Munkidori", "roles": []},
+    {"card": "Duskull", "roles": ["backup_attacker"]},
+    {"card": "Dusclops", "roles": ["backup_attacker"]},
+    {"card": "Dusknoir", "roles": ["backup_attacker"]},
+    {"card": "Hawlucha", "roles": ["backup_attacker"]}
   ],
-  "key_cards": [
-    {
-      "card": "Rare Candy",
-      "role": "rush_evolve"
-    },
-    {
-      "card": "Buddy-Buddy Poffin",
-      "role": "setup"
-    }
-  ]
+  "key_cards": [{"card": "Rare Candy", "role": "rush_evolve"}, {"card": "Buddy-Buddy Poffin", "role": "setup"}]
 }

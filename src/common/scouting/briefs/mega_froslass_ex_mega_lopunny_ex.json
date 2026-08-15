@@ -1,10 +1,7 @@
 {
   "slug": "mega_froslass_ex_mega_lopunny_ex",
   "label": "Mega Froslass ex / Mega Lopunny ex",
-  "covers": [
-    "Mega Froslass ex / Mega Lopunny ex",
-    "Mega Lopunny ex"
-  ],
+  "covers": ["Mega Froslass ex / Mega Lopunny ex", "Mega Lopunny ex"],
   "authored": "2026-08-12",
   "opponent_properties": {
     "opp_tempo": "fast",
@@ -13,51 +10,20 @@
     "opp_effect_immune_bodies": true
   },
   "pokemon": [
-    {
-      "card": "Buneary",
-      "roles": [
-        "backup_attacker",
-        "starter"
-      ]
-    },
-    {
-      "card": "Mega Froslass ex",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Mega Lopunny ex",
-      "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
-      ]
-    },
-    {
-      "card": "Snorunt",
-      "roles": [
-        "backup_attacker"
-      ]
-    }
+    {"card": "Buneary", "roles": ["primary_attacker"]},
+    {"card": "Mega Froslass ex", "roles": ["primary_attacker"]},
+    {"card": "Mega Lopunny ex", "roles": ["primary_attacker"]},
+    {"card": "Snorunt", "roles": ["primary_attacker"]},
+    {"card": "Abra", "roles": ["support_pokemon"]},
+    {"card": "Dunsparce", "roles": []},
+    {"card": "Dudunsparce", "roles": []},
+    {"card": "Fan Rotom", "roles": []},
+    {"card": "Moltres", "roles": ["backup_attacker"]}
   ],
   "key_cards": [
-    {
-      "card": "Wally's Compassion",
-      "role": "full_heal_loop"
-    },
-    {
-      "card": "Air Balloon",
-      "role": "pivot"
-    },
-    {
-      "card": "Mist Energy",
-      "role": "attack_effect_immunity"
-    },
-    {
-      "card": "Battle Cage",
-      "role": "bench_counter_guard"
-    }
+    {"card": "Wally's Compassion", "role": "full_heal_loop"},
+    {"card": "Air Balloon", "role": "pivot"},
+    {"card": "Mist Energy", "role": "attack_effect_immunity"},
+    {"card": "Battle Cage", "role": "bench_counter_guard"}
   ]
 }

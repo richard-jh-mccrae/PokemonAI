@@ -40,22 +40,76 @@ _Avoid_: Lethal score, likely win
 The current-turn search that produces a Terminal Proof or abstains without changing normal policy.
 _Avoid_: Lethal heuristic, win bonus
 
-**Need Root**:
-One unmet recipient, capability, and resource slot whose satisfaction has a bounded marginal value.
-_Avoid_: Wanted card, deck-wide wish
+**Strategy**:
+An authored, conditional hint about decision sequences likely to reach valuable end states.
+It schedules Bellman traversal and never changes action or board value.
+_Avoid_: Need, rule, reward
 
-**Admissible Need Bound**:
-An optimistic ceiling proving whether a Needs-guided branch can still beat an executable incumbent.
-_Avoid_: Need score, heuristic cutoff
+**General Strategy**:
+A deck-independent Strategy shared by every pilot, such as taking inexpensive information first.
+_Avoid_: Generic value
+
+**Deck Strategy**:
+Own-deck doctrine that may add to or explicitly override General Strategies.
+_Avoid_: Card Role, hard-coded line
+
+**Opponent Strategy**:
+Scouting doctrine activated by the matched opponent Brief.
+_Avoid_: Opponent Role, matchup value
+
+**Strategy Match Strength**:
+The degree to which a legal action advances active Strategies in the known state.
+It controls search priority only.
+_Avoid_: Action value, Bellman reward
+
+**Strategy Snapshot**:
+The resolved General, Deck, and Opponent Strategies activated for one Planning Epoch.
+New strategy-relevant information creates a new snapshot.
+_Avoid_: Turn-only cache, live action score
+
+**Strategy Beam**:
+The focused root actions scheduled first from Strategy Match Strength, plus safe executable actions.
+Bellman later widens into every unresolved legal path and owns the final choice.
+_Avoid_: Pruning rule, replacement planner
+
+**Candidate Harvest**:
+Strategy-ordered depth-first search for distinct executable attack/End lines before Bellman widening.
+It stops at its Pilot Profile line quota or clock share, whichever comes first.
+_Avoid_: Strategy policy, early final choice
+
+**Pokémon Role**:
+Deck or scouting doctrine describing a Pokémon's strategic job, such as primary attacker, backup attacker, or support.
+Roles contribute to development, preservation, and KO value.
+_Avoid_: Win condition, secondary attacker, Trainer function, Strategy
+
+**General Pokémon Role**:
+A deck-independent Pokémon Role used whenever the same body has the same strategic job for either player.
+_Avoid_: Repeated deck Role, Card Function
+
+**Pre-evolution Role**:
+Scouting doctrine marking an undeveloped Pokémon whose known evolution line makes it a valuable denial target.
+_Avoid_: Win condition base, automatic deck Role
+
+**Evolution Relationship**:
+The intrinsic ancestry between Pokémon cards. It comes from card facts and is not deck doctrine.
+_Avoid_: Authored evolution map, Pokémon Role
+
+**Card Function**:
+An intrinsic Trainer or Energy capability shared across decks, such as search, draw, gust, or acceleration.
+_Avoid_: Pokémon Role, deck doctrine
+
+**Demand Slot**:
+One value-side recipient, capability, and resource requirement used to price access and retained options.
+_Avoid_: Strategy, wanted card
+
+**Bellman Value**:
+The comparable utility of an action's resulting state and continuation.
+Strategies never enter this quantity; Roles, Card Functions, prize yield, and board development may.
+_Avoid_: Strategy Match Strength
 
 **Bound Prune**:
 Planning-epoch removal proved by an upper bound no better than the current executable lower bound.
 _Avoid_: Structural Prune, low-priority branch
-
-**Need Beam**:
-Search-wave scheduling from metadata-connected demand, safety, hold, and explicit Unknown evidence.
-Bellman still probes and chooses among every legal root action.
-_Avoid_: Rules policy, replacement planner
 
 **Pilot Profile**:
 The resolved, versioned set of adjustable value, search, clock, belief, execution, and diagnostic parameters.
@@ -67,7 +121,8 @@ There is no rules-pipeline fallback.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
-- card Roles and evolution relationships;
+- Pokémon Roles; evolution relationships are derived from card facts;
+- Deck Strategies and explicit General Strategy overrides;
 - starter priority and preferred first/second turn;
 - partner dependencies;
 - prize routes;
@@ -76,9 +131,10 @@ Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 The flattened Bellman core owns the decision model:
 
 - `information.py`: opponent belief and exact hypergeometric draw/reveal outcome classes;
-- `needs.py`: immutable demand/access paths compiled from stats, effects, tags, Brief roles, known
-  top-deck cards, and exact hypergeometric access. Its beam is shadow-only by default;
-- `refresh.py`: analytic shuffle-refresh commitments. It integrates need-coverage classes with exact
+- `strategy/strategies.py`: General, Deck, and Opponent Strategy declarations and Planning-Epoch
+  activation snapshots;
+- `demand.py`: Strategy Beam scheduling plus value-side Demand Slots and exact access odds;
+- `refresh.py`: analytic shuffle-refresh commitments. It integrates demand-coverage classes with exact
   hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
   never constructs or searches a hypothetical redraw;
 - `value.py` and `potential.py`: portable card Worth and successor-state potential;
@@ -88,8 +144,8 @@ The flattened Bellman core owns the decision model:
 - `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
 - `effects.py`, `fetch.py`, and `draws.py`: effect data and pure chance-window mechanics;
 - `solver.py`: reference recursion plus production successive-halving search. Every legal root gets
-  an equal value probe; the two strongest incomplete continuations get the full pass. This shapes
-  beam width only—turn depth remains uncapped;
+  focused Strategy paths first, retains executable safety paths, then widens across unresolved legal
+  roots until proof or timeout. Strategy changes order only; Bellman value selects the action;
 - `planner.py`: first-action Bellman commitment;
 - `runtime.py`: match-scoped deployment, guarded deterministic plan-suffix reuse, forced selections,
   and declarative setup;
@@ -98,7 +154,7 @@ Neutral retained services are Scouting, card/stat providers, card-function data,
 option equivalence, telemetry, and board-card traversal.
 
 Revealed choices use `E[max continuation after reveal]`. Hidden shuffle-refresh draws do not: their
-identities are integrated out as need-coverage classes, and the solver commits or declines before
+identities are integrated out as demand-coverage classes, and the solver commits or declines before
 the live random result. Actual post-refresh cards are planned only on the next engine callback.
 
 Native semantic transpositions include a signature of the actual determinized hidden zones, not

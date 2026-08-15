@@ -38,9 +38,9 @@ The fix has five deck-neutral parts:
 Search depth is not capped. A line may continue until the engine ends the turn, an attack resolves,
 a game result occurs, a semantic cycle is found, or the explicit node budget is consumed.
 
-## Implemented needs boundary
+## Implemented demand boundary
 
-`common.needs` now owns shared immediate demand and deterministic retained evolution value. It does
+`common.demand` now owns shared immediate demand and deterministic retained evolution value. It does
 not sample draws, construct hypothetical hands, or search imagined redraw continuations. A
 future-card effect combination is deliberately outside this boundary until it has a generic
 effect-outcome evaluator; the ordinary `hand` family continues to retain those known cards.
@@ -122,8 +122,8 @@ registration to CABT, so unrelated OpenSpiel native code is no longer loaded dur
 - `src/common/solver.py`: sleep-set partial-order reduction, equal probes, refinement, diagnostics.
 - `src/common/native_engine.py`: hidden-world identity, exact transpositions, cheaper conversion.
 - `src/common/potential.py`: immutable evaluator caches and repeated-fact elimination.
-- `src/common/needs.py`: immediate coverage and deterministic visible-card next-turn options.
-- `src/common/refresh.py`: exact need-class odds and the no-hypothetical-redraw boundary.
+- `src/common/demand.py`: immediate coverage and deterministic visible-card next-turn options.
+- `src/common/refresh.py`: exact demand-class odds and the no-hypothetical-redraw boundary.
 - `docs/adr/0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md`: architecture amendment.
 - `tests/bellman/test_m3_solver.py`: allocation contract.
 - `tests/bellman/test_native_engine.py`: hidden-world identity contract.

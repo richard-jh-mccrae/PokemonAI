@@ -63,8 +63,8 @@ def test_observed_threats_and_targets_from_board():
     read = scout.observe(make_obs(opp_active=MEGA_LUCARIO, opp_bench=[KIRLIA]))
 
     roles = {t.cardId: t.role for t in read.targets}
-    assert roles[MEGA_LUCARIO] == "prize_liability"   # ex/Mega = extra prizes
-    assert roles[KIRLIA] == "support"                  # can't attack
+    assert roles[MEGA_LUCARIO] == "primary_attacker"   # ex/Mega = extra prizes
+    assert roles[KIRLIA] == "support_pokemon"          # can't attack
     threat_ids = {t.cardId for t in read.threats}
     assert MEGA_LUCARIO in threat_ids and KIRLIA not in threat_ids
     assert all(i.seen for i in read.targets + read.threats)

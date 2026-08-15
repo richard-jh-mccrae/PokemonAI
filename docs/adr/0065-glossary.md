@@ -1,7 +1,7 @@
 # Ubiquitous Language — the card-worth oracle (ADR-0065)
 
 Companion vocabulary doc for ADR-0065 (not an ADR itself — same convention as `0050-glossary.md`).
-Six plain words: **Value** over Worth, Odds, Gates, Closure, and Needs. Needs now shapes search order,
+Six plain words: **Value** over Worth, Odds, Gates, Closure, and Strategy. Strategy now shapes search order,
 not Value. Use these terms in code, tests, commits, and design work.
 
 ## The two features (do not conflate)
@@ -14,7 +14,7 @@ not Value. Use these terms in code, tests, commits, and design work.
 ## The umbrella term: Value (ratified with the user 2026-07-20)
 
 **Value** = what a card or body means RIGHT NOW. Worth is shaped by Odds and Gates for a specific
-question at a specific moment. Needs never enters this quantity.
+question at a specific moment. Strategy never enters this quantity.
 
 | Question | Asks | The site |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Value(question, moment) = Worth × Odds × Gates
 | --- | --- | --- | --- |
 | **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a doom-answering card under pressure SPIKES to full worth (the closing edge); a duplicate of a once-per-turn card sheds by rank (the quota window). All four legs built 2026-07-18/19. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
 | **Closure** | WHAT can reach what — the tutor/recycle/search graph over the card REPRESENTATION (`card_effects.json` FETCH clauses + `CardStat`), never a text parse. Pure graph; carries no Odds or Worth of its own. | `common/fetch_closure.py` | reach (avoid as a noun — used adjectivally, "reachable"), the graph (fine in prose) |
-| **Needs** | Authored strategy hints that order Bellman's first beam. | `common/strategy/needs.py` | value, utility |
+| **Strategy** | Authored hints that order Bellman's first beam without entering Value. | `common/strategy/strategies.py` | need, value, utility |
 
 ## Relationships
 

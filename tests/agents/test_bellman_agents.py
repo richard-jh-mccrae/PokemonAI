@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from common.cards import CardFunctions
 from common.runtime import BellmanRuntime, build_runtime
+from common.scouting.provider import EngineCardStatProvider
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -36,6 +38,18 @@ def test_every_deck_builds_the_shared_bellman_runtime(name):
 
 
 @pytest.mark.parametrize("name", AGENTS)
+def test_every_deck_pokemon_resolves_to_a_role(name):
+    strategy = _strategy(name)
+    deck = [int(value) for value in
+            (REPO / "src" / "agents" / name / "deck.csv").read_text().splitlines()
+            if value.strip()]
+    stats = EngineCardStatProvider()
+    roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+    pokemon = {card_id for card_id in deck if stats.get(card_id).is_pokemon}
+    assert pokemon <= roles.keys(), f"{name}: missing Roles for {sorted(pokemon - roles.keys())}"
+
+
+@pytest.mark.parametrize("name", AGENTS)
 def test_agent_entrypoint_contains_only_shared_runtime_wiring(name):
     path = REPO / "src" / "agents" / name / "main.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -52,4 +66,18 @@ def test_deck_declarations_are_the_only_per_deck_policy_surface():
     starmie, lucario, dragapult = (_strategy(name) for name in AGENTS[::-1])
     assert starmie.prize_plan is not None
     assert lucario.partners
-    assert dragapult.lines[0].path == (119, 120, 121)
+    assert dragapult.roles[121] == ["primary_attacker"]
+    assert dragapult.roles.evolves == {}
+
+
+def test_experiment_decision_seconds_exactly_overrides_deck_clock(monkeypatch):
+    strategy = _strategy("mega_starmie")
+    strategy.pilot_overrides["clock.remaining_200_seconds"] = 99
+    monkeypatch.setenv("AGENT_DECISION_SECONDS", "7")
+    deck = [int(value) for value in
+            (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().splitlines()
+            if value.strip()]
+    runtime = build_runtime(
+        strategy, deck, stats=None, functions=None, scout=None, briefs=[])
+    assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 7
+    assert runtime.pilot_profile.get("clock.adaptive_enabled") == 0

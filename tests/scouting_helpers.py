@@ -58,7 +58,7 @@ def tiny_artifact() -> Artifact:
             "Mega Lucario ex": {
                 "representative_build": [SOLROCK, RIOLU, MEGA_LUCARIO, SHARED],
                 "evolution_lines": [[RIOLU, MEGA_LUCARIO]],
-                "threats": [{"cardId": MEGA_LUCARIO, "role": "attacker"}],
+                "threats": [{"cardId": MEGA_LUCARIO, "role": "backup_attacker"}],
                 "targets": [{"cardId": RIOLU, "role": "fragile_preevo"}],
             },
         },

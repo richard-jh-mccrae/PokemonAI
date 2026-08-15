@@ -112,7 +112,7 @@ def _registry():
         typed_basic_energy=db.card(card_id).cardType == CardType.BASIC_ENERGY,
     ) for card_id in set(DECK)}
     return ValueRegistry(
-        roles={MEGA: ("win_condition", "primary_attacker"),
+        roles={MEGA: ("primary_attacker", "primary_attacker"),
                CINDERACE: ("accel_source",)},
         functions={card_id: tuple(functions.tags(card_id)) for card_id in set(DECK)},
         facts=facts, line_bases=(STARYU,),

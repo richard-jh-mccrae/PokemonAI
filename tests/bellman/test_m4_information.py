@@ -136,7 +136,7 @@ def test_scouting_adapter_conserves_unknown_mass_and_never_selects():
 
 def test_60hp_fixture_attaches_then_takes_lillie_expectation_and_replans():
     registry = ValueRegistry(
-        roles={STARYU: ("win_condition_base",)},
+        roles={STARYU: ("primary_attacker",)},
         functions={BOSS: ("gust",), LILLIE: ("draw",), WATER: ()},
         facts={cid: CardFacts(typed_basic_energy=cid == WATER)
                for cid in (STARYU, BOSS, WATER, LILLIE)},

@@ -150,7 +150,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
 - **Line-member worth derivation (2026-07-19, the shadow's first prerequisite closed).** The shadow
   sweep found an undeclared middle Line stage (the f68 Drakloak on Dreepy→Drakloak→Dragapult ex)
   pricing **0** — `_role_value` saw only the declared base. `planner._role_value` now derives
-  `win_condition_base` worth for every `_line_preevo_set` member (Round 9 'derive first'), so the
+  `primary_attacker` worth for every `_line_preevo_set` member (Round 9 'derive first'), so the
   Drakloak prices 20. WORTH-ONLY: the Line-membership fact enters the value currency (keep-cost
   sites + the shadow) but NOT `_roles_of` / `c.roles` — injecting it there would flip the discard
   ladder's `_BASE_ROLES` exemptions and REGRESS the covered-Drakloak pin `83686860-18`, so that
@@ -158,7 +158,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   a no-op (no pin moved). Suite + corpus green (3105).
 - **Keep-value v2 (Needs) WP-N1–N3 built (2026-07-19/20; `ADR-0065`).**
   The successor to the gate stack the user flagged as brittle ("more and more gates that begin to
-  undermine each other"): needs reified as deadline-tagged SLOTS (`common/needs.py`, the fifth
+  undermine each other"): needs reified as deadline-tagged SLOTS (`common/demand.py`, the fifth
   glossary term), a card's keep-value its MARGINAL slot coverage under EXACT bitmask-DP assignment —
   so multi-copies, energy-attached, doom, quotas, fuel and deploy-now are slot PROPERTIES resolved
   GLOBALLY in one assignment, not pairwise-composed gates. WP-N1 the module + the two soundness nets

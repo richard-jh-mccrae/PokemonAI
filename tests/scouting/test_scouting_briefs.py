@@ -8,6 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from common.card_worth import role_value
+from common.cards import CardFunctions
+from common.pokemon_roles import general_pokemon_roles
+from common.scouting.artifact import load_artifact
 from common.scouting.briefs import (
     Brief, load_briefs, match_brief, resolve_brief_cards, resolve_scouted_role_worth,
 )
@@ -19,9 +23,29 @@ from common.scouting.read import Read
 _BRIEFS_DIR = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting" / "briefs"
 
 
+@pytest.mark.parametrize(("name", "purpose"), (
+    ("Dunsparce", "draw_engine"),
+    ("Dudunsparce", "draw_engine"),
+    ("Drakloak", "draw_engine"),
+    ("Mega Kangaskhan ex", "draw_engine"),
+    ("Latias ex", "retreat_assist"),
+    ("Budew", "item_locker"),
+    ("Meowth ex", "search_engine"),
+    ("Fezandipiti ex", "draw_engine"),
+))
+def test_generic_support_pokemon_roles_preserve_their_purpose(name, purpose):
+    provider = EngineCardStatProvider()
+    functions = CardFunctions.load()
+    ids = provider.ids_for_name(name)
+    roles = general_pokemon_roles(ids, provider, functions)
+    assert ids and all(
+        {"support_pokemon", purpose} <= set(roles.get(card_id, ())) for card_id in ids)
+
+
 def _write_brief(d, slug, covers, **extra):
     brief = {"slug": slug, "covers": covers, "opponent_properties": extra.get("opponent_properties", {}),
-             "pokemon": extra.get("pokemon", []), "key_cards": extra.get("key_cards", [])}
+             "pokemon": extra.get("pokemon", []), "key_cards": extra.get("key_cards", []),
+             "strategies": extra.get("strategies", [])}
     (d / f"{slug}.json").write_text(json.dumps(brief), encoding="utf-8")
 
 
@@ -36,6 +60,23 @@ def test_load_briefs_reads_a_well_formed_brief(tmp_path):
     assert len(briefs) == 1
     assert briefs[0].slug == "alakazam"
     assert "Alakazam / Frillish" in briefs[0].covers
+
+
+def test_load_briefs_parses_opponent_strategies(tmp_path):
+    _write_brief(tmp_path, "alakazam", ["Alakazam"], strategies=[{
+        "identifier": "opponent.pressure_engine",
+        "conditions": [],
+        "desired_facts": [{"kind": "damage_setup",
+                           "recipient": "opponent.bench.highest_role"}],
+        "recipient_selector": "opponent.bench.highest_role",
+        "deadline": "this_turn",
+        "confidence": "medium",
+    }])
+
+    strategy = load_briefs(tmp_path)[0].strategies[0]
+
+    assert strategy.scope == "opponent"
+    assert strategy.provenance == "scouting.brief:alakazam"
 
 
 def test_load_briefs_is_fail_safe(tmp_path):
@@ -76,7 +117,7 @@ def test_resolve_brief_cards_maps_names_to_ids_and_roles():
     name_ids = {"Mega Lucario ex": {678}, "Hariyama": {679}}
     threat_ids, target_roles = resolve_brief_cards(_ml_brief(), lambda n: name_ids.get(n, ()))
     assert threat_ids == frozenset({678, 679})
-    assert target_roles == {678: "prize_liability", 679: "attacker"}
+    assert target_roles == {678: "primary_attacker", 679: "backup_attacker"}
 
 
 def test_resolve_brief_cards_skips_unresolvable_names():
@@ -85,21 +126,21 @@ def test_resolve_brief_cards_skips_unresolvable_names():
                             {"card": "Ghost Card", "roles": ["support"]}]),
         lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
-    assert target_roles == {678: "prize_liability"}  # unresolved support is dropped
+    assert target_roles == {678: "primary_attacker"}  # unresolved support is dropped
 
 
 def test_resolve_brief_cards_maps_a_name_to_all_its_ids():
     _, target_roles = resolve_brief_cards(
         _ml_brief(pokemon=[{"card": "Hariyama", "roles": ["backup_attacker"]}]),
         lambda n: {"Hariyama": {679, 6791}}.get(n, ()))
-    assert target_roles == {679: "attacker", 6791: "attacker"}
+    assert target_roles == {679: "backup_attacker", 6791: "backup_attacker"}
 
 
 def test_resolve_brief_cards_lists_a_card_that_is_both_threat_and_target():
     brief = _ml_brief(pokemon=[{"card": "Mega Lucario ex", "roles": ["primary_attacker"]}])
     threat_ids, target_roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}}.get(n, ()))
     assert threat_ids == frozenset({678})
-    assert target_roles == {678: "prize_liability"}
+    assert target_roles == {678: "primary_attacker"}
 
 
 def test_bellman_role_worth_expands_primary_attacker_to_its_ancestors():
@@ -160,14 +201,33 @@ def test_shipped_briefs_are_readable_crlf_json_with_bounded_lines():
         assert max(len(line) for line in raw.split(b"\r\n")) <= 120, f"{path.name}: line over 120 columns"
 
 
-def test_shipped_threats_are_labeled_as_primary_or_backup_attackers():
-    """Threatening Brief bodies must distinguish main lines from supporting attackers."""
+def test_every_shipped_brief_pokemon_resolves_to_a_role():
+    provider = EngineCardStatProvider()
+    functions = CardFunctions.load()
     for brief in load_briefs():
+        _, resolved = resolve_brief_cards(
+            brief, provider.ids_for_name, stat_for_id=provider.get,
+            forward_ids=provider.forward_card_ids, functions=functions)
         for entry in brief.pokemon:
-            roles = set(entry.get("roles", []))
-            if "threat" in roles:
-                assert {"primary_attacker", "backup_attacker"} & roles, (
-                    f"{brief.slug}: {entry['card']} is a threat without an attacker label")
+            ids = provider.ids_for_name(entry["card"])
+            assert ids and all(card_id in resolved for card_id in ids), (
+                f"{brief.slug}: {entry['card']} has no resolved Role")
+            assert all(role_value((resolved[card_id],)) > 0 for card_id in ids), (
+                f"{brief.slug}: {entry['card']} has a Role with no Bellman Worth")
+
+
+def test_briefs_list_every_representative_build_pokemon():
+    provider = EngineCardStatProvider()
+    artifact = load_artifact()
+    for brief in load_briefs():
+        represented = set().union(*(provider.ids_for_name(row["card"]) for row in brief.pokemon))
+        expected = set()
+        for cover in brief.covers:
+            for card_id in (artifact.dossiers.get(cover) or {}).get("representative_build") or ():
+                stat = provider.get(int(card_id))
+                if stat is not None and stat.is_pokemon:
+                    expected.add(int(card_id))
+        assert expected <= represented, f"{brief.slug}: missing Pokémon ids {sorted(expected - represented)}"
 
 
 @pytest.mark.req("REQ-BRIEF-0003")
@@ -208,7 +268,7 @@ def _ancestor_names(prov, cid: int) -> set[str]:
 
 
 @pytest.mark.req("REQ-BRIEF-0002")
-def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
+def test_shipped_briefs_make_every_primary_attacker_a_primary_attacker():
     """A primary attacker and every earlier evolution are the curated matchup payoff."""
     prov = EngineCardStatProvider()
     for brief in load_briefs():
@@ -219,11 +279,11 @@ def test_shipped_briefs_make_every_primary_attacker_a_prize_liability():
         assert primaries, f"{brief.slug}: Brief has no primary attacker"
         for name in primaries:
             ids = prov.ids_for_name(name) or ()
-            assert any(target_roles.get(cid) == "prize_liability" for cid in ids), (
-                f"{brief.slug}: primary attacker {name!r} must resolve to prize_liability")
+            assert any(target_roles.get(cid) == "primary_attacker" for cid in ids), (
+                f"{brief.slug}: primary attacker {name!r} must resolve to primary_attacker")
             ancestor_names = set().union(*(_ancestor_names(prov, card_id) for card_id in ids))
             for ancestor_name in ancestor_names:
-                assert all(target_roles.get(card_id) == "prize_liability"
+                assert all(target_roles.get(card_id) == "primary_attacker"
                            for card_id in prov.ids_for_name(ancestor_name)), (
                     f"{brief.slug}: {ancestor_name!r} must inherit primary-attacker priority")
 
@@ -246,7 +306,7 @@ def test_multiple_primary_attackers_are_supported():
         {"card": "Hariyama", "roles": ["primary_attacker"]},
     ])
     _, roles = resolve_brief_cards(brief, lambda n: {"Mega Lucario ex": {678}, "Hariyama": {679}}.get(n, ()))
-    assert roles == {678: "prize_liability", 679: "prize_liability"}
+    assert roles == {678: "primary_attacker", 679: "primary_attacker"}
 
 
 def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
@@ -271,4 +331,4 @@ def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
         forward_ids=lambda card_id: forward[card_id])
 
     assert threats == frozenset({1, 2, 3})
-    assert roles == {1: "prize_liability", 2: "prize_liability", 3: "prize_liability"}
+    assert roles == {1: "primary_attacker", 2: "primary_attacker", 3: "primary_attacker"}
