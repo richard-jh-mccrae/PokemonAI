@@ -153,9 +153,7 @@ def _candidate(state, action, provider, oracle, profile: PilotProfile) -> Family
                     "evolution" if action.identity.kind == "evolve" else
                     "promote_retreat" if action.identity.kind == "retreat" else
                     "deployment" if _is_deployment_action(state, action, provider) else None)
-    need_coverage = (oracle.need_coverage_ledger(state, action)
-                     if known_family is None and hasattr(oracle, "need_coverage_ledger") else None)
-    family = known_family or (need_coverage[0] if need_coverage is not None else None)
+    family = known_family
     if (known_family is None and action.identity.kind not in {"card", "play"}
             and getattr(provider, "stats", None) is not None):
         return _singleton(action)
@@ -169,8 +167,7 @@ def _candidate(state, action, provider, oracle, profile: PilotProfile) -> Family
             return _singleton(action)
         if profile.get(f"family.{family}_shadow") < 0.5:
             return FamilyCandidate(action, family, (), (), None, None, 0, "shadow_disabled")
-        ledger = (need_coverage[1] if need_coverage is not None
-                  else oracle.transition_ledger(state, node.state, action.identity))
+        ledger = oracle.transition_ledger(state, node.state, action.identity)
         kwargs = ({"resource_premium": _attachment_resource_premium(state, action, oracle)}
                   if family == "attachment" else {})
         result = SCORERS[family](ledger, profile, **kwargs)

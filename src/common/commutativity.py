@@ -18,7 +18,7 @@ DECLARED_DETERMINISTIC_EFFECT_KINDS = frozenset({
 })
 OPAQUE_ACTION_KINDS = frozenset({
     "ability", "attack", "card", "decline", "discard", "end", "energy", "energy_card",
-    "number", "retreat", "skill", "special_condition", "tool_card", "yes", "no",
+    "number", "skill", "special_condition", "tool_card", "yes", "no",
 })
 
 
@@ -141,9 +141,9 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
         event = (kind, card_token, body_token)
         return ActionFootprint(
             event,
-            frozenset({f"hand:{card_token}", "allowance:energy", "own:energy",
+            frozenset({f"hand:{card_token}", "allowance:energy",
                        f"body:{body_token}:identity"}),
-            frozenset({f"hand:{card_token}", "allowance:energy", "own:energy",
+            frozenset({f"hand:{card_token}", "allowance:energy",
                        f"body:{body_token}:energy"}),
             commitment=True,
         )
@@ -151,10 +151,31 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
     if kind == "evolve":
         event = (kind, card_token, body_token)
         body_identity = f"body:{body_token}:identity"
+        target = stats.get(card.get("id")) if card and stats is not None else None
+        if target is not None and getattr(target, "hasAbility", False):
+            return ActionFootprint(event, barrier=True, commitment=True)
         return ActionFootprint(
             event,
-            frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
-            frozenset({f"hand:{card_token}", body_identity, "own:hp"}),
+            frozenset({f"hand:{card_token}", body_identity, f"body:{body_token}:hp"}),
+            frozenset({f"hand:{card_token}", f"body:{body_token}:card",
+                       body_identity, f"body:{body_token}:hp"}),
+            commitment=True,
+        )
+
+    if kind == "retreat":
+        active = (player.get("active") or ())
+        active_body = active[0] if active else None
+        active_token = _body_token(active_body, None)
+        lineup = tuple(active) + tuple(player.get("bench") or ())
+        lineup_identities = {
+            f"body:{_body_token(candidate, None)}:identity" for candidate in lineup
+        }
+        return ActionFootprint(
+            (kind, body_token),
+            frozenset({"allowance:retreat", "own:lineup",
+                       f"body:{active_token}:energy", f"body:{body_token}:identity",
+                       *lineup_identities}),
+            frozenset({"allowance:retreat", "own:lineup", f"body:{active_token}:energy"}),
             commitment=True,
         )
 

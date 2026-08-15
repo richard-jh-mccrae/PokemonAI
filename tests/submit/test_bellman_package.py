@@ -24,6 +24,13 @@ def test_manifest_describes_declarations_and_bellman_only():
     assert summary(manifest)["system"] == "bellman"
     assert manifest["pilot_profile"]["hash"]
     assert "planning_clock" in manifest["pilot_profile"]["groups"]
+    needs = manifest["needs_strategy"]
+    assert needs["resolved"]["content_hash"]
+    assert needs["enabled"] is True
+    assert needs["odds_enabled"] is True
+    assert needs["resolved"]["effective"]
+    assert any(row["identifier"] == "mega_starmie.evolve_benched_staryu"
+               for row in needs["resolved"]["deck"])
 
 
 def test_brief_projects_the_same_profile_to_html_and_csv():
@@ -38,6 +45,25 @@ def test_brief_projects_the_same_profile_to_html_and_csv():
     assert "clock.remaining_600_seconds" in csv_text
     assert "family.snipe_shadow" in csv_text
     assert "promote_retreat.resource_cost_weight" in csv_text
+    assert "Needs strategy beam" in html
+    assert manifest["needs_strategy"]["resolved"]["content_hash"] in html
+    assert "own.active" in html
+
+
+def test_needs_off_manifest_keeps_odds_and_the_same_resolved_strategy_catalog():
+    enabled = build_manifest(REPO / "src" / "agents" / "mega_starmie",
+                             git_hash="abc123", cards={})
+    disabled = build_manifest(
+        REPO / "src" / "agents" / "mega_starmie",
+        git_hash="abc123", cards={},
+        pilot_values={"needs.focus_enabled": 0.0},
+    )
+
+    assert enabled["needs_strategy"]["enabled"] is True
+    assert disabled["needs_strategy"]["enabled"] is False
+    assert disabled["needs_strategy"]["odds_enabled"] is True
+    assert (enabled["needs_strategy"]["resolved"]["content_hash"]
+            == disabled["needs_strategy"]["resolved"]["content_hash"])
 
 
 def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
@@ -59,6 +85,13 @@ def test_package_contains_shared_bellman_and_no_legacy_policy(tmp_path):
         assert "tuned.json" not in names
         manifest_text = bundle.read("brief.html").decode("utf-8")
         assert '"system": "bellman"' in manifest_text
+
+
+def test_package_bakes_needs_toggle_into_runtime_config(tmp_path):
+    archive = package("mega_starmie", tmp_path, stamp=False, needs_enabled=False)
+    with zipfile.ZipFile(archive) as bundle:
+        config = json.loads(bundle.read("runtime_config.json"))
+    assert config == {"pilot": {"needs.focus_enabled": 0.0}}
 
 
 @pytest.mark.parametrize("agent_name", SHIPPABLE_AGENTS)

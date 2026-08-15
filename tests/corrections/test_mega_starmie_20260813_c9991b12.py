@@ -23,10 +23,10 @@ MAX_CORRECTION_DECISION_SECONDS = 60.0
     ("8db4265d078d", (0,)),  # useful free information now precedes the tied attachment
     ("f1571e558ae0", (1,)),  # same setup-only opener through the opposite seat
     ("c8ebc06190d5", (0,)),  # beneficial attack beats ending the turn
-    ("0395fcb0da0f", (1,)),  # after the recorded evolution, attach before draw disruption
+    ("0395fcb0da0f", (2,)),  # recorded evolution commutes; attach/item still precede Lillie
     ("ab708777810c", (0,)),  # free denial before the resolving attack
     ("231db774b45e", (0,)),  # small recovery menu fully compares its continuations
-    ("26007ba948e7", (5,)),  # Night Stretcher starts the recorded turn plan
+    ("26007ba948e7", (0,)),  # urgent Wally and Night Stretcher are exact-value commutative prefixes
     ("79789ec5d19e", (1,)),  # simultaneous Active/Bench KO readiness is preserved
     ("6a0242d3e39a", (1,)),  # energy goes to the empty healthy attacker
 ))

@@ -17,6 +17,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+import json
 
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
@@ -62,7 +63,8 @@ def artifact_stem(name: str, *, when: datetime | None = None, git_hash: str | No
 
 def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bool = True,
             prev_deck: dict | None = None, prev_build_id: int | None = None,
-            prev_hyps: dict | None = None) -> Path:
+            prev_hyps: dict | None = None, overlay: Path | str | None = None,
+            needs_enabled: bool | None = None) -> Path:
     """Stage `dist/<name>/` and zip it -> the zip path. Only the ZIP carries the stamp, so a build
     history accumulates while the staged dir is scratch. Shared runtime packages always come from
     `src/`."""
@@ -84,7 +86,21 @@ def package(name: str, dist: Path, *, agents_root: Path | None = None, stamp: bo
 
     when, git_hash = datetime.now(), _git_hash(REPO)  # one stamp for brief and zip name
     from submit.brief import build_manifest, render_brief, render_brief_csv  # lazy: avoid import cycle
-    manifest = build_manifest(stage, when=when, git_hash=git_hash, agent_name=name)
+    pilot_values = None
+    if overlay is not None:
+        payload = json.loads(Path(overlay).read_text(encoding="utf-8"))
+        pilot_values = payload.get("pilot", {})
+        if not isinstance(pilot_values, dict):
+            raise ValueError("overlay pilot must be an object")
+    if needs_enabled is not None:
+        pilot_values = {**(pilot_values or {}),
+                        "needs.focus_enabled": 1.0 if needs_enabled else 0.0}
+    if pilot_values:
+        (stage / "runtime_config.json").write_text(
+            json.dumps({"pilot": pilot_values}, sort_keys=True), encoding="utf-8")
+    manifest = build_manifest(
+        stage, when=when, git_hash=git_hash, agent_name=name,
+        pilot_values=pilot_values)
     brief = render_brief(manifest, prev_deck=prev_deck, prev_build_id=prev_build_id)
     (stage / "brief.html").write_text(brief, encoding="utf-8")
     (stage / "brief.csv").write_text(render_brief_csv(manifest), encoding="utf-8", newline="")
@@ -100,8 +116,14 @@ def main() -> None:
     ap.add_argument("--out", default=str(REPO / "dist"))
     ap.add_argument("--no-stamp", action="store_true",
                     help="name the zip <name>.zip (omit the datetime/githash stamp)")
+    ap.add_argument("--overlay", default=None,
+                    help="pilot overlay JSON recorded in the packaged brief")
+    ap.add_argument("--needs", choices=("on", "off"), default=None,
+                    help="record the canonical Needs beam A/B toggle")
     args = ap.parse_args()
-    zip_path = package(args.name, Path(args.out), stamp=not args.no_stamp)
+    zip_path = package(
+        args.name, Path(args.out), stamp=not args.no_stamp, overlay=args.overlay,
+        needs_enabled=None if args.needs is None else args.needs == "on")
     print(f"packaged -> {zip_path}")
 
 

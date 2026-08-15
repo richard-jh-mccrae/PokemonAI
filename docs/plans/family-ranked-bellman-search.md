@@ -3,6 +3,11 @@
 Status: attachment vertical slice implemented 2026-08-14; ordering, widening, and adaptive clock
 remain shadow-disabled after the newest correction corpus blocked activation.
 
+The accepted follow-up specification
+[`terminal-proof-needs-bounded-bellman.md`](terminal-proof-needs-bounded-bellman.md) supersedes this
+document's prohibition on permanent Needs pruning. Family Scores remain scheduling-only; only an
+admissible Bellman upper-bound proof may delete a Needs-guided branch.
+
 ## Objective
 
 Keep successor-state Bellman value as the sole decision value while using mature local equations to

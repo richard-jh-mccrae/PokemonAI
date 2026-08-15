@@ -14,6 +14,7 @@ import json
 import os
 from contextlib import contextmanager
 from pathlib import Path
+from time import perf_counter
 
 
 def episode_id(run_stem: str, index: int) -> int:
@@ -22,12 +23,14 @@ def episode_id(run_stem: str, index: int) -> int:
     return int(hashlib.sha1(f"{run_stem}:{index}".encode("utf-8")).hexdigest()[:12], 16)
 
 
-def run_stem(agent: str, when, sha: str, overlay=None) -> str:
+def run_stem(agent: str, when, sha: str, overlay=None, needs_enabled=None) -> str:
     """The provenance stem, matching `provenance.build_identity` so self-play Corrections file under
     a real build folder. The overlay digest keeps a candidate-config corpus off the baseline's."""
     marker = "selfplay"
     if overlay:
         marker += "-" + hashlib.sha1(str(overlay).encode("utf-8")).hexdigest()[:8]
+    if needs_enabled is not None:
+        marker += "-needs-on" if needs_enabled else "-needs-off"
     return f"{agent}_{when:%Y%m%d-%H%M%S}_{sha}-{marker}"
 
 
@@ -54,14 +57,19 @@ def _save_telemetry(run_dir: Path, eid: int, captured: list[dict]) -> None:
 
 
 @contextmanager
-def _overlay_env(overlay):
+def _overlay_env(overlay, needs_enabled=None):
     """Expose `overlay` as `AGENT_OVERLAY` for the in-process `env.run` games, then restore.
     ``overlay=None`` CLEARS any inherited one, so a baseline corpus is truly the default."""
     prev = os.environ.get("AGENT_OVERLAY")
+    prev_needs = os.environ.get("AGENT_NEEDS_ENABLED")
     if overlay:
         os.environ["AGENT_OVERLAY"] = str(Path(overlay).resolve())
     else:
         os.environ.pop("AGENT_OVERLAY", None)
+    if needs_enabled is None:
+        os.environ.pop("AGENT_NEEDS_ENABLED", None)
+    else:
+        os.environ["AGENT_NEEDS_ENABLED"] = "1" if needs_enabled else "0"
     try:
         yield
     finally:
@@ -69,29 +77,39 @@ def _overlay_env(overlay):
             os.environ.pop("AGENT_OVERLAY", None)
         else:
             os.environ["AGENT_OVERLAY"] = prev
+        if prev_needs is None:
+            os.environ.pop("AGENT_NEEDS_ENABLED", None)
+        else:
+            os.environ["AGENT_NEEDS_ENABLED"] = prev_needs
 
 
 def generate_corpus(agent: str, n: int, *, agents_root, out_root, when, sha, overlay=None,
-                    syspath_roots=(), configuration=None) -> Path:
+                    syspath_roots=(), configuration=None, needs_enabled=None) -> Path:
     """Run `n` mirror games of `agent`, saving each as a tagged replay -> the run dir. Uses
     `check_agent._run_match`, the cabt-env path whose `env.toJSON()` carries the per-frame `obs`."""
     from sim.check_agent import _run_match  # lazy: pulls in kaggle_environments only when generating
 
-    stem = run_stem(agent, when, sha, overlay)
+    stem = run_stem(agent, when, sha, overlay, needs_enabled)
     run_dir = Path(out_root) / "selfplay" / stem
     run_dir.mkdir(parents=True, exist_ok=True)
     agent_dir = Path(agents_root) / agent
     team_names = [f"{stem}#0", f"{stem}#1"]
-    with _overlay_env(overlay):
+    with _overlay_env(overlay, needs_enabled):
         for i in range(n):
             from common.telemetry import capture_records
+            started = perf_counter()
             with capture_records() as captured:
                 if configuration is None:
                     _statuses, env = _run_match(agent_dir, syspath_roots)
                 else:
                     _statuses, env = _run_match(agent_dir, syspath_roots, configuration=configuration)
+            match_seconds = perf_counter() - started
             eid = episode_id(stem, i)
             tagged = tag_replay(env.toJSON(), episode_id=eid, team_names=team_names)
+            tagged["info"]["MatchWallSeconds"] = match_seconds
+            if configuration and configuration.get("actTimeout") is not None:
+                tagged["info"]["DecisionTimeoutSeconds"] = float(
+                    configuration["actTimeout"])
             (run_dir / f"{eid}.json").write_text(json.dumps(tagged, ensure_ascii=False),
                                                  encoding="utf-8")
             _save_telemetry(run_dir, eid, captured)
@@ -113,6 +131,8 @@ def main(argv=None) -> int:
     ap.add_argument("agent", help="agent under src/agents/ to self-play")
     ap.add_argument("-n", "--games", type=int, default=20, help="games to generate (default 20)")
     ap.add_argument("--overlay", default=None, help="experiment overlay JSON -> corpus of that config")
+    ap.add_argument("--needs", choices=("on", "off"), default=None,
+                    help="canonical Needs beam A/B toggle; Odds remains enabled")
     ap.add_argument("--agents-root", default=str(repo / "src" / "agents"))
     ap.add_argument("--out", default=str(repo / "data" / "replays"),
                     help="corpus root (the run lands under <out>/selfplay/<stem>/)")
@@ -129,7 +149,8 @@ def main(argv=None) -> int:
         configuration["runTimeout"] = 1e100
     run_dir = generate_corpus(args.agent, args.games, agents_root=args.agents_root, out_root=args.out,
                               when=datetime.now(), sha=_git_short(), overlay=args.overlay,
-                              syspath_roots=[repo / "src"], configuration=configuration or None)
+                              syspath_roots=[repo / "src"], configuration=configuration or None,
+                              needs_enabled=(None if args.needs is None else args.needs == "on"))
     saved = len([path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name])
     print(f"Self-play Corpus: {saved} games -> {run_dir}")
     return 0

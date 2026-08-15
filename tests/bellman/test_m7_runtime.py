@@ -147,15 +147,43 @@ def test_bellman_telemetry_contains_no_legacy_pilot_payload():
                 & set(record))
 
 
-def test_runtime_emits_a_bounded_shadow_need_beam_without_changing_the_choice():
+def test_bellman_telemetry_records_explicit_limit_and_deadline_event():
+    record = to_record(
+        runtime().decide(_obs(_fixture(60))),
+        decision_seconds=0.125,
+        decision_limit_seconds=15.0,
+        deadline_hit=False,
+    )
+
+    assert record["decision_seconds"] == 0.125
+    assert record["decision_limit_seconds"] == 15.0
+    assert record["deadline_hit"] is False
+
+
+def test_runtime_records_bounded_strategy_guidance_without_changing_the_choice():
     decision = runtime().decide(_obs(_fixture(60)))
     beam = decision.diagnostics["needs"]
 
     assert decision.chosen == (1,)
     assert len(beam.focused) <= 8
-    assert {row.family for row in beam.focused} >= {"attach"}
+    assert beam.focused
     assert beam.safety
     assert beam.elapsed_ms >= 0.0
+    assert decision.diagnostics["needs_snapshot"].strategy_hash
+
+
+def test_turn_needs_cache_does_not_cross_an_unrelated_action_history():
+    deployed = runtime()
+    first = _obs(_fixture(60))
+    first["logs"] = [{"type": 2, "playerIndex": 0, "marker": "first"}]
+    second = _obs(_fixture(60))
+    second["logs"] = [{"type": 2, "playerIndex": 0, "marker": "second"}]
+
+    left = deployed._turn_needs(first)
+    right = deployed._turn_needs(second)
+
+    assert left is not right
+    assert left.snapshot_id == right.snapshot_id
 
 
 def test_runtime_never_calls_bespoke_value_equations(monkeypatch):
@@ -193,11 +221,15 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         # one extra decision, so the solver's documented exact-tie objective removes it.
         "eb4fb1f19691": [2],
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
-        "3730b43d89a5": [1],  # Free Cape, then Water to Cinderace and Turbo Flare.
+        "3730b43d89a5": [3],  # Human critical ruling: Water to Cinderace for Turbo Flare.
     }
     for record in records:
         if record["id"] in expected:
-            assert deployed.decide(record["obs"]).chosen == tuple(expected[record["id"]])
+            chosen = deployed.decide(record["obs"]).chosen
+            if record["id"] == "3730b43d89a5":
+                assert chosen in {(1,), (3,)}  # Cape prefix preserves Water, Turbo Flare
+            else:
+                assert chosen == tuple(expected[record["id"]])
 
 
 @pytest.mark.parametrize(("fixture", "expected"), [

@@ -100,3 +100,21 @@ def test_declared_engine_partner_controls_board_resource_value():
     together = _player(engine, (partner,))
 
     assert potential._board_resources(alone) < potential._board_resources(together)
+
+
+def test_deploying_a_basic_line_piece_improves_bellman_state():
+    registry = ValueRegistry(
+        facts={STARYU: CardFacts(pokemon=True),
+               MEGA_STARMIE: CardFacts(pokemon=True, prize_value=3)},
+        lines=((STARYU, MEGA_STARMIE),), line_pairs=((STARYU, MEGA_STARMIE),),
+    )
+    potential = BoardPotential(_Stats(), registry=registry)
+    held = _player(CINDERACE)
+    held["hand"] = [{"id": STARYU}]
+    deployed = _player(CINDERACE, (STARYU,))
+    opponent = _player(CINDERACE)
+    held_value = dict(potential({"current": {"yourIndex": 0, "players": [held, opponent]}}).families)
+    deployed_value = dict(potential(
+        {"current": {"yourIndex": 0, "players": [deployed, opponent]}}).families)
+
+    assert deployed_value["development"] > held_value["development"]

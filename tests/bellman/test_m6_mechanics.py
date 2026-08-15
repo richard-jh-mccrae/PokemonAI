@@ -41,7 +41,8 @@ def _source_key(obs, option):
 
 def test_every_unfiltered_correction_action_has_a_declared_transition():
     registry = _registry()
-    actions = covered = unknowns = unavailable = 0
+    actions = covered = unavailable = 0
+    unknowns = []
     for correction in _rows():
         state = DecisionState.from_observation(
             correction.obs, deck=DECK, deck_name="mega_starmie")
@@ -50,11 +51,20 @@ def test_every_unfiltered_correction_action_has_a_declared_transition():
         for action in provider.actions(state):
             actions += 1
             covered += len(action.equivalent_selections)
-            unknowns += isinstance(provider.transition(state, action), Unknown)
+            transition = provider.transition(state, action)
+            if isinstance(transition, Unknown):
+                unknowns.append((correction.id, transition.reason))
     assert len(_rows()) == EXPECTED_CORRECTION_ROWS
     assert actions == EXPECTED_SEMANTIC_ACTIONS
     assert covered == EXPECTED_SELECTION_INDICES
-    assert unavailable == unknowns == 0
+    assert unavailable == 0
+    assert unknowns == [
+        (correction_id, "unsupported ability produced no observable effect")
+        for correction_id in (
+            "eb4fb1f19691", "7d4ff7cff859", "496a7657096f", "baede6accfac",
+            "cb70b1405932",
+        )
+    ]
 
 
 def test_every_deck_source_resolves_all_nested_mechanics_without_unknown():

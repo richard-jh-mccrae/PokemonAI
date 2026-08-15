@@ -1,6 +1,7 @@
 """One Bellman benefit/cost ledger over canonical board potentials."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
@@ -13,6 +14,7 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
+from .fetch import DEADNESS, fetch_target_matches
 from .state import DecisionState
 
 
@@ -23,6 +25,49 @@ MIN_EVOLUTION_LINE_LENGTH = 2
 def worth_to_prizes(worth: float) -> float:
     """Cross portable card Worth into Bellman's prize-denominated currency."""
     return float(worth) / WORTH_PER_PRIZE
+
+
+def held_card_worth(registry, effects, stats, state: DecisionState, card_id: int, *,
+                    discount_redundant: bool = False) -> float:
+    worth = registry.worth(card_id)
+    if effects is None or stats is None:
+        return worth
+    clauses = tuple(effects.clauses(card_id))
+    fetches = tuple(clause for clause in clauses
+                    if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+    if not fetches or len(fetches) != len(clauses):
+        return worth
+
+    def matches(clause, target_id):
+        stat = stats.get(target_id)
+        return (fetch_target_matches(clause, stat, reading=DEADNESS)
+                and (not clause.get("name_family") or clause["name_family"] in
+                     str(getattr(stat, "name", ""))))
+
+    available = tuple(target_id for target_id, count in state.deck_counts if count > 0)
+    if not any(matches(clause, target_id)
+               for clause in fetches for target_id in available):
+        return min(worth, KNOWN_CARD_FLOOR)
+    if not discount_redundant:
+        return worth
+    players = (state.obs.get("current") or {}).get("players") or ()
+    mine = players[state.root_seat] if state.root_seat < len(players) else {}
+    bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
+    hand_ids = Counter(int(card["id"]) for card in (mine.get("hand") or ()) if card)
+    for clause in fetches:
+        targets = tuple(target_id for target_id in available if matches(clause, target_id))
+        parents = {int(target_id): registry.line_parents.get(int(target_id))
+                   for target_id in targets}
+        if not targets or any(parent is None for parent in parents.values()):
+            return worth
+        recipients = sum(1 for body in bodies if body and int(body.get("id", -1)) in {
+            int(parent) for parent in parents.values() if parent is not None
+        })
+        held = sum(count for held_id, count in hand_ids.items()
+                   if matches(clause, held_id))
+        if held < recipients:
+            return worth
+    return min(worth, KNOWN_CARD_FLOOR)
 
 FAMILY_OWNERS = {
     "prize_race": ("game", "prizes", "prize proximity"),
@@ -172,7 +217,7 @@ class Potential:
 
 
 class ValueOracle:
-    """Differences a state utility once per transition; it never inspects action semantics."""
+    """Differences state utility and charges irreversible action opportunity costs once."""
 
     def __init__(self, registry: ValueRegistry,
                  family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
@@ -184,14 +229,12 @@ class ValueOracle:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
-        self._need_coverage_cache = {}
         self._reveal_priority_cache = {}
         if refresh_evaluator is None and effects is not None and stats is not None:
             from .refresh import RefreshEvaluator
             refresh_evaluator = RefreshEvaluator(
                 registry, family_evaluator, effects=effects, stats=stats)
         self._refresh = refresh_evaluator
-        self.needs = refresh_evaluator.needs if refresh_evaluator is not None else None
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
         if model is None and state.semantic_key in self._potential_cache:
@@ -214,18 +257,200 @@ class ValueOracle:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
-        if ((before.obs.get("current") or {}).get("looking") is not None
-                and int((before.obs.get("select") or {}).get("context", 0)) != 0):
-            need_value = self.reveal_choice_priority(before, after)
-            hand_delta = (sum(value for family, value in benefits if family == "hand_demand")
-                          - sum(value for family, value in costs if family == "hand_demand"))
-            if need_value > hand_delta:
-                benefits = [(family, value) for family, value in benefits
-                            if family != "hand_demand"]
-                costs = [(family, value) for family, value in costs
-                         if family != "hand_demand"]
-                benefits.append(("hand_demand", need_value))
+        discard_cost = self._spent_option_cost(before, after, action)
+        represented = sum(value for family, value in costs
+                          if family in {"hand", "hand_demand"})
+        if discard_cost > represented:
+            costs.append(("discarded_options", discard_cost - represented))
+        dead_fetch_release = self._dead_fetch_release(before, after, action)
+        if dead_fetch_release > 0.0:
+            benefits.append(("dead_fetch_release", dead_fetch_release))
+        stranded = self._stranded_fetch_cost(before, after, action)
+        if stranded > 0.0:
+            costs.append(("stranded_fetch", stranded))
+        unresolved = self._unresolved_fetch_cost(before, after, action)
+        if unresolved > 0.0:
+            costs.append(("unresolved_fetch", unresolved))
         return Ledger(tuple(benefits), tuple(costs))
+
+    def _unresolved_fetch_cost(self, before: DecisionState, after: DecisionState,
+                               action: ActionIdentity) -> float:
+        if action.kind != "play" or self.effects is None:
+            return 0.0
+        if int((after.obs.get("select") or {}).get("context", 0)) != 0:
+            return 0.0
+        moved = self._spent_cards(before, after, action)
+        card_ids = {card_id for (card_id, _serial), count in moved.items() if count > 0}
+        if len(card_ids) != 1:
+            return 0.0
+        card_id = next(iter(card_ids))
+        clauses = tuple(self.effects.clauses(card_id))
+        if not clauses or any(clause.get("kind") != "fetch" for clause in clauses):
+            return 0.0
+
+        def board(state):
+            players = (state.obs.get("current") or {}).get("players") or ()
+            player = players[state.root_seat] if state.root_seat < len(players) else {}
+            return tuple(
+                (body.get("serial"), body.get("id"),
+                 tuple(card.get("id") for card in body.get("preEvolution") or ()))
+                for body in tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
+                if body)
+
+        if board(before) != board(after):
+            return 0.0
+
+        def hand(state):
+            players = (state.obs.get("current") or {}).get("players") or ()
+            player = players[state.root_seat] if state.root_seat < len(players) else {}
+            return Counter(
+                (int(card["id"]), card.get("serial"))
+                for card in (player.get("hand") or ()) if card)
+
+        retained = hand(before) - moved
+        if hand(after) - retained:
+            return 0.0
+        return worth_to_prizes(KNOWN_CARD_FLOOR)
+
+    def _stranded_fetch_cost(self, state: DecisionState, after: DecisionState,
+                             action: ActionIdentity) -> float:
+        if (action.kind not in {"play", "ability", "skill"}
+                or self.effects is None or self.stats is None):
+            return 0.0
+
+        def card_ids(value):
+            if isinstance(value, dict):
+                if value.get("id") is not None:
+                    yield int(value["id"])
+                for child in value.values():
+                    yield from card_ids(child)
+            elif isinstance(value, (list, tuple)):
+                for child in value:
+                    yield from card_ids(child)
+
+        try:
+            decoded = tuple(json.loads(part) for part in action.parts if isinstance(part, str))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return 0.0
+        card_id = next(card_ids(decoded), None) if action.kind == "play" else None
+        if card_id is None and action.kind in {"ability", "skill"} and decoded:
+            option = next((value for value in decoded[0] if isinstance(value, dict)), {})
+            area = option.get("inPlayArea", option.get("area"))
+            index = option.get("inPlayIndex", option.get("index"))
+            current = state.obs.get("current") or {}
+            if area == 7:
+                cards = current.get("stadium") or ()
+            else:
+                players = current.get("players") or ()
+                mine = players[state.root_seat] if state.root_seat < len(players) else {}
+                cards = (mine.get("active") or () if area == 4 else
+                         mine.get("bench") or () if area == 5 else ())
+            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
+                card_id = int(cards[index]["id"])
+        clauses = tuple(self.effects.clauses(card_id)) if card_id is not None else ()
+        fetches = tuple(clause for clause in clauses
+                        if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+        if not fetches or len(fetches) != len(clauses):
+            return 0.0
+        players = (state.obs.get("current") or {}).get("players") or ()
+        mine = players[state.root_seat] if state.root_seat < len(players) else {}
+        bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
+        body_ids = {int(body["id"]) for body in bodies if body and body.get("id") is not None}
+        available = dict(state.deck_counts)
+
+        def hand_ids(value):
+            players = (value.obs.get("current") or {}).get("players") or ()
+            player = players[value.root_seat] if value.root_seat < len(players) else {}
+            return Counter(int(card["id"]) for card in (player.get("hand") or ()) if card)
+
+        held_before = hand_ids(state)
+        acquired = hand_ids(after) - held_before
+        stranded = []
+        redundant_fetch = False
+        for clause in fetches:
+            targets = tuple(acquired) if acquired else tuple(
+                    int(target_id) for target_id, count in available.items()
+                    if count > 0 and fetch_target_matches(
+                        clause, self.stats.get(target_id), reading=DEADNESS)
+                    and (not clause.get("name_family") or clause["name_family"] in
+                         str(getattr(self.stats.get(target_id), "name", ""))))
+            if not targets:
+                continue
+            if any(not getattr(self.stats.get(target_id), "evolvesFrom", None)
+                   for target_id in targets):
+                return 0.0
+            playable = {
+                int(top): int(base) for top, base in self.registry.line_parents.items()
+                if int(top) in targets
+            }
+            recipients = sum(body_id in set(playable.values()) for body_id in body_ids)
+            held_targets = sum(held_before.get(top, 0) for top in playable)
+            redundant = bool(playable) and recipients > 0 and held_targets >= recipients
+            redundant_fetch = redundant_fetch or redundant
+            if not redundant and any(base in body_ids for base in playable.values()):
+                return 0.0
+            for target_id in targets:
+                line = next((line for line in self.registry.lines if target_id in line), ())
+                cards = line[:line.index(target_id) + 1] if line else (target_id,)
+                stranded.append(sum(self.registry.prizes(value) for value in cards))
+        return (max(stranded, default=0.0)
+                + (self.registry.prizes(card_id)
+                   if stranded and action.kind == "play" else 0.0)
+                + (worth_to_prizes(KNOWN_CARD_FLOOR) if redundant_fetch else 0.0))
+
+    def _spent_option_cost(self, before: DecisionState, after: DecisionState,
+                           action: ActionIdentity) -> float:
+        moved = self._spent_cards(before, after, action)
+        worth = sum(self._held_card_worth(
+            before, card_id, discount_redundant=action.kind == "card") * count
+                    for (card_id, _serial), count in moved.items())
+        return worth_to_prizes(worth)
+
+    @staticmethod
+    def _spent_cards(before: DecisionState, after: DecisionState,
+                     action: ActionIdentity) -> Counter:
+        def zones(state):
+            players = ((state.obs.get("current") or {}).get("players") or ())
+            player = players[state.root_seat] if len(players) > state.root_seat else {}
+
+            def keys(cards):
+                return Counter(
+                    (int(card["id"]), card.get("serial"))
+                    for card in cards or () if card and card.get("id") is not None)
+
+            return keys(player.get("hand")), keys(player.get("discard"))
+
+        before_hand, before_discard = zones(before)
+        after_hand, after_discard = zones(after)
+        return ((before_hand - after_hand) if action.kind == "play" else
+                (after_discard - before_discard) & before_hand)
+
+    def _dead_fetch_release(self, before: DecisionState, after: DecisionState,
+                            action: ActionIdentity) -> float:
+        if action.kind != "card":
+            return 0.0
+        released = sum(
+            (self.registry.worth(card_id) - self._held_card_worth(
+                before, card_id, discount_redundant=action.kind == "card")) * count
+            for (card_id, _serial), count in self._spent_cards(before, after, action).items()
+        )
+        return worth_to_prizes(released)
+
+    def _held_card_worth(self, state: DecisionState, card_id: int, *,
+                         discount_redundant: bool = False) -> float:
+        return held_card_worth(
+            self.registry, self.effects, self.stats, state, card_id,
+            discount_redundant=discount_redundant)
+
+    def continuation_upper_bound(self, state: DecisionState) -> float:
+        potential = self.potential(state)
+        ceiling = getattr(self._families, "optimistic_ceiling", None)
+        if potential.unknowns or ceiling is None:
+            return math.inf
+        absolute = float(ceiling(state.obs, deck=state.deck, registry=self.registry))
+        if not math.isfinite(absolute) or absolute < potential.total:
+            return math.inf
+        return absolute - potential.total
 
     def refresh_ledger(self, state: DecisionState, node, *, include_next_turn=True):
         if self._refresh is None:
@@ -244,42 +469,12 @@ class ValueOracle:
                     and not getattr(attack, "hiddenPerUnit", 0))
 
     def reveal_choice_priority(self, before: DecisionState, after: DecisionState) -> float:
-        if self._refresh is None:
-            return 0.0
         key = before.semantic_key, after.semantic_key
         if key in self._reveal_priority_cache:
             return self._reveal_priority_cache[key]
-        from collections import Counter
-        from .needs import best_assignment
-
-        seat = before.root_seat
-        before_players = (before.obs.get("current") or {}).get("players") or ()
-        after_players = (after.obs.get("current") or {}).get("players") or ()
-        before_hand = Counter(int(card["id"]) for card in (
-            before_players[seat].get("hand") or ()) if card)
-        after_hand = Counter(int(card["id"]) for card in (
-            after_players[seat].get("hand") or ()) if card)
-        added = list((after_hand - before_hand).elements())
-        if not added:
-            self._reveal_priority_cache[key] = 0.0
-            return 0.0
-        needs = self._refresh.needs.immediate(before.obs, seat)
-        targets = Counter(dict(before.deck_counts))
-
-        def signatures(card_ids):
-            rows = []
-            for card_id in card_ids:
-                rows.extend(self._refresh.needs.coverage_slots(
-                    card_id, needs, supporter_available=before.budgets.supporter,
-                    discard_capacity=max(0, sum(before_hand.values()) - 1),
-                    available_targets=targets))
-            return rows
-
-        baseline = best_assignment(
-            signatures(before_hand.elements()), len(needs), target_counts=targets).value
-        expanded = best_assignment(
-            signatures((*before_hand.elements(), *added)), len(needs), target_counts=targets).value
-        result = max(0.0, expanded - baseline)
+        left = self.potential(before).total
+        right = self.potential(after).total
+        result = max(0.0, right - left)
         self._reveal_priority_cache[key] = result
         return result
 
@@ -291,42 +486,6 @@ class ValueOracle:
                 priorities.append(self.reveal_choice_priority(before, state))
         return max(priorities, default=0.0)
 
-    def need_coverage_ledger(self, state: DecisionState, action) -> tuple[str, Ledger] | None:
-        covered = self._played_need_coverage(state, action)
-        if covered is None:
-            return None
-        needs, assignment = covered
-        keys = [need.key for index, need in enumerate(needs)
-                if assignment.covered_mask & (1 << index)]
-        families = {
-            "deployment" if key.startswith("deploy_line:") else
-            "evolution" if key.startswith("evolve:") else
-            "attachment" if key == "fund_attack" else ""
-            for key in keys
-        } - {""}
-        if assignment.value <= 0.0 or len(families) != 1:
-            return None
-        family = families.pop()
-        ledger_name = {"deployment": "board", "evolution": "development",
-                       "attachment": "energy_position"}[family]
-        return family, Ledger(((ledger_name, assignment.value),), ())
-
-    def need_coverage_value(self, state: DecisionState, action) -> float:
-        covered = self._played_need_coverage(state, action)
-        return covered[1].value if covered is not None else 0.0
-
-    def heal_need_value(self, state: DecisionState, action) -> float | None:
-        if self._refresh is None:
-            return None
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        if card_id is None or not any(
-                clause.get("kind") == "heal"
-                for clause in self._refresh.effects.clauses(card_id)):
-            return None
-        return self.need_coverage_value(state, action)
-
     def heal_repositions_energy(self, state: DecisionState, action) -> bool:
         if self._refresh is None:
             return False
@@ -337,85 +496,6 @@ class ValueOracle:
             clause.get("kind") == "heal" and clause.get("rider") == "bounce_energy_to_hand"
             for clause in self._refresh.effects.clauses(card_id)
         ))
-
-    def recovery_need_value(self, state: DecisionState, action) -> float:
-        if self._refresh is None:
-            return 0.0
-        from collections import Counter
-        from .fetch import REACH, fetch_target_matches
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        if card_id is None:
-            return 0.0
-        clauses = tuple(
-            clause for clause in self._refresh.effects.clauses(card_id)
-            if clause.get("kind") == "fetch" and clause.get("zone") == "discard"
-        )
-        if not clauses:
-            return 0.0
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        needs = self._refresh.needs.immediate(state.obs, state.root_seat)
-        hand_ids = tuple(int(card["id"]) for card in mine.get("hand") or () if card)
-        available = Counter(dict(state.deck_counts))
-        uncovered = self._refresh.needs.uncovered_by_hand(
-            needs, hand_ids, supporter_available=state.budgets.supporter,
-            discard_capacity=max(0, len(hand_ids) - 1), available_targets=available,
-        )
-        best = 0.0
-        for target in mine.get("discard") or ():
-            if not target or target.get("id") is None:
-                continue
-            target_id = int(target["id"])
-            if not any(fetch_target_matches(
-                    clause, self._refresh.needs.stat(target_id), reading=REACH)
-                       for clause in clauses):
-                continue
-            best = max(best, max(
-                (dict(need.direct).get(target_id, 0.0) for need in uncovered), default=0.0))
-        return best
-
-    def irrelevant_deterministic_fetch(self, state: DecisionState, action) -> bool:
-        if self._refresh is None:
-            return False
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        clauses = tuple(self._refresh.effects.clauses(card_id)) if card_id is not None else ()
-        return bool(clauses and all(
-            clause.get("kind") == "fetch" and clause.get("zone") == "deck"
-            and not any(clause.get(field) for field in
-                        ("cost", "cost_required", "dig", "rider", "trigger"))
-            for clause in clauses
-        ) and self.need_coverage_value(state, action) <= 0.0)
-
-    def _played_need_coverage(self, state: DecisionState, action):
-        if self._refresh is None:
-            return None
-        from collections import Counter
-        from .needs import best_assignment
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        if card_id is None:
-            return None
-        key = state.semantic_key, action.identity
-        if key in self._need_coverage_cache:
-            return self._need_coverage_cache[key]
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        needs = self._refresh.needs.immediate(state.obs, state.root_seat)
-        targets = Counter(dict(state.deck_counts))
-        signatures = self._refresh.needs.coverage_slots(
-            card_id, needs, supporter_available=state.budgets.supporter,
-            discard_capacity=max(0, len(mine.get("hand") or ()) - 1),
-            available_targets=targets)
-        assignment = best_assignment(signatures, len(needs), target_counts=targets)
-        result = needs, assignment
-        self._need_coverage_cache[key] = result
-        return result
-
 
 __all__ = (
     "CardFacts", "Potential", "ValueOracle",

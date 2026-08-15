@@ -40,7 +40,7 @@ def _card_from_select(observation: Mapping, option: Mapping, area_key: str, inde
 
 
 def _fingerprint(observation: Mapping, option: Mapping) -> str:
-    semantic = dict(option)
+    semantic = {key: value for key, value in option.items() if value is not None}
     # MAIN PLAY options identify a card by its hand index but omit the redundant HAND area.  Add
     # that structural reference for identity only, so two physical copies cannot consume two beam
     # slots.  The representative still submits the engine's original index.
@@ -53,13 +53,13 @@ def _fingerprint(observation: Mapping, option: Mapping) -> str:
     enriched = []
     referenced = set()
     for area_key, index_key in (("area", "index"), ("inPlayArea", "inPlayIndex")):
-        if option.get(area_key) not in (_DECK, _LOOKING):
+        if semantic.get(area_key) not in (_DECK, _LOOKING):
             continue
-        card = _card_from_select(observation, option, area_key, index_key)
+        card = _card_from_select(observation, semantic, area_key, index_key)
         if card is not None:
             referenced.update((area_key, index_key))
-            enriched.append((int(option[area_key]), without_engine_serial(card)))
-    public = {key: without_engine_serial(value) for key, value in sorted(option.items())
+            enriched.append((int(semantic[area_key]), without_engine_serial(card)))
+    public = {key: without_engine_serial(value) for key, value in sorted(semantic.items())
               if key not in referenced and not str(key).startswith("_")}
     return json.dumps([public, enriched], sort_keys=True, separators=(",", ":"))
 

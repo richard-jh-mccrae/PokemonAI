@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
 from .damage import compute_active_damage
 from .damage_context import SideFacts, damage_context
@@ -16,8 +17,6 @@ from .strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes
 
 
-ENERGY_COLORLESS = 0
-ENERGY_WILDCARD = 10
 MINIMUM_HP = 1
 KNOCKED_OUT_HP = 0
 TERMINAL_GAME_UTILITY = 100.0
@@ -27,11 +26,12 @@ STANDARD_PRIZE_COUNT = 6
 FUTURE_HAND_ACCESS_DISCOUNT = 0.75
 OPPONENT_ROLE_PRESENCE_SHARE = 0.90
 OPPONENT_ROLE_HEALTH_SHARE = 0.10
-SAFE_DAMAGE_RESERVE_SHARE = 0.25
+SAFE_DAMAGE_RESERVE_SHARE = 0.10
 OPPONENT_ROLE_THREAT_SHARE = 0.20
 OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
 BENCH_ATTACK_ACCESS_SHARE = 0.50
 EVOLVED_BODY_PRIZE_SHARE = 0.040
+DEPLOYED_BASIC_LINE_PRIZE_SHARE = 0.020
 KO_PRESSURE_SHARE = 0.000001
 
 
@@ -56,20 +56,7 @@ def _energy_codes(body):
 
 
 def _pay_fraction(codes, required) -> float:
-    required = [int(code) for code in required]
-    if not required:
-        return 1.0
-    remaining = list(codes)
-    paid = 0
-    for energy_type in (code for code in required if code != ENERGY_COLORLESS):
-        index = next((index for index, code in enumerate(remaining)
-                      if code in (energy_type, ENERGY_WILDCARD)), None)
-        if index is not None:
-            remaining.pop(index)
-            paid += 1
-    colorless = sum(code == ENERGY_COLORLESS for code in required)
-    paid += min(colorless, len(remaining))
-    return paid / len(required)
+    return payment_fraction(codes, required)
 
 
 class BoardPotential:
@@ -309,18 +296,21 @@ class BoardPotential:
         active = next((body for body in (me.get("active") or ()) if body), None)
         if active is None:
             return 0.0
-        energy_types = []
+        energy_provisions = []
         for card in me.get("hand") or ():
             stat = self._stat(card.get("id")) if card else None
             if stat is None or not getattr(stat, "is_energy", False):
                 continue
             energy_type = getattr(stat, "energyType", None)
             if energy_type is not None:
-                energy_types.append(int(energy_type))
+                units = provision_units(
+                    self.registry.functions, int(card.get("id", 0)),
+                    evolved=bool(active.get("preEvolution")))
+                energy_provisions.append((int(energy_type), max(1, units)))
         codes = _energy_codes(active)
         return max((self._attack_ko_coverage(
-            active, [*codes, energy_type], me, opponent)
-                    for energy_type in energy_types), default=0.0)
+            active, [*codes, *([energy_type] * units)], me, opponent)
+                    for energy_type, units in energy_provisions), default=0.0)
 
     def _attack_ko_coverage(self, body, codes, me, opponent) -> float:
         defender = next((target for target in (opponent.get("active") or ()) if target), None)
@@ -462,6 +452,9 @@ class BoardPotential:
         jobs: dict[tuple, list[float]] = {}
         for body in _bodies(me):
             for card_id in self._stack_ids(body):
+                stat = self._stat(card_id)
+                if stat is not None and getattr(stat, "is_energy", False):
+                    continue
                 partners = required_partners.get(card_id, ())
                 if partners and not set(partners).issubset(body_ids):
                     continue
@@ -470,6 +463,25 @@ class BoardPotential:
         worth = sum(sum(sorted(values, reverse=True)[:capacities.get(card_job, len(values))])
                     for card_job, values in jobs.items())
         return float(worth_to_prizes(worth))
+
+    def _held_card_usable(self, me, card_id: int) -> bool:
+        stat = self._stat(card_id)
+        if stat is None:
+            return True
+        bodies = _bodies(me)
+        if getattr(stat, "is_energy", False):
+            return self.isolated_selection or any(
+                len(_energy_codes(body)) < self._energy_cost_cap(int(body.get("id", 0)))
+                for body in bodies)
+        evolves_from = getattr(stat, "evolvesFrom", None)
+        if not evolves_from:
+            return True
+        parent = self.registry.line_parents.get(int(card_id))
+        return any(
+            (parent is not None and int(body.get("id", 0)) == int(parent))
+            or getattr(self._stat(body.get("id")), "name", None) == evolves_from
+            for body in bodies
+        )
 
     def _energy_cost_cap(self, card_id: int) -> int:
         candidates = [int(card_id)]
@@ -510,8 +522,21 @@ class BoardPotential:
             maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
             survival = max(0.0, min(1.0, int(body.get("hp", maximum)) / maximum))
             cards = tuple(card for card in (body.get("energyCards") or ()) if card)
-            values = [worth_to_prizes(self.registry.worth(int(card.get("id", 0))))
-                      for card in cards[:cap]]
+            remaining = cap
+            values = []
+            overcap = 0.0
+            for card in cards:
+                supplied = provision_units(
+                    self.registry.functions, int(card.get("id", 0)),
+                    evolved=bool(body.get("preEvolution")))
+                units = min(remaining, supplied)
+                unit_value = worth_to_prizes(
+                    self.registry.worth(int(card.get("id", 0)))) / supplied
+                values.extend(
+                    unit_value
+                    for _ in range(units))
+                overcap += max(0, supplied - units) * unit_value
+                remaining -= units
             if not values:
                 values = [worth_to_prizes(self.registry.seeds.energy)] * min(
                     cap, len(_energy_codes(body)))
@@ -521,7 +546,7 @@ class BoardPotential:
                          for index, value in enumerate(values))
             if not self.isolated_selection or historical_context != _DAMAGE:
                 shaped *= self._attack_coverage(body, _energy_codes(body), me, opponent)
-            total += survival * shaped
+            total += survival * shaped - overcap
         active = next((body for body in (me.get("active") or ()) if body), None)
         if active is not None and not self.isolated_selection:
             cap = self._energy_cost_cap(int(active.get("id", 0)))
@@ -541,13 +566,18 @@ class BoardPotential:
         return total
 
     def _development(self, me) -> float:
-        """Value realized by turning a line piece into a developed body.
-
-        The retained pre-evolution stack already proves that development occurred.  Scale the
-        improvement by the evolved body's prize liability so the term stays card- and deck-neutral.
-        """
-        return sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
-                   for body in _bodies(me) if body.get("preEvolution"))
+        """Value deployed and evolved pieces of declared evolution lines."""
+        evolved = sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
+                      for body in _bodies(me) if body.get("preEvolution"))
+        line_payoff = {
+            int(line[0]): self._card_prizes(int(line[-1]))
+            for line in self.registry.lines if len(line) > 1
+        }
+        deployed = sum(
+            line_payoff.get(int(body.get("id", 0)), 0) * DEPLOYED_BASIC_LINE_PRIZE_SHARE
+            for body in _bodies(me) if not body.get("preEvolution")
+        )
+        return evolved + deployed
 
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()
@@ -561,6 +591,8 @@ class BoardPotential:
             if not card or card.get("id") is None:
                 continue
             card_id = int(card["id"])
+            if not self._held_card_usable(me, card_id):
+                continue
             facts = self.registry.facts.get(card_id)
             tags = self.registry.functions.get(card_id, ())
             if (setup_complete and "opener" in tags
@@ -591,6 +623,8 @@ class BoardPotential:
             if not card or card.get("id") is None:
                 continue
             card_id = int(card["id"])
+            if not self._held_card_usable(me, card_id):
+                continue
             job = self._resource_job(card_id)
             capacity = capacities.get(job, 1)
             if occupied[job] + seen[job] < capacity:
@@ -598,7 +632,7 @@ class BoardPotential:
                 value += worth_to_prizes(self.registry.worth(card_id))
             tags = frozenset(self.registry.functions.get(card_id, ()))
             if (self.isolated_selection and missing_slots
-                    and {"draw", "dig"}.intersection(tags)):
+                    and {"draw", "dig", "tutor_energy"}.intersection(tags)):
                 access += missing_slots * worth_to_prizes(self.registry.worth(card_id))
         return 0.01 * value + FUTURE_HAND_ACCESS_DISCOUNT * access
 
@@ -720,6 +754,9 @@ class BoardPotential:
             "prize_plan": self._prize_plan(me, opponent),
         }
         return Potential(sum(families.values()), tuple(sorted(families.items())))
+
+    def optimistic_ceiling(self, _observation, **_context) -> float:
+        return self.scale.game
 
 
 __all__ = ("BoardPotential", "UtilityScale")

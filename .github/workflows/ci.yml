@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       tool_tests: ${{ steps.plan.outputs.tool_tests }}
+      sim: ${{ steps.plan.outputs.sim }}
       corrections: ${{ steps.plan.outputs.corrections }}
       src: ${{ steps.plan.outputs.src }}
       cgpy: ${{ steps.plan.outputs.cgpy }}
@@ -61,11 +62,12 @@ jobs:
           F_AUTHORING: ${{ steps.changes.outputs.authoring }}
           F_ANY: ${{ steps.changes.outputs.any }}
         run: |
-          tool_tests='[]'; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
+          tool_tests='[]'; sim=false; corrections=false; src=false; cgpy=false; docs=false; mirrors='[]'
           add_tool_test() {
+            if [ "$1" = sim ]; then sim=true; return; fi
             tool_tests=$(python -c 'import json, sys; tests = json.loads(sys.argv[1]); tool = sys.argv[2]; print(json.dumps(tests if tool in tests else tests + [tool]))' "$tool_tests" "$1")
           }
-          enable_all() { tool_tests='["arena", "meta_tracker", "sim", "submit", "test_agent_skills.py"]'; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
+          enable_all() { tool_tests='["arena", "meta_tracker", "submit", "test_agent_skills.py"]'; sim=true; corrections=true; src=true; cgpy=true; docs=true; mirrors='["mega_starmie"]'; }
           if [ "$EVENT" != 'pull_request' ] || [ "$F_TOOL_GLOBAL" = true ]; then
             enable_all
           else
@@ -94,7 +96,7 @@ jobs:
             done
             [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
           fi
-          printf 'tool_tests=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tool_tests" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
+          printf 'tool_tests=%s\nsim=%s\ncorrections=%s\nsrc=%s\ncgpy=%s\ndocs=%s\nmirrors=%s\n' "$tool_tests" "$sim" "$corrections" "$src" "$cgpy" "$docs" "$mirrors" >> "$GITHUB_OUTPUT"
 
   test-tools:
     name: tests / ${{ matrix.tool }}
@@ -117,6 +119,41 @@ jobs:
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - run: python -m pytest tests/${{ matrix.tool }} -q -n auto --tb=short --durations=20
 
+  test-sim:
+    name: tests / sim / ${{ matrix.shard }}
+    needs: plan
+    if: needs.plan.outputs.sim == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: engine
+            workers: 2
+            targets: >-
+              tests/sim/test_audit_attacks_engine.py tests/sim/test_battle.py
+              tests/sim/test_check_agent.py tests/sim/test_corpus.py
+              tests/sim/test_retreat_lock_engine.py tests/sim/test_transients_engine.py
+          - shard: analysis
+            workers: auto
+            targets: >-
+              tests/sim/test_attack_override_provenance.py tests/sim/test_audit_attacks.py
+              tests/sim/test_battle_result.py tests/sim/test_eval_aivat.py
+              tests/sim/test_eval_report.py tests/sim/test_eval_stats.py
+              tests/sim/test_generate_attack_overrides.py tests/sim/test_mirror_gate.py
+              tests/sim/test_paired_ab.py tests/sim/test_record.py tests/sim/test_selfplay.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - run: >-
+          python -m pytest ${{ matrix.targets }} -q -n ${{ matrix.workers }}
+          --tb=short --durations=20
+
   test-corrections:
     name: tests / corrections
     needs: plan
@@ -135,7 +172,7 @@ jobs:
         run: |
           targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
           [ -d tests/corrections ] && targets+=(tests/corrections)
-          python -m pytest "${targets[@]}" -q -n auto --tb=short
+          python -m pytest "${targets[@]}" -q --tb=short
 
   test-src:
     name: tests / src
@@ -150,7 +187,15 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/agents tests/bellman tests/cards tests/common tests/parity tests/scouting tests/test_import_hygiene.py -q -n auto --tb=short
+      - name: Run parallel source contracts
+        run: >-
+          python -m pytest tests/agents tests/bellman tests/cards tests/common tests/parity
+          tests/scouting tests/test_import_hygiene.py -q -n auto --tb=short
+          --ignore=tests/bellman/test_m6_mechanics.py
+          --ignore=tests/bellman/test_m7_runtime.py
+          --ignore=tests/bellman/test_m8_acceptance.py
+      - name: Run wall-clock runtime contracts serially
+        run: python -m pytest tests/bellman/test_m7_runtime.py -q --tb=short
 
   test-cgpy:
     name: tests / cgpy
@@ -167,7 +212,16 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
-      - run: python -m pytest tests/parity tests/bellman -q -n auto --tb=short
+      - name: Run parallel cgpy contracts
+        run: >-
+          python -m pytest tests/parity tests/bellman -q -n auto --tb=short
+          --ignore=tests/bellman/test_m6_mechanics.py
+          --ignore=tests/bellman/test_m7_runtime.py
+          --ignore=tests/bellman/test_m8_acceptance.py
+      - name: Run cgpy wall-clock contracts serially
+        run: >-
+          python -m pytest tests/bellman/test_m6_mechanics.py
+          tests/bellman/test_m7_runtime.py tests/bellman/test_m8_acceptance.py -q --tb=short
 
   test-docs:
     name: tests / docs

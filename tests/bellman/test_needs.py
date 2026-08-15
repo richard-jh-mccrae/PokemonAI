@@ -7,11 +7,11 @@ import pytest
 from common import ActionIdentity
 from common.effects import CardEffects
 from common.needs import (
-    AccessEdge, CapabilityIndex, Need, NeedBeam, NeedBeamBuilder, NeedModel, NeedPath, NeedRoot,
-    PathFeatures, PokemonRole, access_probability, best_assignment, infer_pokemon_roles,
+    AccessEdge, CapabilityIndex, CoverageEdge, Need, NeedBeam, NeedBeamBuilder, NeedModel,
+    NeedPath, NeedRoot, PathFeatures, PokemonRole, access_probability, best_assignment, infer_pokemon_roles,
     opponent_threat_roots,
 )
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.options import LegalAction
 from common.value import CardFacts, Potential, ValueRegistry
 from train.needs_lab import gate_failures
@@ -25,6 +25,8 @@ GEAR = 905
 ENERGY = 906
 ACCELERATOR = 907
 MARNIE_TARGET = 908
+ATTACK = 909
+FIRE_ENERGY = 910
 
 
 def _potential(observation):
@@ -97,9 +99,42 @@ def test_next_turn_evolution_has_situational_value_beyond_equal_static_hand_wort
     unrelated = model.next_turn_retained(
         _observation([UNRELATED]), 0, [UNRELATED])
 
-    assert useful.value == pytest.approx(0.6)
+    assert useful.value == pytest.approx(0.8)
     assert useful.options[0].description.startswith("evolve:")
     assert unrelated.value == 0.0
+
+
+def test_visible_board_needs_do_not_require_a_visible_hand():
+    observation = _observation([], appeared=False)
+    observation["current"]["players"][0]["hand"] = None
+    observation["current"]["players"][0]["handCount"] = 3
+
+    needs = _model().immediate(observation, 0)
+
+    assert any(need.key.startswith("evolve:") for need in needs)
+
+
+def test_heal_bounce_accepts_hidden_hand_without_mutating_observation():
+    observation = _observation([], appeared=False)
+    player = observation["current"]["players"][0]
+    player["hand"] = None
+    player["handCount"] = 3
+    player["bench"] = [{
+        "id": LINE_TOP, "hp": 200, "maxHp": 330, "appearThisTurn": False,
+        "preEvolution": [{"id": LINE_BASE}], "energies": [3],
+        "energyCards": [{"id": ENERGY}], "tools": [],
+    }]
+    model = _model()
+
+    gain = model._heal_gain(
+        observation, 0,
+        {"kind": "heal", "amount": "all", "restriction": "mega_only",
+         "rider": "bounce_energy_to_hand"},
+        target=("bench", 0))
+
+    assert gain > 0.0
+    assert observation["current"]["players"][0]["hand"] is None
+    assert observation["current"]["players"][0]["handCount"] == 3
 
 
 def test_multi_target_fetch_provides_one_assignment_token_per_printed_target():
@@ -133,6 +168,234 @@ def test_fetch_without_a_remaining_target_is_not_an_out():
     assert model.coverage_slots(
         SUPPORTER, (need,), supporter_available=True, discard_capacity=0,
         available_targets={LINE_TOP: 0}) == ()
+
+
+def test_available_held_supporter_removes_the_need_it_can_guarantee():
+    base = _model()
+    effects = CardEffects({SUPPORTER: [{
+        "kind": "fetch", "target": "pokemon", "zone": "deck",
+    }]})
+    model = NeedModel(base.registry, _potential, effects=effects, stats=base.stats)
+    need = Need("evolve", ((LINE_TOP, 1.0),))
+
+    assert model.uncovered_by_hand(
+        (need,), (SUPPORTER,), supporter_available=True, discard_capacity=0,
+        available_targets={LINE_TOP: 1}) == ()
+    assert model.uncovered_by_hand(
+        (need,), (SUPPORTER,), supporter_available=False, discard_capacity=0,
+        available_targets={LINE_TOP: 1}) == (need,)
+
+
+def test_attack_needs_name_the_recipient_attack_typed_slot_and_matching_energy():
+    registry = ValueRegistry(
+        facts={
+            LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
+            ENERGY: CardFacts(), FIRE_ENERGY: CardFacts(),
+        },
+    )
+    stats = DictCardStatProvider({
+        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
+        ENERGY: CardStat(ENERGY, cardType=5, energyType=3),
+        FIRE_ENERGY: CardStat(FIRE_ENERGY, cardType=5, energyType=2),
+    }, attacks={ATTACK: AttackStat(ATTACK, cost=2, energyTypes=(3, 2))})
+
+    def energy_potential(observation):
+        active = observation["current"]["players"][0]["active"][0]
+        value = float(len(active.get("energyCards") or ()))
+        return Potential(value, (("energy_position", value),))
+
+    model = NeedModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    observation = _observation([])
+    observation["current"]["energyAttached"] = False
+    observation["current"]["players"][0]["bench"] = []
+    observation["current"]["players"][0]["active"] = [{
+        "id": LINE_TOP, "serial": 77, "hp": 100, "maxHp": 100,
+        "preEvolution": [{"id": LINE_BASE}], "energies": [3],
+        "energyCards": [{"id": ENERGY}], "tools": [],
+    }]
+
+    needs = model.immediate(observation, 0)
+    funding = tuple(need for need in needs if need.capability == "fund_attack")
+
+    assert [need.key for need in funding] == [f"fund_attack:77:{ATTACK}:1:2"]
+    assert funding[0].recipient == "77"
+    assert funding[0].slot == "1:2"
+    assert dict(funding[0].direct) == {FIRE_ENERGY: pytest.approx(1.0)}
+
+
+def test_multi_unit_energy_covers_multiple_slots_for_only_its_chosen_recipient():
+    registry = ValueRegistry(
+        functions={ENERGY: ("provides:3",)}, facts={ENERGY: CardFacts()})
+    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
+    model = NeedModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    needs = tuple(
+        Need(f"fund_attack:77:1:{slot}:0", ((ENERGY, 0.5),),
+             recipient="77", capability="fund_attack", slot=f"{slot}:0")
+        for slot in range(3)
+    ) + (Need(
+        "fund_attack:88:1:0:0", ((ENERGY, 1.0),),
+        recipient="88", capability="fund_attack", slot="0:0"),)
+
+    tokens = model.coverage_slots(
+        ENERGY, needs, supporter_available=True, discard_capacity=0,
+        recipient="77", provision_units=3)
+    assignment = best_assignment(tokens, len(needs))
+
+    assert len(tokens) == 3
+    assert assignment.value == pytest.approx(1.5)
+    assert assignment.covered_mask == 0b0111
+
+
+def test_multi_unit_energy_distributes_one_operation_gain_across_covered_slots():
+    registry = ValueRegistry(
+        functions={ENERGY: ("provides:3",)},
+        facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()},
+    )
+    stats = DictCardStatProvider({
+        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
+        ENERGY: CardStat(ENERGY, cardType=6, energyType=0),
+    }, attacks={ATTACK: AttackStat(ATTACK, cost=3, energyTypes=(0, 0, 0))})
+
+    def energy_potential(observation):
+        active = observation["current"]["players"][0]["active"][0]
+        value = float(len(active.get("energies") or ()))
+        return Potential(value, (("energy_position", value),))
+
+    model = NeedModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    observation = _observation([])
+    observation["current"]["energyAttached"] = False
+    observation["current"]["players"][0]["bench"] = []
+    observation["current"]["players"][0]["active"] = [{
+        "id": LINE_TOP, "serial": 77, "hp": 100, "maxHp": 100,
+        "preEvolution": [], "energies": [], "energyCards": [], "tools": [],
+    }]
+
+    needs = tuple(need for need in model.immediate(observation, 0)
+                  if need.capability == "fund_attack")
+    signatures = model.coverage_slots(
+        ENERGY, needs, supporter_available=True, discard_capacity=0,
+        recipient="77", provision_units=3)
+    assignment = best_assignment(signatures, len(needs))
+
+    assert len(needs) == 3
+    assert assignment.value == pytest.approx(3.0)
+
+
+def test_multi_unit_energy_never_combines_alternative_attacks_on_one_recipient():
+    registry = ValueRegistry(
+        functions={ENERGY: ("provides:3",)}, facts={ENERGY: CardFacts()})
+    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
+    model = NeedModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    needs = (
+        Need("fund_attack:77:10:0:0", ((ENERGY, 0.8),), recipient="77",
+             capability="fund_attack", slot="0:0", alternative="10"),
+        Need("fund_attack:77:10:1:0", ((ENERGY, 0.8),), recipient="77",
+             capability="fund_attack", slot="1:0", alternative="10"),
+        Need("fund_attack:77:20:0:0", ((ENERGY, 1.0),), recipient="77",
+             capability="fund_attack", slot="0:0", alternative="20"),
+    )
+
+    tokens = model.coverage_slots(
+        ENERGY, needs, supporter_available=True, discard_capacity=0,
+        recipient="77", provision_units=2)
+    assignment = best_assignment(tokens, len(needs))
+
+    assert assignment.value == pytest.approx(1.6)
+    assert assignment.covered_mask == 0b011
+
+
+def test_one_multi_unit_energy_cannot_split_its_units_across_recipients():
+    registry = ValueRegistry(
+        functions={ENERGY: ("provides_evo:3",)}, facts={ENERGY: CardFacts()})
+    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
+    model = NeedModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    needs = tuple(
+        Need(f"fund_attack:77:1:{slot}:0", ((ENERGY, 1.0),), recipient="77",
+             capability="fund_attack", slot=f"{slot}:0", alternative="1")
+        for slot in range(3)
+    ) + (Need(
+        "fund_attack:88:2:0:0", ((ENERGY, 2.0),), recipient="88",
+        capability="fund_attack", slot="0:0", alternative="2"),)
+
+    tokens = model.coverage_slots(
+        ENERGY, needs, supporter_available=True, discard_capacity=0,
+        recipient_units={"77": 3, "88": 1}, resource_group="held:0")
+    assignment = best_assignment(tokens, len(needs))
+
+    assert assignment.value == pytest.approx(3.0)
+    assert assignment.covered_mask == 0b0111
+
+
+def test_assignment_never_combines_alternative_attacks_across_fetch_tokens():
+    signatures = (
+        (CoverageEdge(0, 0.8, 10, "77:fund_attack", "attack-a"),
+         CoverageEdge(1, 1.0, 20, "77:fund_attack", "attack-b")),
+        (CoverageEdge(0, 0.8, 10, "77:fund_attack", "attack-a"),
+         CoverageEdge(1, 1.0, 20, "77:fund_attack", "attack-b")),
+    )
+
+    assignment = best_assignment(signatures, 2, target_counts={10: 1, 20: 1})
+
+    assert assignment.value == pytest.approx(1.0)
+    assert assignment.covered_mask in {0b01, 0b10}
+
+
+def test_global_assignment_preserves_cross_energy_attack_plan_complementarity():
+    wildcard, b_one, b_two = 910, 911, 912
+    registry = ValueRegistry(facts={
+        wildcard: CardFacts(), b_one: CardFacts(), b_two: CardFacts()})
+    stats = DictCardStatProvider({
+        card_id: CardStat(card_id, cardType=5, energyType=0)
+        for card_id in (wildcard, b_one, b_two)
+    })
+    model = NeedModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    needs = (
+        Need("a", ((wildcard, 0.9),), recipient="77", capability="fund_attack",
+             slot="0", alternative="attack-a"),
+        Need("b0", ((wildcard, 0.8), (b_one, 0.8)), recipient="77",
+             capability="fund_attack", slot="0", alternative="attack-b"),
+        Need("b1", ((wildcard, 0.8), (b_two, 0.8)), recipient="77",
+             capability="fund_attack", slot="1", alternative="attack-b"),
+        Need("b2", ((wildcard, 0.8), (b_one, 0.8), (b_two, 0.8)), recipient="77",
+             capability="fund_attack", slot="2", alternative="attack-b"),
+    )
+    signatures = tuple(
+        token
+        for card_id in (wildcard, b_one, b_two)
+        for token in model.coverage_slots(
+            card_id, needs, supporter_available=True, discard_capacity=0,
+            recipient="77")
+    )
+
+    assignment = best_assignment(signatures, len(needs))
+
+    assert assignment.value == pytest.approx(2.4)
+    assert assignment.covered_mask == 0b1110
+
+
+def test_removing_a_recipient_removes_all_of_its_need_roots():
+    registry = ValueRegistry(
+        facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()})
+    stats = DictCardStatProvider({
+        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
+        ENERGY: CardStat(ENERGY, cardType=5, energyType=0),
+    }, attacks={ATTACK: AttackStat(ATTACK, cost=1, energyTypes=(0,))})
+    def energy_potential(observation):
+        active = observation["current"]["players"][0].get("active") or ()
+        value = float(len(active[0].get("energyCards") or ())) if active else 0.0
+        return Potential(value, (("energy_position", value),))
+
+    model = NeedModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    observation = _observation([])
+    observation["current"]["energyAttached"] = False
+    observation["current"]["players"][0]["active"] = [{
+        "id": LINE_TOP, "serial": 77, "hp": 100, "maxHp": 100,
+        "energies": [], "energyCards": [], "tools": [], "preEvolution": [],
+    }]
+
+    assert any(need.recipient == "77" for need in model.immediate(observation, 0))
+    observation["current"]["players"][0]["active"] = []
+    assert all(need.recipient != "77" for need in model.immediate(observation, 0))
 
 
 @pytest.mark.parametrize("observation", (
@@ -186,6 +449,32 @@ def test_access_probability_reuses_exact_hypergeometric_classes():
     assert access_probability((1, 1, 2, 3), 0, (1,)) == 0.0
 
 
+def test_need_path_score_prefers_equal_access_without_irreversible_discards():
+    root = NeedRoot("deploy", "deploy", 0, "establish_attacker", 1.0, "generic")
+    edge = AccessEdge(GEAR, "fetch", (root.semantic_id,), 0, True, 1.0, 1.0)
+    free = NeedPath((root.semantic_id,), (edge,), (), (), 0, 1.0, 1.0, "safe")
+    costly = NeedPath(
+        (root.semantic_id,), (edge,), ("discard:0", "discard:1"), (),
+        0, 1.0, 1.0, "safe")
+
+    assert NeedBeamBuilder._path_score(free, (root,)) > NeedBeamBuilder._path_score(
+        costly, (root,))
+
+
+def test_need_path_score_prioritizes_the_larger_recipient_ceiling():
+    low = NeedRoot(
+        "fund", "fund", 0, "take_prize", 1.0, "generic", ceiling=0.2)
+    high = NeedRoot(
+        "heal", "heal", 0, "prevent_prize", 1.0, "generic", ceiling=1.3)
+    low_path = NeedPath(
+        (low.semantic_id,), (), (), (), 0, 1.0, 1.0, "safe")
+    high_path = NeedPath(
+        (high.semantic_id,), (), (), (), 0, 1.0, 1.0, "safe")
+
+    assert NeedBeamBuilder._path_score(high_path, (low, high)) > \
+        NeedBeamBuilder._path_score(low_path, (low, high))
+
+
 def test_known_top_path_is_emitted_once_independent_of_available_sources():
     model = _model()
     builder = NeedBeamBuilder(
@@ -202,6 +491,50 @@ def test_known_top_path_is_emitted_once_independent_of_available_sources():
     paths = tuple(builder._access_paths(state, (root,), (need,)))
 
     assert sum(path.edges[0].capability == "known_top_draw" for path in paths) == 1
+
+
+def test_access_mapping_visits_current_legal_sources_before_future_deck_sources():
+    base = _model()
+    effects = CardEffects({GEAR: [
+        {"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},
+    ]})
+    model = NeedModel(base.registry, _potential, effects=effects, stats=base.stats)
+    builder = NeedBeamBuilder(
+        model, CapabilityIndex(((SUPPORTER, ("fetch",)), (GEAR, ("dig",))), ()))
+    need = Need("evolve:active:0", ((LINE_TOP, 1.0),))
+    root = builder._root(need)
+    state = SimpleNamespace(
+        deck_counts=((LINE_TOP, 1),), obs={"known_top": (), "current": {
+            "supporterPlayed": False, "players": [{"hand": []}, {}]}}, root_seat=0)
+    paths = tuple(builder._access_paths(
+        state, (root,), (need,), source_ids=(GEAR,)))
+
+    assert paths[0].edges[0].source_card_id == GEAR
+
+
+def test_discard_recovery_is_a_current_need_path():
+    base = _model()
+    effects = CardEffects({SUPPORTER: [
+        {"kind": "fetch", "target": "pokemon", "zone": "discard"},
+    ]})
+    model = NeedModel(base.registry, _potential, effects=effects, stats=base.stats)
+    builder = NeedBeamBuilder(
+        model, CapabilityIndex(((SUPPORTER, ("fetch",)),), ()))
+    need = Need("deploy:line:0", ((LINE_BASE, 1.0),))
+    root = builder._root(need)
+    state = SimpleNamespace(
+        deck_counts=(), root_seat=0,
+        obs={"current": {"supporterPlayed": False, "players": [
+            {"hand": [{"id": SUPPORTER}], "discard": [{"id": LINE_BASE}]}, {},
+        ]}},
+    )
+
+    paths = tuple(builder._access_paths(
+        state, (root,), (need,), source_ids=(SUPPORTER,)))
+
+    assert len(paths) == 1
+    assert paths[0].edges[0].capability == "recover"
+    assert paths[0].edges[0].source_card_id == SUPPORTER
 
 
 def test_generic_roles_fall_back_but_brief_roles_propagate_down_the_line():
@@ -223,8 +556,8 @@ def test_visible_energy_creates_active_and_future_denial_needs():
     roots = opponent_threat_roots(observation)
 
     assert [(root.predicate, root.deadline, root.outcome) for root in roots] == [
-        ("deny_threat:active:0", 0, "prevent_prize"),
-        ("deny_threat:bench:0", 1, "prevent_prize"),
+        ("deny:active:0:10:threat", 0, "prevent_prize"),
+        ("deny:bench:0:11:threat", 1, "prevent_prize"),
     ]
 
 
@@ -293,6 +626,17 @@ def test_need_roots_consume_inferred_role_provenance():
     assert root.outcome == "establish_primary_attacker"
     assert root.confidence == 0.9
     assert root.provenance == "brief"
+
+
+def test_absent_primary_attacker_deployment_is_a_current_need():
+    builder = NeedBeamBuilder(
+        _model(), CapabilityIndex((), ()),
+        roles=(PokemonRole(LINE_BASE, "primary_attacker", 0.9, "brief"),))
+
+    root = builder._root(Need("deploy:line:0", ((LINE_BASE, 1.0),)))
+
+    assert root.outcome == "establish_primary_attacker"
+    assert root.deadline == 0
 
 
 def test_replay_gate_fails_closed_on_changes_unknowns_and_errors():

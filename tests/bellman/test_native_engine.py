@@ -4,7 +4,9 @@ from functools import partial
 import importlib.util
 import os
 import random
+from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,11 +14,44 @@ from common import (
     Chance, DecisionState, Deterministic, NativeCgTransitionProvider, Terminal, Unknown,
     enumerate_legal_actions,
 )
+from common.engine import CgpyTransitionProvider
+from common.effects import CardEffects
 from common.runtime import build_runtime
 from common.native_engine import _hidden_signature
 
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def test_partial_ability_that_resolves_as_a_noop_fails_closed():
+    observation = {
+        "current": {"yourIndex": 0, "turnActionCount": 1,
+                    "players": [{"hand": [], "active": [], "bench": [], "discard": []},
+                                {"hand": None, "active": [], "bench": [], "discard": []}],
+                    "stadium": [{"id": 1259, "playerIndex": 1}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 10, "area": 7, "index": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    successor_observation = deepcopy(observation)
+    successor_observation["current"]["turnActionCount"] = 2
+    successor_observation["select"]["option"] = [{"type": 14}]
+    successor = state.with_observation(successor_observation)
+    child = SimpleNamespace(gs=SimpleNamespace(pending=None), step=lambda _choice: None)
+    engine = SimpleNamespace(fork=lambda: child)
+    provider = object.__new__(CgpyTransitionProvider)
+    provider._local_nested = False
+    provider._engines = {state.semantic_key: engine}
+    provider.effects = CardEffects({1259: [{
+        "kind": "fetch", "target": "pokemon", "zone": "deck", "name_family": "Marnie's",
+    }]})
+    provider.stats = None
+    provider._register_successor = lambda *_args: Deterministic(successor)
+
+    result = provider.transition(state, enumerate_legal_actions(observation)[0])
+
+    assert isinstance(result, Unknown)
+    assert result.reason == "unsupported ability produced no observable effect"
 
 
 def test_hidden_signature_tracks_world_contents_not_action_path():
@@ -69,6 +104,60 @@ def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips()
 
     assert successor["current"]["players"][0]["hand"] == known_hand
     assert successor["current"]["players"][1]["hand"] is None
+
+
+def test_terminal_proof_abstains_when_attack_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [{}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 13, "attackId": 999}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("MissingStats", (), {"attack": lambda _self, _attack_id: None})()
+
+    assert not provider.terminal_action_supported(state, action)
+
+
+def test_terminal_proof_abstains_when_play_effect_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 999}], "active": [], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 7, "index": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("TrainerStats", (), {
+        "get": lambda _self, _card_id: type("Trainer", (), {"is_pokemon": False})(),
+    })()
+
+    assert not provider.terminal_action_supported(state, action)
+
+
+def test_terminal_proof_abstains_when_attach_trigger_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 999}], "active": [{"id": 1000}], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 8, "index": 0,
+                               "inPlayArea": 4, "inPlayIndex": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("SpecialEnergyStats", (), {
+        "get": lambda _self, card_id: type("Stat", (), {
+            "is_basic_energy": False, "hasAbility": card_id == 1000,
+        })(),
+    })()
+
+    assert not provider.terminal_action_supported(state, action)
 
 
 pytest.importorskip("cg.sim", reason="native engine unavailable")
