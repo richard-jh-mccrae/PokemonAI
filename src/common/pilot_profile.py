@@ -138,7 +138,7 @@ class ResolvedParameter:
     definition: ParameterDefinition
     global_value: float
     deck_learned_adjustment: float
-    authored_deck_adjustment: float
+    authored_deck_override: float | None
     effective: float
 
     def as_dict(self) -> dict:
@@ -146,7 +146,7 @@ class ResolvedParameter:
         return {
             "name": definition.name, "group": definition.group, "family": definition.family,
             "global": self.global_value, "deck_learned_adjustment": self.deck_learned_adjustment,
-            "authored_deck_adjustment": self.authored_deck_adjustment,
+            "authored_deck_override": self.authored_deck_override,
             "effective": self.effective, "minimum": definition.minimum,
             "maximum": definition.maximum, "units": definition.units,
             "learnable": definition.learnable,
@@ -166,9 +166,12 @@ class PilotProfile:
     @classmethod
     def resolve(cls, *, global_values: Mapping[str, float] | None = None,
                 deck_learned: Mapping[str, float] | None = None,
-                authored_deck: Mapping[str, float] | None = None,
+                authored_deck_overrides: Mapping[str, float] | None = None,
                 provenance: str = "authored-defaults") -> "PilotProfile":
-        layers = (dict(global_values or {}), dict(deck_learned or {}), dict(authored_deck or {}))
+        layers = (
+            dict(global_values or {}), dict(deck_learned or {}),
+            dict(authored_deck_overrides or {}),
+        )
         unknown = set().union(*(set(layer) for layer in layers)) - set(_BY_NAME)
         if unknown:
             raise ValueError(f"unknown Pilot parameter(s): {sorted(unknown)}")
@@ -178,9 +181,12 @@ class PilotProfile:
             if not definition.minimum <= global_value <= definition.maximum:
                 raise ValueError(f"{definition.name} global value is out of bounds")
             learned = float(layers[1].get(definition.name, 0.0))
-            authored = float(layers[2].get(definition.name, 0.0))
-            effective = min(definition.maximum,
-                            max(definition.minimum, global_value + learned + authored))
+            authored = (float(layers[2][definition.name])
+                        if definition.name in layers[2] else None)
+            if authored is not None and not definition.minimum <= authored <= definition.maximum:
+                raise ValueError(f"{definition.name} authored override is out of bounds")
+            effective = (authored if authored is not None else min(
+                definition.maximum, max(definition.minimum, global_value + learned)))
             rows.append(ResolvedParameter(definition, global_value, learned, authored, effective))
         return cls(tuple(rows), provenance)
 

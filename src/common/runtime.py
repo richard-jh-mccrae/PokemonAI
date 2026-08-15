@@ -99,7 +99,7 @@ class BellmanRuntime:
         experiment, experiment_path = _pilot_overlay()
         self.pilot_profile = PilotProfile.resolve(
             global_values=experiment,
-            authored_deck=getattr(strategy, "pilot_adjustments", {}),
+            authored_deck_overrides=getattr(strategy, "pilot_overrides", {}),
             provenance=(f"overlay:{experiment_path}" if experiment_path
                         else f"strategy:{strategy.name}"),
         )

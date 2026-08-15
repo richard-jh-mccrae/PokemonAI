@@ -37,7 +37,7 @@ def _runtime(focused: bool, *, reuse=True, planning_seconds=None):
                        "clock.remaining_200_seconds": float(planning_seconds)})
     runtime.pilot_profile = PilotProfile.resolve(
         global_values=values,
-        authored_deck=getattr(module.STRATEGY, "pilot_adjustments", {}),
+        authored_deck_overrides=getattr(module.STRATEGY, "pilot_overrides", {}),
         provenance="strategy-lab")
     return runtime, OwnCardModel(deck, effects=runtime.effects)
 

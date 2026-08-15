@@ -6,28 +6,30 @@ from common.pilot_profile import DEFINITIONS, PilotProfile
 from common.runtime import _pilot_overlay
 
 
-def test_profile_layers_clamp_and_hash_stably():
+def test_authored_deck_value_overwrites_global_and_learned_layers():
     first = PilotProfile.resolve(
         global_values={"family.tie_margin": 0.2},
         deck_learned={"family.tie_margin": 0.1},
-        authored_deck={"family.tie_margin": -0.05},
+        authored_deck_overrides={"family.tie_margin": 0.05},
     )
     second = PilotProfile.resolve(
-        authored_deck={"family.tie_margin": -0.05},
+        authored_deck_overrides={"family.tie_margin": 0.05},
         deck_learned={"family.tie_margin": 0.1},
         global_values={"family.tie_margin": 0.2},
     )
 
-    assert first.get("family.tie_margin") == pytest.approx(0.25)
+    assert first.get("family.tie_margin") == pytest.approx(0.05)
     assert first.hash == second.hash
     assert len({definition.name for definition in DEFINITIONS}) == len(DEFINITIONS)
 
 
 def test_profile_rejects_unknown_and_out_of_bounds_global_values():
     with pytest.raises(ValueError, match="unknown"):
-        PilotProfile.resolve(authored_deck={"missing.parameter": 1.0})
+        PilotProfile.resolve(authored_deck_overrides={"missing.parameter": 1.0})
     with pytest.raises(ValueError, match="out of bounds"):
         PilotProfile.resolve(global_values={"family.tie_margin": 99.0})
+    with pytest.raises(ValueError, match="authored override"):
+        PilotProfile.resolve(authored_deck_overrides={"family.tie_margin": 99.0})
 
 
 def test_all_value_equations_default_to_disconnected():

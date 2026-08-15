@@ -145,7 +145,7 @@ class Strategy:
     params: dict = field(default_factory=dict)
     partners: dict[int, tuple[int, ...]] = field(default_factory=dict)
     worth_overrides: dict[int, float] = field(default_factory=dict)
-    pilot_adjustments: dict[str, float] = field(default_factory=dict)
+    pilot_overrides: dict[str, float] = field(default_factory=dict)
     prize_plan: PrizePlan | None = None
     strategies: tuple[StrategyHint, ...] = ()
     strategy_overrides: tuple[StrategyOverride, ...] = ()
@@ -157,8 +157,8 @@ class Strategy:
                          for card_id, partners in self.partners.items()}
         self.worth_overrides = {int(card_id): float(value)
                                 for card_id, value in self.worth_overrides.items()}
-        self.pilot_adjustments = {str(name): float(value)
-                                  for name, value in self.pilot_adjustments.items()}
+        self.pilot_overrides = {str(name): float(value)
+                                for name, value in self.pilot_overrides.items()}
         self.strategies = tuple(self.strategies)
         self.strategy_overrides = tuple(self.strategy_overrides)
         self.lines = tuple(self.roles.lines)
