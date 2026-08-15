@@ -15,6 +15,7 @@ See ADR-0014 / ADR-0015 / ADR-0049.
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -75,8 +76,21 @@ def _counterfactual_response(session_id: str, recorder) -> dict:
             "counterfactual": payload}
 
 
+def _json_body(payload) -> bytes:
+    def normalize(value):
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        if isinstance(value, dict):
+            return {key: normalize(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [normalize(item) for item in value]
+        return value
+
+    return json.dumps(normalize(payload), allow_nan=False).encode("utf-8")
+
+
 def _json(handler: BaseHTTPRequestHandler, payload, code: int = 200) -> None:
-    body = json.dumps(payload).encode("utf-8")
+    body = _json_body(payload)
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
