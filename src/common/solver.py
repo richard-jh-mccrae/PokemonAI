@@ -117,7 +117,7 @@ def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, bool, 
 
 
 def _select_our_action(finite, context: int):
-    if context == _DISCARD and any(not result.complete for _action, result in finite):
+    if context == _DISCARD:
         immediate = max(result.ledger.immediate for _action, result in finite)
         leaders = tuple(
             pair for pair in finite
@@ -690,6 +690,31 @@ class ProductionSolver(ReferenceSolver):
                 return action, result
         return selected
 
+    def _select_unresolved_focus(self, state: DecisionState, finite, context: int, selected):
+        if context != MAIN_DECISION_CONTEXT or state.semantic_key != self._root_key:
+            return selected
+        selected_footprint = self._footprint(state, selected[0])
+        if (selected[0].identity.kind != "attach" or selected_footprint is None
+                or not selected_footprint.commitment):
+            return selected
+        focus_ranks = self._need_focus_ranks.get(state.semantic_key, {})
+        focused = []
+        for pair in finite:
+            footprint = self._footprint(state, pair[0])
+            if (not pair[1].complete
+                    and semantic_action_key(pair[0]) in focus_ranks
+                    and footprint is not None and footprint.information_first
+                    and isinstance(self._provider_transition(state, pair[0]), RevealChoice)
+                    and self._information_priority(state, pair[0]) > 0.0):
+                focused.append(pair)
+        focused.sort(key=lambda pair: focus_ranks[semantic_action_key(pair[0])])
+        for candidate in focused:
+            bound = self._action_bounds.get(candidate[0].identity, {})
+            if round(float(bound.get("q_upper", math.inf)), VALUE_TIE_DECIMALS) >= round(
+                    selected[1].value, VALUE_TIE_DECIMALS):
+                return candidate
+        return selected
+
     def _successor_sleep(self, state: DecisionState, sleep: tuple[SleepEvent, ...],
                          earlier: list[tuple[LegalAction, ActionFootprint]],
                          current_action: LegalAction,
@@ -842,7 +867,7 @@ class ProductionSolver(ReferenceSolver):
             actions = tuple(sorted(
                 actions,
                 key=lambda action: (-self._immediate_order_value(state, action), action.identity),
-            ))
+            ))[:1]
         footprints: dict[object, ActionFootprint | None] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             footprints = {action.identity: self._footprint(state, action) for action in actions}
@@ -1018,13 +1043,13 @@ class ProductionSolver(ReferenceSolver):
                     str(row[1].identity),
                 ),
             )
-            selected.extend(row for row in refinement_candidates
-                            if row[1].identity.kind == "attack")
             selected.extend(sorted(
                 (row for row in refinement_candidates
-                 if row not in selected and semantic_action_key(row[1]) in focus_ranks),
+                 if semantic_action_key(row[1]) in focus_ranks),
                 key=lambda row: focus_ranks[semantic_action_key(row[1])],
             ))
+            selected.extend(row for row in refinement_candidates
+                            if row not in selected and row[1].identity.kind == "attack")
             selected.extend(row for row in refinement_candidates if row not in selected)
             selected = selected[:refinement_width]
             for uncertainty_type in (Chance, RevealChoice):
@@ -1051,9 +1076,7 @@ class ProductionSolver(ReferenceSolver):
             ordered_refinements = selected + [
                 row for row in refinement_candidates if row not in selected
             ] if refinement_width else []
-            priority_refinements = sum(
-                semantic_action_key(row[1]) in focus_ranks for row in selected
-            )
+            reserved_refinements = len(selected)
             for refinement_index, (index, action, probe) in enumerate(ordered_refinements):
                 if monotonic() >= self._hard_deadline:
                     break
@@ -1078,8 +1101,8 @@ class ProductionSolver(ReferenceSolver):
                     refinement_nodes = self.production_limits.max_nodes
                 self.limits = SearchLimits(refinement_nodes)
                 remaining = (
-                    priority_refinements - refinement_index
-                    if refinement_index < priority_refinements
+                    reserved_refinements - refinement_index
+                    if refinement_index < reserved_refinements
                     else len(ordered_refinements) - refinement_index
                 )
                 self._deadline = self._budget.root_deadline(
@@ -1165,7 +1188,9 @@ class ProductionSolver(ReferenceSolver):
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:
-                action, result = self._select_our_action(state, finite, context)
+                selected = self._select_our_action(state, finite, context)
+                action, result = self._select_unresolved_focus(
+                    state, finite, context, selected)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))

@@ -345,6 +345,68 @@ def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace()
     assert chosen == information
 
 
+def test_unresolved_root_uses_undominated_needs_focus_instead_of_completed_incumbent(
+        monkeypatch):
+    root = _state("focus-fallback-root")
+    focused = _state("focus-fallback-focused", board=0.1)
+    partial = _state("focus-fallback-partial", board=0.2)
+    finish = _state("focus-fallback-finish", board=0.3)
+    information, attach, end = _action("play"), _action("attach", 1), _action("end", 2)
+    continue_line = _action("continue")
+
+    class FocusInformation:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        @staticmethod
+        def action_priority(_state, action):
+            return 1.0 if action.identity.kind == "play" else 0.0
+
+        def build(self, _state, _actions, ranking=None):
+            del ranking
+            return NeedBeam(
+                (ActionFocus(semantic_action_key(information), "play", (), 1.0,
+                             "strategy_hint"),),
+                (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
+                (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusInformation)
+    graph = FootprintedGraph(
+        {"focus-fallback-root": (information, attach, end),
+         "focus-fallback-focused": (continue_line, end),
+         "focus-fallback-partial": (end,),
+         "focus-fallback-finish": (end,)},
+        {("focus-fallback-root", "play"): RevealChoice(
+             Actor.OURS, (Edge("known", Deterministic(focused)),),
+             (RevealOutcome(1.0, ("known",)),)),
+         ("focus-fallback-root", "attach"): Deterministic(partial),
+         ("focus-fallback-focused", "continue"): Deterministic(finish)},
+        {"play": ActionFootprint(("information",), information_first=True),
+         "attach": ActionFootprint(("attach",), commitment=True),
+         "continue": ActionFootprint(("continue",)),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    class OpenCeiling:
+        def __call__(self, observation):
+            value = float(observation["current"].get("board", 0.0))
+            return Potential(value, (("board", value),))
+
+        @staticmethod
+        def optimistic_ceiling(_observation, **_context):
+            return 1.0
+
+    decision = ProductionSolver(
+        graph, ValueOracle(REGISTRY, OpenCeiling()),
+        limits=ProductionLimits(max_nodes=1, root_probe_nodes=1, root_refinement_width=2),
+        needs_snapshot=object(),
+    ).decide(root)
+
+    assert not decision.complete
+    assert decision.action == information.identity
+
+
 def test_equal_commutative_lines_choose_the_canonical_prefix():
     from common.solver import Evaluation
 
@@ -823,6 +885,51 @@ def test_reserved_recovery_does_not_leave_refinement_width_unused():
                decision.diagnostics["production"]["root_branch_nodes"]) == 2
 
 
+def test_reserved_attack_and_need_focus_receive_separate_clock_slices(monkeypatch):
+    root = _state("clock-root")
+    attacked = _state("clock-attacked", board=0.2)
+    informed = _state("clock-informed", board=0.1)
+    attack, information, end = _action("attack"), _action("play", 1), _action("end", 2)
+
+    class FocusInformation:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def build(self, _state, _actions, ranking=None):
+            del ranking
+            return NeedBeam(
+                (ActionFocus(semantic_action_key(information), "play", (), 1.0,
+                             "strategy_hint"),),
+                (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
+                (), (), (), 0.0, False,
+            )
+
+    slices = []
+    original = solver_module.FairBudgetPrototype.root_deadline
+
+    def record_slice(now, hard_deadline, roots_remaining):
+        slices.append(roots_remaining)
+        return original(now, hard_deadline, roots_remaining)
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusInformation)
+    monkeypatch.setattr(
+        solver_module.FairBudgetPrototype, "root_deadline", staticmethod(record_slice))
+    graph = Graph(
+        {"clock-root": (attack, information, end),
+         "clock-attacked": (end,), "clock-informed": (end,)},
+        {("clock-root", "attack"): Deterministic(attacked),
+         ("clock-root", "play"): Deterministic(informed)},
+    )
+
+    ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(max_nodes=10, root_probe_nodes=1, root_refinement_width=2),
+        needs_snapshot=object(),
+    ).decide(root)
+
+    assert slices[-2:] == [2, 1]
+
+
 def test_information_orders_before_heal_without_blocking_later_widening():
     root = _state("priority-root")
     healed = _state("priority-healed", board=0.1)
@@ -876,6 +983,38 @@ def test_any_incomplete_forced_discard_uses_stable_immediate_value_fallback():
     ), 8)
 
     assert chosen == keep
+
+
+def test_complete_forced_discard_still_preserves_the_best_immediate_hand_value():
+    from common.solver import Evaluation, _select_our_action
+
+    keep, waste = _action("discard_keep"), _action("discard_waste", 1)
+    chosen, _result = _select_our_action((
+        (keep, Evaluation(0.2, Ledger((('hand', 0.2),), ()), True)),
+        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), True)),
+    ), 8)
+
+    assert chosen == keep
+
+
+def test_forced_discard_executes_only_the_best_immediate_resource_choice():
+    root = _state("discard-root", context=8)
+    preserved = _state("discard-preserved", board=0.2)
+    wasted = _state("discard-wasted", board=0.1)
+    keep, waste, end = _action("keep"), _action("waste", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"discard-root": (keep, waste),
+         "discard-preserved": (end,), "discard-wasted": (end,)},
+        {("discard-root", "keep"): Deterministic(preserved),
+         ("discard-root", "waste"): Deterministic(wasted)},
+        {"keep": ActionFootprint(("keep",)), "waste": ActionFootprint(("waste",)),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(graph, _oracle()).decide(root)
+
+    assert decision.action == keep.identity
+    assert len(decision.diagnostics["production"]["root_branch_nodes"]) == 1
 
 
 def test_retreat_depends_on_active_identity_that_can_change_its_cost():
