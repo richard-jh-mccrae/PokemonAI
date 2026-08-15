@@ -253,8 +253,6 @@ class StrategyBeamBuilder:
                 if clause.get("cost_required") or discard_cost(clause):
                     continue
                 depth = int(clause.get("dig", 0) or 0)
-                if depth <= 0 and clause.get("dest") != "bench":
-                    continue
                 matching = tuple(card_id for card_id in pool
                                  if _need_fetch_target_matches(
                                      clause, self.stats.get(card_id)))

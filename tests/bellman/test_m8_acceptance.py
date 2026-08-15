@@ -73,7 +73,9 @@ def test_20260812_sequence_and_target_corrections():
             prizes = record["decision"]["current"]["players"][0]["prize"]
             observation["own_prizes"] = dict(Counter(str(card["id"]) for card in prizes))
         chosen = runtime().decide(observation).chosen
-        if record["id"] == "0a482197b23f":
+        if record["id"] == "9e502ba97ac7":
+            assert chosen in {(0,), (1,)}
+        elif record["id"] == "0a482197b23f":
             assert chosen in {(0,), (1,)}
         elif record["id"] == "71cf48e4701c":
             assert chosen in {(2,), (6,)}

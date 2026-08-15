@@ -202,7 +202,7 @@ def test_live_odds_refresh_against_the_cached_turn_snapshot():
     assert unreachable.focused == ()
 
 
-def test_information_hint_excludes_deterministic_search_commitments():
+def test_information_hint_includes_free_search_but_excludes_discard_commitments():
     rule = NeedStrategy(
         "general.information", "general",
         (ActivationCondition("own.active.energy_count", "lt", 1),),
@@ -241,4 +241,5 @@ def test_information_hint_excludes_deterministic_search_commitments():
         snapshot, effects=FreeSearch(), stats=Stats()).build(
             SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1),)), actions)
 
-    assert free_beam.focused == ()
+    assert len(free_beam.focused) == 1
+    assert free_beam.focused[0].path_ids == ("general.information",)
