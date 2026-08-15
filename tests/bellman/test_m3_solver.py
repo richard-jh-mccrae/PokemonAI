@@ -1059,7 +1059,7 @@ def test_bounded_own_choice_keeps_a_finite_lower_bound_from_one_legal_branch():
     assert not decision.complete
 
 
-def test_bounded_own_state_returns_incumbent_when_budget_expires_between_actions():
+def test_bounded_own_state_does_not_skip_legal_actions_at_node_cap():
     root = _state("state-lower-root")
     choose = _state("state-lower-choose")
     exact = _state("state-lower-exact", board=0.5)
@@ -1090,10 +1090,10 @@ def test_bounded_own_state_returns_incumbent_when_budget_expires_between_actions
     assert decision.action.kind == "setup"
     assert decision.value == pytest.approx(0.5)
     assert not decision.complete
-    assert ("state-lower-choose", "z_slow") not in graph.calls
+    assert ("state-lower-choose", "z_slow") in graph.calls
 
 
-def test_forced_own_choice_orders_by_immediate_bellman_gain_before_capping():
+def test_forced_own_choice_ignores_optional_menu_width_and_compares_every_pick():
     root = _state("forced-order-root")
     choose = _state("forced-order-choose", context=7)
     low = _state("forced-order-low", board=0.1)
@@ -1119,8 +1119,7 @@ def test_forced_own_choice_orders_by_immediate_bellman_gain_before_capping():
 
     assert decision.action.kind == "setup"
     assert decision.value == pytest.approx(0.5)
-    assert not decision.complete
-    assert decision.diagnostics["production"]["forced_choice_truncations"] == 1
+    assert decision.complete
 
 
 def test_reveal_choice_uses_remaining_turn_value_not_static_card_precedence():

@@ -493,7 +493,7 @@ def test_known_top_path_is_emitted_once_independent_of_available_sources():
     assert sum(path.edges[0].capability == "known_top_draw" for path in paths) == 1
 
 
-def test_access_budget_visits_current_legal_sources_before_future_deck_sources(monkeypatch):
+def test_access_mapping_visits_current_legal_sources_before_future_deck_sources():
     base = _model()
     effects = CardEffects({GEAR: [
         {"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},
@@ -506,11 +506,8 @@ def test_access_budget_visits_current_legal_sources_before_future_deck_sources(m
     state = SimpleNamespace(
         deck_counts=((LINE_TOP, 1),), obs={"known_top": (), "current": {
             "supporterPlayed": False, "players": [{"hand": []}, {}]}}, root_seat=0)
-    clock = iter((0.0, 0.0, 2.0, 2.0))
-    monkeypatch.setattr("common.needs.perf_counter", lambda: next(clock))
-
     paths = tuple(builder._access_paths(
-        state, (root,), (need,), deadline=1.0, source_ids=(GEAR,)))
+        state, (root,), (need,), source_ids=(GEAR,)))
 
     assert paths[0].edges[0].source_card_id == GEAR
 

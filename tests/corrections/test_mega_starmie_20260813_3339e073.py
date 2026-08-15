@@ -20,7 +20,7 @@ RUNTIME = runtime()
     ("8c69ecaccafa", ((0,),)),  # equal damage concentrates toward the nearer KO
     ("dfc26070178c", ((0,),)),  # information action precedes the resolving attack
     ("8d91984d4430", ((1,),)),  # diversify acceleration across viable Basic attackers
-    ("c7fd0670fb3e", ((0,), (5,))),  # funded evolution and free retreat commute
+    ("c7fd0670fb3e", ((0,), (3,), (5,))),  # free information/evolution/retreat prefixes
     ("76e7d6d7539e", ((4,),)),  # Wally returns all three Basics, leaving no legal attack
     ("5ee5f49312b2", ((1,),)),  # analytic refresh commitment does not plan a hidden hand
     ("da72e53929f0", ((0,),)),  # complete hidden-refresh expectation remains eligible
@@ -30,7 +30,7 @@ RUNTIME = runtime()
     ("188cceda7001", ((1,),)),  # Poffin creates a Turbo Flare recipient before attacking
     ("feafb8ef77c5", ((0,),)),  # information action before Turbo Flare
     ("496a7657096f", ((4,),)),  # dead stadium and Mega searches commute before refreshing
-    ("baede6accfac", ((6,),)),  # free dead stadium search; never attach the fourth Energy
+    ("baede6accfac", ((1,), (6,))),  # free Harlequin/search prefixes; never attach fourth Energy
     ("cb70b1405932", ((4,),)),  # expiring Energy is lost at End in either line
     ("79767ab416a7", ((0,),)),  # persistent basic Energy beats expiring Energy
     ("3c2afa3f1f28", ((0,),)),  # beneficial attack beats End

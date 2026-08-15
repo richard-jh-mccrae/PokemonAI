@@ -28,7 +28,7 @@ PRODUCTION_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.max_nodes"))
 PRODUCTION_CHANCE_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.chance_max_nodes"))
 PRODUCTION_REVEAL_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.reveal_max_nodes"))
 UNCERTAINTY_REFINEMENT_VALUE_MARGIN = DEFAULT_PILOT_PROFILE.get("search.uncertainty_margin")
-ROOT_PROBE_TIME_SHARE = 0.5
+ROOT_PROBE_TIME_SHARE = 0.4
 PRODUCTION_MAX_SECONDS = DEFAULT_PILOT_PROFILE.get("clock.remaining_200_seconds")
 PRODUCTION_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.beam_width"))
 DEFAULT_ROOT_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.root_beam_width"))
@@ -37,7 +37,6 @@ DEFAULT_ROOT_PROBE_NODES = int(DEFAULT_PILOT_PROFILE.get("search.shallow_nodes")
 DEFAULT_ROOT_REFINEMENT_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.refinement_width"))
 SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
-PRIZE_SELECTION_CONTEXT = 7
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
 
@@ -435,7 +434,6 @@ class ProductionSolver(ReferenceSolver):
         self._completed_rounds = 0
         self._bound_prunes: list[dict] = []
         self._action_bounds: dict[object, dict] = {}
-        self._forced_choice_truncations = 0
         self._urgent_refinement = False
 
     def decide(self, state: DecisionState) -> RootDecision:
@@ -469,7 +467,6 @@ class ProductionSolver(ReferenceSolver):
         self._completed_rounds = 0
         self._bound_prunes.clear()
         self._action_bounds.clear()
-        self._forced_choice_truncations = 0
         self._urgent_refinement = False
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
@@ -498,7 +495,6 @@ class ProductionSolver(ReferenceSolver):
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
             "information_first_permutations_pruned": self.information_pruned,
-            "forced_choice_truncations": self._forced_choice_truncations,
             "structural_prunes": tuple(self._structural_prunes),
             "profile_hash": self.profile.hash,
             "completed_rounds": self._completed_rounds,
@@ -797,7 +793,6 @@ class ProductionSolver(ReferenceSolver):
                     earlier.append(footprint)
         else:
             child_sleeps = {action.identity: sleep for action in actions}
-        truncated = False
         if key == self._root_key:
             action_waves = self._need_waves.get(key, {})
             results_list = []
@@ -891,13 +886,20 @@ class ProductionSolver(ReferenceSolver):
                 key=lambda row: self._information_priority(state, row[1]),
                 default=None,
             )
-            urgent_heal = max(
+            heal_candidate = max(
                 (row for row in refinement_candidates
                  if self.oracle.heal_repositions_energy(state, row[1])
                  and (self.oracle.heal_need_value(state, row[1]) or 0.0)
                  >= self.profile.get("needs.heal_min_gain")),
                 key=lambda row: self.oracle.heal_need_value(state, row[1]) or 0.0,
                 default=None,
+            )
+            urgent_heal = (
+                heal_candidate
+                if (heal_candidate is not None
+                    and (self.oracle.heal_need_value(state, heal_candidate[1]) or 0.0)
+                    >= self.profile.get("needs.heal_urgent_gain"))
+                else None
             )
             recovery_need = max(
                 (row for row in incomplete
@@ -920,7 +922,8 @@ class ProductionSolver(ReferenceSolver):
                 key=lambda row: self.oracle.need_coverage_value(state, row[1]),
                 default=None,
             )
-            reserved = (urgent_heal, information_candidate, recovery_need, evolution_need)
+            reserved = (
+                urgent_heal, information_candidate, recovery_need, heal_candidate, evolution_need)
             if not any(reserved):
                 reserved = (deterministic_need,)
             for candidate in reserved:
@@ -960,6 +963,12 @@ class ProductionSolver(ReferenceSolver):
                     refinement_nodes = self.production_limits.reveal_max_nodes
                 elif isinstance(transition, Chance):
                     refinement_nodes = self.production_limits.chance_max_nodes
+                elif (actor is Actor.OURS and context != MAIN_DECISION_CONTEXT):
+                    refinement_nodes = self.production_limits.reveal_max_nodes
+                elif (footprints.get(action.identity) is not None
+                      and footprints[action.identity].information_first
+                      and self._information_priority(state, action) > 0.0):
+                    refinement_nodes = self.production_limits.reveal_max_nodes
                 elif self.oracle.heal_repositions_energy(state, action):
                     refinement_nodes = self.production_limits.reveal_max_nodes
                 else:
@@ -967,8 +976,8 @@ class ProductionSolver(ReferenceSolver):
                 self.limits = SearchLimits(refinement_nodes)
                 self.nodes = 1
                 previous_urgent = self._urgent_refinement
-                self._urgent_refinement = (
-                    previous_urgent or self.oracle.heal_repositions_energy(state, action))
+                self._urgent_refinement = previous_urgent or action == (
+                    urgent_heal[1] if urgent_heal is not None else None)
                 try:
                     refined = self._action(state, action, child_sleeps[action.identity])
                 finally:
@@ -992,30 +1001,17 @@ class ProductionSolver(ReferenceSolver):
             results_list = []
             ordered_actions = actions
             if actor is Actor.OURS:
-                if context == MAIN_DECISION_CONTEXT:
-                    ordered_actions = tuple(sorted(
-                        actions, key=lambda row: (row.identity.kind != "end", row.identity)))
-                else:
+                if self._urgent_refinement and context != MAIN_DECISION_CONTEXT:
                     ordered_actions = tuple(sorted(actions, key=lambda row: (
                         row.identity.kind != "end",
                         -self._immediate_order_value(state, row),
                         row.identity,
                     )))
-                    width = (1 if (context == PRIZE_SELECTION_CONTEXT
-                                   and self._urgent_refinement)
-                             else self.production_limits.effect_choice_width)
-                    if len(ordered_actions) > width:
-                        self._forced_choice_truncations += 1
-                        ordered_actions = ordered_actions[:width]
-                        truncated = True
+                else:
+                    ordered_actions = tuple(sorted(
+                        actions, key=lambda row: (row.identity.kind != "end", row.identity)))
             incumbent = None
-            evaluated_non_end = False
             for action in ordered_actions:
-                if (actor is Actor.OURS and incumbent is not None and evaluated_non_end
-                        and (self.nodes >= self.limits.max_nodes
-                             or monotonic() >= self._deadline)):
-                    truncated = True
-                    break
                 if actor is Actor.OURS and incumbent is not None \
                         and action.identity.kind != "end":
                     q_upper, terms = self._root_upper_bound(state, action)
@@ -1044,7 +1040,6 @@ class ProductionSolver(ReferenceSolver):
                         continue
                 result = self._action(state, action, child_sleeps[action.identity])
                 results_list.append((action, result))
-                evaluated_non_end = evaluated_non_end or action.identity.kind != "end"
                 bound_key = (state.semantic_key, action.identity)
                 bound = self._action_bounds.get(bound_key, {
                     "state": state.semantic_key, "action": str(action.identity)})
@@ -1074,11 +1069,10 @@ class ProductionSolver(ReferenceSolver):
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
-            proven = (not truncated and result.complete and len(finite) == len(results)
-                      and all(evaluated.complete for _candidate, evaluated in results))
-            reason = ("production cap: incumbent lower bound" if truncated else result.reason)
-            evaluation = Evaluation(result.value, result.ledger, proven, reason,
-                                    result.branches, result.decisions, result.continuation)
+            proven = result.complete and len(finite) == len(results) and all(
+                evaluated.complete for _candidate, evaluated in results)
+            evaluation = Evaluation(result.value, result.ledger, proven, result.reason,
+                                     result.branches, result.decisions, result.continuation)
             answer = StateEvaluation(result.value, action, evaluation, results)
         # A bounded lower bound depends on the budget remaining when it was
         # reached.  Reusing it from another branch would turn traversal order

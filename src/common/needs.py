@@ -9,7 +9,6 @@ from collections import Counter
 import copy
 from dataclasses import dataclass
 import hashlib
-import math
 from time import perf_counter
 
 from .fetch import REACH, WINDOW, fetch_target_matches
@@ -303,9 +302,8 @@ class NeedBeamBuilder:
         action_sources = tuple(filter(None, (
             self._source_card_id(state, action) for action in actions)))
         paths = list(self._direct_paths(roots, needs))
-        if perf_counter() < deadline:
-            paths.extend(self._access_paths(
-                state, roots, needs, deadline=deadline, source_ids=action_sources))
+        paths.extend(self._access_paths(
+            state, roots, needs, source_ids=action_sources))
         if perf_counter() < deadline:
             paths.extend(self._acceleration_paths(roots))
             paths.extend(self._denial_paths(roots))
@@ -400,7 +398,7 @@ class NeedBeamBuilder:
                 edge = AccessEdge(int(card_id), "direct", (root.semantic_id,), 0, True, 1.0, 1.0)
                 yield NeedPath((root.semantic_id,), (edge,), (), (), 0, 1.0, 1.0, "safe")
 
-    def _access_paths(self, state, roots, needs, *, deadline=math.inf, source_ids=()):
+    def _access_paths(self, state, roots, needs, *, source_ids=()):
         pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
         available = frozenset(pool)
         players = ((state.obs.get("current") or {}).get("players") or ())
@@ -421,16 +419,12 @@ class NeedBeamBuilder:
             for root, need in zip(roots, needs)
         )
         for root, _need, eligible in root_needs:
-            if perf_counter() >= deadline:
-                return
             if known_top and int(known_top[0][1]) in eligible:
                 edge = AccessEdge(None, "known_top_draw", (root.semantic_id,), 1,
                                   True, 1.0, 1.0)
                 yield NeedPath((root.semantic_id,), (edge,), ("known_top",), (), 1,
                                1.0, 1.0, "fragile")
         for source_id in sources:
-            if perf_counter() >= deadline:
-                return
             clauses = tuple(self.model.effects.clauses(source_id)) if self.model.effects else ()
             for root, need, eligible in root_needs:
                 for clause in clauses:
@@ -480,8 +474,6 @@ class NeedBeamBuilder:
         if current.get("supporterPlayed"):
             return
         for source_id in sources:
-            if perf_counter() >= deadline:
-                return
             for clause in tuple(self.model.effects.clauses(source_id)) if self.model.effects else ():
                 if (clause.get("kind") != "fetch" or clause.get("zone") != "deck"
                         or clause.get("target") != "supporter"):

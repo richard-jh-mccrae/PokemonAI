@@ -135,7 +135,7 @@ jobs:
         run: |
           targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
           [ -d tests/corrections ] && targets+=(tests/corrections)
-          python -m pytest "${targets[@]}" -q -n auto --tb=short
+          python -m pytest "${targets[@]}" -q --tb=short
 
   test-src:
     name: tests / src
