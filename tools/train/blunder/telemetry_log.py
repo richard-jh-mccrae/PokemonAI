@@ -11,7 +11,7 @@ import math
 import re
 from pathlib import Path
 
-from common.telemetry import TAG
+from common.telemetry import TAG, lethal_proof_seconds
 
 from .decisions import iter_decisions
 

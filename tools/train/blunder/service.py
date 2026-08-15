@@ -17,7 +17,8 @@ from .decode import option_label
 from .seats import detect_seat
 from .store import DEFAULT_PATH, append_correction, load_corrections
 from .telemetry_log import (
-    decision_seconds as telemetry_decision_seconds, record_for, search_timing,
+    decision_seconds as telemetry_decision_seconds, lethal_proof_seconds, record_for,
+    search_timing,
 )
 
 
@@ -97,6 +98,7 @@ def frames_payload(replay: dict, our_team: str | None = None,
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
             "decision_seconds": seconds,
+            "lethal_proof_seconds": lethal_proof_seconds(live),
             "search_timing": search_timing(live),
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.

@@ -522,6 +522,7 @@ function show(n){
     `<div>decision by <b>${pname(f.seat)}</b> (seat ${f.seat}) → saves as <b>${own?'own':'peer'}</b></div>`+
     `<div><b>${f.context||'(no decision here)'}</b>${f.type?' ('+f.type+')':''}</div>`;
   if(f.taggable) h+=`<div class="timing">decision time: <b>${f.decision_seconds==null?'unavailable':f.decision_seconds.toFixed(3)+'s'}</b></div>`;
+  if(f.lethal_proof_seconds!=null) h+=`<div class="timing">Lethal solver: <b>${f.lethal_proof_seconds.toFixed(3)}s</b></div>`;
   if(f.search_timing){
     const S=f.search_timing, sec=x=>Number(x).toFixed(1)+'s';
     const focus=S.strategy_focus_position==null?'not focused':`${S.strategy_focus_position} of ${S.strategy_focus_count}`;

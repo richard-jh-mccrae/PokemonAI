@@ -4,6 +4,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import math
 import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -11,6 +12,18 @@ from contextvars import ContextVar
 
 TAG = "@T"
 _CAPTURE: ContextVar[list[dict] | None] = ContextVar("telemetry_capture", default=None)
+
+
+def lethal_proof_seconds(record: dict | None) -> float | None:
+    if not isinstance(record, dict):
+        return None
+    proof = ((record.get("diagnostics") or {}).get("terminal_proof") or {})
+    value = proof.get("elapsed_ms")
+    if proof.get("attempted") is not True or isinstance(value, bool) \
+            or not isinstance(value, (int, float)):
+        return None
+    seconds = float(value) / 1000.0
+    return seconds if math.isfinite(seconds) and seconds >= 0.0 else None
 
 
 def _wire(value):

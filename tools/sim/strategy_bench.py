@@ -1,7 +1,8 @@
-"""Run timed local matches and report when Bellman's final incumbent stabilized."""
+"""Run timed local matches, save decision CSV telemetry, and report search timing."""
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import random
 import sys
@@ -9,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from statistics import mean
 from time import monotonic
-
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -28,6 +28,8 @@ def summarize_decisions(records) -> dict:
     totals = [row["decision_seconds"] for row in timed]
     first = [row["first_found_seconds"] for row in found]
     stable = [row["stabilized_seconds"] for row in stabilized]
+    lethal = [row["lethal_proof_seconds"] for row in records
+              if row.get("lethal_proof_seconds") is not None]
     waves = {name: sum(row.get("strategy_wave") == name for row in stabilized)
              for name in ("first", "widening")}
     return {
@@ -50,11 +52,19 @@ def summarize_decisions(records) -> dict:
             "p95": _percentile(stable, 0.95),
             "max": max(stable, default=0.0),
         },
+        "lethal_proof_seconds": {
+            "samples": len(lethal),
+            "avg": mean(lethal) if lethal else 0.0,
+            "min": min(lethal, default=0.0),
+            "max": max(lethal, default=0.0),
+        },
         "strategy_waves": waves,
     }
 
 
 def decision_metrics(records, *, match_index, contestants) -> list[dict]:
+    from common.telemetry import lethal_proof_seconds
+
     rows = []
     for record in records:
         production = ((record.get("diagnostics") or {}).get("production") or {})
@@ -73,14 +83,44 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
             "decision_seconds": record.get("decision_seconds"),
             "decision_limit_seconds": record.get("decision_limit_seconds"),
             "deadline_hit": record.get("deadline_hit"),
+            "lethal_proof_seconds": lethal_proof_seconds(record),
+            "total_search_seconds": incumbent.get("search_seconds", record.get("decision_seconds")),
             "first_found_seconds": incumbent.get("first_found_seconds"),
             "stabilized_seconds": incumbent.get("stabilized_seconds"),
+            "remaining_search_seconds": (
+                max(0.0, float(incumbent.get("search_seconds", record.get("decision_seconds")))
+                    - float(incumbent["stabilized_seconds"]))
+                if incumbent.get("stabilized_seconds") is not None
+                and incumbent.get("search_seconds", record.get("decision_seconds")) is not None
+                else None),
             "strategy_wave": incumbent.get("strategy_wave"),
             "strategy_focus_position": incumbent.get("strategy_focus_position"),
             "strategy_focus_count": incumbent.get("strategy_focus_count"),
             "incumbent_timeline": production.get("incumbent_timeline") or [],
         })
     return rows
+
+
+_CSV_FIELDS = (
+    "match", "decision", "turn", "seat", "agent", "action", "value", "complete",
+    "decision_seconds", "decision_limit_seconds", "deadline_hit", "lethal_proof_seconds",
+    "total_search_seconds", "first_found_seconds", "stabilized_seconds",
+    "remaining_search_seconds", "strategy_wave", "strategy_focus_position",
+    "strategy_focus_count",
+)
+
+
+def write_decisions_csv(run_dir, decisions) -> Path:
+    path = Path(run_dir) / "decisions.csv"
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=_CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        for decision in decisions:
+            row = dict(decision)
+            if isinstance(row.get("action"), (dict, list, tuple)):
+                row["action"] = json.dumps(row["action"], separators=(",", ":"))
+            writer.writerow(row)
+    return path
 
 
 def _focus(row) -> str:
@@ -94,7 +134,14 @@ def format_report(payload: dict, hotspot_count=10) -> str:
     decision = summary["decision_seconds"]
     first = summary["first_found_seconds"]
     stable = summary["stabilized_seconds"]
+    lethal = summary["lethal_proof_seconds"]
     matches = payload["matches"]
+    lethal_by_match = [
+        (match, summarize_decisions(
+            [row for row in payload["decisions"] if row["match"] == match]
+        )["lethal_proof_seconds"])
+        for match in sorted({row["match"] for row in payload["decisions"]})
+    ]
     wins = [sum(row["winner_seat"] == seat for row in matches) for seat in (0, 1)]
     lines = [
         f"Strategy Bench -- {config['mode']} -- {len(payload['matches'])} matches",
@@ -107,8 +154,14 @@ def format_report(payload: dict, hotspot_count=10) -> str:
         f"Decision time avg {decision['avg']:.2f}s | p95 {decision['p95']:.2f}s | max {decision['max']:.2f}s",
         f"Final incumbent first found avg {first['avg']:.2f}s | p95 {first['p95']:.2f}s | max {first['max']:.2f}s",
         f"Final incumbent stabilized avg {stable['avg']:.2f}s | p95 {stable['p95']:.2f}s | max {stable['max']:.2f}s",
+        f"Lethal solver avg {lethal['avg']:.3f}s | min {lethal['min']:.3f}s | max {lethal['max']:.3f}s",
         f"Final Strategy wave: first {summary['strategy_waves']['first']} | "
         f"widening {summary['strategy_waves']['widening']}",
+        "",
+        "Lethal solver per match:",
+        *(f"Match {match}: avg {sample['avg']:.3f}s | min {sample['min']:.3f}s | "
+          f"max {sample['max']:.3f}s"
+          for match, sample in lethal_by_match),
         "",
         "Hotspots by final-incumbent stabilization time:",
     ]
@@ -186,6 +239,7 @@ def run(config: dict) -> dict:
         matches.append(match)
     payload = {"config": config, "matches": matches, "decisions": decisions}
     payload["summary"] = summarize_decisions(decisions)
+    payload["decision_csv"] = write_decisions_csv(run_dir, decisions).name
     (run_dir / "report.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
@@ -228,7 +282,7 @@ def main(argv=None) -> int:
     }
     payload = run(config)
     print(format_report(payload))
-    print(f"\nJSON + replays: {output}")
+    print(f"\nCSV + JSON + replays: {output}")
     return 0
 
 

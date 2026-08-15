@@ -5,7 +5,9 @@ from meta_tracker.parse import load_replay
 from train.blunder.decisions import iter_decisions
 from train.blunder.service import frames_payload, record_correction
 from train.blunder.store import load_corrections
-from train.blunder.telemetry_log import find_log, load_log, record_for, search_timing
+from train.blunder.telemetry_log import (
+    find_log, lethal_proof_seconds, load_log, record_for, search_timing,
+)
 
 TELE = FIXTURES / "replays" / "mega_starmie_20260625_bde590c"
 LOG = TELE / "episode-81903490-agent-0-logs.json"
@@ -133,3 +135,12 @@ def test_search_timing_reads_the_final_incumbent_and_computes_remaining_search()
         "strategy_focus_count": 8,
         "remaining_seconds": 54.9,
     }
+
+
+def test_lethal_proof_seconds_only_reports_an_attempted_solver_run():
+    assert lethal_proof_seconds({
+        "diagnostics": {"terminal_proof": {"attempted": True, "elapsed_ms": 125.0}},
+    }) == 0.125
+    assert lethal_proof_seconds({
+        "diagnostics": {"terminal_proof": {"attempted": False, "elapsed_ms": 125.0}},
+    }) is None

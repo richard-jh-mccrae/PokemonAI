@@ -135,11 +135,16 @@ def test_frames_and_shell_show_strategy_search_timing():
         "strategy_focus_position": 3, "strategy_focus_count": 8,
     }
     live = {0: [{"bellman": True, "chosen": [0],
-                 "diagnostics": {"production": {"final_incumbent": final}}},
+                 "diagnostics": {
+                     "terminal_proof": {"attempted": True, "elapsed_ms": 125.0},
+                     "production": {"final_incumbent": final},
+                 }},
                 {"bellman": True, "chosen": [0]}]}
 
     frames = frames_payload(replay, live_records_by_seat=live)["frames"]
 
     assert frames[0]["search_timing"]["remaining_seconds"] == pytest.approx(54.9)
+    assert frames[0]["lethal_proof_seconds"] == pytest.approx(0.125)
+    assert "Lethal solver" in _SHELL_HTML
     assert "Final sequence first found" in _SHELL_HTML
     assert "Strategy focus position" in _SHELL_HTML
