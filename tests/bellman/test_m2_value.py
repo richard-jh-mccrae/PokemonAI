@@ -66,6 +66,21 @@ def test_unused_hand_card_has_no_terminal_turn_wealth():
     assert oracle.transition_ledger(before, before, ActionIdentity("end")).total == 0.0
 
 
+def test_irreversible_discard_preserves_portable_option_cost():
+    registry, oracle = _registry(), ValueOracle(_registry(), _families)
+    before_obs = _obs([HAMMER])
+    after_obs = _obs([])
+    after_obs["current"]["players"][0]["discard"] = [
+        {"id": HAMMER, "serial": 10, "playerIndex": 0},
+    ]
+
+    ledger = oracle.transition_ledger(
+        _state(before_obs, registry), _state(after_obs, registry), ActionIdentity("card"))
+
+    assert dict(ledger.costs)["discarded_options"] == pytest.approx(
+        registry.worth(HAMMER) / 120.0)
+
+
 def test_realized_board_benefit_is_counted_once():
     registry, oracle = _registry(), ValueOracle(_registry(), _families)
     before_obs, after_obs = _obs([HAMMER]), _obs([])
@@ -100,7 +115,7 @@ def test_action_labels_do_not_change_the_same_state_transition_value():
         assert oracle.transition_ledger(state, state, ActionIdentity(kind)).total == 0.0
 
 
-def test_isolated_selection_realizes_the_larger_unmet_need_value(monkeypatch):
+def test_reveal_priority_does_not_enter_transition_utility(monkeypatch):
     registry = _registry()
     before_obs, after_obs = _obs([]), _obs([])
     before_obs["select"]["context"] = 7
@@ -113,8 +128,8 @@ def test_isolated_selection_realizes_the_larger_unmet_need_value(monkeypatch):
     ledger = oracle.transition_ledger(
         _state(before_obs, registry), _state(after_obs, registry), ActionIdentity("card"))
 
-    assert dict(ledger.benefits)["hand_demand"] == pytest.approx(0.8)
-    assert ledger.total == pytest.approx(0.9)
+    assert dict(ledger.benefits) == {"board": pytest.approx(0.1)}
+    assert ledger.total == pytest.approx(0.1)
 
 
 def test_duplicate_hand_resources_are_linear_and_policy_free():

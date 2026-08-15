@@ -21,13 +21,13 @@ RUNTIME = runtime()
     ("dfc26070178c", ((0,),)),  # information action precedes the resolving attack
     ("8d91984d4430", ((1,),)),  # diversify acceleration across viable Basic attackers
     ("c7fd0670fb3e", ((0,), (3,), (5,))),  # free information/evolution/retreat prefixes
-    ("76e7d6d7539e", ((4,),)),  # Wally returns all three Basics, leaving no legal attack
+    ("76e7d6d7539e", ((0,),)),  # raw ruling: Wally preserves expiring Energy, then reattach/attack
     ("5ee5f49312b2", ((1,),)),  # analytic refresh commitment does not plan a hidden hand
     ("da72e53929f0", ((0,),)),  # complete hidden-refresh expectation remains eligible
     ("c8ee8ab3e82b", ((1,),)),  # turn annotation's own written line starts with Hilda
     ("91cea0a2fa6d", ((1,),)),  # attach to the healthy attacker
     ("da39bb37b166", ((1,),)),  # never overcap the nearly-KO'd attacker
-    ("188cceda7001", ((1,),)),  # Poffin creates a Turbo Flare recipient before attacking
+    ("188cceda7001", ((0,),)),  # raw ruling: Harlequin disrupts and replaces a dead hand
     ("feafb8ef77c5", ((0,),)),  # information action before Turbo Flare
     ("496a7657096f", ((4,),)),  # dead stadium and Mega searches commute before refreshing
     ("baede6accfac", ((1,), (6,))),  # free Harlequin/search prefixes; never attach fourth Energy

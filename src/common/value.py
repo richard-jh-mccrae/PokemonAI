@@ -1,6 +1,7 @@
 """One Bellman benefit/cost ledger over canonical board potentials."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
@@ -184,14 +185,12 @@ class ValueOracle:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
-        self._need_coverage_cache = {}
         self._reveal_priority_cache = {}
         if refresh_evaluator is None and effects is not None and stats is not None:
             from .refresh import RefreshEvaluator
             refresh_evaluator = RefreshEvaluator(
                 registry, family_evaluator, effects=effects, stats=stats)
         self._refresh = refresh_evaluator
-        self.needs = refresh_evaluator.needs if refresh_evaluator is not None else None
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
         if model is None and state.semantic_key in self._potential_cache:
@@ -214,18 +213,31 @@ class ValueOracle:
                 benefits.append((family, delta))
             elif delta < 0.0:
                 costs.append((family, -delta))
-        if ((before.obs.get("current") or {}).get("looking") is not None
-                and int((before.obs.get("select") or {}).get("context", 0)) != 0):
-            need_value = self.reveal_choice_priority(before, after)
-            hand_delta = (sum(value for family, value in benefits if family == "hand_demand")
-                          - sum(value for family, value in costs if family == "hand_demand"))
-            if need_value > hand_delta:
-                benefits = [(family, value) for family, value in benefits
-                            if family != "hand_demand"]
-                costs = [(family, value) for family, value in costs
-                         if family != "hand_demand"]
-                benefits.append(("hand_demand", need_value))
+        discard_cost = self._discarded_option_cost(before, after)
+        represented = sum(value for family, value in costs
+                          if family in {"hand", "hand_demand"})
+        if discard_cost > represented:
+            costs.append(("discarded_options", discard_cost - represented))
         return Ledger(tuple(benefits), tuple(costs))
+
+    def _discarded_option_cost(self, before: DecisionState, after: DecisionState) -> float:
+        def zones(state):
+            players = ((state.obs.get("current") or {}).get("players") or ())
+            player = players[state.root_seat] if len(players) > state.root_seat else {}
+
+            def keys(cards):
+                return Counter(
+                    (int(card["id"]), card.get("serial"))
+                    for card in cards or () if card and card.get("id") is not None)
+
+            return keys(player.get("hand")), keys(player.get("discard"))
+
+        before_hand, before_discard = zones(before)
+        _after_hand, after_discard = zones(after)
+        moved = (after_discard - before_discard) & before_hand
+        worth = sum(self.registry.worth(card_id) * count
+                    for (card_id, _serial), count in moved.items())
+        return worth_to_prizes(worth)
 
     def continuation_upper_bound(self, state: DecisionState) -> float:
         potential = self.potential(state)
@@ -236,24 +248,6 @@ class ValueOracle:
         if not math.isfinite(absolute) or absolute < potential.total:
             return math.inf
         return absolute - potential.total
-
-    def remaining_need_ceiling(self, state: DecisionState) -> float:
-        if self.needs is None:
-            return 0.0
-        needs = self.needs.immediate(state.obs, state.root_seat)
-        independent = 0.0
-        alternatives = {}
-        for need in needs:
-            ceiling = max(0.0, float(need.ceiling or max(
-                (value for _card_id, value in need.direct), default=0.0)))
-            if not need.alternative:
-                independent += ceiling
-                continue
-            group = need.recipient, need.capability
-            plans = alternatives.setdefault(group, {})
-            plans[need.alternative] = plans.get(need.alternative, 0.0) + ceiling
-        return independent + sum(max(plans.values(), default=0.0)
-                                 for plans in alternatives.values())
 
     def refresh_ledger(self, state: DecisionState, node, *, include_next_turn=True):
         if self._refresh is None:
@@ -272,45 +266,12 @@ class ValueOracle:
                     and not getattr(attack, "hiddenPerUnit", 0))
 
     def reveal_choice_priority(self, before: DecisionState, after: DecisionState) -> float:
-        if self._refresh is None:
-            return 0.0
         key = before.semantic_key, after.semantic_key
         if key in self._reveal_priority_cache:
             return self._reveal_priority_cache[key]
-        from collections import Counter
-        from .needs import best_assignment
-
-        seat = before.root_seat
-        before_players = (before.obs.get("current") or {}).get("players") or ()
-        after_players = (after.obs.get("current") or {}).get("players") or ()
-        before_hand = Counter(int(card["id"]) for card in (
-            before_players[seat].get("hand") or ()) if card)
-        after_hand = Counter(int(card["id"]) for card in (
-            after_players[seat].get("hand") or ()) if card)
-        added = list((after_hand - before_hand).elements())
-        if not added:
-            self._reveal_priority_cache[key] = 0.0
-            return 0.0
-        needs = self._refresh.needs.immediate(before.obs, seat)
-        targets = Counter(dict(before.deck_counts))
-
-        def signatures(card_ids):
-            rows = []
-            for resource_index, card_id in enumerate(card_ids):
-                rows.extend(self._refresh.needs.coverage_slots(
-                    card_id, needs, supporter_available=before.budgets.supporter,
-                    discard_capacity=max(0, sum(before_hand.values()) - 1),
-                    available_targets=targets,
-                    recipient_units=self._refresh.needs.energy_units_by_recipient(
-                        before.obs, seat, card_id),
-                    resource_group=f"reveal:{resource_index}"))
-            return rows
-
-        baseline = best_assignment(
-            signatures(before_hand.elements()), len(needs), target_counts=targets).value
-        expanded = best_assignment(
-            signatures((*before_hand.elements(), *added)), len(needs), target_counts=targets).value
-        result = max(0.0, expanded - baseline)
+        left = self.potential(before).total
+        right = self.potential(after).total
+        result = max(0.0, right - left)
         self._reveal_priority_cache[key] = result
         return result
 
@@ -322,42 +283,6 @@ class ValueOracle:
                 priorities.append(self.reveal_choice_priority(before, state))
         return max(priorities, default=0.0)
 
-    def need_coverage_ledger(self, state: DecisionState, action) -> tuple[str, Ledger] | None:
-        covered = self._played_need_coverage(state, action)
-        if covered is None:
-            return None
-        needs, assignment = covered
-        keys = [need.key for index, need in enumerate(needs)
-                if assignment.covered_mask & (1 << index)]
-        families = {
-            "deployment" if key.startswith("deploy:") else
-            "evolution" if key.startswith("evolve:") else
-            "attachment" if key.startswith("fund_attack:") else ""
-            for key in keys
-        } - {""}
-        if assignment.value <= 0.0 or len(families) != 1:
-            return None
-        family = families.pop()
-        ledger_name = {"deployment": "board", "evolution": "development",
-                       "attachment": "energy_position"}[family]
-        return family, Ledger(((ledger_name, assignment.value),), ())
-
-    def need_coverage_value(self, state: DecisionState, action) -> float:
-        covered = self._played_need_coverage(state, action)
-        return covered[1].value if covered is not None else 0.0
-
-    def heal_need_value(self, state: DecisionState, action) -> float | None:
-        if self._refresh is None:
-            return None
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        if card_id is None or not any(
-                clause.get("kind") == "heal"
-                for clause in self._refresh.effects.clauses(card_id)):
-            return None
-        return self.need_coverage_value(state, action)
-
     def heal_repositions_energy(self, state: DecisionState, action) -> bool:
         if self._refresh is None:
             return False
@@ -368,86 +293,6 @@ class ValueOracle:
             clause.get("kind") == "heal" and clause.get("rider") == "bounce_energy_to_hand"
             for clause in self._refresh.effects.clauses(card_id)
         ))
-
-    def recovery_need_value(self, state: DecisionState, action) -> float:
-        if self._refresh is None:
-            return 0.0
-        from collections import Counter
-        from .fetch import REACH, fetch_target_matches
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        if card_id is None:
-            return 0.0
-        clauses = tuple(
-            clause for clause in self._refresh.effects.clauses(card_id)
-            if clause.get("kind") == "fetch" and clause.get("zone") == "discard"
-        )
-        if not clauses:
-            return 0.0
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        needs = self._refresh.needs.immediate(state.obs, state.root_seat)
-        hand_ids = tuple(int(card["id"]) for card in mine.get("hand") or () if card)
-        available = Counter(dict(state.deck_counts))
-        uncovered = self._refresh.needs.uncovered_by_hand(
-            needs, hand_ids, supporter_available=state.budgets.supporter,
-            discard_capacity=max(0, len(hand_ids) - 1), available_targets=available,
-            observation=state.obs, seat=state.root_seat,
-        )
-        best = 0.0
-        for target in mine.get("discard") or ():
-            if not target or target.get("id") is None:
-                continue
-            target_id = int(target["id"])
-            if not any(fetch_target_matches(
-                    clause, self._refresh.needs.stat(target_id), reading=REACH)
-                       for clause in clauses):
-                continue
-            best = max(best, max(
-                (dict(need.direct).get(target_id, 0.0) for need in uncovered), default=0.0))
-        return best
-
-    def irrelevant_deterministic_fetch(self, state: DecisionState, action) -> bool:
-        if self._refresh is None:
-            return False
-        from .refresh import played_card_id
-
-        card_id = played_card_id(state, action)
-        clauses = tuple(self._refresh.effects.clauses(card_id)) if card_id is not None else ()
-        return bool(clauses and all(
-            clause.get("kind") == "fetch" and clause.get("zone") == "deck"
-            and not any(clause.get(field) for field in
-                        ("cost", "cost_required", "dig", "rider", "trigger"))
-            for clause in clauses
-        ) and self.need_coverage_value(state, action) <= 0.0)
-
-    def _played_need_coverage(self, state: DecisionState, action):
-        if self._refresh is None:
-            return None
-        from collections import Counter
-        from .needs import best_assignment
-
-        card_id, recipient, provision_units = self._refresh.needs.supply_context(state, action)
-        if card_id is None:
-            return None
-        key = state.semantic_key, action.identity
-        if key in self._need_coverage_cache:
-            return self._need_coverage_cache[key]
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if len(players) > state.root_seat else {}
-        needs = self._refresh.needs.immediate(state.obs, state.root_seat)
-        targets = Counter(dict(state.deck_counts))
-        signatures = self._refresh.needs.coverage_slots(
-            card_id, needs, supporter_available=state.budgets.supporter,
-            discard_capacity=max(0, len(mine.get("hand") or ()) - 1),
-            available_targets=targets, recipient=recipient,
-            provision_units=provision_units)
-        assignment = best_assignment(signatures, len(needs), target_counts=targets)
-        result = needs, assignment
-        self._need_coverage_cache[key] = result
-        return result
-
 
 __all__ = (
     "CardFacts", "Potential", "ValueOracle",

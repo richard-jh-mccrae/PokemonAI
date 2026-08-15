@@ -16,6 +16,7 @@ from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_c
 from .information import OutcomeGroup, hypergeometric_classes
 from .scouting.card_text import name_in_family
 from .strategy.context import _MAIN
+from .strategy.context import _ACTIVE, _BENCH
 
 
 DEFAULT_BENCH_CAPACITY = 5
@@ -178,6 +179,170 @@ class CapabilityIndex:
 
     def kinds(self, card_id: int) -> tuple[str, ...]:
         return dict(self.entries).get(int(card_id), ())
+
+
+class StrategyBeamBuilder:
+    """Order legal actions against one immutable turn-start strategy snapshot."""
+
+    _DEADLINE = {"immediate": 3.0, "this_turn": 2.0, "next_turn": 1.0}
+    _CONFIDENCE = {"high": 3.0, "medium": 2.0, "low": 1.0}
+
+    def __init__(self, snapshot, *, effects=None, stats=None, width=8):
+        self.snapshot = snapshot
+        self.effects = effects
+        self.stats = stats
+        self.width = max(1, int(width))
+        self.last_odds: dict[str, float] = {}
+
+    @staticmethod
+    def _option(state, action):
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        if len(action.selection) != 1:
+            return None
+        index = action.selection[0]
+        return options[index] if 0 <= index < len(options) else None
+
+    @staticmethod
+    def _player(state):
+        players = ((state.obs.get("current") or {}).get("players") or ())
+        seat = int(getattr(state, "root_seat", 0))
+        return players[seat] if 0 <= seat < len(players) and players[seat] else {}
+
+    def _source_card_id(self, state, action) -> int | None:
+        option = self._option(state, action)
+        index = option.get("index") if option else None
+        hand = self._player(state).get("hand") or ()
+        card = hand[index] if isinstance(index, int) and 0 <= index < len(hand) else None
+        return int(card["id"]) if card and card.get("id") is not None else None
+
+    def _recipient_serial(self, state, action) -> int | None:
+        option = self._option(state, action)
+        if not option:
+            return None
+        area = option.get("inPlayArea")
+        index = option.get("inPlayIndex")
+        bodies = ((self._player(state).get("active") or ()) if area == _ACTIVE else
+                  (self._player(state).get("bench") or ()) if area == _BENCH else ())
+        body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
+        return int(body["serial"]) if body and body.get("serial") is not None else None
+
+    def _eligible_targets(self, state, hint) -> tuple[int, ...]:
+        if hint.target_card_ids:
+            return tuple(card_id for card_id in hint.target_card_ids
+                         if dict(state.deck_counts).get(card_id, 0) > 0)
+        if hint.kind != "fund_attack" or self.stats is None:
+            return ()
+        return tuple(
+            int(card_id) for card_id, count in state.deck_counts
+            if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+        )
+
+    def _access_odds(self, state, action, hint) -> float:
+        source_id = self._source_card_id(state, action)
+        if source_id is None or self.effects is None:
+            return 0.0
+        source_stat = self.stats.get(source_id) if self.stats is not None else None
+        if hint.kind == "relevant_information":
+            if bool(getattr(source_stat, "is_supporter", False)) or self.stats is None:
+                return 0.0
+            pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
+            best = 0.0
+            for clause in self.effects.clauses(source_id):
+                if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
+                    continue
+                if clause.get("cost_required") or discard_cost(clause):
+                    continue
+                depth = int(clause.get("dig", 0) or 0)
+                if depth <= 0 and clause.get("dest") != "bench":
+                    continue
+                matching = tuple(card_id for card_id in pool
+                                 if _need_fetch_target_matches(
+                                     clause, self.stats.get(card_id)))
+                best = max(best, access_probability(pool, depth, matching) if depth else
+                           float(bool(matching)))
+            return best
+        eligible = self._eligible_targets(state, hint)
+        if not eligible:
+            return 0.0
+        pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
+        best = 0.0
+        for clause in self.effects.clauses(source_id):
+            kind = clause.get("kind")
+            if kind == "draw":
+                best = max(best, access_probability(
+                    pool, int(clause.get("amount", 0) or 0), eligible))
+            elif kind == "fetch" and clause.get("zone") == "deck":
+                matching = tuple(card_id for card_id in eligible
+                                 if _need_fetch_target_matches(
+                                     clause, self.stats.get(card_id)))
+                depth = int(clause.get("dig", 0) or 0)
+                best = max(best, access_probability(pool, depth, matching) if depth else
+                           float(bool(matching)))
+        return best
+
+    def _priority(self, state, action) -> tuple[float, tuple[str, ...]]:
+        matched = []
+        priority = 0.0
+        recipient = self._recipient_serial(state, action)
+        source_id = self._source_card_id(state, action)
+        source_stat = self.stats.get(source_id) if source_id is not None and self.stats else None
+        for hint in self.snapshot.hints:
+            probability = 0.0
+            if (hint.kind == "fund_attack" and action.identity.kind == "attach"
+                    and recipient == hint.recipient_serial
+                    and bool(getattr(source_stat, "is_energy", False))):
+                probability = 1.0
+            elif (hint.kind == "evolve" and action.identity.kind == "evolve"
+                  and recipient == hint.recipient_serial
+                  and (not hint.target_card_ids or source_id in hint.target_card_ids)):
+                probability = 1.0
+            elif (hint.kind == "heal" and action.identity.kind == "play"
+                  and self.effects is not None
+                  and any(clause.get("kind") == "heal"
+                          for clause in self.effects.clauses(source_id))):
+                probability = 1.0
+            elif action.identity.kind == "play" and not bool(
+                    getattr(source_stat, "is_supporter", False)
+                    and (state.obs.get("current") or {}).get("supporterPlayed")):
+                probability = self._access_odds(state, action, hint)
+            if probability <= 0.0:
+                continue
+            matched.append(hint.strategy_id)
+            key = semantic_action_key(action)
+            self.last_odds[key] = max(self.last_odds.get(key, 0.0), probability)
+            priority = max(priority, self._DEADLINE[hint.deadline] * 100.0
+                           + self._CONFIDENCE[hint.confidence] * 10.0 + probability)
+        return priority, tuple(sorted(set(matched)))
+
+    def action_priority(self, state, action) -> float:
+        return self._priority(state, action)[0]
+
+    def build(self, state, actions, *, ranking=None) -> NeedBeam:
+        started = perf_counter()
+        self.last_odds = {}
+        focused = []
+        safety = []
+        unknown = []
+        inactive = []
+        for action in actions:
+            key = semantic_action_key(action)
+            if action.identity.kind in {"attack", "end", "retreat"}:
+                safety.append(ActionFocus(key, action.identity.kind, (), 0.0, "safety"))
+                continue
+            priority, strategy_ids = self._priority(state, action)
+            if priority > 0.0:
+                focused.append(ActionFocus(
+                    key, action.identity.kind, strategy_ids, priority, "strategy_hint"))
+            else:
+                inactive.append(ActionFocus(
+                    key, action.identity.kind, (), 0.0, "no_strategy_hint"))
+        focused = tuple(sorted(
+            focused, key=lambda row: (-row.score, row.action_key))[:self.width])
+        elapsed = (perf_counter() - started) * 1000.0
+        return NeedBeam(
+            focused, tuple(safety), tuple(unknown), (), (), elapsed, False,
+            (), tuple(inactive), (),
+        )
 
 
 def access_probability(pool_ids, draws: int, eligible_ids) -> float:
@@ -1235,6 +1400,7 @@ class NeedModel:
 __all__ = (
     "AccessEdge", "ActionFocus", "CapabilityIndex", "CoverageEdge", "Need", "NeedBeam",
     "NeedBeamBuilder", "NeedModel", "NeedPath", "NeedRoot", "PathFeatures", "PokemonRole",
+    "StrategyBeamBuilder",
     "ResolvedAssignment",
     "RetainedAssignment", "RetainedOption", "UnknownAction", "access_probability",
     "best_assignment", "best_retained_assignment", "coverage_signature", "infer_pokemon_roles",

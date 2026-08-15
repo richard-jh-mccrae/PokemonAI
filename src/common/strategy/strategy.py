@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .needs import NeedStrategy, StrategyOverride
+
 
 STANDARD_PRIZES_TO_WIN = 6
 
@@ -114,6 +116,8 @@ class Strategy:
     worth_overrides: dict[int, float] = field(default_factory=dict)
     pilot_adjustments: dict[str, float] = field(default_factory=dict)
     prize_plan: PrizePlan | None = None
+    needs_strategies: tuple[NeedStrategy, ...] = ()
+    needs_overrides: tuple[StrategyOverride, ...] = ()
     lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -124,6 +128,8 @@ class Strategy:
                                 for card_id, value in self.worth_overrides.items()}
         self.pilot_adjustments = {str(name): float(value)
                                   for name, value in self.pilot_adjustments.items()}
+        self.needs_strategies = tuple(self.needs_strategies)
+        self.needs_overrides = tuple(self.needs_overrides)
         self.lines = tuple(self.roles.lines)
 
 

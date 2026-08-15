@@ -94,7 +94,9 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
 
 
 def to_record(decision, *, read=None, seat=None, compact=False,
-              decision_seconds: float | None = None) -> dict:
+              decision_seconds: float | None = None,
+              decision_limit_seconds: float | None = None,
+              deadline_hit: bool | None = None) -> dict:
     """Serialize the complete Bellman explanation for one committed choice."""
 
     diagnostics = _wire(dict(decision.diagnostics))
@@ -116,12 +118,19 @@ def to_record(decision, *, read=None, seat=None, compact=False,
         record["seat"] = int(seat)
     if decision_seconds is not None:
         record["decision_seconds"] = float(decision_seconds)
+    if decision_limit_seconds is not None:
+        record["decision_limit_seconds"] = float(decision_limit_seconds)
+    if deadline_hit is not None:
+        record["deadline_hit"] = bool(deadline_hit)
     return record
 
 
-def emit(decision, *, read=None, seat=None, out=None, decision_seconds=None) -> None:
+def emit(decision, *, read=None, seat=None, out=None, decision_seconds=None,
+         decision_limit_seconds=None, deadline_hit=None) -> None:
     record = to_record(decision, read=read, seat=seat, compact=True,
-                       decision_seconds=decision_seconds)
+                       decision_seconds=decision_seconds,
+                       decision_limit_seconds=decision_limit_seconds,
+                       deadline_hit=deadline_hit)
     captured = _CAPTURE.get()
     if captured is not None:
         captured.append(record)

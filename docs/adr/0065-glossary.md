@@ -1,9 +1,8 @@
 # Ubiquitous Language — the card-worth oracle (ADR-0065)
 
 Companion vocabulary doc for ADR-0065 (not an ADR itself — same convention as `0050-glossary.md`).
-Six plain words: the umbrella quantity (**Value**, ratified 2026-07-20) over five independent
-features (Worth · Odds · Gates · Closure · Needs — Needs ratified 2026-07-19, built WP-N1–N8); use
-these in code, tests, commits, and grill docs. Agreed with the user 2026-07-19/20.
+Six plain words: **Value** over Worth, Odds, Gates, Closure, and Needs. Needs now shapes search order,
+not Value. Use these terms in code, tests, commits, and design work.
 
 ## The two features (do not conflate)
 
@@ -14,8 +13,8 @@ these in code, tests, commits, and grill docs. Agreed with the user 2026-07-19/2
 
 ## The umbrella term: Value (ratified with the user 2026-07-20)
 
-**Value** = what a card or body means RIGHT NOW — its Worth shaped by the situation (Needs, Odds,
-Gates), asked of a SPECIFIC QUESTION at a specific moment. One quantity, many questions:
+**Value** = what a card or body means RIGHT NOW. Worth is shaped by Odds and Gates for a specific
+question at a specific moment. Needs never enters this quantity.
 
 | Question | Asks | The site |
 | --- | --- | --- |
@@ -34,7 +33,7 @@ questions correctly; only umbrella USAGE changes.
 Every question's equation is the same product:
 
 ```
-Value(question, moment) = Worth × Odds × Gates    (Needs supplying WHICH worth is live)
+Value(question, moment) = Worth × Odds × Gates
 ```
 
 - **keep_cost** = Worth × (1 − Odds of getting it back) × Gates — Odds pointed BACKWARDS (closure)
@@ -50,7 +49,7 @@ Value(question, moment) = Worth × Odds × Gates    (Needs supplying WHICH worth
 | --- | --- | --- | --- |
 | **Gates** | WHEN a card's Worth is live — the deadline factor. An undeployable evolution's Worth is gated to 0 (the base is provably gone); a dead fetcher (every target provably gone) likewise; a doom-answering card under pressure SPIKES to full worth (the closing edge); a duplicate of a once-per-turn card sheds by rank (the quota window). All four legs built 2026-07-18/19. | `common/gate_library.py` | deadline (fine in prose; "Gates" is the code-facing noun), timing |
 | **Closure** | WHAT can reach what — the tutor/recycle/search graph over the card REPRESENTATION (`card_effects.json` FETCH clauses + `CardStat`), never a text parse. Pure graph; carries no Odds or Worth of its own. | `common/fetch_closure.py` | reach (avoid as a noun — used adjectivally, "reachable"), the graph (fine in prose) |
-| **Needs** | WHAT the position requires — deadline-tagged slots derived from board state (fund-attack, evolve-now, answer-the-doom, quota turns, discard-fuel; opponent-side from visible zones + turns-to-ready lookahead). A card's keep-value is its MARGINAL slot coverage under exact assignment (`keep_v2` — the counterfactual with re-assignment); Gates re-derive as "a slot with a deadline" and dissolve as each re-derives (the DISSOLUTION LEDGER). **Ratified 2026-07-19 (keep-value v2 grill); WP-N1–N5 built** — the module, the exact-assignment engine, the Pilot resolver (`pilot._needs_v2`/`_resolve_needs`), the DISCARD DECIDER SWAP (v2 decides the forced discard, superseding v1 — armed 2026-07-20 by `Pilot.needs_keep_value`, which Issue #319 deleted once it gated nothing), the refresh-SHED MAGNITUDE shadow (which proved v2 not-yet-ready there), and the general-worth slot (latent hand worth on the leaf's `contribution × saturation` terms, halving the refresh under-pricing). The readiness-leaf fold (WP-N5b, blocked on hand-visibility plumbing) + the gamble/refresh swaps stay staged; the gate stack stays live for those sites — `ADR-0065`. | `common/needs.py` | needs list / wants (say Needs/slots), gate (during the transition — a gate is a derived VIEW of a slot) |
+| **Needs** | Authored strategy hints that order Bellman's first beam. | `common/strategy/needs.py` | value, utility |
 
 ## Relationships
 
@@ -110,7 +109,7 @@ Value(question, moment) = Worth × Odds × Gates    (Needs supplying WHICH worth
 ## Amendment — Issue #387 (2026-08-09)
 
 Mega Starmie's forced multi-picks now use iterated 1-ply `state_value.hand` differencing. Each Ultra Ball discard
-removes one visible hand card, projects the fixed root Needs demand ledger onto the remaining hand,
+removes one visible hand card, projects Bellman's visible hand value onto the remaining hand,
 then rebuilds and prices the next removal; mandatory `minCount=2` never declines. Fixing demand is
 what prevents the last supplier's removal from erasing the need itself. This retires
 `_discard_needs_pick` as a selector.

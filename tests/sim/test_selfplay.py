@@ -34,6 +34,15 @@ def test_run_stem_distinguishes_an_overlay_corpus():
     assert build_identity(f"x/{ov}/1.json")["agent"] == "mega_starmie"   # still provenance-resolvable
 
 
+def test_run_stem_labels_the_canonical_needs_variants():
+    on = run_stem("mega_starmie", WHEN, "577f603", needs_enabled=True)
+    off = run_stem("mega_starmie", WHEN, "577f603", needs_enabled=False)
+
+    assert on.endswith("-needs-on")
+    assert off.endswith("-needs-off")
+    assert on != off
+
+
 @pytest.mark.req("REQ-SIM-0009")
 def test_episode_id_is_deterministic_and_globally_unique():
     s1 = run_stem("mega_starmie", WHEN, "577f603")
@@ -114,10 +123,14 @@ def test_generate_corpus_exposes_overlay_to_games_and_restores_env(tmp_path, mon
     overlay = tmp_path / "ov.json"
     overlay.write_text("{}", encoding="utf-8")
 
-    generate_corpus("mega_starmie", 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
-                    when=WHEN, sha="abc", overlay=str(overlay))
+    run_dir = generate_corpus(
+        "mega_starmie", 2, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
+        when=WHEN, sha="abc", overlay=str(overlay))
     assert seen == [str(overlay.resolve())] * 2            # every game saw the overlay (absolute path)
     assert "AGENT_OVERLAY" not in os.environ               # restored after run -> no leak to later code
+    replays = [json.loads(path.read_text(encoding="utf-8"))
+               for path in Path(run_dir).glob("*.json") if "-logs" not in path.name]
+    assert all(replay["info"]["MatchWallSeconds"] >= 0.0 for replay in replays)
 
 
 def test_generate_corpus_forwards_cabt_timeouts(tmp_path, monkeypatch):
@@ -132,6 +145,9 @@ def test_generate_corpus_forwards_cabt_timeouts(tmp_path, monkeypatch):
         return (["DONE", "DONE"], _FakeEnv())
 
     monkeypatch.setattr("sim.check_agent._run_match", fake_run_match)
-    generate_corpus("mega_starmie", 1, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
-                    when=WHEN, sha="abc", configuration={"actTimeout": 180, "runTimeout": 1e100})
+    run_dir = generate_corpus(
+        "mega_starmie", 1, agents_root=FIXTURE_AGENTS, out_root=tmp_path,
+        when=WHEN, sha="abc", configuration={"actTimeout": 180, "runTimeout": 1e100})
     assert seen == [{"actTimeout": 180, "runTimeout": 1e100}]
+    replay_path = next(path for path in Path(run_dir).glob("*.json") if "-logs" not in path.name)
+    assert json.loads(replay_path.read_text())["info"]["DecisionTimeoutSeconds"] == 180.0

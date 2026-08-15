@@ -78,6 +78,23 @@ def test_plan_suffix_resolves_semantic_action_against_reordered_live_menu():
     assert decision.chosen == (0,)
 
 
+def test_plan_suffix_treats_omitted_and_null_optional_option_fields_as_identical():
+    sparse = _observation(options=[{"type": 7, "index": 0}])
+    sparse["current"]["players"][0]["hand"] = [{"id": 1120, "serial": 4}]
+    expanded = _observation(options=[{
+        "type": 7, "index": 0, "area": None, "attackId": None,
+        "inPlayArea": None, "inPlayIndex": None, "playerIndex": None,
+    }])
+    expanded["current"]["players"][0]["hand"] = [{"id": 1120, "serial": 4}]
+
+    planned = _Planner.state_for(PlanRequest(expanded, (), "test"))
+    live = _Planner.state_for(PlanRequest(sparse, (), "test"))
+
+    assert enumerate_legal_actions(planned.obs)[0].identity == enumerate_legal_actions(live.obs)[0].identity
+    assert planned.legal_menu_digest == live.legal_menu_digest
+    assert planned.plan_key == live.plan_key
+
+
 def test_terminal_proof_lock_replays_before_ordinary_plan_suffix():
     request = PlanRequest(_observation(options=[{"type": 13}, {"type": 14}]), (), "test")
     state = _Planner.state_for(request)

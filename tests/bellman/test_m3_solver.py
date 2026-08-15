@@ -144,6 +144,29 @@ def test_complete_line_continues_and_commits_only_first_action():
     assert decision.diagnostics["ledger"]["continuation"] > 0.0
 
 
+def test_production_retains_guarded_suffix_from_executable_incomplete_lower_bound():
+    root = _state("root")
+    mid = _state("mid", board=0.1)
+    finish = _state("finish", board=0.2)
+    attach, play, end = _action("attach"), _action("play", 1), _action("end", 2)
+    graph = Graph(
+        {"root": (attach, end), "mid": (play, end), "finish": (end,)},
+        {("root", "attach"): Deterministic(mid),
+         ("mid", "play"): Deterministic(finish)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(
+            max_nodes=2, root_probe_nodes=2, root_refinement_width=0),
+    ).decide(root)
+
+    assert not decision.complete
+    assert decision.action == attach.identity
+    assert decision.plan_suffix[0].action == play.identity
+    assert tuple(step.action.kind for step in decision.plan_suffix) == ("play", "end")
+
+
 def test_analytic_refresh_keeps_a_guaranteed_attack_continuation(monkeypatch):
     root, attacked = _state("root"), _state("attacked", board=0.5)
     refresh, attack, end = _action("play"), _action("attack", 1), _action("end", 2)
@@ -218,7 +241,7 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
                 ),
             )
 
-    monkeypatch.setattr(solver_module, "NeedBeamBuilder", FixedBeamBuilder)
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FixedBeamBuilder)
     oracle = _oracle()
     oracle.needs = NeedModel(REGISTRY, lambda obs: Potential(
         float(obs["current"].get("board", 0.0)),
@@ -239,6 +262,7 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
         oracle,
         limits=ProductionLimits(max_nodes=50),
         profile=PilotProfile.resolve(global_values={"needs.focus_enabled": 1.0}),
+        needs_snapshot=object(),
     )
 
     decision = solver.decide(root)
@@ -249,6 +273,50 @@ def test_needs_focus_schedules_every_root_without_deleting_a_legal_branch(monkey
     assert decision.diagnostics["production"]["root_branch_nodes"] == (3, 1, 2, 2)
     assert {call for call in graph.calls if call[0] == "focus-root"} == {
         ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma")}
+
+
+def test_exhaustive_needs_on_and_off_choose_the_same_policy(monkeypatch):
+    root = _state("ab-root")
+    weak = _state("ab-weak", board=0.2)
+    strong = _state("ab-strong", board=0.7)
+    first, second, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+
+    class FocusWeak:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def build(self, _state, _actions, ranking=None):
+            return NeedBeam(
+                (ActionFocus(semantic_action_key(first), "alpha", (), 1.0, "strategy_hint"),),
+                (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
+                (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusWeak)
+    graph = Graph(
+        {"ab-root": (first, second, end), "ab-weak": (end,), "ab-strong": (end,)},
+        {("ab-root", "alpha"): Deterministic(weak),
+         ("ab-root", "beta"): Deterministic(strong)},
+    )
+    limits = ProductionLimits(max_nodes=50, root_probe_nodes=50, root_refinement_width=3)
+
+    on = ProductionSolver(graph, _oracle(), limits=limits, needs_snapshot=object()).decide(root)
+    off = ProductionSolver(graph, _oracle(), limits=limits, needs_snapshot=None).decide(root)
+
+    assert on.complete and off.complete
+    assert on.action == off.action == second.identity
+
+
+def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace():
+    from common.solver import Evaluation, _select_our_action
+
+    information, commitment = _action("play"), _action("attach", 1)
+    chosen, _result = _select_our_action((
+        (information, Evaluation(1.0, Ledger(), False, decisions=4.0)),
+        (commitment, Evaluation(1.0, Ledger(), False, decisions=2.0)),
+    ), 0)
+
+    assert chosen == information
 
 
 def test_production_partial_order_reduction_skips_only_the_reverse_commutative_order():
@@ -281,6 +349,64 @@ def test_production_partial_order_reduction_skips_only_the_reverse_commutative_o
         "commutativity"
 
 
+def test_exact_deterministic_diamond_collapses_an_unresolved_static_pair():
+    root = _state("diamond-root")
+    after_alpha = _state("diamond-alpha")
+    after_beta = _state("diamond-beta")
+    finish = _state("diamond-finish", board=0.5)
+    alpha, beta, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"diamond-root": (alpha, beta, end), "diamond-alpha": (beta, end),
+         "diamond-beta": (alpha, end), "diamond-finish": (end,)},
+        {("diamond-root", "alpha"): Deterministic(after_alpha),
+         ("diamond-root", "beta"): Deterministic(after_beta),
+         ("diamond-alpha", "beta"): Deterministic(finish),
+         ("diamond-beta", "alpha"): Deterministic(finish)},
+        {"alpha": ActionFootprint(("alpha",), barrier=True),
+         "beta": ActionFootprint(("beta",), barrier=True),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "alpha"
+    assert any(row["proof_type"] == "diamond_commutativity"
+               for row in decision.diagnostics["production"]["structural_prunes"])
+    assert decision.diagnostics["production"]["commutative_permutations_pruned"] >= 1
+
+
+def test_diamond_dependency_graph_collapses_a_three_action_web():
+    states = {name: _state(f"web-{name}", board=0.1 * len(name))
+              for name in ("", "a", "b", "c", "ab", "ac", "bc", "abc")}
+    actions = {name: _action(name, index) for index, name in enumerate(("a", "b", "c"))}
+    end = _action("end", 3)
+    menus = {}
+    transitions = {}
+    for subset, state in states.items():
+        remaining = tuple(actions[name] for name in "abc" if name not in subset)
+        menus[state.obs["node"]] = (*remaining, end)
+        for name in "abc":
+            if name not in subset:
+                target = "".join(sorted((*subset, name)))
+                transitions[(state.obs["node"], name)] = Deterministic(states[target])
+    graph = FootprintedGraph(
+        menus, transitions,
+        {**{name: ActionFootprint((name,), barrier=True) for name in "abc"},
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=200, root_probe_nodes=200),
+    ).decide(states[""])
+
+    proofs = [row for row in decision.diagnostics["production"]["structural_prunes"]
+              if row["proof_type"] == "diamond_commutativity"]
+    assert decision.action.kind == "a"
+    assert len(proofs) >= 3
+
+
 def test_commutative_evolution_is_canonical_before_attachment():
     root = _state("root")
     after_attach = _state("after-attach", board=0.1)
@@ -306,6 +432,28 @@ def test_commutative_evolution_is_canonical_before_attachment():
     assert decision.action.kind == "evolve"
     assert ("after-evolve", "attach") in graph.calls
     assert ("after-attach", "evolve") not in graph.calls
+
+
+def test_same_body_attach_and_evolve_require_exact_diamond_proof():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 13}, {"id": 1031}],
+             "active": [{"id": 1030, "serial": 44}], "bench": []},
+            {"hand": None, "active": [], "bench": []},
+        ]},
+        "select": {"option": [
+            {"type": 8, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 9, "index": 1, "inPlayArea": 4, "inPlayIndex": 0},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation)
+    attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
+    evolve = LegalAction(ActionIdentity("evolve"), (1,), ((1,),), ())
+    stats = SimpleNamespace(get=lambda _card_id: SimpleNamespace(hasAbility=False))
+    assert not independent(
+        action_footprint(state, attach, stats=stats),
+        action_footprint(state, evolve, stats=stats),
+    )
 
 
 def test_chance_boundary_clears_partial_order_sleep_set():
@@ -493,7 +641,7 @@ def test_shuffle_refresh_is_not_safe_information_first():
     assert not footprint.information_first
 
 
-def test_information_first_prunes_only_the_commitment_then_fetch_order():
+def test_information_first_ordering_does_not_delete_commitment_first():
     root = _state("info-root")
     after_attach = _state("after-attach", board=0.2)
     after_fetch = _state("after-fetch", board=0.1)
@@ -511,18 +659,14 @@ def test_information_first_prunes_only_the_commitment_then_fetch_order():
          "end": ActionFootprint(("end",), barrier=True)},
     )
 
-    oracle = _oracle()
-    oracle.need_coverage_value = lambda _state, action: (
-        1.0 if action.identity.kind == "play" else 0.0)
     decision = ProductionSolver(
-        graph, oracle, limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
     ).decide(root)
 
-    assert decision.action.kind == "play"
-    assert ("after-attach", "play") not in graph.calls
+    assert decision.action.kind == "attach"
+    assert ("after-attach", "play") in graph.calls
     assert ("after-fetch", "attach") in graph.calls
-    assert any(row["proof_type"] == "information_before_commitment"
-               for row in decision.diagnostics["production"]["structural_prunes"])
+    assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 0
 
 
 def test_immediate_need_preparation_never_deletes_a_commitment_without_a_bound():
@@ -613,7 +757,7 @@ def test_reserved_recovery_does_not_leave_refinement_width_unused():
                decision.diagnostics["production"]["root_branch_nodes"]) == 2
 
 
-def test_urgent_heal_refines_before_information_when_only_one_slot_remains():
+def test_information_orders_before_heal_without_blocking_later_widening():
     root = _state("priority-root")
     healed = _state("priority-healed", board=0.1)
     informed = _state("priority-informed", board=0.2)
@@ -650,23 +794,25 @@ def test_urgent_heal_refines_before_information_when_only_one_slot_remains():
             max_nodes=10, root_probe_nodes=1, root_refinement_width=1),
     ).decide(root)
 
+    assert ("priority-informed", "finish_information") in graph.calls
     assert ("priority-healed", "finish_heal") in graph.calls
-    assert ("priority-informed", "finish_information") not in graph.calls
+    assert graph.calls.index(("priority-informed", "finish_information")) < \
+        graph.calls.index(("priority-healed", "finish_heal"))
 
 
-def test_incomplete_forced_discard_uses_stable_immediate_value_fallback():
+def test_any_incomplete_forced_discard_uses_stable_immediate_value_fallback():
     from common.solver import Evaluation, _select_our_action
 
     keep, waste = _action("discard_keep"), _action("discard_waste", 1)
     chosen, _result = _select_our_action((
         (keep, Evaluation(0.2, Ledger((('hand', 0.2),), ()), False)),
-        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), False)),
+        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), True)),
     ), 8)
 
     assert chosen == keep
 
 
-def test_bench_fetch_and_evolution_do_not_claim_retreat_commutativity():
+def test_retreat_has_known_dependencies_without_claiming_unsafe_commutativity():
     observation = {
         "current": {"yourIndex": 0, "players": [
             {"hand": [{"id": 905}, {"id": 906}],
@@ -696,9 +842,35 @@ def test_bench_fetch_and_evolution_do_not_claim_retreat_commutativity():
     retreat_footprint = action_footprint(state, retreat, effects=Effects())
 
     assert fetch_footprint.barrier
-    assert retreat_footprint.barrier
+    assert not retreat_footprint.barrier
     assert not independent(fetch_footprint, retreat_footprint)
-    assert not independent(evolve_footprint, retreat_footprint)
+    assert independent(evolve_footprint, retreat_footprint)
+
+
+def test_same_body_attachment_and_evolution_require_exact_proof():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 3}, {"id": 1031}],
+             "active": [{"id": 1030, "serial": 44}], "bench": []},
+            {"active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 8, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 9, "index": 1, "inPlayArea": 4, "inPlayIndex": 0},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation)
+    attach, evolve = enumerate_legal_actions(observation)
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(hasAbility=False)
+
+    assert not independent(
+        action_footprint(state, attach, stats=Stats()),
+        action_footprint(state, evolve, stats=Stats()),
+    )
 
 
 def test_all_negative_actions_choose_end_zero():
@@ -709,6 +881,20 @@ def test_all_negative_actions_choose_end_zero():
     decision = ReferenceSolver(graph, _oracle()).decide(root)
     assert decision.action.kind == "end"
     assert decision.value == 0.0
+
+
+def test_production_reports_an_actual_wall_clock_deadline_stop():
+    root, expired, end = _state("deadline-root"), _state("deadline-end"), _action("end")
+
+    decision = ProductionSolver(
+        ResolvedEndGraph(
+            {"deadline-root": (end,), "deadline-end": (end,)},
+            {("deadline-root", "end"): Deterministic(expired)}),
+        _oracle(),
+        limits=ProductionLimits(max_seconds=0.0),
+    ).decide(root)
+
+    assert decision.diagnostics["production"]["deadline_hit"] is True
 
 
 def test_equal_utility_uses_the_shorter_bellman_continuation():
@@ -780,7 +966,7 @@ def test_mandatory_choice_ignores_optional_menu_width_cap():
     assert decision.action.kind == "choose_high"
 
 
-def test_production_successive_halving_refines_only_the_best_incomplete_root():
+def test_production_iteratively_widens_past_the_first_incomplete_root():
     root = _state("root")
     promising = _state("promising", board=0.10)
     payoff = _state("payoff", board=0.50)
@@ -806,10 +992,11 @@ def test_production_successive_halving_refines_only_the_best_incomplete_root():
     ).decide(root)
 
     production = decision.diagnostics["production"]
-    assert decision.action.kind == "build"
+    assert decision.action.kind == "distract"
     assert production["root_branch_nodes"][0] > 1
-    assert production["root_branch_nodes"][1] == 1
+    assert production["root_branch_nodes"][1] > 1
     assert production["root_refinement_width"] == 1
+    assert production["completed_rounds"] >= 3
 
 
 def test_equal_lower_bounds_prefer_the_proven_complete_action():

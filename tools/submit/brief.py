@@ -13,6 +13,7 @@ from pathlib import Path
 
 from submit.package import REPO, _git_hash, artifact_stem
 from common.pilot_profile import PilotProfile
+from common.strategy.needs import GENERAL_NEEDS_STRATEGIES, resolve_need_strategies
 
 
 def _load_strategy(agent_dir: Path):
@@ -72,7 +73,7 @@ def _strategy(strategy) -> dict:
 
 
 def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, cards=None,
-                   **_ignored) -> dict:
+                   pilot_values=None, **_ignored) -> dict:
     """Describe the exact Bellman bundle without importing the engine."""
     agent_dir = Path(agent_dir)
     when = when or datetime.now()
@@ -80,9 +81,13 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     agent_name = agent_name or agent_dir.name
     strategy = _load_strategy(agent_dir)
     pilot_profile = PilotProfile.resolve(
-        authored_deck=strategy.pilot_adjustments, provenance=f"strategy:{strategy.name}")
+        global_values=pilot_values,
+        authored_deck=strategy.pilot_adjustments,
+        provenance=f"strategy:{strategy.name}")
+    needs_strategy = resolve_need_strategies(
+        GENERAL_NEEDS_STRATEGIES, strategy.needs_strategies, strategy.needs_overrides)
     return {
-        "schema_version": 4,
+        "schema_version": 5,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),
@@ -92,6 +97,11 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
         "system": "bellman",
         "deck": _deck(agent_dir, cards),
         "strategy": _strategy(strategy),
+        "needs_strategy": {
+            "enabled": pilot_profile.get("needs.focus_enabled") >= 0.5,
+            "odds_enabled": True,
+            "resolved": needs_strategy.as_dict(),
+        },
         "pilot_profile": pilot_profile.as_dict(),
         "safety_bounds": {
             "callback_watchdog_seconds": {
@@ -161,6 +171,13 @@ def render_brief(manifest: dict, **_ignored) -> str:
     safety_rows = "".join(
         f"<li><code>{html.escape(name)}</code>: {row['value']} {html.escape(row['units'])}</li>"
         for name, row in manifest["safety_bounds"].items())
+    needs = manifest["needs_strategy"]
+    effective_rows = "".join(
+        f"<li><code>{html.escape(row['identifier'])}</code> · "
+        f"{html.escape(row['deadline'])} · {html.escape(row['confidence'])}<br>"
+        f"when {html.escape(str(row['conditions']))}<br>"
+        f"seek {html.escape(str(row['desired_facts']))}</li>"
+        for row in needs["resolved"]["effective"])
     return (
         "<!doctype html>\n<html lang='en'><head><meta charset='utf-8'>"
         f"<title>Bellman Agent Brief — {html.escape(provenance['agent'])}</title>"
@@ -173,6 +190,9 @@ def render_brief(manifest: dict, **_ignored) -> str:
         f"<code>{html.escape(provenance['git_hash'])}</code></p>"
         f"<h2>Deck roles</h2><ul>{role_rows}</ul>"
         f"<h2>Starter priority</h2><p>{html.escape(str(strategy['starter_priority']))}</p>"
+        f"<h2>Needs strategy beam</h2><p>{'ON' if needs['enabled'] else 'OFF'} · "
+        f"Odds {'ON' if needs['odds_enabled'] else 'OFF'} · "
+        f"<code>{needs['resolved']['content_hash']}</code></p><ul>{effective_rows}</ul>"
         f"<h2>Pilot profile</h2><p><code>{manifest['pilot_profile']['hash']}</code> · "
         f"{customized} deck-customized parameters</p>{''.join(profile_sections)}"
         f"<details><summary>Read-only safety bounds</summary><ul>{safety_rows}</ul></details>"

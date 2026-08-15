@@ -295,18 +295,21 @@ class BoardPotential:
         active = next((body for body in (me.get("active") or ()) if body), None)
         if active is None:
             return 0.0
-        energy_types = []
+        energy_provisions = []
         for card in me.get("hand") or ():
             stat = self._stat(card.get("id")) if card else None
             if stat is None or not getattr(stat, "is_energy", False):
                 continue
             energy_type = getattr(stat, "energyType", None)
             if energy_type is not None:
-                energy_types.append(int(energy_type))
+                units = provision_units(
+                    self.registry.functions, int(card.get("id", 0)),
+                    evolved=bool(active.get("preEvolution")))
+                energy_provisions.append((int(energy_type), max(1, units)))
         codes = _energy_codes(active)
         return max((self._attack_ko_coverage(
-            active, [*codes, energy_type], me, opponent)
-                    for energy_type in energy_types), default=0.0)
+            active, [*codes, *([energy_type] * units)], me, opponent)
+                    for energy_type, units in energy_provisions), default=0.0)
 
     def _attack_ko_coverage(self, body, codes, me, opponent) -> float:
         defender = next((target for target in (opponent.get("active") or ()) if target), None)
@@ -600,7 +603,7 @@ class BoardPotential:
                 value += worth_to_prizes(self.registry.worth(card_id))
             tags = frozenset(self.registry.functions.get(card_id, ()))
             if (self.isolated_selection and missing_slots
-                    and {"draw", "dig"}.intersection(tags)):
+                    and {"draw", "dig", "tutor_energy"}.intersection(tags)):
                 access += missing_slots * worth_to_prizes(self.registry.worth(card_id))
         return 0.01 * value + FUTURE_HAND_ACCESS_DISCOUNT * access
 

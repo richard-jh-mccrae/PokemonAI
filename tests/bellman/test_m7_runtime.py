@@ -147,15 +147,29 @@ def test_bellman_telemetry_contains_no_legacy_pilot_payload():
                 & set(record))
 
 
-def test_runtime_emits_a_bounded_shadow_need_beam_without_changing_the_choice():
+def test_bellman_telemetry_records_explicit_limit_and_deadline_event():
+    record = to_record(
+        runtime().decide(_obs(_fixture(60))),
+        decision_seconds=0.125,
+        decision_limit_seconds=15.0,
+        deadline_hit=False,
+    )
+
+    assert record["decision_seconds"] == 0.125
+    assert record["decision_limit_seconds"] == 15.0
+    assert record["deadline_hit"] is False
+
+
+def test_runtime_records_bounded_strategy_guidance_without_changing_the_choice():
     decision = runtime().decide(_obs(_fixture(60)))
     beam = decision.diagnostics["needs"]
 
     assert decision.chosen == (1,)
     assert len(beam.focused) <= 8
-    assert {row.family for row in beam.focused} >= {"attach"}
+    assert beam.focused
     assert beam.safety
     assert beam.elapsed_ms >= 0.0
+    assert decision.diagnostics["needs_snapshot"].strategy_hash
 
 
 def test_runtime_never_calls_bespoke_value_equations(monkeypatch):
