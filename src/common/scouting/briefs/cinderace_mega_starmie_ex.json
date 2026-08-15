@@ -13,21 +13,29 @@
       "card": "Cinderace",
       "roles": [
         "backup_attacker",
-        "starter",
-        "energy_accel",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Mega Starmie ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Staryu",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Mega Froslass ex",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Snorunt",
       "roles": [
         "backup_attacker"
       ]

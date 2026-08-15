@@ -8,6 +8,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from common.cards import CardFunctions
+from common.pokemon_roles import general_pokemon_roles
+from common.scouting.artifact import load_artifact
 from common.scouting.briefs import (
     Brief, load_briefs, match_brief, resolve_brief_cards, resolve_scouted_role_worth,
 )
@@ -17,6 +20,15 @@ from common.scouting.read import Read
 
 
 _BRIEFS_DIR = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting" / "briefs"
+
+
+def test_generic_support_pokemon_roles_are_deck_independent():
+    provider = EngineCardStatProvider()
+    functions = CardFunctions.load()
+    for name in ("Meowth ex", "Fezandipiti ex", "Dunsparce", "Dudunsparce", "Budew"):
+        ids = provider.ids_for_name(name)
+        roles = general_pokemon_roles(ids, provider, functions)
+        assert ids and all("support_pokemon" in roles.get(card_id, ()) for card_id in ids)
 
 
 def _write_brief(d, slug, covers, **extra):
@@ -178,14 +190,31 @@ def test_shipped_briefs_are_readable_crlf_json_with_bounded_lines():
         assert max(len(line) for line in raw.split(b"\r\n")) <= 120, f"{path.name}: line over 120 columns"
 
 
-def test_shipped_threats_are_labeled_as_primary_or_backup_attackers():
-    """Threatening Brief bodies must distinguish main lines from supporting attackers."""
+def test_every_shipped_brief_pokemon_resolves_to_a_role():
+    provider = EngineCardStatProvider()
+    functions = CardFunctions.load()
     for brief in load_briefs():
+        _, resolved = resolve_brief_cards(
+            brief, provider.ids_for_name, stat_for_id=provider.get,
+            forward_ids=provider.forward_card_ids, functions=functions)
         for entry in brief.pokemon:
-            roles = set(entry.get("roles", []))
-            if "threat" in roles:
-                assert {"primary_attacker", "backup_attacker"} & roles, (
-                    f"{brief.slug}: {entry['card']} is a threat without an attacker label")
+            ids = provider.ids_for_name(entry["card"])
+            assert ids and any(card_id in resolved for card_id in ids), (
+                f"{brief.slug}: {entry['card']} has no resolved Role")
+
+
+def test_briefs_list_every_representative_build_pokemon():
+    provider = EngineCardStatProvider()
+    artifact = load_artifact()
+    for brief in load_briefs():
+        represented = set().union(*(provider.ids_for_name(row["card"]) for row in brief.pokemon))
+        expected = set()
+        for cover in brief.covers:
+            for card_id in (artifact.dossiers.get(cover) or {}).get("representative_build") or ():
+                stat = provider.get(int(card_id))
+                if stat is not None and stat.is_pokemon:
+                    expected.add(int(card_id))
+        assert expected <= represented, f"{brief.slug}: missing Pokémon ids {sorted(expected - represented)}"
 
 
 @pytest.mark.req("REQ-BRIEF-0003")

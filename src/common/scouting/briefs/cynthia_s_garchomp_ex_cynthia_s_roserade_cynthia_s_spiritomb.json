@@ -15,29 +15,27 @@
     {
       "card": "Cynthia's Gabite",
       "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
+        "primary_attacker",
+        "disruption_target"
       ]
     },
     {
       "card": "Cynthia's Garchomp ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Cynthia's Gible",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Cynthia's Roselia",
       "roles": [
         "backup_attacker",
-        "support"
+        "support_pokemon"
       ]
     },
     {
@@ -45,14 +43,13 @@
       "roles": [
         "backup_attacker",
         "disruption_target",
-        "support"
+        "support_pokemon"
       ]
     },
     {
       "card": "Cynthia's Spiritomb",
       "roles": [
-        "backup_attacker",
-        "threat"
+        "backup_attacker"
       ]
     }
   ],

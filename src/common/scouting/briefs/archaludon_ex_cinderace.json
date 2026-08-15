@@ -12,30 +12,27 @@
     {
       "card": "Archaludon ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Cinderace",
       "roles": [
         "backup_attacker",
-        "energy_accel",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Duraludon",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Relicanth",
       "roles": [
         "backup_attacker",
-        "support"
+        "support_pokemon"
       ]
     }
   ],

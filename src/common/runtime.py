@@ -9,6 +9,7 @@ from time import perf_counter
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
 from common.cards import CardFunctions
+from common.card_worth import role_value
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
@@ -16,6 +17,7 @@ from common.options import enumerate_legal_actions
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.pilot_profile import PilotProfile
+from common.pokemon_roles import general_pokemon_roles
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs, match_brief, resolve_scouted_role_worth
 from common.scouting.provider import EngineCardStatProvider
@@ -83,7 +85,7 @@ class BellmanRuntime:
         self.stats = stats
         self.functions = CardFunctions.load() if functions is _ENGINE else functions
         self.effects = CardEffects.load()
-        self.roles = strategy.roles.resolve(self.deck, self.stats)
+        self.roles = strategy.roles.resolve(self.deck, self.stats, self.functions)
         if scout is _ENGINE:
             scout = Scout(load_artifact(), provider=self.stats)
         self.scout = scout
@@ -200,7 +202,16 @@ class BellmanRuntime:
             properties=(brief.opponent_properties if brief is not None else None))
         self.opponent_role_worth = resolve_scouted_role_worth(
             self.last_read, getattr(self.scout, "artifact", None), self.stats,
-            briefs=self.briefs)
+            briefs=self.briefs, functions=self.functions)
+        players = current.get("players") or ()
+        opponent = players[1 - seat] if len(players) == 2 else {}
+        bodies = tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
+        generic_roles = general_pokemon_roles(
+            (body["id"] for body in bodies if body.get("id") is not None),
+            self.stats, self.functions)
+        for card_id, card_roles in generic_roles.items():
+            self.opponent_role_worth[card_id] = max(
+                self.opponent_role_worth.get(card_id, 0.0), role_value(card_roles))
         potential = BoardPotential(
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=self.opponent_role_worth,

@@ -14,14 +14,14 @@
     {
       "card": "Applin",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Bayleef",
       "roles": [
         "backup_attacker",
-        "support"
+        "support_pokemon"
       ]
     },
     {
@@ -33,53 +33,54 @@
     {
       "card": "Dipplin",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Fezandipiti ex",
       "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Hydrapple ex",
       "roles": [
         "primary_attacker",
-        "energy_accel",
-        "threat"
+        "accel_source"
       ]
     },
     {
       "card": "Meganium",
       "roles": [
         "backup_attacker",
-        "energy_accel",
+        "accel_source",
         "disruption_target",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Meowth ex",
       "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
+        "disruption_target"
       ]
     },
     {
       "card": "Teal Mask Ogerpon ex",
       "roles": [
         "primary_attacker",
-        "energy_accel",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Celebi",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Tapu Bulu",
+      "roles": [
+        "backup_attacker"
       ]
     }
   ],

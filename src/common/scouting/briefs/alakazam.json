@@ -13,21 +13,40 @@
     {
       "card": "Abra",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Alakazam",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Kadabra",
       "roles": [
-        "backup_attacker",
-        "draw_engine"
+        "primary_attacker",
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Dunsparce",
+      "roles": []
+    },
+    {
+      "card": "Dudunsparce",
+      "roles": []
+    },
+    {
+      "card": "Frillish",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Team Rocket's Articuno",
+      "roles": [
+        "support_pokemon"
       ]
     }
   ],

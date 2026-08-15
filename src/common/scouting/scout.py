@@ -96,7 +96,7 @@ class Scout:
         if st and st.maxDamage > 0:
             return "backup_attacker"
         if st:
-            return "support"
+            return "support_pokemon"
         return "unknown"
 
     def _dossier_intel(self, arch: str, key: str) -> list[Intel]:

@@ -16,23 +16,29 @@
     {
       "card": "Hop's Phantump",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
-      "card": "Hop's Snorlax",
+      "card": "Hop’s Snorlax",
       "roles": [
         "backup_attacker",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Hop's Trevenant",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
+    },
+    {
+      "card": "Dunsparce",
+      "roles": []
+    },
+    {
+      "card": "Dudunsparce",
+      "roles": []
     }
   ],
   "key_cards": [

@@ -14,65 +14,70 @@
   "pokemon": [
     {
       "card": "Budew",
-      "roles": [
-        "backup_attacker",
-        "disruption",
-        "threat"
-      ]
+      "roles": []
     },
     {
       "card": "Dragapult ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Drakloak",
       "roles": [
-        "backup_attacker",
-        "draw_engine"
+        "primary_attacker"
       ]
     },
     {
       "card": "Dreepy",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Fezandipiti ex",
       "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Latias ex",
       "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Meowth ex",
       "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
+        "disruption_target"
       ]
     },
     {
       "card": "Munkidori",
+      "roles": []
+    },
+    {
+      "card": "Duskull",
       "roles": [
-        "backup_attacker",
-        "support",
-        "threat"
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Dusclops",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Dusknoir",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Hawlucha",
+      "roles": [
+        "backup_attacker"
       ]
     }
   ],

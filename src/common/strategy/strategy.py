@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from common.pokemon_roles import general_pokemon_roles
+
 from .strategies import StrategyHint, StrategyOverride
 
 
@@ -68,9 +70,7 @@ class Roles(dict):
     def lines(self) -> tuple[Line, ...]:
         return self._lines
 
-    def resolve(self, deck, stats) -> "Roles":
-        if self.evolves:
-            return self
+    def resolve(self, deck, stats, functions=None) -> "Roles":
         card_ids = tuple(sorted(set(int(card_id) for card_id in deck)))
         names = {}
         for card_id in card_ids:
@@ -78,13 +78,17 @@ class Roles(dict):
             name = getattr(stat, "name", None)
             if name:
                 names.setdefault(str(name), []).append(card_id)
-        evolves = {}
-        for target in card_ids:
-            stat = stats.get(target) if stats is not None else None
-            parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
-            if len(parents) == 1:
-                evolves[int(parents[0])] = target
-        cards = {card_id: list(card_roles) for card_id, card_roles in self.items()}
+        evolves = dict(self.evolves)
+        if not evolves:
+            for target in card_ids:
+                stat = stats.get(target) if stats is not None else None
+                parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
+                if len(parents) == 1:
+                    evolves[int(parents[0])] = target
+        cards = general_pokemon_roles(card_ids, stats, functions)
+        for card_id, card_roles in self.items():
+            resolved = cards.setdefault(int(card_id), [])
+            resolved.extend(role for role in card_roles if role not in resolved)
         relevant = {
             card_id for card_id, card_roles in cards.items()
             if any(role in card_roles for role in self._LINE_ROLE_PRIORITY)

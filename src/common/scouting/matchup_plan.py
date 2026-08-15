@@ -73,16 +73,18 @@ ROLE_REGISTRY: dict[str, Role] = {
            "boost it. `disruption_target` is how a Brief opts one in, and `avoid` is how the "
            "general tier de-prioritizes the 1-prize utility class.",
         (DERIVED_BY, READ_BY, BRIEF_BY)),
-    "support": Role(
-        0, "emitted by `Scout._target_role` for an in-play body with no printed damage. No claim — "
-           "but it must be DECLARED or the vocabulary lint fails, which is the whole point of a "
-           "closed vocabulary: silence is a ruling, not an omission. READ-ONLY: a hand-authored "
-           "Brief may not declare it, because \"I have no claim\" is not a claim a human is making.",
-        (READ_BY,)),
+    "support_pokemon": Role(
+        0, "a generally useful support body; prize yield still contributes independently",
+        (READ_BY, BRIEF_BY)),
+    "accel_source": Role(
+        0, "a body that accelerates resources; a Brief may separately mark it for disruption",
+        (BRIEF_BY,)),
+    "counter_mover": Role(
+        0, "a support body that relocates damage counters", (BRIEF_BY,)),
     "unknown": Role(
         0, "emitted by `Scout._target_role` when there is no CardStat at all, and by "
-           "`Scout._dossier_intel` for a dossier entry with no role. Same reading as `support`, and "
-        "READ-ONLY for the same reason.", (READ_BY,)),
+           "`Scout._dossier_intel` for a dossier entry with no role. READ-ONLY because it makes no "
+           "strategic claim.", (READ_BY,)),
     "avoid": Role(
         -80, "decoy / self-shuffler — never spend removal here. **Gated on `prize_value == 1`** "
              "(D4): a 1-prize utility body (Dudunsparce / Budew class) is a poor place to spend "
@@ -121,17 +123,12 @@ def roles_in_dossiers(dossiers: Mapping) -> list[str]:
 
 
 def roles_in_brief(brief: Mapping) -> list[str]:
-    """The compact Brief's Pokémon roles, reduced to the Pilot target-role vocabulary."""
-    doctrine_target_roles = {
-        "primary_attacker": "primary_attacker", "backup_attacker": "backup_attacker",
-        "disruption_target": "disruption_target", "support": "engine",
-        "energy_accel": "engine", "draw_engine": "engine",
-    }
+    """Every authored Brief Role string; the registry audit rejects unknown vocabulary."""
     out: set[str] = set()
     for entry in (brief or {}).get("pokemon") or ():
         for role in (entry or {}).get("roles") or ():
-            if isinstance(role, str) and role in doctrine_target_roles:
-                out.add(doctrine_target_roles[role])
+            if isinstance(role, str):
+                out.add(role)
     return sorted(out)
 
 

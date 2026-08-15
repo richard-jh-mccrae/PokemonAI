@@ -17,34 +17,38 @@
     {
       "card": "Cornerstone Mask Ogerpon ex",
       "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Crustle",
       "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Dwebble",
       "roles": [
-        "backup_attacker",
-        "starter"
+        "primary_attacker"
       ]
     },
     {
       "card": "Mega Kangaskhan ex",
       "roles": [
-        "primary_attacker",
-        "wall",
-        "draw_engine",
-        "threat"
+        "primary_attacker"
       ]
+    },
+    {
+      "card": "Budew",
+      "roles": []
+    },
+    {
+      "card": "Fezandipiti ex",
+      "roles": []
+    },
+    {
+      "card": "Meowth ex",
+      "roles": []
     }
   ],
   "key_cards": [

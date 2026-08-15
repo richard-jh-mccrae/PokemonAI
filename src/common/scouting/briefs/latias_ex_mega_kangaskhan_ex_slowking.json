@@ -13,80 +13,87 @@
     {
       "card": "Annihilape",
       "roles": [
-        "backup_attacker",
-        "threat"
+        "backup_attacker"
       ]
     },
     {
       "card": "Conkeldurr",
       "roles": [
-        "backup_attacker",
-        "threat"
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Gurdurr",
+      "roles": [
+        "backup_attacker"
       ]
     },
     {
       "card": "Fezandipiti ex",
       "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Kyurem",
       "roles": [
-        "backup_attacker",
-        "threat"
+        "backup_attacker"
       ]
     },
     {
       "card": "Latias ex",
       "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Mega Kangaskhan ex",
       "roles": [
         "primary_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
-      "card": "Meowth ex",
-      "roles": [
-        "backup_attacker",
-        "disruption_target",
-        "support"
-      ]
-    },
-    {
-      "card": "Slowking",
-      "roles": [
-        "primary_attacker",
-        "threat"
-      ]
-    },
-    {
-      "card": "Slowpoke",
+      "card": "Mankey",
       "roles": [
         "backup_attacker"
       ]
     },
     {
+      "card": "Meowth ex",
+      "roles": [
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Primeape",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Slowking",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Slowpoke",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
       "card": "Smoochum",
       "roles": [
-        "starter",
-        "energy_accel",
+        "accel_source",
         "disruption_target"
+      ]
+    },
+    {
+      "card": "Timburr",
+      "roles": [
+        "backup_attacker"
       ]
     }
   ],

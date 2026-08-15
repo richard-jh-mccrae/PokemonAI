@@ -11,13 +11,9 @@ BOSS_ORDERS, CRISPIN, RISKY_RUINS = 1182, 1198, 1260
 
 
 ROLES = Roles({
+    DREEPY: ["primary_attacker"],
+    DRAKLOAK: ["primary_attacker"],
     DRAGAPULT_EX: ["primary_attacker"],
-    DRAKLOAK: ["engine"],
-    MUNKIDORI: ["counter_mover"],
-    FEZANDIPITI_EX: ["engine"],
-    MEOWTH_EX: ["engine"],
-    DUNSPARCE: ["support_pokemon"],
-    BUDEW: ["support_pokemon"],
 }, ready={DRAGAPULT_EX: 2})
 
 

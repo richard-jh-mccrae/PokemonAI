@@ -15,39 +15,63 @@
     {
       "card": "Applin",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Dipplin",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Fezandipiti ex",
       "roles": [
-        "backup_attacker",
-        "draw_engine",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
       ]
     },
     {
       "card": "Grookey",
       "roles": [
         "backup_attacker",
-        "support"
+        "support_pokemon"
       ]
     },
     {
       "card": "Thwackey",
       "roles": [
         "backup_attacker",
-        "disruption_target",
-        "support"
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Goldeen",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Seaking",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Psyduck",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Rellor",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Rabsca",
+      "roles": [
+        "support_pokemon"
       ]
     }
   ],

@@ -15,40 +15,38 @@
       "card": "Froslass",
       "roles": [
         "backup_attacker",
-        "disruption",
         "disruption_target",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Marnie's Grimmsnarl ex",
       "roles": [
-        "primary_attacker",
-        "energy_accel",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Marnie's Impidimp",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Marnie's Morgrem",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Munkidori",
       "roles": [
-        "backup_attacker",
-        "disruption",
-        "disruption_target",
-        "support",
-        "threat"
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Snorunt",
+      "roles": [
+        "backup_attacker"
       ]
     }
   ],

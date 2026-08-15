@@ -15,21 +15,25 @@
       "card": "Kyogre",
       "roles": [
         "primary_attacker",
-        "support",
-        "threat"
+        "support_pokemon"
       ]
     },
     {
       "card": "Mega Abomasnow ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Snover",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Jynx",
+      "roles": [
+        "support_pokemon"
       ]
     }
   ],

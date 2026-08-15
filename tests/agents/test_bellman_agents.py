@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from common.cards import CardFunctions
 from common.runtime import BellmanRuntime, build_runtime
+from common.scouting.provider import EngineCardStatProvider
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -33,6 +35,18 @@ def test_every_deck_builds_the_shared_bellman_runtime(name):
     assert runtime.strategy.name == name
     assert runtime.registry.identity
     assert len(runtime.deck) == 60
+
+
+@pytest.mark.parametrize("name", AGENTS)
+def test_every_deck_pokemon_resolves_to_a_role(name):
+    strategy = _strategy(name)
+    deck = [int(value) for value in
+            (REPO / "src" / "agents" / name / "deck.csv").read_text().splitlines()
+            if value.strip()]
+    stats = EngineCardStatProvider()
+    roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+    pokemon = {card_id for card_id in deck if stats.get(card_id).is_pokemon}
+    assert pokemon <= roles.keys(), f"{name}: missing Roles for {sorted(pokemon - roles.keys())}"
 
 
 @pytest.mark.parametrize("name", AGENTS)

@@ -13,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from submit.package import REPO, _git_hash, artifact_stem
+from common.cards import CardFunctions
 from common.pilot_profile import PilotProfile
 from common.strategy.strategies import GENERAL_STRATEGIES, resolve_strategies
 
@@ -52,7 +53,7 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
 def _strategy(strategy, deck, cards) -> dict:
     stats = SimpleNamespace(get=lambda card_id: (
         SimpleNamespace(**cards[int(card_id)]) if int(card_id) in cards else None))
-    resolved_roles = strategy.roles.resolve(deck, stats)
+    resolved_roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
     roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}

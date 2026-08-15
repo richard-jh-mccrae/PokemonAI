@@ -20,12 +20,12 @@
     },
     "pokemon": {
       "type": "array",
-      "description": "every strategically relevant Pokémon and its compact doctrine roles",
+      "description": "every Pokémon in the covered deck variants and its deck-specific Role additions",
       "items": {
         "type": "object", "additionalProperties": false, "required": ["card", "roles"],
         "properties": {
           "card": {"type": "string"},
-          "roles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["primary_attacker", "backup_attacker", "support", "energy_accel", "draw_engine", "disruption", "disruption_target", "wall", "starter", "threat"]}}
+          "roles": {"type": "array", "items": {"type": "string", "enum": ["primary_attacker", "backup_attacker", "support_pokemon", "accel_source", "engine", "counter_mover", "disruption_target"]}}
         }
       }
     },

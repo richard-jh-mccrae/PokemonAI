@@ -16,13 +16,35 @@
     {
       "card": "Crustle",
       "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Dwebble",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Chewtle",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Drednaw",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Eevee",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Sylveon",
       "roles": [
         "backup_attacker"
       ]

@@ -13,16 +13,14 @@
     {
       "card": "Hariyama",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "backup_attacker"
       ]
     },
     {
       "card": "Lunatone",
       "roles": [
         "backup_attacker",
-        "energy_accel",
-        "support"
+        "accel_source"
       ]
     },
     {
@@ -34,22 +32,21 @@
     {
       "card": "Mega Lucario ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Riolu",
       "roles": [
-        "backup_attacker"
+        "primary_attacker"
       ]
     },
     {
       "card": "Solrock",
       "roles": [
         "backup_attacker",
-        "energy_accel",
-        "support"
+        "accel_source",
+        "support_pokemon"
       ]
     }
   ],

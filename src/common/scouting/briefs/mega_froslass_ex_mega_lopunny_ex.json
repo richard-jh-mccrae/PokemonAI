@@ -16,27 +16,47 @@
     {
       "card": "Buneary",
       "roles": [
-        "backup_attacker",
-        "starter"
+        "primary_attacker"
       ]
     },
     {
       "card": "Mega Froslass ex",
       "roles": [
-        "primary_attacker",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Mega Lopunny ex",
       "roles": [
-        "primary_attacker",
-        "wall",
-        "threat"
+        "primary_attacker"
       ]
     },
     {
       "card": "Snorunt",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Abra",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Dunsparce",
+      "roles": []
+    },
+    {
+      "card": "Dudunsparce",
+      "roles": []
+    },
+    {
+      "card": "Fan Rotom",
+      "roles": []
+    },
+    {
+      "card": "Moltres",
       "roles": [
         "backup_attacker"
       ]

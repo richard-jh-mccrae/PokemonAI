@@ -77,6 +77,10 @@ Deck or scouting doctrine describing a Pokémon's strategic job, such as primary
 Roles contribute to development, preservation, and KO value.
 _Avoid_: Win condition, secondary attacker, Trainer function, Strategy
 
+**General Pokémon Role**:
+A deck-independent Pokémon Role used whenever the same body has the same strategic job for either player.
+_Avoid_: Repeated deck Role, Card Function
+
 **Pre-evolution Role**:
 Scouting doctrine marking an undeveloped Pokémon whose known evolution line makes it a valuable denial target.
 _Avoid_: Win condition base, automatic deck Role

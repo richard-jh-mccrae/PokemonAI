@@ -125,7 +125,9 @@ def test_the_role_vocabulary_audit_actually_bites_with_a_positive_control():
                                 "card_inclusion": {"1": 0.5}}}
     assert roles_in_dossiers(fabricated) == ["__typo__", "engine"]      # …and skips non-role blocks
     assert undeclared_roles(roles_in_dossiers(fabricated)) == ["__typo__"]
-    assert roles_in_brief({"pokemon": [{"roles": ["primary_attacker", "support"]}]}) == ["engine", "primary_attacker"]
+    assert roles_in_brief(
+        {"pokemon": [{"roles": ["primary_attacker", "support_pokemon"]}]}
+    ) == ["primary_attacker", "support_pokemon"]
     # the real stores stay green on this same run, so the bite is discrimination, not a red-on-all
     assert undeclared_roles(roles_in_dossiers(load_artifact().dossiers)) == []
 
@@ -135,9 +137,8 @@ def test_the_brief_schema_has_the_compact_doctrine_roles():
     schema = json.loads(_SCHEMA.read_text(encoding="utf-8"))
     enum = set(schema["properties"]["pokemon"]["items"]["properties"]["roles"]["items"]["enum"])
     assert enum, "the schema's role enum is empty — the assertion below would pass vacuously"
-    assert {"primary_attacker", "backup_attacker", "support", "energy_accel"} <= enum
-    # `support` is doctrine, not a MatchupPlan role: the resolver maps it to neutral `engine`.
-    assert "support" in enum and "unknown" not in enum
+    assert {"primary_attacker", "backup_attacker", "support_pokemon", "accel_source"} <= enum
+    assert "support" not in enum and "energy_accel" not in enum and "unknown" not in enum
 
 
 def test_the_registry_is_a_well_formed_ordinal_ladder():
@@ -145,7 +146,9 @@ def test_the_registry_is_a_well_formed_ordinal_ladder():
     than left implied by the numbers."""
     p = {name: r.priority for name, r in ROLE_REGISTRY.items()}
     assert p["primary_attacker"] > p["fragile_preevo"] > p["disruption_target"] \
-        > p["backup_attacker"] > p["enabler"] > p["engine"] == 0 > p["avoid"]
+        > p["backup_attacker"] > p["enabler"] \
+        > p["engine"] == p["support_pokemon"] == p["accel_source"] == p["counter_mover"] == 0 \
+        > p["avoid"]
     # Every role says why it sits there, and names at least one tier allowed to assign it.
     assert [r for r, e in ROLE_REGISTRY.items() if not e.reason.strip()] == []
     assert [r for r, e in ROLE_REGISTRY.items()
