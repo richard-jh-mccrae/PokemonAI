@@ -363,8 +363,10 @@ class ValueOracle:
             player = players[value.root_seat] if value.root_seat < len(players) else {}
             return Counter(int(card["id"]) for card in (player.get("hand") or ()) if card)
 
-        acquired = hand_ids(after) - hand_ids(state)
+        held_before = hand_ids(state)
+        acquired = hand_ids(after) - held_before
         stranded = []
+        redundant_fetch = False
         for clause in fetches:
             targets = tuple(acquired) if acquired else tuple(
                     int(target_id) for target_id, count in available.items()
@@ -381,14 +383,20 @@ class ValueOracle:
                 int(top): int(base) for top, base in self.registry.line_parents.items()
                 if int(top) in targets
             }
-            if any(base in body_ids for base in playable.values()):
+            recipients = sum(body_id in set(playable.values()) for body_id in body_ids)
+            held_targets = sum(held_before.get(top, 0) for top in playable)
+            redundant = bool(playable) and recipients > 0 and held_targets >= recipients
+            redundant_fetch = redundant_fetch or redundant
+            if not redundant and any(base in body_ids for base in playable.values()):
                 return 0.0
             for target_id in targets:
                 line = next((line for line in self.registry.lines if target_id in line), ())
                 cards = line[:line.index(target_id) + 1] if line else (target_id,)
                 stranded.append(sum(self.registry.prizes(value) for value in cards))
-        return max(stranded, default=0.0) + (
-            self.registry.prizes(card_id) if stranded and action.kind == "play" else 0.0)
+        return (max(stranded, default=0.0)
+                + (self.registry.prizes(card_id)
+                   if stranded and action.kind == "play" else 0.0)
+                + (worth_to_prizes(KNOWN_CARD_FLOOR) if redundant_fetch else 0.0))
 
     def _spent_option_cost(self, before: DecisionState, after: DecisionState,
                            action: ActionIdentity) -> float:
