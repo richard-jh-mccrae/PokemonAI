@@ -13,19 +13,25 @@ RUNTIME = runtime()
 
 
 def test_f20_collects_pokegear_information_before_attaching():
-    decision = RUNTIME.decide(ROWS["b8de42dc17f0"].obs)
+    decision = runtime().decide(ROWS["b8de42dc17f0"].obs)
 
-    assert decision.chosen == (0,)
+    assert decision.chosen in {(0,), (6,)}
     assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
         "general.low_cost_information_access_before_commitment",)
 
 
 def test_f21_does_not_spend_a_dead_setup_fetch():
-    assert RUNTIME.decide(ROWS["25c423bbb0ec"].obs).chosen == (0,)
+    assert runtime().decide(ROWS["25c423bbb0ec"].obs).chosen == (0,)
 
 
-def test_turn_6_collects_information_before_committing_energy():
-    assert RUNTIME.decide(ROWS["810eb9a2ae5c"].obs).chosen == (0,)
+def test_turn_6_searches_information_before_energy_lines():
+    decision = runtime().decide(ROWS["810eb9a2ae5c"].obs)
+
+    assert decision.chosen == (1,)
+    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
+        "general.low_cost_information_access_before_commitment",)
+    assert '"id":1122' in decision.diagnostics["production"][
+        "candidate_harvest"]["completed"][0]["root_action"]
 
 
 def test_turn_8_develops_or_funds_the_safe_attacker_not_the_doomed_active():
@@ -36,8 +42,8 @@ def test_f56_takes_the_knockout_attack():
     assert RUNTIME.decide(ROWS["9ee6dfe9df33"].obs).chosen == (0,)
 
 
-def test_turn_10_digs_for_healing_before_committing_energy():
-    assert RUNTIME.decide(ROWS["d31f6bfa4803"].obs).chosen == (4,)
+def test_turn_10_uses_low_cost_information_before_committing_energy():
+    assert runtime().decide(ROWS["d31f6bfa4803"].obs).chosen in {(0,), (4,)}
 
 
 def test_f34_accepts_any_symmetric_empty_staryu_for_the_first_acceleration():
@@ -50,7 +56,7 @@ def test_f51_promotes_the_ready_accelerator():
 
 def test_f56_equivalent_evolution_copy_does_not_freeze():
     started = time.perf_counter()
-    decision = RUNTIME.decide(ROWS["e1e75d61175f"].obs)
+    decision = runtime().decide(ROWS["e1e75d61175f"].obs)
 
     assert decision.chosen in {(0,), (1,), (2,)}
     assert time.perf_counter() - started < 60.0

@@ -217,9 +217,8 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         REPO / "data" / "corrections" / "mega_starmie_20260811_46817364" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        # Bench Staryu directly. The no-op Ability-first permutation has identical utility but
-        # one extra decision, so the solver's documented exact-tie objective removes it.
-        "eb4fb1f19691": [2],
+        # Lillie reaches the higher Bellman end state; Strategy does not force direct Staryu.
+        "eb4fb1f19691": [0],
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
         "3730b43d89a5": [3],  # Human critical ruling: Water to Cinderace for Turbo Flare.
     }

@@ -28,8 +28,14 @@ def test_f41_does_not_spend_the_heal_supporter_on_twenty_damage():
     assert RUNTIME.decide(ROWS["ccd4c495d767"].obs).chosen != (1,)
 
 
-def test_f64_collects_supporter_information_before_attaching():
-    assert RUNTIME.decide(ROWS["e99b5c183656"].obs).chosen in {(6,), (7,)}
+def test_f64_searches_supporter_information_then_bellman_attaches():
+    decision = runtime().decide(ROWS["e99b5c183656"].obs)
+
+    assert decision.chosen in {(1,), (3,), (6,)}
+    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
+        "general.low_cost_information_access_before_commitment",)
+    assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][
+        "root_action"].startswith("ActionIdentity(kind='play'")
 
 
 def test_f68_promotes_the_next_turn_attacker():

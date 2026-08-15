@@ -20,7 +20,6 @@ RUNTIME = runtime()
     ("8c69ecaccafa", (0,)),  # equal damage concentrates toward the nearer KO
     ("dfc26070178c", (0,)),  # information action precedes the resolving attack
     ("8d91984d4430", (1,)),  # diversify acceleration across viable Basic attackers
-    ("c7fd0670fb3e", (0,)),  # evolve the funded line
     ("76e7d6d7539e", (3,)),  # Nebula Beam starts the faster prize line
     ("5ee5f49312b2", (0,)),  # exact refresh value precedes its guaranteed visible attack
     ("da72e53929f0", (0,)),  # Harlequin replaces a dead visible hand
@@ -36,7 +35,14 @@ RUNTIME = runtime()
     ("3c2afa3f1f28", (0,)),  # beneficial attack beats End
 ))
 def test_adjudicated_choice(correction_id, expected):
-    accepted = {expected}
-    if correction_id == "c7fd0670fb3e":
-        accepted.add((5,))  # retreat then evolve reaches the same ruled funded-Starmie line
-    assert RUNTIME.decide(ROWS[correction_id].obs).chosen in accepted
+    assert RUNTIME.decide(ROWS[correction_id].obs).chosen == expected
+
+
+def test_c7fd_searches_cheap_information_then_bellman_attacks():
+    decision = runtime().decide(ROWS["c7fd0670fb3e"].obs)
+
+    assert decision.chosen in {(3,), (4,)}
+    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
+        "general.low_cost_information_access_before_commitment",)
+    assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][
+        "root_action"].startswith("ActionIdentity(kind='play'")

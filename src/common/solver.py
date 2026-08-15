@@ -1,7 +1,7 @@
 """Deterministic exhaustive Bellman reference solver."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from time import monotonic
 from typing import Protocol
@@ -77,6 +77,7 @@ class Evaluation:
     branches: tuple[dict, ...] = ()
     decisions: float = 0.0
     continuation: tuple[PlanStep, ...] = ()
+    execution_complete: bool = False
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,23 @@ def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, bool, 
     return value, bool(result.complete), decision_order
 
 
+@dataclass
+class _CompletedCandidateBank:
+    live: dict[object, Evaluation] = field(default_factory=dict)
+    checkpoint: dict[object, Evaluation] = field(default_factory=dict)
+
+    def offer(self, action: LegalAction, result: Evaluation) -> None:
+        incumbent = self.live.get(action.identity)
+        if (result.execution_complete
+                and (incumbent is None
+                     or _ordered_evaluation(result, Actor.OURS)
+                     > _ordered_evaluation(incumbent, Actor.OURS))):
+            self.live[action.identity] = result
+
+    def publish(self) -> None:
+        self.checkpoint = dict(self.live)
+
+
 def _select_our_action(finite, context: int):
     if context == _DISCARD:
         immediate = max(result.ledger.immediate for _action, result in finite)
@@ -134,6 +152,7 @@ def _commutative_order(action: LegalAction):
 
 
 def _expected_evaluation(weighted, *, reason: str, branches=(), complete: bool = True) -> Evaluation:
+    weighted = tuple(weighted)
     benefits: dict[str, float] = {}
     costs: dict[str, float] = {}
     continuation = 0.0
@@ -146,7 +165,9 @@ def _expected_evaluation(weighted, *, reason: str, branches=(), complete: bool =
         continuation += probability * result.ledger.continuation
         decisions += probability * result.decisions
     ledger = Ledger(tuple(sorted(benefits.items())), tuple(sorted(costs.items())), continuation)
-    return Evaluation(ledger.total, ledger, complete, reason, tuple(branches), decisions)
+    return Evaluation(ledger.total, ledger, complete, reason, tuple(branches), decisions,
+                      execution_complete=all(
+                          result.execution_complete for _probability, result in weighted))
 
 
 class ReferenceSolver:
@@ -263,10 +284,12 @@ class ReferenceSolver:
         if action.identity.kind == "end":
             resolve_end = getattr(self.provider, "resolve_end", None)
             if resolve_end is None:
-                return Evaluation(0.0, Ledger(), True, "End exact zero")
+                return Evaluation(
+                    0.0, Ledger(), True, "End exact zero", execution_complete=True)
             node = resolve_end(state, action)
             if node is None:
-                return Evaluation(0.0, Ledger(), True, "End exact zero")
+                return Evaluation(
+                    0.0, Ledger(), True, "End exact zero", execution_complete=True)
             return self._end_transition(state, action, node)
         return self._transition(state, action, self._provider_transition(state, action), sleep)
 
@@ -296,11 +319,14 @@ class ReferenceSolver:
                 combined = _combine(ledger, continuation.value)
                 return Evaluation(
                     combined.total, combined, True, "End forced continuation resolved",
-                    decisions=1.0 + continuation.decisions)
-            return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0)
+                    decisions=1.0 + continuation.decisions,
+                    execution_complete=continuation.execution_complete)
+            return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0,
+                              execution_complete=True)
         if isinstance(node, Terminal):
             ledger = _combine(self._ledger(before, node.state, action), 0.0, node.ledger)
-            return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0)
+            return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0,
+                              execution_complete=True)
         if isinstance(node, Chance):
             branches = [(edge, self._end_transition(before, action, edge.node))
                         for edge in node.children]
@@ -328,11 +354,13 @@ class ReferenceSolver:
             steps = self._continuation_steps(before, action, node.state, continuation)
             return Evaluation(ledger.total, ledger, continuation.evaluation.complete,
                               continuation.evaluation.reason, decisions=(
-                                  1.0 + continuation.evaluation.decisions), continuation=steps)
+                                  1.0 + continuation.evaluation.decisions), continuation=steps,
+                              execution_complete=continuation.evaluation.execution_complete)
         if isinstance(node, Terminal):
             base = self._ledger(before, node.state, action)
             ledger = _combine(base, 0.0, node.ledger)
-            return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0)
+            return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0,
+                              execution_complete=True)
         if isinstance(node, Choice):
             branches = [(edge, self._transition(before, action, edge.node, sleep))
                         for edge in node.children]
@@ -353,7 +381,11 @@ class ReferenceSolver:
                                else f"{node.actor.value} chose {edge.label}"),
                               tuple({"label": child.label, "value": evaluated.value,
                                      "complete": evaluated.complete}
-                                    for child, evaluated in branches), result.decisions)
+                                    for child, evaluated in branches), result.decisions,
+                              execution_complete=(
+                                  result.execution_complete if node.actor is Actor.OURS else
+                                  all(evaluated.execution_complete
+                                      for _child, evaluated in branches)))
         if isinstance(node, RevealChoice):
             evaluated = {edge.label: self._transition(before, action, edge.node, ())
                          for edge in self._reveal_choices(before, node)}
@@ -383,7 +415,8 @@ class ReferenceSolver:
             continuation = self._guaranteed_refresh_continuation(before)
             combined = _combine(ledger, continuation.value)
             return Evaluation(combined.total, combined, True, "analytic refresh gamble",
-                              diagnostics, decisions=1.0 + continuation.decisions)
+                              diagnostics, decisions=1.0 + continuation.decisions,
+                              execution_complete=True)
         if isinstance(node, Chance):
             branches = [(edge, self._transition(before, action, edge.node, ()))
                         for edge in node.children]
@@ -405,7 +438,9 @@ class ReferenceSolver:
                               "expected value",
                               tuple({"label": edge.label, "probability": edge.probability,
                                      "value": result.value}
-                                    for edge, result in branches), decisions)
+                                    for edge, result in branches), decisions,
+                              execution_complete=all(
+                                  result.execution_complete for _edge, result in branches))
         return Evaluation(-math.inf, Ledger(), False, "undeclared transition result")
 
     def _guaranteed_refresh_continuation(self, state: DecisionState) -> Evaluation:
@@ -462,6 +497,9 @@ class ProductionSolver(ReferenceSolver):
         self._incumbent_timeline: list[dict] = []
         self._harvesting_candidates = False
         self._candidate_harvest: dict = {}
+        self._candidate_bank = _CompletedCandidateBank()
+        self._harvest_prefix: list[object] = []
+        self._harvest_exclusions: set[tuple[object, ...]] = set()
         self._candidate_timeout_fallback = False
 
     def decide(self, state: DecisionState) -> RootDecision:
@@ -500,6 +538,9 @@ class ProductionSolver(ReferenceSolver):
             "completed_count": 0,
             "completed": (),
         }
+        self._candidate_bank = _CompletedCandidateBank()
+        self._harvest_prefix = []
+        self._harvest_exclusions = set()
         self._candidate_timeout_fallback = False
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
@@ -561,9 +602,13 @@ class ProductionSolver(ReferenceSolver):
         return (str(action.identity), *(str(step.action) for step in result.continuation))
 
     @staticmethod
+    def _sequence_identities(action, result) -> tuple[object, ...]:
+        return (action.identity, *(step.action for step in result.continuation))
+
+    @staticmethod
     def _is_executable_candidate(action, result) -> bool:
         del action
-        return math.isfinite(result.value)
+        return math.isfinite(result.value) and result.execution_complete
 
     def _candidate_order(self, actions) -> tuple[LegalAction, ...]:
         if self._strategy_builder is None:
@@ -573,9 +618,7 @@ class ProductionSolver(ReferenceSolver):
             (action for action in actions if semantic_action_key(action) in focus_ranks),
             key=lambda action: focus_ranks[semantic_action_key(action)],
         )
-        safety = next((action for action in actions if action.identity.kind == "attack"), None)
-        if safety is None:
-            safety = next((action for action in actions if action.identity.kind == "end"), None)
+        safety = next(iter(self._safety_candidates(actions)), None)
         target = int(self.profile.get("search.completed_candidate_target"))
         reserved = 1 if safety is not None and safety not in focused[:target] else 0
         ordered = focused[:max(0, target - reserved)]
@@ -586,6 +629,28 @@ class ProductionSolver(ReferenceSolver):
                        if action not in ordered and action.identity.kind not in {"attack", "end"})
         ordered.extend(action for action in actions if action not in ordered)
         return tuple(ordered)
+
+    @staticmethod
+    def _safety_candidates(actions, *, allow_fallback=False) -> tuple[LegalAction, ...]:
+        safety = tuple(action for kind in ("attack", "end") for action in actions
+                       if action.identity.kind == kind)
+        if safety:
+            return safety
+        fallback = next((action for action in actions if action.selection), None) \
+            if allow_fallback else None
+        return (fallback,) if fallback is not None else ()
+
+    def _bank_candidate(self, action: LegalAction, result: Evaluation) -> None:
+        self._candidate_bank.offer(action, result)
+
+    def _search_action(self, state, action, sleep) -> Evaluation:
+        if not self._harvesting_candidates:
+            return self._action(state, action, sleep)
+        self._harvest_prefix.append(action.identity)
+        try:
+            return self._action(state, action, sleep)
+        finally:
+            self._harvest_prefix.pop()
 
     def _record_incumbent(self, state, finite, context, phase) -> None:
         if not finite:
@@ -796,31 +861,6 @@ class ProductionSolver(ReferenceSolver):
                 return action, result
         return selected
 
-    def _select_unresolved_focus(self, state: DecisionState, finite, context: int, selected):
-        if context != MAIN_DECISION_CONTEXT or state.semantic_key != self._root_key:
-            return selected
-        selected_footprint = self._footprint(state, selected[0])
-        if (selected[0].identity.kind != "attach" or selected_footprint is None
-                or not selected_footprint.commitment):
-            return selected
-        focus_ranks = self._strategy_focus_ranks.get(state.semantic_key, {})
-        focused = []
-        for pair in finite:
-            footprint = self._footprint(state, pair[0])
-            if (not pair[1].complete
-                    and semantic_action_key(pair[0]) in focus_ranks
-                    and footprint is not None and footprint.information_first
-                    and isinstance(self._provider_transition(state, pair[0]), RevealChoice)
-                    and self._information_priority(state, pair[0]) > 0.0):
-                focused.append(pair)
-        focused.sort(key=lambda pair: focus_ranks[semantic_action_key(pair[0])])
-        for candidate in focused:
-            bound = self._action_bounds.get(candidate[0].identity, {})
-            if round(float(bound.get("q_upper", math.inf)), VALUE_TIE_DECIMALS) >= round(
-                    selected[1].value, VALUE_TIE_DECIMALS):
-                return candidate
-        return selected
-
     def _successor_sleep(self, state: DecisionState, sleep: tuple[SleepEvent, ...],
                          earlier: list[tuple[LegalAction, ActionFootprint]],
                          current_action: LegalAction,
@@ -856,7 +896,7 @@ class ProductionSolver(ReferenceSolver):
             return StateEvaluation(-math.inf, None, exact, ((end, exact),))
         lower = Evaluation(
             exact.value, exact.ledger, False, reason, exact.branches,
-            exact.decisions, exact.continuation)
+            exact.decisions, exact.continuation, exact.execution_complete)
         return StateEvaluation(lower.value, end, lower, ((end, lower),))
 
     def _node_upper_bound(self, before: DecisionState, action: LegalAction, node) -> tuple[float, dict]:
@@ -1059,6 +1099,7 @@ class ProductionSolver(ReferenceSolver):
                     earlier.append((action, footprint))
         else:
             child_sleeps = {action.identity: sleep for action in actions}
+        harvest_short_circuit = False
         if key == self._root_key:
             action_waves = self._strategy_waves.get(key, {})
             results_list: list[tuple[LegalAction, Evaluation] | None] = [None] * len(actions)
@@ -1080,29 +1121,84 @@ class ProductionSolver(ReferenceSolver):
                 if len(completed) >= harvest_target or monotonic() >= harvest_deadline:
                     break
                 index = actions.index(action)
-                self._deadline = self._budget.root_deadline(
-                    monotonic(), harvest_deadline, len(harvest_order) - position)
-                self.nodes = 1
-                result = self._action(state, action, child_sleeps[action.identity])
-                results_list[index] = (action, result)
-                branch_nodes[index] = self.nodes
-                branch_capped[index] = not result.complete and (
-                    self.nodes >= self.production_limits.max_nodes
-                    or monotonic() >= self._deadline)
-                sequence = self._sequence_signature(action, result)
-                if (self._is_executable_candidate(action, result)
-                        and sequence not in seen_sequences):
+                while len(completed) < harvest_target and monotonic() < harvest_deadline:
+                    self._deadline = self._budget.root_deadline(
+                        monotonic(), harvest_deadline, len(harvest_order) - position)
+                    self.nodes = 1
+                    result = self._search_action(state, action, child_sleeps[action.identity])
+                    incumbent = results_list[index]
+                    if (incumbent is None
+                            or _ordered_evaluation(result, Actor.OURS)
+                            > _ordered_evaluation(incumbent[1], Actor.OURS)):
+                        results_list[index] = (action, result)
+                    branch_nodes[index] += max(1, self.nodes)
+                    branch_capped[index] = not result.complete and (
+                        self.nodes >= self.production_limits.max_nodes
+                        or monotonic() >= self._deadline)
+                    sequence = self._sequence_signature(action, result)
+                    identities = self._sequence_identities(action, result)
+                    if (not self._is_executable_candidate(action, result)
+                            or sequence in seen_sequences):
+                        break
                     seen_sequences.add(sequence)
+                    self._harvest_exclusions.add(identities)
+                    self._bank_candidate(action, result)
                     completed.append({
                         "root_action": str(action.identity),
                         "sequence": sequence,
                         "value": result.value,
                         "bellman_complete": result.complete,
                     })
+                    break
                 finite_results = tuple(
                     pair for pair in results_list
                     if pair is not None and math.isfinite(pair[1].value))
                 self._record_incumbent(state, finite_results, context, "candidate_harvest")
+            while (self._strategy_builder is not None
+                   and len(completed) < harvest_target
+                   and monotonic() < harvest_deadline):
+                progress = False
+                for action in harvest_order:
+                    if len(completed) >= harvest_target or monotonic() >= harvest_deadline:
+                        break
+                    index = actions.index(action)
+                    self._deadline = harvest_deadline
+                    self.nodes = 1
+                    result = self._search_action(state, action, child_sleeps[action.identity])
+                    branch_nodes[index] += max(1, self.nodes)
+                    sequence = self._sequence_signature(action, result)
+                    identities = self._sequence_identities(action, result)
+                    if (not self._is_executable_candidate(action, result)
+                            or sequence in seen_sequences):
+                        continue
+                    seen_sequences.add(sequence)
+                    self._harvest_exclusions.add(identities)
+                    self._bank_candidate(action, result)
+                    completed.append({
+                        "root_action": str(action.identity), "sequence": sequence,
+                        "value": result.value, "bellman_complete": result.complete,
+                    })
+                    progress = True
+                if not progress:
+                    break
+            for action in self._safety_candidates(
+                    actions, allow_fallback=context != MAIN_DECISION_CONTEXT):
+                if action.identity in self._candidate_bank.live:
+                    break
+                index = actions.index(action)
+                self.nodes = 1
+                result = self._search_action(state, action, child_sleeps[action.identity])
+                results_list[index] = (action, result)
+                branch_nodes[index] = max(branch_nodes[index], self.nodes)
+                sequence = self._sequence_signature(action, result)
+                if self._is_executable_candidate(action, result) and sequence not in seen_sequences:
+                    seen_sequences.add(sequence)
+                    self._bank_candidate(action, result)
+                    completed.append({
+                        "root_action": str(action.identity), "sequence": sequence,
+                        "value": result.value, "bellman_complete": result.complete,
+                    })
+                    break
             self._harvesting_candidates = False
             self._candidate_harvest = {
                 "target": harvest_target,
@@ -1112,6 +1208,7 @@ class ProductionSolver(ReferenceSolver):
                 "completed_count": len(completed),
                 "completed": tuple(completed),
             }
+            self._candidate_bank.publish()
 
             probe_started = monotonic()
             probe_hard_deadline = probe_started + max(
@@ -1129,7 +1226,8 @@ class ProductionSolver(ReferenceSolver):
                 self._deadline = self._budget.root_deadline(
                     monotonic(), probe_hard_deadline, len(remaining) - position)
                 self.nodes = 1
-                result = self._action(state, action, child_sleeps[action.identity])
+                result = self._search_action(state, action, child_sleeps[action.identity])
+                self._bank_candidate(action, result)
                 branch_nodes[index] = self.nodes
                 branch_capped[index] = not result.complete and (
                     self.nodes >= probe_nodes or monotonic() >= self._deadline)
@@ -1140,8 +1238,9 @@ class ProductionSolver(ReferenceSolver):
                           if pair is not None and math.isfinite(pair[1].value)),
                     context, "probe")
             results_list = [pair for pair in results_list if pair is not None]
-            if results_list:
+            if len(results_list) == len(actions):
                 self._completed_rounds = 1
+                self._candidate_bank.publish()
             self._deadline = self._hard_deadline
 
             # Bellman probe values order bounded widening rounds; exact results need no more work.
@@ -1240,14 +1339,12 @@ class ProductionSolver(ReferenceSolver):
                 row for row in refinement_candidates if row not in selected
             ] if refinement_width else []
             reserved_refinements = len(selected)
+            refinement_interrupted = False
             for refinement_index, (index, action, probe) in enumerate(ordered_refinements):
                 if monotonic() >= self._hard_deadline:
                     self._deadline_hit = True
+                    refinement_interrupted = True
                     break
-                self._completed_rounds = max(
-                    self._completed_rounds,
-                    2 + refinement_index // max(1, refinement_width),
-                )
                 transition = self._provider_transition(state, action)
                 if isinstance(transition, RevealChoice):
                     refinement_nodes = self.production_limits.reveal_max_nodes
@@ -1271,7 +1368,7 @@ class ProductionSolver(ReferenceSolver):
                      else len(ordered_refinements) - refinement_index),
                 )
                 self.nodes = 1
-                refined = self._action(state, action, child_sleeps[action.identity])
+                refined = self._search_action(state, action, child_sleeps[action.identity])
                 branch_nodes[index] += max(0, self.nodes - 1)
                 branch_capped[index] = (
                     not refined.complete and self.nodes >= refinement_nodes)
@@ -1281,11 +1378,22 @@ class ProductionSolver(ReferenceSolver):
                              or (actor is Actor.OPPONENT and _ordered_evaluation(refined, actor)
                                  <= _ordered_evaluation(probe, actor)))):
                     results_list[index] = (action, refined)
+                    self._bank_candidate(action, refined)
                 self._record_incumbent(
                     state,
                     tuple((candidate, evaluated) for candidate, evaluated in results_list
                           if math.isfinite(evaluated.value)),
                     context, "refinement")
+                if refinement_width and (refinement_index + 1) % refinement_width == 0:
+                    self._candidate_bank.publish()
+                    self._completed_rounds = max(
+                        self._completed_rounds, 2 + refinement_index // refinement_width)
+            if (ordered_refinements and not refinement_interrupted and refinement_width
+                    and len(ordered_refinements) % refinement_width):
+                self._candidate_bank.publish()
+                self._completed_rounds = max(
+                    self._completed_rounds,
+                    2 + (len(ordered_refinements) - 1) // refinement_width)
 
             self._root_branch_nodes.extend(branch_nodes)
             self._root_branch_capped.extend(branch_capped)
@@ -1299,6 +1407,10 @@ class ProductionSolver(ReferenceSolver):
             if actor is Actor.OURS and not self._harvesting_candidates:
                 ordered_actions = tuple(sorted(
                     actions, key=lambda row: (row.identity.kind != "end", row.identity)))
+            if self._harvesting_candidates and self._harvest_exclusions:
+                ordered_actions = tuple(
+                    action for action in ordered_actions
+                    if (*self._harvest_prefix, action.identity) not in self._harvest_exclusions)
             incumbent = None
             for action in ordered_actions:
                 if actor is Actor.OURS and incumbent is not None \
@@ -1327,7 +1439,7 @@ class ProductionSolver(ReferenceSolver):
                         bound.update({"q_lower": -math.inf, "complete": False,
                                       "search_wave": 0, "pruned": True})
                         continue
-                result = self._action(state, action, child_sleeps[action.identity])
+                result = self._search_action(state, action, child_sleeps[action.identity])
                 results_list.append((action, result))
                 bound_key = (state.semantic_key, action.identity)
                 bound = self._action_bounds.get(bound_key, {
@@ -1345,6 +1457,9 @@ class ProductionSolver(ReferenceSolver):
                         (candidate, evaluated) for candidate, evaluated in results_list
                         if math.isfinite(evaluated.value))
                     incumbent = self._select_our_action(state, finite_results, context)
+                    if self._harvesting_candidates and result.execution_complete:
+                        harvest_short_circuit = True
+                        break
             results = tuple(results_list)
         self._deadline_hit = self._deadline_hit or monotonic() >= self._hard_deadline
         self._active.remove(memo_key)
@@ -1356,22 +1471,27 @@ class ProductionSolver(ReferenceSolver):
         else:
             if actor is Actor.OURS:
                 candidate_finite = tuple(
-                    pair for pair in finite if self._is_executable_candidate(*pair))
+                    (candidate, self._candidate_bank.checkpoint[candidate.identity])
+                    for candidate, _evaluated in finite
+                    if candidate.identity in self._candidate_bank.checkpoint)
                 if key == self._root_key and self._deadline_hit and candidate_finite:
                     action, result = self._select_our_action(
                         state, candidate_finite, context)
                     self._candidate_timeout_fallback = True
                 else:
-                    selected = self._select_our_action(state, finite, context)
-                    action, result = self._select_unresolved_focus(
-                        state, finite, context, selected)
+                    action, result = self._select_our_action(state, finite, context)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
-            proven = result.complete and len(finite) == len(results) and all(
+            proven = (not harvest_short_circuit
+                      and result.complete and len(finite) == len(results) and all(
                 evaluated.complete for _candidate, evaluated in results)
+            )
             evaluation = Evaluation(result.value, result.ledger, proven, result.reason,
-                                     result.branches, result.decisions, result.continuation)
+                                     result.branches, result.decisions, result.continuation,
+                                     (result.execution_complete if actor is Actor.OURS else
+                                      all(evaluated.execution_complete
+                                          for _candidate, evaluated in results)))
             answer = StateEvaluation(result.value, action, evaluation, results)
         # A bounded lower bound depends on the budget remaining when it was
         # reached.  Reusing it from another branch would turn traversal order
