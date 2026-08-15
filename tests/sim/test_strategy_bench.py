@@ -1,4 +1,8 @@
-from sim.strategy_bench import decision_metrics, format_report, summarize_decisions
+from sim.record import MatchRecorder
+from sim.strategy_bench import (
+    decision_metrics, format_report, save_match_artifacts, summarize_decisions,
+)
+from train.blunder.batch import discover_replays, load_game
 
 
 def _telemetry():
@@ -49,3 +53,19 @@ def test_report_uses_strategy_wave_and_focus_position_language():
     assert "Final incumbent first found avg 4.00s" in report
     assert "Strategy wave: first" in report
     assert "Strategy focus position: 3 of 8" in report
+
+
+def test_match_artifacts_are_directly_consumable_by_blunder_correction(tmp_path):
+    obs = {"current": {"yourIndex": 0, "turn": 1},
+           "select": {"context": 0, "option": [{"type": 14, "value": "a"}]}}
+    recorder = MatchRecorder()
+    recorder.step(obs, [0])
+    recorder.finish({"current": {"result": 0}, "select": None}, 0)
+    replay = recorder.replay(episode_id=42, team_names=["a", "b"])
+    records = [{"bellman": True, "chosen": [0], "seat": 0}]
+
+    path = save_match_artifacts(tmp_path, 42, replay, records)
+
+    assert path.name == "episode-42-replay.json"
+    assert discover_replays(tmp_path) == [path]
+    assert load_game(path)["live_records_by_seat"][0] == records

@@ -561,7 +561,8 @@ class ProductionSolver(ReferenceSolver):
         last_other = max(
             (index for index, event in enumerate(self._incumbent_timeline)
              if tuple(event["sequence"]) != final_sequence), default=-1)
-        stable_index = next((index for index in matches if index > last_other), None)
+        stable_index = next((index for index in matches
+                             if index >= first_index and index > last_other), None)
         first = self._incumbent_timeline[first_index]
         stable = self._incumbent_timeline[stable_index if stable_index is not None else matches[-1]]
         return {

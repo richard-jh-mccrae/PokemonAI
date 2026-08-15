@@ -9,7 +9,7 @@ import pytest
 from common import (
     ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
     PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
-    Refresh, SearchLimits, Terminal,
+    Refresh, RootDecision, SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
 from common.commutativity import ActionFootprint, action_footprint, independent
@@ -338,6 +338,27 @@ def test_exhaustive_strategy_on_and_off_choose_the_same_policy(monkeypatch):
     assert incumbent["strategy_wave"] == "widening"
     assert incumbent["strategy_focus_position"] is None
     assert incumbent["strategy_focus_count"] == 1
+
+
+def test_incumbent_stabilization_never_precedes_completed_first_discovery():
+    root = _state("timing-root")
+    action = _action("alpha")
+    solver = ProductionSolver(Graph({"timing-root": (action,)}, {}), _oracle())
+    sequence = (str(action.identity),)
+    solver._incumbent_timeline = [
+        {"elapsed_seconds": 1.0, "sequence": sequence, "complete": False,
+         "strategy_wave": "first", "strategy_focus_position": 1,
+         "strategy_focus_count": 1},
+        {"elapsed_seconds": 5.0, "sequence": sequence, "complete": True,
+         "strategy_wave": "first", "strategy_focus_position": 1,
+         "strategy_focus_count": 1},
+    ]
+    decision = RootDecision((0,), action.identity, 1.0, True, {})
+
+    timing = solver._incumbent_summary(decision, 60.0)
+
+    assert timing["first_found_seconds"] == 5.0
+    assert timing["stabilized_seconds"] == 5.0
 
 
 def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace():

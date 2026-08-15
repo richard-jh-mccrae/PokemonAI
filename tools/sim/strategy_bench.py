@@ -135,6 +135,15 @@ def _pairings(mode, agents, matches, seed):
     return [tuple(rng.sample(agents, 2)) for _ in range(matches)]
 
 
+def save_match_artifacts(run_dir, episode_id, replay, records) -> Path:
+    from sim.selfplay import _save_telemetry
+
+    path = Path(run_dir) / f"episode-{episode_id}-replay.json"
+    path.write_text(json.dumps(replay, ensure_ascii=False), encoding="utf-8")
+    _save_telemetry(Path(run_dir), episode_id, records)
+    return path
+
+
 def run(config: dict) -> dict:
     from sim.battle import AgentServer, play_match, read_deck
     from sim.record import MatchRecorder
@@ -165,17 +174,16 @@ def run(config: dict) -> dict:
                 server.close()
         elapsed = monotonic() - started
         decisions.extend(decision_metrics(captured, match_index=index, contestants=names))
+        eid = int(datetime.now().timestamp() * 1_000_000) + index
+        replay = recorder.replay(episode_id=eid, team_names=list(names))
+        replay_path = save_match_artifacts(run_dir, eid, replay, captured)
         match = {
             "match": index, "contestants": names, "winner_seat": result.winner,
             "crashed": result.crashed, "timed_out": result.timed_out,
             "match_deadline_hit": result.match_deadline_hit, "seconds": elapsed,
+            "replay": replay_path.name,
         }
         matches.append(match)
-        replay = recorder.replay(
-            episode_id=int(datetime.now().timestamp() * 1_000_000) + index,
-            team_names=list(names))
-        (run_dir / f"match-{index:04d}.json").write_text(
-            json.dumps(replay, ensure_ascii=False), encoding="utf-8")
     payload = {"config": config, "matches": matches, "decisions": decisions}
     payload["summary"] = summarize_decisions(decisions)
     (run_dir / "report.json").write_text(
