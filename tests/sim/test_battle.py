@@ -183,6 +183,7 @@ def test_play_match_scores_a_crashing_seat_as_a_loss():
         a.close()
         b.close()
     assert result.winner == 1 and result.crashed == (0,)   # seat 0 crashed -> seat 1 wins, flagged
+    assert "RuntimeError: intentional crash" in result.failure
 
 
 @pytest.mark.req("REQ-SIM-0007")

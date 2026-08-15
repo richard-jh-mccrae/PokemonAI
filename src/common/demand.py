@@ -193,6 +193,7 @@ class StrategyBeamBuilder:
                 probability = 1.0
             elif (hint.kind == "heal" and action.identity.kind == "play"
                   and self.effects is not None
+                  and source_id is not None
                   and any(clause.get("kind") == "heal"
                           for clause in self.effects.clauses(source_id))):
                 probability = 1.0

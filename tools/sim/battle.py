@@ -20,6 +20,7 @@ import os
 import queue
 import subprocess
 import sys
+from collections import deque
 from threading import Thread
 from time import monotonic
 from dataclasses import dataclass
@@ -38,6 +39,7 @@ class MatchResult:
     crashed: tuple[int, ...] = ()
     timed_out: tuple[int, ...] = ()
     match_deadline_hit: bool = False
+    failure: str | None = None
 
 
 @dataclass(frozen=True)
@@ -195,17 +197,32 @@ class AgentServer:
         self.proc = subprocess.Popen(
             [sys.executable, str(_SERVER), *(str(p) for p in extra_syspath)],
             cwd=str(bundle), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=env)
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env)
         self._responses = queue.Queue()
         self._reader = Thread(target=self._read_responses, daemon=True)
+        self._stderr_lines = deque(maxlen=80)
+        self._stderr_reader = Thread(target=self._read_stderr, daemon=True)
         self._reader.start()
+        self._stderr_reader.start()
         self.last_telemetry = []
         self.last_timeout = False
+        self.last_error = None
 
     def _read_responses(self) -> None:
         for line in self.proc.stdout:
             self._responses.put(line)
         self._responses.put(None)
+
+    def _read_stderr(self) -> None:
+        for line in self.proc.stderr:
+            self._stderr_lines.append(line.rstrip())
+
+    def _process_error(self) -> str:
+        self._stderr_reader.join(timeout=0.2)
+        detail = "\n".join(self._stderr_lines).strip()
+        code = self.proc.poll()
+        head = f"agent process exited with code {code}" if code is not None else "agent process failed"
+        return f"{head}: {detail[-4000:]}" if detail else head
 
     def alive(self) -> bool:
         return self.proc.poll() is None
@@ -214,11 +231,13 @@ class AgentServer:
         """The chosen indices, or None after a process failure or decision timeout."""
         self.last_timeout = False
         self.last_telemetry = []
+        self.last_error = None
         try:
             self.proc.stdin.write(json.dumps(obs) + "\n")
             self.proc.stdin.flush()
             line = self._responses.get(timeout=timeout)
             if not line:
+                self.last_error = self._process_error()
                 return None
             payload = json.loads(line)
             if isinstance(payload, dict):
@@ -229,8 +248,10 @@ class AgentServer:
         except queue.Empty:
             self.last_timeout = True
             self.proc.terminate()
+            self.last_error = f"decision timed out after {float(timeout):g}s"
             return None
-        except (BrokenPipeError, OSError, ValueError):
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            self.last_error = f"agent protocol failed: {type(exc).__name__}: {exc}"
             return None
 
     def close(self) -> None:
@@ -247,7 +268,12 @@ class AgentServer:
             self.proc.stdout and self.proc.stdout.close()
         except OSError:
             pass
+        try:
+            self.proc.stderr and self.proc.stderr.close()
+        except OSError:
+            pass
         self._reader.join(timeout=1)
+        self._stderr_reader.join(timeout=1)
 
 
 def play_match(server_a: AgentServer, server_b: AgentServer,
@@ -266,6 +292,7 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     crashed: tuple[int, ...] = ()
     timed_out: tuple[int, ...] = ()
     match_deadline_hit = False
+    failure = None
     deadline = monotonic() + float(match_timeout) if match_timeout is not None else None
     decision_index = 0
     try:
@@ -296,6 +323,7 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 else:
                     winner = 1 - seat
                     crashed = (seat,)
+                failure = getattr(servers[seat], "last_error", None)
                 break
             if metrics is not None:
                 metrics.extend({**record, "engine_seat": seat,
@@ -306,15 +334,16 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 recorder.step(obs, choice)         # (obs shown, choice made) — paired for the +1-offset film
             try:
                 obs = battle_select(choice)
-            except Exception:                      # illegal selection is a loss, same as a crash
+            except Exception as exc:               # illegal selection is a loss, same as a crash
                 winner, crashed = 1 - seat, (seat,)
+                failure = f"engine rejected selection: {type(exc).__name__}: {exc}"
                 break
     finally:
         battle_finish()
     if recorder is not None:
         recorder.finish(obs, winner)               # terminal obs + engine-seat winner
     return MatchResult(winner=winner, crashed=crashed, timed_out=timed_out,
-                       match_deadline_hit=match_deadline_hit)
+                       match_deadline_hit=match_deadline_hit, failure=failure)
 
 
 def _play_seated(server_a, server_b, deck_a, deck_b, a_seat: int) -> BattleMatch:

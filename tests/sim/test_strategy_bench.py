@@ -2,8 +2,8 @@ import os
 
 from sim.record import MatchRecorder
 from sim.strategy_bench import (
-    _run_jobs, decision_metrics, default_jobs, format_report, save_match_artifacts,
-    summarize_decisions, write_decisions_csv,
+    _agent_decision_seconds, _run_jobs, decision_metrics, default_jobs, format_report,
+    save_match_artifacts, summarize_decisions, write_decisions_csv,
 )
 from train.blunder.batch import discover_replays, load_game
 
@@ -59,6 +59,7 @@ def test_report_uses_strategy_wave_and_focus_position_language():
     }
     report = format_report(payload)
     assert "1 matches -- 10 jobs" in report
+    assert "Decision timeout 60.0s | agent budget 57s" in report
     assert "Final incumbent first found avg 4.00s" in report
     assert "Strategy wave: first" in report
     assert "Strategy focus position: 3 of 8" in report
@@ -84,6 +85,11 @@ def test_decision_csv_contains_both_seats_and_timing_metrics(tmp_path):
 def test_default_jobs_leaves_two_logical_processors_for_the_host(monkeypatch):
     monkeypatch.setattr(os, "cpu_count", lambda: 12)
     assert default_jobs() == 10
+
+
+def test_agent_budget_finishes_before_the_parent_process_timeout():
+    assert _agent_decision_seconds(120.0) == 115.0
+    assert 0 < _agent_decision_seconds(2.0) < 2.0
 
 
 def test_run_jobs_uses_bounded_process_pool_and_preserves_task_order(monkeypatch):
