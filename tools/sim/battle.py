@@ -17,8 +17,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import subprocess
 import sys
+from threading import Thread
+from time import monotonic
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,10 +33,11 @@ _MAX_STEPS = 5000          # runaway-game backstop; a real Match resolves in ~10
 
 @dataclass(frozen=True)
 class MatchResult:
-    """One Match outcome: winner seat (0=A, 1=B, None=draw) and which seats crashed. A crash already
-    decides the Match, so `winner` is the other seat and `crashed` is only the flag."""
+    """One engine-seat Match outcome, including process and experiment deadline failures."""
     winner: int | None
     crashed: tuple[int, ...] = ()
+    timed_out: tuple[int, ...] = ()
+    match_deadline_hit: bool = False
 
 
 @dataclass(frozen=True)
@@ -175,8 +179,15 @@ class AgentServer:
     """A contestant in its own process. The isolation (own cwd / `sys.path` / `sys.modules`) is the
     whole point: two DIFFERENT Bundles can play one Match, which an in-process load cannot do."""
 
-    def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None):
-        env = dict(os.environ, AGENT_NO_TELEMETRY="1", PYTHONIOENCODING="utf-8")
+    def __init__(self, bundle: Path | str, extra_syspath=(), *, overlay=None,
+                 capture_telemetry=False, decision_seconds=None):
+        env = dict(os.environ, AGENT_NO_TELEMETRY="0" if capture_telemetry else "1",
+                   AGENT_CAPTURE_TELEMETRY="1" if capture_telemetry else "0",
+                   PYTHONIOENCODING="utf-8")
+        if decision_seconds is not None:
+            env["AGENT_DECISION_SECONDS"] = str(float(decision_seconds))
+        else:
+            env.pop("AGENT_DECISION_SECONDS", None)
         if overlay:                                   # config under test, as absolute path (cwd=bundle)
             env["AGENT_OVERLAY"] = str(Path(overlay).resolve())
         else:
@@ -185,37 +196,64 @@ class AgentServer:
             [sys.executable, str(_SERVER), *(str(p) for p in extra_syspath)],
             cwd=str(bundle), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", env=env)
+        self._responses = queue.Queue()
+        self._reader = Thread(target=self._read_responses, daemon=True)
+        self._reader.start()
+        self.last_telemetry = []
+        self.last_timeout = False
+
+    def _read_responses(self) -> None:
+        for line in self.proc.stdout:
+            self._responses.put(line)
+        self._responses.put(None)
 
     def alive(self) -> bool:
         return self.proc.poll() is None
 
-    def act(self, obs: dict) -> list[int] | None:
-        """The contestant's chosen option indices for `obs`, or None if it crashed/died."""
+    def act(self, obs: dict, timeout=None) -> list[int] | None:
+        """The chosen indices, or None after a process failure or decision timeout."""
+        self.last_timeout = False
+        self.last_telemetry = []
         try:
             self.proc.stdin.write(json.dumps(obs) + "\n")
             self.proc.stdin.flush()
-            line = self.proc.stdout.readline()
-            return json.loads(line) if line.strip() else None
+            line = self._responses.get(timeout=timeout)
+            if not line:
+                return None
+            payload = json.loads(line)
+            if isinstance(payload, dict):
+                self.last_telemetry = list(payload.get("telemetry") or ())
+                return list(payload.get("choice") or ())
+            self.last_telemetry = []
+            return payload
+        except queue.Empty:
+            self.last_timeout = True
+            self.proc.terminate()
+            return None
         except (BrokenPipeError, OSError, ValueError):
             return None
 
     def close(self) -> None:
-        for stream in (self.proc.stdin, self.proc.stdout):
-            try:
-                stream and stream.close()
-            except OSError:
-                pass
+        try:
+            self.proc.stdin and self.proc.stdin.close()
+        except OSError:
+            pass
         self.proc.terminate()
         try:
             self.proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             self.proc.kill()
+        try:
+            self.proc.stdout and self.proc.stdout.close()
+        except OSError:
+            pass
+        self._reader.join(timeout=1)
 
 
 def play_match(server_a: AgentServer, server_b: AgentServer,
-               deck_a: list[int], deck_b: list[int], *, recorder=None) -> MatchResult:
-    """Drive one Match on the native engine until it reports a `result`. A crashed or illegal seat
-    loses and is flagged. Pass a `sim.record.MatchRecorder` to film the game off this loop."""
+               deck_a: list[int], deck_b: list[int], *, recorder=None,
+               decision_timeout=None, match_timeout=None, metrics=None) -> MatchResult:
+    """Drive one native Match, optionally capturing decisions and enforcing two deadlines."""
     from cg.game import battle_finish, battle_start, battle_select
 
     obs, start = battle_start(deck_a, deck_b)
@@ -226,6 +264,10 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
     servers = (server_a, server_b)
     winner: int | None = None
     crashed: tuple[int, ...] = ()
+    timed_out: tuple[int, ...] = ()
+    match_deadline_hit = False
+    deadline = monotonic() + float(match_timeout) if match_timeout is not None else None
+    decision_index = 0
     try:
         for _ in range(_MAX_STEPS):
             cur = obs.get("current") or {}
@@ -235,11 +277,31 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 break
             if obs.get("select") is None:
                 break
-            seat = cur.get("yourIndex", 0)
-            choice = servers[seat].act(obs)
-            if choice is None:                     # seat crashed -> other seat wins
-                winner, crashed = 1 - seat, (seat,)
+            if deadline is not None and monotonic() >= deadline:
+                match_deadline_hit = True
                 break
+            seat = cur.get("yourIndex", 0)
+            remaining = max(0.0, deadline - monotonic()) if deadline is not None else None
+            timeout = (min(float(decision_timeout), remaining)
+                       if decision_timeout is not None and remaining is not None
+                       else float(decision_timeout) if decision_timeout is not None else remaining)
+            choice = servers[seat].act(obs, timeout=timeout)
+            if choice is None:                     # seat crashed -> other seat wins
+                if (servers[seat].last_timeout and deadline is not None
+                        and monotonic() >= deadline):
+                    match_deadline_hit = True
+                elif servers[seat].last_timeout:
+                    winner = 1 - seat
+                    timed_out = (seat,)
+                else:
+                    winner = 1 - seat
+                    crashed = (seat,)
+                break
+            if metrics is not None:
+                metrics.extend({**record, "engine_seat": seat,
+                                "decision_index": decision_index}
+                               for record in servers[seat].last_telemetry)
+            decision_index += 1
             if recorder is not None:
                 recorder.step(obs, choice)         # (obs shown, choice made) — paired for the +1-offset film
             try:
@@ -251,7 +313,8 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
         battle_finish()
     if recorder is not None:
         recorder.finish(obs, winner)               # terminal obs + engine-seat winner
-    return MatchResult(winner=winner, crashed=crashed)
+    return MatchResult(winner=winner, crashed=crashed, timed_out=timed_out,
+                       match_deadline_hit=match_deadline_hit)
 
 
 def _play_seated(server_a, server_b, deck_a, deck_b, a_seat: int) -> BattleMatch:

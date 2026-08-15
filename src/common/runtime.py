@@ -97,9 +97,16 @@ class BellmanRuntime:
             roles=self.roles)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
         experiment, experiment_path = _pilot_overlay()
+        pilot_overrides = dict(getattr(strategy, "pilot_overrides", {}))
+        decision_seconds = os.environ.get("AGENT_DECISION_SECONDS")
+        if decision_seconds is not None:
+            pilot_overrides.update({
+                "clock.adaptive_enabled": 0.0,
+                "clock.remaining_200_seconds": float(decision_seconds),
+            })
         self.pilot_profile = PilotProfile.resolve(
             global_values=experiment,
-            authored_deck_overrides=getattr(strategy, "pilot_overrides", {}),
+            authored_deck_overrides=pilot_overrides,
             provenance=(f"overlay:{experiment_path}" if experiment_path
                         else f"strategy:{strategy.name}"),
         )

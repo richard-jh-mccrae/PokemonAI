@@ -294,6 +294,12 @@ def test_strategy_focus_schedules_every_root_without_deleting_a_legal_branch(mon
     assert decision.diagnostics["production"]["strategy_later_wave"] == 2
     assert decision.diagnostics["production"]["strategy_clock_scale"] == 1.0
     assert decision.diagnostics["production"]["root_branch_nodes"] == (3, 1, 2, 2)
+    incumbent = decision.diagnostics["production"]["final_incumbent"]
+    assert incumbent["strategy_wave"] == "first"
+    assert incumbent["strategy_focus_position"] == 1
+    assert incumbent["strategy_focus_count"] == 1
+    assert incumbent["first_found_seconds"] <= incumbent["stabilized_seconds"] \
+        <= incumbent["search_seconds"]
     assert {call for call in graph.calls if call[0] == "focus-root"} == {
         ("focus-root", "alpha"), ("focus-root", "beta"), ("focus-root", "gamma")}
 
@@ -328,6 +334,10 @@ def test_exhaustive_strategy_on_and_off_choose_the_same_policy(monkeypatch):
 
     assert on.complete and off.complete
     assert on.action == off.action == second.identity
+    incumbent = on.diagnostics["production"]["final_incumbent"]
+    assert incumbent["strategy_wave"] == "widening"
+    assert incumbent["strategy_focus_position"] is None
+    assert incumbent["strategy_focus_count"] == 1
 
 
 def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace():

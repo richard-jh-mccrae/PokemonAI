@@ -438,8 +438,12 @@ class ProductionSolver(ReferenceSolver):
         self._bound_prunes: list[dict] = []
         self._action_bounds: dict[object, dict] = {}
         self._deadline_hit = False
+        self._search_started = 0.0
+        self._incumbent_timeline: list[dict] = []
 
     def decide(self, state: DecisionState) -> RootDecision:
+        self._search_started = monotonic()
+        self._incumbent_timeline = []
         self._root_key = state.semantic_key
         self._root_branch_nodes = []
         self._root_branch_capped = []
@@ -466,6 +470,8 @@ class ProductionSolver(ReferenceSolver):
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
+        search_seconds = monotonic() - self._search_started
+        incumbent_summary = self._incumbent_summary(decision, search_seconds)
         self._complete_root_bounds(state, decision)
         if self._strategy_builder is not None and self._root_key not in self._strategy_beams:
             root_actions = tuple(sorted(self.provider.actions(state), key=lambda row: row.identity))
@@ -499,6 +505,8 @@ class ProductionSolver(ReferenceSolver):
             "family_candidates": (),
             "bound_prunes": tuple(self._bound_prunes),
             "action_bounds": tuple(self._action_bounds.values()),
+            "incumbent_timeline": tuple(self._incumbent_timeline),
+            "final_incumbent": incumbent_summary,
         }
         if self._root_key in self._strategy_beams:
             diagnostics["strategy_beam"] = self._strategy_beams[self._root_key]
@@ -511,6 +519,62 @@ class ProductionSolver(ReferenceSolver):
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics, decision.plan_suffix)
+
+    @staticmethod
+    def _sequence_signature(action, result) -> tuple[str, ...]:
+        return (str(action.identity), *(str(step.action) for step in result.continuation))
+
+    def _record_incumbent(self, state, finite, context, phase) -> None:
+        if not finite:
+            return
+        action, result = self._select_our_action(state, finite, context)
+        key = semantic_action_key(action)
+        focus_ranks = self._strategy_focus_ranks.get(self._root_key, {})
+        event = {
+            "elapsed_seconds": monotonic() - self._search_started,
+            "sequence": self._sequence_signature(action, result),
+            "value": result.value,
+            "complete": result.complete,
+            "phase": phase,
+            "strategy_wave": ("first" if self._strategy_waves.get(
+                self._root_key, {}).get(action, 0) == 0 else "widening"),
+            "strategy_focus_position": (
+                focus_ranks[key] + 1 if key in focus_ranks else None),
+            "strategy_focus_count": len(focus_ranks),
+        }
+        identity = (event["sequence"], event["value"], event["complete"])
+        if not self._incumbent_timeline or identity != tuple(
+                self._incumbent_timeline[-1][name]
+                for name in ("sequence", "value", "complete")):
+            self._incumbent_timeline.append(event)
+
+    def _incumbent_summary(self, decision, search_seconds) -> dict:
+        final_sequence = (
+            str(decision.action), *(str(step.action) for step in decision.plan_suffix))
+        matches = [index for index, event in enumerate(self._incumbent_timeline)
+                   if tuple(event["sequence"]) == final_sequence]
+        if not matches:
+            return {"search_seconds": search_seconds, "found": False}
+        complete_matches = [index for index in matches
+                            if self._incumbent_timeline[index]["complete"]]
+        first_index = (complete_matches[0] if complete_matches else matches[0])
+        last_other = max(
+            (index for index, event in enumerate(self._incumbent_timeline)
+             if tuple(event["sequence"]) != final_sequence), default=-1)
+        stable_index = next((index for index in matches if index > last_other), None)
+        first = self._incumbent_timeline[first_index]
+        stable = self._incumbent_timeline[stable_index if stable_index is not None else matches[-1]]
+        return {
+            "search_seconds": search_seconds,
+            "found": True,
+            "first_found_seconds": first["elapsed_seconds"],
+            "stabilized_seconds": (
+                stable["elapsed_seconds"] if stable_index is not None else search_seconds),
+            "strategy_wave": stable["strategy_wave"],
+            "strategy_focus_position": stable["strategy_focus_position"],
+            "strategy_focus_count": stable["strategy_focus_count"],
+            "complete": decision.complete,
+        }
 
     def _continuation_steps(self, before: DecisionState, action: LegalAction,
                             after: DecisionState,
@@ -930,6 +994,11 @@ class ProductionSolver(ReferenceSolver):
                 branch_capped.append(not result.complete and (
                     self.nodes >= probe_nodes or monotonic() >= self._deadline))
                 results_list.append((action, result))
+                self._record_incumbent(
+                    state,
+                    tuple((candidate, evaluated) for candidate, evaluated in results_list
+                          if math.isfinite(evaluated.value)),
+                    context, "probe")
             if results_list:
                 self._completed_rounds = 1
             self._deadline = self._hard_deadline
@@ -1065,6 +1134,11 @@ class ProductionSolver(ReferenceSolver):
                              or (actor is Actor.OPPONENT and _ordered_evaluation(refined, actor)
                                  <= _ordered_evaluation(probe, actor)))):
                     results_list[index] = (action, refined)
+                self._record_incumbent(
+                    state,
+                    tuple((candidate, evaluated) for candidate, evaluated in results_list
+                          if math.isfinite(evaluated.value)),
+                    context, "refinement")
 
             self._root_branch_nodes.extend(branch_nodes)
             self._root_branch_capped.extend(branch_capped)

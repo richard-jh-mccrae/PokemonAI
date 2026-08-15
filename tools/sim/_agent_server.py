@@ -4,14 +4,15 @@ Spawned by tools/sim/battle.py with **cwd = the Bundle dir**, so the agent's `de
 sibling imports (`strategy`, `common`, `cg`) resolve exactly as on the grader — and each
 contestant gets its *own* process, so two different Bundles never collide in `sys.modules`.
 
-Protocol: one JSON observation per line in (stdin) → one JSON list of chosen indices per
-line out. The agent's own stdout (stray prints, telemetry) is redirected to stderr so it
-never corrupts the protocol channel. Telemetry is silenced for speed (curiosity mode).
+Protocol: one JSON observation per line in (stdin) → one JSON response per line out.
+Normal Battles return the chosen-index list. Strategy Bench returns that list plus captured
+decision telemetry. Agent stdout is redirected to stderr so it cannot corrupt the channel.
 """
 import importlib.util
 import json
 import os
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 
@@ -23,7 +24,8 @@ def _load_agent(bundle: Path):
 
 
 def main() -> None:
-    os.environ["AGENT_NO_TELEMETRY"] = "1"                 # protocol channel must stay clean
+    capture = os.environ.get("AGENT_CAPTURE_TELEMETRY") == "1"
+    os.environ["AGENT_NO_TELEMETRY"] = "0" if capture else "1"
     for root in sys.argv[1:]:                              # extra sys.path roots (e.g. src for source agent)
         sys.path.insert(0, root)
     bundle = Path.cwd()
@@ -41,8 +43,16 @@ def main() -> None:
         line = line.strip()
         if not line:
             continue
-        choice = agent(json.loads(line))
-        proto.write(json.dumps([int(i) for i in choice]) + "\n")
+        if capture:
+            from common.telemetry import capture_records
+            context = capture_records()
+        else:
+            context = nullcontext([])
+        with context as records:
+            choice = agent(json.loads(line))
+        payload = ({"choice": [int(i) for i in choice], "telemetry": records}
+                   if capture else [int(i) for i in choice])
+        proto.write(json.dumps(payload) + "\n")
         proto.flush()
 
 

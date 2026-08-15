@@ -1,7 +1,9 @@
 """Battle (tools/sim): a local head-to-head between two Builds. Pure-core + engine driver."""
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+import sim.battle as battle
 
 from sim.battle import (AgentServer, BattleMatch, MatchResult, balanced_tally, format_report,
                         parse_spec, play_match, read_deck, resolve, resolve_contestant, run_battle,
@@ -181,6 +183,30 @@ def test_play_match_scores_a_crashing_seat_as_a_loss():
         a.close()
         b.close()
     assert result.winner == 1 and result.crashed == (0,)   # seat 0 crashed -> seat 1 wins, flagged
+
+
+@pytest.mark.req("REQ-SIM-0007")
+def test_play_match_attributes_an_expired_shorter_wait_to_the_match_deadline(monkeypatch):
+    obs = {"current": {"result": -1, "yourIndex": 0}, "select": {"context": 0}}
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        obs, SimpleNamespace(errorPlayer=-1)))
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+    clock = iter((0.0, 0.0, 0.0, 2.0))
+    monkeypatch.setattr(battle, "monotonic", lambda: next(clock))
+
+    class TimedServer:
+        last_timeout = True
+        last_telemetry = []
+
+        def act(self, _obs, timeout=None):
+            assert timeout == 1.0
+            return None
+
+    result = play_match(TimedServer(), TimedServer(), [], [],
+                        decision_timeout=5.0, match_timeout=1.0)
+    assert result.winner is None
+    assert result.timed_out == ()
+    assert result.match_deadline_hit
 
 
 @pytest.mark.req("REQ-SIM-0007")
