@@ -28,7 +28,7 @@ PRODUCTION_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.max_nodes"))
 PRODUCTION_CHANCE_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.chance_max_nodes"))
 PRODUCTION_REVEAL_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.reveal_max_nodes"))
 UNCERTAINTY_REFINEMENT_VALUE_MARGIN = DEFAULT_PILOT_PROFILE.get("search.uncertainty_margin")
-ROOT_PROBE_TIME_SHARE = 0.5
+ROOT_PROBE_TIME_SHARE = 0.1
 PRODUCTION_MAX_SECONDS = DEFAULT_PILOT_PROFILE.get("clock.remaining_200_seconds")
 PRODUCTION_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.beam_width"))
 DEFAULT_ROOT_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.root_beam_width"))
@@ -37,6 +37,7 @@ DEFAULT_ROOT_PROBE_NODES = int(DEFAULT_PILOT_PROFILE.get("search.shallow_nodes")
 DEFAULT_ROOT_REFINEMENT_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.refinement_width"))
 SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
+PRIZE_SELECTION_CONTEXT = 7
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
 
@@ -434,6 +435,7 @@ class ProductionSolver(ReferenceSolver):
         self._completed_rounds = 0
         self._bound_prunes: list[dict] = []
         self._action_bounds: dict[object, dict] = {}
+        self._forced_choice_truncations = 0
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
@@ -466,6 +468,7 @@ class ProductionSolver(ReferenceSolver):
         self._completed_rounds = 0
         self._bound_prunes.clear()
         self._action_bounds.clear()
+        self._forced_choice_truncations = 0
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
@@ -493,6 +496,7 @@ class ProductionSolver(ReferenceSolver):
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
             "information_first_permutations_pruned": self.information_pruned,
+            "forced_choice_truncations": self._forced_choice_truncations,
             "structural_prunes": tuple(self._structural_prunes),
             "profile_hash": self.profile.hash,
             "completed_rounds": self._completed_rounds,
@@ -549,6 +553,15 @@ class ProductionSolver(ReferenceSolver):
             minimum = self.profile.get("search.reveal_information_min_need")
             return reveal if reveal >= minimum else 0.0
         return self.oracle.need_coverage_value(state, action)
+
+    def _immediate_order_value(self, state: DecisionState, action: LegalAction) -> float:
+        node = self._provider_transition(state, action)
+        if isinstance(node, Deterministic):
+            return self._ledger(state, node.state, action).immediate
+        if isinstance(node, Terminal):
+            return _combine(self._ledger(state, node.state, action), 0.0,
+                            node.ledger).immediate
+        return -math.inf
 
     @staticmethod
     def _sleep_key(sleep: tuple[SleepEvent, ...]) -> tuple[tuple[str, ...], ...]:
@@ -782,6 +795,7 @@ class ProductionSolver(ReferenceSolver):
                     earlier.append(footprint)
         else:
             child_sleeps = {action.identity: sleep for action in actions}
+        truncated = False
         if key == self._root_key:
             action_waves = self._need_waves.get(key, {})
             results_list = []
@@ -970,10 +984,29 @@ class ProductionSolver(ReferenceSolver):
             results_list = []
             ordered_actions = actions
             if actor is Actor.OURS:
-                ordered_actions = tuple(sorted(
-                    actions, key=lambda row: (row.identity.kind != "end", row.identity)))
+                if context == MAIN_DECISION_CONTEXT:
+                    ordered_actions = tuple(sorted(
+                        actions, key=lambda row: (row.identity.kind != "end", row.identity)))
+                else:
+                    ordered_actions = tuple(sorted(actions, key=lambda row: (
+                        row.identity.kind != "end",
+                        -self._immediate_order_value(state, row),
+                        row.identity,
+                    )))
+                    width = (1 if context == PRIZE_SELECTION_CONTEXT
+                             else self.production_limits.effect_choice_width)
+                    if len(ordered_actions) > width:
+                        self._forced_choice_truncations += 1
+                        ordered_actions = ordered_actions[:width]
+                        truncated = True
             incumbent = None
+            evaluated_non_end = False
             for action in ordered_actions:
+                if (actor is Actor.OURS and incumbent is not None and evaluated_non_end
+                        and (self.nodes >= self.limits.max_nodes
+                             or monotonic() >= self._deadline)):
+                    truncated = True
+                    break
                 if actor is Actor.OURS and incumbent is not None \
                         and action.identity.kind != "end":
                     q_upper, terms = self._root_upper_bound(state, action)
@@ -1002,6 +1035,7 @@ class ProductionSolver(ReferenceSolver):
                         continue
                 result = self._action(state, action, child_sleeps[action.identity])
                 results_list.append((action, result))
+                evaluated_non_end = evaluated_non_end or action.identity.kind != "end"
                 bound_key = (state.semantic_key, action.identity)
                 bound = self._action_bounds.get(bound_key, {
                     "state": state.semantic_key, "action": str(action.identity)})
@@ -1031,9 +1065,10 @@ class ProductionSolver(ReferenceSolver):
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))
-            proven = result.complete and len(finite) == len(results) and all(
-                evaluated.complete for _candidate, evaluated in results)
-            evaluation = Evaluation(result.value, result.ledger, proven, result.reason,
+            proven = (not truncated and result.complete and len(finite) == len(results)
+                      and all(evaluated.complete for _candidate, evaluated in results))
+            reason = ("production cap: incumbent lower bound" if truncated else result.reason)
+            evaluation = Evaluation(result.value, result.ledger, proven, reason,
                                     result.branches, result.decisions, result.continuation)
             answer = StateEvaluation(result.value, action, evaluation, results)
         # A bounded lower bound depends on the budget remaining when it was

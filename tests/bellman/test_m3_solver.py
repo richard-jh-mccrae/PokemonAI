@@ -1059,6 +1059,70 @@ def test_bounded_own_choice_keeps_a_finite_lower_bound_from_one_legal_branch():
     assert not decision.complete
 
 
+def test_bounded_own_state_returns_incumbent_when_budget_expires_between_actions():
+    root = _state("state-lower-root")
+    choose = _state("state-lower-choose")
+    exact = _state("state-lower-exact", board=0.5)
+    unresolved = _state("state-lower-unresolved")
+    setup, good, slow, forced, end = (
+        _action("setup"), _action("a_good"), _action("z_slow"),
+        _action("forced"), _action("end", 1))
+    graph = FootprintedGraph(
+        {"state-lower-root": (setup, end),
+         "state-lower-choose": (good, slow, end),
+         "state-lower-unresolved": (forced,), "state-lower-exact": (end,)},
+        {("state-lower-root", "setup"): Deterministic(choose),
+         ("state-lower-root", "end"): Terminal(root, "End exact zero"),
+         ("state-lower-choose", "a_good"): Terminal(exact, "resolved"),
+         ("state-lower-choose", "z_slow"): Deterministic(unresolved),
+         ("state-lower-unresolved", "forced"): Terminal(exact, "resolved")},
+        {"setup": ActionFootprint(("setup",)), "a_good": ActionFootprint(("good",)),
+         "z_slow": ActionFootprint(("slow",)), "forced": ActionFootprint(("forced",)),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(
+            max_nodes=2, root_probe_nodes=2, root_refinement_width=0),
+    ).decide(root)
+
+    assert decision.action.kind == "setup"
+    assert decision.value == pytest.approx(0.5)
+    assert not decision.complete
+    assert ("state-lower-choose", "z_slow") not in graph.calls
+
+
+def test_forced_own_choice_orders_by_immediate_bellman_gain_before_capping():
+    root = _state("forced-order-root")
+    choose = _state("forced-order-choose", context=7)
+    low = _state("forced-order-low", board=0.1)
+    high = _state("forced-order-high", board=0.5)
+    setup, low_pick, high_pick, end = (
+        _action("setup"), _action("a_low"), _action("z_high"), _action("end", 1))
+    graph = Graph(
+        {"forced-order-root": (setup, end),
+         "forced-order-choose": (low_pick, high_pick),
+         "forced-order-low": (end,), "forced-order-high": (end,)},
+        {("forced-order-root", "setup"): Deterministic(choose),
+         ("forced-order-root", "end"): Terminal(root, "End exact zero"),
+         ("forced-order-choose", "a_low"): Terminal(low, "resolved"),
+         ("forced-order-choose", "z_high"): Terminal(high, "resolved")},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(
+            max_nodes=20, root_probe_nodes=20, root_refinement_width=0,
+            effect_choice_width=64),
+    ).decide(root)
+
+    assert decision.action.kind == "setup"
+    assert decision.value == pytest.approx(0.5)
+    assert not decision.complete
+    assert decision.diagnostics["production"]["forced_choice_truncations"] == 1
+
+
 def test_reveal_choice_uses_remaining_turn_value_not_static_card_precedence():
     root = _state("root")
     static_high = _state("static-high", board=0.10)
