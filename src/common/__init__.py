@@ -64,6 +64,7 @@ from .solver import (
     TransitionProvider,
 )
 from .state import DecisionState, OpponentBelief, TurnBudgets
+from .terminal import ProofStep, TerminalLimits, TerminalProof, TerminalProver
 from .value import CardFacts, Potential, ValueOracle, ValueRegistry, WorthSeeds
 
 __all__ = (
@@ -74,7 +75,8 @@ __all__ = (
     "Need", "NeedBeam", "NeedBeamBuilder", "NeedModel", "NeedPath", "NeedRoot", "PathFeatures", "PokemonRole",
     "ProductionLimits", "ProductionSolver", "ReferenceSolver", "Refresh",
     "ResolvedAssignment", "RetainedAssignment", "RetainedOption", "RevealChoice", "RevealOutcome",
-    "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TransitionProvider", "TurnBudgets",
+    "RevealSet", "RootDecision", "SearchLimits", "Terminal", "TerminalLimits", "TerminalProof",
+    "TerminalProver", "ProofStep", "TransitionProvider", "TurnBudgets",
     "Unknown", "UnknownAction", "UtilityScale", "ValueOracle", "ValueRegistry", "WorthSeeds",
     "DEFAULT_PILOT_PROFILE", "DEFINITIONS", "PilotProfile", "enumerate_legal_actions",
     "access_probability", "hypergeometric_classes", "infer_pokemon_roles", "opponent_belief",

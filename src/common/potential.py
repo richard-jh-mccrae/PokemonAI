@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
 from .damage import compute_active_damage
 from .damage_context import SideFacts, damage_context
@@ -16,8 +17,6 @@ from .strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes
 
 
-ENERGY_COLORLESS = 0
-ENERGY_WILDCARD = 10
 MINIMUM_HP = 1
 KNOCKED_OUT_HP = 0
 TERMINAL_GAME_UTILITY = 100.0
@@ -27,7 +26,7 @@ STANDARD_PRIZE_COUNT = 6
 FUTURE_HAND_ACCESS_DISCOUNT = 0.75
 OPPONENT_ROLE_PRESENCE_SHARE = 0.90
 OPPONENT_ROLE_HEALTH_SHARE = 0.10
-SAFE_DAMAGE_RESERVE_SHARE = 0.25
+SAFE_DAMAGE_RESERVE_SHARE = 0.10
 OPPONENT_ROLE_THREAT_SHARE = 0.20
 OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
 BENCH_ATTACK_ACCESS_SHARE = 0.50
@@ -56,20 +55,7 @@ def _energy_codes(body):
 
 
 def _pay_fraction(codes, required) -> float:
-    required = [int(code) for code in required]
-    if not required:
-        return 1.0
-    remaining = list(codes)
-    paid = 0
-    for energy_type in (code for code in required if code != ENERGY_COLORLESS):
-        index = next((index for index, code in enumerate(remaining)
-                      if code in (energy_type, ENERGY_WILDCARD)), None)
-        if index is not None:
-            remaining.pop(index)
-            paid += 1
-    colorless = sum(code == ENERGY_COLORLESS for code in required)
-    paid += min(colorless, len(remaining))
-    return paid / len(required)
+    return payment_fraction(codes, required)
 
 
 class BoardPotential:
@@ -462,6 +448,9 @@ class BoardPotential:
         jobs: dict[tuple, list[float]] = {}
         for body in _bodies(me):
             for card_id in self._stack_ids(body):
+                stat = self._stat(card_id)
+                if stat is not None and getattr(stat, "is_energy", False):
+                    continue
                 partners = required_partners.get(card_id, ())
                 if partners and not set(partners).issubset(body_ids):
                     continue
@@ -510,8 +499,21 @@ class BoardPotential:
             maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
             survival = max(0.0, min(1.0, int(body.get("hp", maximum)) / maximum))
             cards = tuple(card for card in (body.get("energyCards") or ()) if card)
-            values = [worth_to_prizes(self.registry.worth(int(card.get("id", 0))))
-                      for card in cards[:cap]]
+            remaining = cap
+            values = []
+            overcap = 0.0
+            for card in cards:
+                supplied = provision_units(
+                    self.registry.functions, int(card.get("id", 0)),
+                    evolved=bool(body.get("preEvolution")))
+                units = min(remaining, supplied)
+                unit_value = worth_to_prizes(
+                    self.registry.worth(int(card.get("id", 0)))) / supplied
+                values.extend(
+                    unit_value
+                    for _ in range(units))
+                overcap += max(0, supplied - units) * unit_value
+                remaining -= units
             if not values:
                 values = [worth_to_prizes(self.registry.seeds.energy)] * min(
                     cap, len(_energy_codes(body)))
@@ -521,7 +523,7 @@ class BoardPotential:
                          for index, value in enumerate(values))
             if not self.isolated_selection or historical_context != _DAMAGE:
                 shaped *= self._attack_coverage(body, _energy_codes(body), me, opponent)
-            total += survival * shaped
+            total += survival * shaped - overcap
         active = next((body for body in (me.get("active") or ()) if body), None)
         if active is not None and not self.isolated_selection:
             cap = self._energy_cost_cap(int(active.get("id", 0)))
@@ -720,6 +722,9 @@ class BoardPotential:
             "prize_plan": self._prize_plan(me, opponent),
         }
         return Potential(sum(families.values()), tuple(sorted(families.items())))
+
+    def optimistic_ceiling(self, _observation, **_context) -> float:
+        return self.scale.game
 
 
 __all__ = ("BoardPotential", "UtilityScale")

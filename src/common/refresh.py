@@ -112,7 +112,8 @@ class RefreshEvaluator:
         players = current.get("players") or ()
         mine = players[state.root_seat] if len(players) > state.root_seat else {}
         opponent = players[1 - state.root_seat] if len(players) > 1 else {}
-        immediate = self.needs.immediate(observation, state.root_seat)
+        current_needs = self.needs.immediate(observation, state.root_seat)
+        immediate = tuple(need for need in current_needs if need.timing != "next_turn")
         hand = tuple(card for card in (mine.get("hand") or ())
                      if card and card.get("id") is not None)
         returned = [int(card["id"]) for card in hand]
@@ -126,7 +127,7 @@ class RefreshEvaluator:
             observation, state.root_seat, returned,
         )
         next_turn = (self.needs.new_next_turn_needs(
-            observation, state.root_seat, current=immediate)
+            observation, state.root_seat, current=current_needs)
                      if include_next_turn else ())
         branch_rows = []
         weighted_needs = weighted_next_turn = weighted_tactical = weighted_opponent = 0.0
@@ -138,6 +139,7 @@ class RefreshEvaluator:
                 discard_capacity=max(0, len(returned) - FETCHER_CARD_COUNT),
                 available_targets=Counter({int(card_id): int(count)
                                            for card_id, count in state.deck_counts}),
+                observation=observation, seat=state.root_seat,
             )
             need_value = self._expected_need_value(
                 state, uncovered, returned, int(own_draw),
@@ -199,7 +201,9 @@ class RefreshEvaluator:
             root_value = max((value for _card_id, value in need.direct), default=0.0)
             normalized.append(Need(
                 need.key, tuple((card_id, root_value) for card_id, _value in need.direct),
-                need.timing))
+                timing=need.timing, recipient=need.recipient,
+                capability=need.capability, slot=need.slot,
+                ceiling=root_value, alternative=need.alternative))
         return tuple(normalized)
 
     def _held_option_cost(self, observation, seat: int, *, played_card_id: int) -> float:
@@ -231,12 +235,18 @@ class RefreshEvaluator:
         refreshed_counts = hidden_counts + returned_counts
         discard_capacity = max(0, int(draws) - FETCHER_CARD_COUNT)
 
+        recipient_units = {
+            card_id: self.needs.energy_units_by_recipient(state.obs, state.root_seat, card_id)
+            for card_id in refreshed_counts
+        }
+
         def semantic_counts(identity_counts):
             grouped = Counter()
             for card_id, count in identity_counts.items():
                 slots = self.needs.coverage_slots(
                     card_id, needs, supporter_available=supporter_available,
-                    discard_capacity=discard_capacity, available_targets=refreshed_counts)
+                    discard_capacity=discard_capacity, available_targets=refreshed_counts,
+                    recipient_units=recipient_units[card_id], resource_group="class")
                 # Only card identities capable of filling one of these needs must remain distinct.
                 # Every other identity is equivalent filler for this closed-form calculation.
                 grouped[int(card_id) if slots else None] += count
@@ -270,10 +280,13 @@ class RefreshEvaluator:
                     remaining_targets = Counter({card_id: count for card_id, count
                                                  in remaining_targets.items() if count > 0})
                     tokens = tuple(
-                        token for card_id in drawn_ids for token in self.needs.coverage_slots(
+                        token for resource_index, card_id in enumerate(drawn_ids)
+                        for token in self.needs.coverage_slots(
                             card_id, needs, supporter_available=supporter_available,
                             discard_capacity=discard_capacity,
-                            available_targets=remaining_targets))
+                            available_targets=remaining_targets,
+                            recipient_units=recipient_units[card_id],
+                            resource_group=f"drawn:{resource_index}"))
                     assignment = best_assignment(
                         tokens, len(needs), target_counts=remaining_targets)
                     expected += (split * returned_probability * hidden_probability

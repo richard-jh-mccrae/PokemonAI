@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections import Counter
 import json
 
 import pytest
@@ -28,8 +29,8 @@ def _correction(episode, frame):
     (82753102, 85, [0]),        # Kadabra line outranks Dunsparce
     (83966968, 79, [1]),        # damaged multi-prize gust target
     (84897262, 110, [1]),       # fetched Water unlocks the game win
-    (82749168, 21, [0]),        # deterministic Water attach, then Hammer strips the energized Bench
-    (82228017, 4, [2]),         # free Cape, then the ruled Water attach to Cinderace
+    (82749168, 21, [1]),        # Hammer can strip the energized Bench before the attack
+    (82228017, 4, [1]),         # ruled Water attach; Cape is a commutative free prefix
     (82752604, 16, [2]),        # redundant Mega Signal loses to the resolving attack
     (82717711, 18, [1]),        # a legal beneficial attack beats exact-zero End
     (83116081, 76, [5]),        # heal then reattach then KO survives bounded search
@@ -55,15 +56,24 @@ def test_20260812_sequence_and_target_corrections():
         REPO / "data" / "corrections" / "mega_starmie_20260812_1a37dbb5" /
         "corrections.jsonl").read_text(encoding="utf-8").splitlines()]
     expected = {
-        "9e502ba97ac7": [1],       # need-aware dig before a now-redundant deterministic Mega search
+        "9e502ba97ac7": [1],       # Mega Signal is redundant after all three Mega Starmie are found
         "e4fae85fcf63": [0],       # free deterministic search, then the ruled attack over End
         "fa978d4e6fe4": [0],       # damage the scouted evolving win condition
-        "0a482197b23f": [0],       # identical Salvatore copy of corrected option 2
+        "0a482197b23f": [0],       # either identical Salvatore copy of corrected option 2
         "995549cd76ee": [0],       # evolve the loaded Staryu
         "03fae5aa66e0": [5],       # Ultra Ball begins the proved same-turn game win
-        "71cf48e4701c": [6],       # establish Staryu before targeting both wincon bodies
+        "71cf48e4701c": [6],       # Needs establishes Staryu; Pokégear commutes
         "4eaf233ccb54": [0, 1],    # discard duplicate tutor access; retain live Hammer
         "5972e5096b0c": [0],       # damage the scouted Alakazam win condition
     }
     for record in records:
-        assert runtime().decide(record["obs"]).chosen == tuple(expected[record["id"]])
+        observation = record["obs"]
+        if record["id"] == "03fae5aa66e0":
+            observation = dict(observation)
+            prizes = record["decision"]["current"]["players"][0]["prize"]
+            observation["own_prizes"] = dict(Counter(str(card["id"]) for card in prizes))
+        chosen = runtime().decide(observation).chosen
+        if record["id"] == "0a482197b23f":
+            assert chosen in {(0,), (1,)}
+        else:
+            assert chosen == tuple(expected[record["id"]])

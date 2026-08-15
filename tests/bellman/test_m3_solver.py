@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import math
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +14,7 @@ from common import (
 from common.algebra import Edge, WeightedEdge
 from common.commutativity import ActionFootprint, action_footprint, independent
 from common.needs import ActionFocus, NeedBeam, semantic_action_key
-from common.options import LegalAction
+from common.options import LegalAction, enumerate_legal_actions
 import common.solver as solver_module
 from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 
@@ -280,6 +281,33 @@ def test_production_partial_order_reduction_skips_only_the_reverse_commutative_o
         "commutativity"
 
 
+def test_commutative_evolution_is_canonical_before_attachment():
+    root = _state("root")
+    after_attach = _state("after-attach", board=0.1)
+    after_evolve = _state("after-evolve", board=0.1)
+    finish = _state("finish", board=0.2)
+    attach, evolve, end = _action("attach"), _action("evolve", 1), _action("end", 2)
+    graph = FootprintedGraph(
+        {"root": (attach, evolve, end), "after-attach": (evolve, end),
+         "after-evolve": (attach, end), "finish": (end,)},
+        {("root", "attach"): Deterministic(after_attach),
+         ("root", "evolve"): Deterministic(after_evolve),
+         ("after-attach", "evolve"): Deterministic(finish),
+         ("after-evolve", "attach"): Deterministic(finish)},
+        {"attach": ActionFootprint(("attach",), writes=frozenset({"energy"})),
+         "evolve": ActionFootprint(("evolve",), writes=frozenset({"identity"})),
+         "end": ActionFootprint(("end",), barrier=True)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+    ).decide(root)
+
+    assert decision.action.kind == "evolve"
+    assert ("after-evolve", "attach") in graph.calls
+    assert ("after-attach", "evolve") not in graph.calls
+
+
 def test_chance_boundary_clears_partial_order_sleep_set():
     root = _state("chance-root")
     after_alpha = _state("chance-after-alpha", board=0.1)
@@ -497,7 +525,7 @@ def test_information_first_prunes_only_the_commitment_then_fetch_order():
                for row in decision.diagnostics["production"]["structural_prunes"])
 
 
-def test_immediate_need_preparation_precedes_a_commitment():
+def test_immediate_need_preparation_never_deletes_a_commitment_without_a_bound():
     root = _state("need-root")
     after_setup = _state("after-setup", board=0.1)
     after_attach = _state("after-attach", board=0.2)
@@ -523,9 +551,11 @@ def test_immediate_need_preparation_precedes_a_commitment():
         graph, oracle, limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
     ).decide(root)
 
-    assert decision.action.kind == "play"
-    assert any(row["proof_type"] == "needs_before_commitment"
-               for row in decision.diagnostics["production"]["structural_prunes"])
+    assert decision.action == ReferenceSolver(graph, oracle).decide(root).action
+    assert ("need-root", "attach") in graph.calls
+    assert ("need-root", "play") in graph.calls
+    assert not any(row["proof_type"] == "needs_before_commitment"
+                   for row in decision.diagnostics["production"]["structural_prunes"])
 
 
 def test_urgent_heal_retains_free_recovery_that_fills_a_need():
@@ -556,6 +586,31 @@ def test_urgent_heal_retains_free_recovery_that_fills_a_need():
     ).decide(root)
 
     assert decision.action.kind == "recover"
+
+
+def test_reserved_recovery_does_not_leave_refinement_width_unused():
+    root = _state("reserve-root")
+    recovered = _state("reserve-recovered", board=0.1)
+    explored = _state("reserve-explored", board=0.8)
+    recover, explore, end = _action("recover"), _action("explore", 1), _action("end", 2)
+    graph = Graph(
+        {"reserve-root": (recover, explore, end),
+         "reserve-recovered": (end,), "reserve-explored": (end,)},
+        {("reserve-root", "recover"): Deterministic(recovered),
+         ("reserve-root", "explore"): Deterministic(explored)},
+    )
+    oracle = _oracle()
+    oracle.recovery_need_value = lambda _state, action: (
+        0.1 if action.identity.kind == "recover" else 0.0)
+
+    decision = ProductionSolver(
+        graph, oracle,
+        limits=ProductionLimits(
+            max_nodes=10, root_probe_nodes=1, root_refinement_width=2),
+    ).decide(root)
+
+    assert sum(count > 1 for count in
+               decision.diagnostics["production"]["root_branch_nodes"]) == 2
 
 
 def test_incomplete_forced_discard_uses_stable_immediate_value_fallback():
@@ -649,6 +704,23 @@ def test_budget_dependent_lower_bound_is_not_transposition_cached():
     assert exact.value == pytest.approx(0.2)
 
 
+def test_capped_state_uses_the_exact_resolved_end_as_its_lower_bound():
+    capped, expired = _state("capped", board=0.4), _state("expired", board=0.1)
+    end = _action("end")
+    solver = ProductionSolver(
+        ResolvedEndGraph({"capped": (end,)}, {("capped", "end"): Deterministic(expired)}),
+        _oracle(), limits=ProductionLimits(max_nodes=1),
+    )
+    solver.nodes = 1
+
+    result = solver._state(capped)
+
+    assert result.action == end
+    assert result.value == pytest.approx(-0.3)
+    assert result.evaluation.ledger.costs == (("board", pytest.approx(0.3)),)
+    assert not result.evaluation.complete
+
+
 def test_mandatory_choice_ignores_optional_menu_width_cap():
     """A forced selection must return a legal Bellman action, never crash on a width cap."""
     root = _state("mandatory")
@@ -697,6 +769,208 @@ def test_production_successive_halving_refines_only_the_best_incomplete_root():
     assert production["root_branch_nodes"][0] > 1
     assert production["root_branch_nodes"][1] == 1
     assert production["root_refinement_width"] == 1
+
+
+def test_equal_lower_bounds_prefer_the_proven_complete_action():
+    root = _state("complete-tie-root")
+    exact = _state("complete-tie-exact", board=0.5)
+    bounded = _state("complete-tie-bounded", board=0.5)
+    proven, uncertain, end = (
+        _action("proven", 0), _action("uncertain", 1), _action("end", 2))
+    graph = Graph(
+        {"complete-tie-root": (uncertain, proven, end),
+         "complete-tie-bounded": (end,)},
+        {("complete-tie-root", "proven"): Terminal(exact, "resolved"),
+         ("complete-tie-root", "uncertain"): Deterministic(bounded)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(max_nodes=1, root_probe_nodes=1, root_refinement_width=0),
+    ).decide(root)
+
+    assert decision.action.kind == "proven"
+
+
+def test_admissible_upper_bound_prunes_only_a_branch_below_the_incumbent():
+    root = _state("bound-root")
+    won = _state("bound-won", board=0.4)
+    weak = _state("bound-weak", board=0.1)
+    weak_finish = _state("bound-finish", board=0.2)
+    good, bad, continue_bad, end = (
+        _action("good", 0), _action("bad", 1), _action("continue_bad", 0), _action("end", 2))
+
+    class BoundedPotential:
+        def __call__(self, observation):
+            value = float(observation["current"].get("board", 0.0))
+            return Potential(value, (("board", value),))
+
+        @staticmethod
+        def optimistic_ceiling(observation, **_context):
+            return 0.2 if observation.get("node", "").startswith("bound-weak") else 0.4
+
+    graph = Graph(
+        {"bound-root": (good, bad, end), "bound-weak": (continue_bad, end),
+         "bound-finish": (end,)},
+        {("bound-root", "good"): Terminal(won, "attack resolved"),
+         ("bound-root", "bad"): Deterministic(weak),
+         ("bound-weak", "continue_bad"): Deterministic(weak_finish)},
+    )
+    oracle = ValueOracle(REGISTRY, BoundedPotential())
+
+    decision = ProductionSolver(
+        graph, oracle,
+        limits=ProductionLimits(max_nodes=20, root_probe_nodes=1, root_refinement_width=2),
+    ).decide(root)
+
+    prune = decision.diagnostics["production"]["bound_prunes"][0]
+    assert decision.action.kind == "good"
+    assert prune["q_lower"] == pytest.approx(0.4)
+    assert prune["q_upper"] == pytest.approx(0.2)
+    assert ReferenceSolver(graph, oracle).decide(root).action.kind == "good"
+    assert all("q_lower" in row and "complete" in row and "search_wave" in row
+               for row in decision.diagnostics["production"]["action_bounds"])
+
+
+def test_missing_upper_bound_never_prunes_an_incomplete_branch():
+    root, won, weak = _state("unknown-root"), _state("unknown-won", board=0.4), \
+        _state("unknown-weak", board=0.1)
+    good, bad, end = _action("good", 0), _action("bad", 1), _action("end", 2)
+    graph = Graph(
+        {"unknown-root": (good, bad, end), "unknown-weak": (end,)},
+        {("unknown-root", "good"): Terminal(won, "attack resolved"),
+         ("unknown-root", "bad"): Deterministic(weak)},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(),
+        limits=ProductionLimits(max_nodes=20, root_probe_nodes=1, root_refinement_width=2),
+    ).decide(root)
+
+    assert decision.diagnostics["production"]["bound_prunes"] == ()
+    bad_bound = next(row for row in decision.diagnostics["production"]["action_bounds"]
+                     if "bad" in row["action"])
+    assert math.isinf(bad_bound["q_upper"])
+
+
+def test_admissible_upper_bound_prunes_at_nested_own_actor_state():
+    root = _state("nested-root")
+    middle = _state("nested-middle", board=0.4)
+    weak = _state("nested-weak", board=0.1)
+    next_turn = _state("nested-next", board=0.4)
+    start, bad, end = _action("start", 0), _action("bad", 1), _action("end", 2)
+
+    class BoundedPotential:
+        def __call__(self, observation):
+            value = float(observation["current"].get("board", 0.0))
+            return Potential(value, (("board", value),))
+
+        @staticmethod
+        def optimistic_ceiling(observation, **_context):
+            return 0.2 if observation.get("node") == "nested-weak" else 0.4
+
+    graph = Graph(
+        {"nested-root": (start,), "nested-middle": (bad, end)},
+        {("nested-root", "start"): Deterministic(middle),
+         ("nested-middle", "bad"): Deterministic(weak),
+         ("nested-middle", "end"): Deterministic(next_turn)},
+    )
+
+    decision = ProductionSolver(
+        graph, ValueOracle(REGISTRY, BoundedPotential()),
+        limits=ProductionLimits(max_nodes=20, root_probe_nodes=20),
+    ).decide(root)
+
+    prune = next(row for row in decision.diagnostics["production"]["bound_prunes"]
+                 if row.get("state") == middle.semantic_key)
+    assert "kind='bad'" in prune["action"]
+    assert decision.action == start.identity
+
+
+def test_equal_upper_bound_uses_decision_and_canonical_tie_break_before_pruning():
+    root = _state("tie-root")
+    exact = _state("tie-exact", board=0.2)
+    possible = _state("tie-possible", board=0.1)
+    finish = _state("tie-finish", board=0.2)
+    good, bad, continue_bad, end = (
+        _action("a_good", 0), _action("z_bad", 1),
+        _action("continue_bad", 0), _action("end", 2))
+
+    class TieCeiling:
+        def __call__(self, observation):
+            value = float(observation["current"].get("board", 0.0))
+            return Potential(value, (("board", value),))
+
+        @staticmethod
+        def optimistic_ceiling(_observation, **_context):
+            return 0.2
+
+    graph = Graph(
+        {"tie-root": (good, bad, end), "tie-possible": (continue_bad, end),
+         "tie-finish": (end,)},
+        {("tie-root", "a_good"): Terminal(exact, "attack resolved"),
+         ("tie-root", "z_bad"): Deterministic(possible),
+         ("tie-possible", "continue_bad"): Deterministic(finish)},
+    )
+
+    decision = ProductionSolver(
+        graph, ValueOracle(REGISTRY, TieCeiling()),
+        limits=ProductionLimits(max_nodes=20, root_probe_nodes=1, root_refinement_width=2),
+    ).decide(root)
+
+    prune = next(row for row in decision.diagnostics["production"]["bound_prunes"]
+                 if "z_bad" in row["action"])
+    assert prune["q_upper"] == pytest.approx(prune["q_lower"])
+    assert decision.action == good.identity
+
+
+def test_choice_chance_and_reveal_prunes_preserve_complete_reference_optimum():
+    root = _state("algebra-root")
+    exact = _state("algebra-exact", board=0.4)
+    weak_a = _state("algebra-a", board=0.1)
+    weak_b = _state("algebra-b", board=0.2)
+    good, bad, end = _action("good", 0), _action("bad", 1), _action("end", 2)
+
+    class AlgebraCeiling:
+        def __call__(self, observation):
+            value = float(observation["current"].get("board", 0.0))
+            return Potential(value, (("board", value),))
+
+        @staticmethod
+        def optimistic_ceiling(_observation, **_context):
+            return 0.2
+
+    nodes = (
+        Choice(Actor.OURS, (
+            Edge("a", Deterministic(weak_a)), Edge("b", Deterministic(weak_b)))),
+        Choice(Actor.OPPONENT, (
+            Edge("a", Deterministic(weak_a)), Edge("b", Deterministic(weak_b)))),
+        Chance((WeightedEdge(0.5, "a", Deterministic(weak_a)),
+                WeightedEdge(0.5, "b", Deterministic(weak_b)))),
+        RevealChoice(
+            Actor.OURS,
+            (Edge("a", Deterministic(weak_a)), Edge("b", Deterministic(weak_b))),
+            (RevealOutcome(0.5, ("a",)), RevealOutcome(0.5, ("b",)))),
+    )
+    for node in nodes:
+        graph = Graph(
+            {"algebra-root": (good, bad, end), "algebra-a": (end,),
+             "algebra-b": (end,)},
+            {("algebra-root", "good"): Terminal(exact, "attack resolved"),
+             ("algebra-root", "bad"): node},
+        )
+        oracle = ValueOracle(REGISTRY, AlgebraCeiling())
+
+        bounded = ProductionSolver(
+            graph, oracle,
+            limits=ProductionLimits(
+                max_nodes=20, root_probe_nodes=1, root_refinement_width=2),
+        ).decide(root)
+        complete = ReferenceSolver(graph, oracle).decide(root)
+
+        assert bounded.action == complete.action == good.identity
+        assert any("bad" in row["action"]
+                   for row in bounded.diagnostics["production"]["bound_prunes"])
 
 
 def test_opponent_min_and_known_chance_are_recursive_nodes():
@@ -802,3 +1076,29 @@ def test_cgpy_provider_reconstructs_a_real_corpus_main_menu_without_ranking():
         {7: "play", 8: "attach", 9: "evolve", 10: "ability", 12: "retreat",
          13: "attack", 14: "end"}.get(option["type"], f"option_{option['type']}")
         for option in correction.obs["select"]["option"]}
+
+
+def test_cgpy_terminal_proof_rejects_deck_fetch_without_exact_prizes():
+    from common.engine import CgpyTransitionProvider
+
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 999}], "active": [], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 7, "index": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(CgpyTransitionProvider)
+    provider.effects = type("Effects", (), {
+        "clauses": lambda _self, _card_id: (
+            {"kind": "fetch", "target": "pokemon", "zone": "deck"},),
+        "fully_covers": lambda _self, _card_id: True,
+    })()
+    provider.stats = type("Stats", (), {
+        "get": lambda _self, _card_id: type("Trainer", (), {
+            "is_pokemon": False, "is_basic_energy": False,
+        })(),
+    })()
+
+    assert not provider.terminal_action_supported(state, action)

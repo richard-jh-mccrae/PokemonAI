@@ -32,6 +32,26 @@ _Avoid_: Any callback
 Permanent removal justified by semantic equivalence or coefficient-independent dominance.
 _Avoid_: Low score, clear loser
 
+**Terminal Proof**:
+A sound certificate that a legal current-turn policy wins under every relevant outcome.
+_Avoid_: Lethal score, likely win
+
+**Lethal Solver**:
+The current-turn search that produces a Terminal Proof or abstains without changing normal policy.
+_Avoid_: Lethal heuristic, win bonus
+
+**Need Root**:
+One unmet recipient, capability, and resource slot whose satisfaction has a bounded marginal value.
+_Avoid_: Wanted card, deck-wide wish
+
+**Admissible Need Bound**:
+An optimistic ceiling proving whether a Needs-guided branch can still beat an executable incumbent.
+_Avoid_: Need score, heuristic cutoff
+
+**Bound Prune**:
+Planning-epoch removal proved by an upper bound no better than the current executable lower bound.
+_Avoid_: Structural Prune, low-priority branch
+
 **Need Beam**:
 Search-wave scheduling from metadata-connected demand, safety, hold, and explicit Unknown evidence.
 Bellman still probes and chooses among every legal root action.

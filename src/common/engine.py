@@ -16,6 +16,7 @@ from .native_engine import _own_hidden_zones
 from .commutativity import action_footprint
 from .refresh import refresh_transition
 from .transition_value import end_has_forced_value_change
+from .terminal import terminal_effects_supported
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -116,6 +117,41 @@ class CgpyTransitionProvider:
 
     def footprint(self, state: DecisionState, action: LegalAction):
         return action_footprint(state, action, effects=self.effects, stats=self.stats)
+
+    def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
+        kind = action.identity.kind
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        option_index = action.selection[0] if len(action.selection) == 1 else -1
+        option = options[option_index] if 0 <= option_index < len(options) else {}
+        current = state.obs.get("current") or {}
+        players = current.get("players") or ()
+        seat = int(state.obs.get("bellmanActor", state.root_seat))
+        mine = players[seat] if 0 <= seat < len(players) else {}
+        card_id = None
+        if kind in {"play", "attach", "evolve"}:
+            hand_index = option.get("index")
+            hand = mine.get("hand") or ()
+            if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
+                card_id = int(hand[hand_index]["id"])
+        if kind in {"ability", "skill"}:
+            area = option.get("inPlayArea", option.get("area"))
+            index = option.get("inPlayIndex", option.get("index"))
+            cards = (mine.get("active") if area == _ACTIVE else
+                     mine.get("bench") if area == _BENCH else
+                     current.get("stadium") if area == 7 else ()) or ()
+            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
+                card_id = int(cards[index]["id"])
+        recipient_id = None
+        if kind == "attach":
+            area = option.get("inPlayArea")
+            index = option.get("inPlayIndex")
+            bodies = (mine.get("active") if area == _ACTIVE else
+                      mine.get("bench") if area == _BENCH else ()) or ()
+            body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
+            recipient_id = int(body["id"]) if body and body.get("id") is not None else None
+        return terminal_effects_supported(
+            state, action, card_id=card_id, recipient_id=recipient_id,
+            effects=self.effects, stats=self.stats)
 
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:

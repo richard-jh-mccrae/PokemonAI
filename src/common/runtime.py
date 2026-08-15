@@ -33,6 +33,7 @@ from common.strategy.context import (
     _YES,
 )
 from common.value import ValueRegistry
+from common.terminal import proof_lock_step
 
 
 _ENGINE = object()
@@ -79,6 +80,8 @@ class BellmanRuntime:
                         else f"strategy:{strategy.name}"),
         )
         self._plan_suffix = ()
+        self._proof_suffix = ()
+        self._proof_id = ""
         self._plan_reuse_stats = {"hits": 0, "planner_calls": 0, "invalidations": {}}
         self.last_read = Read()
 
@@ -217,11 +220,53 @@ class BellmanRuntime:
         return RootDecision(
             action.selection, action.identity, step.value, True,
             {"backend": "plan-suffix", "profile_hash": self.pilot_profile.hash,
+             "terminal_proof": getattr(planner, "last_terminal_diagnostics", {
+                 "attempted": False, "result": "skipped", "reason": "unavailable"}),
              "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix),
                              "hits": stats["hits"],
                              "planner_calls_avoided": stats["hits"]}},
             self._plan_suffix,
         ), "hit"
+
+    def _cached_proof_decision(self, planner, request):
+        suffix = getattr(self, "_proof_suffix", ())
+        if not suffix:
+            return None, "empty"
+        state = planner.state_for(request)
+        step, failure = proof_lock_step(
+            suffix, state, profile_hash=self.pilot_profile.hash,
+            proof_id=getattr(self, "_proof_id", ""))
+        if failure is not None:
+            self._proof_suffix = ()
+            self._proof_id = ""
+            return None, failure
+        action = next((candidate for candidate in enumerate_legal_actions(state.obs)
+                       if candidate.identity == step.action), None)
+        if action is None:
+            self._proof_suffix = ()
+            self._proof_id = ""
+            return None, "planned_action_missing"
+        self._proof_suffix = tuple(candidate for candidate in suffix if candidate is not step)
+        return RootDecision(
+            action.selection, action.identity, 0.0, True,
+            {"backend": "terminal-proof-lock", "terminal_proof": {
+                "attempted": False, "result": "replayed", "reason": "lock_hit",
+                "proof_id": step.proof_id, "remaining": len(self._proof_suffix),
+                "lock_event": "replayed"}},
+            self._proof_suffix,
+        ), "hit"
+
+    @staticmethod
+    def _with_proof_invalidation(decision, reason):
+        if reason in {"empty", "hit"}:
+            return decision
+        diagnostics = dict(decision.diagnostics)
+        terminal = dict(diagnostics.get("terminal_proof", {}))
+        terminal.update({"lock_event": "invalidated", "lock_reason": reason})
+        diagnostics["terminal_proof"] = terminal
+        return RootDecision(
+            decision.chosen, decision.action, decision.value, decision.complete,
+            diagnostics, decision.plan_suffix)
 
     def _forced_selection(self, observation):
         select = observation.get("select") or {}
@@ -231,6 +276,8 @@ class BellmanRuntime:
         if len(options) > 1 or minimum != maximum or minimum != len(options):
             return None
         self._plan_suffix = ()
+        self._proof_suffix = ()
+        self._proof_id = ""
         return RootDecision(
             tuple(range(len(options))), ActionIdentity(
                 "forced_selection", (int(select.get("context", -1)),)),
@@ -241,20 +288,38 @@ class BellmanRuntime:
         current = observation.get("current") or {}
         if int(current.get("turn", 0)) <= 0:
             self._plan_suffix = ()
+            self._proof_suffix = ()
+            self._proof_id = ""
             self.last_read = Read()
             return self._pregame(observation)
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
-        cached, invalidation = self._cached_decision(planner, request)
-        if cached is not None:
-            return cached
+        proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
+        if proof_cached is not None:
+            return proof_cached
         forced = self._forced_selection(observation)
         if forced is not None:
             return forced
+        proof = planner.prove(request)
+        if proof is not None:
+            self._proof_suffix = proof.plan_suffix
+            self._proof_id = str(proof.diagnostics["terminal_proof"]["proof_id"])
+            self._plan_suffix = ()
+            return self._with_proof_invalidation(proof, _proof_invalidation)
+        cached, invalidation = self._cached_decision(planner, request)
+        if cached is not None:
+            planner.discard_precheck()
+            return self._with_proof_invalidation(cached, _proof_invalidation)
         self._plan_reuse_stats["planner_calls"] += 1
-        decision = planner.decide(request)
+        decision = planner.decide(request, terminal_checked=True)
+        self._proof_suffix = ()
+        self._proof_id = ""
         self._plan_suffix = decision.plan_suffix
         diagnostics = dict(decision.diagnostics)
+        if _proof_invalidation not in {"empty", "hit"}:
+            terminal = dict(diagnostics.get("terminal_proof", {}))
+            terminal.update({"lock_event": "invalidated", "lock_reason": _proof_invalidation})
+            diagnostics["terminal_proof"] = terminal
         diagnostics["plan_suffix"] = {
             "hit": False, "invalidation": invalidation,
             "cached_steps": len(self._plan_suffix),

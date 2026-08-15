@@ -130,7 +130,7 @@ def test_refresh_uses_exact_need_class_odds_for_direct_cards_and_fetchers():
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((2, 0),), False))
 
     assert dict(ledger.benefits)["refresh_immediate_needs"] == pytest.approx(2 / 3)
-    assert branches[0]["needs"] == ("evolve:bench:0",)
+    assert branches[0]["needs"] == (f"evolve:20:{LINE_TOP}",)
 
 
 def test_drawn_tutor_cannot_reuse_the_last_matching_target_drawn_beside_it():
@@ -160,6 +160,24 @@ def test_future_need_odds_use_one_root_value_for_every_covering_out():
     normalized = evaluator._root_value(needs)
 
     assert normalized[0].direct == ((LINE_TOP, 1.0), (FILLER, 1.0))
+
+
+def test_future_need_normalization_preserves_recipient_and_attack_exclusivity():
+    evaluator = RefreshEvaluator(
+        _registry((REFRESH_CARD, LINE_TOP, FILLER)), _potential,
+        effects=CardEffects({}), stats=_stats())
+    need = Need(
+        "future", ((LINE_TOP, 0.2), (FILLER, 1.0)), timing="next_turn",
+        recipient="active:7", capability="fund_attack", slot="1:3",
+        ceiling=1.0, alternative="1487")
+
+    normalized = evaluator._root_value((need,))[0]
+
+    assert normalized.recipient == "active:7"
+    assert normalized.capability == "fund_attack"
+    assert normalized.slot == "1:3"
+    assert normalized.alternative == "1487"
+    assert normalized.ceiling == pytest.approx(1.0)
 
 
 def test_refresh_does_not_claim_a_need_already_held_and_playable_first():
@@ -222,7 +240,7 @@ def test_refresh_charges_a_deterministic_next_turn_evolution_option():
 
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((6, 0),), False))
 
-    assert dict(ledger.costs)["refresh_next_turn_options"] == pytest.approx(0.6)
+    assert dict(ledger.costs)["refresh_next_turn_options"] == pytest.approx(0.8)
     assert dict(ledger.benefits)["refresh_next_turn_needs"] > 0.0
     assert branches[0]["retained_options"][0].startswith("evolve:")
-    assert branches[0]["next_turn_needs"] == ("evolve:bench:0",)
+    assert branches[0]["next_turn_needs"] == (f"evolve:20:{LINE_TOP}",)

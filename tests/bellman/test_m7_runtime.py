@@ -193,7 +193,7 @@ def test_bellman_batch_establishes_the_starmie_line_before_attacking():
         # one extra decision, so the solver's documented exact-tie objective removes it.
         "eb4fb1f19691": [2],
         "4907d6c25a56": [0],  # Poffin two Staryu, then take the attack.
-        "3730b43d89a5": [1],  # Free Cape, then Water to Cinderace and Turbo Flare.
+        "3730b43d89a5": [3],  # Human critical ruling: Water to Cinderace for Turbo Flare.
     }
     for record in records:
         if record["id"] in expected:

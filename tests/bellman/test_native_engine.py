@@ -71,6 +71,60 @@ def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips()
     assert successor["current"]["players"][1]["hand"] is None
 
 
+def test_terminal_proof_abstains_when_attack_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [{}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 13, "attackId": 999}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("MissingStats", (), {"attack": lambda _self, _attack_id: None})()
+
+    assert not provider.terminal_action_supported(state, action)
+
+
+def test_terminal_proof_abstains_when_play_effect_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 999}], "active": [], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 7, "index": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("TrainerStats", (), {
+        "get": lambda _self, _card_id: type("Trainer", (), {"is_pokemon": False})(),
+    })()
+
+    assert not provider.terminal_action_supported(state, action)
+
+
+def test_terminal_proof_abstains_when_attach_trigger_metadata_is_missing():
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 999}], "active": [{"id": 1000}], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 8, "index": 0,
+                               "inPlayArea": 4, "inPlayIndex": 0}]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = None
+    provider.stats = type("SpecialEnergyStats", (), {
+        "get": lambda _self, card_id: type("Stat", (), {
+            "is_basic_energy": False, "hasAbility": card_id == 1000,
+        })(),
+    })()
+
+    assert not provider.terminal_action_supported(state, action)
+
+
 pytest.importorskip("cg.sim", reason="native engine unavailable")
 if os.environ.get("CG_ENGINE") == "py":
     pytest.skip("production-provider test requires native cg", allow_module_level=True)

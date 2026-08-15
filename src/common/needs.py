@@ -1,10 +1,11 @@
 """Deck-neutral demand and known-card coverage for Bellman value calculations.
 
-This module describes value opportunities and schedules legal actions into search waves. It never
-assigns decision utility, steps a rules engine, samples a hidden card, or deletes a legal action.
+This module describes recipient-specific opportunities, access odds, and optimistic ceilings.
+It never assigns decision utility, steps a rules engine, or samples a hidden card.
 """
 from __future__ import annotations
 
+from collections import Counter
 import copy
 from dataclasses import dataclass
 import hashlib
@@ -12,6 +13,7 @@ import math
 from time import perf_counter
 
 from .fetch import REACH, WINDOW, fetch_target_matches
+from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
 from .scouting.card_text import name_in_family
 from .strategy.context import _MAIN
@@ -22,9 +24,8 @@ DEFAULT_ENERGY_CODE = 0
 FETCHER_CARD_COUNT = 1
 FLOAT_TIE_DIGITS = 12
 MINIMUM_BODY_HP = 10
-MINIMUM_ENERGY_UNITS = 1
 NEXT_STAGE_OFFSET = 1
-NEXT_TURN_OPTION_DISCOUNT = 0.75
+NEXT_TURN_OPTION_DISCOUNT = 1.0
 BENCH_HEAL_VALUE_SHARE = 0.25
 HEAL_DAMAGE_PER_VALUE = 200.0
 
@@ -45,6 +46,11 @@ class NeedRoot:
     outcome: str
     confidence: float
     provenance: str
+    recipient: str = ""
+    capability: str = ""
+    slot: str = ""
+    ceiling: float = 0.0
+    alternative: str = ""
 
     @property
     def semantic_id(self) -> str:
@@ -133,6 +139,7 @@ class NeedBeam:
     exhausted: bool
     held: tuple[ActionFocus, ...] = ()
     inactive: tuple[ActionFocus, ...] = ()
+    roots: tuple[NeedRoot, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -244,23 +251,28 @@ def opponent_threat_roots(observation, stats=None) -> tuple[NeedRoot, ...]:
             if not body or not (body.get("energyCards") or body.get("energies")):
                 continue
             deadline = 0 if area == "active" else 1
-            key = f"deny_threat:{area}:{index}"
-            roots.append(NeedRoot(key, key, deadline, "prevent_prize", 0.75, "generic"))
+            recipient = str(body.get("serial", f"{area}:{index}:{body.get('id', 0)}"))
+            key = f"deny:{recipient}:threat"
+            roots.append(NeedRoot(
+                key, key, deadline, "prevent_prize", 0.75, "generic",
+                recipient, "deny", "threat"))
             stat = stats.get(body.get("id")) if stats is not None else None
             energy_types = tuple(int(value) for value in body.get("energies") or ())
             energy_count = len(energy_types or tuple(body.get("energyCards") or ()))
             if (area == "active" and stat is not None
                     and int(getattr(stat, "retreatCost", 0) or 0) == energy_count):
-                retreat_key = f"deny_retreat:{index}"
+                retreat_key = f"deny:{recipient}:retreat"
                 roots.append(NeedRoot(
-                    retreat_key, retreat_key, 0, "prevent_retreat", 1.0, "card_stats"))
+                    retreat_key, retreat_key, 0, "prevent_retreat", 1.0, "card_stats",
+                    recipient, "deny", "retreat"))
             required_types = tuple(int(value) for value in
                                    getattr(stat, "abilityEnergyTypes", ()) or ())
             if (stat is not None and getattr(stat, "hasAbility", False)
                     and sum(value in required_types for value in energy_types) == 1):
-                ability_key = f"deny_ability:{area}:{index}"
+                ability_key = f"deny:{recipient}:ability"
                 roots.append(NeedRoot(
-                    ability_key, ability_key, deadline, "prevent_ability", 1.0, "card_stats"))
+                    ability_key, ability_key, deadline, "prevent_ability", 1.0, "card_stats",
+                    recipient, "deny", "ability"))
     return tuple(roots)
 
 
@@ -325,7 +337,17 @@ class NeedBeamBuilder:
                 held.append(ActionFocus(key, family, (), 0.0, "supporter_already_played"))
                 continue
             if related:
-                score = max(self._path_score(path, roots) for path in related)
+                assigned_roots = self._assigned_roots(state, action, needs, roots)
+                if assigned_roots:
+                    root_scores = {
+                        root_id: max(self._path_score(path, roots) for path in related
+                                     if path.root_ids[0] == root_id)
+                        for root_id in assigned_roots
+                        if any(path.root_ids[0] == root_id for path in related)
+                    }
+                    score = sum(root_scores.values())
+                else:
+                    score = max(self._path_score(path, roots) for path in related)
                 if candidate is not None and candidate.score is not None:
                     score += max(0.0, float(candidate.score))
                 focused.append(ActionFocus(
@@ -347,24 +369,29 @@ class NeedBeamBuilder:
         focused = self._retain(focused)
         elapsed = (perf_counter() - started) * 1000.0
         return NeedBeam(tuple(focused), tuple(safety), tuple(unknown), tuple(paths), features,
-                        elapsed, perf_counter() >= deadline, tuple(held), tuple(inactive))
+                        elapsed, perf_counter() >= deadline, tuple(held), tuple(inactive), roots)
 
     def _root(self, need: Need) -> NeedRoot:
         role = next((self.roles.get(int(card_id)) for card_id, _value in need.direct
                      if self.roles.get(int(card_id)) is not None), None)
+        timing_deadline = 1 if need.timing == "next_turn" else 0
         if need.key.startswith("heal"):
             outcome, deadline = "prevent_prize", 0
         elif need.key.startswith("deploy"):
-            outcome, deadline = f"establish_{role.role if role else 'attacker'}", min(
-                2, self.horizon)
+            outcome = f"establish_{role.role if role else 'attacker'}"
+            deadline = (0 if role is not None and role.role == "primary_attacker"
+                        else min(2, self.horizon))
         elif need.key.startswith("evolve"):
-            outcome, deadline = f"establish_{role.role if role else 'attacker'}", min(
-                1, self.horizon)
+            outcome, deadline = f"establish_{role.role if role else 'attacker'}", timing_deadline
         else:
-            outcome, deadline = "take_prize", 0
+            outcome, deadline = "take_prize", timing_deadline
+        deadline = max(deadline, timing_deadline)
         return NeedRoot(
             need.key, need.key, deadline, outcome,
-            role.confidence if role else 1.0, role.provenance if role else "generic")
+            role.confidence if role else 1.0, role.provenance if role else "generic",
+            need.recipient, need.capability, need.slot,
+            need.ceiling or max((value for _card_id, value in need.direct), default=0.0),
+            need.alternative)
 
     @staticmethod
     def _direct_paths(roots, needs):
@@ -376,11 +403,18 @@ class NeedBeamBuilder:
     def _access_paths(self, state, roots, needs, *, deadline=math.inf, source_ids=()):
         pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
         available = frozenset(pool)
+        players = ((state.obs.get("current") or {}).get("players") or ())
+        seat = int(getattr(state, "root_seat", 0))
+        mine = players[seat] if seat < len(players) else {}
+        discard = frozenset(int(card["id"]) for card in mine.get("discard") or ()
+                            if card and card.get("id") is not None)
         known_top = tuple(state.obs.get("known_top") or ())
         downstream = []
-        sources = tuple(sorted(set(
-            source_id for source_id, _kinds in self.capabilities.entries)
-            | set(int(card_id) for card_id in source_ids)))
+        current_sources = tuple(sorted(set(int(card_id) for card_id in source_ids)))
+        future_sources = tuple(sorted(
+            source_id for source_id, _kinds in self.capabilities.entries
+            if source_id not in current_sources))
+        sources = (*current_sources, *future_sources)
         root_needs = tuple(
             (root, need, tuple(card_id for card_id, _value in need.direct
                                if int(card_id) in available))
@@ -409,10 +443,26 @@ class NeedBeamBuilder:
                             continue
                         depth = int(clause.get("dig", 0) or 0)
                         probability = access_probability(pool, depth, reachable) if depth else 1.0
+                        reservations = tuple(
+                            f"discard:{index}" for index in range(discard_cost(clause)))
                         edge = AccessEdge(source_id, "dig" if depth else "fetch",
-                                          (root.semantic_id,), 0, depth == 0, probability, 1.0)
-                        path = NeedPath((root.semantic_id,), (edge,), (), (), 0,
+                                          (root.semantic_id,), 0, depth == 0, probability, 1.0,
+                                          costs=reservations)
+                        path = NeedPath((root.semantic_id,), (edge,), reservations, (), 0,
                                         probability, 1.0, "safe")
+                        downstream.append((source_id, root, path))
+                        yield path
+                    elif kind == "fetch" and clause.get("zone") == "discard":
+                        reachable = tuple(
+                            int(card_id) for card_id, _value in need.direct
+                            if int(card_id) in discard
+                            and _need_fetch_target_matches(clause, self.model.stat(card_id)))
+                        if not reachable:
+                            continue
+                        edge = AccessEdge(source_id, "recover", (root.semantic_id,), 0,
+                                          True, 1.0, 1.0)
+                        path = NeedPath((root.semantic_id,), (edge,), (), (), 0,
+                                        1.0, 1.0, "safe")
                         downstream.append((source_id, root, path))
                         yield path
                     elif kind == "draw":
@@ -461,7 +511,7 @@ class NeedBeamBuilder:
                         probability, min(1.0, path.confidence), "safe")
 
     def _denial_paths(self, roots):
-        threats = tuple(root for root in roots if root.key.startswith("deny_"))
+        threats = tuple(root for root in roots if root.key.startswith("deny:"))
         for source_id, kinds in self.capabilities.entries:
             if "energy_denial" not in kinds:
                 continue
@@ -497,7 +547,8 @@ class NeedBeamBuilder:
         urgency = 1.0 / (1.0 + root.deadline)
         supporter_first = any(edge.capability in {"dig_supporter", "fetch_supporter"}
                               for edge in path.edges)
-        return path.probability * path.confidence * urgency + float(supporter_first)
+        access = path.probability * path.confidence * urgency * (1.0 + root.ceiling)
+        return access / (1.0 + len(path.reservations)) + float(supporter_first)
 
     def _retain(self, focused):
         focused.sort(key=lambda row: (-row.score, row.family, row.action_key))
@@ -511,6 +562,25 @@ class NeedBeamBuilder:
             if len(retained) >= self.width:
                 break
         return retained
+
+    def _assigned_roots(self, state, action, needs, roots) -> frozenset[str]:
+        card_id, recipient, units = self.model.supply_context(state, action)
+        if card_id is None:
+            return frozenset()
+        current = state.obs.get("current") or {}
+        players = current.get("players") or ()
+        mine = players[state.root_seat] if state.root_seat < len(players) else {}
+        signatures = self.model.coverage_slots(
+            card_id, needs,
+            supporter_available=not bool(current.get("supporterPlayed")),
+            discard_capacity=max(0, len(mine.get("hand") or ()) - 1),
+            available_targets=Counter(dict(state.deck_counts)),
+            recipient=recipient, provision_units=units)
+        assignment = best_assignment(
+            signatures, len(needs), target_counts=Counter(dict(state.deck_counts)))
+        return frozenset(
+            roots[index].semantic_id for index in range(len(needs))
+            if assignment.covered_mask & (1 << index))
 
     @staticmethod
     def _source_card_id(state, action):
@@ -570,6 +640,11 @@ class Need:
     key: str
     direct: tuple[tuple[int, float], ...]
     timing: str = "immediate"
+    recipient: str = ""
+    capability: str = ""
+    slot: str = ""
+    ceiling: float = 0.0
+    alternative: str = ""
 
 
 @dataclass(frozen=True)
@@ -579,6 +654,9 @@ class CoverageEdge:
     need_index: int
     value: float
     fetched_target: int | None = None
+    exclusive_group: str = ""
+    alternative: str = ""
+    constraints: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -640,20 +718,30 @@ def best_assignment(signatures, need_count: int, *, target_counts=None) -> Resol
     target_ids = tuple(sorted(int(card_id) for card_id, count in target_counts.items() if count > 0))
     target_positions = {card_id: index for index, card_id in enumerate(target_ids)}
     initial_counts = tuple(int(target_counts[card_id]) for card_id in target_ids)
-    dp = {(0, initial_counts): (0.0, 0)}
+    dp = {(0, initial_counts, ()): (0.0, 0)}
     for card_index, signature in enumerate(signatures):
         advanced = dict(dp)
-        for (mask, available), (value, used) in dp.items():
+        for (mask, available, alternatives), (value, used) in dp.items():
             for raw_edge in signature:
                 if isinstance(raw_edge, CoverageEdge):
-                    need_index, edge_value, target = (
-                        raw_edge.need_index, raw_edge.value, raw_edge.fetched_target)
+                    need_index, edge_value, target, group, alternative = (
+                        raw_edge.need_index, raw_edge.value, raw_edge.fetched_target,
+                        raw_edge.exclusive_group, raw_edge.alternative)
+                    constraints = raw_edge.constraints
                 else:
                     need_index, edge_value = raw_edge
                     target = None
+                    group = alternative = ""
+                    constraints = ()
                 bit = 1 << need_index
                 if mask & bit:
                     continue
+                selected = dict(alternatives)
+                choices = constraints + (((group, alternative),) if group else ())
+                if any(choice_group in selected and selected[choice_group] != choice
+                       for choice_group, choice in choices):
+                    continue
+                selected.update(choices)
                 next_available = available
                 if target is not None:
                     position = target_positions.get(int(target))
@@ -663,14 +751,14 @@ def best_assignment(signatures, need_count: int, *, target_counts=None) -> Resol
                                       *available[position + 1:])
                 new_mask = mask | bit
                 candidate = (value + edge_value, used | (1 << card_index))
-                state = (new_mask, next_available)
+                state = (new_mask, next_available, tuple(sorted(selected.items())))
                 previous = advanced.get(state)
                 if (previous is None or
                         (round(candidate[0], FLOAT_TIE_DIGITS), candidate[1])
                         > (round(previous[0], FLOAT_TIE_DIGITS), previous[1])):
                     advanced[state] = candidate
         dp = advanced
-    (mask, _available), (value, used) = max(
+    (mask, _available, _alternatives), (value, used) = max(
         dp.items(), key=lambda row: (round(row[1][0], FLOAT_TIE_DIGITS), row[0][0], row[1][1]))
     return ResolvedAssignment(value, mask, used)
 
@@ -727,50 +815,99 @@ class NeedModel:
         rows = tuple(body_rows(mine))
 
         for area, index, body in rows:
-            if body.get("appearThisTurn"):
-                continue
+            timing = "next_turn" if body.get("appearThisTurn") else "immediate"
             target = self._next_stage(body.get("id"))
             if target is None:
                 continue
             evolved = self._evolve(observation, seat, area, index, target)
             gain = self.operation_gain(observation, evolved)
             if gain > 0.0:
-                needs.append(Need(f"evolve:{area}:{index}", ((target, gain),)))
+                recipient = self._recipient(area, index, body)
+                needs.append(Need(
+                    f"evolve:{recipient}:{target}", ((target, gain),),
+                    timing=timing, recipient=recipient, capability="evolve",
+                    slot=str(target), ceiling=gain))
 
-        if not bool(current.get("energyAttached")):
-            energy_edges = {}
-            for candidate in self.registry.facts:
-                stat = self.stat(candidate)
-                if stat is None or not getattr(stat, "is_energy", False):
+        funding_timing = "next_turn" if current.get("energyAttached") else "immediate"
+        candidates = tuple(
+            (int(card_id), self.stat(card_id)) for card_id in self.registry.facts
+            if self.stat(card_id) is not None
+            and getattr(self.stat(card_id), "is_energy", False))
+        for area, index, body in rows:
+            body_stat = self.stat(body.get("id"))
+            attacks = tuple(getattr(body_stat, "attacks", ()) or ()) if body_stat else ()
+            recipient = self._recipient(area, index, body)
+            gains = {}
+            for candidate, energy_stat in candidates:
+                attached = copy.deepcopy(observation)
+                target_body = attached["current"]["players"][seat][area][index]
+                units = self._energy_units(candidate, target_body)
+                energy_type = getattr(energy_stat, "energyType", None)
+                code = DEFAULT_ENERGY_CODE if energy_type is None else int(energy_type)
+                target_body.setdefault("energies", []).extend([code] * units)
+                target_body.setdefault("energyCards", []).append({"id": candidate})
+                gains[candidate] = self.operation_gain(observation, attached)
+            for attack_id in attacks:
+                attack = (self.stats.attack(attack_id)
+                          if self.stats is not None and hasattr(self.stats, "attack") else None)
+                if attack is None:
                     continue
-                best = 0.0
-                for area, index, body in rows:
-                    body_stat = self.stat(body.get("id"))
-                    if body_stat is None or not tuple(getattr(body_stat, "attacks", ()) or ()):
+                requirements = tuple(getattr(attack, "energyTypes", ()) or ())
+                if not requirements:
+                    requirements = (ENERGY_COLORLESS,) * int(getattr(attack, "cost", 0) or 0)
+                missing_slots = unmet_cost_slots(body.get("energies") or (), requirements)
+                allocations = {}
+                for candidate, energy_stat in candidates:
+                    compatible = sum(
+                        pays_energy_type(
+                            getattr(energy_stat, "energyType", DEFAULT_ENERGY_CODE)
+                            if getattr(energy_stat, "energyType", None) is not None
+                            else DEFAULT_ENERGY_CODE,
+                            required_type)
+                        for _slot_index, required_type in missing_slots
+                    )
+                    supplied = min(self._energy_units(candidate, body), compatible)
+                    if supplied > 0 and gains[candidate] > 0.0:
+                        allocations[candidate] = gains[candidate] / supplied
+                for slot_index, required_type in missing_slots:
+                    direct = tuple(sorted(
+                        (candidate, allocations[candidate])
+                        for candidate, energy_stat in candidates
+                        if candidate in allocations
+                        if pays_energy_type(
+                            getattr(energy_stat, "energyType", DEFAULT_ENERGY_CODE)
+                            if getattr(energy_stat, "energyType", None) is not None
+                            else DEFAULT_ENERGY_CODE,
+                            required_type)
+                    ))
+                    if not direct:
                         continue
-                    attached = copy.deepcopy(observation)
-                    target_body = attached["current"]["players"][seat][area][index]
-                    units = self._energy_units(candidate, target_body)
-                    energy_type = getattr(stat, "energyType", None)
-                    code = DEFAULT_ENERGY_CODE if energy_type is None else int(energy_type)
-                    target_body.setdefault("energies", []).extend([code] * units)
-                    target_body.setdefault("energyCards", []).append({"id": int(candidate)})
-                    best = max(best, self.operation_gain(observation, attached))
-                if best > 0.0:
-                    energy_edges[int(candidate)] = best
-            if energy_edges:
-                needs.append(Need("fund_attack", tuple(sorted(energy_edges.items()))))
+                    slot = f"{slot_index}:{required_type}"
+                    needs.append(Need(
+                        f"fund_attack:{recipient}:{attack_id}:{slot}", direct,
+                        timing=funding_timing, recipient=recipient,
+                        capability="fund_attack", slot=slot,
+                        ceiling=max(value for _card_id, value in direct),
+                        alternative=str(attack_id)))
 
-        heal_edges = {}
-        for card_id in self.registry.facts:
-            clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
-            gains = [self._heal_gain(observation, seat, clause)
-                     for clause in clauses if clause.get("kind") == "heal"]
-            gain = max(gains, default=0.0)
-            if gain > 0.0:
-                heal_edges[int(card_id)] = gain
-        if heal_edges:
-            needs.append(Need("heal_board", tuple(sorted(heal_edges.items()))))
+        for area, index, body in rows:
+            recipient = self._recipient(area, index, body)
+            heal_edges = {}
+            for card_id in self.registry.facts:
+                clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
+                gains = [self._heal_gain(observation, seat, clause, target=(area, index))
+                         for clause in clauses if clause.get("kind") == "heal"]
+                gain = max(gains, default=0.0)
+                if gain > 0.0:
+                    heal_edges[int(card_id)] = gain
+            if heal_edges:
+                damage = max(0, int(body.get("maxHp", body.get("hp", 0)))
+                             - int(body.get("hp", 0)))
+                band = str((damage // 30) * 30)
+                ceiling = max(heal_edges.values())
+                needs.append(Need(
+                    f"heal:{recipient}:{band}", tuple(sorted(heal_edges.items())),
+                    recipient=recipient, capability="heal", slot=band, ceiling=ceiling))
 
         bench_space = max(0, int(mine.get("benchMax", DEFAULT_BENCH_CAPACITY))
                           - len(mine.get("bench") or ()))
@@ -791,12 +928,20 @@ class NeedModel:
                  "preEvolution": [], "energies": [], "energyCards": [], "tools": []})
             gain = self.operation_gain(observation, deployed)
             if gain > 0.0:
-                first_key = len(needs)
-                needs.extend(Need(f"deploy_line:{first_key + offset}", ((base, gain),))
-                             for offset in range(missing))
+                line_key = "-".join(str(card_id) for card_id in line)
+                first_slot = len(mine.get("bench") or ())
+                needs.extend(Need(
+                    f"deploy:{line_key}:{first_slot + offset}", ((base, gain),),
+                    recipient=line_key, capability="deploy", slot=str(first_slot + offset),
+                    ceiling=gain)
+                    for offset in range(missing))
         return tuple(needs)
 
-    def _heal_gain(self, observation, seat: int, clause: dict) -> float:
+    @staticmethod
+    def _recipient(area: str, index: int, body) -> str:
+        return str(body.get("serial", f"{area}:{index}:{body.get('id', 0)}"))
+
+    def _heal_gain(self, observation, seat: int, clause: dict, *, target=None) -> float:
         if clause.get("rider") not in (None, "bounce_energy_to_hand"):
             return 0.0
         restriction = clause.get("restriction")
@@ -810,6 +955,8 @@ class NeedModel:
         players = current.get("players") or ()
         mine = players[seat] if len(players) > seat else {}
         candidates = list(body_rows(mine))
+        if target is not None:
+            candidates = [row for row in candidates if row[:2] == target]
         if restriction == "active_only":
             candidates = [row for row in candidates if row[0] == "active"]
         elif restriction == "mega_only":
@@ -839,17 +986,25 @@ class NeedModel:
                 gain += restored / HEAL_DAMAGE_PER_VALUE * (
                     1.0 if area == "active" else BENCH_HEAL_VALUE_SHARE)
                 body["hp"] = min(maximum, int(body.get("hp", 0)) + amount)
+                gain = max(gain, self.operation_gain(observation, healed))
                 if clause.get("rider") == "bounce_energy_to_hand":
-                    healed["current"]["players"][seat].setdefault("hand", []).extend(
-                        body.get("energyCards") or ())
+                    player = healed["current"]["players"][seat]
+                    bounced = tuple(body.get("energyCards") or ())
+                    if player.get("hand") is None:
+                        player["handCount"] = int(player.get("handCount", 0) or 0) + len(bounced)
+                    else:
+                        player.setdefault("hand", []).extend(bounced)
                     body["energyCards"] = []
                     body["energies"] = []
+            gain = max(gain, self.operation_gain(observation, healed))
             best = max(best, gain)
         return best
 
     def coverage_slots(self, card_id: int, needs: tuple[Need, ...], *,
                        supporter_available: bool, discard_capacity: int,
-                       available_targets=None) -> tuple[tuple[CoverageEdge, ...], ...]:
+                       available_targets=None, recipient: str | None = None,
+                       provision_units: int = 1, recipient_units=None,
+                       resource_group: str = "") -> tuple[tuple[CoverageEdge, ...], ...]:
         """Independent resources a card can supply, respecting printed fetch capacity.
 
         A multi-target fetch contributes one assignment token per printed target.  The tokens are
@@ -857,11 +1012,34 @@ class NeedModel:
         of its relevant targets are visible, discarded, or known prized.
         """
         edges = {index: dict(need.direct).get(int(card_id), 0.0)
-                 for index, need in enumerate(needs)}
+                 for index, need in enumerate(needs)
+                 if recipient is None or need.recipient == recipient}
         edges = {index: value for index, value in edges.items() if value > 0.0}
-        direct = tuple(CoverageEdge(index, value) for index, value in sorted(edges.items()))
+        def edge(index, value, target=None, constraints=()):
+            need = needs[index]
+            group = (f"{need.recipient}:{need.capability}"
+                     if need.alternative else "")
+            return CoverageEdge(
+                index, value, target, group, need.alternative, constraints)
+
+        direct = tuple(edge(index, value) for index, value in sorted(edges.items()))
         stat = self.stat(card_id)
-        if stat is None or getattr(stat, "is_pokemon", False) or getattr(stat, "is_energy", False):
+        if stat is not None and getattr(stat, "is_energy", False):
+            if recipient is None and recipient_units is not None:
+                tokens = []
+                for unit_index in range(max(recipient_units.values(), default=0)):
+                    token = tuple(
+                        edge(index, value, constraints=(
+                            (f"energy:{resource_group}", needs[index].recipient),))
+                        for index, value in sorted(edges.items())
+                        if int(recipient_units.get(needs[index].recipient, 1)) > unit_index
+                    )
+                    if token:
+                        tokens.append(token)
+                return tuple(tokens)
+            units = max(1, int(provision_units))
+            return tuple(direct for _ in range(units)) if direct else ()
+        if stat is None or getattr(stat, "is_pokemon", False):
             return (direct,) if direct else ()
         if getattr(stat, "is_supporter", False) and not supporter_available:
             return (direct,) if direct else ()
@@ -876,7 +1054,7 @@ class NeedModel:
             if bool(clause.get("cost_required")) and discard_cost(clause) > discard_capacity:
                 continue
             reachable = tuple(
-                CoverageEdge(index, value, int(target))
+                edge(index, value, int(target))
                 for index, need in enumerate(needs)
                 for target, value in need.direct
                 if (fetch_target_matches(clause, self.stat(target), reading=REACH)
@@ -895,19 +1073,57 @@ class NeedModel:
                     tokens.append(reachable)
         return tuple(token for token in (direct, *tokens) if token)
 
+    def supply_context(self, state, action) -> tuple[int | None, str | None, int]:
+        if len(action.selection) != 1 or action.identity.kind not in {"play", "attach", "evolve"}:
+            return None, None, 1
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        option_index = action.selection[0]
+        option = options[option_index] if 0 <= option_index < len(options) else {}
+        players = (state.obs.get("current") or {}).get("players") or ()
+        mine = players[state.root_seat] if state.root_seat < len(players) else {}
+        hand = mine.get("hand") or ()
+        hand_index = option.get("index")
+        if not isinstance(hand_index, int) or not 0 <= hand_index < len(hand) or not hand[hand_index]:
+            return None, None, 1
+        card_id = int(hand[hand_index]["id"])
+        if action.identity.kind == "play":
+            return card_id, None, 1
+        area = option.get("inPlayArea")
+        index = option.get("inPlayIndex")
+        zone = "active" if area == 4 else "bench" if area == 5 else None
+        bodies = mine.get(zone) or () if zone is not None else ()
+        if not isinstance(index, int) or not 0 <= index < len(bodies) or not bodies[index]:
+            return card_id, None, 1
+        body = bodies[index]
+        recipient = self._recipient(zone, index, body)
+        units = self._energy_units(card_id, body) if action.identity.kind == "attach" else 1
+        return card_id, recipient, units
+
+    def energy_units_by_recipient(self, observation, seat: int, card_id: int) -> dict[str, int]:
+        players = (observation.get("current") or {}).get("players") or ()
+        mine = players[seat] if seat < len(players) else {}
+        return {
+            self._recipient(area, index, body): self._energy_units(card_id, body)
+            for area, index, body in body_rows(mine)
+        }
+
     def uncovered_by_hand(self, needs: tuple[Need, ...], hand_ids, *,
                           supporter_available: bool, discard_capacity: int,
-                          available_targets=None) -> tuple[Need, ...]:
+                          available_targets=None, observation=None,
+                          seat: int = 0) -> tuple[Need, ...]:
         signatures = []
-        for card_id in hand_ids:
+        for resource_index, card_id in enumerate(hand_ids):
             stat = self.stat(card_id)
-            if stat is not None and getattr(stat, "is_supporter", False):
-                continue
+            recipient_units = (self.energy_units_by_recipient(observation, seat, card_id)
+                               if observation is not None and stat is not None
+                               and getattr(stat, "is_energy", False) else None)
             signatures.extend(self.coverage_slots(
                 int(card_id), needs,
                 supporter_available=supporter_available,
                 discard_capacity=discard_capacity,
-                available_targets=available_targets))
+                available_targets=available_targets,
+                recipient_units=recipient_units,
+                resource_group=f"held:{resource_index}"))
         assignment = best_assignment(signatures, len(needs), target_counts=available_targets)
         return tuple(need for index, need in enumerate(needs)
                      if not assignment.covered_mask & (1 << index))
@@ -944,6 +1160,9 @@ class NeedModel:
     def new_next_turn_needs(self, observation, seat: int, *, current=None) -> tuple[Need, ...]:
         """Demands that first become actionable after turn allowances reset."""
         current = self.immediate(observation, seat) if current is None else tuple(current)
+        deferred = tuple(need for need in current if need.timing == "next_turn")
+        if deferred:
+            return deferred
         if current:
             return ()
         projected = self._next_turn_observation(observation, seat, ())
@@ -974,10 +1193,8 @@ class NeedModel:
         return evolved
 
     def _energy_units(self, card_id: int, body) -> int:
-        tags = self.registry.functions.get(int(card_id), ())
-        base = self._tag_amount(tags, "provides:")
-        evolution = self._tag_amount(tags, "provides_evo:") if body.get("preEvolution") else 0
-        return max(MINIMUM_ENERGY_UNITS, base, evolution)
+        return provision_units(
+            self.registry.functions, card_id, evolved=bool(body.get("preEvolution")))
 
     @staticmethod
     def _tag_amount(tags, prefix: str) -> int:
@@ -993,11 +1210,17 @@ class NeedModel:
 
     @staticmethod
     def _remove_hand_positions(observation, seat: int, positions) -> None:
-        hand = observation["current"]["players"][seat].setdefault("hand", [])
+        positions = tuple(positions)
+        if not positions:
+            return
+        player = observation["current"]["players"][seat]
+        hand = player.get("hand")
+        if hand is None:
+            return
         for position in sorted(set(int(value) for value in positions), reverse=True):
             if 0 <= position < len(hand):
                 hand.pop(position)
-        observation["current"]["players"][seat]["handCount"] = len(hand)
+        player["handCount"] = len(hand)
 
     @staticmethod
     def _next_turn_observation(observation, seat: int, hand_ids):

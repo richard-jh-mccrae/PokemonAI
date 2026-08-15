@@ -71,6 +71,29 @@ def test_full_health_active_is_funded_before_backup_energy_is_valued():
     assert bench_value < baseline
 
 
+def test_multi_unit_energy_saturates_attack_without_valuing_a_fourth_unit():
+    registry = ValueRegistry(
+        facts={3: CardFacts(), 13: CardFacts()},
+        functions={13: ("provides_evo:3",)},
+    )
+    potential = BoardPotential(_Stats(), registry=registry, root_seat=0)
+    before = _observation(_body(9), _body(2))
+    active = before["current"]["players"][0]["active"][0]
+    active.update({
+        "preEvolution": [{"id": 8}], "energies": [3, 3, 3],
+        "energyCards": [{"id": 13}],
+    })
+    after = deepcopy(before)
+    after_active = after["current"]["players"][0]["active"][0]
+    after_active["energies"].append(3)
+    after_active["energyCards"].append({"id": 3})
+
+    before_energy = dict(potential(before).families)["energy_position"]
+    after_energy = dict(potential(after).families)["energy_position"]
+
+    assert after_energy < before_energy
+
+
 def test_snipe_progress_values_the_primary_attacker_above_the_backup():
     primary_hit = _observation(_body(1, hp=50), _body(2))
     backup_hit = _observation(_body(1), _body(2, hp=50))

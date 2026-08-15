@@ -227,6 +227,34 @@ class ValueOracle:
                 benefits.append(("hand_demand", need_value))
         return Ledger(tuple(benefits), tuple(costs))
 
+    def continuation_upper_bound(self, state: DecisionState) -> float:
+        potential = self.potential(state)
+        ceiling = getattr(self._families, "optimistic_ceiling", None)
+        if potential.unknowns or ceiling is None:
+            return math.inf
+        absolute = float(ceiling(state.obs, deck=state.deck, registry=self.registry))
+        if not math.isfinite(absolute) or absolute < potential.total:
+            return math.inf
+        return absolute - potential.total
+
+    def remaining_need_ceiling(self, state: DecisionState) -> float:
+        if self.needs is None:
+            return 0.0
+        needs = self.needs.immediate(state.obs, state.root_seat)
+        independent = 0.0
+        alternatives = {}
+        for need in needs:
+            ceiling = max(0.0, float(need.ceiling or max(
+                (value for _card_id, value in need.direct), default=0.0)))
+            if not need.alternative:
+                independent += ceiling
+                continue
+            group = need.recipient, need.capability
+            plans = alternatives.setdefault(group, {})
+            plans[need.alternative] = plans.get(need.alternative, 0.0) + ceiling
+        return independent + sum(max(plans.values(), default=0.0)
+                                 for plans in alternatives.values())
+
     def refresh_ledger(self, state: DecisionState, node, *, include_next_turn=True):
         if self._refresh is None:
             raise ValueError("shuffle-refresh valuation requires effects and card facts")
@@ -268,11 +296,14 @@ class ValueOracle:
 
         def signatures(card_ids):
             rows = []
-            for card_id in card_ids:
+            for resource_index, card_id in enumerate(card_ids):
                 rows.extend(self._refresh.needs.coverage_slots(
                     card_id, needs, supporter_available=before.budgets.supporter,
                     discard_capacity=max(0, sum(before_hand.values()) - 1),
-                    available_targets=targets))
+                    available_targets=targets,
+                    recipient_units=self._refresh.needs.energy_units_by_recipient(
+                        before.obs, seat, card_id),
+                    resource_group=f"reveal:{resource_index}"))
             return rows
 
         baseline = best_assignment(
@@ -299,9 +330,9 @@ class ValueOracle:
         keys = [need.key for index, need in enumerate(needs)
                 if assignment.covered_mask & (1 << index)]
         families = {
-            "deployment" if key.startswith("deploy_line:") else
+            "deployment" if key.startswith("deploy:") else
             "evolution" if key.startswith("evolve:") else
-            "attachment" if key == "fund_attack" else ""
+            "attachment" if key.startswith("fund_attack:") else ""
             for key in keys
         } - {""}
         if assignment.value <= 0.0 or len(families) != 1:
@@ -362,6 +393,7 @@ class ValueOracle:
         uncovered = self._refresh.needs.uncovered_by_hand(
             needs, hand_ids, supporter_available=state.budgets.supporter,
             discard_capacity=max(0, len(hand_ids) - 1), available_targets=available,
+            observation=state.obs, seat=state.root_seat,
         )
         best = 0.0
         for target in mine.get("discard") or ():
@@ -395,9 +427,8 @@ class ValueOracle:
             return None
         from collections import Counter
         from .needs import best_assignment
-        from .refresh import played_card_id
 
-        card_id = played_card_id(state, action)
+        card_id, recipient, provision_units = self._refresh.needs.supply_context(state, action)
         if card_id is None:
             return None
         key = state.semantic_key, action.identity
@@ -410,7 +441,8 @@ class ValueOracle:
         signatures = self._refresh.needs.coverage_slots(
             card_id, needs, supporter_available=state.budgets.supporter,
             discard_capacity=max(0, len(mine.get("hand") or ()) - 1),
-            available_targets=targets)
+            available_targets=targets, recipient=recipient,
+            provision_units=provision_units)
         assignment = best_assignment(signatures, len(needs), target_counts=targets)
         result = needs, assignment
         self._need_coverage_cache[key] = result

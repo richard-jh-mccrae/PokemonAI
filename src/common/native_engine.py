@@ -9,9 +9,11 @@ from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEd
 from .options import LegalAction, enumerate_legal_actions
 from .commutativity import action_footprint
 from .refresh import refresh_transition
+from .refresh import played_card_id
 from .transition_value import end_has_forced_value_change
 from .state import DecisionState
-from common.strategy.context import _MAIN, _NO, _YES
+from .terminal import terminal_effects_supported
+from common.strategy.context import _ACTIVE, _BENCH, _MAIN, _NO, _YES
 
 
 # One authoritative native world is the deployed latency budget.  Additional worlds are an
@@ -193,6 +195,40 @@ class NativeCgTransitionProvider:
 
     def footprint(self, state: DecisionState, action: LegalAction):
         return action_footprint(state, action, effects=self.effects, stats=self.stats)
+
+    def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
+        kind = action.identity.kind
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        option_index = action.selection[0] if len(action.selection) == 1 else -1
+        option = options[option_index] if 0 <= option_index < len(options) else {}
+        current = state.obs.get("current") or {}
+        players = current.get("players") or ()
+        mine = players[state.root_seat] if state.root_seat < len(players) else {}
+        card_id = played_card_id(state, action)
+        if card_id is None and kind in {"attach", "evolve"}:
+            hand_index = option.get("index")
+            hand = mine.get("hand") or ()
+            if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
+                card_id = int(hand[hand_index]["id"])
+        if card_id is None and kind in {"ability", "skill"}:
+            area = option.get("inPlayArea", option.get("area"))
+            index = option.get("inPlayIndex", option.get("index"))
+            cards = (mine.get("active") if area == _ACTIVE else
+                     mine.get("bench") if area == _BENCH else
+                     current.get("stadium") if area == 7 else ()) or ()
+            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
+                card_id = int(cards[index]["id"])
+        recipient_id = None
+        if kind == "attach":
+            area = option.get("inPlayArea")
+            index = option.get("inPlayIndex")
+            bodies = (mine.get("active") if area == _ACTIVE else
+                      mine.get("bench") if area == _BENCH else ()) or ()
+            body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
+            recipient_id = int(body["id"]) if body and body.get("id") is not None else None
+        return terminal_effects_supported(
+            state, action, card_id=card_id, recipient_id=recipient_id,
+            effects=self.effects, stats=self.stats)
 
     def transition(self, state: DecisionState, action: LegalAction):
         worlds = self._worlds.get(state.semantic_key)

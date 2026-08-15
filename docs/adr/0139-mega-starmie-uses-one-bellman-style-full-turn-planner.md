@@ -394,7 +394,8 @@ uses the same semantic key across action paths, converts native dataclasses with
 copy, and caches immutable stat/attack/resource facts in the potential evaluator. Root allocation is
 successive halving: all actions receive 96 expansions, then the strongest incomplete Bellman lower
 bounds receive up to 256 deterministic, 600 chance, or 1,300 reveal-choice expansions. No depth
-horizon, card identity, tag, or deck-specific branch participates in admission. The exact packaged native mirror improved from a
+horizon, card identity, tag, or deck-specific branch participates in admission. The exact packaged
+native mirror improved from a
 600-second timeout to 143.5 seconds with both seats `DONE`; all 25 rationale-led hard acceptance
 gates pass.
 
@@ -414,7 +415,7 @@ The count/tier summary remains for dashboards, and raw Kaggle agent logs remain 
 
 ## 2026-08-14 amendment: terminal proof precedes Needs scheduling
 
-Status: Accepted design; not yet implemented.
+Status: Accepted and built 2026-08-14.
 
 The implementation outcome's rejection of a separate terminal-win search is superseded. Exact,
 engine-verified same-turn wins are terminal proofs, not weighted Needs: a proven win dominates every
@@ -425,3 +426,7 @@ Prize count, KO yield, attack reach, and game termination remain one shared calc
 them to express probabilistic or future win setup; the terminal prover uses them only to establish a
 guaranteed current-turn win. This keeps prize math out of competing implementations while preventing
 ordinary development demand from outweighing a certain victory.
+
+The implementation contract, recovered-solver review, bound proof obligations, and acceptance gates are
+specified in
+[`terminal-proof-needs-bounded-bellman.md`](../plans/terminal-proof-needs-bounded-bellman.md).
