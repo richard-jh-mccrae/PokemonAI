@@ -28,7 +28,7 @@ PRODUCTION_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.max_nodes"))
 PRODUCTION_CHANCE_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.chance_max_nodes"))
 PRODUCTION_REVEAL_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.reveal_max_nodes"))
 UNCERTAINTY_REFINEMENT_VALUE_MARGIN = DEFAULT_PILOT_PROFILE.get("search.uncertainty_margin")
-ROOT_PROBE_TIME_SHARE = 0.1
+ROOT_PROBE_TIME_SHARE = 0.5
 PRODUCTION_MAX_SECONDS = DEFAULT_PILOT_PROFILE.get("clock.remaining_200_seconds")
 PRODUCTION_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.beam_width"))
 DEFAULT_ROOT_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.root_beam_width"))
@@ -436,6 +436,7 @@ class ProductionSolver(ReferenceSolver):
         self._bound_prunes: list[dict] = []
         self._action_bounds: dict[object, dict] = {}
         self._forced_choice_truncations = 0
+        self._urgent_refinement = False
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._root_key = state.semantic_key
@@ -469,6 +470,7 @@ class ProductionSolver(ReferenceSolver):
         self._bound_prunes.clear()
         self._action_bounds.clear()
         self._forced_choice_truncations = 0
+        self._urgent_refinement = False
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
@@ -964,7 +966,13 @@ class ProductionSolver(ReferenceSolver):
                     refinement_nodes = self.production_limits.max_nodes
                 self.limits = SearchLimits(refinement_nodes)
                 self.nodes = 1
-                refined = self._action(state, action, child_sleeps[action.identity])
+                previous_urgent = self._urgent_refinement
+                self._urgent_refinement = (
+                    previous_urgent or self.oracle.heal_repositions_energy(state, action))
+                try:
+                    refined = self._action(state, action, child_sleeps[action.identity])
+                finally:
+                    self._urgent_refinement = previous_urgent
                 branch_nodes[index] += max(0, self.nodes - 1)
                 branch_capped[index] = (
                     not refined.complete and self.nodes >= refinement_nodes)
@@ -993,7 +1001,8 @@ class ProductionSolver(ReferenceSolver):
                         -self._immediate_order_value(state, row),
                         row.identity,
                     )))
-                    width = (1 if context == PRIZE_SELECTION_CONTEXT
+                    width = (1 if (context == PRIZE_SELECTION_CONTEXT
+                                   and self._urgent_refinement)
                              else self.production_limits.effect_choice_width)
                     if len(ordered_actions) > width:
                         self._forced_choice_truncations += 1

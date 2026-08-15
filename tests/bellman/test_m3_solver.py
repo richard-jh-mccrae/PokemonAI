@@ -1114,7 +1114,7 @@ def test_forced_own_choice_orders_by_immediate_bellman_gain_before_capping():
         graph, _oracle(),
         limits=ProductionLimits(
             max_nodes=20, root_probe_nodes=20, root_refinement_width=0,
-            effect_choice_width=64),
+            effect_choice_width=1),
     ).decide(root)
 
     assert decision.action.kind == "setup"
