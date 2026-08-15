@@ -72,6 +72,11 @@ The focused root actions scheduled first from Strategy Match Strength, plus safe
 Bellman later widens into every unresolved legal path and owns the final choice.
 _Avoid_: Pruning rule, replacement planner
 
+**Candidate Harvest**:
+Strategy-ordered depth-first search for distinct executable attack/End lines before Bellman widening.
+It stops at its Pilot Profile line quota or clock share, whichever comes first.
+_Avoid_: Strategy policy, early final choice
+
 **Pokémon Role**:
 Deck or scouting doctrine describing a Pokémon's strategic job, such as primary attacker, backup attacker, or support.
 Roles contribute to development, preservation, and KO value.

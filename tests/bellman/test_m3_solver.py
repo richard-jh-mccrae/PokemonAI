@@ -340,6 +340,119 @@ def test_exhaustive_strategy_on_and_off_choose_the_same_policy(monkeypatch):
     assert incumbent["strategy_focus_count"] == 1
 
 
+def test_candidate_harvest_completes_strategy_roots_and_a_safety_root(monkeypatch):
+    root = _state("harvest-root")
+    alpha = _state("harvest-alpha", board=0.1)
+    beta = _state("harvest-beta", board=0.2)
+    first, second, attack, end = (
+        _action("alpha"), _action("beta", 1), _action("attack", 2), _action("end", 3))
+
+    class FocusAlphaThenBeta:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def build(self, state, actions, ranking=None):
+            del ranking
+            focused = ((first, second) if state.obs["node"] == "harvest-root" else (
+                next((action for action in actions if action.identity.kind != "end"), end),))
+            return StrategyBeam(
+                tuple(ActionFocus(semantic_action_key(action), action.identity.kind, (), 1.0,
+                                  "strategy_hint") for action in focused),
+                tuple(ActionFocus(semantic_action_key(action), action.identity.kind, (), 0.0,
+                                  "safety") for action in actions
+                      if action.identity.kind in {"attack", "end"}),
+                (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusAlphaThenBeta)
+    graph = Graph(
+        {"harvest-root": (first, second, attack, end),
+         "harvest-alpha": (end,), "harvest-beta": (end,)},
+        {("harvest-root", "alpha"): Deterministic(alpha),
+         ("harvest-root", "beta"): Deterministic(beta),
+         ("harvest-root", "attack"): Terminal(alpha, "attack resolved", Ledger())},
+    )
+    profile = PilotProfile.resolve(global_values={
+        "search.completed_candidate_target": 3,
+        "search.completed_candidate_time_share": 0.20,
+    })
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=20), profile=profile,
+        strategy_snapshot=object()).decide(root)
+    harvest = decision.diagnostics["production"]["candidate_harvest"]
+
+    assert harvest["target"] == 3
+    assert harvest["time_share"] == pytest.approx(0.20)
+    assert harvest["completed_count"] == 3
+    assert {row["root_action"] for row in harvest["completed"]} >= {
+        str(first.identity), str(second.identity), str(attack.identity)}
+
+
+def test_candidate_harvest_follows_strategy_at_each_state(monkeypatch):
+    root, middle = _state("deep-harvest-root"), _state("deep-harvest-middle")
+    start, other, preferred, end = (
+        _action("start"), _action("a_other"), _action("z_preferred", 1), _action("end", 2))
+
+    class FocusPath:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def build(self, state, actions, ranking=None):
+            del ranking
+            focus = start if state.obs["node"] == "deep-harvest-root" else preferred
+            return StrategyBeam(
+                (ActionFocus(semantic_action_key(focus), focus.identity.kind, (), 1.0,
+                             "strategy_hint"),),
+                (), (), (), (), 0.0, False,
+            )
+
+    class RecordingGraph(Graph):
+        def __init__(self, actions, transitions):
+            super().__init__(actions, transitions)
+            self.calls = []
+
+        def transition(self, state, action):
+            self.calls.append((state.obs["node"], action.identity.kind))
+            return super().transition(state, action)
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusPath)
+    graph = RecordingGraph(
+        {"deep-harvest-root": (start,), "deep-harvest-middle": (other, preferred, end)},
+        {("deep-harvest-root", "start"): Deterministic(middle),
+         ("deep-harvest-middle", "a_other"): Terminal(middle, "resolved"),
+         ("deep-harvest-middle", "z_preferred"): Terminal(middle, "resolved")},
+    )
+
+    ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=20),
+        strategy_snapshot=object()).decide(root)
+
+    assert graph.calls.index(("deep-harvest-middle", "z_preferred")) < \
+        graph.calls.index(("deep-harvest-middle", "a_other"))
+
+
+def test_timeout_fallback_chooses_best_bellman_valued_executable_candidate():
+    root = _state("fallback-root")
+    high, safe = _state("fallback-high", board=0.9), _state("fallback-safe", board=0.2)
+    unresolved, attack, end = _action("play"), _action("attack", 1), _action("end", 2)
+    solver = ProductionSolver(
+        Graph(
+            {"fallback-root": (unresolved, attack, end)},
+            {("fallback-root", "play"): Terminal(high, "resolved"),
+             ("fallback-root", "attack"): Terminal(safe, "attack resolved")},
+        ),
+        _oracle(), limits=ProductionLimits(max_nodes=20),
+    )
+    solver._root_key = root.semantic_key
+    solver._deadline_hit = True
+
+    solved = solver._state(root)
+
+    assert solved.action == unresolved
+    assert solver._candidate_timeout_fallback is True
+
+
 def test_incumbent_stabilization_never_precedes_completed_first_discovery():
     root = _state("timing-root")
     action = _action("alpha")

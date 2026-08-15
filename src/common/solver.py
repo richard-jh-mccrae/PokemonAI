@@ -424,9 +424,9 @@ class ReferenceSolver:
 class ProductionSolver(ReferenceSolver):
     """Bounded search over the reference transition/value contracts.
 
-    There is no depth horizon and no second action policy. Width/state capacity are explicit. At a
-    capped state where End is legal, exact-zero End is a valid lower bound. Every root receives an
-    equal probe; the strongest few incomplete roots receive the expensive refinement pass.
+    Strategy paths first produce executable candidates; Bellman then probes every unresolved root
+    and refines the strongest incomplete branches. There is no depth horizon or second action policy.
+    Width/state capacity are explicit; a capped state may retain an exact End lower bound.
     """
 
     def __init__(self, provider: TransitionProvider, oracle: ValueOracle, *, model_factory=None,
@@ -460,6 +460,9 @@ class ProductionSolver(ReferenceSolver):
         self._deadline_hit = False
         self._search_started = 0.0
         self._incumbent_timeline: list[dict] = []
+        self._harvesting_candidates = False
+        self._candidate_harvest: dict = {}
+        self._candidate_timeout_fallback = False
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._search_started = monotonic()
@@ -488,6 +491,16 @@ class ProductionSolver(ReferenceSolver):
         self._bound_prunes.clear()
         self._action_bounds.clear()
         self._deadline_hit = False
+        self._harvesting_candidates = False
+        self._candidate_harvest = {
+            "target": int(self.profile.get("search.completed_candidate_target")),
+            "time_share": self.profile.get("search.completed_candidate_time_share"),
+            "elapsed_seconds": 0.0,
+            "attempted_count": 0,
+            "completed_count": 0,
+            "completed": (),
+        }
+        self._candidate_timeout_fallback = False
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
@@ -515,6 +528,8 @@ class ProductionSolver(ReferenceSolver):
             "root_branch_capped": tuple(self._root_branch_capped),
             "cap_reached": any(self._root_branch_capped),
             "deadline_hit": self._deadline_hit,
+            "candidate_harvest": self._candidate_harvest,
+            "candidate_timeout_fallback": self._candidate_timeout_fallback,
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
             "information_first_permutations_pruned": self.information_pruned,
@@ -544,6 +559,33 @@ class ProductionSolver(ReferenceSolver):
     @staticmethod
     def _sequence_signature(action, result) -> tuple[str, ...]:
         return (str(action.identity), *(str(step.action) for step in result.continuation))
+
+    @staticmethod
+    def _is_executable_candidate(action, result) -> bool:
+        del action
+        return math.isfinite(result.value)
+
+    def _candidate_order(self, actions) -> tuple[LegalAction, ...]:
+        if self._strategy_builder is None:
+            return ()
+        focus_ranks = self._strategy_focus_ranks.get(self._root_key, {})
+        focused = sorted(
+            (action for action in actions if semantic_action_key(action) in focus_ranks),
+            key=lambda action: focus_ranks[semantic_action_key(action)],
+        )
+        safety = next((action for action in actions if action.identity.kind == "attack"), None)
+        if safety is None:
+            safety = next((action for action in actions if action.identity.kind == "end"), None)
+        target = int(self.profile.get("search.completed_candidate_target"))
+        reserved = 1 if safety is not None and safety not in focused[:target] else 0
+        ordered = focused[:max(0, target - reserved)]
+        if safety is not None and safety not in ordered:
+            ordered.append(safety)
+        ordered.extend(action for action in focused if action not in ordered)
+        ordered.extend(action for action in actions
+                       if action not in ordered and action.identity.kind not in {"attack", "end"})
+        ordered.extend(action for action in actions if action not in ordered)
+        return tuple(ordered)
 
     def _record_incumbent(self, state, finite, context, phase) -> None:
         if not finite:
@@ -906,7 +948,7 @@ class ProductionSolver(ReferenceSolver):
                sleep: tuple[SleepEvent, ...] = ()) -> StateEvaluation:
         now = monotonic()
         if self.nodes >= self.limits.max_nodes or now >= self._deadline:
-            self._deadline_hit = self._deadline_hit or now >= self._deadline
+            self._deadline_hit = self._deadline_hit or now >= self._hard_deadline
             actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
             return self._end_lower_bound(state, actions, "production cap: exact End lower bound")
 
@@ -954,7 +996,8 @@ class ProductionSolver(ReferenceSolver):
                     else:
                         self.por_pruned += 1
             actions = filtered
-        strategy_focus = (actor is Actor.OURS and key == self._root_key
+        strategy_focus = (actor is Actor.OURS
+                          and (key == self._root_key or self._harvesting_candidates)
                           and self._strategy_builder is not None
                           and self.profile.get("strategy.focus_enabled") >= 0.5)
         if strategy_focus:
@@ -1018,14 +1061,64 @@ class ProductionSolver(ReferenceSolver):
             child_sleeps = {action.identity: sleep for action in actions}
         if key == self._root_key:
             action_waves = self._strategy_waves.get(key, {})
-            results_list = []
-            branch_nodes = []
-            branch_capped = []
+            results_list: list[tuple[LegalAction, Evaluation] | None] = [None] * len(actions)
+            branch_nodes = [0] * len(actions)
+            branch_capped = [False] * len(actions)
             original_limits = self.limits
+
+            harvest_started = monotonic()
+            harvest_target = int(self.profile.get("search.completed_candidate_target"))
+            harvest_share = self.profile.get("search.completed_candidate_time_share")
+            harvest_deadline = harvest_started + max(
+                0.0, self._hard_deadline - harvest_started) * harvest_share
+            harvest_order = self._candidate_order(actions)
+            completed = []
+            seen_sequences = set()
+            self._harvesting_candidates = True
+            self.limits = SearchLimits(self.production_limits.max_nodes)
+            for position, action in enumerate(harvest_order):
+                if len(completed) >= harvest_target or monotonic() >= harvest_deadline:
+                    break
+                index = actions.index(action)
+                self._deadline = self._budget.root_deadline(
+                    monotonic(), harvest_deadline, len(harvest_order) - position)
+                self.nodes = 1
+                result = self._action(state, action, child_sleeps[action.identity])
+                results_list[index] = (action, result)
+                branch_nodes[index] = self.nodes
+                branch_capped[index] = not result.complete and (
+                    self.nodes >= self.production_limits.max_nodes
+                    or monotonic() >= self._deadline)
+                sequence = self._sequence_signature(action, result)
+                if (self._is_executable_candidate(action, result)
+                        and sequence not in seen_sequences):
+                    seen_sequences.add(sequence)
+                    completed.append({
+                        "root_action": str(action.identity),
+                        "sequence": sequence,
+                        "value": result.value,
+                        "bellman_complete": result.complete,
+                    })
+                finite_results = tuple(
+                    pair for pair in results_list
+                    if pair is not None and math.isfinite(pair[1].value))
+                self._record_incumbent(state, finite_results, context, "candidate_harvest")
+            self._harvesting_candidates = False
+            self._candidate_harvest = {
+                "target": harvest_target,
+                "time_share": harvest_share,
+                "elapsed_seconds": monotonic() - harvest_started,
+                "attempted_count": sum(pair is not None for pair in results_list),
+                "completed_count": len(completed),
+                "completed": tuple(completed),
+            }
+
             probe_started = monotonic()
             probe_hard_deadline = probe_started + max(
                 0.0, self._hard_deadline - probe_started) * ROOT_PROBE_TIME_SHARE
-            for index, action in enumerate(actions):
+            remaining = [index for index, pair in enumerate(results_list) if pair is None]
+            for position, index in enumerate(remaining):
+                action = actions[index]
                 wave = action_waves.get(action, 0)
                 widening = wave > 0
                 probe_nodes = min(
@@ -1034,18 +1127,19 @@ class ProductionSolver(ReferenceSolver):
                 )
                 self.limits = SearchLimits(probe_nodes)
                 self._deadline = self._budget.root_deadline(
-                    monotonic(), probe_hard_deadline, len(actions) - index)
+                    monotonic(), probe_hard_deadline, len(remaining) - position)
                 self.nodes = 1
                 result = self._action(state, action, child_sleeps[action.identity])
-                branch_nodes.append(self.nodes)
-                branch_capped.append(not result.complete and (
-                    self.nodes >= probe_nodes or monotonic() >= self._deadline))
-                results_list.append((action, result))
+                branch_nodes[index] = self.nodes
+                branch_capped[index] = not result.complete and (
+                    self.nodes >= probe_nodes or monotonic() >= self._deadline)
+                results_list[index] = (action, result)
                 self._record_incumbent(
                     state,
-                    tuple((candidate, evaluated) for candidate, evaluated in results_list
-                          if math.isfinite(evaluated.value)),
+                    tuple(pair for pair in results_list
+                          if pair is not None and math.isfinite(pair[1].value)),
                     context, "probe")
+            results_list = [pair for pair in results_list if pair is not None]
             if results_list:
                 self._completed_rounds = 1
             self._deadline = self._hard_deadline
@@ -1148,6 +1242,7 @@ class ProductionSolver(ReferenceSolver):
             reserved_refinements = len(selected)
             for refinement_index, (index, action, probe) in enumerate(ordered_refinements):
                 if monotonic() >= self._hard_deadline:
+                    self._deadline_hit = True
                     break
                 self._completed_rounds = max(
                     self._completed_rounds,
@@ -1201,7 +1296,7 @@ class ProductionSolver(ReferenceSolver):
         else:
             results_list = []
             ordered_actions = actions
-            if actor is Actor.OURS:
+            if actor is Actor.OURS and not self._harvesting_candidates:
                 ordered_actions = tuple(sorted(
                     actions, key=lambda row: (row.identity.kind != "end", row.identity)))
             incumbent = None
@@ -1251,6 +1346,7 @@ class ProductionSolver(ReferenceSolver):
                         if math.isfinite(evaluated.value))
                     incumbent = self._select_our_action(state, finite_results, context)
             results = tuple(results_list)
+        self._deadline_hit = self._deadline_hit or monotonic() >= self._hard_deadline
         self._active.remove(memo_key)
         finite = [(action, result) for action, result in results if math.isfinite(result.value)]
         if not finite or (actor is Actor.OPPONENT and len(finite) != len(results)):
@@ -1259,9 +1355,16 @@ class ProductionSolver(ReferenceSolver):
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:
-                selected = self._select_our_action(state, finite, context)
-                action, result = self._select_unresolved_focus(
-                    state, finite, context, selected)
+                candidate_finite = tuple(
+                    pair for pair in finite if self._is_executable_candidate(*pair))
+                if key == self._root_key and self._deadline_hit and candidate_finite:
+                    action, result = self._select_our_action(
+                        state, candidate_finite, context)
+                    self._candidate_timeout_fallback = True
+                else:
+                    selected = self._select_our_action(state, finite, context)
+                    action, result = self._select_unresolved_focus(
+                        state, finite, context, selected)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))

@@ -77,3 +77,16 @@ def test_offline_clock_accepts_an_exhaustive_budget():
     assert PilotProfile.resolve(
         global_values={"clock.remaining_200_seconds": 600}
     ).get("clock.remaining_200_seconds") == 600
+
+
+def test_completed_candidate_harvest_defaults_are_central_and_tunable():
+    definitions = {row.name: row for row in DEFINITIONS}
+    profile = PilotProfile.resolve(global_values={
+        "search.completed_candidate_target": 5,
+        "search.completed_candidate_time_share": 0.35,
+    })
+
+    assert definitions["search.completed_candidate_target"].default == 3.0
+    assert definitions["search.completed_candidate_time_share"].default == 0.20
+    assert profile.get("search.completed_candidate_target") == 5
+    assert profile.get("search.completed_candidate_time_share") == pytest.approx(0.35)
