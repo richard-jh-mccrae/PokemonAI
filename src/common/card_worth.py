@@ -23,8 +23,14 @@ ROLE_TIER: dict[str, float] = {
     "preevolution": PREEVOLUTION_TIER,
     "engine": 12.0,
     "support_pokemon": 12.0,
+    "disruption_target": 12.0,
     "accel_source": 12.0,
     "counter_mover": 12.0,        # a damage-relay Ability body (Munkidori) — the engine band
+    "item_locker": 12.0,
+    "search_engine": 12.0,
+    "retreat_assist": 12.0,
+    "healer": 12.0,
+    "stall_pokemon": 12.0,
 }
 
 # Scouting Brief vocabulary aliases into the same semantic Worth currency. These translate role

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from common.card_worth import role_value
 from common.cards import CardFunctions
 from common.pokemon_roles import general_pokemon_roles
 from common.scouting.artifact import load_artifact
@@ -22,13 +23,23 @@ from common.scouting.read import Read
 _BRIEFS_DIR = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting" / "briefs"
 
 
-def test_generic_support_pokemon_roles_are_deck_independent():
+@pytest.mark.parametrize(("name", "purpose"), (
+    ("Dunsparce", "draw_engine"),
+    ("Dudunsparce", "draw_engine"),
+    ("Drakloak", "draw_engine"),
+    ("Mega Kangaskhan ex", "draw_engine"),
+    ("Latias ex", "retreat_assist"),
+    ("Budew", "item_locker"),
+    ("Meowth ex", "search_engine"),
+    ("Fezandipiti ex", "draw_engine"),
+))
+def test_generic_support_pokemon_roles_preserve_their_purpose(name, purpose):
     provider = EngineCardStatProvider()
     functions = CardFunctions.load()
-    for name in ("Meowth ex", "Fezandipiti ex", "Dunsparce", "Dudunsparce", "Budew"):
-        ids = provider.ids_for_name(name)
-        roles = general_pokemon_roles(ids, provider, functions)
-        assert ids and all("support_pokemon" in roles.get(card_id, ()) for card_id in ids)
+    ids = provider.ids_for_name(name)
+    roles = general_pokemon_roles(ids, provider, functions)
+    assert ids and all(
+        {"support_pokemon", purpose} <= set(roles.get(card_id, ())) for card_id in ids)
 
 
 def _write_brief(d, slug, covers, **extra):
@@ -199,8 +210,10 @@ def test_every_shipped_brief_pokemon_resolves_to_a_role():
             forward_ids=provider.forward_card_ids, functions=functions)
         for entry in brief.pokemon:
             ids = provider.ids_for_name(entry["card"])
-            assert ids and any(card_id in resolved for card_id in ids), (
+            assert ids and all(card_id in resolved for card_id in ids), (
                 f"{brief.slug}: {entry['card']} has no resolved Role")
+            assert all(role_value((resolved[card_id],)) > 0 for card_id in ids), (
+                f"{brief.slug}: {entry['card']} has a Role with no Bellman Worth")
 
 
 def test_briefs_list_every_representative_build_pokemon():

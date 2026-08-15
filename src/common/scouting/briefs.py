@@ -121,7 +121,7 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
         roles = tuple(entry.get("roles") or ())
         ids = {int(card_id) for card_id in ids_for_name(entry.get("card", "")) or ()}
         if stat_for_id is not None:
-            generic = general_pokemon_roles(ids, _StatLookup(stat_for_id), functions)
+            generic = general_pokemon_roles(ids, _StatLookup(stat_for_id, forward_ids), functions)
             for card_id, card_roles in generic.items():
                 role_claims.setdefault(card_id, set()).update(card_roles)
         if _THREAT_ROLES.intersection(roles):
@@ -149,8 +149,9 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
 
 
 class _StatLookup:
-    def __init__(self, get):
+    def __init__(self, get, forward_card_ids=None):
         self.get = get
+        self.forward_card_ids = forward_card_ids or (lambda _card_id: ())
 
 
 def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=(), functions=None) -> dict[int, float]:
