@@ -1,9 +1,11 @@
 from common.strategy.strategies import (
+    ActivatedStrategy,
     ActivationCondition,
     DesiredFact,
     GENERAL_STRATEGIES,
     StrategyHint,
     StrategyOverride,
+    StrategySnapshot,
     resolve_strategies,
     activate_strategies,
 )
@@ -389,3 +391,53 @@ def test_damage_setup_strategy_focuses_a_bench_snipe_attack():
 
     assert [row.family for row in beam.focused] == ["attack"]
     assert [row.family for row in beam.safety] == ["attack", "end"]
+
+
+def test_cached_strategy_orders_a_forced_recovery_target():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["discard"] = [{"id": 1030}, {"id": 3}]
+    observation["select"] = {"context": 7, "minCount": 1, "maxCount": 1, "option": [
+        {"type": 3, "playerIndex": 0, "area": 3, "index": 0},
+        {"type": 3, "playerIndex": 0, "area": 3, "index": 1},
+    ]}
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy("deck.deploy", "deploy", "own.bench",
+                          None, None, (1030,), "this_turn", "high"),
+    ))
+    actions = enumerate_legal_actions(observation)
+
+    beam = StrategyBeamBuilder(snapshot).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    assert [row.action_key for row in beam.focused] == [
+        semantic_action_key(next(action for action in actions if action.selection == (0,)))
+    ]
+
+
+def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
+    observation = _observation(hand=[{"id": 50}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy("deck.deploy", "deploy", "own.bench",
+                          None, None, (1030,), "this_turn", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 1030,
+                                   stage="basic" if card_id == 1030 else None)
+
+    registry = SimpleNamespace(line_parents={1031: 1030})
+    beam = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=((1030, 1),)),
+            enumerate_legal_actions(observation),
+        )
+
+    assert beam.focused == ()

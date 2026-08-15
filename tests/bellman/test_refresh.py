@@ -10,7 +10,7 @@ from common.native_engine import NativeCgTransitionProvider, _NativeWorld
 from common.options import enumerate_legal_actions
 from common.refresh import RefreshEvaluator
 from common.scouting.provider import CardStat, DictCardStatProvider
-from common.value import CardFacts, Potential, ValueRegistry
+from common.value import KNOWN_CARD_FLOOR, CardFacts, Potential, ValueRegistry
 
 
 REFRESH_CARD = 900
@@ -113,7 +113,7 @@ def test_native_refresh_transition_never_steps_a_hypothetical_draw_world():
     assert not hasattr(result, "state")
 
 
-def test_refresh_uses_exact_draw_odds_over_bellman_hand_value():
+def test_refresh_reports_exact_draw_odds_without_adding_them_to_bellman_utility():
     hidden = (LINE_TOP, LINE_TOP, POKEMON_TUTOR, POKEMON_TUTOR, *(FILLER for _ in range(6)))
     deck = (REFRESH_CARD, LINE_BASE, *hidden)
     state, registry = _state(deck)
@@ -127,12 +127,12 @@ def test_refresh_uses_exact_draw_odds_over_bellman_hand_value():
 
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((2, 0),), False))
 
-    assert "refresh_expected_hand" not in dict(ledger.benefits)
-    assert dict(ledger.benefits)["refresh_board_access"] > 0.0
+    assert dict(ledger.benefits)["refresh_expected_hand"] == pytest.approx(0.08)
+    assert "refresh_board_access" not in dict(ledger.benefits)
     assert branches[0]["board_access_value"] > 0.0
     assert branches[0]["expected_hand_value"] == pytest.approx(0.08)
     assert branches[0]["hand_value_deviation"] > 0.08
-    assert not any("need" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
+    assert not any("demand" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
 
 
 def test_returned_cards_join_the_exact_refresh_draw_pool():
@@ -146,7 +146,7 @@ def test_returned_cards_join_the_exact_refresh_draw_pool():
     assert deviation == pytest.approx(0.1)
 
 
-def test_refresh_charges_a_guaranteed_need_already_held_and_playable_first():
+def test_refresh_reports_a_guaranteed_held_demand_without_charging_bellman_utility():
     hidden = (LINE_TOP, LINE_TOP, *(FILLER for _ in range(8)))
     deck = (REFRESH_CARD, LINE_BASE, LINE_TOP, *hidden)
     state, registry = _state(deck, hand=(REFRESH_CARD, LINE_TOP))
@@ -155,7 +155,7 @@ def test_refresh_charges_a_guaranteed_need_already_held_and_playable_first():
 
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((6, 0),), False))
 
-    assert dict(ledger.costs)["refresh_held_demand"] == pytest.approx(1.0)
+    assert "refresh_held_demand" not in dict(ledger.costs)
     assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(0.2)
     assert "expected_hand_value" in branches[0]
 
@@ -178,6 +178,30 @@ def test_refresh_charges_every_consumed_hand_card_including_the_played_card():
     assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(0.4)
 
 
+def test_refresh_charges_a_dead_fetch_only_as_known_discard_fodder():
+    deck = (REFRESH_CARD, POKEMON_TUTOR, *(FILLER for _ in range(10)))
+    state, registry = _state(deck, hand=(REFRESH_CARD, POKEMON_TUTOR))
+
+    def hand_potential(observation):
+        hand = observation["current"]["players"][0].get("hand") or ()
+        value = 0.2 * len(hand)
+        return Potential(value, (("hand", value),))
+
+    evaluator = RefreshEvaluator(
+        registry, hand_potential,
+        effects=CardEffects({POKEMON_TUTOR: [{
+            "kind": "fetch", "target": "pokemon", "zone": "deck",
+        }]}),
+        stats=_stats(),
+    )
+
+    ledger, _branches = evaluator.evaluate(
+        state, Refresh(REFRESH_CARD, ((6, 0),), False))
+
+    assert dict(ledger.costs)["refresh_held_options"] == pytest.approx(
+        0.2 + KNOWN_CARD_FLOOR / 120.0)
+
+
 def test_harlequin_style_coin_branches_are_averaged_without_draw_hands():
     hidden = (LINE_TOP, *(FILLER for _ in range(9)))
     deck = (REFRESH_CARD, LINE_BASE, *hidden)
@@ -185,15 +209,18 @@ def test_harlequin_style_coin_branches_are_averaged_without_draw_hands():
     evaluator = RefreshEvaluator(
         registry, _potential, effects=CardEffects({}), stats=_stats())
 
-    _ledger, branches = evaluator.evaluate(
+    ledger, branches = evaluator.evaluate(
         state, Refresh(REFRESH_CARD, ((5, 3), (3, 5)), True))
 
     assert tuple((row["own_draw"], row["opponent_draw"]) for row in branches) == (
         (5, 3), (3, 5))
     assert all("expected_hand_value" in row for row in branches)
+    assert "refresh_opponent_hand" not in dict(ledger.benefits)
+    assert "refresh_hand_size_tactical" not in dict(ledger.costs)
+    assert all("opponent_hand" in row and "hand_size_tactical" in row for row in branches)
 
 
-def test_refresh_does_not_create_next_turn_need_rewards_or_costs():
+def test_refresh_does_not_create_next_turn_demand_rewards_or_costs():
     hidden = (LINE_TOP, *(FILLER for _ in range(9)))
     deck = (REFRESH_CARD, LINE_BASE, LINE_TOP, *hidden)
     observation = _observation((REFRESH_CARD, LINE_TOP))
@@ -206,5 +233,5 @@ def test_refresh_does_not_create_next_turn_need_rewards_or_costs():
 
     ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((6, 0),), False))
 
-    assert not any("need" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
+    assert not any("demand" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
     assert "expected_hand_value" in branches[0]

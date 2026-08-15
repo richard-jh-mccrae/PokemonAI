@@ -112,6 +112,7 @@ class BellmanRuntime:
         )
         self.strategies = None
         self._strategy_snapshot = None
+        self._strategy_history = ()
         self.last_brief = None
         self.opponent_role_worth = {}
         self._plan_suffix = ()
@@ -243,10 +244,16 @@ class BellmanRuntime:
         candidate = activate_strategies(
             observation, self.strategies, roles=self.roles, stats=self.stats,
             opponent_role_worth=self.opponent_role_worth)
+        history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
+                        for row in observation.get("logs") or ())
+        same_history = (len(history) >= len(self._strategy_history)
+                        and history[:len(self._strategy_history)] == self._strategy_history)
         if (self._strategy_snapshot is not None
-                and self._strategy_snapshot.snapshot_id == candidate.snapshot_id):
+                and self._strategy_snapshot.snapshot_id == candidate.snapshot_id
+                and same_history):
             return self._strategy_snapshot
         self._strategy_snapshot = candidate
+        self._strategy_history = history
         return candidate
 
     def _cached_decision(self, planner, request):

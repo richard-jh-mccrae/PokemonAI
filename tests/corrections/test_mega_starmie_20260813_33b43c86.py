@@ -16,8 +16,8 @@ def test_f20_collects_pokegear_information_before_attaching():
     decision = RUNTIME.decide(ROWS["b8de42dc17f0"].obs)
 
     assert decision.chosen == (0,)
-    assert decision.diagnostics["needs"].focused[0].path_ids == (
-        "general.information_before_commitment",)
+    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
+        "general.low_cost_information_access_before_commitment",)
 
 
 def test_f21_does_not_spend_a_dead_setup_fetch():

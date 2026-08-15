@@ -14,6 +14,7 @@ from time import perf_counter
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
+from .option_equivalence import option_source_card
 from .scouting.card_text import name_in_family
 from .strategy.context import _ACTIVE, _BENCH
 
@@ -64,10 +65,11 @@ class StrategyBeamBuilder:
     _DEADLINE = {"immediate": 3.0, "this_turn": 2.0, "next_turn": 1.0}
     _CONFIDENCE = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
-    def __init__(self, snapshot, *, effects=None, stats=None, width=8):
+    def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8):
         self.snapshot = snapshot
         self.effects = effects
         self.stats = stats
+        self.registry = registry
         self.width = max(1, int(width))
         self.last_odds: dict[str, float] = {}
 
@@ -93,13 +95,7 @@ class StrategyBeamBuilder:
 
     def _source_card_id(self, state, action) -> int | None:
         option = self._option(state, action)
-        index = option.get("index") if option else None
-        player = self._player(state)
-        area = option.get("area") if option else None
-        cards = ((player.get("active") or ()) if area == _ACTIVE else
-                 (player.get("bench") or ()) if area == _BENCH else
-                 (player.get("hand") or ()))
-        card = cards[index] if isinstance(index, int) and 0 <= index < len(cards) else None
+        card = option_source_card(option, state.obs)
         return int(card["id"]) if card and card.get("id") is not None else None
 
     def _recipient_serial(self, state, action) -> int | None:
@@ -115,8 +111,19 @@ class StrategyBeamBuilder:
 
     def _eligible_targets(self, state, hint) -> tuple[int, ...]:
         if hint.target_card_ids:
-            return tuple(card_id for card_id in hint.target_card_ids
-                         if dict(state.deck_counts).get(card_id, 0) > 0)
+            targets = tuple(card_id for card_id in hint.target_card_ids
+                            if dict(state.deck_counts).get(card_id, 0) > 0)
+            if hint.kind == "deploy" and self.registry is not None:
+                hand = tuple(int(card["id"]) for card in self._player(state).get("hand") or ()
+                             if card and card.get("id") is not None)
+                available = set(hand) | {
+                    int(card_id) for card_id, count in state.deck_counts if count > 0
+                }
+                targets = tuple(base for base in targets if any(
+                    parent == base and top in available
+                    for top, parent in self.registry.line_parents.items()
+                ))
+            return targets
         if hint.kind != "fund_attack" or self.stats is None:
             return ()
         return tuple(
@@ -204,6 +211,9 @@ class StrategyBeamBuilder:
                     for body in self._opponent(state).get("bench") or () if body)
                 if target_exists and int(getattr(attack, "benchSnipe", 0) or 0) > 0:
                     probability = 1.0
+            elif (action.identity.kind == "card" and source_id is not None
+                  and source_id in hint.target_card_ids):
+                probability = 1.0
             elif action.identity.kind in {"play", "ability"} and not bool(
                     getattr(source_stat, "is_supporter", False)
                     and (state.obs.get("current") or {}).get("supporterPlayed")):
@@ -240,8 +250,18 @@ class StrategyBeamBuilder:
             else:
                 inactive.append(ActionFocus(
                     key, action.identity.kind, (), 0.0, "no_strategy_hint"))
+        information_ids = {
+            hint.strategy_id for hint in self.snapshot.hints
+            if hint.kind == "low_cost_information_access"
+        }
         focused = tuple(sorted(
-            focused, key=lambda row: (-row.score, row.action_key))[:self.width])
+            focused, key=lambda row: (
+                -row.score,
+                (0 if row.family == "evolve" else
+                 1 if information_ids.intersection(row.path_ids) else
+                 2 if row.family == "attach" else 3),
+                row.action_key,
+            ))[:self.width])
         elapsed = (perf_counter() - started) * 1000.0
         return StrategyBeam(
             focused, tuple(safety), tuple(unknown), (), (), elapsed, False,

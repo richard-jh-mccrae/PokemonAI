@@ -117,7 +117,7 @@ def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, bool, 
 
 
 def _select_our_action(finite, context: int):
-    if context == _DISCARD and any(not result.complete for _action, result in finite):
+    if context == _DISCARD:
         immediate = max(result.ledger.immediate for _action, result in finite)
         leaders = tuple(
             pair for pair in finite
@@ -277,6 +277,26 @@ class ReferenceSolver:
                               f"{node.reason}: {node.missing_fact}")
         if isinstance(node, Deterministic):
             ledger = self._ledger(before, node.state, action)
+            select = node.state.obs.get("select") or {}
+            if int(select.get("context", MAIN_DECISION_CONTEXT)) != MAIN_DECISION_CONTEXT:
+                actor = self.provider.actor(node.state)
+                forced = tuple(
+                    (candidate, self._end_transition(
+                        node.state, candidate,
+                        self._provider_transition(node.state, candidate)))
+                    for candidate in self.provider.actions(node.state)
+                )
+                if (not forced or any(not result.complete or not math.isfinite(result.value)
+                                      for _candidate, result in forced)):
+                    return Evaluation(-math.inf, ledger, False,
+                                      "forced End continuation incomplete")
+                chooser = max if actor is Actor.OURS else min
+                _candidate, continuation = chooser(
+                    forced, key=lambda row: _ordered_evaluation(row[1], actor))
+                combined = _combine(ledger, continuation.value)
+                return Evaluation(
+                    combined.total, combined, True, "End forced continuation resolved",
+                    decisions=1.0 + continuation.decisions)
             return Evaluation(ledger.total, ledger, True, "End resolved", decisions=1.0)
         if isinstance(node, Terminal):
             ledger = _combine(self._ledger(before, node.state, action), 0.0, node.ledger)
@@ -462,6 +482,7 @@ class ProductionSolver(ReferenceSolver):
                 and self.profile.get("strategy.focus_enabled") >= 0.5):
             self._strategy_builder = StrategyBeamBuilder(
                 self.strategy_snapshot, effects=self.oracle.effects, stats=self.oracle.stats,
+                registry=self.oracle.registry,
                 width=self.profile.get("strategy.focus_width"))
         self._completed_rounds = 0
         self._bound_prunes.clear()
@@ -733,6 +754,31 @@ class ProductionSolver(ReferenceSolver):
                 return action, result
         return selected
 
+    def _select_unresolved_focus(self, state: DecisionState, finite, context: int, selected):
+        if context != MAIN_DECISION_CONTEXT or state.semantic_key != self._root_key:
+            return selected
+        selected_footprint = self._footprint(state, selected[0])
+        if (selected[0].identity.kind != "attach" or selected_footprint is None
+                or not selected_footprint.commitment):
+            return selected
+        focus_ranks = self._strategy_focus_ranks.get(state.semantic_key, {})
+        focused = []
+        for pair in finite:
+            footprint = self._footprint(state, pair[0])
+            if (not pair[1].complete
+                    and semantic_action_key(pair[0]) in focus_ranks
+                    and footprint is not None and footprint.information_first
+                    and isinstance(self._provider_transition(state, pair[0]), RevealChoice)
+                    and self._information_priority(state, pair[0]) > 0.0):
+                focused.append(pair)
+        focused.sort(key=lambda pair: focus_ranks[semantic_action_key(pair[0])])
+        for candidate in focused:
+            bound = self._action_bounds.get(candidate[0].identity, {})
+            if round(float(bound.get("q_upper", math.inf)), VALUE_TIE_DECIMALS) >= round(
+                    selected[1].value, VALUE_TIE_DECIMALS):
+                return candidate
+        return selected
+
     def _successor_sleep(self, state: DecisionState, sleep: tuple[SleepEvent, ...],
                          earlier: list[tuple[LegalAction, ActionFootprint]],
                          current_action: LegalAction,
@@ -885,7 +931,7 @@ class ProductionSolver(ReferenceSolver):
             actions = tuple(sorted(
                 actions,
                 key=lambda action: (-self._immediate_order_value(state, action), action.identity),
-            ))
+            ))[:1]
         footprints: dict[object, ActionFootprint | None] = {}
         if actor is Actor.OURS and context == MAIN_DECISION_CONTEXT:
             footprints = {action.identity: self._footprint(state, action) for action in actions}
@@ -908,41 +954,41 @@ class ProductionSolver(ReferenceSolver):
                     else:
                         self.por_pruned += 1
             actions = filtered
-            strategy_focus = (key == self._root_key and self._strategy_builder is not None
-                           and self.profile.get("strategy.focus_enabled") >= 0.5)
-            if strategy_focus:
-                beam = self._strategy_builder.build(state, actions)
-                self._strategy_beams[key] = beam
-                retained = {row.action_key for row in (*beam.focused, *beam.safety)}
-                retained.update(row.action_key for row in beam.unknown)
-                self._strategy_later_wave[key] = tuple(
-                    action for action in actions
-                    if semantic_action_key(action) not in retained)
-                self._strategy_waves[key] = {
-                    action: (0 if semantic_action_key(action) in retained
-                             else 1)
-                    for action in actions
-                }
-                self._strategy_focus_ranks[key] = {
-                    row.action_key: index for index, row in enumerate(beam.focused)
-                }
-                original = {action: index for index, action in enumerate(actions)}
-                focus_order = {
-                    row.action_key: index for index, row in enumerate(beam.focused)
-                }
-                information_order = {
-                    action: 0
-                    for action in actions
-                    if footprints[action.identity] is not None
-                    and footprints[action.identity].information_first
-                    and self._information_priority(state, action) > 0.0
-                }
-                actions = tuple(sorted(actions, key=lambda action: (
-                    information_order.get(action, 1),
-                    self._strategy_waves[key][action],
-                    focus_order.get(semantic_action_key(action), len(actions)),
-                    original[action],
-                )))
+        strategy_focus = (actor is Actor.OURS and key == self._root_key
+                          and self._strategy_builder is not None
+                          and self.profile.get("strategy.focus_enabled") >= 0.5)
+        if strategy_focus:
+            beam = self._strategy_builder.build(state, actions)
+            self._strategy_beams[key] = beam
+            retained = {row.action_key for row in (*beam.focused, *beam.safety)}
+            retained.update(row.action_key for row in beam.unknown)
+            self._strategy_later_wave[key] = tuple(
+                action for action in actions
+                if semantic_action_key(action) not in retained)
+            self._strategy_waves[key] = {
+                action: (0 if semantic_action_key(action) in retained else 1)
+                for action in actions
+            }
+            self._strategy_focus_ranks[key] = {
+                row.action_key: index for index, row in enumerate(beam.focused)
+            }
+            original = {action: index for index, action in enumerate(actions)}
+            focus_order = {
+                row.action_key: index for index, row in enumerate(beam.focused)
+            }
+            information_order = {
+                action: 0
+                for action in actions
+                if footprints.get(action.identity) is not None
+                and footprints[action.identity].information_first
+                and self._information_priority(state, action) > 0.0
+            }
+            actions = tuple(sorted(actions, key=lambda action: (
+                information_order.get(action, 1),
+                self._strategy_waves[key][action],
+                focus_order.get(semantic_action_key(action), len(actions)),
+                original[action],
+            )))
         if self.provider.actor(state) is Actor.OURS:
             width = (self.production_limits.root_beam_width if key == self._root_key
                      else self.production_limits.beam_width if context == MAIN_DECISION_CONTEXT
@@ -1068,9 +1114,11 @@ class ProductionSolver(ReferenceSolver):
             )
             selected.extend(sorted(
                 (row for row in refinement_candidates
-                 if row not in selected and semantic_action_key(row[1]) in focus_ranks),
+                 if semantic_action_key(row[1]) in focus_ranks),
                 key=lambda row: focus_ranks[semantic_action_key(row[1])],
             ))
+            selected.extend(row for row in refinement_candidates
+                            if row not in selected and row[1].identity.kind == "attack")
             selected.extend(row for row in refinement_candidates if row not in selected)
             selected = selected[:refinement_width]
             for uncertainty_type in (Chance, RevealChoice):
@@ -1097,6 +1145,7 @@ class ProductionSolver(ReferenceSolver):
             ordered_refinements = selected + [
                 row for row in refinement_candidates if row not in selected
             ] if refinement_width else []
+            reserved_refinements = len(selected)
             for refinement_index, (index, action, probe) in enumerate(ordered_refinements):
                 if monotonic() >= self._hard_deadline:
                     break
@@ -1122,7 +1171,9 @@ class ProductionSolver(ReferenceSolver):
                 self.limits = SearchLimits(refinement_nodes)
                 self._deadline = self._budget.root_deadline(
                     monotonic(), self._hard_deadline,
-                    len(ordered_refinements) - refinement_index,
+                    (reserved_refinements - refinement_index
+                     if refinement_index < reserved_refinements
+                     else len(ordered_refinements) - refinement_index),
                 )
                 self.nodes = 1
                 refined = self._action(state, action, child_sleeps[action.identity])
@@ -1208,7 +1259,9 @@ class ProductionSolver(ReferenceSolver):
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:
-                action, result = self._select_our_action(state, finite, context)
+                selected = self._select_our_action(state, finite, context)
+                action, result = self._select_unresolved_focus(
+                    state, finite, context, selected)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))

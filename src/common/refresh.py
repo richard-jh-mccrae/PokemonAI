@@ -8,7 +8,7 @@ from math import sqrt
 from .algebra import Ledger, Refresh
 from .draws import draw_branches, draw_shape_problem
 from .demand import DemandModel, access_probability
-from .value import KNOWN_CARD_FLOOR, worth_to_prizes
+from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
 
 
 SHUFFLE_OWN_HAND_RIDER = "shuffle_own_hand_in"
@@ -90,7 +90,7 @@ class RefreshEvaluator:
             returned.remove(int(node.card_id))
         except ValueError:
             pass
-        held_cost = self._held_option_cost(observation, state.root_seat)
+        held_cost = self._held_option_cost(state, node.card_id)
         branch_rows = []
         demands = tuple(demand for demand in self.demand.immediate(observation, state.root_seat)
                         if demand.timing == "immediate")
@@ -104,7 +104,7 @@ class RefreshEvaluator:
             discard_capacity=max(0, len(returned) - 1),
             available_targets=Counter(dict(state.deck_counts)),
             observation=observation, seat=state.root_seat)
-        weighted_draw = weighted_access = weighted_tactical = weighted_opponent = 0.0
+        weighted_draw = 0.0
         branch_probability = 1.0 / len(node.draws)
         for own_draw, opponent_draw in node.draws:
             draw_mean, draw_deviation = self._draw_value_moments(
@@ -122,16 +122,14 @@ class RefreshEvaluator:
                                     else int(opponent.get("handCount", 0) or 0))
                 - KNOWN_CARD_FLOOR * int(opponent_draw))
                               if node.opponent_shuffles else 0.0)
-            weighted_draw += branch_probability * draw_value
-            weighted_access += branch_probability * access_value
-            weighted_tactical += branch_probability * tactical
-            weighted_opponent += branch_probability * opponent_value
+            weighted_draw += branch_probability * draw_mean
             branch_rows.append({
                 "own_draw": int(own_draw), "opponent_draw": int(opponent_draw),
                 "expected_hand_value": draw_mean,
                 "hand_value_deviation": draw_deviation,
                 "lower_confidence_hand_value": draw_value,
                 "board_access_value": access_value,
+                "held_demand_value": held_demand_cost,
                 "hand_size_tactical": tactical,
                 "opponent_hand": opponent_value,
             })
@@ -139,12 +137,7 @@ class RefreshEvaluator:
         costs = {}
         if held_cost > 0.0:
             costs["refresh_held_options"] = held_cost
-        if held_demand_cost > 0.0:
-            costs["refresh_held_demand"] = held_demand_cost
-        for label, value in (("refresh_board_access", weighted_access),
-                             ("refresh_expected_hand", weighted_draw),
-                             ("refresh_hand_size_tactical", weighted_tactical),
-                             ("refresh_opponent_hand", weighted_opponent)):
+        for label, value in (("refresh_expected_hand", weighted_draw),):
             if value > 0.0:
                 benefits[label] = value
             elif value < 0.0:
@@ -155,7 +148,9 @@ class RefreshEvaluator:
     def _potential(self, observation):
         return self.family_evaluator(observation)
 
-    def _held_option_cost(self, observation, seat: int) -> float:
+    def _held_option_cost(self, state, played_card_id: int) -> float:
+        observation = state.obs
+        seat = state.root_seat
         retained = copy.deepcopy(observation)
         hand = retained["current"]["players"][seat].get("hand") or []
         retained["current"]["players"][seat]["handCount"] = len(hand)
@@ -165,8 +160,29 @@ class RefreshEvaluator:
         player["hand"] = []
         player["handCount"] = 0
         after = _families(self._potential(stripped))
-        return sum(max(0.0, before.get(name, 0.0) - after.get(name, 0.0))
-                   for name in HELD_OPTION_FAMILIES)
+        total = sum(max(0.0, before.get(name, 0.0) - after.get(name, 0.0))
+                    for name in HELD_OPTION_FAMILIES)
+        capped_marginals = 0.0
+        played_reconciled = False
+        for index, card in enumerate(hand):
+            without_card = copy.deepcopy(retained)
+            without_hand = without_card["current"]["players"][seat]["hand"]
+            without_hand.pop(index)
+            without_card["current"]["players"][seat]["handCount"] = len(without_hand)
+            families = _families(self._potential(without_card))
+            marginal = sum(max(0.0, before.get(name, 0.0) - families.get(name, 0.0))
+                           for name in HELD_OPTION_FAMILIES)
+            card_id = int(card["id"])
+            held_worth = held_card_worth(
+                self.registry, self.effects, self.stats, state, card_id)
+            component = (min(marginal, worth_to_prizes(held_worth))
+                         if held_worth < self.registry.worth(card_id)
+                         else marginal)
+            if card_id == int(played_card_id) and not played_reconciled:
+                component = max(component, worth_to_prizes(held_worth))
+                played_reconciled = True
+            capped_marginals += component
+        return min(total, capped_marginals)
 
     def _draw_value_moments(self, state, returned, draws: int) -> tuple[float, float]:
         if draws <= 0:

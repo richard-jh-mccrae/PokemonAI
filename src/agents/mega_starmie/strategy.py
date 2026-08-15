@@ -58,15 +58,5 @@ STRATEGY = Strategy(
             "opponent.bench.highest_role", "this_turn", "medium",
             "mega_starmie.strategy",
         ),
-        NeedStrategy(
-            "mega_starmie.deploy_backup_staryu",
-            "deck",
-            (ActivationCondition("own.board.evolvable_count", "eq", 0),),
-            (DesiredFact("deploy", "turn"),),
-            "turn",
-            "this_turn",
-            "high",
-            "mega_starmie.strategy",
-        ),
     ),
 )

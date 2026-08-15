@@ -172,15 +172,15 @@ def test_runtime_records_bounded_strategy_guidance_without_changing_the_choice()
     assert decision.diagnostics["strategy_snapshot"].strategy_hash
 
 
-def test_turn_needs_cache_does_not_cross_an_unrelated_action_history():
+def test_strategy_cache_does_not_cross_an_unrelated_action_history():
     deployed = runtime()
     first = _obs(_fixture(60))
     first["logs"] = [{"type": 2, "playerIndex": 0, "marker": "first"}]
     second = _obs(_fixture(60))
     second["logs"] = [{"type": 2, "playerIndex": 0, "marker": "second"}]
 
-    left = deployed._turn_needs(first)
-    right = deployed._turn_needs(second)
+    left = deployed._planning_epoch_strategy(first)
+    right = deployed._planning_epoch_strategy(second)
 
     assert left is not right
     assert left.snapshot_id == right.snapshot_id

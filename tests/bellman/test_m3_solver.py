@@ -373,7 +373,7 @@ def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace()
     assert chosen == information
 
 
-def test_unresolved_root_uses_undominated_needs_focus_instead_of_completed_incumbent(
+def test_unresolved_root_uses_undominated_strategy_focus_instead_of_completed_incumbent(
         monkeypatch):
     root = _state("focus-fallback-root")
     focused = _state("focus-fallback-focused", board=0.1)
@@ -392,7 +392,7 @@ def test_unresolved_root_uses_undominated_needs_focus_instead_of_completed_incum
 
         def build(self, _state, _actions, ranking=None):
             del ranking
-            return NeedBeam(
+            return StrategyBeam(
                 (ActionFocus(semantic_action_key(information), "play", (), 1.0,
                              "strategy_hint"),),
                 (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
@@ -428,7 +428,7 @@ def test_unresolved_root_uses_undominated_needs_focus_instead_of_completed_incum
     decision = ProductionSolver(
         graph, ValueOracle(REGISTRY, OpenCeiling()),
         limits=ProductionLimits(max_nodes=1, root_probe_nodes=1, root_refinement_width=2),
-        needs_snapshot=object(),
+        strategy_snapshot=object(),
     ).decide(root)
 
     assert not decision.complete
@@ -913,7 +913,7 @@ def test_reserved_recovery_does_not_leave_refinement_width_unused():
                decision.diagnostics["production"]["root_branch_nodes"]) == 2
 
 
-def test_reserved_attack_and_need_focus_receive_separate_clock_slices(monkeypatch):
+def test_reserved_attack_and_strategy_focus_receive_separate_clock_slices(monkeypatch):
     root = _state("clock-root")
     attacked = _state("clock-attacked", board=0.2)
     informed = _state("clock-informed", board=0.1)
@@ -925,7 +925,7 @@ def test_reserved_attack_and_need_focus_receive_separate_clock_slices(monkeypatc
 
         def build(self, _state, _actions, ranking=None):
             del ranking
-            return NeedBeam(
+            return StrategyBeam(
                 (ActionFocus(semantic_action_key(information), "play", (), 1.0,
                              "strategy_hint"),),
                 (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
@@ -952,7 +952,7 @@ def test_reserved_attack_and_need_focus_receive_separate_clock_slices(monkeypatc
     ProductionSolver(
         graph, _oracle(),
         limits=ProductionLimits(max_nodes=10, root_probe_nodes=1, root_refinement_width=2),
-        needs_snapshot=object(),
+        strategy_snapshot=object(),
     ).decide(root)
 
     assert slices[-2:] == [2, 1]
