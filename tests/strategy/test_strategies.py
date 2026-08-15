@@ -1,6 +1,7 @@
 from common.strategy.strategies import (
     ActivationCondition,
     DesiredFact,
+    GENERAL_STRATEGIES,
     StrategyHint,
     StrategyOverride,
     resolve_strategies,
@@ -188,6 +189,23 @@ def test_attack_ready_condition_uses_the_deployed_attack_provider():
     assert snapshot.hints == ()
     assert snapshot.active_ids == ()
     assert snapshot.inactive_ids == ("general.fund",)
+
+
+def test_general_funding_strategy_accepts_primary_and_backup_attackers():
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(attacks=(90,))
+
+        @staticmethod
+        def attack(_attack_id):
+            return SimpleNamespace(energyTypes=(3,))
+
+    for role in ("primary_attacker", "backup_attacker"):
+        snapshot = activate_strategies(
+            _observation(hand=[]), resolve_strategies(GENERAL_STRATEGIES),
+            roles=Roles({10: [role]}), stats=Stats())
+        assert "general.fund_active_attacker" in snapshot.active_ids
 
 
 def test_strategy_beam_targets_the_declared_recipient_without_pruning_other_actions():

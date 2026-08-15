@@ -17,7 +17,7 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 ROLES = Roles({
     MEGA_STARMIE_EX: ["primary_attacker"],
     STARYU: ["primary_attacker"],
-    CINDERACE: ["accel_source"],
+    CINDERACE: ["backup_attacker", "accel_source"],
 })
 
 STRATEGY = Strategy(

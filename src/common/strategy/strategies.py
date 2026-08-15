@@ -185,6 +185,8 @@ def _visible_facts(observation: dict, *, roles, stats=None,
     facts = {
         "own.active.card_id": card_id,
         "own.active.role": card_roles,
+        "own.active.is_attacker": bool(
+            {"primary_attacker", "backup_attacker"}.intersection(card_roles)),
         "own.active.energy_count": len(active.get("energies") or ()),
         "own.active.full_health": (
             bool(active)
@@ -352,7 +354,7 @@ GENERAL_STRATEGIES = (
         "general.fund_active_attacker",
         "general",
         (
-            ActivationCondition("own.active.role", "contains", "primary_attacker"),
+            ActivationCondition("own.active.is_attacker", "eq", True),
             ActivationCondition("own.active.full_health", "eq", True),
             ActivationCondition("own.active.attack_ready", "eq", False),
         ),
