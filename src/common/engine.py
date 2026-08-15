@@ -15,7 +15,6 @@ from .fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
 from .commutativity import action_footprint
 from .refresh import refresh_transition
-from .transition_value import end_has_forced_value_change
 from .terminal import terminal_effects_supported
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
@@ -189,7 +188,7 @@ class CgpyTransitionProvider:
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
 
     def resolve_end(self, state: DecisionState, action: LegalAction):
-        return self.transition(state, action) if end_has_forced_value_change(state, self.registry) else None
+        return self.transition(state, action)
 
     @staticmethod
     def _played_card_id(engine, action):

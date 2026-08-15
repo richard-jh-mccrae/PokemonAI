@@ -166,10 +166,15 @@ def action_footprint(state, action, *, effects=None, stats=None) -> ActionFootpr
         active = (player.get("active") or ())
         active_body = active[0] if active else None
         active_token = _body_token(active_body, None)
+        lineup = tuple(active) + tuple(player.get("bench") or ())
+        lineup_identities = {
+            f"body:{_body_token(candidate, None)}:identity" for candidate in lineup
+        }
         return ActionFootprint(
             (kind, body_token),
             frozenset({"allowance:retreat", "own:lineup",
-                       f"body:{active_token}:energy", f"body:{body_token}:identity"}),
+                       f"body:{active_token}:energy", f"body:{body_token}:identity",
+                       *lineup_identities}),
             frozenset({"allowance:retreat", "own:lineup", f"body:{active_token}:energy"}),
             commitment=True,
         )

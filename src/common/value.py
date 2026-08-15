@@ -26,6 +26,49 @@ def worth_to_prizes(worth: float) -> float:
     """Cross portable card Worth into Bellman's prize-denominated currency."""
     return float(worth) / WORTH_PER_PRIZE
 
+
+def held_card_worth(registry, effects, stats, state: DecisionState, card_id: int, *,
+                    discount_redundant: bool = False) -> float:
+    worth = registry.worth(card_id)
+    if effects is None or stats is None:
+        return worth
+    clauses = tuple(effects.clauses(card_id))
+    fetches = tuple(clause for clause in clauses
+                    if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+    if not fetches or len(fetches) != len(clauses):
+        return worth
+
+    def matches(clause, target_id):
+        stat = stats.get(target_id)
+        return (fetch_target_matches(clause, stat, reading=DEADNESS)
+                and (not clause.get("name_family") or clause["name_family"] in
+                     str(getattr(stat, "name", ""))))
+
+    available = tuple(target_id for target_id, count in state.deck_counts if count > 0)
+    if not any(matches(clause, target_id)
+               for clause in fetches for target_id in available):
+        return min(worth, KNOWN_CARD_FLOOR)
+    if not discount_redundant:
+        return worth
+    players = (state.obs.get("current") or {}).get("players") or ()
+    mine = players[state.root_seat] if state.root_seat < len(players) else {}
+    bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
+    hand_ids = Counter(int(card["id"]) for card in (mine.get("hand") or ()) if card)
+    for clause in fetches:
+        targets = tuple(target_id for target_id in available if matches(clause, target_id))
+        parents = {int(target_id): registry.line_parents.get(int(target_id))
+                   for target_id in targets}
+        if not targets or any(parent is None for parent in parents.values()):
+            return worth
+        recipients = sum(1 for body in bodies if body and int(body.get("id", -1)) in {
+            int(parent) for parent in parents.values() if parent is not None
+        })
+        held = sum(count for held_id, count in hand_ids.items()
+                   if matches(clause, held_id))
+        if held < recipients:
+            return worth
+    return min(worth, KNOWN_CARD_FLOOR)
+
 FAMILY_OWNERS = {
     "prize_race": ("game", "prizes", "prize proximity"),
     "prize_plan": ("own KO ordering", "prize-route availability"),
@@ -225,7 +268,49 @@ class ValueOracle:
         stranded = self._stranded_fetch_cost(before, after, action)
         if stranded > 0.0:
             costs.append(("stranded_fetch", stranded))
+        unresolved = self._unresolved_fetch_cost(before, after, action)
+        if unresolved > 0.0:
+            costs.append(("unresolved_fetch", unresolved))
         return Ledger(tuple(benefits), tuple(costs))
+
+    def _unresolved_fetch_cost(self, before: DecisionState, after: DecisionState,
+                               action: ActionIdentity) -> float:
+        if action.kind != "play" or self.effects is None:
+            return 0.0
+        if int((after.obs.get("select") or {}).get("context", 0)) != 0:
+            return 0.0
+        moved = self._spent_cards(before, after, action)
+        card_ids = {card_id for (card_id, _serial), count in moved.items() if count > 0}
+        if len(card_ids) != 1:
+            return 0.0
+        card_id = next(iter(card_ids))
+        clauses = tuple(self.effects.clauses(card_id))
+        if not clauses or any(clause.get("kind") != "fetch" for clause in clauses):
+            return 0.0
+
+        def board(state):
+            players = (state.obs.get("current") or {}).get("players") or ()
+            player = players[state.root_seat] if state.root_seat < len(players) else {}
+            return tuple(
+                (body.get("serial"), body.get("id"),
+                 tuple(card.get("id") for card in body.get("preEvolution") or ()))
+                for body in tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
+                if body)
+
+        if board(before) != board(after):
+            return 0.0
+
+        def hand(state):
+            players = (state.obs.get("current") or {}).get("players") or ()
+            player = players[state.root_seat] if state.root_seat < len(players) else {}
+            return Counter(
+                (int(card["id"]), card.get("serial"))
+                for card in (player.get("hand") or ()) if card)
+
+        retained = hand(before) - moved
+        if hand(after) - retained:
+            return 0.0
+        return worth_to_prizes(KNOWN_CARD_FLOOR)
 
     def _stranded_fetch_cost(self, state: DecisionState, after: DecisionState,
                              action: ActionIdentity) -> float:
@@ -334,6 +419,8 @@ class ValueOracle:
 
     def _dead_fetch_release(self, before: DecisionState, after: DecisionState,
                             action: ActionIdentity) -> float:
+        if action.kind != "card":
+            return 0.0
         released = sum(
             (self.registry.worth(card_id) - self._held_card_worth(
                 before, card_id, discount_redundant=action.kind == "card")) * count
@@ -343,44 +430,9 @@ class ValueOracle:
 
     def _held_card_worth(self, state: DecisionState, card_id: int, *,
                          discount_redundant: bool = False) -> float:
-        worth = self.registry.worth(card_id)
-        if self.effects is None or self.stats is None:
-            return worth
-        clauses = tuple(self.effects.clauses(card_id))
-        fetches = tuple(clause for clause in clauses
-                        if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
-        if not fetches or len(fetches) != len(clauses):
-            return worth
-        def matches(clause, target_id):
-            stat = self.stats.get(target_id)
-            return (fetch_target_matches(clause, stat, reading=DEADNESS)
-                    and (not clause.get("name_family") or clause["name_family"] in
-                         str(getattr(stat, "name", ""))))
-
-        available = tuple(target_id for target_id, count in state.deck_counts if count > 0)
-        if not any(matches(clause, target_id)
-                   for clause in fetches for target_id in available):
-            return min(worth, KNOWN_CARD_FLOOR)
-        if not discount_redundant:
-            return worth
-        players = (state.obs.get("current") or {}).get("players") or ()
-        mine = players[state.root_seat] if state.root_seat < len(players) else {}
-        bodies = tuple(mine.get("active") or ()) + tuple(mine.get("bench") or ())
-        hand_ids = Counter(int(card["id"]) for card in (mine.get("hand") or ()) if card)
-        for clause in fetches:
-            targets = tuple(target_id for target_id in available if matches(clause, target_id))
-            parents = {int(target_id): self.registry.line_parents.get(int(target_id))
-                       for target_id in targets}
-            if not targets or any(parent is None for parent in parents.values()):
-                return worth
-            recipients = sum(1 for body in bodies if body and int(body.get("id", -1)) in {
-                int(parent) for parent in parents.values() if parent is not None
-            })
-            held = sum(count for held_id, count in hand_ids.items()
-                       if matches(clause, held_id))
-            if held < recipients:
-                return worth
-        return min(worth, KNOWN_CARD_FLOOR)
+        return held_card_worth(
+            self.registry, self.effects, self.stats, state, card_id,
+            discount_redundant=discount_redundant)
 
     def continuation_upper_bound(self, state: DecisionState) -> float:
         potential = self.potential(state)

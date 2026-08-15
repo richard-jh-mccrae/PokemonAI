@@ -155,6 +155,7 @@ def _visible_facts(observation: dict, *, roles, stats=None) -> tuple[dict, dict]
     card_id = int(active["id"]) if active.get("id") is not None else None
     card_roles = tuple(roles.get(card_id, ())) if card_id is not None else ()
     bench = tuple(body for body in player.get("bench") or () if body)
+    board = ((active,) if active else ()) + bench
     options = tuple((observation.get("select") or {}).get("option") or ())
     facts = {
         "own.active.card_id": card_id,
@@ -172,6 +173,8 @@ def _visible_facts(observation: dict, *, roles, stats=None) -> tuple[dict, dict]
         "own.active.evolvable": card_id in roles.evolves if card_id is not None else False,
         "own.bench.evolvable_count": sum(
             1 for body in bench if body.get("id") in roles.evolves),
+        "own.board.evolvable_count": sum(
+            1 for body in board if body.get("id") in roles.evolves),
         "turn.commitment_available": (
             not bool(current.get("energyAttached"))
             or (card_id in roles.evolves if card_id is not None else False)
@@ -234,6 +237,8 @@ def activate_need_strategies(observation: dict, resolved: ResolvedNeedStrategies
             targets = ()
             if desired.kind == "evolve" and recipient_card_id in roles.evolves:
                 targets = (int(roles.evolves[recipient_card_id]),)
+            elif desired.kind == "deploy":
+                targets = tuple(sorted(int(card_id) for card_id in roles.evolves))
             hints.append(ActivatedNeed(
                 row.identifier, desired.kind, desired.recipient,
                 recipient_card_id, recipient_serial,

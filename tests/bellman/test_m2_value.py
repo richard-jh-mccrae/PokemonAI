@@ -7,7 +7,10 @@ import pytest
 from common import ActionIdentity, DecisionState
 from common.effects import CardEffects
 from common.scouting.provider import CardStat, DictCardStatProvider
-from common.value import CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry
+from common.value import (
+    KNOWN_CARD_FLOOR, CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry,
+    worth_to_prizes,
+)
 
 
 HAMMER, LILLIE, WATER = 1120, 1227, 3
@@ -205,6 +208,33 @@ def test_fetching_an_evolution_without_a_recipient_charges_the_stranded_line():
     assert costs["stranded_fetch"] == pytest.approx(
         registry.prizes(RUSH_EVOLUTION)
         + registry.prizes(LINE_BASE) + registry.prizes(LINE_TOP))
+
+
+def test_playing_a_fetch_that_acquires_nothing_loses_future_discard_fodder():
+    registry = ValueRegistry(
+        functions={RUSH_EVOLUTION: ("search",)},
+        facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
+               RUSH_EVOLUTION: CardFacts()},
+    )
+    stats = DictCardStatProvider({
+        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
+        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, cardType=1),
+    })
+    before = DecisionState.from_observation(
+        _obs([RUSH_EVOLUTION]), deck=(LINE_BASE, RUSH_EVOLUTION),
+        deck_name="test", value_registry_identity=registry.identity)
+    after = before.with_observation(_obs([]))
+    oracle = ValueOracle(
+        registry, _families,
+        effects=CardEffects({RUSH_EVOLUTION: [{
+            "kind": "fetch", "target": "pokemon", "zone": "deck",
+        }]}), stats=stats)
+
+    costs = dict(oracle.transition_ledger(
+        before, after, ActionIdentity("play", (RUSH_EVOLUTION,))).costs)
+
+    assert costs["unresolved_fetch"] == pytest.approx(
+        worth_to_prizes(KNOWN_CARD_FLOOR))
 
 
 def test_every_required_consequence_has_one_named_family_owner():

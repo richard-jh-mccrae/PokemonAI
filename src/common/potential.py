@@ -31,6 +31,7 @@ OPPONENT_ROLE_THREAT_SHARE = 0.20
 OPPONENT_ROLE_WORTH_NORMALIZER = 30.0
 BENCH_ATTACK_ACCESS_SHARE = 0.50
 EVOLVED_BODY_PRIZE_SHARE = 0.040
+DEPLOYED_BASIC_LINE_PRIZE_SHARE = 0.020
 KO_PRESSURE_SHARE = 0.000001
 
 
@@ -565,13 +566,18 @@ class BoardPotential:
         return total
 
     def _development(self, me) -> float:
-        """Value realized by turning a line piece into a developed body.
-
-        The retained pre-evolution stack already proves that development occurred.  Scale the
-        improvement by the evolved body's prize liability so the term stays card- and deck-neutral.
-        """
-        return sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
-                   for body in _bodies(me) if body.get("preEvolution"))
+        """Value deployed and evolved pieces of declared evolution lines."""
+        evolved = sum(self._prizes(body) * EVOLVED_BODY_PRIZE_SHARE
+                      for body in _bodies(me) if body.get("preEvolution"))
+        line_payoff = {
+            int(line[0]): self._card_prizes(int(line[-1]))
+            for line in self.registry.lines if len(line) > 1
+        }
+        deployed = sum(
+            line_payoff.get(int(body.get("id", 0)), 0) * DEPLOYED_BASIC_LINE_PRIZE_SHARE
+            for body in _bodies(me) if not body.get("preEvolution")
+        )
+        return evolved + deployed
 
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()

@@ -71,6 +71,16 @@ def _card_at(frame, seat, area, index):
     return cards[index] if index < len(cards) else None
 
 
+def option_source_card(option: dict, frame: dict | None):
+    """Resolve the visible card selected by an option's primary area/index reference."""
+    if not isinstance(option, dict):
+        return None
+    seat = option.get("playerIndex")
+    if seat is None:
+        seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
+    return _card_at(frame, seat, option.get("area", AREA_HAND), option.get("index"))
+
+
 def option_fingerprint(option: dict, frame: dict | None) -> str | None:
     """None = "joins no class", returned whenever ANY zone reference fails to resolve — never a
     partial fingerprint over the references that happened to work. An option naming no zone is None."""

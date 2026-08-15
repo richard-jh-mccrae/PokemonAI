@@ -16,13 +16,13 @@ RUNTIME = runtime()
 @pytest.mark.parametrize(("correction_id", "expected"), (
     ("d39f2e524f36", (6,)),  # free mulligan cards are monotonically beneficial
     ("e02e699ced1d", (0,)),  # draw access covers two missing primary-attacker slots
-    ("92e27180b008", (1,)),  # deterministic evolution beats the labelled reveal gamble
+    ("92e27180b008", (0,)),  # free Pokegear information precedes the held deterministic evolution
     ("8c69ecaccafa", (0,)),  # equal damage concentrates toward the nearer KO
     ("dfc26070178c", (0,)),  # information action precedes the resolving attack
     ("8d91984d4430", (1,)),  # diversify acceleration across viable Basic attackers
     ("c7fd0670fb3e", (0,)),  # evolve the funded line
     ("76e7d6d7539e", (3,)),  # Nebula Beam starts the faster prize line
-    ("5ee5f49312b2", (1,)),  # analytic refresh commitment does not plan a hidden hand
+    ("5ee5f49312b2", (0,)),  # exact refresh value precedes its guaranteed visible attack
     ("da72e53929f0", (0,)),  # Harlequin replaces a dead visible hand
     ("c8ee8ab3e82b", (1,)),  # turn annotation's own written line starts with Hilda
     ("91cea0a2fa6d", (1,)),  # attach to the healthy attacker

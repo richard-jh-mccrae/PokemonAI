@@ -104,6 +104,7 @@ class BellmanRuntime:
             getattr(strategy, "needs_overrides", ()),
         )
         self._needs_snapshot = None
+        self._needs_history = ()
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
@@ -215,11 +216,16 @@ class BellmanRuntime:
     def _turn_needs(self, observation):
         current = observation.get("current") or {}
         key = (int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
+        history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
+                        for row in observation.get("logs") or ())
         cached = self._needs_snapshot
-        if cached is not None and (cached.turn, cached.seat) == key:
+        same_history = (len(history) >= len(self._needs_history)
+                        and history[:len(self._needs_history)] == self._needs_history)
+        if cached is not None and (cached.turn, cached.seat) == key and same_history:
             return cached
         self._needs_snapshot = activate_need_strategies(
             observation, self.needs_strategies, roles=self.strategy.roles, stats=self.stats)
+        self._needs_history = history
         return self._needs_snapshot
 
     def _cached_decision(self, planner, request):

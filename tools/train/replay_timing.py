@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
 from train.blunder.decisions import iter_decisions
-from train.blunder.telemetry_log import decision_seconds, find_logs, load_log, record_for
+from train.blunder.telemetry_log import decision_seconds, find_logs, load_log, records_for
 
 
 def _finite(value) -> float | None:
@@ -93,11 +93,11 @@ def analyze_directory(directory: Path | str) -> dict:
         records_by_seat = {
             seat: load_log(path) for seat, path in find_logs(replay_path).items()
         }
-        for decision in iter_decisions(replay):
+        decisions = iter_decisions(replay)
+        records_by_frame = records_for(decisions, records_by_seat)
+        for decision in decisions:
             decision_count += 1
-            record = record_for(
-                replay, records_by_seat.get(decision.seat, ()),
-                seat=decision.seat, frame=decision.frame)
+            record = records_by_frame.get((decision.seat, decision.frame))
             sample = decision_seconds(record)
             if sample is None:
                 sample = _finite(decision.decision_seconds)

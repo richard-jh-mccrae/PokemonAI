@@ -14,6 +14,7 @@ from time import perf_counter
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
+from .option_equivalence import option_source_card
 from .scouting.card_text import name_in_family
 from .strategy.context import _MAIN
 from .strategy.context import _ACTIVE, _BENCH
@@ -187,10 +188,11 @@ class StrategyBeamBuilder:
     _DEADLINE = {"immediate": 3.0, "this_turn": 2.0, "next_turn": 1.0}
     _CONFIDENCE = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
-    def __init__(self, snapshot, *, effects=None, stats=None, width=8):
+    def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8):
         self.snapshot = snapshot
         self.effects = effects
         self.stats = stats
+        self.registry = registry
         self.width = max(1, int(width))
         self.last_odds: dict[str, float] = {}
 
@@ -210,9 +212,7 @@ class StrategyBeamBuilder:
 
     def _source_card_id(self, state, action) -> int | None:
         option = self._option(state, action)
-        index = option.get("index") if option else None
-        hand = self._player(state).get("hand") or ()
-        card = hand[index] if isinstance(index, int) and 0 <= index < len(hand) else None
+        card = option_source_card(option, state.obs)
         return int(card["id"]) if card and card.get("id") is not None else None
 
     def _recipient_serial(self, state, action) -> int | None:
@@ -228,8 +228,19 @@ class StrategyBeamBuilder:
 
     def _eligible_targets(self, state, hint) -> tuple[int, ...]:
         if hint.target_card_ids:
-            return tuple(card_id for card_id in hint.target_card_ids
-                         if dict(state.deck_counts).get(card_id, 0) > 0)
+            targets = tuple(card_id for card_id in hint.target_card_ids
+                            if dict(state.deck_counts).get(card_id, 0) > 0)
+            if hint.kind == "deploy" and self.registry is not None:
+                hand = tuple(int(card["id"]) for card in self._player(state).get("hand") or ()
+                             if card and card.get("id") is not None)
+                available = set(hand) | {
+                    int(card_id) for card_id, count in state.deck_counts if count > 0
+                }
+                targets = tuple(base for base in targets if any(
+                    parent == base and top in available
+                    for top, parent in self.registry.line_parents.items()
+                ))
+            return targets
         if hint.kind != "fund_attack" or self.stats is None:
             return ()
         return tuple(
@@ -243,11 +254,16 @@ class StrategyBeamBuilder:
             return 0.0
         source_stat = self.stats.get(source_id) if self.stats is not None else None
         if hint.kind == "relevant_information":
-            if bool(getattr(source_stat, "is_supporter", False)) or self.stats is None:
+            if self.stats is None:
                 return 0.0
+            clauses = tuple(self.effects.clauses(source_id))
+            if bool(getattr(source_stat, "is_supporter", False)):
+                return float(any(clause.get("kind") == "draw"
+                                 and int(clause.get("amount", 0) or 0) > 0
+                                 for clause in clauses))
             pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
             best = 0.0
-            for clause in self.effects.clauses(source_id):
+            for clause in clauses:
                 if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
                     continue
                 if clause.get("cost_required") or discard_cost(clause):
@@ -299,6 +315,9 @@ class StrategyBeamBuilder:
                   and any(clause.get("kind") == "heal"
                           for clause in self.effects.clauses(source_id))):
                 probability = 1.0
+            elif (action.identity.kind == "card" and source_id is not None
+                  and source_id in hint.target_card_ids):
+                probability = 1.0
             elif action.identity.kind == "play" and not bool(
                     getattr(source_stat, "is_supporter", False)
                     and (state.obs.get("current") or {}).get("supporterPlayed")):
@@ -334,8 +353,18 @@ class StrategyBeamBuilder:
             else:
                 inactive.append(ActionFocus(
                     key, action.identity.kind, (), 0.0, "no_strategy_hint"))
+        information_ids = {
+            hint.strategy_id for hint in self.snapshot.hints
+            if hint.kind == "relevant_information"
+        }
         focused = tuple(sorted(
-            focused, key=lambda row: (-row.score, row.action_key))[:self.width])
+            focused, key=lambda row: (
+                -row.score,
+                (0 if row.family == "evolve" else
+                 1 if information_ids.intersection(row.path_ids) else
+                 2 if row.family == "attach" else 3),
+                row.action_key,
+            ))[:self.width])
         elapsed = (perf_counter() - started) * 1000.0
         return NeedBeam(
             focused, tuple(safety), tuple(unknown), (), (), elapsed, False,

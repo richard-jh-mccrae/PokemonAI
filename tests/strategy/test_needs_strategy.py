@@ -1,8 +1,10 @@
 from common.strategy.needs import (
+    ActivatedNeed,
     ActivationCondition,
     DesiredFact,
     NeedStrategy,
     StrategyOverride,
+    TurnNeedSnapshot,
     resolve_need_strategies,
     activate_need_strategies,
 )
@@ -243,3 +245,130 @@ def test_information_hint_includes_free_search_but_excludes_discard_commitments(
 
     assert len(free_beam.focused) == 1
     assert free_beam.focused[0].path_ids == ("general.information",)
+
+
+def test_information_need_wins_a_priority_tie_with_a_commitment_need():
+    observation = _observation(hand=[{"id": 50}, {"id": 3}])
+    observation["select"]["option"] = [
+        {"type": 7, "index": 0},
+        {"type": 8, "index": 1, "inPlayArea": 4, "inPlayIndex": 0},
+    ]
+    snapshot = TurnNeedSnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedNeed("general.information", "relevant_information", "turn",
+                      None, None, (), "immediate", "high"),
+        ActivatedNeed("deck.fund", "fund_attack", "own.active",
+                      10, 77, (), "immediate", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},) \
+                if card_id == 50 else ()
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=False, is_energy=card_id == 3,
+                                   is_pokemon=card_id == 11, stage="basic")
+
+    actions = enumerate_legal_actions(observation)
+    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1),)), actions)
+
+    assert [row.family for row in beam.focused[:2]] == ["play", "attach"]
+
+
+def test_cached_need_orders_a_forced_recovery_target():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["discard"] = [{"id": 1030}, {"id": 3}]
+    observation["select"] = {"context": 7, "minCount": 1, "maxCount": 1, "option": [
+        {"type": 3, "playerIndex": 0, "area": 3, "index": 0},
+        {"type": 3, "playerIndex": 0, "area": 3, "index": 1},
+    ]}
+    snapshot = TurnNeedSnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedNeed("deck.deploy", "deploy", "own.bench",
+                      None, None, (1030,), "this_turn", "high"),
+    ))
+    actions = enumerate_legal_actions(observation)
+
+    beam = StrategyBeamBuilder(snapshot).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    assert [row.action_key for row in beam.focused] == [
+        semantic_action_key(next(action for action in actions if action.selection == (0,)))
+    ]
+
+
+def test_deploy_need_targets_declared_evolution_bases_when_none_are_in_play():
+    rule = NeedStrategy(
+        "deck.deploy_backup", "deck",
+        (ActivationCondition("own.board.evolvable_count", "eq", 0),),
+        (DesiredFact("deploy", "turn"),),
+        "turn", "this_turn", "high", "deck",
+    )
+    roles = Roles({1031: ("win_condition",)}, evolves={1030: 1031})
+    observation = _observation(hand=[])
+
+    snapshot = activate_need_strategies(
+        observation, resolve_need_strategies((), (rule,), ()), roles=roles)
+
+    assert snapshot.hints == (
+        ActivatedNeed("deck.deploy_backup", "deploy", "turn",
+                      None, None, (1030,), "this_turn", "high"),
+    )
+
+
+def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
+    observation = _observation(hand=[{"id": 50}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}]
+    snapshot = TurnNeedSnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedNeed("deck.deploy", "deploy", "turn",
+                      None, None, (1030,), "this_turn", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 1030,
+                                   stage="basic" if card_id == 1030 else None)
+
+    registry = SimpleNamespace(line_parents={1031: 1030})
+    beam = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=((1030, 1),)),
+            enumerate_legal_actions(observation),
+        )
+
+    assert beam.focused == ()
+
+
+def test_shuffle_refresh_supporter_is_relevant_information():
+    observation = _observation(hand=[{"id": 50}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}]
+    snapshot = TurnNeedSnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedNeed("general.information", "relevant_information", "turn",
+                      None, None, (), "immediate", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "draw", "amount": 5, "rider": "shuffle_own_hand_in"},)
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(is_supporter=True)
+
+    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 10),)),
+        enumerate_legal_actions(observation),
+    )
+
+    assert len(beam.focused) == 1

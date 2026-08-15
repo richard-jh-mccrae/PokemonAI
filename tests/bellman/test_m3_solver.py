@@ -190,6 +190,32 @@ def test_analytic_refresh_keeps_a_guaranteed_attack_continuation(monkeypatch):
     assert decision.diagnostics["ledger"]["continuation"] == pytest.approx(0.5)
 
 
+def test_analytic_refresh_keeps_the_attacks_forced_resolution_value(monkeypatch):
+    root = _state("refresh-forced-root")
+    choose = _state("refresh-forced-choice", context=7)
+    finish = _state("refresh-forced-finish", board=0.7)
+    refresh, attack, end = _action("play"), _action("attack", 1), _action("end", 2)
+    pick = _action("card")
+    graph = Graph(
+        {"refresh-forced-root": (refresh, attack, end),
+         "refresh-forced-choice": (pick,), "refresh-forced-finish": (end,)},
+        {("refresh-forced-root", "play"): Refresh(CARD, ((6, 0),), False),
+         ("refresh-forced-root", "attack"): Deterministic(choose),
+         ("refresh-forced-choice", "card"): Deterministic(finish)},
+    )
+    oracle = _oracle()
+    monkeypatch.setattr(
+        oracle, "refresh_ledger",
+        lambda _state, _node, **_kwargs: (Ledger((("refresh", 0.1),), ()), ()),
+    )
+    monkeypatch.setattr(oracle, "refresh_attack_independent", lambda *_args: True)
+
+    decision = ReferenceSolver(graph, oracle).decide(root)
+
+    assert decision.action.kind == "play"
+    assert decision.value == pytest.approx(0.8)
+
+
 def test_production_turn_search_has_no_depth_limit():
     """Width and nodes bound production; a finite legal turn is never cut off by action count."""
     action, end = _action("play"), _action("end", 1)
@@ -852,7 +878,7 @@ def test_any_incomplete_forced_discard_uses_stable_immediate_value_fallback():
     assert chosen == keep
 
 
-def test_retreat_has_known_dependencies_without_claiming_unsafe_commutativity():
+def test_retreat_depends_on_active_identity_that_can_change_its_cost():
     observation = {
         "current": {"yourIndex": 0, "players": [
             {"hand": [{"id": 905}, {"id": 906}],
@@ -884,7 +910,7 @@ def test_retreat_has_known_dependencies_without_claiming_unsafe_commutativity():
     assert fetch_footprint.barrier
     assert not retreat_footprint.barrier
     assert not independent(fetch_footprint, retreat_footprint)
-    assert independent(evolve_footprint, retreat_footprint)
+    assert not independent(evolve_footprint, retreat_footprint)
 
 
 def test_same_body_attachment_and_evolution_require_exact_proof():

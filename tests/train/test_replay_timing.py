@@ -4,6 +4,7 @@ import pytest
 
 from sim.record import MatchRecorder
 from sim.selfplay import _save_telemetry
+from train import replay_timing
 from train.replay_timing import analyze_directory, format_report
 
 
@@ -70,3 +71,24 @@ def test_gz_replay_uses_double_suffix_timing_sidecar(tmp_path):
     (tmp_path / "game-timing.json").write_text(
         json.dumps({"match_wall_seconds": 2.5}), encoding="utf-8")
     assert analyze_directory(tmp_path)["match_time"]["avg"] == 2.5
+
+
+def test_replay_timing_builds_each_replays_decision_index_once(tmp_path, monkeypatch):
+    recorder = MatchRecorder()
+    for frame in range(8):
+        recorder.step(_obs(frame % 2, str(frame)), [0])
+    recorder.finish({"current": {"result": 0}, "select": None}, winner=0)
+    replay = recorder.replay(episode_id=99, team_names=["a", "b"])
+    (tmp_path / "99.json").write_text(json.dumps(replay), encoding="utf-8")
+    original = replay_timing.iter_decisions
+    calls = 0
+
+    def counted(value):
+        nonlocal calls
+        calls += 1
+        return original(value)
+
+    monkeypatch.setattr(replay_timing, "iter_decisions", counted)
+
+    assert analyze_directory(tmp_path)["decision_count"] == 8
+    assert calls == 1

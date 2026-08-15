@@ -92,17 +92,30 @@ def decision_seconds(record: dict | None) -> float | None:
 def record_for(replay: dict, records: list[dict], *, seat: int, frame: int) -> dict | None:
     """Positional join: the k-th seat decision-frame maps to ``records[k]``, accepted only when the
     record's option count and ``chosen`` positions match the film Decision."""
-    seat_decisions = [d for d in iter_decisions(replay) if d.seat == seat]
-    frames = [d.frame for d in seat_decisions]
-    if frame not in frames:
-        return None
-    k = frames.index(frame)
-    if not 0 <= k < len(records):
-        return None
-    record, decision = records[k], seat_decisions[k]
+    return records_for(iter_decisions(replay), {seat: records}).get((seat, frame))
+
+
+def records_for(decisions, records_by_seat: dict[int, list[dict]]) -> dict[tuple[int, int], dict]:
+    positions: dict[int, int] = {}
+    joined = {}
+    for decision in decisions:
+        seat = int(decision.seat)
+        position = positions.get(seat, 0)
+        positions[seat] = position + 1
+        records = records_by_seat.get(seat, ())
+        if not 0 <= position < len(records):
+            continue
+        record = records[position]
+        if not _record_matches(record, decision):
+            continue
+        joined[(seat, int(decision.frame))] = record
+    return joined
+
+
+def _record_matches(record: dict, decision) -> bool:
     if record.get("chosen") != decision.chosen:
-        return None
+        return False
     if not record.get("bellman") and record.get("schema") not in {"bellman", "setup"} \
             and len(record.get("opts", [])) != len(decision.options):
-        return None
-    return record
+        return False
+    return True
