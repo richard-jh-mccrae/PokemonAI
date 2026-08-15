@@ -4,14 +4,20 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import random
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from statistics import mean
 from time import monotonic
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def default_jobs() -> int:
+    return max(1, (os.cpu_count() or 2) - 2)
 
 
 def _percentile(values, fraction):
@@ -144,7 +150,8 @@ def format_report(payload: dict, hotspot_count=10) -> str:
     ]
     wins = [sum(row["winner_seat"] == seat for row in matches) for seat in (0, 1)]
     lines = [
-        f"Strategy Bench -- {config['mode']} -- {len(payload['matches'])} matches",
+        f"Strategy Bench -- {config['mode']} -- {len(payload['matches'])} matches -- "
+        f"{config.get('jobs', 1)} jobs",
         f"Decision timeout {config['decision_timeout']}s | match timeout {config['match_timeout']}s",
         f"Seat wins {wins[0]}-{wins[1]} | draws {sum(row['winner_seat'] is None for row in matches)} | "
         f"decision timeouts {sum(bool(row['timed_out']) for row in matches)} | "
@@ -197,46 +204,67 @@ def save_match_artifacts(run_dir, episode_id, replay, records) -> Path:
     return path
 
 
-def run(config: dict) -> dict:
+def _run_match_job(task: dict) -> dict:
     from sim.battle import AgentServer, play_match, read_deck
     from sim.record import MatchRecorder
 
+    config = task["config"]
+    index = task["match"]
+    names = tuple(task["contestants"])
     agents_root = Path(config["agents_root"])
-    pairings = _pairings(config["mode"], config["agents"], config["matches"], config["seed"])
     run_dir = Path(config["output"])
-    run_dir.mkdir(parents=True, exist_ok=True)
-    matches, decisions = [], []
-    for index, names in enumerate(pairings, 1):
-        dirs = tuple(agents_root / name for name in names)
-        for name, directory in zip(names, dirs):
-            if not (directory / "main.py").exists():
-                raise ValueError(f"unknown working-tree agent {name!r}")
-        servers = tuple(AgentServer(
-            directory, [REPO / "src"], capture_telemetry=True,
-            decision_seconds=config["decision_timeout"]) for directory in dirs)
-        recorder = MatchRecorder()
-        captured = []
-        started = monotonic()
-        try:
-            result = play_match(
-                servers[0], servers[1], read_deck(dirs[0]), read_deck(dirs[1]),
-                recorder=recorder, decision_timeout=config["decision_timeout"],
-                match_timeout=config["match_timeout"], metrics=captured)
-        finally:
-            for server in servers:
-                server.close()
-        elapsed = monotonic() - started
-        decisions.extend(decision_metrics(captured, match_index=index, contestants=names))
-        eid = int(datetime.now().timestamp() * 1_000_000) + index
-        replay = recorder.replay(episode_id=eid, team_names=list(names))
-        replay_path = save_match_artifacts(run_dir, eid, replay, captured)
-        match = {
+    dirs = tuple(agents_root / name for name in names)
+    for name, directory in zip(names, dirs):
+        if not (directory / "main.py").exists():
+            raise ValueError(f"unknown working-tree agent {name!r}")
+    servers = tuple(AgentServer(
+        directory, [REPO / "src"], capture_telemetry=True,
+        decision_seconds=config["decision_timeout"]) for directory in dirs)
+    recorder = MatchRecorder()
+    captured = []
+    started = monotonic()
+    try:
+        result = play_match(
+            servers[0], servers[1], read_deck(dirs[0]), read_deck(dirs[1]),
+            recorder=recorder, decision_timeout=config["decision_timeout"],
+            match_timeout=config["match_timeout"], metrics=captured)
+    finally:
+        for server in servers:
+            server.close()
+    elapsed = monotonic() - started
+    replay = recorder.replay(episode_id=task["episode_id"], team_names=list(names))
+    replay_path = save_match_artifacts(run_dir, task["episode_id"], replay, captured)
+    return {
+        "match": {
             "match": index, "contestants": names, "winner_seat": result.winner,
             "crashed": result.crashed, "timed_out": result.timed_out,
             "match_deadline_hit": result.match_deadline_hit, "seconds": elapsed,
             "replay": replay_path.name,
-        }
-        matches.append(match)
+        },
+        "decisions": decision_metrics(captured, match_index=index, contestants=names),
+    }
+
+
+def _run_jobs(tasks, *, jobs, worker=None) -> list[dict]:
+    worker = worker or _run_match_job
+    if jobs <= 1 or len(tasks) <= 1:
+        return [worker(task) for task in tasks]
+    with ProcessPoolExecutor(max_workers=min(jobs, len(tasks))) as pool:
+        return list(pool.map(worker, tasks))
+
+
+def run(config: dict) -> dict:
+    pairings = _pairings(config["mode"], config["agents"], config["matches"], config["seed"])
+    run_dir = Path(config["output"])
+    run_dir.mkdir(parents=True, exist_ok=True)
+    episode_base = int(datetime.now().timestamp() * 1_000_000)
+    tasks = [{
+        "match": index, "contestants": names, "episode_id": episode_base + index,
+        "config": config,
+    } for index, names in enumerate(pairings, 1)]
+    results = _run_jobs(tasks, jobs=int(config.get("jobs", 1)))
+    matches = [result["match"] for result in results]
+    decisions = [decision for result in results for decision in result["decisions"]]
     payload = {"config": config, "matches": matches, "decisions": decisions}
     payload["summary"] = summarize_decisions(decisions)
     payload["decision_csv"] = write_decisions_csv(run_dir, decisions).name
@@ -260,6 +288,8 @@ def main(argv=None) -> int:
         command.add_argument("--decision-timeout", type=float, required=True)
         command.add_argument("--match-timeout", type=float, required=True)
         command.add_argument("--seed", type=int, default=1)
+        command.add_argument("--jobs", type=int, default=default_jobs(),
+                             help="parallel matches (default: logical CPUs minus two)")
         command.add_argument("--agents-root", default=str(REPO / "src" / "agents"))
         command.add_argument("--output")
     args = parser.parse_args(argv)
@@ -273,12 +303,14 @@ def main(argv=None) -> int:
         parser.error("decision timeout must be at least 2 seconds")
     if args.match_timeout <= 0:
         parser.error("match timeout must be positive")
+    if args.jobs < 1:
+        parser.error("jobs must be at least 1")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     output = args.output or str(REPO / "data" / "reports" / "strategy-bench" / stamp)
     config = {
         "mode": args.mode, "agents": agents, "matches": args.matches,
         "decision_timeout": args.decision_timeout, "match_timeout": args.match_timeout,
-        "seed": args.seed, "agents_root": args.agents_root, "output": output,
+        "seed": args.seed, "jobs": args.jobs, "agents_root": args.agents_root, "output": output,
     }
     payload = run(config)
     print(format_report(payload))

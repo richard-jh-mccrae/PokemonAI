@@ -1,7 +1,9 @@
+import os
+
 from sim.record import MatchRecorder
 from sim.strategy_bench import (
-    decision_metrics, format_report, save_match_artifacts, summarize_decisions,
-    write_decisions_csv,
+    _run_jobs, decision_metrics, default_jobs, format_report, save_match_artifacts,
+    summarize_decisions, write_decisions_csv,
 )
 from train.blunder.batch import discover_replays, load_game
 
@@ -47,12 +49,16 @@ def test_metrics_preserve_final_incumbent_timing_and_friendly_focus_coordinates(
 def test_report_uses_strategy_wave_and_focus_position_language():
     decisions = decision_metrics(_telemetry(), match_index=2, contestants=("a", "b"))
     payload = {
-        "config": {"mode": "versus", "decision_timeout": 60.0, "match_timeout": 600.0},
+        "config": {
+            "mode": "versus", "decision_timeout": 60.0, "match_timeout": 600.0,
+            "jobs": 10,
+        },
         "matches": [{"winner_seat": 1, "timed_out": (), "match_deadline_hit": False}],
         "decisions": decisions,
         "summary": summarize_decisions(decisions),
     }
     report = format_report(payload)
+    assert "1 matches -- 10 jobs" in report
     assert "Final incumbent first found avg 4.00s" in report
     assert "Strategy wave: first" in report
     assert "Strategy focus position: 3 of 8" in report
@@ -73,6 +79,37 @@ def test_decision_csv_contains_both_seats_and_timing_metrics(tmp_path):
     assert "lethal_proof_seconds" in text
     assert "0.125" in text
     assert {line.split(",")[3] for line in text.splitlines()[1:]} == {"0", "1"}
+
+
+def test_default_jobs_leaves_two_logical_processors_for_the_host(monkeypatch):
+    monkeypatch.setattr(os, "cpu_count", lambda: 12)
+    assert default_jobs() == 10
+
+
+def test_run_jobs_uses_bounded_process_pool_and_preserves_task_order(monkeypatch):
+    seen = {}
+
+    class _Pool:
+        def __init__(self, max_workers):
+            seen["workers"] = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def map(self, worker, tasks):
+            seen["tasks"] = list(tasks)
+            return map(worker, seen["tasks"])
+
+    monkeypatch.setattr("sim.strategy_bench.ProcessPoolExecutor", _Pool)
+    assert _run_jobs([3, 1, 2], jobs=10, worker=lambda value: value * 2) == [6, 2, 4]
+    assert seen == {"workers": 3, "tasks": [3, 1, 2]}
+
+
+def test_run_jobs_crosses_a_real_process_boundary():
+    assert _run_jobs([3, 1, 2], jobs=2, worker=str) == ["3", "1", "2"]
 
 
 def test_match_artifacts_are_directly_consumable_by_blunder_correction(tmp_path):
