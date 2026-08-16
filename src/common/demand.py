@@ -138,7 +138,9 @@ class StrategyBeamBuilder:
         if hint.deadline == "next_turn":
             return "high" if turn > int(self.snapshot.turn) else "low"
         options = tuple((state.obs.get("select") or {}).get("option") or ())
-        closing = any(int(option.get("type", -1)) in (13, 14) for option in options)
+        # An offered attack marks the commit point where the turn is about to be spent; a
+        # merely-legal End is on almost every main-phase menu and signals no such urgency.
+        closing = any(int(option.get("type", -1)) == 13 for option in options)
         return "high" if closing else "medium"
 
     def outcome_statuses(self, state) -> tuple[dict, ...]:
