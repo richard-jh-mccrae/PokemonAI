@@ -1,7 +1,7 @@
 """submit_agent — the Submission lifecycle CLI (ADR-0019).
 
     python tools/submit_agent.py build  <agent> [--label L]   # package + record to the build ledger
-    python tools/submit_agent.py submit [N] [--allow-dirty]   # upload build N (default: latest)
+    python tools/submit_agent.py submit [N] [--allow-dirty] [--skip-check]  # upload build N
     python tools/submit_agent.py collect <id> --replays DIR   # record performance from replays
     python tools/submit_agent.py dashboard                    # render the over-time view
 
@@ -56,6 +56,9 @@ def main(argv=None) -> int:
     s = sub.add_parser("submit", help="upload a prior build (default: latest) to the competition")
     s.add_argument("build_id", nargs="?", type=_build_id, help="which build to submit (default: most recent)")
     s.add_argument("--allow-dirty", action="store_true", help="permit submitting a dirty build")
+    s.add_argument("--skip-check", action="store_true",
+                   help="upload with no deployability check at all (no mirror match, no "
+                        "structure check) — a broken artifact will not be caught locally")
     s.add_argument("--out", default=str(DEFAULT_OUT))
     s.add_argument("--builds", default=str(DEFAULT_BUILDS))
     s.add_argument("--history", default=str(DEFAULT_HISTORY))
@@ -84,7 +87,8 @@ def main(argv=None) -> int:
         print(f"built #{row['submission_id']} -> {row['artifact']}.zip")
     else:  # submit
         row = submit(args.build_id, out=args.out, builds=args.builds, history=args.history,
-                     agents_root=args.agents_root, allow_dirty=args.allow_dirty)
+                     agents_root=args.agents_root, allow_dirty=args.allow_dirty,
+                     skip_check=args.skip_check)
         print(f"submitted #{row['submission_id']}: {row['message']}")
     return 0
 

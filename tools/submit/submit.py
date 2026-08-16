@@ -76,10 +76,11 @@ def _resolve(rows: list[dict], build_id: int | None) -> dict:
 
 
 def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILDS,
-           history=DEFAULT_HISTORY, agents_root=None, allow_dirty=False, when=None,
-           check_fn=None, upload_fn=None) -> dict:
+           history=DEFAULT_HISTORY, agents_root=None, allow_dirty=False, skip_check=False,
+           when=None, check_fn=None, upload_fn=None) -> dict:
     """Upload the chosen build (default: latest) and record it. Raises SystemExit *before*
-    uploading on any gate failure."""
+    uploading on any gate failure. ``skip_check=True`` uploads with no deployability check at
+    all — the artifact could crash or forfeit every match on Kaggle with no local warning."""
     row = dict(_resolve(read_history(builds), build_id))   # copy: don't mutate ledger entry
     zip_path = Path(out) / f"{row['artifact']}.zip"
     if not zip_path.exists():
@@ -87,6 +88,16 @@ def submit(build_id: int | None = None, *, out=DEFAULT_OUT, builds=DEFAULT_BUILD
     if "-dirty" in row["git_hash"] and not allow_dirty:
         raise SystemExit(f"refusing to submit a dirty build ({row['git_hash']}); "
                          "rebuild on a clean commit, or pass allow_dirty=True")
+    if skip_check:
+        print(f"WARNING: skipping the deployability check for {zip_path.name}; "
+              "an artifact that crashes or errors out on Kaggle will not be caught locally.",
+              flush=True)
+        row["message"] = compose_message(row)
+        (upload_fn or _default_upload)(zip_path, row["message"])
+        print("Kaggle accepted upload; recording local submission history...", flush=True)
+        row["submitted_at"] = (when or datetime.now()).isoformat(timespec="seconds")
+        append_history(history, row)
+        return row
     report = (check_fn(row["agent"], agents_root) if check_fn is not None
               else _default_check(zip_path, row["agent"]))
     if not report.ok:

@@ -3,7 +3,10 @@
 from common.strategy import (
     ActivationCondition, DesiredFact, Roles, Strategy, StrategyHint, StrategyOverride,
 )
-from agents.dragapult_ex.potential import DragapultPotential
+try:
+    from agents.dragapult_ex.potential import DragapultPotential
+except ImportError:                      # packaged submission: siblings, no `agents` package
+    from potential import DragapultPotential
 
 
 DREEPY, DRAKLOAK, DRAGAPULT_EX = 119, 120, 121
