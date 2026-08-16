@@ -144,8 +144,8 @@ class RefreshEvaluator:
         costs = {}
         if held_cost > 0.0:
             costs["refresh_held_options"] = held_cost
-        # The opponent swing is ADR-0060's certain strip/gift value; dropping it priced Judge,
-        # Unfair Stamp, and Harlequin as pure self-harm exactly when they are strongest.
+        # The opponent swing is ADR-0060's certain strip/gift value; dropping it priced every
+        # symmetric hand refresh as pure self-harm exactly when the strip is strongest.
         for label, value in (("refresh_expected_hand", weighted_draw),
                              ("refresh_opponent_hand", weighted_opponent)):
             if value > 0.0:
