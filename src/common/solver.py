@@ -18,7 +18,7 @@ from .commutativity import ActionFootprint, independent
 from .fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .option_equivalence import option_source_card
-from .demand import StrategyBeamBuilder, semantic_action_key
+from .demand import StrategyBeamBuilder, outcome_identity, semantic_action_key
 from .refresh import played_card_id
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
@@ -559,6 +559,7 @@ class ProductionSolver(ReferenceSolver):
         self._candidate_harvest: dict = {}
         self._candidate_bank = _CompletedCandidateBank()
         self._harvest_prefix: list[object] = []
+        self._harvest_coverage: list[tuple[str, ...]] = []
         self._harvest_exclusions: set[tuple[object, ...]] = set()
         self._candidate_timeout_fallback = False
         self._phase_budgets = {}
@@ -589,12 +590,15 @@ class ProductionSolver(ReferenceSolver):
             self._strategy_builder = StrategyBeamBuilder(
                 self.strategy_snapshot, effects=self.oracle.effects, stats=self.oracle.stats,
                 registry=self.oracle.registry,
-                width=self.profile.get("strategy.focus_width"))
+                width=self.profile.get("strategy.focus_width"),
+                sequence_coverage=(
+                    self.profile.get("strategy.sequence_coverage_enabled") >= 0.5))
         self._completed_rounds = 0
         self._bound_prunes.clear()
         self._action_bounds.clear()
         self._deadline_hit = False
         self._harvesting_candidates = False
+        self._harvest_coverage = []
         self._candidate_harvest = {
             "target": int(self.profile.get("search.completed_candidate_target")),
             "time_share": self.profile.get("search.completed_candidate_time_share"),
@@ -617,6 +621,7 @@ class ProductionSolver(ReferenceSolver):
         self._complete_root_bounds(state, decision)
         if self._strategy_builder is not None and self._root_key not in self._strategy_beams:
             root_actions = tuple(sorted(self.provider.actions(state), key=lambda row: row.identity))
+            self._sync_prefix_outcomes()
             self._strategy_beams[self._root_key] = self._strategy_builder.build(state, root_actions)
         diagnostics = dict(decision.diagnostics)
         diagnostics["production"] = {
@@ -714,8 +719,8 @@ class ProductionSolver(ReferenceSolver):
         reachability = {"unknown": 0, "probabilistic": 1, "guaranteed": 2}
 
         def outcome(row):
-            return (
-                row.get("kind"), row.get("recipient"), row.get("recipient_serial"),
+            return outcome_identity(
+                row.get("kind"), row.get("recipient_serial"), row.get("recipient_card_id"),
                 tuple(row.get("target_card_ids") or ()), int(row.get("waypoint", 0)),
             )
 
@@ -888,14 +893,31 @@ class ProductionSolver(ReferenceSolver):
         return selected if round(result.value, VALUE_TIE_DECIMALS) > round(
             upper, VALUE_TIE_DECIMALS) else preferred
 
+    def _action_coverage(self, state, action) -> tuple[str, ...]:
+        beam = self._strategy_beams.get(state.semantic_key)
+        if beam is None:
+            return ()
+        key = semantic_action_key(action)
+        row = next((row for row in beam.focused if row.action_key == key), None)
+        return tuple(getattr(row, "coverage", ()) or ()) if row is not None else ()
+
+    def _sync_prefix_outcomes(self) -> None:
+        """Hand the beam the outcomes the searched prefix already advanced, so a sequence
+        counts each distinct outcome once (traversal order only — never value or bounds)."""
+        if self._strategy_builder is not None:
+            self._strategy_builder.prefix_outcomes = tuple(dict.fromkeys(
+                key for keys in self._harvest_coverage for key in keys))
+
     def _search_action(self, state, action, sleep) -> Evaluation:
         if not self._harvesting_candidates:
             return self._action(state, action, sleep)
         self._harvest_prefix.append(action.identity)
+        self._harvest_coverage.append(self._action_coverage(state, action))
         try:
             return self._action(state, action, sleep)
         finally:
             self._harvest_prefix.pop()
+            self._harvest_coverage.pop()
 
     def _record_incumbent(self, state, finite, context, phase) -> None:
         if not finite:
@@ -1150,7 +1172,15 @@ class ProductionSolver(ReferenceSolver):
         protected_keys = set()
         protected_bundles = set(self._protected_bundles(state))
         if protected_bundles and self._strategy_builder is not None:
-            beam = self._strategy_builder.build(state, actions)
+            self._sync_prefix_outcomes()
+            # A dominance proof must not depend on beam width or sort order: build unbounded so
+            # the protected set is the full match set, whatever coverage put in the top slots.
+            width = self._strategy_builder.width
+            self._strategy_builder.width = max(width, len(actions))
+            try:
+                beam = self._strategy_builder.build(state, actions)
+            finally:
+                self._strategy_builder.width = width
             by_id = {
                 hint.strategy_id: str(hint.bundle_id or hint.strategy_id)
                 for hint in self.strategy_snapshot.hints
@@ -1510,6 +1540,7 @@ class ProductionSolver(ReferenceSolver):
                           and (key == self._root_key or self._harvesting_candidates
                                or deep_strategy))
         if strategy_focus:
+            self._sync_prefix_outcomes()
             beam = self._strategy_builder.build(state, actions)
             self._strategy_beams[key] = beam
             retained = {row.action_key for row in (*beam.focused, *beam.safety)}

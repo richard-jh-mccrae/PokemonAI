@@ -58,6 +58,35 @@ class ActionFocus:
     path_ids: tuple[str, ...]
     score: float
     reason: str
+    coverage: tuple[str, ...] = ()
+
+
+#: Distinct-outcome coverage saturates here so declaration volume cannot dominate ordering.
+COVERAGE_DISTINCT_CAP = 3
+
+
+def outcome_identity(kind, recipient_serial, recipient_card_id, target_card_ids,
+                     waypoint) -> str:
+    """One desired outcome's identity, keyed on the bound recipient body — never the authoring
+    selector or strategy identifier — so equal declarations collapse to one need."""
+    targets = ",".join(str(int(card_id)) for card_id in sorted(target_card_ids or ()))
+    return f"{kind}|{recipient_serial}|{recipient_card_id}|{targets}|{int(waypoint)}"
+
+
+@dataclass(frozen=True)
+class SequenceCoverage:
+    """Strategy coverage of a searched prefix or candidate continuation."""
+
+    tier: tuple[float, float] = (0.0, 0.0)
+    outcomes: tuple[str, ...] = ()
+
+
+def combined_coverage(parts) -> SequenceCoverage:
+    parts = tuple(parts)
+    tier = max((part.tier for part in parts), default=(0.0, 0.0))
+    outcomes = tuple(dict.fromkeys(
+        key for part in parts for key in part.outcomes))
+    return SequenceCoverage(tier, outcomes)
 
 
 @dataclass(frozen=True)
@@ -79,15 +108,27 @@ class StrategyBeamBuilder:
     _URGENCY = {"high": 3.0, "medium": 2.0, "low": 1.0}
     _CONVICTION = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
-    def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8):
+    def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8,
+                 sequence_coverage=False):
         self.snapshot = snapshot
         self.effects = effects
         self.stats = stats
         self.registry = registry
         self.width = max(1, int(width))
+        self.sequence_coverage = bool(sequence_coverage)
+        #: Outcome identities the searched prefix already advanced; they stop adding coverage.
+        self.prefix_outcomes: tuple[str, ...] = ()
         self.last_odds: dict[str, float] = {}
         self.last_reachability: dict[str, str] = {}
         self.last_beam: StrategyBeam | None = None
+
+    @staticmethod
+    def hint_outcome(hint) -> str:
+        return outcome_identity(
+            hint.kind, getattr(hint, "recipient_serial", None),
+            getattr(hint, "recipient_card_id", None),
+            tuple(getattr(hint, "target_card_ids", ()) or ()),
+            int(getattr(hint, "waypoint", 0)))
 
     def urgency(self, state, hint) -> str:
         turn = int((state.obs.get("current") or {}).get("turn", 0))
@@ -135,6 +176,7 @@ class StrategyBeamBuilder:
                 "kind": hint.kind,
                 "recipient": getattr(hint, "recipient", None),
                 "recipient_serial": getattr(hint, "recipient_serial", None),
+                "recipient_card_id": getattr(hint, "recipient_card_id", None),
                 "target_card_ids": tuple(getattr(hint, "target_card_ids", ())),
                 "urgency": self.urgency(state, hint),
                 "conviction": getattr(hint, "conviction", getattr(hint, "confidence", "low")),
@@ -256,17 +298,22 @@ class StrategyBeamBuilder:
                 best = max(best, float(bool(matching)))
         return best
 
-    def _priority(self, state, action) -> tuple[float, tuple[str, ...]]:
+    def _priority(self, state, action) -> tuple[
+            float, tuple[str, ...], tuple, SequenceCoverage]:
+        """Score, matched hint ids, lexicographic search rank, and distinct outcome coverage."""
         matched = []
+        advanced: dict[str, tuple[float, float]] = {}
         priority = 0.0
         recipient = self._recipient_serial(state, action)
         source_id = self._source_card_id(state, action)
         source_stat = self.stats.get(source_id) if source_id is not None and self.stats else None
         statuses = {row["strategy_id"]: row for row in self.outcome_statuses(state)}
+        tiers: list[tuple[float, float, float]] = []
         for hint in self.snapshot.hints:
-            if statuses[hint.strategy_id]["status"] == "satisfied":
+            if statuses[hint.strategy_id]["status"] in {"satisfied", "impossible"}:
                 continue
             probability = 0.0
+            via_access = False
             if (hint.kind == "fund_attack" and action.identity.kind == "attach"
                     and recipient == hint.recipient_serial
                     and (not hint.target_card_ids or source_id in hint.target_card_ids)
@@ -307,6 +354,7 @@ class StrategyBeamBuilder:
                     getattr(source_stat, "is_supporter", False)
                     and (state.obs.get("current") or {}).get("supporterPlayed")):
                 probability = self._access_odds(state, action, hint)
+                via_access = True
             if probability <= 0.0:
                 continue
             matched.append(hint.strategy_id)
@@ -314,14 +362,44 @@ class StrategyBeamBuilder:
                 "guaranteed" if probability >= 1.0 else "probabilistic")
             key = semantic_action_key(action)
             self.last_odds[key] = max(self.last_odds.get(key, 0.0), probability)
-            priority = max(priority, self._URGENCY[self.urgency(state, hint)] * 100.0
-                           + self._CONVICTION[getattr(
-                               hint, "conviction", getattr(hint, "confidence", "low"))]
-                           * 10.0 + probability)
-        return priority, tuple(sorted(set(matched)))
+            urgency = self._URGENCY[self.urgency(state, hint)]
+            conviction = self._CONVICTION[getattr(
+                hint, "conviction", getattr(hint, "confidence", "low"))]
+            priority = max(priority, urgency * 100.0 + conviction * 10.0 + probability)
+            tiers.append((urgency, conviction, probability))
+            # An access match may only FIND the need; it has not advanced it.  Coverage counts
+            # certain direct advances, so one action never counts alternatives it reaches.
+            if not via_access:
+                outcome = self.hint_outcome(hint)
+                incumbent = advanced.get(outcome, (0.0, 0.0))
+                advanced[outcome] = max(incumbent, (urgency, conviction))
+        if not matched:
+            return 0.0, (), (), SequenceCoverage()
+        advanced_tier = max(advanced.values(), default=(0.0, 0.0))
+        if not self.sequence_coverage:
+            return (priority, tuple(sorted(set(matched))), (priority,),
+                    SequenceCoverage(advanced_tier, tuple(sorted(advanced))))
+        primary = max(row[:2] for row in tiers)
+        best_probability = max(row[2] for row in tiers)
+        prefix = set(self.prefix_outcomes)
+        coverage = tuple(sorted(key for key in advanced if key not in prefix))
+        top_tier = (self._URGENCY["high"], self._CONVICTION["high"])
+        protected = sum(1 for key in coverage if advanced[key] == top_tier)
+        rank = (
+            *primary,
+            float(min(COVERAGE_DISTINCT_CAP, protected)),
+            float(min(COVERAGE_DISTINCT_CAP, len(coverage))),
+            best_probability,
+        )
+        return (priority, tuple(sorted(set(matched))), rank,
+                SequenceCoverage(advanced_tier, coverage))
 
     def action_priority(self, state, action) -> float:
         return self._priority(state, action)[0]
+
+    def action_coverage(self, state, action) -> SequenceCoverage:
+        """Pure per-action projection; fold a sequence's with ``combined_coverage``."""
+        return self._priority(state, action)[3]
 
     def rank_legal(self, state, actions) -> tuple:
         """Strategy-first legal order with stable deterministic completion."""
@@ -336,21 +414,28 @@ class StrategyBeamBuilder:
     def build(self, state, actions, *, ranking=None) -> StrategyBeam:
         started = perf_counter()
         self.last_odds = {}
-        self.last_reachability = {}
+        # An impossible mark is an epoch-scoped external proof (no in-repo producer yet — a
+        # caller-owned contract); every other reachability entry is rebuilt from this build.
+        self.last_reachability = {
+            strategy_id: status for strategy_id, status in self.last_reachability.items()
+            if status == "impossible"}
         focused = []
+        ranks: dict[str, tuple] = {}
         safety = []
         unknown = []
         inactive = []
         for action in actions:
             key = semantic_action_key(action)
-            priority, strategy_ids = self._priority(state, action)
+            priority, strategy_ids, rank, coverage = self._priority(state, action)
             if action.identity.kind in {"attack", "end", "retreat"}:
                 safety.append(ActionFocus(key, action.identity.kind, (), 0.0, "safety"))
                 if priority <= 0.0:
                     continue
             if priority > 0.0:
+                ranks[key] = rank
                 focused.append(ActionFocus(
-                    key, action.identity.kind, strategy_ids, priority, "strategy_hint"))
+                    key, action.identity.kind, strategy_ids, priority, "strategy_hint",
+                    coverage.outcomes if self.sequence_coverage else ()))
             else:
                 inactive.append(ActionFocus(
                     key, action.identity.kind, (), 0.0, "no_strategy_hint"))
@@ -360,7 +445,7 @@ class StrategyBeamBuilder:
         }
         focused = tuple(sorted(
             focused, key=lambda row: (
-                -row.score,
+                tuple(-value for value in ranks[row.action_key]),
                 (0 if row.family == "evolve" else
                  1 if information_ids.intersection(row.path_ids) else
                  2 if row.family == "attach" else 3),
@@ -1048,9 +1133,11 @@ class DemandModel:
 
 
 __all__ = (
-    "ActionFocus", "CoverageEdge", "DemandSlot", "DemandModel", "StrategyBeam",
+    "ActionFocus", "CoverageEdge", "DemandSlot", "DemandModel", "SequenceCoverage",
+    "StrategyBeam",
     "StrategyBeamBuilder",
     "ResolvedAssignment",
     "RetainedAssignment", "RetainedOption", "access_probability", "best_assignment",
-    "best_retained_assignment", "coverage_signature", "semantic_action_key",
+    "best_retained_assignment", "combined_coverage", "coverage_signature",
+    "outcome_identity", "semantic_action_key",
 )

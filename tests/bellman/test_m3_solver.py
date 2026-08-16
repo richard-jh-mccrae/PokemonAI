@@ -2049,3 +2049,145 @@ def test_cgpy_terminal_proof_rejects_deck_fetch_without_exact_prizes():
     })()
 
     assert not provider.terminal_action_supported(state, action)
+
+
+
+def test_sequence_coverage_changes_no_value_bound_or_exhaustive_policy(monkeypatch):
+    root = _state("coverage-ab-root")
+    weak = _state("coverage-ab-weak", board=0.2)
+    strong = _state("coverage-ab-strong", board=0.7)
+    first, second, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+
+    class FocusWeak:
+        def __init__(self, *_args, **_kwargs):
+            self.prefix_outcomes = ()
+
+        def build(self, _state, _actions, ranking=None):
+            return StrategyBeam(
+                (ActionFocus(semantic_action_key(first), "alpha", (), 1.0, "strategy_hint",
+                             ("deploy|77|10||0",)),),
+                (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
+                (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusWeak)
+    graph = Graph(
+        {"coverage-ab-root": (first, second, end),
+         "coverage-ab-weak": (end,), "coverage-ab-strong": (end,)},
+        {("coverage-ab-root", "alpha"): Deterministic(weak),
+         ("coverage-ab-root", "beta"): Deterministic(strong)},
+    )
+    limits = ProductionLimits(max_nodes=50, root_probe_nodes=50, root_refinement_width=3)
+
+    def run(enabled):
+        profile = PilotProfile.resolve(global_values={
+            "strategy.sequence_coverage_enabled": enabled})
+        solver = ProductionSolver(
+            graph, _oracle(), limits=limits, profile=profile, strategy_snapshot=object())
+        decision = solver.decide(root)
+        bounds = {
+            row["action"]: (row.get("q_lower"), row.get("q_upper"), row.get("complete"))
+            for row in decision.diagnostics["production"]["action_bounds"]
+            if "action" in row}
+        return decision, bounds
+
+    on_decision, on_bounds = run(1.0)
+    off_decision, off_bounds = run(0.0)
+
+    assert on_decision.complete and off_decision.complete
+    assert on_decision.action == off_decision.action == second.identity
+    assert on_decision.value == off_decision.value
+    assert on_bounds == off_bounds
+
+
+def test_harvest_hands_the_beam_the_prefix_outcomes_already_advanced(monkeypatch):
+    root, middle = _state("prefix-root"), _state("prefix-middle")
+    start, follow, end = _action("start"), _action("follow"), _action("end", 1)
+    seen = []
+
+    class RecordingBuilder:
+        def __init__(self, *_args, **_kwargs):
+            self.prefix_outcomes = ()
+
+        def build(self, state, actions, ranking=None):
+            del ranking
+            seen.append((state.obs["node"], tuple(self.prefix_outcomes)))
+            focus, coverage = (
+                (start, ("evolve|77|333|678|0",))
+                if state.obs["node"] == "prefix-root" else
+                (follow, ("deploy|None|None|500|0",)))
+            return StrategyBeam(
+                (ActionFocus(semantic_action_key(focus), focus.identity.kind, (), 1.0,
+                             "strategy_hint", coverage),),
+                (), (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", RecordingBuilder)
+    graph = Graph(
+        {"prefix-root": (start,), "prefix-middle": (follow, end)},
+        {("prefix-root", "start"): Deterministic(middle),
+         ("prefix-middle", "follow"): Terminal(middle, "resolved")},
+    )
+
+    decision = ProductionSolver(
+        graph, _oracle(), limits=ProductionLimits(max_nodes=20),
+        strategy_snapshot=object()).decide(root)
+
+    assert ("prefix-root", ()) in seen
+    assert ("prefix-middle", ("evolve|77|333|678|0",)) in seen
+    # The two-need line is the first completed candidate: the sequence that also advances the
+    # second outcome is searched before any line that stops at the first.
+    completed = decision.diagnostics["production"]["candidate_harvest"]["completed"]
+    assert completed[0]["sequence"] == (str(start.identity), str(follow.identity))
+
+
+
+def test_dominance_prune_set_is_identical_under_the_coverage_toggle():
+    """A structural proof must not depend on beam width or coverage sort order: with focus
+    width 1 and two protected evolutions, the retained set is the same toggled on or off."""
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from common.demand import StrategyBeamBuilder
+
+    hints = (
+        ActivatedStrategy("deck.develop_active", "evolve", "own.active", 10, 77,
+                          (201,), "immediate", "high", "bundle.active", 0),
+        ActivatedStrategy("deck.develop_bench", "evolve", "own.bench.evolvable:first", 11, 78,
+                          (202,), "immediate", "high", "bundle.bench", 0),
+        ActivatedStrategy("deck.bench_extra", "evolve", "own.bench.evolvable:first", 11, 78,
+                          (202, 300), "next_turn", "low", "bundle.bench", 0),
+    )
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+    observation = {
+        "current": {"turn": 4, "yourIndex": 0, "players": [
+            {"active": [{"id": 10, "serial": 77, "energies": []}],
+             "bench": [{"id": 11, "serial": 78, "energies": []}],
+             "hand": [{"id": 201, "serial": 90}, {"id": 202, "serial": 91}]},
+            {"active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 9, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 9, "index": 1, "inPlayArea": 5, "inPlayIndex": 0},
+            {"type": 7, "index": 0},
+            {"type": 14},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+    actions = enumerate_legal_actions(observation)
+    evolve_active = next(action for action in actions if action.selection == (0,))
+    evolve_bench = next(action for action in actions if action.selection == (1,))
+    peek = next(action for action in actions if action.selection == (2,))
+    footprints = {
+        evolve_active.identity: ActionFootprint(("evolve", "77"), commitment=True),
+        evolve_bench.identity: ActionFootprint(("evolve", "78"), commitment=True),
+        peek.identity: ActionFootprint(("peek",), information_first=True),
+    }
+
+    def retained(enabled):
+        solver = ProductionSolver(Graph({}, {}), _oracle(), strategy_snapshot=snapshot)
+        solver._strategy_builder = StrategyBeamBuilder(
+            snapshot, width=1, sequence_coverage=enabled)
+        kept = solver._information_dominance_filter(state, actions, footprints)
+        return {action.identity for action in kept}
+
+    assert retained(True) == retained(False)
+    assert {evolve_active.identity, evolve_bench.identity} <= retained(True)
