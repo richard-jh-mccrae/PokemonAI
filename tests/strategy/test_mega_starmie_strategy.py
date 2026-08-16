@@ -86,11 +86,20 @@ def test_bench_hint_focuses_the_basic_pokemon_tutor():
     assert focused == set(actions)
 
 
-def test_the_snipe_hint_names_the_only_attack_that_reaches_the_bench():
-    """The hint was authored against Nebula Beam, which cannot reach the Bench at all; the
-    damage_setup matcher only ever accepted a bench-reaching attack."""
+def test_only_jetting_blow_can_do_the_softening_nebula_beam_cashes_in():
+    """Nebula Beam cannot reach the Bench, so the damage_setup matcher — which only ever accepted
+    a bench-reaching attack — can only ever mean Jetting Blow's rider."""
     assert bench_reach(STATS.attack(JETTING_BLOW)) > 0
     assert bench_reach(STATS.attack(NEBULA_BEAM)) == 0
+
+
+def test_one_softening_pass_covers_a_bench_body_but_not_a_mega_sized_one():
+    """One rider then one gusted Nebula Beam reaches this far; a Mega-sized body needs more
+    softening passes than that, and the hint keeps asking until the target leaves the board."""
+    reach = int(STATS.attack(NEBULA_BEAM).damage) + bench_reach(STATS.attack(JETTING_BLOW))
+
+    assert reach == 260
+    assert reach < int(STATS.get(MEGA_STARMIE_EX).hp)
 
 
 def test_the_snipe_hint_focuses_jetting_blow_and_not_nebula_beam():

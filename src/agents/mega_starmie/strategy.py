@@ -54,9 +54,9 @@ STRATEGY = Strategy(
             "mega_starmie.strategy",
         ),
         StrategyHint(
-            # Jetting Blow is the only attack here that reaches the Bench; Nebula Beam cannot.
-            # Softening a scouted role target sets up a later Boss's Orders drag into Nebula Beam.
-            "mega_starmie.snipe_role_target_with_jetting_blow",
+            # Nebula Beam cannot reach the Bench, so the softening is Jetting Blow's 50-damage
+            # rider: it drops a scouted role target into the 210 one Nebula Beam takes once gusted.
+            "mega_starmie.soften_role_target_into_nebula_beam_range",
             "deck",
             (
                 ActivationCondition("own.active.card_id", "eq", MEGA_STARMIE_EX),
