@@ -736,6 +736,40 @@ class ProductionSolver(ReferenceSolver):
 
         return tuple(sorted(node.choices, key=priority))
 
+    def _information_dominance_filter(self, actions, footprints):
+        """Free-peek dominance: play costless pure deck peeks before neutral commitments.
+
+        A pure hidden fetch reads and writes only the deck and the acting hand slot, consumes no
+        allowance, and reveals information.  Any hand-and-deck-neutral commitment (attach, evolve,
+        retreat, a declared-deterministic trainer play) is exactly as playable after the peek, so
+        every line taking such a commitment first is weakly dominated by the peek-first line and
+        is pruned.  Barrier actions are never pruned — a shuffle or draw can destroy the peek's
+        knowledge, so peek-first is not dominant over them — and attack/End stay reachable as the
+        guaranteed-executable safety fallback.
+        """
+        peek_available = False
+        for action in actions:
+            footprint = footprints.get(action.identity)
+            if footprint is not None and footprint.information_first:
+                peek_available = True
+                break
+        if not peek_available:
+            return actions
+        retained = []
+        for action in actions:
+            footprint = footprints.get(action.identity)
+            if (footprint is not None and footprint.commitment and not footprint.barrier
+                    and action.identity.kind not in ("attack", "end")):
+                self.information_pruned += 1
+                self._structural_prunes.append({
+                    "proof_type": "information_dominance",
+                    "pruned": str(action.identity),
+                    "retained_event": ("free_peek_first",),
+                })
+                continue
+            retained.append(action)
+        return tuple(retained)
+
     def _footprint(self, state: DecisionState, action: LegalAction) -> ActionFootprint | None:
         footprint = getattr(self.provider, "footprint", None)
         if footprint is None:
@@ -1046,6 +1080,8 @@ class ProductionSolver(ReferenceSolver):
                     else:
                         self.por_pruned += 1
             actions = filtered
+            if self.profile.get("search.information_dominance_enabled") >= 0.5:
+                actions = self._information_dominance_filter(actions, footprints)
         strategy_focus = (actor is Actor.OURS
                           and (key == self._root_key or self._harvesting_candidates)
                           and self._strategy_builder is not None
