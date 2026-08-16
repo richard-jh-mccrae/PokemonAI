@@ -147,6 +147,26 @@ def test_strategy_rejects_conflicting_recipient_declarations():
         )
 
 
+def test_strategy_rejects_unknown_recipient_selector_by_name():
+    import pytest
+    from common.strategy.strategies import _RECIPIENT_SELECTORS
+
+    with pytest.raises(ValueError, match="own.actve"):
+        StrategyHint(
+            identifier="general.typo", scope="general", conditions=(),
+            desired_facts=(DesiredFact("fund_attack", "own.actve", 1),),
+            recipient_selector="own.actve", deadline="this_turn", conviction="high",
+            provenance="general",
+        )
+    for selector in sorted(_RECIPIENT_SELECTORS):
+        StrategyHint(
+            identifier=f"general.ok.{selector}", scope="general", conditions=(),
+            desired_facts=(DesiredFact("fund_attack", selector, 1),),
+            recipient_selector=selector, deadline="this_turn", conviction="high",
+            provenance="general",
+        )
+
+
 def test_strategy_resolution_rejects_silent_replacement_and_unknown_override():
     import pytest
 
