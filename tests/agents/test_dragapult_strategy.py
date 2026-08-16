@@ -456,6 +456,38 @@ def test_drakloak_evolves_once_the_line_has_no_payoff_of_its_own():
     assert "dragapult.evolve_drakloak_for_the_attack" not in _snapshot(()).active_ids
 
 
+def test_protection_saves_the_hurt_drakloak_not_the_healthy_one():
+    """The condition fires on the most threatened copy, so the hint must point at that copy.
+    Aimed at the readiest one it evolved a healthy Drakloak while the dying one still died."""
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+
+    def _drakloak(serial, hp, energies):
+        return {"id": 120, "serial": serial, "hp": hp, "maxHp": 90,
+                "energies": list(energies), "energyCards": [], "preEvolution": [], "tools": []}
+
+    observation = {"current": {"turn": 6, "yourIndex": 0, "result": -1, "players": [
+        {"active": [{"id": 119, "serial": 1, "hp": 70, "maxHp": 70, "energies": [],
+                     "energyCards": [], "preEvolution": [], "tools": []}],
+         "bench": [_drakloak(2, 20, ()), _drakloak(3, 90, (2, 5))],
+         "hand": [], "prize": [None] * 6, "benchMax": 5},
+        {"active": [], "bench": [], "prize": [None] * 6, "benchMax": 5},
+    ]}, "select": {"context": 0, "option": []}}
+    hints = {row.strategy_id: row for row in activate_strategies(
+        observation, resolved, roles=roles, stats=stats, effects=effects).hints}
+
+    assert hints["dragapult.evolve_threatened_drakloak"].recipient_serial == 2
+    # The attack line is the mirror and must not follow it onto the dying body.
+    assert hints["dragapult.evolve_drakloak_for_the_attack"].recipient_serial == 3
+
+
 def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
     """90 HP becomes 320 and the damage already on it stops being lethal. Losing the Drakloak
     loses the line behind the attacker."""
