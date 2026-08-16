@@ -24,6 +24,11 @@ _KIND_NAMES = {
 }
 DEFAULT_PICK_COUNT = 1
 
+#: The largest engine-posed menu observed is ~400 selections; a choose-up-to-N over a big listing
+#: is combinatorial and would eat the decision clock. Cheapest counts enumerate first, so the
+#: decline/minimum submissions always survive the cap.
+SELECTION_ENUMERATION_CAP = 4096
+
 
 def _card_from_select(observation: Mapping, option: Mapping, area_key: str, index_key: str):
     area, index = option.get(area_key), option.get(index_key)
@@ -90,9 +95,16 @@ def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     minimum, maximum = (int(select.get("minCount", DEFAULT_PICK_COUNT)),
                         int(select.get("maxCount", DEFAULT_PICK_COUNT)))
     maximum = min(maximum, len(options))
+    minimum = min(minimum, maximum)                  # an impossible ask still submits its closest
     groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, ...]]] = {}
+    budget = SELECTION_ENUMERATION_CAP
     for count in range(max(0, minimum), maximum + 1):
+        if budget <= 0:
+            break
         for selection in combinations(range(len(options)), count):
+            if budget <= 0:
+                break
+            budget -= 1
             kinds = tuple(_KIND_NAMES.get(options[index].get("type"),
                                           f"option_{options[index].get('type')}")
                           for index in selection)

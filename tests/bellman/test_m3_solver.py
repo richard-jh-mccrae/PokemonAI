@@ -1656,6 +1656,51 @@ def test_opponent_min_and_known_chance_are_recursive_nodes():
     assert ReferenceSolver(graph, _oracle()).decide(root).action.kind == "play"
 
 
+def test_a_dead_end_root_salvages_a_legal_submission_instead_of_raising():
+    # Every root subtree Unknown used to raise "no complete legal action" — a forfeit in
+    # deployment. The root must still submit something legal, marked incomplete.
+    from common.algebra import Unknown
+
+    actions = {"root": (_action("card", 0), _action("card", 1))}
+    transitions = {("root", "card"): Unknown("native cg transition failed", "boom")}
+    solver = ReferenceSolver(Graph(actions, transitions), _oracle())
+
+    decision = solver.decide(_state("root"))
+
+    assert decision.chosen == (0,)
+    assert not decision.complete
+    assert "salvage" in decision.diagnostics["root"].stopped_reason
+
+
+def test_a_dead_end_root_prefers_the_end_action():
+    from common.algebra import Unknown
+
+    actions = {"root": (_action("card", 0), _action("end", 1))}
+    transitions = {("root", "card"): Unknown("native cg transition failed", "boom"),
+                   ("root", "end"): Unknown("native cg transition failed", "boom")}
+    solver = ReferenceSolver(ResolvedEndGraph(actions, transitions), _oracle())
+
+    decision = solver.decide(_state("root"))
+
+    assert decision.chosen == (1,)
+    assert not decision.complete
+
+
+def test_a_cyclic_forced_end_chain_is_budgeted_not_a_recursion_error():
+    # The forced continuation after End had no node, deadline, cycle, or depth accounting —
+    # a self-referential forced menu recursed to the interpreter limit.
+    loop_state = _state("loop", context=5)
+    actions = {"root": (_action("end", 0),), "loop": (_action("card", 0),)}
+    transitions = {("root", "end"): Deterministic(loop_state),
+                   ("loop", "card"): Deterministic(loop_state)}
+    solver = ReferenceSolver(ResolvedEndGraph(actions, transitions), _oracle())
+
+    decision = solver.decide(_state("root"))          # must return, not RecursionError
+
+    assert decision.chosen == (0,)
+    assert not decision.complete
+
+
 def test_bounded_own_choice_keeps_a_finite_lower_bound_from_one_legal_branch():
     root = _state("choice-lower-root")
     exact = _state("choice-lower-exact", board=0.5)

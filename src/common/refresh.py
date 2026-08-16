@@ -165,6 +165,8 @@ class RefreshEvaluator:
         capped_marginals = 0.0
         played_reconciled = False
         for index, card in enumerate(hand):
+            if not card or card.get("id") is None:   # evaluate() filters these; mirror it here
+                continue
             without_card = copy.deepcopy(retained)
             without_hand = without_card["current"]["players"][seat]["hand"]
             without_hand.pop(index)

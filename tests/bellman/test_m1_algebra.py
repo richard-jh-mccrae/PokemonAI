@@ -81,6 +81,37 @@ def test_every_corpus_menu_index_is_covered_once_with_stable_identity():
     assert seen > 500
 
 
+def test_an_impossible_minimum_clamps_to_the_closest_legal_submission():
+    # A menu demanding more picks than it offers must still yield a submittable action —
+    # an empty action list upstream is a raise, which is a forfeit in deployment.
+    obs = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [{"id": 1120, "serial": 10}, {"id": 1227, "serial": 11}]}, {},
+        ]},
+        "select": {"minCount": 3, "maxCount": 3, "option": [
+            {"type": 3, "area": 2, "index": 0, "playerIndex": 0},
+            {"type": 3, "area": 2, "index": 1, "playerIndex": 0},
+        ]},
+    }
+    actions = enumerate_legal_actions(obs)
+    assert actions and actions[0].selection == (0, 1)
+
+
+def test_combination_enumeration_is_capped_cheapest_counts_first():
+    hand = [{"id": 1000 + index, "serial": index} for index in range(24)]
+    obs = {
+        "current": {"yourIndex": 0, "players": [{"hand": hand}, {}]},
+        "select": {"minCount": 0, "maxCount": 6, "option": [
+            {"type": 3, "area": 2, "index": index, "playerIndex": 0}
+            for index in range(24)
+        ]},
+    }
+    actions = enumerate_legal_actions(obs)
+    total = sum(len(action.equivalent_selections) for action in actions)
+    assert total <= 4096                              # bounded, not the ~190k uncapped
+    assert any(action.selection == () for action in actions)   # the decline survives the cap
+
+
 def test_identical_playable_hand_copies_are_one_action_and_cover_both_indices():
     obs = {
         "current": {"yourIndex": 0, "players": [

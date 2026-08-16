@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import sys
 from time import monotonic
 from typing import Protocol
 
@@ -39,6 +40,10 @@ SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
+#: The forced continuation after End is expected to be a few plies of checkup menus; these caps
+#: keep a pathological or cyclic forced chain from eating the clock or the interpreter stack.
+END_CHAIN_DEPTH_CAP = 32
+END_CHAIN_NODE_CAP = 512
 
 
 class TransitionProvider(Protocol):
@@ -186,14 +191,18 @@ class ReferenceSolver:
         self._transitions = {}
         self.nodes = 0
         self.cache_hits = 0
+        self._end_chain_nodes = 0
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._memo.clear()
         self._active.clear()
         self._transitions.clear()
         self.nodes = self.cache_hits = 0
+        self._end_chain_nodes = 0
         self._root_key = state.semantic_key
         solved = self._state(state)
+        if solved.action is None:
+            solved = self._root_salvage(state, solved)
         if solved.action is None:
             raise RuntimeError(f"Bellman root has no complete legal action: {solved.evaluation.reason}")
         end_pair = next(((action, result) for action, result in solved.alternatives
@@ -221,6 +230,19 @@ class ReferenceSolver:
             diagnostics={"root": diagnostics, "ledger": solved.evaluation.ledger.as_dict()},
             plan_suffix=solved.evaluation.continuation,
         )
+
+    def _root_salvage(self, state: DecisionState, solved: StateEvaluation) -> StateEvaluation:
+        """A planning dead end (every root subtree capped or Unknown) must still submit something
+        legal — an uncaught raise is a forfeit in deployment. Prefers End, else the first legal
+        action; the result stays incomplete and names the dead end, never a fabricated value."""
+        actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
+        if not actions:
+            return solved
+        action = next((candidate for candidate in actions
+                       if candidate.identity.kind == "end"), actions[0])
+        reason = f"root salvage: {solved.evaluation.reason or 'no complete legal action'}"
+        return StateEvaluation(
+            0.0, action, Evaluation(0.0, Ledger(), False, reason), solved.alternatives)
 
     def _continuation_steps(self, before: DecisionState, action: LegalAction,
                             after: DecisionState,
@@ -295,8 +317,19 @@ class ReferenceSolver:
             return self._end_transition(state, action, node)
         return self._transition(state, action, self._provider_transition(state, action), sleep)
 
-    def _end_transition(self, before: DecisionState, action: LegalAction, node) -> Evaluation:
-        """Value only the forced turn-boundary outcome, without planning the opponent's turn."""
+    def _end_chain_available(self) -> bool:
+        return self._end_chain_nodes < END_CHAIN_NODE_CAP
+
+    def _end_transition(self, before: DecisionState, action: LegalAction, node,
+                        depth: int = END_CHAIN_DEPTH_CAP) -> Evaluation:
+        """Value only the forced turn-boundary outcome, without planning the opponent's turn.
+
+        The forced chain is the only solver recursion outside the node/deadline budget, so it
+        carries its own caps — a cyclic or pathological forced menu must degrade to an incomplete
+        evaluation, never a RecursionError or a burned clock."""
+        self._end_chain_nodes += 1
+        if depth <= 0 or not self._end_chain_available():
+            return Evaluation(-math.inf, Ledger(), False, "End continuation capped")
         if isinstance(node, Unknown):
             return Evaluation(-math.inf, Ledger(), False,
                               f"{node.reason}: {node.missing_fact}")
@@ -308,7 +341,7 @@ class ReferenceSolver:
                 forced = tuple(
                     (candidate, self._end_transition(
                         node.state, candidate,
-                        self._provider_transition(node.state, candidate)))
+                        self._provider_transition(node.state, candidate), depth - 1))
                     for candidate in self.provider.actions(node.state)
                 )
                 if (not forced or any(not result.complete or not math.isfinite(result.value)
@@ -330,7 +363,7 @@ class ReferenceSolver:
             return Evaluation(ledger.total, ledger, True, node.result, decisions=1.0,
                               execution_complete=True)
         if isinstance(node, Chance):
-            branches = [(edge, self._end_transition(before, action, edge.node))
+            branches = [(edge, self._end_transition(before, action, edge.node, depth - 1))
                         for edge in node.children]
             if any(not result.complete for _edge, result in branches):
                 return Evaluation(-math.inf, Ledger(), False, "incomplete End chance branch")
@@ -411,7 +444,9 @@ class ReferenceSolver:
             try:
                 ledger, diagnostics = self.oracle.refresh_ledger(
                     before, node, include_next_turn=before.semantic_key == self._root_key)
-            except (TypeError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001 - a KeyError here was process death (forfeit)
+                print(f"refresh valuation unavailable ({type(exc).__name__}: {exc}); "
+                      "the refresh card is unplayable this decision", file=sys.stderr, flush=True)
                 return Evaluation(-math.inf, Ledger(), False,
                                   f"refresh valuation unavailable: {exc}")
             continuation = self._guaranteed_refresh_continuation(before)
@@ -598,6 +633,10 @@ class ProductionSolver(ReferenceSolver):
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics, decision.plan_suffix)
+
+    def _end_chain_available(self) -> bool:
+        return (super()._end_chain_available()
+                and monotonic() < getattr(self, "_hard_deadline", math.inf))
 
     @staticmethod
     def _sequence_signature(action, result) -> tuple[str, ...]:

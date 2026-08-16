@@ -5,9 +5,13 @@ import json
 from common import DecisionState, RootDecision
 from common.board_cards import body_card_ids
 from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
-from common.option_equivalence import class_representatives, fan_out, option_source_card
+from common.option_equivalence import (
+    class_representatives, fan_out, fingerprint_source_card_id, option_in_play_source_id,
+    option_source_card, semantic_option_fingerprint,
+)
 from common.strategy import PrizePlan, Roles, Strategy
 from common.telemetry import to_record
+from observation_helpers import engine_opt
 
 
 def test_declarative_roles_derive_a_complete_evolution_line():
@@ -88,6 +92,41 @@ def test_option_source_card_resolves_the_engine_shaped_main_menu_play():
     assert option_source_card({**ENGINE_PLAY_OPTION, "index": 9}, frame) is None   # off the end
     # Not a Play: a null area stays unresolvable rather than being guessed as HAND.
     assert option_source_card({**ENGINE_PLAY_OPTION, "type": 9}, frame) is None
+
+
+#: The board for every in-play source-resolution test below.
+IN_PLAY_FRAME = {"current": {"yourIndex": 0, "players": [
+    {"active": [{"id": 112, "serial": 7}], "bench": [{"id": 674, "serial": 8}]},
+    {"active": [{"id": 999, "serial": 9}], "bench": []},
+], "stadium": [{"id": 1260, "serial": 3, "playerIndex": 0}]}}
+
+
+def test_in_play_source_resolves_the_engine_shaped_ability_option():
+    # The engine emits `inPlayArea: None` on an ability that carries its reference in `area` —
+    # a `get("inPlayArea", option.get("area"))` fallback never fires on that shape (PR #532 class).
+    assert option_in_play_source_id(engine_opt(type=10, area=4, index=0), IN_PLAY_FRAME) == 112
+    assert option_in_play_source_id(engine_opt(type=10, area=5, index=0), IN_PLAY_FRAME) == 674
+    assert option_in_play_source_id(engine_opt(type=10, area=7, index=0), IN_PLAY_FRAME) == 1260
+
+
+def test_in_play_source_prefers_the_explicit_card_and_fails_closed():
+    assert option_in_play_source_id(engine_opt(type=15, cardId=678), IN_PLAY_FRAME) == 678
+    # A materialized reference that does not resolve is None — never a guess from the other pair.
+    assert option_in_play_source_id(engine_opt(type=10, area=4, index=5), IN_PLAY_FRAME) is None
+    assert option_in_play_source_id(engine_opt(type=10), IN_PLAY_FRAME) is None
+    assert option_in_play_source_id(None, IN_PLAY_FRAME) is None
+    # The sparse cgpy shape (keys absent instead of None) resolves identically.
+    assert option_in_play_source_id({"type": 10, "area": 4, "index": 0}, IN_PLAY_FRAME) == 112
+
+
+def test_fingerprint_source_card_id_reads_the_embedded_reference():
+    ability_part = semantic_option_fingerprint(engine_opt(type=10, area=4, index=0), IN_PLAY_FRAME)
+    skill_part = semantic_option_fingerprint(engine_opt(type=15, cardId=678), IN_PLAY_FRAME)
+
+    assert fingerprint_source_card_id(ability_part, IN_PLAY_FRAME) == 112
+    assert fingerprint_source_card_id(skill_part, IN_PLAY_FRAME) == 678
+    assert fingerprint_source_card_id(None, IN_PLAY_FRAME) is None
+    assert fingerprint_source_card_id("not json", IN_PLAY_FRAME) is None
 
 
 def test_telemetry_exposes_only_the_bellman_decision_contract():

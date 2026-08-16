@@ -210,6 +210,49 @@ def test_fetching_an_evolution_without_a_recipient_charges_the_stranded_line():
         + registry.prizes(LINE_BASE) + registry.prizes(LINE_TOP))
 
 
+def test_an_ability_fetch_charges_stranded_line_through_the_engine_shaped_option():
+    # The ability's ActionIdentity embeds its resolved source card; the engine-shaped option
+    # (every key present, unused None) must still charge the stranded line (PR #532 class).
+    from common.options import enumerate_legal_actions
+    from observation_helpers import engine_opt
+
+    registry = ValueRegistry(
+        roles={LINE_BASE: ("primary_attacker",), LINE_TOP: ("primary_attacker",)},
+        functions={RUSH_EVOLUTION: ("search",)},
+        facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
+               LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
+               RUSH_EVOLUTION: CardFacts(pokemon=True)},
+        line_pairs=((LINE_BASE, LINE_TOP),), lines=((LINE_BASE, LINE_TOP),))
+    stats = DictCardStatProvider({
+        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
+        LINE_TOP: CardStat(LINE_TOP, name="Top", hp=330, stage="stage1",
+                           evolvesFrom="Base", megaEx=True),
+        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, name="Fetcher", hp=70, stage="basic"),
+    })
+    before_obs = _obs([])
+    before_obs["current"]["players"][0]["active"] = [{"id": RUSH_EVOLUTION, "serial": 30}]
+    before_obs["select"] = {"context": 0, "minCount": 1, "maxCount": 1,
+                            "option": [engine_opt(type=10, area=4, index=0)]}
+    after_obs = deepcopy(before_obs)
+    after_obs["select"] = {"context": 0, "option": [{"type": 14}]}
+    before = DecisionState.from_observation(
+        before_obs, deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION), deck_name="test",
+        value_registry_identity=registry.identity)
+    after = before.with_observation(after_obs)
+    oracle = ValueOracle(
+        registry, _families,
+        effects=CardEffects({RUSH_EVOLUTION: [{
+            "kind": "fetch", "target": "mega", "zone": "deck",
+        }]}), stats=stats)
+    action = enumerate_legal_actions(before_obs)[0].identity
+    assert action.kind == "ability"
+
+    costs = dict(oracle.transition_ledger(before, after, action).costs)
+
+    assert costs["stranded_fetch"] == pytest.approx(
+        registry.prizes(LINE_BASE) + registry.prizes(LINE_TOP))
+
+
 def test_playing_a_fetch_that_acquires_nothing_loses_future_discard_fodder():
     registry = ValueRegistry(
         functions={RUSH_EVOLUTION: ("search",)},

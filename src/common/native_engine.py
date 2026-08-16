@@ -6,6 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
+from .option_equivalence import option_in_play_source_id
 from .options import LegalAction
 from .commutativity import action_footprint
 from .refresh import refresh_transition
@@ -211,13 +212,7 @@ class NativeCgTransitionProvider:
             if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
                 card_id = int(hand[hand_index]["id"])
         if card_id is None and kind in {"ability", "skill"}:
-            area = option.get("inPlayArea", option.get("area"))
-            index = option.get("inPlayIndex", option.get("index"))
-            cards = (mine.get("active") if area == _ACTIVE else
-                     mine.get("bench") if area == _BENCH else
-                     current.get("stadium") if area == 7 else ()) or ()
-            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
-                card_id = int(cards[index]["id"])
+            card_id = option_in_play_source_id(option, state.obs)
         recipient_id = None
         if kind == "attach":
             area = option.get("inPlayArea")

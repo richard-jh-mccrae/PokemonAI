@@ -16,6 +16,7 @@ from common.card_worth import (
 from .algebra import Ledger
 from .api import ActionIdentity
 from .fetch import DEADNESS, fetch_target_matches
+from .option_equivalence import fingerprint_source_card_id
 from .state import DecisionState
 
 
@@ -333,20 +334,10 @@ class ValueOracle:
         except (TypeError, ValueError, json.JSONDecodeError):
             return 0.0
         card_id = next(card_ids(decoded), None) if action.kind == "play" else None
-        if card_id is None and action.kind in {"ability", "skill"} and decoded:
-            option = next((value for value in decoded[0] if isinstance(value, dict)), {})
-            area = option.get("inPlayArea", option.get("area"))
-            index = option.get("inPlayIndex", option.get("index"))
-            current = state.obs.get("current") or {}
-            if area == 7:
-                cards = current.get("stadium") or ()
-            else:
-                players = current.get("players") or ()
-                mine = players[state.root_seat] if state.root_seat < len(players) else {}
-                cards = (mine.get("active") or () if area == 4 else
-                         mine.get("bench") or () if area == 5 else ())
-            if isinstance(index, int) and 0 <= index < len(cards) and cards[index]:
-                card_id = int(cards[index]["id"])
+        if card_id is None and action.kind in {"ability", "skill"}:
+            card_id = next((found for part in action.parts
+                            if (found := fingerprint_source_card_id(part, state.obs)) is not None),
+                           None)
         clauses = tuple(self.effects.clauses(card_id)) if card_id is not None else ()
         fetches = tuple(clause for clause in clauses
                         if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
