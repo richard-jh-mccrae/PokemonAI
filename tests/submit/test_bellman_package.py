@@ -30,7 +30,7 @@ def test_manifest_describes_declarations_and_bellman_only():
     assert catalog["enabled"] is True
     assert catalog["odds_enabled"] is True
     assert catalog["resolved"]["effective"]
-    assert any(row["identifier"] == "mega_starmie.establish_benched_staryu_before_turbo_flare"
+    assert any(row["identifier"] == "mega_starmie.bench_staryu_before_turbo_flare"
                for row in catalog["resolved"]["deck"])
 
 

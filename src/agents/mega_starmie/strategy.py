@@ -1,7 +1,12 @@
 """Mega Starmie declarations for the shared Bellman runtime.
 
-Turbo Mega Starmie ex: open Cinderace (Explosiveness), Turbo Flare to load the Bench, tutor + evolve
-Staryu -> Mega Starmie ex, then fire Nebula Beam (one Ignition Energy on an Evolution = CCC).
+Turbo Mega Starmie ex: open Cinderace (Explosiveness), bench Staryu so Turbo Flare's three Basic
+Energy have a Benched recipient, evolve that Staryu into Mega Starmie ex, then attack. Nebula Beam
+costs CCC and one Ignition Energy on an Evolution provides CCC, so it pays that attack alone.
+
+The evolution and Ignition funding waypoints of that line stay undeclared: every guaranteed
+immediate/high hint outranks general.low_cost_information_access_before_commitment in the beam,
+and four adjudicated frames rule that free information leads. See docs/plans/strategy-beam-bellman.md.
 """
 from common.strategy import (
     ActivationCondition, DesiredFact, StrategyHint, PrizePlan, Roles, Strategy,
@@ -33,11 +38,12 @@ STRATEGY = Strategy(
     params={"preferred_start": "second"},  # turbo: attack T1
     strategies=(
         StrategyHint(
-            "mega_starmie.establish_benched_staryu_before_turbo_flare",
+            # Turbo Flare attaches only to BENCHED Pokémon, so an empty Bench wastes the attack.
+            # The Bench must hold Staryu before Cinderace attacks, not after it is already funded.
+            "mega_starmie.bench_staryu_before_turbo_flare",
             "deck",
             (
                 ActivationCondition("own.active.card_id", "eq", CINDERACE),
-                ActivationCondition("own.active.attack_ready", "eq", True),
                 ActivationCondition("own.bench.space", "gt", 0),
                 ActivationCondition("own.bench.card_ids", "not_contains", STARYU),
             ),
@@ -48,7 +54,9 @@ STRATEGY = Strategy(
             "mega_starmie.strategy",
         ),
         StrategyHint(
-            "mega_starmie.soften_role_target_for_nebula_beam",
+            # Jetting Blow is the only attack here that reaches the Bench; Nebula Beam cannot.
+            # Softening a scouted role target sets up a later Boss's Orders drag into Nebula Beam.
+            "mega_starmie.snipe_role_target_with_jetting_blow",
             "deck",
             (
                 ActivationCondition("own.active.card_id", "eq", MEGA_STARMIE_EX),
