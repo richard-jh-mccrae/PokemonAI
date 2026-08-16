@@ -1,12 +1,12 @@
 """Deck declarations consumed by the Bellman runtime.
 
-Decks provide Pokémon Roles, Strategies, evolution relationships, starter order,
-partner dependencies, prize routes, and upward-only Worth overrides. Tactical
-action values do not belong at this boundary.
+Decks provide Roles, Strategies, relationships, prize routes, upward-only Worth,
+and an optional observable-potential extension. Action policy does not belong here.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Callable
 
 from common.pokemon_roles import general_pokemon_roles
 
@@ -149,6 +149,7 @@ class Strategy:
     prize_plan: PrizePlan | None = None
     strategies: tuple[StrategyHint, ...] = ()
     strategy_overrides: tuple[StrategyOverride, ...] = ()
+    potential_factory: Callable[..., object] | None = None
     lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:

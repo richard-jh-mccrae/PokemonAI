@@ -10,7 +10,7 @@ from .algebra import (
 )
 from .attack_locks import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
-from .options import LegalAction
+from .options import LegalAction, recycled_card_ids
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
@@ -459,7 +459,7 @@ class CgpyTransitionProvider:
         except Exception as exc:  # noqa: BLE001 - stays explicit
             return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")
 
-    def _state_from_engine(self, state, child):
+    def _state_from_engine(self, state, child, action):
         from cgpy.search import export_token
 
         observation = child.observation(
@@ -471,11 +471,14 @@ class CgpyTransitionProvider:
         # Same carry-forward as the native adapter: a self-lock spent inside the search is only
         # visible in this step's log, and the parent's locks must survive it.
         carry_attack_locks(state.obs, observation, stats=self.stats)
+        recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
+        if recycled:
+            observation["bellmanRecycledCardIds"] = recycled
         return state.with_observation(observation)
 
     def _register_successor(self, state, child, action):
         try:
-            successor = self._state_from_engine(state, child)
+            successor = self._state_from_engine(state, child, action)
             committed = self._attack_committed.get(state.semantic_key, False) or \
                 action.identity.kind == "attack"
             if successor.semantic_key not in self._engines:

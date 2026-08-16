@@ -29,7 +29,8 @@
 "66": [
 "draw",
 "stall",
-"dig:3"
+"dig:3",
+"recycle_line"
 ],
 "77": [
 "paralyze"
@@ -141,7 +142,8 @@
 "draw"
 ],
 "305": [
-"switch"
+"switch",
+"recycle_line"
 ],
 "330": [
 "prevent_ex_damage"

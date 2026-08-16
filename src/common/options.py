@@ -8,8 +8,9 @@ from typing import Mapping
 
 from common.option_equivalence import semantic_option_fingerprint, without_engine_serial
 from common.strategy.context import (
-    _ABILITY, _ATTACH, _ATTACHED_TOOL, _ATTACK, _CARD, _DECK, _DISCARD_IN_PLAY, _END, _ENERGY,
-    _ENERGY_CARD, _EVOLVE, _HAND, _LOOKING, _NO, _NUMBER, _PLAY, _RETREAT, _SKILL,
+    _ABILITY, _ACTIVE, _ATTACH, _ATTACHED_TOOL, _ATTACK, _BENCH, _CARD, _DECK,
+    _DISCARD_IN_PLAY, _END, _ENERGY, _ENERGY_CARD, _EVOLVE, _HAND, _LOOKING, _NO, _NUMBER,
+    _PLAY, _RETREAT, _SKILL,
     _SPECIAL_CONDITION, _YES,
 )
 
@@ -128,4 +129,29 @@ def end_action(actions: tuple[LegalAction, ...]) -> LegalAction | None:
     return next((action for action in actions if action.identity.kind == "end"), None)
 
 
-__all__ = ("LegalAction", "end_action", "enumerate_legal_actions")
+def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_seat: int):
+    carried = tuple(observation.get("bellmanRecycledCardIds") or ())
+    if action.identity.kind != "ability" or len(action.selection) != 1 or registry is None:
+        return carried
+    options = tuple((observation.get("select") or {}).get("option") or ())
+    option_index = action.selection[0]
+    if not 0 <= option_index < len(options):
+        return carried
+    option = options[option_index]
+    current = observation.get("current") or {}
+    players = current.get("players") or ()
+    seat = int(observation.get("bellmanActor", root_seat))
+    player = players[seat] if 0 <= seat < len(players) else {}
+    area, index = option.get("inPlayArea", option.get("area")), option.get(
+        "inPlayIndex", option.get("index"))
+    bodies = (player.get("active") if area == _ACTIVE else
+              player.get("bench") if area == _BENCH else ()) or ()
+    body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
+    card_id = int(body.get("id", 0)) if body else 0
+    if "recycle_line" not in registry.functions.get(card_id, ()):
+        return carried
+    stack = tuple(int(card.get("id", 0)) for card in body.get("preEvolution") or ())
+    return tuple(dict.fromkeys((*carried, *stack, card_id)))
+
+
+__all__ = ("LegalAction", "end_action", "enumerate_legal_actions", "recycled_card_ids")

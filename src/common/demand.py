@@ -338,6 +338,8 @@ class StrategyBeamBuilder:
                 if clause.get("cost_required") or discard_cost(clause):
                     continue
                 if clause.get("kind") == "draw":
+                    if clause.get("condition") is not None:
+                        continue
                     best = max(best, float(int(clause.get("amount", 0) or 0) > 0))
                     continue
                 if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
@@ -398,6 +400,18 @@ class StrategyBeamBuilder:
                     and (not hint.target_card_ids or source_id in hint.target_card_ids)
                     and bool(getattr(source_stat, "is_energy", False))):
                 probability = 1.0
+            elif (hint.kind == "fund_ability" and action.identity.kind == "attach"
+                  and recipient == hint.recipient_serial
+                  and (not hint.target_card_ids or source_id in hint.target_card_ids)):
+                probability = 1.0
+            elif (hint.kind == "use_ability" and action.identity.kind == "ability"
+                  and recipient == hint.recipient_serial):
+                probability = 1.0
+            elif hint.kind == "item_lock" and action.identity.kind == "attack":
+                active = next((body for body in self._player(state).get("active") or () if body), {})
+                if (self.registry is not None and "item_lock" in self.registry.functions.get(
+                        int(active.get("id", 0)), ())):
+                    probability = 1.0
             elif (hint.kind == "evolve" and action.identity.kind == "evolve"
                   and recipient == hint.recipient_serial
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)):
@@ -413,6 +427,10 @@ class StrategyBeamBuilder:
                   and bool(getattr(source_stat, "is_pokemon", False))
                   and str(getattr(source_stat, "stage", "")).lower() == "basic"):
                 probability = 1.0
+            elif (hint.kind == "play_card"
+                  and action.identity.kind == "play" and source_id is not None
+                  and source_id in hint.target_card_ids):
+                probability = 1.0
             elif hint.kind == "damage_setup" and action.identity.kind == "attack":
                 option = self._option(state, action) or {}
                 attack_id = option.get("attackId")
@@ -421,7 +439,21 @@ class StrategyBeamBuilder:
                 target_exists = any(
                     int(body.get("serial", -1)) == hint.recipient_serial
                     for body in self._opponent(state).get("bench") or () if body)
-                if target_exists and bench_reach(attack) > 0:
+                if hint.target_card_ids and target_exists:
+                    active = next((body for body in self._player(state).get("active") or ()
+                                   if body), {})
+                    active_id = int(active.get("id", 0))
+                    if (active_id in hint.target_card_ids
+                            and bench_reach(attack) > 0):
+                        probability = 1.0
+                elif target_exists and bench_reach(attack) > 0:
+                    probability = 1.0
+            elif hint.kind == "status_setup" and action.identity.kind == "attack":
+                active = next((body for body in self._player(state).get("active") or () if body), {})
+                active_id = int(active.get("id", 0))
+                if (self.registry is not None and "confuse" in self.registry.functions.get(
+                        active_id, ()) and (not hint.target_card_ids
+                                           or active_id in hint.target_card_ids)):
                     probability = 1.0
             elif (hint.kind == "damage_setup" and action.identity.kind == "card"
                   and recipient == hint.recipient_serial):

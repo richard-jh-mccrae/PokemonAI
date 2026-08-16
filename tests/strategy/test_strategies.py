@@ -560,6 +560,29 @@ def test_damage_setup_strategy_focuses_a_bench_snipe_attack():
     assert [row.family for row in beam.safety] == ["attack", "end"]
 
 
+def test_status_setup_strategy_focuses_a_confusion_attack():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["active"] = [
+        {"id": 112, "serial": 7, "hp": 110, "energies": [5, 7]}]
+    observation["current"]["players"][1]["bench"] = [
+        {"id": 20, "serial": 89, "hp": 100, "energies": []}]
+    observation["select"]["option"] = [{"type": 13, "attackId": 141}, {"type": 14}]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy(
+            "general.card.112.confusion_attack", "status_setup",
+            "opponent.bench.highest_role", 20, 89, (112,), "this_turn", "medium"),
+    ))
+    actions = enumerate_legal_actions(observation)
+
+    class Registry:
+        functions = {112: ("confuse",)}
+
+    beam = StrategyBeamBuilder(snapshot, registry=Registry()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    assert [row.family for row in beam.focused] == ["attack"]
+
+
 def test_cached_strategy_orders_a_forced_recovery_target():
     observation = _observation(hand=[])
     observation["current"]["players"][0]["discard"] = [{"id": 1030}, {"id": 3}]

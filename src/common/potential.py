@@ -539,10 +539,7 @@ class BoardPotential:
                 defender_transient=transient)
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
-            reach = bench_reach(attack)
-            bench_prizes = max((self._prizes(target) for target in opponent.get("bench") or ()
-                                if target and reach >= int(target.get("hp", MINIMUM_HP))),
-                               default=0)
+            bench_prizes = self._bench_ko_prizes(attack, opponent.get("bench") or ())
             best = max(best, float(self._prizes(defender) + bench_prizes))
         return best
 
@@ -574,9 +571,7 @@ class BoardPotential:
                     defender_transient=transient)
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
-                reach = bench_reach(attack)
-                target_prizes = max((self._prizes(target) for target in bench
-                                     if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
+                target_prizes = self._bench_ko_prizes(attack, bench)
                 if target_prizes:
                     best = max(best, float(self._prizes(defender) + target_prizes))
         return best
@@ -622,7 +617,7 @@ class BoardPotential:
                 reach = bench_reach(attack)
                 sniped = tuple(index for index, target in enumerate(bench)
                                if reach >= int(target.get("hp", MINIMUM_HP)))
-                exposed += max((self._prizes(bench[index]) for index in sniped), default=0)
+                exposed += self._bench_ko_prizes(attack, bench)
                 share = attacker_active_share if body is attacker_active else 1.0
                 exposed *= share
                 # A body that cannot attack next turn reaches nothing, so it marks nothing.
@@ -632,6 +627,11 @@ class BoardPotential:
                         reachable.add(0)
                 worst = max(worst, exposed)
         return -worst, frozenset(reachable)
+
+    def _bench_ko_prizes(self, attack, bench) -> float:
+        snipe = bench_reach(attack)
+        return float(max((self._prizes(target) for target in bench
+                          if snipe >= int(target.get("hp", MINIMUM_HP))), default=0))
 
     @staticmethod
     def _stack_ids(body):

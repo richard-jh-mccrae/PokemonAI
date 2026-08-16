@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 
+from common.energy import payment_fraction
 
 _SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
@@ -190,7 +191,7 @@ def _attack_ready(body: dict, stats) -> bool:
                for cost in requirements)
 
 
-def _visible_facts(observation: dict, *, roles, stats=None,
+def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
                    opponent_role_worth=None) -> dict:
     current = observation.get("current") or {}
     seat = int(current.get("yourIndex", 0))
@@ -235,6 +236,69 @@ def _visible_facts(observation: dict, *, roles, stats=None,
         # an attack OR one is already offered (PR #533 review: the post-attach committed case).
         "turn.boostable_attack_available": commitment_available or can_attack,
     }
+    ability_ids = []
+    for option in options:
+        if int(option.get("type", -1)) != 10:
+            continue
+        area, index = option.get("inPlayArea", option.get("area")), option.get(
+            "inPlayIndex", option.get("index"))
+        bodies = ((player.get("active") or ()) if area == 4 else
+                  (player.get("bench") or ()) if area == 5 else ())
+        if isinstance(index, int) and 0 <= index < len(bodies) and bodies[index]:
+            ability_ids.append(int(bodies[index].get("id", 0)))
+    facts["turn.ability.card_ids"] = tuple(ability_ids)
+    facts["own.damaged_count"] = 0
+    for body in (active, *bench):
+        if not body:
+            continue
+        body_id = int(body.get("id", 0))
+        prefix = f"own.card.{body_id}"
+        facts[prefix + ".in_play"] = True
+        facts[prefix + ".energy_count"] = max(
+            int(facts.get(prefix + ".energy_count", 0)), len(body.get("energies") or ()))
+        facts[prefix + ".hp_fraction"] = (
+            int(body.get("hp", 0)) / max(1, int(body.get("maxHp", body.get("hp", 1)))))
+        if int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0))):
+            facts["own.damaged_count"] += 1
+        stat = stats.get(body_id) if stats is not None else None
+        required = tuple(getattr(stat, "abilityEnergyTypes", ()) or ())
+        if required:
+            facts[prefix + ".ability_ready"] = payment_fraction(
+                tuple(int(code) for code in body.get("energies") or ()), required) >= 1.0
+    facts["opponent.bench.softened_multi_prize_count"] = sum(
+        int(body.get("hp", 0)) <= 200
+        and int(getattr(stats.get(int(body.get("id", 0))), "prize_value", 1)) > 1
+        for body in opponent_bench
+    ) if stats is not None else 0
+    ko_window = bool(observation.get("strategyPokemonKoWindow"))
+    if not ko_window:
+        try:
+            from cgpy.search import parse_token
+            internals = parse_token(observation.get("search_begin_input"))
+        except ImportError:
+            internals = None
+        if internals is not None:
+            ko_turn = tuple(internals.get("ko_turn") or ())
+            ko_window = seat < len(ko_turn) and int(ko_turn[seat]) == int(current.get("turn", 0)) - 1
+    ko_window = ko_window or any(
+        body and int(body.get("hp", 1)) <= 0
+        for body in player.get("active") or ())
+    if effects is not None and stats is not None:
+        hand = tuple(player.get("hand") or ())
+        for option in options:
+            if int(option.get("type", -1)) != 7:
+                continue
+            index = option.get("index")
+            card = hand[index] if isinstance(index, int) and 0 <= index < len(hand) else None
+            card_id = int(card.get("id", 0)) if card else 0
+            stat = stats.get(card_id)
+            if bool(getattr(stat, "is_pokemon", False)):
+                continue
+            if any(clause.get("condition") == "pokemon_ko_last_turn"
+                   for clause in effects.clauses(card_id)):
+                ko_window = True
+                break
+    facts["turn.pokemon_ko_window"] = ko_window
     return facts
 
 
@@ -252,6 +316,14 @@ def _recipient_body(observation: dict, seat: int, selector: str, roles,
         card_id = int(selector[len(_BENCH_CARD):])
         return next((body for body in player.get("bench") or ()
                      if body and int(body.get("id", -1)) == card_id), {})
+    if selector.startswith("own.body.card:") and selector.endswith(":first"):
+        try:
+            card_id = int(selector.split(":")[1])
+        except (IndexError, ValueError):
+            return {}
+        return next((body for body in (
+            tuple(player.get("active") or ()) + tuple(player.get("bench") or ()))
+                     if body and int(body.get("id", 0)) == card_id), {})
     if selector == "opponent.bench.highest_role":
         opponent = _player(observation, 1 - seat)
         worth = opponent_role_worth or {}
@@ -289,12 +361,12 @@ def _condition_matches(condition: ActivationCondition, facts: dict) -> bool:
 
 
 def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, roles,
-                        stats=None, opponent_role_worth=None) -> StrategySnapshot:
+                        stats=None, effects=None, opponent_role_worth=None) -> StrategySnapshot:
     current = observation.get("current") or {}
     turn = int(current.get("turn", 0))
     seat = int(current.get("yourIndex", 0))
     facts = _visible_facts(
-        observation, roles=roles, stats=stats,
+        observation, roles=roles, stats=stats, effects=effects,
         opponent_role_worth=opponent_role_worth)
     active_rows = tuple(
         row for row in resolved.effective
@@ -446,8 +518,69 @@ GENERAL_STRATEGIES = (
 )
 
 
+def general_card_strategies(deck, roles, functions, stats, effects=None) -> tuple[StrategyHint, ...]:
+    hints = []
+    for card_id in sorted(set(int(value) for value in deck)):
+        card_roles = frozenset(roles.get(card_id, ()))
+        tags = frozenset(functions.tags(card_id)) if functions is not None else frozenset()
+        recipient = f"own.body.card:{card_id}:first"
+        if "item_locker" in card_roles:
+            hints.append(StrategyHint(
+                f"general.card.{card_id}.item_lock", "general",
+                (ActivationCondition("own.active.card_id", "eq", card_id),),
+                (DesiredFact("item_lock", "own.active", target_card_ids=(card_id,)),),
+                "own.active", "immediate", "high", "shared-card-role"))
+        if "counter_mover" in card_roles:
+            stat = stats.get(card_id) if stats is not None else None
+            required = frozenset(getattr(stat, "abilityEnergyTypes", ()) or ())
+            energy_ids = tuple(sorted(set(
+                int(energy_id) for energy_id in deck
+                if getattr(stats.get(int(energy_id)), "energyType", None) in required
+            ))) if stats is not None else ()
+            hints.extend((
+                StrategyHint(
+                    f"general.card.{card_id}.fund_ability", "general",
+                    (ActivationCondition(f"own.card.{card_id}.in_play", "eq", True),),
+                    (DesiredFact("fund_ability", recipient, target_card_ids=energy_ids),),
+                    recipient, "immediate", "high", "shared-card-role"),
+                StrategyHint(
+                    f"general.card.{card_id}.use_ability", "general", (
+                        ActivationCondition("turn.ability.card_ids", "contains", card_id),
+                        ActivationCondition("own.damaged_count", "gt", 0),
+                    ), (DesiredFact("use_ability", recipient, target_card_ids=(card_id,)),),
+                    recipient, "immediate", "high", "shared-card-role"),
+            ))
+            if "confuse" in tags:
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.confusion_attack", "general", (),
+                    (DesiredFact("status_setup", "opponent.bench.highest_role",
+                                 target_card_ids=(card_id,)),),
+                    "opponent.bench.highest_role", "this_turn", "medium",
+                    "shared-card-role"))
+        if "draw_engine" in card_roles:
+            conditional_draw = bool(effects is not None and any(
+                clause.get("kind") == "draw"
+                and clause.get("condition") == "pokemon_ko_last_turn"
+                for clause in effects.clauses(card_id)))
+            if conditional_draw:
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.deploy_after_ko", "general", (
+                        ActivationCondition("turn.pokemon_ko_window", "eq", True),
+                        ActivationCondition("own.bench.card_ids", "not_contains", card_id),
+                        ActivationCondition("own.bench.space", "gt", 0),
+                    ), (DesiredFact("deploy", "own.bench", target_card_ids=(card_id,)),),
+                    "own.bench", "immediate", "high", "shared-card-role"))
+            hints.append(StrategyHint(
+                f"general.card.{card_id}.draw_ability", "general",
+                (ActivationCondition("turn.ability.card_ids", "contains", card_id),),
+                (DesiredFact("use_ability", recipient, target_card_ids=(card_id,)),),
+                recipient, "immediate", "high", "shared-card-role"))
+    return tuple(hints)
+
+
 __all__ = (
     "ActivationCondition", "DesiredFact", "GENERAL_STRATEGIES", "StrategyHint",
     "ActivatedStrategy", "ResolvedStrategies", "StrategyOverride", "StrategySnapshot",
-    "activate_strategies", "resolve_strategies", "strategy_hint_from_dict",
+    "activate_strategies", "general_card_strategies", "resolve_strategies",
+    "strategy_hint_from_dict",
 )
