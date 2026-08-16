@@ -207,8 +207,17 @@ than free information.  `DOMINATED_COMMITMENT_KINDS` keys the prunable set on th
 no Trainer or Supporter play is ever dominated.  Together these two resolved four frames:
 `82228017-4`, `92459166-125`, `83456015-35` and `92646350-132`.
 
-Clause 2 needed no code.  `DecisionState.from_observation` already subtracts `own_prizes` from
-`deck_counts`; the frames that read a prized target as live are a fixture limit, not a defect.
+Clause 2 shipped only half of itself, and the other half is now **withdrawn as refuted**.
+Prize-exactness needed no code: `DecisionState.from_observation` already subtracts `own_prizes`
+from `deck_counts`, so the frames that read a prized target as live are a fixture limit, not a
+defect.  Hand-marginality was built as specified — a peek whose window targets are already held in
+hand reads dead — and it **broke both budget-flip frames this ADR exists to fix** (`d31f6bfa4803`
+and `c7fd0670fb3e`, 3 disagreements of 11).  The reason is in their boards: both rule peek-first
+while already holding Supporters (Harlequin and two Lillie's Determination; Wally's Compassion).
+Hand-redundancy was always a *tutor* argument — a Signal that fetches a card you hold twice buys
+nothing — and clause 1 now removes tutors from the trigger entirely.  A look-at-seven can still
+find a *better* Supporter than the one in hand, so for look-class peeks the corpus rules against
+hand-marginality.  Clause 2 therefore stands as prize-exact deck liveness only.
 
 Clause 4 was attempted twice and **both attempts were rejected by measurement**.  Root-only gating
 regressed to 5 disagreements of 9 — deep pruning is load-bearing for `8db4265d078d` and
@@ -224,11 +233,25 @@ ruled Pokégear's 2.197.  No Staryu remain in the deck and Cinderace is a Stage 
 fetch is dead by printed text — and the immediate ledger charged it only 0.105, a margin a
 deadline erases.  The frame churned 1-in-3 before and is 3-of-3 after.
 
-A play whose entire printed effect is an unconditional fetch reaching nothing in its named zones
+A Trainer whose entire printed effect is an unconditional fetch reaching nothing in its named zones
 moves only itself to the discard, so every continuation stays available without it with a strictly
 larger hand: it is weakly dominated by skipping it.  This is the corpus's own standing rule —
 `496a7657096f` and `baede6accfac` both pin that a dead Mega Signal must not detour the line — now
 structural rather than a value margin.
+
+Two conditions on that proof came out of review, and both are real holes rather than caution:
+
+- **Pokemon are excluded.**  `kind == "play"` covers benching a Basic, and Meowth ex (1071) is a
+  Basic whose only printed clause is an `on_bench_play` fetch — the sole such card in the pool.
+  With its window empty the filter would have deleted the bench play itself, even though putting a
+  body on the Bench changes the board completely.  It would have fought the replacement-risk term
+  below over exactly the action that answers a game-ending knockout.  Triggered clauses are
+  excluded for the same reason: a card carrying one is played for something other than the fetch.
+- **A larger hand is not always free.**  Draw-to-hand-size and hand-shuffling effects
+  (`to_hand_size`, `shuffle_own_hand_in`, `discard_hand`) make a *smaller* hand better, so burning
+  a dead card can genuinely pay.  Where any such play is legal the whole node is left ungated, the
+  same shape as the discard-cost exemption the peek gate already carries.  The deck's own
+  Lillie's Determination is one of these, so this is a live condition, not a hypothetical.
 
 ### Per-body doom conditioning (`potential.py`)
 
@@ -250,9 +273,13 @@ the `game` family at the opponent's remaining prizes — unit-consistent with `p
 larger the further the opponent still had to go.  Two clauses were forced by measurement, and both
 made the rule *more* correct rather than less:
 
-- **A Basic in hand discharges it.**  The bench being empty is not enough: a benchable Basic can be
-  played this turn, so the loss is not forced.  Gating on the hand as well as the bench also moved
-  the payoff onto the recovery node itself, where no search depth is needed to see it.
+- **A Basic in hand discharges it, but only while the turn is still ours.**  The bench being empty
+  is not enough: a benchable Basic can be played this turn, so the loss is not forced.  Gating on
+  the hand as well as the bench also moved the payoff onto the recovery node itself, where no
+  search depth is needed to see it.  The discharge is conditioned on `bellmanActor` still being our
+  seat — a Basic held past End cannot reach the Bench before the opponent's knockout, and without
+  that condition the evaluator scored holding it and benching it alike, offering no reason to
+  actually play it before passing.
 - **Fragility persists when no knockout is reachable yet.**  Gated on present reachability, the
   term vanished the moment a line healed the Active out of range, and `231db774b45e` came back as
   an *exact* three-way tie at 4.9487 with the search completing — the model could not tell a

@@ -366,7 +366,7 @@ class BoardPotential:
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
         return best
 
-    def _replacement_risk(self, me, opponent, exposed) -> float:
+    def _replacement_risk(self, me, opponent, exposed, *, can_bench: bool) -> float:
         """An Active knocked out with nothing to promote ends the game (``docs/rules.md`` 7.2), so
         holding no replacement costs the whole remaining prize race, not one Active's prizes."""
         if any(body for body in (me.get("bench") or ())):
@@ -374,11 +374,13 @@ class BoardPotential:
         hand = me.get("hand")
         if hand is None:                       # a hidden hand cannot be shown to hold no Basic
             return 0.0
-        for card in hand:
+        # Only while the turn is still ours: a Basic held past End cannot reach the Bench before
+        # the opponent's knockout, so it must not discharge a liability it can no longer answer.
+        for card in hand if can_bench else ():
             stat = self._stat(card.get("id")) if card else None
             if (stat is not None and getattr(stat, "is_pokemon", False)
                     and not getattr(stat, "evolvesFrom", None)):
-                return 0.0                     # benchable this turn, so the loss is not forced
+                return 0.0
         # Reachable now it is the live liability; otherwise the board is merely one unanswered
         # knockout from losing, which is held in reserve exactly as unreachable damage is.
         reserve = 1.0 if 0 in exposed else SAFE_DAMAGE_RESERVE_SHARE
@@ -968,16 +970,17 @@ class BoardPotential:
                              else (observation.get("select") or {}).get("context"))
         promoted_after_attack = (self.isolated_selection
                                  and historical_context == _TO_ACTIVE)
+        opponent_moves_next = int(observation.get("bellmanActor", seat)) != seat
         readiness = self._readiness(
-            me, opponent,
-            opponent_moves_next=int(observation.get("bellmanActor", seat)) != seat,
+            me, opponent, opponent_moves_next=opponent_moves_next,
             include_incoming=not promoted_after_attack)
         if promoted_after_attack:
             readiness = self._next_attachment_coverage(me, opponent)
         board = self._own_board_resources(me, stadium=own_stadium(current, seat))
         opponent_roles = self._opponent_role_pressure(opponent)
         families = {
-            "game": self._replacement_risk(me, opponent, exposed_bodies),
+            "game": self._replacement_risk(me, opponent, exposed_bodies,
+                                           can_bench=not opponent_moves_next),
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
             "damage": (self._damage_progress(opponent)
                        - self._damage_progress(me, exposed=exposed_bodies)),
