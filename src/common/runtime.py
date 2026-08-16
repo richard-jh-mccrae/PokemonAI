@@ -120,9 +120,11 @@ class BellmanRuntime:
             pilot_overrides.update({
                 "clock.adaptive_enabled": 0.0,
                 "clock.remaining_200_seconds": self.decision_clock.bellman_seconds,
-                # A pinned clock promises reproducible decisions, so the prover must stop on
-                # its node/decision caps: a wall-clock stop varies with machine load.
-                "terminal.max_seconds": 60.0,
+                # No `terminal.max_seconds` override. It used to be lifted to 60s here so a pinned
+                # clock would stop the prover on its node/decision caps only, since a wall-clock
+                # stop varies with machine load. The 64-node cap now supplies that determinism on
+                # its own — the node budget binds long before 1.2s — and lifting the clock was what
+                # let a single abstention eat 9s of a 10s decision and forfeit the match.
             })
         self.pilot_profile = PilotProfile.resolve(
             global_values=experiment,

@@ -121,6 +121,25 @@ def test_external_decision_seconds_reserve_the_fallback_tail(monkeypatch):
     assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 6
     assert runtime.decision_clock.fallback_tail_seconds == 1
     assert runtime.pilot_profile.get("clock.adaptive_enabled") == 0
-    # The pinned clock also unbinds the prover from the wall clock (node/decision caps only),
-    # so replayed node counts cannot vary with machine load.
-    assert runtime.pilot_profile.get("terminal.max_seconds") == 60
+    # The pinned clock no longer lifts the prover's own clock. That lift is what let one
+    # abstention eat 9s of a 10s decision and forfeit a match; the 64-node cap supplies the
+    # replay determinism it was there for.
+    assert runtime.pilot_profile.get("terminal.max_seconds") == 1.2
+
+
+def test_the_prover_clock_is_a_ceiling_no_layer_can_raise():
+    """1.2s must hold against every source, not merely be the default: `PilotProfile.resolve`
+    rejects an out-of-bounds value, so `maximum` is what makes the ceiling real."""
+    from common.pilot_profile import PilotProfile
+
+    assert PilotProfile.resolve(
+        global_values={"terminal.max_seconds": 1.2},
+        authored_deck_overrides={}, provenance="test").get("terminal.max_seconds") == 1.2
+    for layer in ("global_values", "authored_deck_overrides"):
+        with pytest.raises(ValueError):
+            PilotProfile.resolve(**{layer: {"terminal.max_seconds": 1.21}},
+                                 provenance="test")
+    # A learned delta cannot climb past it either — that layer clamps rather than raises.
+    assert PilotProfile.resolve(
+        deck_learned={"terminal.max_seconds": 100.0},
+        provenance="test").get("terminal.max_seconds") == 1.2
