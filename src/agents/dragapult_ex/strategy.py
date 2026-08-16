@@ -15,6 +15,9 @@ UNFAIR_STAMP = 1080
 
 PHANTOM_DIVE = "dragapult.phantom_dive"
 DRAKLOAK_BODY = f"own.body.card:{DRAKLOAK}:readiest"
+#: Protection is about the copy in the WORST shape. Naming the readiest one evolves a healthy
+#: Drakloak while the threatened one, which is why the hint activated, still dies.
+THREATENED_DRAKLOAK = f"own.body.card:{DRAKLOAK}:weakest"
 DUNSPARCE_BODY = f"own.body.card:{DUNSPARCE}:first"
 
 
@@ -136,7 +139,7 @@ STRATEGY = Strategy(
         # The other reason to evolve: 90 HP becomes 320 and the damage already on it stops
         # being lethal. Worth it even while a Dragapult ex is already attacking, because
         # losing the Drakloak loses the line behind it.
-        _hint("evolve_threatened_drakloak", "evolve", DRAKLOAK_BODY,
+        _hint("evolve_threatened_drakloak", "evolve", THREATENED_DRAKLOAK,
               conditions=(ActivationCondition(
                   f"own.card.{DRAKLOAK}.hp_fraction", "lt", 0.75),),
               targets=(DRAGAPULT_EX,), confidence="medium"),

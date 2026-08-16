@@ -28,7 +28,7 @@ _RECIPIENT_SELECTORS = frozenset({
 #: selector is -- which is the whole point of the closed set.
 _PARAMETERISED_SELECTORS = (
     re.compile(r"^own\.bench\.card:\d+$"),
-    re.compile(r"^own\.body\.card:\d+:(?:first|readiest)$"),
+    re.compile(r"^own\.body\.card:\d+:(?:first|readiest|weakest)$"),
 )
 
 
@@ -364,7 +364,7 @@ def _recipient_body(observation: dict, seat: int, selector: str, roles,
         return next((body for body in player.get("bench") or ()
                      if body and int(body.get("id", -1)) == card_id), {})
     if (selector.startswith("own.body.card:")
-            and selector.split(":")[-1] in {"first", "readiest"}):
+            and selector.split(":")[-1] in {"first", "readiest", "weakest"}):
         try:
             card_id = int(selector.split(":")[1])
         except (IndexError, ValueError):
@@ -372,14 +372,23 @@ def _recipient_body(observation: dict, seat: int, selector: str, roles,
         copies = tuple(body for body in (
             tuple(player.get("active") or ()) + tuple(player.get("bench") or ()))
             if body and int(body.get("id", 0)) == card_id)
+        def readiness(body):
+            return (
+                len(body.get("energies") or ()),
+                int(body.get("hp", 0)) / max(1, int(body.get("maxHp", body.get("hp", 1)))),
+            )
+
         if selector.endswith(":readiest"):
             # The copy in the best shape to attack: most Energy, then least hurt. A deck running
             # four of a card must be able to name the one worth promoting, not the first listed.
-            return max(copies, key=lambda body: (
-                len(body.get("energies") or ()),
-                int(body.get("hp", 0)) / max(1, int(body.get("maxHp", body.get("hp", 1)))),
-                -int(body.get("serial", 0)),
-            ), default={})
+            return max(copies, key=lambda body: (*readiness(body), -int(body.get("serial", 0))),
+                       default={})
+        if selector.endswith(":weakest"):
+            # The mirror, and NOT interchangeable with it: a need to protect a body is about the
+            # copy in the worst shape, and pointing it at the readiest one saves the wrong body
+            # while the threatened one still dies.
+            return min(copies, key=lambda body: (*readiness(body), int(body.get("serial", 0))),
+                       default={})
         return copies[0] if copies else {}
     if selector == "opponent.bench.highest_role":
         opponent = _player(observation, 1 - seat)

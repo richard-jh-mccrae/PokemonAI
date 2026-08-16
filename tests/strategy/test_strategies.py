@@ -1651,3 +1651,27 @@ def test_a_hint_naming_a_parameterised_body_selector_constructs():
             "deck.typo", "deck", (),
             (DesiredFact("evolve", "own.body.card:120:frist"),),
             "own.body.card:120:frist", "this_turn", "high", "test")
+
+
+def test_readiest_and_weakest_select_opposite_copies():
+    """Two tie-breaks over the same card, and not interchangeable: one names the body worth
+    committing to, the other the body worth saving."""
+    from common.strategy.strategies import _recipient_body, known_recipient_selector
+    from common.strategy import Roles
+
+    card = 120
+    observation = {"current": {"yourIndex": 0, "turn": 4, "players": [
+        {"active": [], "benchMax": 5, "bench": [
+            {"id": card, "serial": 2, "hp": 20, "maxHp": 90, "energies": []},
+            {"id": card, "serial": 3, "hp": 90, "maxHp": 90, "energies": [2, 5]},
+        ]},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+
+    assert known_recipient_selector(f"own.body.card:{card}:weakest")
+    assert not known_recipient_selector(f"own.body.card:{card}:weekest")
+    readiest = _recipient_body(observation, 0, f"own.body.card:{card}:readiest", Roles())
+    weakest = _recipient_body(observation, 0, f"own.body.card:{card}:weakest", Roles())
+
+    assert readiest["serial"] == 3
+    assert weakest["serial"] == 2
