@@ -1,4 +1,9 @@
-"""Run timed local matches, save decision CSV telemetry, and report search timing."""
+"""Run timed local matches, save decision CSV telemetry, and report search timing.
+
+`--no-emit` runs the contestants with telemetry off. Search timing then has no source, but
+`round_trip_seconds` — the harness clock around one ask/answer — is measured either way, so
+the same run with and without the flag prices the whole telemetry path.
+"""
 from __future__ import annotations
 
 import argparse
@@ -42,6 +47,8 @@ def summarize_decisions(records) -> dict:
     stable = [row["stabilized_seconds"] for row in stabilized]
     lethal = [row["lethal_proof_seconds"] for row in records
               if row.get("lethal_proof_seconds") is not None]
+    trips = [row["round_trip_seconds"] for row in records
+             if row.get("round_trip_seconds") is not None]
     waves = {name: sum(row.get("strategy_wave") == name for row in stabilized)
              for name in ("first", "widening")}
     return {
@@ -49,6 +56,12 @@ def summarize_decisions(records) -> dict:
         "timed_decisions": len(timed),
         "stabilized_decisions": len(stabilized),
         "deadline_hits": sum(bool(row.get("deadline_hit")) for row in records),
+        "round_trip_seconds": {
+            "samples": len(trips),
+            "avg": mean(trips) if trips else 0.0,
+            "p95": _percentile(trips, 0.95),
+            "max": max(trips, default=0.0),
+        },
         "decision_seconds": {
             "avg": mean(totals) if totals else 0.0,
             "p95": _percentile(totals, 0.95),
@@ -92,6 +105,7 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
             "action": record.get("action"),
             "value": record.get("value"),
             "complete": record.get("complete"),
+            "round_trip_seconds": record.get("round_trip_seconds"),
             "decision_seconds": record.get("decision_seconds"),
             "decision_limit_seconds": record.get("decision_limit_seconds"),
             "deadline_hit": record.get("deadline_hit"),
@@ -115,6 +129,7 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
 
 _CSV_FIELDS = (
     "match", "decision", "turn", "seat", "agent", "action", "value", "complete",
+    "round_trip_seconds",
     "decision_seconds", "decision_limit_seconds", "deadline_hit", "lethal_proof_seconds",
     "total_search_seconds", "first_found_seconds", "stabilized_seconds",
     "remaining_search_seconds", "strategy_wave", "strategy_focus_position",
@@ -144,16 +159,9 @@ def _focus(row) -> str:
 def format_report(payload: dict, hotspot_count=10) -> str:
     config, summary = payload["config"], payload["summary"]
     decision = summary["decision_seconds"]
-    first = summary["first_found_seconds"]
-    stable = summary["stabilized_seconds"]
-    lethal = summary["lethal_proof_seconds"]
+    trip = summary["round_trip_seconds"]
     matches = payload["matches"]
-    lethal_by_match = [
-        (match, summarize_decisions(
-            [row for row in payload["decisions"] if row["match"] == match]
-        )["lethal_proof_seconds"])
-        for match in sorted({row["match"] for row in payload["decisions"]})
-    ]
+    emit = bool(config.get("emit", True))
     wins = [sum(row["winner_seat"] == seat for row in matches) for seat in (0, 1)]
     lines = [
         f"Strategy Bench -- {config['mode']} -- {len(payload['matches'])} matches -- "
@@ -167,6 +175,23 @@ def format_report(payload: dict, hotspot_count=10) -> str:
         f"match timeouts {sum(row['match_deadline_hit'] for row in matches)}",
         f"Decisions {summary['decisions']} | measured Bellman searches "
         f"{summary['stabilized_decisions']} | deadline hits {summary['deadline_hits']}",
+        f"Telemetry emission {'on' if emit else 'off'} | round trip avg {trip['avg']:.2f}s | "
+        f"p95 {trip['p95']:.2f}s | max {trip['max']:.2f}s",
+    ]
+    if not summary["timed_decisions"]:
+        lines.append(
+            "Search timing needs telemetry; compare the round trip against an emitting run.")
+        return "\n".join(lines)
+    first = summary["first_found_seconds"]
+    stable = summary["stabilized_seconds"]
+    lethal = summary["lethal_proof_seconds"]
+    lethal_by_match = [
+        (match, summarize_decisions(
+            [row for row in payload["decisions"] if row["match"] == match]
+        )["lethal_proof_seconds"])
+        for match in sorted({row["match"] for row in payload["decisions"]})
+    ]
+    lines += [
         f"Decision time avg {decision['avg']:.2f}s | p95 {decision['p95']:.2f}s | max {decision['max']:.2f}s",
         f"Final incumbent first found avg {first['avg']:.2f}s | p95 {first['p95']:.2f}s | max {first['max']:.2f}s",
         f"Final incumbent stabilized avg {stable['avg']:.2f}s | p95 {stable['p95']:.2f}s | max {stable['max']:.2f}s",
@@ -231,7 +256,7 @@ def _run_match_job(task: dict) -> dict:
         if not (directory / "main.py").exists():
             raise ValueError(f"unknown working-tree agent {name!r}")
     servers = tuple(AgentServer(
-        directory, [REPO / "src"], capture_telemetry=True,
+        directory, [REPO / "src"], capture_telemetry=bool(config.get("emit", True)),
         decision_seconds=_agent_decision_seconds(config["decision_timeout"])) for directory in dirs)
     recorder = MatchRecorder()
     captured = []
@@ -306,6 +331,10 @@ def main(argv=None) -> int:
                              help="parallel matches (default: logical CPUs minus two)")
         command.add_argument("--agents-root", default=str(REPO / "src" / "agents"))
         command.add_argument("--output")
+        command.add_argument("--no-emit", action="store_true",
+                             help="run the contestants with AGENT_NO_TELEMETRY=1: no record is "
+                                  "built, serialised, or shipped, so the round-trip clock shows "
+                                  "what telemetry costs")
     args = parser.parse_args(argv)
     agents = ([args.agent] if args.mode == "mirror" else
               [args.agent_a, args.agent_b] if args.mode == "versus" else args.agents)
@@ -325,6 +354,7 @@ def main(argv=None) -> int:
         "mode": args.mode, "agents": agents, "matches": args.matches,
         "decision_timeout": args.decision_timeout, "match_timeout": args.match_timeout,
         "seed": args.seed, "jobs": args.jobs, "agents_root": args.agents_root, "output": output,
+        "emit": not args.no_emit,
     }
     payload = run(config)
     print(format_report(payload))

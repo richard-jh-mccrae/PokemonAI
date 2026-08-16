@@ -211,6 +211,29 @@ def test_play_match_attributes_an_expired_shorter_wait_to_the_match_deadline(mon
 
 
 @pytest.mark.req("REQ-SIM-0007")
+def test_play_match_times_every_decision_even_with_the_contestants_telemetry_off(monkeypatch):
+    live = {"current": {"result": -1, "yourIndex": 0}, "select": {"context": 0}}
+    over = {"current": {"result": 0, "yourIndex": 0}, "select": None}
+    monkeypatch.setattr("cg.game.battle_start", lambda _a, _b: (
+        live, SimpleNamespace(errorPlayer=-1)))
+    monkeypatch.setattr("cg.game.battle_select", lambda _choice: over)
+    monkeypatch.setattr("cg.game.battle_finish", lambda: None)
+
+    class SilentServer:                            # AGENT_NO_TELEMETRY=1 -> nothing comes back
+        last_timeout = False
+        last_telemetry = []
+        last_seconds = 0.75
+
+        def act(self, _obs, timeout=None):
+            return [0]
+
+    metrics = []
+    play_match(SilentServer(), SilentServer(), [], [], metrics=metrics)
+
+    assert metrics == [{"engine_seat": 0, "decision_index": 0, "round_trip_seconds": 0.75}]
+
+
+@pytest.mark.req("REQ-SIM-0007")
 def test_run_battle_parallel_tallies_every_match():
     deck = read_deck(MEGA)
     results = run_battle(MEGA, MEGA, deck, deck, n=4, jobs=2, extra_syspath=SRC)
