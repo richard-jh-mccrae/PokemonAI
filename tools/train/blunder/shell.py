@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 import mimetypes
+import socket
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -252,13 +253,34 @@ def init_state(replays, *, store_path, agent="", source="own", our_team=None,
                  submission_id=submission_id, agent_version=agent_version, viewer_dir=str(viewer_dir))
 
 
+def port_is_taken(host: str, port: int) -> bool:
+    """Is something already listening there? ``HTTPServer`` sets ``SO_REUSEADDR``, which on Windows
+    lets a SECOND shell bind a port an earlier one still owns -- no error, but the first process
+    keeps answering, so the replay you just passed silently never loads. Port 0 is ephemeral."""
+    if not port:
+        return False
+    with socket.socket() as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex((host, port)) == 0
+
+
 def serve(replays, *, store_path, agent="", source="own", our_team=None,
-          submission_id=None, agent_version=None, viewer_dir="", host="127.0.0.1", port=8077):
-    """Blocking; returns the bound port. Each Replay's telemetry (ADR-0019) loads lazily per game."""
+          submission_id=None, agent_version=None, viewer_dir="", host="127.0.0.1", port=8077,
+          on_start=None):
+    """Blocking; returns the bound port. Each Replay's telemetry (ADR-0019) loads lazily per game.
+    ``on_start(url)`` fires once we OWN the port -- opening a browser before that lands on whatever
+    stale shell is squatting there."""
     init_state(replays, store_path=store_path, agent=agent, source=source, our_team=our_team,
                submission_id=submission_id, agent_version=agent_version, viewer_dir=viewer_dir)
+    if port_is_taken(host, port):
+        raise SystemExit(
+            f"port {port} is already serving an older blunder_correction shell (its replay, not "
+            f"yours, would load). Stop it, or pass --port <other>.")
     httpd = ThreadingHTTPServer((host, port), _Handler)
-    print(f"blunder_correction shell -> http://{host}:{httpd.server_address[1]}/")
+    url = f"http://{host}:{httpd.server_address[1]}/"
+    print(f"blunder_correction shell -> {url}")
+    if on_start is not None:
+        on_start(url)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

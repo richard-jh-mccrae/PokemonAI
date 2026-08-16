@@ -74,6 +74,14 @@ def _opening_frame(film: list[dict]) -> int:
     return 0
 
 
+def _live_on_the_wire(record: dict | None) -> dict | None:
+    """``diagnostics`` is the decision's whole Bellman search trace — ~650 KB per Decision, which is
+    99% of this payload — and the pane reads none of it: the two numbers it shows are distilled into
+    ``search_timing``/``lethal_proof_seconds`` here, and a saved Correction re-reads the full record
+    server-side. So it never goes to the browser."""
+    return None if record is None else {k: v for k, v in record.items() if k != "diagnostics"}
+
+
 def _records_by_seat(live_records, live_seat, live_records_by_seat) -> dict[int, list[dict]]:
     """Seat -> the seat's ``@T`` stream. The by-seat map wins; the single-seat stream fills in the
     seat it was loaded for."""
@@ -125,7 +133,7 @@ def frames_payload(replay: dict, our_team: str | None = None,
             # Read through the SAME derivation `build_correction` validates with, so the pane and
             # the validator cannot disagree; `None` keeps the pane refusing where the validator would.
             "min_count": select_min_count(decision.obs) if decision is not None else None,
-            "live": live,
+            "live": _live_on_the_wire(live),
         })
 
     return {

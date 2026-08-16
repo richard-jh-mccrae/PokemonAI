@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import threading
 import webbrowser
 from pathlib import Path
 
@@ -51,13 +50,12 @@ def main(argv=None):
     print(f"blunder_correction: {len(replays)} replay(s) from {args.replay}")
     print(f"  agent for own blunders: {args.agent or detected or '(unknown — pass --agent)'}"
           + ("" if args.agent else "  [auto-detected]" if detected else ""))
-    if not args.no_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}/")).start()
     serve(
         replays, store_path=args.store, agent=args.agent, source=args.source,
         our_team=args.team, submission_id=args.submission_id,
         agent_version=args.agent_version,
         viewer_dir=args.viewer_dir, port=args.port,
+        on_start=None if args.no_browser else webbrowser.open,
     )
 
 

@@ -1,0 +1,5168 @@
+{
+  "config": {
+    "mode": "mirror",
+    "agents": [
+      "mega_lucario"
+    ],
+    "matches": 1,
+    "decision_timeout": 20.0,
+    "match_timeout": 600.0,
+    "seed": 1,
+    "jobs": 10,
+    "agents_root": "C:\\Users\\Richard\\Projects\\PokemonAI\\src\\agents",
+    "output": "C:\\Users\\Richard\\Projects\\PokemonAI\\data\\reports\\strategy-bench\\20260817-002314",
+    "emit": true
+  },
+  "matches": [
+    {
+      "match": 1,
+      "contestants": [
+        "mega_lucario",
+        "mega_lucario"
+      ],
+      "winner_seat": 1,
+      "crashed": [],
+      "timed_out": [],
+      "match_deadline_hit": false,
+      "seconds": 117.54700000002049,
+      "failure": null,
+      "replay": "episode-1786918994264234-replay.json"
+    }
+  ],
+  "decisions": [
+    {
+      "match": 1,
+      "decision": 0,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "choose_start",
+        "parts": [
+          41
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.25,
+      "decision_seconds": 4.4899992644786835e-05,
+      "decision_limit_seconds": null,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 4.4899992644786835e-05,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 1,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "setup_active",
+        "parts": [
+          1
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.015999999945051968,
+      "decision_seconds": 6.969994865357876e-05,
+      "decision_limit_seconds": null,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 6.969994865357876e-05,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 2,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "setup_active",
+        "parts": [
+          1
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.015000000013969839,
+      "decision_seconds": 6.19000056758523e-05,
+      "decision_limit_seconds": null,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 6.19000056758523e-05,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 3,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "setup_bench_decline",
+        "parts": [
+          2
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 8.620007429271936e-05,
+      "decision_limit_seconds": null,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 8.620007429271936e-05,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 4,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "setup_bench_decline",
+        "parts": [
+          2
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 4.8200017772614956e-05,
+      "decision_limit_seconds": null,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 4.8200017772614956e-05,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 5,
+      "turn": 1,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 0.33524242424242423,
+      "complete": false,
+      "round_trip_seconds": 13.297000000020489,
+      "decision_seconds": 12.900724299950525,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2190000000409782,
+      "total_search_seconds": 11.672000000020489,
+      "first_found_seconds": 5.5,
+      "first_recoverable_seconds": 5.5,
+      "first_full_seconds": 5.5,
+      "stabilized_seconds": 5.5,
+      "remaining_search_seconds": 6.172000000020489,
+      "strategy_wave": "first",
+      "strategy_focus_position": 2,
+      "strategy_focus_count": 4,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":673,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":675,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":674,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": -0.2930909090909091,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 3.1089999999385327,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.33524242424242423,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 5.5,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.33524242424242423,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 4
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.10899999993853271
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 6,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 0.09499999999999999,
+      "complete": true,
+      "round_trip_seconds": 1.2349999999860302,
+      "decision_seconds": 1.2191950000124052,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2030000000959262,
+      "total_search_seconds": 1.2191950000124052,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 7,
+      "turn": 1,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":676,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 0.24666666666666676,
+      "complete": false,
+      "round_trip_seconds": 7.045999999972992,
+      "decision_seconds": 6.762067600036971,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2179999999934807,
+      "total_search_seconds": 5.530999999959022,
+      "first_found_seconds": 2.375,
+      "first_recoverable_seconds": 2.375,
+      "first_full_seconds": 2.375,
+      "stabilized_seconds": 2.375,
+      "remaining_search_seconds": 3.155999999959022,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.030999999959021807,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":674,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.046999999904073775,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":676,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.12666666666666668,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 2.375,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":676,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":676,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.24666666666666676,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.030999999959021807
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.015999999945051968
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":674,\"playerIndex\":0}]]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":675,\"playerIndex\":0}]]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":676,\"playerIndex\":0}]]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":677,\"playerIndex\":0}]]]',))",
+          "ActionIdentity(kind='decline', parts=())"
+        ],
+        "rejected_by_bound": [],
+        "limit": 5
+      }
+    },
+    {
+      "match": 1,
+      "decision": 8,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 0.12000000000000008,
+      "complete": true,
+      "round_trip_seconds": 1.2190000000409782,
+      "decision_seconds": 1.209293600055389,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2040000000270084,
+      "total_search_seconds": 1.209293600055389,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 9,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":676,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 0.22000000000000008,
+      "complete": true,
+      "round_trip_seconds": 0.7029999999795109,
+      "decision_seconds": 0.6925453000003472,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.6879999999655411,
+      "total_search_seconds": 0.6925453000003472,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 10,
+      "turn": 1,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "end",
+        "parts": [
+          "[0,{\"type\":14},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": false,
+      "round_trip_seconds": 3.202999999979511,
+      "decision_seconds": 3.0690817000577226,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.10999999998603016,
+      "total_search_seconds": 2.937999999965541,
+      "first_found_seconds": 0.0470000000204891,
+      "first_recoverable_seconds": 0.0470000000204891,
+      "first_full_seconds": 0.0470000000204891,
+      "stabilized_seconds": 0.0470000000204891,
+      "remaining_search_seconds": 2.890999999945052,
+      "strategy_wave": "first",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 2,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.03200000000651926,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='no', parts=('[0,{\"type\":2},[]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": -0.45066666666666666,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='no', parts=('[0,{\"type\":2},[]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": -0.14066666666666672,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 2
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.0470000000204891
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.card.675.draw_ability",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.card.675.draw_ability",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 11,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.9380712571345815,
+      "complete": false,
+      "round_trip_seconds": 9.829000000027008,
+      "decision_seconds": 9.519428600091487,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.1099999999860302,
+      "total_search_seconds": 8.406000000075437,
+      "first_found_seconds": 3.422000000020489,
+      "first_recoverable_seconds": 3.422000000020489,
+      "first_full_seconds": 3.422000000020489,
+      "stabilized_seconds": 3.422000000020489,
+      "remaining_search_seconds": 4.984000000054948,
+      "strategy_wave": "first",
+      "strategy_focus_position": 2,
+      "strategy_focus_count": 3,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.03100000007543713,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":673,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": -0.07399999999999998,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 3
+        },
+        {
+          "elapsed_seconds": 0.062000000034458935,
+          "sequence": [
+            "ActionIdentity(kind='end', parts=('[1,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 3
+        },
+        {
+          "elapsed_seconds": 2.812000000034459,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.9380712571345815,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 3
+        },
+        {
+          "elapsed_seconds": 3.422000000020489,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.9380712571345815,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 3
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.062000000034458935
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 12,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1152,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.9887379238012484,
+      "complete": true,
+      "round_trip_seconds": 0.5779999999795109,
+      "decision_seconds": 0.5707502999575809,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.5620000000344589,
+      "total_search_seconds": 0.5707502999575809,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 13,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.8479621100849029,
+      "complete": true,
+      "round_trip_seconds": 1.25,
+      "decision_seconds": 1.2203595999162644,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.2970000000204891,
+      "total_search_seconds": 0.9059999999590218,
+      "first_found_seconds": 0.515999999945052,
+      "first_recoverable_seconds": 0.515999999945052,
+      "first_full_seconds": 0.515999999945052,
+      "stabilized_seconds": 0.515999999945052,
+      "remaining_search_seconds": 0.39000000001396984,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":673,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.06,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='end', parts=('[1,{\"type\":14},[]]',))"
+          ],
+          "value": 0.07600000000000001,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.515999999945052,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 1.8479621100849029,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.015999999945051968
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":674,\"playerIndex\":1}]]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":675,\"playerIndex\":1}]]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":677,\"playerIndex\":1}]]]',))",
+          "ActionIdentity(kind='decline', parts=())"
+        ],
+        "rejected_by_bound": [],
+        "limit": 4
+      }
+    },
+    {
+      "match": 1,
+      "decision": 14,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.7719621100849028,
+      "complete": true,
+      "round_trip_seconds": 0.0470000000204891,
+      "decision_seconds": 0.033240500022657216,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0470000000204891,
+      "total_search_seconds": 0.033240500022657216,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 15,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.8125593545249505,
+      "complete": false,
+      "round_trip_seconds": 3.827999999979511,
+      "decision_seconds": 3.6577723000664264,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0779999999795109,
+      "total_search_seconds": 3.562000000034459,
+      "first_found_seconds": 3.39000000001397,
+      "first_recoverable_seconds": 3.39000000001397,
+      "first_full_seconds": 3.39000000001397,
+      "stabilized_seconds": 3.39000000001397,
+      "remaining_search_seconds": 0.1720000000204891,
+      "strategy_wave": "first",
+      "strategy_focus_position": 2,
+      "strategy_focus_count": 2,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.5134502074752716,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.062000000034458935,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.7725593545249503,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 3.39000000001397,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.8125593545249505,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 2
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.0470000000204891
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.18799999996554106
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.card.675.draw_ability",
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.card.675.draw_ability"
+        ],
+        "overflow": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1123,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 16,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "ability",
+        "parts": [
+          "[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 1.7515396731011483,
+      "complete": true,
+      "round_trip_seconds": 2.734000000054948,
+      "decision_seconds": 2.613169000018388,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0470000000204891,
+      "total_search_seconds": 2.547000000020489,
+      "first_found_seconds": 2.327999999979511,
+      "first_recoverable_seconds": 2.327999999979511,
+      "first_full_seconds": 2.327999999979511,
+      "stabilized_seconds": 2.327999999979511,
+      "remaining_search_seconds": 0.2190000000409782,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 1,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.6915396731011483,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        },
+        {
+          "elapsed_seconds": 2.327999999979511,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":true,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.7515396731011483,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.03100000007543713
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.2339999999385327
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.card.675.draw_ability",
+          "mega_lucario.raise_the_lucario_line",
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "general.card.675.draw_ability",
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "overflow": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1123,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 17,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "forced_selection",
+        "parts": [
+          8
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0006762000266462564,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 0.0006762000266462564,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 18,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.588206339767815,
+      "complete": true,
+      "round_trip_seconds": 0.31299999996554106,
+      "decision_seconds": 0.3060545000480488,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.125,
+      "total_search_seconds": 0.1720000000204891,
+      "first_found_seconds": 0.10900000005494803,
+      "first_recoverable_seconds": 0.015000000013969839,
+      "first_full_seconds": 0.015000000013969839,
+      "stabilized_seconds": 0.10900000005494803,
+      "remaining_search_seconds": 0.06299999996554106,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 1,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015000000013969839,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.588206339767815,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        },
+        {
+          "elapsed_seconds": 0.10900000005494803,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.588206339767815,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.015000000013969839
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.01600000006146729
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair",
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair",
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1123,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 19,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[1,{\"attackId\":980,\"type\":13},[]]"
+        ]
+      },
+      "value": 1.6298730064344817,
+      "complete": true,
+      "round_trip_seconds": 0.062000000034458935,
+      "decision_seconds": 0.0638542000669986,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.062000000034458935,
+      "total_search_seconds": 0.0638542000669986,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 20,
+      "turn": 2,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]"
+        ]
+      },
+      "value": 1.3712878787878786,
+      "complete": false,
+      "round_trip_seconds": 14.827999999979511,
+      "decision_seconds": 14.186779399984516,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015999999945051968,
+      "total_search_seconds": 14.172000000020489,
+      "first_found_seconds": 0.03100000007543713,
+      "first_recoverable_seconds": 0.03100000007543713,
+      "first_full_seconds": 0.03100000007543713,
+      "stabilized_seconds": 0.03100000007543713,
+      "remaining_search_seconds": 14.140999999945052,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.03100000007543713,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.3629545454545453,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 2.452999999979511,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.3712878787878786,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.03100000007543713
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":2,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":3,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":4,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":5,\"playerIndex\":1,\"type\":3},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 5
+      }
+    },
+    {
+      "match": 1,
+      "decision": 21,
+      "turn": 2,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 0.7739023082678317,
+      "complete": false,
+      "round_trip_seconds": 7.030999999959022,
+      "decision_seconds": 6.7444551000371575,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 6.73499999998603,
+      "first_found_seconds": 0.0470000000204891,
+      "first_recoverable_seconds": 0.0470000000204891,
+      "first_full_seconds": 0.0470000000204891,
+      "stabilized_seconds": 0.0470000000204891,
+      "remaining_search_seconds": 6.687999999965541,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+          ],
+          "value": -0.689508937345587,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 3.655999999959022,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+          ],
+          "value": 0.7739023082678317,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.2,
+          "elapsed_seconds": 0.030999999959021807
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.01600000006146729
+        }
+      },
+      "protected_bundles": {
+        "eligible": [],
+        "protected": [],
+        "overflow": [],
+        "ranked": []
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 22,
+      "turn": 3,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.1233087366166483,
+      "complete": false,
+      "round_trip_seconds": 9.219000000040978,
+      "decision_seconds": 8.91208049992565,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2349999999860302,
+      "total_search_seconds": 7.657000000006519,
+      "first_found_seconds": 7.454000000027008,
+      "first_recoverable_seconds": 7.454000000027008,
+      "first_full_seconds": 7.454000000027008,
+      "stabilized_seconds": 7.454000000027008,
+      "remaining_search_seconds": 0.2029999999795109,
+      "strategy_wave": "first",
+      "strategy_focus_position": 4,
+      "strategy_focus_count": 4,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0940000000409782,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":673,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='no', parts=('[0,{\"type\":2},[]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": -0.45066666666666666,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 0.1410000000614673,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1213,\"playerIndex\":0}]]]',))"
+          ],
+          "value": -0.044438623452931064,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 3,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 0.1410000000614673,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.6864545454545453,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "first",
+          "strategy_focus_position": 4,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 3.35999999998603,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='no', parts=('[0,{\"type\":2},[]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":677,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 1.4450779122800852,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 7.454000000027008,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":676,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1121,\"playerIndex\":0}]]]', '[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='yes', parts=('[0,{\"type\":1},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1219,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1141,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":980,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":0,\"type\":3},[]]',))"
+          ],
+          "value": 2.1233087366166483,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 4,
+          "strategy_focus_count": 4
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.125
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair",
+          "general.card.675.draw_ability",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair",
+          "general.card.675.draw_ability"
+        ],
+        "overflow": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 23,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.436854191162103,
+      "complete": true,
+      "round_trip_seconds": 1.202999999979511,
+      "decision_seconds": 1.2110044999280944,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.202999999979511,
+      "total_search_seconds": 1.2110044999280944,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 24,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1121,\"playerIndex\":0}]]]",
+          "[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":1213,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.5201875244954361,
+      "complete": true,
+      "round_trip_seconds": 1.2190000000409782,
+      "decision_seconds": 1.209424400003627,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.202999999979511,
+      "total_search_seconds": 1.209424400003627,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 25,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.670187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.5309999999590218,
+      "decision_seconds": 0.5328841001028195,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.5309999999590218,
+      "total_search_seconds": 0.5328841001028195,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 26,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.594187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.4369999999180436,
+      "decision_seconds": 0.4448603999335319,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.4219999999040738,
+      "total_search_seconds": 0.4448603999335319,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 27,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "yes",
+        "parts": [
+          "[0,{\"type\":1},[]]"
+        ]
+      },
+      "value": 1.594187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.45400000002700835,
+      "decision_seconds": 0.4468726000050083,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.4380000000819564,
+      "total_search_seconds": 0.4468726000050083,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 28,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1219,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.594187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.5620000000344589,
+      "decision_seconds": 0.5662752999924123,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.5459999999729916,
+      "total_search_seconds": 0.5662752999924123,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 29,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.5308541911621028,
+      "complete": true,
+      "round_trip_seconds": 0.4059999999590218,
+      "decision_seconds": 0.39945659996010363,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.39099999994505197,
+      "total_search_seconds": 0.39945659996010363,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 30,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":1142,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.614187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.3440000000409782,
+      "decision_seconds": 0.3423210000619292,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.3279999999795109,
+      "total_search_seconds": 0.3423210000619292,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 31,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.5508541911621028,
+      "complete": true,
+      "round_trip_seconds": 0.09399999992456287,
+      "decision_seconds": 0.1107029999839142,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.09399999992456287,
+      "total_search_seconds": 0.1107029999839142,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 32,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":6,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 1.634187524495436,
+      "complete": true,
+      "round_trip_seconds": 0.10900000005494803,
+      "decision_seconds": 0.09176159999333322,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.07900000002700835,
+      "total_search_seconds": 0.09176159999333322,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 33,
+      "turn": 3,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[0,{\"attackId\":980,\"type\":13},[]]"
+        ]
+      },
+      "value": 0.7422160253896313,
+      "complete": true,
+      "round_trip_seconds": 0.06299999996554106,
+      "decision_seconds": 0.07005199999548495,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.06299999996554106,
+      "first_found_seconds": 0.015999999945051968,
+      "first_recoverable_seconds": 0.015999999945051968,
+      "first_full_seconds": 0.015999999945051968,
+      "stabilized_seconds": 0.015999999945051968,
+      "remaining_search_seconds": 0.0470000000204891,
+      "strategy_wave": "first",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 1,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[0,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[2,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.738882692056298,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.7422160253896313,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 1
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.03100000007543713
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.card.675.draw_ability",
+          "mega_lucario.complete_the_solrock_pair",
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "protected": [
+          "general.card.675.draw_ability",
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='retreat', parts=('[0,{\"type\":12},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 34,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.9672122567872448,
+      "complete": false,
+      "round_trip_seconds": 18.42200000002049,
+      "decision_seconds": 17.722665500012226,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2190000000409782,
+      "total_search_seconds": 16.484000000054948,
+      "first_found_seconds": 5.156000000075437,
+      "first_recoverable_seconds": 5.156000000075437,
+      "first_full_seconds": 5.156000000075437,
+      "stabilized_seconds": 5.156000000075437,
+      "remaining_search_seconds": 11.327999999979511,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 4,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.09299999999348074,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1182,\"playerIndex\":1}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.6660107098945203,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 0.23400000005494803,
+          "sequence": [
+            "ActionIdentity(kind='ability', parts=('[1,{\"type\":10},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='evolve', parts=('[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 1.061285219698442,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 5.156000000075437,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1182,\"playerIndex\":1}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":678,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='evolve', parts=('[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+            "ActionIdentity(kind='energy', parts=('[1,{\"count\":1,\"energyIndex\":0,\"playerIndex\":1,\"type\":6},[[4,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":40,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.9672122567872448,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.21799999999348074
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.35999999998603016
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.card.675.draw_ability",
+          "mega_lucario.raise_the_lucario_line",
+          "mega_lucario.complete_the_solrock_pair",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.card.675.draw_ability",
+          "mega_lucario.raise_the_lucario_line"
+        ],
+        "overflow": [
+          "mega_lucario.complete_the_solrock_pair",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "general.card.675.draw_ability",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='attach', parts=('[1,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":40,\"id\":676,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+          "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 35,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1219,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.9019716150760146,
+      "complete": true,
+      "round_trip_seconds": 1.234000000054948,
+      "decision_seconds": 1.2397304000332952,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2179999999934807,
+      "total_search_seconds": 1.2397304000332952,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 36,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1121,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.985304948409348,
+      "complete": true,
+      "round_trip_seconds": 1.25,
+      "decision_seconds": 1.2487923000007868,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.234000000054948,
+      "total_search_seconds": 1.2487923000007868,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 37,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.9219716150760147,
+      "complete": true,
+      "round_trip_seconds": 1.2339999999385327,
+      "decision_seconds": 1.226051399949938,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2189999999245629,
+      "total_search_seconds": 1.226051399949938,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 38,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1123,\"playerIndex\":1}]]]",
+          "[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1182,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 3.005304948409348,
+      "complete": true,
+      "round_trip_seconds": 1.2190000000409782,
+      "decision_seconds": 1.226577499997802,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.202999999979511,
+      "total_search_seconds": 1.226577499997802,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 39,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":678,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 3.130304948409348,
+      "complete": true,
+      "round_trip_seconds": 0.25,
+      "decision_seconds": 0.24593680002726614,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.25,
+      "total_search_seconds": 0.24593680002726614,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 40,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "evolve",
+        "parts": [
+          "[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.940304948409348,
+      "complete": true,
+      "round_trip_seconds": 0.3279999999795109,
+      "decision_seconds": 0.3144140000222251,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0779999999795109,
+      "total_search_seconds": 0.23499999998603016,
+      "first_found_seconds": 0.23499999998603016,
+      "first_recoverable_seconds": 0.23499999998603016,
+      "first_full_seconds": 0.23499999998603016,
+      "stabilized_seconds": 0.23499999998603016,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 2,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='evolve', parts=('[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":980,\"type\":13},[]]',))"
+          ],
+          "value": 0.9760445779872119,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.2190000000409782,
+          "sequence": [
+            "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+            "ActionIdentity(kind='energy', parts=('[1,{\"count\":1,\"energyIndex\":0,\"playerIndex\":1,\"type\":6},[[4,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":40,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='evolve', parts=('[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[4,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.9403049484093478,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.23499999998603016,
+          "sequence": [
+            "ActionIdentity(kind='evolve', parts=('[1,{\"type\":9},[[2,{\"id\":678,\"playerIndex\":1}],[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":80,\"id\":677,\"maxHp\":80,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))",
+            "ActionIdentity(kind='energy', parts=('[1,{\"count\":1,\"energyIndex\":0,\"playerIndex\":1,\"type\":6},[[4,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":40,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.940304948409348,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.015000000013969839
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.1880000000819564
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.raise_the_lucario_line",
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.raise_the_lucario_line",
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='retreat', parts=('[1,{\"type\":12},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 41,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "retreat",
+        "parts": [
+          "[1,{\"type\":12},[]]"
+        ]
+      },
+      "value": 2.685545590120578,
+      "complete": true,
+      "round_trip_seconds": 0.06299999996554106,
+      "decision_seconds": 0.05634140002075583,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.06299999996554106,
+      "total_search_seconds": 0.05634140002075583,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 42,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "forced_selection",
+        "parts": [
+          30
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0015671000583097339,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 0.0015671000583097339,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 43,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":1,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.8573005731055074,
+      "complete": true,
+      "round_trip_seconds": 0.2970000000204891,
+      "decision_seconds": 0.2923478999873623,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.062000000034458935,
+      "total_search_seconds": 0.23499999998603016,
+      "first_found_seconds": 0.23499999998603016,
+      "first_recoverable_seconds": 0.23499999998603016,
+      "first_full_seconds": 0.23499999998603016,
+      "stabilized_seconds": 0.23499999998603016,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":1,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[1,{\"type\":14},[]]',))"
+          ],
+          "value": 1.2235722652164676,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.23499999998603016,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":1,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.8573005731055074,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":true,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":340,\"id\":678,\"maxHp\":340,\"playerIndex\":1,\"preEvolution\":[{\"id\":677,\"playerIndex\":1}],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 44,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[1,{\"attackId\":982,\"type\":13},[]]"
+        ]
+      },
+      "value": 1.6337283078890399,
+      "complete": true,
+      "round_trip_seconds": 0.062000000034458935,
+      "decision_seconds": 0.05552739999257028,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.062000000034458935,
+      "total_search_seconds": 0.05552739999257028,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 45,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.114405218360833,
+      "complete": true,
+      "round_trip_seconds": 0.46899999992456287,
+      "decision_seconds": 0.4606742999749258,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0470000000204891,
+      "total_search_seconds": 0.4059999999590218,
+      "first_found_seconds": 0.3119999999180436,
+      "first_recoverable_seconds": 0.3119999999180436,
+      "first_full_seconds": 0.3119999999180436,
+      "stabilized_seconds": 0.3119999999180436,
+      "remaining_search_seconds": 0.0940000000409782,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.0790138717395403,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.3119999999180436,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":40,\"id\":676,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.114405218360833,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.2,
+          "elapsed_seconds": 0.015999999945051968
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [],
+        "protected": [],
+        "overflow": [],
+        "ranked": []
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]'))",
+          "ActionIdentity(kind='decline', parts=())"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 46,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 2.0790138717395403,
+      "complete": true,
+      "round_trip_seconds": 0.2190000000409782,
+      "decision_seconds": 0.2129745000274852,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015000000013969839,
+      "total_search_seconds": 0.18799999996554106,
+      "first_found_seconds": 0.09399999992456287,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.09399999992456287,
+      "remaining_search_seconds": 0.0940000000409782,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.0790138717395403,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.09399999992456287,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.0790138717395403,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.2,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [],
+        "protected": [],
+        "overflow": [],
+        "ranked": []
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":40,\"id\":676,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 47,
+      "turn": 4,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]"
+        ]
+      },
+      "value": 2.919318181818182,
+      "complete": true,
+      "round_trip_seconds": 0.10900000005494803,
+      "decision_seconds": 0.10162670002318919,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.0940000000409782,
+      "first_found_seconds": 0.030999999959021807,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.030999999959021807,
+      "remaining_search_seconds": 0.06300000008195639,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.919318181818182,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.030999999959021807,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.919318181818182,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.2,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [],
+        "protected": [],
+        "overflow": [],
+        "ranked": []
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":2,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":3,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":4,\"playerIndex\":1,\"type\":3},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 4
+      }
+    },
+    {
+      "match": 1,
+      "decision": 48,
+      "turn": 4,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": -1.34585323586747,
+      "complete": true,
+      "round_trip_seconds": 0.046999999904073775,
+      "decision_seconds": 0.03891890007071197,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.030999999959021807,
+      "first_found_seconds": 0.015000000013969839,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.015000000013969839,
+      "remaining_search_seconds": 0.015999999945051968,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+          ],
+          "value": -1.5638140201811956,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.015000000013969839,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+          ],
+          "value": -1.34585323586747,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "protected": [
+          "mega_lucario.complete_the_solrock_pair"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.complete_the_solrock_pair",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[0,{\"playerIndex\":0,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 49,
+      "turn": 5,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 0.2179607843137256,
+      "complete": true,
+      "round_trip_seconds": 0.0470000000204891,
+      "decision_seconds": 0.03819079999811947,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015000000013969839,
+      "total_search_seconds": 0.01600000006146729,
+      "first_found_seconds": 0.01600000006146729,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.01600000006146729,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.2179607843137256,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.01600000006146729,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.2179607843137256,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+          "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 50,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "end",
+        "parts": [
+          "[0,{\"type\":14},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.015000000013969839,
+      "decision_seconds": 0.013813500059768558,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015000000013969839,
+      "total_search_seconds": 0.013813500059768558,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 51,
+      "turn": 6,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[1,{\"attackId\":982,\"type\":13},[]]"
+        ]
+      },
+      "value": 2.053848484848485,
+      "complete": true,
+      "round_trip_seconds": 3.1570000000065193,
+      "decision_seconds": 3.0997512999456376,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2190000000409782,
+      "total_search_seconds": 1.859000000054948,
+      "first_found_seconds": 1.859000000054948,
+      "first_recoverable_seconds": 0.9060000000754371,
+      "first_full_seconds": 0.9060000000754371,
+      "stabilized_seconds": 1.859000000054948,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "first",
+      "strategy_focus_position": 4,
+      "strategy_focus_count": 4,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0470000000204891,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1227,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":675,\"playerIndex\":1}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.917848484848485,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 0.10900000005494803,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1227,\"playerIndex\":1}]]]',))"
+          ],
+          "value": 2.004991341991342,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 0.9060000000754371,
+          "sequence": [
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.053848484848485,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 4,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 1.859000000054948,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.053848484848485,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 3,
+          "strategy_focus_count": 4
+        },
+        {
+          "elapsed_seconds": 1.859000000054948,
+          "sequence": [
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.053848484848485,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 4,
+          "strategy_focus_count": 4
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.14000000001396984
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker",
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker"
+        ],
+        "overflow": [
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.fund_active_attacker",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.fund_the_readiest_mega_lucario",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 52,
+      "turn": 6,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.4801666666666666,
+      "complete": true,
+      "round_trip_seconds": 0.0779999999795109,
+      "decision_seconds": 0.07172280002851039,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015999999945051968,
+      "total_search_seconds": 0.0470000000204891,
+      "first_found_seconds": 0.03100000007543713,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.03100000007543713,
+      "remaining_search_seconds": 0.015999999945051968,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.4801666666666666,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.03100000007543713,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[3,{\"id\":6,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.4801666666666666,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='decline', parts=())"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 53,
+      "turn": 6,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 1.4801666666666666,
+      "complete": true,
+      "round_trip_seconds": 0.0470000000204891,
+      "decision_seconds": 0.04746199992951006,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015000000013969839,
+      "total_search_seconds": 0.03200000000651926,
+      "first_found_seconds": 0.01600000006146729,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.01600000006146729,
+      "remaining_search_seconds": 0.015999999945051968,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.4801666666666666,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.01600000006146729,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[6],\"energyCards\":[{\"id\":6,\"playerIndex\":1}],\"hp\":110,\"id\":675,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 1.4801666666666666,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":40,\"id\":676,\"maxHp\":110,\"playerIndex\":1,\"preEvolution\":[],\"tools\":[]}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 1
+      }
+    },
+    {
+      "match": 1,
+      "decision": 54,
+      "turn": 6,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]"
+        ]
+      },
+      "value": 2.6058529411764706,
+      "complete": true,
+      "round_trip_seconds": 0.030999999959021807,
+      "decision_seconds": 0.02492929995059967,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015000000013969839,
+      "total_search_seconds": 0.015999999945051968,
+      "first_found_seconds": 0.015999999945051968,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.015999999945051968,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.6058529411764706,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.6058529411764706,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":2,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":3,\"playerIndex\":1,\"type\":3},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 3
+      }
+    },
+    {
+      "match": 1,
+      "decision": 55,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "forced_selection",
+        "parts": [
+          4
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0013654000358656049,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 0.0013654000358656049,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 56,
+      "turn": 7,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 3.1666666666666665,
+      "complete": true,
+      "round_trip_seconds": 0.18700000003445894,
+      "decision_seconds": 0.17387100006453693,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.07800000009592623,
+      "total_search_seconds": 0.09399999992456287,
+      "first_found_seconds": 0.0779999999795109,
+      "first_recoverable_seconds": 0.0779999999795109,
+      "first_full_seconds": 0.0779999999795109,
+      "stabilized_seconds": 0.0779999999795109,
+      "remaining_search_seconds": 0.015999999945051968,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 1,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":6,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": -0.03266666666666667,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 1
+        },
+        {
+          "elapsed_seconds": 0.0779999999795109,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1142,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":677,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":0}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 3.1666666666666665,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 1
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.015999999945051968
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 2,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":0}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 57,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":0,\"type\":3},[[1,{\"id\":677,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 3.25,
+      "complete": true,
+      "round_trip_seconds": 0.0779999999795109,
+      "decision_seconds": 0.08592519990634173,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0779999999795109,
+      "total_search_seconds": 0.08592519990634173,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 58,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[0,{\"type\":7},[[2,{\"id\":677,\"playerIndex\":0}]]]"
+        ]
+      },
+      "value": 0.05999999999999994,
+      "complete": true,
+      "round_trip_seconds": 0.01600000006146729,
+      "decision_seconds": 0.015736800036393106,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.01600000006146729,
+      "total_search_seconds": 0.015736800036393106,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 59,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "end",
+        "parts": [
+          "[0,{\"type\":14},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.015999999945051968,
+      "decision_seconds": 0.009099100017920136,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.009099100017920136,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 60,
+      "turn": 8,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 0.9552496650736232,
+      "complete": true,
+      "round_trip_seconds": 4.26500000001397,
+      "decision_seconds": 4.168671599938534,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.2179999999934807,
+      "total_search_seconds": 2.922000000020489,
+      "first_found_seconds": 1.3589999999385327,
+      "first_recoverable_seconds": 1.3589999999385327,
+      "first_full_seconds": 1.3589999999385327,
+      "stabilized_seconds": 1.3589999999385327,
+      "remaining_search_seconds": 1.5630000000819564,
+      "strategy_wave": "first",
+      "strategy_focus_position": 1,
+      "strategy_focus_count": 5,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.06299999996554106,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1141,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1227,\"playerIndex\":1}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]', '[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]'))"
+          ],
+          "value": 0.4933529411764705,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 5
+        },
+        {
+          "elapsed_seconds": 0.125,
+          "sequence": [
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]', '[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]'))"
+          ],
+          "value": 0.5393529411764706,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "first",
+          "strategy_focus_position": 4,
+          "strategy_focus_count": 5
+        },
+        {
+          "elapsed_seconds": 1.3589999999385327,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1121,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='card', parts=('[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1141,\"playerIndex\":1}]]]', '[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1227,\"playerIndex\":1}]]]'))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='yes', parts=('[1,{\"type\":1},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1182,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":1}]]]',))"
+          ],
+          "value": 0.9552496650736232,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 5
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.10900000005494803
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker",
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker"
+        ],
+        "overflow": [
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.fund_active_attacker",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.fund_the_readiest_mega_lucario",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 61,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1141,\"playerIndex\":1}]]]",
+          "[1,{\"playerIndex\":1,\"type\":3},[[2,{\"id\":1227,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.0385829984069566,
+      "complete": true,
+      "round_trip_seconds": 1.2190000000409782,
+      "decision_seconds": 1.2335581999504939,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 1.202999999979511,
+      "total_search_seconds": 1.2335581999504939,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 62,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1071,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.14691633174029,
+      "complete": true,
+      "round_trip_seconds": 0.26599999994505197,
+      "decision_seconds": 0.2560960999689996,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.25,
+      "total_search_seconds": 0.2560960999689996,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 63,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1071,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.0709163317402899,
+      "complete": true,
+      "round_trip_seconds": 0.2029999999795109,
+      "decision_seconds": 0.21304699999745935,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.2029999999795109,
+      "total_search_seconds": 0.21304699999745935,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 64,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "yes",
+        "parts": [
+          "[1,{\"type\":1},[]]"
+        ]
+      },
+      "value": 1.0709163317402899,
+      "complete": true,
+      "round_trip_seconds": 0.15600000007543713,
+      "decision_seconds": 0.1460780999623239,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.15600000007543713,
+      "total_search_seconds": 0.1460780999623239,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 65,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"playerIndex\":1,\"type\":3},[[1,{\"id\":1182,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.0709163317402899,
+      "complete": true,
+      "round_trip_seconds": 0.125,
+      "decision_seconds": 0.12437069998122752,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.125,
+      "total_search_seconds": 0.12437069998122752,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 66,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 1.0075829984069566,
+      "complete": true,
+      "round_trip_seconds": 0.0470000000204891,
+      "decision_seconds": 0.04397789994254708,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0470000000204891,
+      "total_search_seconds": 0.04397789994254708,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 67,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "forced_selection",
+        "parts": [
+          3
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0012537000002339482,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 0.0012537000002339482,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 68,
+      "turn": 8,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "play",
+        "parts": [
+          "[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]"
+        ]
+      },
+      "value": 2.09091633174029,
+      "complete": true,
+      "round_trip_seconds": 0.0779999999795109,
+      "decision_seconds": 0.06966749997809529,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.015999999945051968,
+      "total_search_seconds": 0.062000000034458935,
+      "first_found_seconds": 0.062000000034458935,
+      "first_recoverable_seconds": 0.062000000034458935,
+      "first_full_seconds": 0.062000000034458935,
+      "stabilized_seconds": 0.062000000034458935,
+      "remaining_search_seconds": 0.0,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 2,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.015000000013969839,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.07091633174029,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.030999999959021807,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":675,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.07091633174029,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 1,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.030999999959021807,
+          "sequence": [
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.07091633174029,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "first",
+          "strategy_focus_position": 2,
+          "strategy_focus_count": 2
+        },
+        {
+          "elapsed_seconds": 0.062000000034458935,
+          "sequence": [
+            "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]',))",
+            "ActionIdentity(kind='attack', parts=('[1,{\"attackId\":982,\"type\":13},[]]',))",
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.09091633174029,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 2
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.5,
+          "elapsed_seconds": 0.015999999945051968
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker",
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "mega_lucario.raise_the_lucario_line",
+          "general.fund_active_attacker"
+        ],
+        "overflow": [
+          "mega_lucario.fund_the_readiest_mega_lucario",
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "ranked": [
+          {
+            "bundle_id": "mega_lucario.raise_the_lucario_line",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.fund_active_attacker",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "mega_lucario.fund_the_readiest_mega_lucario",
+            "reachability": 1,
+            "distinct_outcomes": 1
+          },
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='play', parts=('[1,{\"type\":7},[[2,{\"id\":673,\"playerIndex\":1}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 69,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[1,{\"attackId\":982,\"type\":13},[]]"
+        ]
+      },
+      "value": 2.07091633174029,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.009386499994434416,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.009386499994434416,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 70,
+      "turn": 8,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]"
+        ]
+      },
+      "value": 2.7198529411764705,
+      "complete": true,
+      "round_trip_seconds": 0.030999999959021807,
+      "decision_seconds": 0.02497669996228069,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.015000000013969839,
+      "first_found_seconds": 0.0,
+      "first_recoverable_seconds": 0.0,
+      "first_full_seconds": 0.0,
+      "stabilized_seconds": 0.0,
+      "remaining_search_seconds": 0.015000000013969839,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.7198529411764705,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]',))"
+          ],
+          "value": 2.7198529411764705,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.0
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]',))",
+          "ActionIdentity(kind='card', parts=('[{\"area\":6,\"index\":2,\"playerIndex\":1,\"type\":3},[]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 71,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "forced_selection",
+        "parts": [
+          4
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0009486000053584576,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": null,
+      "total_search_seconds": 0.0009486000053584576,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 72,
+      "turn": 9,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attach",
+        "parts": [
+          "[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]"
+        ]
+      },
+      "value": 0.15979084967320242,
+      "complete": true,
+      "round_trip_seconds": 0.0470000000204891,
+      "decision_seconds": 0.03650479996576905,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.030999999959021807,
+      "first_found_seconds": 0.015999999945051968,
+      "first_recoverable_seconds": 0.015999999945051968,
+      "first_full_seconds": 0.015999999945051968,
+      "stabilized_seconds": 0.015999999945051968,
+      "remaining_search_seconds": 0.015000000013969839,
+      "strategy_wave": "widening",
+      "strategy_focus_position": null,
+      "strategy_focus_count": 0,
+      "incumbent_timeline": [
+        {
+          "elapsed_seconds": 0.0,
+          "sequence": [
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.0,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "candidate_harvest",
+          "strategy_wave": "first",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.15979084967320242,
+          "complete": false,
+          "execution_tier": "full",
+          "phase": "probe",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        },
+        {
+          "elapsed_seconds": 0.015999999945051968,
+          "sequence": [
+            "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+            "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))"
+          ],
+          "value": 0.15979084967320242,
+          "complete": true,
+          "execution_tier": "full",
+          "phase": "refinement",
+          "strategy_wave": "widening",
+          "strategy_focus_position": null,
+          "strategy_focus_count": 0
+        }
+      ],
+      "execution_tier": "full",
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {
+        "candidate_harvest": {
+          "share": 0.25,
+          "elapsed_seconds": 0.0
+        },
+        "challenger": {
+          "share": 0.1,
+          "elapsed_seconds": 0.015999999945051968
+        }
+      },
+      "protected_bundles": {
+        "eligible": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "protected": [
+          "general.low_cost_information_access_before_commitment"
+        ],
+        "overflow": [],
+        "ranked": [
+          {
+            "bundle_id": "general.low_cost_information_access_before_commitment",
+            "reachability": 0,
+            "distinct_outcomes": 1
+          }
+        ]
+      },
+      "challengers": {
+        "selected": [
+          "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":6,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":170,\"id\":1071,\"maxHp\":170,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
+          "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":0}]]]',))"
+        ],
+        "rejected_by_bound": [],
+        "limit": 2
+      }
+    },
+    {
+      "match": 1,
+      "decision": 73,
+      "turn": null,
+      "seat": 0,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "end",
+        "parts": [
+          "[0,{\"type\":14},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.009018299984745681,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.009018299984745681,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 74,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "attack",
+        "parts": [
+          "[1,{\"attackId\":982,\"type\":13},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.015999999945051968,
+      "decision_seconds": 0.004343000007793307,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.004343000007793307,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    },
+    {
+      "match": 1,
+      "decision": 75,
+      "turn": null,
+      "seat": 1,
+      "agent": "mega_lucario",
+      "action": {
+        "kind": "card",
+        "parts": [
+          "[{\"area\":6,\"index\":0,\"playerIndex\":1,\"type\":3},[]]",
+          "[{\"area\":6,\"index\":1,\"playerIndex\":1,\"type\":3},[]]"
+        ]
+      },
+      "value": 0.0,
+      "complete": true,
+      "round_trip_seconds": 0.0,
+      "decision_seconds": 0.0033400000538676977,
+      "decision_limit_seconds": 20.0,
+      "deadline_hit": false,
+      "lethal_proof_seconds": 0.0,
+      "total_search_seconds": 0.0033400000538676977,
+      "first_found_seconds": null,
+      "first_recoverable_seconds": null,
+      "first_full_seconds": null,
+      "stabilized_seconds": null,
+      "remaining_search_seconds": null,
+      "strategy_wave": null,
+      "strategy_focus_position": null,
+      "strategy_focus_count": null,
+      "incumbent_timeline": [],
+      "execution_tier": null,
+      "fallback_cause": null,
+      "fallback_choice": null,
+      "phase_budgets": {},
+      "protected_bundles": {},
+      "challengers": {}
+    }
+  ],
+  "summary": {
+    "decisions": 76,
+    "timed_decisions": 76,
+    "stabilized_decisions": 29,
+    "deadline_hits": 0,
+    "round_trip_seconds": {
+      "samples": 76,
+      "avg": 1.5454342105245145,
+      "p95": 9.219000000040978,
+      "max": 18.42200000002049
+    },
+    "decision_seconds": {
+      "avg": 1.4931408697386934,
+      "p95": 8.91208049992565,
+      "max": 17.722665500012226
+    },
+    "first_found_seconds": {
+      "avg": 1.198827586209016,
+      "p95": 5.5,
+      "max": 7.454000000027008
+    },
+    "first_recoverable_seconds": {
+      "avg": 1.1551724137931034,
+      "p95": 5.5,
+      "max": 7.454000000027008
+    },
+    "first_full_seconds": {
+      "avg": 1.1551724137931034,
+      "p95": 5.5,
+      "max": 7.454000000027008
+    },
+    "stabilized_seconds": {
+      "avg": 1.198827586209016,
+      "p95": 5.5,
+      "max": 7.454000000027008
+    },
+    "lethal_proof_seconds": {
+      "samples": 66,
+      "avg": 0.3910757575773239,
+      "min": 0.0,
+      "max": 1.2349999999860302
+    },
+    "strategy_waves": {
+      "first": 13,
+      "widening": 16
+    },
+    "match_seconds": {
+      "samples": 1,
+      "avg": 117.54700000002049,
+      "min": 117.54700000002049,
+      "max": 117.54700000002049
+    }
+  },
+  "decision_csv": "decisions.csv"
+}

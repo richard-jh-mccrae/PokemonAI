@@ -148,3 +148,34 @@ def test_frames_and_shell_show_strategy_search_timing():
     assert "Lethal solver" in _SHELL_HTML
     assert "Final sequence first found" in _SHELL_HTML
     assert "Strategy focus position" in _SHELL_HTML
+
+
+def test_frames_distil_search_trace_instead_of_shipping_it_to_the_browser():
+    """The trace is ~650 KB per Decision and no pane reads it, so it must stay server-side while the
+    verdict fields the pane DOES read survive."""
+    replay = _timed_replay()
+    live = {0: [{"bellman": True, "chosen": [0], "margin": 1.5,
+                 "diagnostics": {"terminal_proof": {"attempted": True, "elapsed_ms": 125.0}}},
+                {"bellman": True, "chosen": [0]}]}
+
+    frames = frames_payload(replay, live_records_by_seat=live)["frames"]
+
+    assert "diagnostics" not in frames[0]["live"]
+    assert frames[0]["live"]["margin"] == 1.5
+    assert frames[0]["live"]["chosen"] == [0]
+    assert frames[0]["lethal_proof_seconds"] == pytest.approx(0.125)
+
+
+def test_frames_open_on_a_board_that_has_cards_on_it():
+    """A real film opens on the coin flip, whose board is empty — nothing is dealt yet — so landing
+    the viewer on frame 0 shows a blank board."""
+    replay = load_replay(FIXTURE)
+    film = replay["steps"][0][0]["visualize"]
+
+    opening = frames_payload(replay)["opening_frame"]
+
+    assert opening > 0
+    assert not any(player.get(area) for player in film[0]["current"]["players"]
+                   for area in ("active", "bench", "hand"))
+    assert any(player.get(area) for player in film[opening]["current"]["players"]
+               for area in ("active", "bench", "hand"))

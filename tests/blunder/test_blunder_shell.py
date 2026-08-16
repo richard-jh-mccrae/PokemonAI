@@ -1,7 +1,10 @@
 import json
 import math
+import socket
 
-from train.blunder.shell import _SHELL_HTML, _json_body, _viewer_asset
+import pytest
+
+from train.blunder.shell import _SHELL_HTML, _json_body, _viewer_asset, port_is_taken, serve
 
 
 def test_shell_json_normalizes_nonfinite_live_diagnostics():
@@ -31,3 +34,24 @@ def test_viewer_assets_resolve_from_vite_root_or_viewer_prefix(tmp_path):
     assert _viewer_asset("/assets/viewer.js", str(tmp_path)) == asset
     assert _viewer_asset("/viewer/assets/viewer.js", str(tmp_path)) == asset
     assert _viewer_asset("/viewer/../secret", str(tmp_path)) is None
+
+
+def test_serve_refuses_a_port_an_older_shell_already_owns(tmp_path):
+    # Mirror the older shell exactly -- SO_REUSEADDR is what lets Windows bind the port a SECOND
+    # time without error, leaving the first process to answer with ITS replay.
+    with socket.socket() as squatter:
+        squatter.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        squatter.bind(("127.0.0.1", 0))
+        squatter.listen(5)          # room for both probes; a full backlog reads as "refused"
+        port = squatter.getsockname()[1]
+
+        assert port_is_taken("127.0.0.1", port)
+        with pytest.raises(SystemExit, match=f"port {port} is already serving"):
+            serve([], store_path=tmp_path / "corrections.jsonl", port=port)
+
+
+def test_free_and_ephemeral_ports_are_not_taken():
+    with socket.socket() as free:
+        free.bind(("127.0.0.1", 0))          # bound but never listening
+        assert not port_is_taken("127.0.0.1", free.getsockname()[1])
+    assert not port_is_taken("127.0.0.1", 0)
