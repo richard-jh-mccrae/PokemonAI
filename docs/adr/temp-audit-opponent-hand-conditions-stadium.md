@@ -32,8 +32,9 @@ everywhere):
 - **Condition shares.** The Active's conditions scale its forecast attack value: incoming
   `asleep 0.5 / paralyzed 0.0 / confused 0.5` (checkup and rules facts, not tuning), own-side
   `asleep 0.75 / confused 0.5` (paralysis clears before our next attack window and menus already
-  enforce this turn). Poison (10) and expected burn (20 × cure coin) enter `_damage_progress` as
-  pending checkup damage, both sides, capped by remaining HP.
+  enforce this turn). Poison (10) and burn (20 — the counters land unconditionally; the coin only
+  decides the cure, docs/rules.md L161) enter `_damage_progress` as pending checkup damage, both
+  sides, capped by remaining HP.
 - **Stadium Worth.** Our own Stadium in `current["stadium"]` joins `_board_resources` as a
   one-card stack, making a Stadium play value-neutral statically so its printed effect (visible
   through successor HP and readiness) decides.

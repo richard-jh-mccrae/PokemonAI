@@ -38,9 +38,8 @@ _ZONE_REFS = (("area", "index"), ("inPlayArea", "inPlayIndex"))
 #: A fingerprint's embedded zone reference is exactly ``[area, card]``.
 _FINGERPRINT_REFERENCE_LENGTH = 2
 
-#: Non-zone fields that make two same-body options DIFFERENT decisions: an ENERGY_CARD option
-#: names WHICH attachment by ``energyIndex`` — grouping across it called "discard the Fire" and
-#: "discard the Water" one decision.
+#: Non-zone fields that make two same-body options DIFFERENT decisions (``energyIndex`` names
+#: WHICH attachment; grouping across it merged physically distinct discards).
 _DISCRIMINATOR_FIELDS = ("count", "energyIndex", "number", "specialConditionType", "toolIndex")
 
 
@@ -101,13 +100,9 @@ def option_source_card(option: dict, frame: dict | None):
 
 
 def option_in_play_source_id(option, frame: dict | None, seat: int | None = None) -> int | None:
-    """The card id an ability/skill/tool option acts through, surviving BOTH engine shapes.
-
-    The deployed engine emits every option key with ``None`` for unused ones, so a
-    ``get("inPlayArea", option.get("area"))`` fallback never fires there (PR #532 class); the
-    offline twin engine omits unused keys instead. Present-but-None is treated as absent. A
-    reference that materializes but does not resolve fails closed — never a guess from the other
-    pair."""
+    """The card id an ability/skill/tool option acts through. Present-but-None keys are absent
+    (the deployed shape, PR #532); a reference that materializes but does not resolve fails
+    closed — never a guess from the other pair."""
     if not isinstance(option, dict):
         return None
     card_id = option.get("cardId")
@@ -117,7 +112,7 @@ def option_in_play_source_id(option, frame: dict | None, seat: int | None = None
         seat = option["playerIndex"]
     if seat is None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
-    for area_key, index_key in ("inPlayArea", "inPlayIndex"), ("area", "index"):
+    for area_key, index_key in reversed(_ZONE_REFS):
         area = option.get(area_key)
         if area is None:
             continue
@@ -134,11 +129,9 @@ def option_in_play_source_id(option, frame: dict | None, seat: int | None = None
 
 
 def fingerprint_source_card_id(part, frame: dict | None) -> int | None:
-    """Recover the source card id from one ``ActionIdentity`` fingerprint part.
-
-    The semantic shape ``[seat, fields, cards]`` embeds the resolved reference (its ``fields``
-    EXCLUDE the referenced area/index keys, so re-reading them there finds nothing); the fallback
-    shape ``[public, enriched]`` keeps the raw keys and resolves against the frame."""
+    """Source card id from one ``ActionIdentity`` part. The semantic shape ``[seat, fields,
+    cards]`` EXCLUDES referenced area/index keys from ``fields`` — the embedded card is the only
+    place the reference survives; the fallback ``[public, enriched]`` keeps raw keys."""
     if not isinstance(part, str):
         return None
     try:

@@ -15,6 +15,7 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
+from .damage import bench_reach
 from .fetch import DEADNESS, fetch_target_matches
 from .option_equivalence import fingerprint_source_card_id
 from .state import DecisionState
@@ -154,8 +155,7 @@ class ValueRegistry:
                 stage=(getattr(stat, "stage", None) if stat is not None else None),
                 prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
                 energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
-                bench_damage=max((max(int(getattr(attack, "benchSnipe", 0) or 0),
-                                      int(getattr(attack, "benchSpread", 0) or 0))
+                bench_damage=max((bench_reach(attack)
                                   for attack in attacks if attack is not None), default=0),
             )
         declarations = tuple(line for line in getattr(roles, "lines", ()) if line.path)

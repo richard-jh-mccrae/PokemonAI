@@ -232,9 +232,8 @@ class ReferenceSolver:
         )
 
     def _root_salvage(self, state: DecisionState, solved: StateEvaluation) -> StateEvaluation:
-        """A planning dead end (every root subtree capped or Unknown) must still submit something
-        legal — an uncaught raise is a forfeit in deployment. Prefers End, else the first legal
-        action; the result stays incomplete and names the dead end, never a fabricated value."""
+        """A planning dead end still submits something legal (End, else the first action) —
+        incomplete and naming the dead end, never a fabricated value. A raise is a forfeit."""
         actions = tuple(sorted(self.provider.actions(state), key=lambda action: action.identity))
         if not actions:
             return solved
@@ -323,10 +322,9 @@ class ReferenceSolver:
     def _end_transition(self, before: DecisionState, action: LegalAction, node,
                         depth: int = END_CHAIN_DEPTH_CAP) -> Evaluation:
         """Value only the forced turn-boundary outcome, without planning the opponent's turn.
-
-        The forced chain is the only solver recursion outside the node/deadline budget, so it
-        carries its own caps — a cyclic or pathological forced menu must degrade to an incomplete
-        evaluation, never a RecursionError or a burned clock."""
+        Carries its own depth/node caps (production adds its deadline via
+        ``_end_chain_available``): a cyclic forced menu degrades to incomplete, never a
+        RecursionError."""
         self._end_chain_nodes += 1
         if depth <= 0 or not self._end_chain_available():
             return Evaluation(-math.inf, Ledger(), False, "End continuation capped")

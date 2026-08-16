@@ -24,9 +24,8 @@ _KIND_NAMES = {
 }
 DEFAULT_PICK_COUNT = 1
 
-#: The largest engine-posed menu observed is ~400 selections; a choose-up-to-N over a big listing
-#: is combinatorial and would eat the decision clock. Cheapest counts enumerate first, so the
-#: decline/minimum submissions always survive the cap.
+#: Bounds a combinatorial choose-up-to-N menu (largest observed ~400 selections); cheapest
+#: counts enumerate first, so the decline/minimum submissions always survive the cap.
 SELECTION_ENUMERATION_CAP = 4096
 
 

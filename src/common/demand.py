@@ -12,6 +12,7 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
+from .damage import bench_reach
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
@@ -212,16 +213,10 @@ class StrategyBeamBuilder:
                   and recipient == hint.recipient_serial
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)):
                 probability = 1.0
-            elif (hint.kind == "heal" and action.identity.kind == "play"
+            elif (hint.kind in {"heal", "damage_boost"} and action.identity.kind == "play"
                   and self.effects is not None
                   and source_id is not None
-                  and any(clause.get("kind") == "heal"
-                          for clause in self.effects.clauses(source_id))):
-                probability = 1.0
-            elif (hint.kind == "damage_boost" and action.identity.kind == "play"
-                  and self.effects is not None
-                  and source_id is not None
-                  and any(clause.get("kind") == "damage_boost"
+                  and any(clause.get("kind") == hint.kind
                           for clause in self.effects.clauses(source_id))):
                 probability = 1.0
             elif (hint.kind == "deploy" and action.identity.kind == "play"
@@ -237,9 +232,7 @@ class StrategyBeamBuilder:
                 target_exists = any(
                     int(body.get("serial", -1)) == hint.recipient_serial
                     for body in self._opponent(state).get("bench") or () if body)
-                bench_reach = max(int(getattr(attack, "benchSnipe", 0) or 0),
-                                  int(getattr(attack, "benchSpread", 0) or 0))
-                if target_exists and bench_reach > 0:
+                if target_exists and bench_reach(attack) > 0:
                     probability = 1.0
             elif (action.identity.kind == "card" and source_id is not None
                   and source_id in hint.target_card_ids):

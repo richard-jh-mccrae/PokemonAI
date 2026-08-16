@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from .card_worth import KNOWN_CARD_FLOOR, function_role
 from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
-from .damage import compute_active_damage
+from .damage import bench_reach, compute_active_damage
 from .damage_context import SideFacts, damage_context
 from .strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes
@@ -34,15 +34,14 @@ BENCH_ATTACK_ACCESS_SHARE = 0.50
 EVOLVED_BODY_PRIZE_SHARE = 0.040
 DEPLOYED_BASIC_LINE_PRIZE_SHARE = 0.020
 KO_PRESSURE_SHARE = 0.000001
-#: A hidden opponent card is worth the known-card floor (ADR-0060's strip/gift currency); the
-#: refresh ledger prices the same swing with the same constant so the two paths agree.
+#: ADR-0060's strip/gift currency: one hidden opponent card = the known-card floor.
 OPPONENT_HAND_CARD_WORTH = KNOWN_CARD_FLOOR
-#: Engine checkup facts (docs/rules.md): poison places 1 counter; burn places 2 then flips to cure.
+#: Checkup facts (docs/rules.md L161): poison places 1 counter; burn places 2 UNCONDITIONALLY —
+#: the coin only decides whether the burn then cures, never whether the damage lands.
 POISON_CHECKUP_DAMAGE = 10
-BURN_EXPECTED_CHECKUP_DAMAGE = 10.0
-#: How much of a statused Active's printed attack survives into the next-turn forecast. Sleep
-#: flips one wake coin at the checkup before the owner's turn; paralysis blocks that whole turn;
-#: confusion is a per-attack coin. Our own sleep sees two checkups before our next attack window.
+BURN_CHECKUP_DAMAGE = 20.0
+#: Forecast share of a statused Active's attack: wake/attack coins and the paralysis turn-skip
+#: (docs/rules.md L156-166); our own sleep sees two checkups before our next attack window.
 INCOMING_CONDITION_SHARE = {"asleep": 0.5, "paralyzed": 0.0, "confused": 0.5}
 OWN_CONDITION_SHARE = {"asleep": 0.75, "confused": 0.5}
 
@@ -85,13 +84,6 @@ def _active_condition_share(player, table) -> float:
     return share
 
 
-def _bench_reach(attack) -> int:
-    """Single-target bench damage this attack can deliver: snipe hits one target; spread counters
-    can all concentrate on one, so its total is an equivalent (conservative, no-split) reach."""
-    return max(int(getattr(attack, "benchSnipe", 0) or 0),
-               int(getattr(attack, "benchSpread", 0) or 0))
-
-
 class BoardPotential:
     """Absolute observable-state utility used at every Bellman transition.
 
@@ -112,8 +104,7 @@ class BoardPotential:
         self.opponent_role_worth = {int(card_id): max(0.0, float(worth))
                                     for card_id, worth in (opponent_role_worth or {}).items()}
         self.isolated_selection = bool(isolated_selection)
-        # ADR-0060's strip/gift term, dark at 0.0: `value.opponent_hand_share` arms it. The
-        # refresh ledger reads this same share so the two pricing paths cannot disagree.
+        # Every consumer of the opponent-hand term must read THIS share, or the paths disagree.
         self.opponent_hand_share = max(0.0, float(opponent_hand_share))
         self._stat_cache = {}
         self._attack_cache = {}
@@ -297,7 +288,7 @@ class BoardPotential:
             damage = max(float(compute_active_damage(
                              attack, stat, defender_stat, defender_tags, context=context,
                              defender_transient=transient)),
-                         float(_bench_reach(attack)))
+                         float(bench_reach(attack)))
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
         return best
 
@@ -318,7 +309,7 @@ class BoardPotential:
         active = next((body for body in (player.get("active") or ()) if body), None)
         if active is not None:
             pending = ((POISON_CHECKUP_DAMAGE if player.get("poisoned") else 0.0)
-                       + (BURN_EXPECTED_CHECKUP_DAMAGE if player.get("burned") else 0.0))
+                       + (BURN_CHECKUP_DAMAGE if player.get("burned") else 0.0))
             if pending:
                 remaining = max(KNOCKED_OUT_HP, int(active.get("hp", MINIMUM_HP)))
                 total += min(pending, remaining) / DAMAGE_COUNTERS_PER_PRIZE
@@ -437,7 +428,7 @@ class BoardPotential:
                 defender_transient=self._defender_tool_transient(defender))
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
-            reach = _bench_reach(attack)
+            reach = bench_reach(attack)
             bench_prizes = max((self._prizes(target) for target in opponent.get("bench") or ()
                                 if target and reach >= int(target.get("hp", MINIMUM_HP))),
                                default=0)
@@ -473,7 +464,7 @@ class BoardPotential:
                     defender_transient=self._defender_tool_transient(defender))
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
-                reach = _bench_reach(attack)
+                reach = bench_reach(attack)
                 target_prizes = max((self._prizes(target) for target in bench
                                      if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
                 if target_prizes:
@@ -512,7 +503,7 @@ class BoardPotential:
                     defender_transient=self._defender_tool_transient(active))
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
-                reach = _bench_reach(attack)
+                reach = bench_reach(attack)
                 exposed += max((self._prizes(target) for target in bench
                                 if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
                 if body is attacker_active:

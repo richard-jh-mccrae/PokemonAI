@@ -132,7 +132,8 @@ class BellmanRuntime:
         return players[seat] if 0 <= seat < len(players) and players[seat] else {}
 
     def _option_card_id(self, observation, option, seat: int) -> int | None:
-        if int(option.get("type") or -1) != _CARD or option.get("area") != _HAND:
+        option_type = option.get("type")             # 0 is a legal type; `or` would eat it
+        if option_type is None or int(option_type) != _CARD or option.get("area") != _HAND:
             return None
         owner = option.get("playerIndex")                # present-but-None on the engine shape
         owner = seat if owner is None else int(owner)
@@ -458,7 +459,8 @@ def _last_resort_selection(observation: dict) -> list[int]:
     select = observation.get("select") or {}
     options = tuple(select.get("option") or ())
     end_index = next((index for index, option in enumerate(options)
-                      if isinstance(option, dict) and int(option.get("type") or -1) == _END),
+                      if isinstance(option, dict) and option.get("type") is not None
+                      and int(option["type"]) == _END),
                      None)
     if end_index is not None:
         return [end_index]

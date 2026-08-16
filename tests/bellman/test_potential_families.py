@@ -92,11 +92,15 @@ def test_our_own_sleeping_active_discounts_our_forecast_readiness():
     assert dict(asleep.families)["readiness"] < dict(awake.families)["readiness"]
 
 
-def test_poison_on_the_opponent_active_is_pending_damage_progress():
+def test_poison_and_burn_on_the_opponent_active_are_pending_damage_progress():
     clean = _potential()(_observation())
     poisoned = _potential()(_observation(opp_conditions=("poisoned",)))
+    burned = _potential()(_observation(opp_conditions=("burned",)))
 
-    assert dict(poisoned.families)["damage"] > dict(clean.families)["damage"]
+    damage = lambda potential: dict(potential.families)["damage"]
+    assert damage(poisoned) == damage(clean) + 10 / 200.0
+    # Burn lands 2 counters unconditionally; the coin decides only the cure (docs/rules.md L161).
+    assert damage(burned) == damage(clean) + 20 / 200.0
 
 
 def test_a_spread_attack_reaches_the_bench_in_forecasts():

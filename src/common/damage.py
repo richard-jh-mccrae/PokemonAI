@@ -143,3 +143,10 @@ def _prevented(attacker, defender, defender_tags) -> bool:
     if scope == "ex":
         return True
     return scope == "basic_ex" and not getattr(attacker, "evolvesFrom", None)
+
+
+def bench_reach(attack) -> int:
+    """Single-target bench damage: snipe hits one target; spread counters can all concentrate
+    on one, so its total is an equivalent no-split reach."""
+    return max(int(getattr(attack, "benchSnipe", 0) or 0),
+               int(getattr(attack, "benchSpread", 0) or 0))
