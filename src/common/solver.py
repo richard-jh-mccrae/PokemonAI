@@ -13,8 +13,10 @@ from .algebra import (
 from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
+from .fetch import WINDOW, fetch_target_matches
 from .options import LegalAction
 from .demand import StrategyBeamBuilder, semantic_action_key
+from .refresh import played_card_id
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
 from .strategy.context import _DISCARD
@@ -736,7 +738,45 @@ class ProductionSolver(ReferenceSolver):
 
         return tuple(sorted(node.choices, key=priority))
 
-    def _information_dominance_filter(self, actions, footprints):
+    def _peek_is_live(self, state: DecisionState, action: LegalAction) -> bool:
+        """Whether this peek can still reveal anything: a fetch window with zero live targets in
+        the remaining deck carries zero information, so it must not order anyone (ADR-0140)."""
+        effects, stats = self.oracle.effects, self.oracle.stats
+        if effects is None or stats is None:
+            return True
+        card_id = played_card_id(state, action)
+        if card_id is None:
+            return True
+        fetches = tuple(clause for clause in effects.clauses(card_id)
+                        if clause.get("kind") == "fetch")
+        if not fetches:
+            return True
+        return any(
+            count > 0 and any(fetch_target_matches(clause, stats.get(target_id), reading=WINDOW)
+                              for clause in fetches)
+            for target_id, count in state.deck_counts)
+
+    def _hand_payment_available(self, state: DecisionState, actions) -> bool:
+        """Whether any legal play this turn pays a discard-from-hand cost (Ultra Ball class).
+
+        When one does, the peek may be worth more as payment than as a peek, and only the value
+        calculation can weigh that — the gate stands down (ADR-0140).
+        """
+        effects = self.oracle.effects
+        if effects is None:
+            return False
+        for action in actions:
+            if action.identity.kind != "play":
+                continue
+            card_id = played_card_id(state, action)
+            if card_id is None:
+                continue
+            if any(clause.get("cost") or clause.get("cost_required")
+                   for clause in effects.clauses(card_id)):
+                return True
+        return False
+
+    def _information_dominance_filter(self, state, actions, footprints):
         """Free-peek dominance: play costless pure deck peeks before neutral commitments.
 
         A pure hidden fetch reads and writes only the deck and the acting hand slot, consumes no
@@ -746,14 +786,21 @@ class ProductionSolver(ReferenceSolver):
         is pruned.  Barrier actions are never pruned — a shuffle or draw can destroy the peek's
         knowledge, so peek-first is not dominant over them — and attack/End stay reachable as the
         guaranteed-executable safety fallback.
+
+        The gate defers to the value model where the model already knows better: a dead peek
+        (zero live window targets) orders nothing, and the presence of a discard-cost play means
+        the peek may be fodder, so the whole node is left ungated.
         """
         peek_available = False
         for action in actions:
             footprint = footprints.get(action.identity)
-            if footprint is not None and footprint.information_first:
+            if (footprint is not None and footprint.information_first
+                    and self._peek_is_live(state, action)):
                 peek_available = True
                 break
         if not peek_available:
+            return actions
+        if self._hand_payment_available(state, actions):
             return actions
         retained = []
         for action in actions:
@@ -1081,7 +1128,7 @@ class ProductionSolver(ReferenceSolver):
                         self.por_pruned += 1
             actions = filtered
             if self.profile.get("search.information_dominance_enabled") >= 0.5:
-                actions = self._information_dominance_filter(actions, footprints)
+                actions = self._information_dominance_filter(state, actions, footprints)
         strategy_focus = (actor is Actor.OURS
                           and (key == self._root_key or self._harvesting_candidates)
                           and self._strategy_builder is not None

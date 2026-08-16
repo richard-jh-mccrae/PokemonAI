@@ -46,6 +46,20 @@ Never pruned:
   must stay reachable at every node.
 - Anything at a non-MAIN selection, or when no legal peek survived sleep-set filtering.
 
+The gate defers to the value model where the model already knows better (developer-directed
+expansion, 2026-08-16).  Playing a card is never free — the ledger charges every play's hand
+worth, floors a dead fetch's held worth, credits discarding dead cards as payment, and prices a
+peek's benefit through reveal continuations enumerated over the actual remaining deck — so two
+situations the model already prices correctly must not be overridden by ordering:
+
+1. **A dead peek orders nothing.**  If the peek's fetch window has zero live targets in
+   `deck_counts` (`fetch_target_matches`, WINDOW reading), it carries zero information and the
+   gate ignores it.
+2. **A discard-cost play disarms the whole node.**  If any legal play carries a
+   `cost`/`cost_required` clause (Ultra Ball class), the peek may be worth more as discarded
+   payment than as a peek — with one supporter allowance, a fetched Supporter can even be
+   unplayable — and only the Bellman cost-benefit can weigh that.  The node is left ungated.
+
 The rule is a per-node filter (it re-evaluates at every state; once the peek is consumed the
 commitments reappear), runs after sleep-set pruning and before strategy focus and width caps,
 counts into `information_first_permutations_pruned`, and records

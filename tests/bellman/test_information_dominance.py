@@ -130,3 +130,132 @@ def test_kill_switch_restores_the_full_walk():
 
     assert "attach" in _evaluated_kinds(decision)
     assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 0
+
+
+# --- Value-aware exemptions (ADR-0140 expansion): the gate defers to what the model knows ----
+
+from types import SimpleNamespace  # noqa: E402
+
+PEEK_CARD, PAYMENT_CARD, SUPPORTER_CARD = 901, 902, 903
+
+
+class _Effects:
+    CLAUSES = {
+        PEEK_CARD: ({"kind": "fetch", "target": "supporter", "dig": 7},),
+        PAYMENT_CARD: ({"kind": "fetch", "target": "pokemon", "cost": {"discard": 2}},),
+    }
+
+    def clauses(self, card_id):
+        return self.CLAUSES.get(int(card_id), ())
+
+
+class _Stats:
+    def get(self, card_id):
+        if int(card_id) == SUPPORTER_CARD:
+            return SimpleNamespace(is_supporter=True, is_pokemon=False, is_energy=False,
+                                   is_basic_energy=False)
+        return SimpleNamespace(is_supporter=False, is_pokemon=False, is_energy=False,
+                               is_basic_energy=False)
+
+
+def _hand_obs(node, hand_ids, option_count, *, board=0.0):
+    return {"node": node, "current": {
+        "yourIndex": 0, "turn": 1, "board": board,
+        "supporterPlayed": False, "energyAttached": False, "retreated": False,
+        "players": [
+            {"hand": [{"id": cid, "playerIndex": 0} for cid in hand_ids],
+             "active": [], "bench": [], "discard": [], "prize": []},
+            {"hand": None, "active": [], "bench": [], "discard": [], "prize": []},
+        ]}, "select": {"context": 0,
+                       "option": [{"index": i} for i in range(option_count)]}}
+
+
+def _hand_state(node, hand_ids, deck, option_count, **kwargs):
+    return DecisionState.from_observation(
+        _hand_obs(node, hand_ids, option_count, **kwargs), deck=deck, deck_name="test",
+        value_registry_identity=REGISTRY.identity)
+
+
+def _rich_oracle():
+    return ValueOracle(REGISTRY, lambda obs: Potential(
+        float(obs["current"].get("board", 0.0)),
+        (("board", float(obs["current"].get("board", 0.0))),)),
+        effects=_Effects(), stats=_Stats())
+
+
+PEEK_PLAY = LegalAction(ActionIdentity("play", ("peek",)), (0,), ((0,),), ())
+PAYMENT_PLAY = LegalAction(ActionIdentity("play", ("payment",)), (1,), ((1,),), ())
+ATTACH_2 = LegalAction(ActionIdentity("attach", ("attach",)), (2,), ((2,),), ())
+ATTACK_3 = LegalAction(ActionIdentity("attack", ("attack",)), (3,), ((3,),), ())
+END_4 = LegalAction(ActionIdentity("end", ("end",)), (4,), ((4,),), ())
+
+RICH_FOOTPRINTS = {
+    ("play", ("peek",)): ActionFootprint(("play", "peek"), barrier=True, information_first=True),
+    ("play", ("payment",)): ActionFootprint(("play", "payment"), barrier=True, commitment=True),
+    ("attach", ("attach",)): ActionFootprint(
+        ("attach", "energy", "body"),
+        frozenset({"hand:energy"}), frozenset({"hand:energy", "body:energy"}), commitment=True),
+    ("attack", ("attack",)): ActionFootprint(("attack",), barrier=True, commitment=True),
+    ("end", ("end",)): ActionFootprint(("end",), barrier=True),
+}
+
+
+class RichBoard:
+    def __init__(self, actions):
+        self._actions = actions
+        good, bad = _state("good", board=5.0), _state("bad", board=1.0)
+        self._transitions = {
+            ("play", ("peek",)): Terminal(good, "win"),
+            ("play", ("payment",)): Terminal(good, "win"),
+            ("attach", ("attach",)): Terminal(good, "win"),
+            ("attack", ("attack",)): Terminal(bad, "win"),
+            ("end", ("end",)): Terminal(bad, "win"),
+        }
+
+    def actions(self, state):
+        return self._actions if state.obs["node"] == "root" else ()
+
+    def transition(self, state, action):
+        return self._transitions[(action.identity.kind, action.identity.parts)]
+
+    def resolve_end(self, state, action):
+        return None
+
+    def actor(self, state):
+        return Actor.OURS
+
+    def footprint(self, state, action):
+        return RICH_FOOTPRINTS[(action.identity.kind, action.identity.parts)]
+
+
+def test_a_dead_peek_orders_nothing():
+    # Deck holds no supporter, so the peek's window cannot reveal a target: zero information.
+    root = _hand_state("root", (PEEK_CARD,), (PEEK_CARD, CARD), 5)
+    solver = ProductionSolver(RichBoard((PEEK_PLAY, ATTACH_2, ATTACK_3, END_4)),
+                              _rich_oracle(), profile=_profile(1.0))
+    decision = solver.decide(root)
+
+    assert "attach" in _evaluated_kinds(decision)
+    assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 0
+
+
+def test_a_live_peek_still_orders_the_attach():
+    root = _hand_state("root", (PEEK_CARD,), (PEEK_CARD, SUPPORTER_CARD), 5)
+    solver = ProductionSolver(RichBoard((PEEK_PLAY, ATTACH_2, ATTACK_3, END_4)),
+                              _rich_oracle(), profile=_profile(1.0))
+    decision = solver.decide(root)
+
+    assert "attach" not in _evaluated_kinds(decision)
+    assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 1
+
+
+def test_a_discard_cost_play_disarms_the_gate():
+    # An Ultra Ball-class play is legal, so the peek may be worth more as its payment; only the
+    # value calculation can weigh that, and the gate stands down.
+    root = _hand_state("root", (PEEK_CARD, PAYMENT_CARD), (PEEK_CARD, PAYMENT_CARD, SUPPORTER_CARD), 5)
+    solver = ProductionSolver(RichBoard((PEEK_PLAY, PAYMENT_PLAY, ATTACH_2, ATTACK_3, END_4)),
+                              _rich_oracle(), profile=_profile(1.0))
+    decision = solver.decide(root)
+
+    assert "attach" in _evaluated_kinds(decision)
+    assert decision.diagnostics["production"]["information_first_permutations_pruned"] == 0
