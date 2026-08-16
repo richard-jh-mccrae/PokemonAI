@@ -51,8 +51,9 @@ Pokémon is a Stage 2 Cinderace with no evolution above it and no Staryu anywher
 positive magnitude of `opponent_roles`, clamped to `[0, 1]`, multiplying both the `opponent_hand`
 family and the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to
 protect the leader's card economy — they have to dig. The parity is **pinned to the root
-observation** rather than recomputed per successor: how far behind we are is a read of the position being decided from,
-and letting successors move it would price board development and damage partly through a hand term.
+observation** rather than recomputed per successor: how far behind we are is a read of the
+position being decided from, and letting successors move it would price board development and
+damage partly through a hand term.
 
 The denominator is role pressure rather than a board figure taken from the opponent's stacks,
 because no such figure is trustworthy. `_own_board_resources` was written side-agnostic and card
