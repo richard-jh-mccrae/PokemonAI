@@ -246,10 +246,11 @@ def _belief_digest(belief) -> bytes:
 
 @dataclass(frozen=True)
 class TurnBudgets:
+    # Per-body ability usage is engine-private (never rendered into the observation), so it is
+    # deliberately absent here; the legal menu is the only visible trace of a spent ability.
     supporter: bool
     manual_attach: bool
     retreat: bool
-    ability: tuple[int, ...]
     attack: bool
     stadium: bool
 
@@ -260,8 +261,6 @@ class TurnBudgets:
             supporter=not bool(current.get("supporterPlayed")),
             manual_attach=not bool(current.get("energyAttached")),
             retreat=not bool(current.get("retreated")),
-            ability=tuple(sorted(int(serial) for serial in
-                                 (current.get("abilityUsedBodies") or ()))),
             attack=True,
             stadium=not bool(current.get("stadiumPlayed")),
         )
@@ -377,7 +376,7 @@ class DecisionState:
         _feed(update, (self.root_seat, self.deck_name, self.deck_counts, self.prize_counts))
         budgets = self.budgets
         _feed(update, (budgets.supporter, budgets.manual_attach, budgets.retreat,
-                       budgets.ability, budgets.attack, budgets.stadium))
+                       budgets.attack, budgets.stadium))
         update(_belief_digest(self.belief))
         _feed(update, self.value_registry_identity)
         plan_key = hasher.hexdigest()

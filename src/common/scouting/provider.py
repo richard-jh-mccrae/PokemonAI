@@ -18,6 +18,7 @@ from .card_text import (  # noqa: F401
     name_in_family,
     normalize_card_name,
     parse_attack_bench_requirement,
+    parse_tool_damage_reduction,
     parse_attack_bench_snipe,
     parse_attack_bench_spread,
     parse_attack_damage_bounds,
@@ -95,6 +96,8 @@ class CardStat:
     preventsDamageAtLeast: int = 0          # threshold prevention (damage >= N -> 0); 0 = off
     damageReduction: int = 0                # flat always-on, AFTER W/R
     damageReductionTypes: tuple | None = None  # None = all attackers
+    damageReductionHolderTypes: tuple | None = None  # Tool: holder EnergyType gate; None = any
+    damageReductionRequiresAbility: bool = False     # Tool: only attackers WITH an Ability
     synthetic: bool = False             # test-only: an arbitrary body on a convenient real id
 
     # --- single-card interpretation (ADR-0056): byte-faithful ports of retired call-site idioms.
@@ -359,6 +362,10 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
         recoil = max((recoil_by_aid.get(aid, 0) for aid in c.attacks if dmg.get(aid, 0) == max_dmg),
                      default=0)
         prevents_from, prevents_at_least, dmg_reduction, reduction_types = parse_card_defense(c)
+        # A Tool's reduction wording is disjoint from the body patterns; nonzero wins the slot.
+        tool_red, tool_types, tool_holders, tool_ability = parse_tool_damage_reduction(c)
+        if tool_red:
+            dmg_reduction, reduction_types = tool_red, tool_types
         boost, boost_type, boost_vs_ex = parse_card_damage_boost(c)
         cache[c.cardId] = CardStat(
             cardId=c.cardId, name=c.name, hp=int(c.hp),
@@ -392,6 +399,8 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             preventsDamageAtLeast=prevents_at_least,
             damageReduction=dmg_reduction,
             damageReductionTypes=reduction_types,
+            damageReductionHolderTypes=tool_holders if tool_red else None,
+            damageReductionRequiresAbility=bool(tool_red and tool_ability),
         )
     return cache
 

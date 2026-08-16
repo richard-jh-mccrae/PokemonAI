@@ -128,6 +128,11 @@ DEFINITIONS = (
     ParameterDefinition("clock.adaptive_enabled", "planning_clock", 0.0, 0.0, 1.0,
                         "boolean", False),
     ParameterDefinition("belief.unknown_mass", "belief", 1.0, 0.0, 1.0, "probability"),
+    # ADR-0060's opponent strip/gift pricing, armed by developer ruling 2026-08-16. The magnitude
+    # is the ratified one: a hidden opponent card is worth a tenth of the known-card floor, the
+    # largest share under which both re-adjudicated corpus frames keep their ruled line.
+    ParameterDefinition("value.opponent_hand_share", "bellman_value", 0.1, 0.0, 1.0,
+                        "multiplier", False),
     ParameterDefinition("plan_reuse.enabled", "plan_reuse", 1.0, 0.0, 1.0, "boolean", False),
     ParameterDefinition("scouting.posture_scale", "scouting", 1.0, 0.0, 2.0, "multiplier"),
     ParameterDefinition("telemetry.family_detail", "diagnostics", 0.0, 0.0, 1.0,

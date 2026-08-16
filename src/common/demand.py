@@ -12,6 +12,7 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
+from .damage import bench_reach
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
@@ -186,6 +187,14 @@ class StrategyBeamBuilder:
                 depth = int(clause.get("dig", 0) or 0)
                 best = max(best, access_probability(pool, depth, matching) if depth else
                            float(bool(matching)))
+            elif kind == "accel" and clause.get("source") == "deck":
+                # Energy acceleration is a funding OUT: it reaches the same deck Energy a
+                # fetch would, so it earns the same certainty of access.
+                if clause.get("trigger") or clause.get("condition"):
+                    continue
+                matching = tuple(card_id for card_id in eligible
+                                 if _accel_target_matches(clause, self.stats.get(card_id)))
+                best = max(best, float(bool(matching)))
         return best
 
     def _priority(self, state, action) -> tuple[float, tuple[str, ...]]:
@@ -204,10 +213,10 @@ class StrategyBeamBuilder:
                   and recipient == hint.recipient_serial
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)):
                 probability = 1.0
-            elif (hint.kind == "heal" and action.identity.kind == "play"
+            elif (hint.kind in {"heal", "damage_boost"} and action.identity.kind == "play"
                   and self.effects is not None
                   and source_id is not None
-                  and any(clause.get("kind") == "heal"
+                  and any(clause.get("kind") == hint.kind
                           for clause in self.effects.clauses(source_id))):
                 probability = 1.0
             elif (hint.kind == "deploy" and action.identity.kind == "play"
@@ -223,7 +232,7 @@ class StrategyBeamBuilder:
                 target_exists = any(
                     int(body.get("serial", -1)) == hint.recipient_serial
                     for body in self._opponent(state).get("bench") or () if body)
-                if target_exists and int(getattr(attack, "benchSnipe", 0) or 0) > 0:
+                if target_exists and bench_reach(attack) > 0:
                     probability = 1.0
             elif (action.identity.kind == "card" and source_id is not None
                   and source_id in hint.target_card_ids):
@@ -290,6 +299,14 @@ def access_probability(pool_ids, draws: int, eligible_ids) -> float:
     classes = hypergeometric_classes(
         pool_ids, draws, (OutcomeGroup("demand", eligible),))
     return sum(outcome.probability for outcome in classes if outcome.counts[0] > 0)
+
+
+def _accel_target_matches(clause, stat) -> bool:
+    """An accel clause reaches Basic Energy, optionally one printed type."""
+    if not bool(getattr(stat, "is_basic_energy", False)):
+        return False
+    required_type = clause.get("energy_type")
+    return required_type is None or getattr(stat, "energyType", None) == required_type
 
 
 def _demand_fetch_target_matches(clause, stat) -> bool:
@@ -717,18 +734,35 @@ class DemandModel:
         tokens = []
         clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
         for clause in clauses:
-            if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
-                continue
-            if not all(not clause.get(field) for field in
-                       ("trigger", "dig", "condition", "name_family")):
-                continue
-            if bool(clause.get("cost_required")) and discard_cost(clause) > discard_capacity:
+            kind = clause.get("kind")
+            if kind == "fetch":
+                if clause.get("zone") != "deck":
+                    continue
+                if not all(not clause.get(field) for field in
+                           ("trigger", "dig", "condition", "name_family")):
+                    continue
+                if bool(clause.get("cost_required")) and discard_cost(clause) > discard_capacity:
+                    continue
+
+                def matches(target, clause=clause):
+                    return fetch_target_matches(clause, self.stat(target), reading=REACH)
+            elif kind == "accel":
+                # Energy acceleration reaches the same deck Energy a fetch would; without this
+                # token an accelerator counts as zero outs in every coverage question.
+                if clause.get("source") != "deck":
+                    continue
+                if clause.get("trigger") or clause.get("condition"):
+                    continue
+
+                def matches(target, clause=clause):
+                    return _accel_target_matches(clause, self.stat(target))
+            else:
                 continue
             reachable = tuple(
                 edge(index, value, int(target))
                 for index, demand in enumerate(demands)
                 for target, value in demand.direct
-                if (fetch_target_matches(clause, self.stat(target), reading=REACH)
+                if (matches(target)
                     and (available_targets is None
                          or int(available_targets.get(int(target), 0)) > 0))
             )

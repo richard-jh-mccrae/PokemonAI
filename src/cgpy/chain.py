@@ -290,7 +290,11 @@ def _after_program(gs: GameState, fr: EffectFrame) -> None:
         from .turn import _post_end_turn
         _post_end_turn(gs, fr.seat)
     elif fr.kind in ("play", "ability"):
-        from .turn import flush_triggers
+        from .turn import _sweep_kos, flush_triggers
+        # Item/Ability damage KOs sweep at resolution, exactly like attack damage — without this
+        # a 0-HP body stayed in play (and rendered) until the end-of-turn checkup.
+        if _sweep_kos(gs, credited=fr.seat, then=("main", fr.seat)):
+            return
         flush_triggers(gs, fr.seat)
 
 
@@ -2155,6 +2159,9 @@ def op_discard_energy_attach_bench(gs, fr, args) -> bool:
         energy = fr.vars["picked"][0]
         if "answer" not in fr.vars:
             opts = [opt_card(AreaType.BENCH, i, seat) for i in range(len(b.bench))]
+            if not opts:                      # empty bench: min_count 1 over [] would deadlock
+                fr.vars["picked"] = []
+                break
             pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
                  options=opts, min_count=1, max_count=1,
                  context_card=energy, effect_card=fr.source)
@@ -2181,6 +2188,8 @@ def op_discard_energy_attach_one_target(gs, fr, args) -> bool:
         if "answer" not in fr.vars:
             opts = _zone_options(gs, seat, b.discard, AreaType.DISCARD,
                                  args.get("filter", {}))
+            if not opts:                      # nothing matching: min_count 1 would deadlock
+                return True
             pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_TO,
                  options=opts, min_count=args.get("min", 1),
                  max_count=min(args.get("max", 2), len(opts)), effect_card=fr.source)
@@ -2192,6 +2201,9 @@ def op_discard_energy_attach_one_target(gs, fr, args) -> bool:
         from .options import _targets
         opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
                 if _card_matches(gs, p.top, args.get("targetFilter", {}))]
+        if not opts:                          # no legal recipient: the picks stay in the discard
+            fr.vars.pop("picked", None)
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
              options=opts, min_count=1, max_count=1, effect_card=fr.source)
         return False
@@ -2218,6 +2230,8 @@ def op_move_damage_counters(gs, fr, args) -> bool:
         if "answer" not in fr.vars:
             opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
                     if p.hp < p.max_hp]
+            if not opts:                      # no damaged body: min_count 1 would deadlock
+                return True
             pose(gs, seat, type=SelectType.CARD,
                  context=SelectContext.REMOVE_DAMAGE_COUNTER,
                  options=opts, min_count=1, max_count=1, effect_card=fr.source)
@@ -2259,6 +2273,10 @@ def op_move_damage_counters(gs, fr, args) -> bool:
                         and stadium_def(gs).get("benchCounterShield"))]
         # Battle Cage: benched destinations excluded (UNPINNED shape); Adrena-Brain's
         # move is ability-sourced counter placement, squarely in the shield's text
+        if not opts:                          # no legal destination: the heal (already applied
+            fr.vars.pop("count", None)        # on the count answer) stands, the move is skipped
+            fr.vars.pop("src", None)
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.DAMAGE_COUNTER,
              options=opts, min_count=1, max_count=1, effect_card=fr.source)
         return False
@@ -2647,6 +2665,8 @@ def op_heal_mega_bounce_energy(gs, fr, args) -> bool:
         from .options import _targets
         opts = [opt_card(area, idx, seat) for area, idx, p in _targets(gs, seat)
                 if gs.stat(p.top).megaEx and p.hp < p.max_hp]
+        if not opts:                          # no damaged mega: min_count 1 would deadlock
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.HEAL,
              options=opts, min_count=1, max_count=1, effect_card=fr.source)
         return False
@@ -2861,6 +2881,9 @@ def op_move_energy_own(gs, fr, args) -> bool:
                                    src_o["index"]).energy[src_o["energyIndex"]]
         opts = [opt_card(area, idx, seat) for area, idx, _p in _targets(gs, seat)
                 if not (area == src_o["area"] and idx == src_o["index"])]
+        if not opts:                          # lone body: min_count 1 over [] would deadlock
+            fr.vars.pop("moving")
+            return True
         pose(gs, seat, type=SelectType.CARD, context=SelectContext.ATTACH_FROM,
              options=opts, min_count=1, max_count=1,
              context_card=moving_serial, effect_card=fr.source)

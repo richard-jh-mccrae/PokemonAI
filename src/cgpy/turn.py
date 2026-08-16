@@ -502,8 +502,11 @@ def _attack_damage_apply(gs: GameState, seat: int, attack_id: int,
     if pre_vars.get("cancel"):  # "If tails, this attack does nothing": no damage, no rider
         _end_turn(gs, seat)
         return
-    dmg = attack_damage(gs, attacker, gs.db.attacks[attack_id], defender,
-                        adef=adef, pre_vars=pre_vars)
+    # A `pre` program can have removed the defender (bounce/shuffle with an empty bench);
+    # attack_damage dereferences it once any damage lands.
+    dmg = (attack_damage(gs, attacker, gs.db.attacks[attack_id], defender,
+                         adef=adef, pre_vars=pre_vars)
+           if defender is not None else 0)
     # An attack WITH a damage component logs HP_CHANGE even when it computes 0; a component-less
     # status attack logs nothing.
     has_damage = (gs.db.attacks[attack_id].damage > 0 or "scale" in adef
@@ -627,7 +630,8 @@ def _after_prizes_taken(gs: GameState) -> None:
     promote = [s for s in (0, 1)
                if gs.players[s].active is None and gs.players[s].bench]
     # The attacked side promotes first when both lost their Active (seeded order).
-    credited = d["then"][1] if d["then"][0] == "end_turn" else 1 - d["then"][1]
+    credited = (d["then"][1] if d["then"][0] in ("end_turn", "main")
+                else 1 - d["then"][1])
     promote.sort(key=lambda s: 0 if s != credited else 1)
     if promote:
         d["await"] = "promote"
@@ -648,6 +652,8 @@ def _run_continuation(gs: GameState) -> None:
     gs.phase_data = {"seat": seat}
     if kind == "end_turn":
         _end_turn(gs, seat)
+    elif kind == "main":                      # a mid-turn Item/Ability KO resumes the same turn
+        flush_triggers(gs, seat)
     else:
         begin_turn(gs, seat)
 

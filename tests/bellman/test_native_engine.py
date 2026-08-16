@@ -139,6 +139,29 @@ def test_terminal_proof_abstains_when_play_effect_metadata_is_missing():
     assert not provider.terminal_action_supported(state, action)
 
 
+def test_terminal_proof_resolves_the_engine_shaped_ability_source():
+    # The deployed engine emits every option key, unused ones None — `inPlayArea: None` must not
+    # shadow the `area` reference the ability actually carries (the PR #532 shape).
+    from observation_helpers import engine_opt
+
+    observation = {
+        "current": {"yourIndex": 0, "players": [
+            {"hand": [], "active": [{"id": 112}], "bench": []}, {}]},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [engine_opt(type=10, area=4, index=0)]},
+    }
+    state = DecisionState.from_observation(observation, deck=(), deck_name="test")
+    action = enumerate_legal_actions(observation)[0]
+    provider = object.__new__(NativeCgTransitionProvider)
+    provider.effects = type("Effects", (), {
+        "clauses": lambda _self, _card_id: ({"kind": "heal"},),
+        "fully_covers": lambda _self, card_id: card_id == 112,
+    })()
+    provider.stats = type("Stats", (), {"get": lambda _self, _card_id: None})()
+
+    assert provider.terminal_action_supported(state, action)
+
+
 def test_terminal_proof_abstains_when_attach_trigger_metadata_is_missing():
     observation = {
         "current": {"yourIndex": 0, "players": [

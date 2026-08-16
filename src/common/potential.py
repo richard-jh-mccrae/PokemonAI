@@ -9,10 +9,10 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from .card_worth import function_role
+from .card_worth import KNOWN_CARD_FLOOR, function_role
 from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
-from .damage import compute_active_damage
+from .damage import bench_reach, compute_active_damage
 from .damage_context import SideFacts, damage_context
 from .strategy.context import _DAMAGE, _TO_ACTIVE
 from .value import Potential, ValueRegistry, worth_to_prizes
@@ -34,6 +34,18 @@ BENCH_ATTACK_ACCESS_SHARE = 0.50
 EVOLVED_BODY_PRIZE_SHARE = 0.040
 DEPLOYED_BASIC_LINE_PRIZE_SHARE = 0.020
 KO_PRESSURE_SHARE = 0.000001
+#: ADR-0060's strip/gift currency: one hidden opponent card = the known-card floor.
+OPPONENT_HAND_CARD_WORTH = KNOWN_CARD_FLOOR
+#: Checkup facts (docs/rules.md L161): poison places 1 counter; burn places 2 UNCONDITIONALLY —
+#: the coin only decides whether the burn then cures, never whether the damage lands.
+POISON_CHECKUP_DAMAGE = 10
+BURN_CHECKUP_DAMAGE = 20.0
+#: Forecast share of a statused Active's attack: wake/attack coins and the paralysis turn-skip
+#: (docs/rules.md L156-166); our own sleep sees two checkups before our next attack window.
+INCOMING_CONDITION_SHARE = {"asleep": 0.5, "paralyzed": 0.0, "confused": 0.5}
+OWN_CONDITION_SHARE = {"asleep": 0.75, "confused": 0.5}
+
+_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -60,6 +72,34 @@ def _pay_fraction(codes, required) -> float:
     return payment_fraction(codes, required)
 
 
+def _hand_count(player) -> int:
+    hand = player.get("hand")
+    return len(hand) if hand is not None else int(player.get("handCount", 0) or 0)
+
+
+def board_parity(board: float, role_pressure: float) -> float:
+    """Our board Worth over the opponent's role-pressure magnitude, in ``[0, 1]`` (ADR-0141).
+    No resolved pressure means nothing to be behind of, so parity stays whole."""
+    if role_pressure <= 0.0:
+        return 1.0
+    return min(1.0, max(0.0, board) / role_pressure)
+
+
+def own_stadium(current, seat: int) -> tuple:
+    return tuple(card for card in (current.get("stadium") or ())
+                 if card and card.get("playerIndex") is not None
+                 and int(card["playerIndex"]) == seat)
+
+
+def _active_condition_share(player, table) -> float:
+    """Special conditions ride the player payload and apply to that side's Active only."""
+    share = 1.0
+    for name, factor in table.items():
+        if player.get(name):
+            share *= factor
+    return share
+
+
 class BoardPotential:
     """Absolute observable-state utility used at every Bellman transition.
 
@@ -70,7 +110,8 @@ class BoardPotential:
     def __init__(self, stats, *, registry: ValueRegistry,
                  profile: BellmanDeckProfile | None = None,
                  scale: UtilityScale = UtilityScale(), root_seat: int | None = None,
-                 opponent_role_worth=None, isolated_selection: bool = False):
+                 opponent_role_worth=None, isolated_selection: bool = False,
+                 opponent_hand_share: float = 0.0, root_observation=None):
         self.stats = stats
         self.registry = registry
         self.profile = profile or BellmanDeckProfile.from_registry(registry)
@@ -79,6 +120,11 @@ class BoardPotential:
         self.opponent_role_worth = {int(card_id): max(0.0, float(worth))
                                     for card_id, worth in (opponent_role_worth or {}).items()}
         self.isolated_selection = bool(isolated_selection)
+        # Every consumer of the opponent-hand term must read THIS share, or the paths disagree.
+        self.opponent_hand_share = max(0.0, float(opponent_hand_share))
+        # Pinned to the deciding position, never per successor: ADR-0141 amendment, or the scaling
+        # leaks into the damage and development families.
+        self.board_parity = 1.0
         self._stat_cache = {}
         self._attack_cache = {}
         self._resource_job_cache = {}
@@ -89,6 +135,24 @@ class BoardPotential:
         # player/body dicts.  The observation is immutable for the duration of one ``__call__``, so
         # results are keyed by object identity and the cache lives only for that call.
         self._call_cache = None
+        if root_observation is not None:
+            self.board_parity = self._root_board_parity(root_observation)
+
+    def _sides(self, current):
+        seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
+        players = current.get("players") or ()
+
+        def side(index):
+            return players[index] if 0 <= index < len(players) and players[index] else {}
+
+        return seat, side(seat), side(1 - seat)
+
+    def _root_board_parity(self, observation) -> float:
+        current = observation.get("current") or {}
+        seat, me, opponent = self._sides(current)
+        role_pressure = -self._opponent_role_pressure(opponent)
+        return board_parity(self._own_board_resources(me, stadium=own_stadium(current, seat)),
+                            role_pressure)
 
     def _stat(self, card_id):
         if not self.stats or card_id is None:
@@ -228,6 +292,52 @@ class BoardPotential:
             deck_basic_by_type=deck_basic_by_type,
         )
 
+    def _defender_tool_transient(self, defender) -> dict | None:
+        """Attached-tool damage reduction on the defending BODY — without it the forecast reads
+        only the Pokémon card's own printed defenses and overestimates every KO."""
+        cache = self._call_cache
+        if cache is not None:
+            key = ("tool", id(defender))
+            found = cache.get(key, _UNSET)
+            if found is not _UNSET:
+                return found
+        holder_stat = self._stat(defender.get("id"))
+        holder_type = getattr(holder_stat, "energyType", None) if holder_stat else None
+        reduction, typed = 0, []
+        for tool in (defender.get("tools") or ()):
+            stat = self._stat(tool.get("id") if isinstance(tool, dict) else tool)
+            amount = int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
+            if not amount:
+                continue
+            holders = getattr(stat, "damageReductionHolderTypes", None)
+            if holders is not None and holder_type not in holders:
+                continue                               # Thick Scale on a non-{N} holder is inert
+            types = getattr(stat, "damageReductionTypes", None)
+            needs_ability = bool(getattr(stat, "damageReductionRequiresAbility", False))
+            if types is None and not needs_ability:
+                reduction += amount
+            else:                                      # attacker-gated: resolved per attack
+                typed.append((amount, types, needs_ability))
+        result = {}
+        if reduction:
+            result["reduction"] = reduction
+        if typed:
+            result["typed"] = tuple(typed)
+        result = result or None
+        if cache is not None:
+            cache[key] = result
+        return result
+
+    def _condition_share(self, player, table) -> float:
+        cache = self._call_cache
+        if cache is None:
+            return _active_condition_share(player, table)
+        key = ("cond", id(player), id(table))
+        found = cache.get(key)
+        if found is None:
+            found = cache[key] = _active_condition_share(player, table)
+        return found
+
     def _attack_value(self, body, codes, defender, attacker_facts, defender_facts, *,
                       require_ready: bool = False) -> float:
         card_id = body.get("id")
@@ -238,6 +348,7 @@ class BoardPotential:
         hp = max(MINIMUM_HP, int(defender.get("hp", MINIMUM_HP)))
         prizes = self._prizes(defender)
         context = self._context(attacker_facts, defender_facts)
+        transient = self._defender_tool_transient(defender)
         defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
@@ -249,8 +360,9 @@ class BoardPotential:
             if require_ready and readiness < 1.0:
                 continue
             damage = max(float(compute_active_damage(
-                             attack, stat, defender_stat, defender_tags, context=context)),
-                         float(getattr(attack, "benchSnipe", 0) or 0))
+                             attack, stat, defender_stat, defender_tags, context=context,
+                             defender_transient=transient)),
+                         float(bench_reach(attack)))
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
         return best
 
@@ -268,6 +380,13 @@ class BoardPotential:
                       + (self._prizes(body) * KO_PRESSURE_SHARE * (damage / maximum) ** 2
                          if (self.isolated_selection
                              and body_ids[int(body.get("id", 0))] > 1) else 0.0))
+        active = next((body for body in (player.get("active") or ()) if body), None)
+        if active is not None:
+            pending = ((POISON_CHECKUP_DAMAGE if player.get("poisoned") else 0.0)
+                       + (BURN_CHECKUP_DAMAGE if player.get("burned") else 0.0))
+            if pending:
+                remaining = max(KNOCKED_OUT_HP, int(active.get("hp", MINIMUM_HP)))
+                total += min(pending, remaining) / DAMAGE_COUNTERS_PER_PRIZE
         return total
 
     def _reachable_defenders(self, body, *, opponent_moves_next: bool):
@@ -307,14 +426,17 @@ class BoardPotential:
                     values.append(min((self._attack_value(
                         body, self._codes(body), defender, attacker_facts, opponent_facts)
                         for defender in defenders), default=0.0))
-        own = max(max(active_values, default=0.0),
+        own = max(max(active_values, default=0.0)
+                  * self._condition_share(me, OWN_CONDITION_SHARE),
                   BENCH_ATTACK_ACCESS_SHARE * max(bench_values, default=0.0))
         incoming_values = []
         if include_incoming and mine is not None:
+            incoming_active_share = self._condition_share(opponent, INCOMING_CONDITION_SHARE)
             for body in _bodies(opponent):
                 attacker_facts = self._side_facts(opponent, attacking_body=body)
                 incoming_values.append(self._attack_value(
                     body, self._codes(body), mine, attacker_facts, me_facts)
+                    * (incoming_active_share if body is theirs else 1.0)
                     * (1.0 + OPPONENT_ROLE_THREAT_SHARE
                        * self.opponent_role_worth.get(int(body.get("id", 0)), 0.0)
                        / OPPONENT_ROLE_WORTH_NORMALIZER))
@@ -368,6 +490,7 @@ class BoardPotential:
         attacker_facts = self._side_facts(me, attacking_body=body)
         defender_facts = self._side_facts(opponent)
         defender_tags = self._tags(defender.get("id", 0))
+        transient = self._defender_tool_transient(defender)
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
             attack = self._attack(attack_id)
@@ -376,12 +499,13 @@ class BoardPotential:
                 continue
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
-                context=self._context(attacker_facts, defender_facts))
+                context=self._context(attacker_facts, defender_facts),
+                defender_transient=transient)
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
-            snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+            reach = bench_reach(attack)
             bench_prizes = max((self._prizes(target) for target in opponent.get("bench") or ()
-                                if target and snipe >= int(target.get("hp", MINIMUM_HP))),
+                                if target and reach >= int(target.get("hp", MINIMUM_HP))),
                                default=0)
             best = max(best, float(self._prizes(defender) + bench_prizes))
         return best
@@ -397,6 +521,7 @@ class BoardPotential:
             return 0.0
         defender_facts = self._side_facts(opponent)
         defender_tags = self._tags(defender.get("id", 0))
+        transient = self._defender_tool_transient(defender)
         best = 0.0
         for body in _bodies(me):
             stat = self._stat(body.get("id"))
@@ -411,12 +536,13 @@ class BoardPotential:
                         codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                     continue
                 active_damage = compute_active_damage(
-                    attack, stat, defender_stat, defender_tags, context=context)
+                    attack, stat, defender_stat, defender_tags, context=context,
+                    defender_transient=transient)
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
-                snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+                reach = bench_reach(attack)
                 target_prizes = max((self._prizes(target) for target in bench
-                                     if snipe >= int(target.get("hp", MINIMUM_HP))), default=0)
+                                     if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
                 if target_prizes:
                     best = max(best, float(self._prizes(defender) + target_prizes))
         return best
@@ -432,6 +558,11 @@ class BoardPotential:
             return 0.0
         active_tags = self._tags(active.get("id", 0))
         defender_facts = self._side_facts(defender_side)
+        attacker_active = next(
+            (body for body in (attacker_side.get("active") or ()) if body), None)
+        attacker_active_share = self._condition_share(
+            attacker_side, INCOMING_CONDITION_SHARE)
+        active_transient = self._defender_tool_transient(active)
         worst = 0.0
         for body in _bodies(attacker_side):
             stat = self._stat(body.get("id"))
@@ -445,12 +576,15 @@ class BoardPotential:
                     continue
                 exposed = 0.0
                 active_damage = compute_active_damage(
-                    attack, stat, active_stat, active_tags, context=context)
+                    attack, stat, active_stat, active_tags, context=context,
+                    defender_transient=active_transient)
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
-                snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+                reach = bench_reach(attack)
                 exposed += max((self._prizes(target) for target in bench
-                                if snipe >= int(target.get("hp", MINIMUM_HP))), default=0)
+                                if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
+                if body is attacker_active:
+                    exposed *= attacker_active_share
                 worst = max(worst, exposed)
         return -worst
 
@@ -492,7 +626,8 @@ class BoardPotential:
         self._prize_job_capacities_cache = capacities
         return capacities
 
-    def _board_resources(self, me) -> float:
+    def _own_board_resources(self, me, stadium=()) -> float:
+        """OUR side only: registry Worth reads 0.0 for cards outside our deck, not "no board"."""
         capacities = self._prize_job_capacities()
         body_ids = {int(body.get("id", 0)) for body in _bodies(me)}
         required_partners = dict(self.profile.partners)
@@ -507,6 +642,12 @@ class BoardPotential:
                     continue
                 jobs.setdefault(self._resource_job(card_id), []).append(
                     self.registry.worth(card_id))
+        # Our Stadium in play is a board resource like any attached card; without this a Stadium
+        # play was a pure hand loss and the agent was structurally disincentivised from it.
+        for card in stadium:
+            if card and card.get("id") is not None:
+                jobs.setdefault(self._resource_job(int(card["id"])), []).append(
+                    self.registry.worth(int(card["id"])))
         worth = sum(sum(sorted(values, reverse=True)[:capacities.get(card_job, len(values))])
                     for card_job, values in jobs.items())
         return float(worth_to_prizes(worth))
@@ -773,12 +914,7 @@ class BoardPotential:
 
     def _evaluate(self, observation) -> Potential:
         current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
-        players = current.get("players") or ()
-        me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-        opponent_seat = 1 - seat
-        opponent = (players[opponent_seat]
-                    if 0 <= opponent_seat < len(players) and players[opponent_seat] else {})
+        seat, me, opponent = self._sides(current)
         result = int(current.get("result", -1))
         if result != -1:
             game = self.scale.game if result == seat else -self.scale.game
@@ -795,6 +931,8 @@ class BoardPotential:
             include_incoming=not promoted_after_attack)
         if promoted_after_attack:
             readiness = self._next_attachment_coverage(me, opponent)
+        board = self._own_board_resources(me, stadium=own_stadium(current, seat))
+        opponent_roles = self._opponent_role_pressure(opponent)
         families = {
             "game": 0.0,
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
@@ -806,13 +944,17 @@ class BoardPotential:
                                 else self._multi_target_ko_ready(me, opponent)),
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
-            "board": self._board_resources(me),
+            "board": board,
             "energy_position": self._energy_position(
                 me, opponent, historical_context=selection_context),
             "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
             "hand_demand": self._hand_demand(me),
-            "opponent_roles": self._opponent_role_pressure(opponent),
+            "opponent_roles": opponent_roles,
+            "opponent_hand": (-self.board_parity
+                              * self.opponent_hand_share
+                              * worth_to_prizes(OPPONENT_HAND_CARD_WORTH)
+                              * _hand_count(opponent)),
             "prize_plan": self._prize_plan(me, opponent),
         }
         return Potential(sum(families.values()), tuple(sorted(families.items())))

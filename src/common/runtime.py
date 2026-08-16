@@ -4,6 +4,8 @@ from __future__ import annotations
 import gc
 import json
 import os
+import sys
+import traceback
 from pathlib import Path
 from time import perf_counter
 
@@ -26,6 +28,7 @@ from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
     _DRAW_COUNT,
+    _END,
     _HAND,
     _IS_FIRST,
     _MULLIGAN,
@@ -129,14 +132,17 @@ class BellmanRuntime:
         return players[seat] if 0 <= seat < len(players) and players[seat] else {}
 
     def _option_card_id(self, observation, option, seat: int) -> int | None:
-        if int(option.get("type", -1)) != _CARD or option.get("area") != _HAND:
+        option_type = option.get("type")             # 0 is a legal type; `or` would eat it
+        if option_type is None or int(option_type) != _CARD or option.get("area") != _HAND:
             return None
-        owner = int(option.get("playerIndex", seat))
+        owner = option.get("playerIndex")                # present-but-None on the engine shape
+        owner = seat if owner is None else int(owner)
         hand = self._player(observation, owner).get("hand") or ()
         index = option.get("index")
         if not isinstance(index, int) or not 0 <= index < len(hand) or not hand[index]:
             return None
-        return int(hand[index]["id"])
+        card_id = hand[index].get("id")
+        return int(card_id) if card_id is not None else None
 
     @staticmethod
     def _option_of_type(options, option_type: int) -> int | None:
@@ -188,7 +194,7 @@ class BellmanRuntime:
             # Taking a free mulligan draw cannot remove information or a held option.  The
             # numerically largest offered count therefore dominates every smaller count.
             pick = max(range(len(options)),
-                       key=lambda index: int(options[index].get("number", 0)), default=None)
+                       key=lambda index: int(options[index].get("number") or 0), default=None)
             chosen, action = ((pick,) if pick is not None else (), "free_draw_count")
         else:
             minimum = min(int(select.get("minCount", 0)), len(options))
@@ -212,8 +218,10 @@ class BellmanRuntime:
             self.last_read, getattr(self.scout, "artifact", None), self.stats,
             briefs=self.briefs, functions=self.functions)
         players = current.get("players") or ()
-        opponent = players[1 - seat] if len(players) == 2 else {}
-        bodies = tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
+        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
+        bodies = tuple(body for body in
+                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
+                       if body)                          # a facedown Active renders as [None]
         generic_roles = general_pokemon_roles(
             (body["id"] for body in bodies if body.get("id") is not None),
             self.stats, self.functions)
@@ -223,7 +231,9 @@ class BellmanRuntime:
         potential = BoardPotential(
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=self.opponent_role_worth,
-            isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0)
+            isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0,
+            opponent_hand_share=self.pilot_profile.get("value.opponent_hand_share"),
+            root_observation=observation)
         planner_kwargs = {}
         if self.provider_factory is not None:
             planner_kwargs["provider_factory"] = self.provider_factory
@@ -381,6 +391,13 @@ class BellmanRuntime:
     def _decide_with_planner(self, observation: dict) -> RootDecision:
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
+        try:
+            return self._planner_epoch(planner, request, observation)
+        except Exception:
+            planner.discard_precheck()               # release the retained native session
+            raise
+
+    def _planner_epoch(self, planner, request, observation) -> RootDecision:
         self.last_decision_limit = planner._epoch_seconds(request)
         proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
         if proof_cached is not None:
@@ -437,6 +454,21 @@ def _read_deck() -> list[int]:
         return [int(value) for value in handle.read().splitlines()[:60] if value.strip()]
 
 
+def _last_resort_selection(observation: dict) -> list[int]:
+    """The cheapest legal submission after a planning failure: End when offered, else the
+    minimum picks. Decides nothing — this is a survival move, not a decision-quality fallback."""
+    select = observation.get("select") or {}
+    options = tuple(select.get("option") or ())
+    end_index = next((index for index, option in enumerate(options)
+                      if isinstance(option, dict) and option.get("type") is not None
+                      and int(option["type"]) == _END),
+                     None)
+    if end_index is not None:
+        return [end_index]
+    minimum = min(max(0, int(select.get("minCount") or 0)), len(options))
+    return list(range(minimum))
+
+
 def make_agent(strategy):
     """Create the Kaggle ``agent(observation)`` hook."""
 
@@ -448,16 +480,27 @@ def make_agent(strategy):
         if observation.get("select") is None:
             return list(runtime.deck)
         started = perf_counter()
-        own_cards.observe(observation)
-        observation["own_prizes"] = own_cards.prize_export()
-        observation["known_top"] = own_cards.known_top_export()
-        decision = runtime.decide(observation)
+        try:
+            own_cards.observe(observation)
+            observation["own_prizes"] = own_cards.prize_export()
+            observation["known_top"] = own_cards.known_top_export()
+            decision = runtime.decide(observation)
+        except Exception:                            # an uncaught raise forfeits the match
+            traceback.print_exc(file=sys.stderr)
+            chosen = _last_resort_selection(observation)
+            print(f"last-resort submission after planning failure: {chosen}",
+                  file=sys.stderr, flush=True)
+            return chosen
         if telemetry_on:
-            seat = int((observation.get("current") or {}).get("yourIndex", 0))
-            telemetry.emit(decision, read=runtime.last_read, seat=seat,
-                           decision_seconds=perf_counter() - started,
-                           decision_limit_seconds=runtime.last_decision_limit,
-                           deadline_hit=runtime.last_deadline_hit)
+            try:
+                seat = int((observation.get("current") or {}).get("yourIndex", 0))
+                telemetry.emit(decision, read=runtime.last_read, seat=seat,
+                               decision_seconds=perf_counter() - started,
+                               decision_limit_seconds=runtime.last_decision_limit,
+                               deadline_hit=runtime.last_deadline_hit)
+            except Exception:                        # telemetry must never lose the match
+                print("telemetry emit failed; decision preserved", file=sys.stderr, flush=True)
+                traceback.print_exc(file=sys.stderr)
         return list(decision.chosen)
 
     agent.runtime = runtime

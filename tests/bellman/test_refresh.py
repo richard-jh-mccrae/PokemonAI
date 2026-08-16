@@ -215,9 +215,83 @@ def test_harlequin_style_coin_branches_are_averaged_without_draw_hands():
     assert tuple((row["own_draw"], row["opponent_draw"]) for row in branches) == (
         (5, 3), (3, 5))
     assert all("expected_hand_value" in row for row in branches)
+    # Dark by default: the opponent swing stays a diagnostics row until the share is armed.
     assert "refresh_opponent_hand" not in dict(ledger.benefits)
+    assert "refresh_opponent_hand" not in dict(ledger.costs)
     assert "refresh_hand_size_tactical" not in dict(ledger.costs)
     assert all("opponent_hand" in row and "hand_size_tactical" in row for row in branches)
+
+
+def test_the_opponent_strip_reaches_the_refresh_ledger():
+    # ADR-0060: cards stripped from the opponent are certain value. The rewrite computed this
+    # per branch and dropped it into diagnostics only, so Judge/Unfair Stamp/Harlequin priced
+    # as pure self-harm exactly when they are strongest.
+    hidden = (LINE_TOP, *(FILLER for _ in range(9)))
+    deck = (REFRESH_CARD, LINE_BASE, *hidden)
+    observation = _observation((REFRESH_CARD,))
+    observation["current"]["players"][1]["handCount"] = 8
+    registry = _registry(deck)
+    state = DecisionState.from_observation(
+        observation, deck=deck, deck_name="test", value_registry_identity=registry.identity)
+    evaluator = RefreshEvaluator(
+        registry, _potential, effects=CardEffects({}), stats=_stats(),
+        opponent_hand_share=1.0)
+
+    ledger, branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((5, 2),), True))
+
+    assert dict(ledger.benefits)["refresh_opponent_hand"] == pytest.approx(
+        (8 - 2) * KNOWN_CARD_FLOOR / 120.0)
+    assert branches[0]["opponent_hand"] == pytest.approx((8 - 2) * KNOWN_CARD_FLOOR / 120.0)
+
+
+class _ParityPotential:
+    """A family evaluator that reports a fixed board parity, as ``BoardPotential`` does."""
+
+    def __init__(self, parity: float):
+        self.board_parity = parity
+        self.opponent_hand_share = 1.0
+
+    def __call__(self, observation):
+        return _potential(observation)
+
+
+
+def test_the_refresh_ledger_charges_the_strip_at_the_evaluators_board_parity():
+    # ADR-0141: the ledger and the potential family must scale together, or a shuffled path
+    # prices the same strip differently from a stepped one.
+    hidden = (LINE_TOP, *(FILLER for _ in range(9)))
+    deck = (REFRESH_CARD, LINE_BASE, *hidden)
+    observation = _observation((REFRESH_CARD,))
+    observation["current"]["players"][1]["handCount"] = 8
+    registry = _registry(deck)
+    state = DecisionState.from_observation(
+        observation, deck=deck, deck_name="test", value_registry_identity=registry.identity)
+    evaluator = RefreshEvaluator(
+        registry, _ParityPotential(0.25), effects=CardEffects({}), stats=_stats(),
+        opponent_hand_share=1.0)
+
+    ledger, _branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((5, 2),), True))
+
+    assert dict(ledger.benefits)["refresh_opponent_hand"] == pytest.approx(
+        0.25 * (8 - 2) * KNOWN_CARD_FLOOR / 120.0)
+
+
+def test_a_symmetric_refresh_against_a_small_hand_is_priced_as_the_gift_it_is():
+    hidden = (LINE_TOP, *(FILLER for _ in range(9)))
+    deck = (REFRESH_CARD, LINE_BASE, *hidden)
+    observation = _observation((REFRESH_CARD,))
+    observation["current"]["players"][1]["handCount"] = 1
+    registry = _registry(deck)
+    state = DecisionState.from_observation(
+        observation, deck=deck, deck_name="test", value_registry_identity=registry.identity)
+    evaluator = RefreshEvaluator(
+        registry, _potential, effects=CardEffects({}), stats=_stats(),
+        opponent_hand_share=1.0)
+
+    ledger, _branches = evaluator.evaluate(state, Refresh(REFRESH_CARD, ((5, 4),), True))
+
+    assert dict(ledger.costs)["refresh_opponent_hand"] == pytest.approx(
+        (4 - 1) * KNOWN_CARD_FLOOR / 120.0)
 
 
 def test_refresh_does_not_create_next_turn_demand_rewards_or_costs():

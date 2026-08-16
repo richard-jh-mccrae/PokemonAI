@@ -99,7 +99,7 @@ def test_declared_engine_partner_controls_board_resource_value():
     alone = _player(engine)
     together = _player(engine, (partner,))
 
-    assert potential._board_resources(alone) < potential._board_resources(together)
+    assert potential._own_board_resources(alone) < potential._own_board_resources(together)
 
 
 def test_deploying_a_basic_line_piece_improves_bellman_state():

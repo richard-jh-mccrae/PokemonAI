@@ -170,7 +170,8 @@ _TAKES_LESS_RE = re.compile(
 _TAKES_LESS_TYPED_RE = re.compile(
     r"This Pok.mon takes (\d+) less damage from attacks from your opponent.s \{(\w)\}"
     r"(?: or \{(\w)\})? Pok.mon")
-_TYPE_LETTER = {"G": 1, "R": 2, "W": 3, "L": 4, "P": 5, "F": 6, "D": 7, "M": 8}  # EnergyType enum
+_TYPE_LETTER = {"G": 1, "R": 2, "W": 3, "L": 4, "P": 5,
+                "F": 6, "D": 7, "M": 8, "N": 9}        # EnergyType enum ({N} = Dragon)
 
 
 def parse_card_defense(card) -> tuple[str | None, int, int, tuple | None]:
@@ -198,6 +199,37 @@ def parse_card_defense(card) -> tuple[str | None, int, int, tuple | None]:
             if m:
                 reduction = int(m.group(1))
     return (prevents, threshold, reduction, types)
+
+
+# Tool-granted damage reduction: the pool's three printed shapes, none matched by the
+# Pokémon-body patterns above (PR #533 review). All apply AFTER Weakness and Resistance.
+_TOOL_BERRY_REDUCTION_RE = re.compile(
+    r"If the Pok.mon this card is attached to is damaged by an attack from your opponent.s "
+    r"\{(\w)\} Pok.mon, it takes (\d+) less damage")
+_TOOL_ABILITY_REDUCTION_RE = re.compile(
+    r"The Pok.mon this card is attached to takes (\d+) less damage from attacks from your "
+    r"opponent.s Pok.mon that have an Ability")
+_TOOL_HOLDER_TYPED_REDUCTION_RE = re.compile(
+    r"The \{(\w)\} Pok.mon this card is attached to takes (\d+) less damage from attacks from "
+    r"your opponent.s ((?:\{\w\}(?:, | or |, or ))*\{\w\} )Pok.mon")
+
+
+def parse_tool_damage_reduction(card) -> tuple[int, tuple | None, tuple | None, bool]:
+    """``(amount, attacker types | None=any, holder types | None=any, attacker needs an Ability)``.
+    A berry's discard-after-use still guards the next hit, which is all a one-turn forecast prices."""
+    for text in _skill_texts(card):
+        m = _TOOL_BERRY_REDUCTION_RE.search(text)
+        if m and m.group(1) in _TYPE_LETTER:
+            return int(m.group(2)), (_TYPE_LETTER[m.group(1)],), None, False
+        m = _TOOL_ABILITY_REDUCTION_RE.search(text)
+        if m:
+            return int(m.group(1)), None, None, True
+        m = _TOOL_HOLDER_TYPED_REDUCTION_RE.search(text)
+        if m and m.group(1) in _TYPE_LETTER:
+            attackers = tuple(_TYPE_LETTER[g] for g in re.findall(r"\{(\w)\}", m.group(3))
+                              if g in _TYPE_LETTER)
+            return int(m.group(2)), attackers or None, (_TYPE_LETTER[m.group(1)],), False
+    return 0, None, None, False
 
 
 # A colour a body needs for its ABILITY, never in an attack cost; energy routing must credit it.

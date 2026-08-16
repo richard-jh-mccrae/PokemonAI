@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0140.**
+**Next free number: 0142.**
 
 ## Index
 
@@ -288,3 +288,5 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0137](0137-combat-realization-aligns-each-attack-and-energy-owner.md) | Combat realization aligns each attack and Energy owner | Accepted; BUILT 2026-08-10 (Issue #495). One multi-attack profile aligns payoff, condition, typed cost, persistent build, legal-now reach, and future clock. Held Energy is a weighted `NeedGraph`; acceleration uses exhaustive shared allocation. Attach, retreat, evolution, promote, dig, and deploy consume the same owner. |
 | [0138](0138-exact-frontier-identity-precedes-continuation-aware-admission.md) | Exact frontier identity precedes continuation-aware admission | Accepted for production activation by developer request; measured 2026-08-10 (Issue #496). Corpus P95 4.559 s exceeded both the committed ceiling and grader floor, and continuation showed no completed-reference benefit; the accepted alpha-normalized Mega identity result is 6→3 because duplicate Wally copies are interchangeable. |
 | [0139](0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md) | Mega Starmie uses one Bellman-style full-turn planner | Accepted and implemented (Issue #507, 2026-08-11). Post-Set-Up Mega Starmie uses one recursive benefit-minus-cost objective with exact-zero End, full action/nested transition generation, chance and opponent-response nodes, complete attack resolution, and no legacy strategic fallback. The unfiltered 259-row corpus closes with zero excluded/unexplained rows and 62 explicitly named tuning errors. |
+| [0140](0140-free-peek-dominance-orders-the-search-walk.md) | Free-peek dominance orders the search walk | Accepted for production activation by developer request (2026-08-16, PR #534), knowingly overriding part of the ruling corpus; the corpus is split on peek-first vs commit-first and the armed gate resolves the two disputed budget-flip frames while contradicting four prior rulings. Row added here at the ADR-0141 collision repair — PR #534 shipped the file without one. |
+| [0141](0141-opponent-hand-conditions-stadium.md) | The Bellman potential prices the opponent's hand, special conditions, and the stadium zone | Accepted; built from the 2026-08-16 src/ crash-and-valuation audit. opponent_hand family + refresh_opponent_hand row ARMED by the 2026-08-16 amendment at `value.opponent_hand_share` 0.1, scaled by root-pinned board parity after both overturned frames were re-ruled and upheld; special-condition forecast shares and pending poison/burn ticks plus own-stadium board Worth are live. |

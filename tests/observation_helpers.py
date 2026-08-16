@@ -11,6 +11,21 @@ def opt(type: int = PLAY, **values) -> dict:
     return {"type": type, **values}
 
 
+#: Every field of `cg.api.Option`, so `engine_opt` can emit the wire shape exactly.
+ENGINE_OPTION_FIELDS = (
+    "area", "attackId", "cardId", "count", "energyIndex", "inPlayArea", "inPlayIndex",
+    "index", "number", "playerIndex", "serial", "specialConditionType", "toolIndex", "type",
+)
+
+
+def engine_opt(type: int = PLAY, **values) -> dict:
+    """An option exactly as the deployed engine emits it: EVERY field present, unused ones None.
+    A sparse `opt()` exercises the cgpy shape; consumers must survive both (PR #532)."""
+    option = {field: None for field in ENGINE_OPTION_FIELDS}
+    option.update({"type": type, **values})
+    return option
+
+
 def card_opt(area: int, index: int, player: int = 0) -> dict:
     return {"type": CARD, "area": area, "index": index, "playerIndex": player}
 
