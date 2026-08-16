@@ -243,6 +243,7 @@ def test_only_the_phantom_dive_line_and_its_conversions_are_immediate():
         "dragapult.fund_active_phantom_dive",
         "dragapult.evolve_drakloak_for_the_attack",
         "dragapult.phantom_dive_damage_setup",
+        "dragapult.munkidori_counters_into_the_spread",
         "dragapult.boss_softened_two_prize_target",
         "dragapult.unfair_stamp_before_draw",
     }
@@ -480,3 +481,83 @@ def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
         observation, resolved, roles=roles, stats=stats, effects=effects)
 
     assert "dragapult.evolve_threatened_drakloak" in snapshot.active_ids
+
+
+def test_a_funded_drakloak_that_can_take_a_prize_has_the_knockout_searched():
+    """Dragon Headbutt's 70 is worth more than the evolution when it takes a prize. Strategy
+    only guarantees both lines are searched; which one wins is Bellman's comparison."""
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+
+    def _snapshot(defender_hp):
+        observation = {"current": {"turn": 6, "yourIndex": 0, "result": -1, "players": [
+            {"active": [{"id": 120, "serial": 1, "hp": 90, "maxHp": 90, "energies": [2, 5],
+                         "energyCards": [], "preEvolution": [], "tools": []}],
+             "bench": [], "hand": [], "prize": [None] * 6, "benchMax": 5},
+            {"active": [{"id": 1071, "serial": 20, "hp": defender_hp, "maxHp": 170,
+                         "energies": []}], "bench": [], "prize": [None] * 6, "benchMax": 5},
+        ]}, "select": {"context": 0, "option": []}}
+        return activate_strategies(
+            observation, resolved, roles=roles, stats=stats, effects=effects)
+
+    knockout = "general.take_the_knockout_in_front_of_you"
+    evolve = "dragapult.evolve_drakloak_for_the_attack"
+
+    # 70 reaches: both the knockout and the evolution are searched, and Bellman chooses.
+    assert {knockout, evolve} <= set(_snapshot(60).active_ids)
+    # 70 does not reach: only the evolution.
+    assert knockout not in _snapshot(170).active_ids
+    assert evolve in _snapshot(170).active_ids
+
+
+def test_the_healthy_funded_drakloak_is_the_one_promoted():
+    """Two Drakloak are not interchangeable. The hurt one stays benched and keeps drawing."""
+    from common.strategy.strategies import GENERAL_STRATEGIES, _recipient_body
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+    # Hurt copy listed FIRST, so ":first" would have promoted the wrong one.
+    observation = {"current": {"turn": 6, "yourIndex": 0, "result": -1, "players": [
+        {"active": [], "benchMax": 5, "hand": [], "prize": [None] * 6, "bench": [
+            {"id": 120, "serial": 2, "hp": 20, "maxHp": 90, "energies": [],
+             "energyCards": [], "preEvolution": [], "tools": []},
+            {"id": 120, "serial": 3, "hp": 90, "maxHp": 90, "energies": [2, 5],
+             "energyCards": [], "preEvolution": [], "tools": []},
+        ]},
+        {"active": [], "bench": [], "prize": [None] * 6, "benchMax": 5},
+    ]}, "select": {"context": 4, "option": [
+        {"type": 3, "area": 5, "index": 0}, {"type": 3, "area": 5, "index": 1}]}}
+
+    assert _recipient_body(
+        observation, 0, "own.body.card:120:readiest", roles)["serial"] == 3
+    assert _recipient_body(observation, 0, "own.body.card:120:first", roles)["serial"] == 2
+
+    snapshot = activate_strategies(
+        observation, resolved, roles=roles, stats=stats, effects=effects)
+    promote = next(row for row in snapshot.hints
+                   if row.strategy_id == "dragapult.promote_readiest_drakloak")
+
+    assert promote.recipient_serial == 3
+
+
+def test_munkidori_moves_counters_inside_the_phantom_dive_plan():
+    """Adrena-Brain and Phantom Dive are one play: counters moved onto the opponent's bench are
+    what the attack's six counters then finish."""
+    by_id = {hint.identifier: hint for hint in STRATEGY.strategies}
+    counters = by_id["dragapult.munkidori_counters_into_the_spread"]
+    swing = by_id["dragapult.phantom_dive_damage_setup"]
+
+    assert counters.bundle_id == swing.bundle_id
+    assert counters.waypoint < swing.waypoint

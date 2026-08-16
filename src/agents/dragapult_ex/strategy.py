@@ -14,7 +14,7 @@ BOSS_ORDERS, CRISPIN, RISKY_RUINS = 1182, 1198, 1260
 UNFAIR_STAMP = 1080
 
 PHANTOM_DIVE = "dragapult.phantom_dive"
-DRAKLOAK_BODY = f"own.body.card:{DRAKLOAK}:first"
+DRAKLOAK_BODY = f"own.body.card:{DRAKLOAK}:readiest"
 DUNSPARCE_BODY = f"own.body.card:{DUNSPARCE}:first"
 
 
@@ -80,13 +80,24 @@ STRATEGY = Strategy(
                   ActivationCondition(f"own.card.{DRAKLOAK}.energy_count", "ge", 2),
               ), targets=(DRAGAPULT_EX,), deadline="immediate",
               bundle_id=PHANTOM_DIVE, waypoint=1),
+        # Adrena-Brain and Phantom Dive are one play, not two: counters moved off our own hurt
+        # bodies land on the opponent's bench, and the attack's six counters then finish what
+        # they started while the 200 still lands on the Active. Same bundle, ahead of the swing.
+        _hint("munkidori_counters_into_the_spread", "use_ability",
+              f"own.body.card:{MUNKIDORI}:first",
+              conditions=(
+                  ActivationCondition("turn.ability.card_ids", "contains", MUNKIDORI),
+                  ActivationCondition("own.damaged_count", "gt", 0),
+                  ActivationCondition("opponent.bench.role_target_count", "gt", 0),
+              ), targets=(MUNKIDORI,), deadline="immediate",
+              bundle_id=PHANTOM_DIVE, waypoint=2),
         # Gated on the opponent's bench, not on ours: a turn that evolves Drakloak and THEN
         # attacks must still carry this hint, and activation is fixed at the epoch boundary.
         _hint("phantom_dive_damage_setup", "damage_setup",
               "opponent.bench.highest_role", targets=(DRAGAPULT_EX,),
               conditions=(ActivationCondition(
                   "opponent.bench.role_target_count", "gt", 0),),
-              deadline="immediate", bundle_id=PHANTOM_DIVE, waypoint=2),
+              deadline="immediate", bundle_id=PHANTOM_DIVE, waypoint=3),
         # A gust only converts when the target is already inside Phantom Dive's reach.
         _hint("boss_softened_two_prize_target", "play_card",
               "opponent.bench.highest_role",
@@ -151,6 +162,14 @@ STRATEGY = Strategy(
                   ActivationCondition("own.bench.space", "gt", 0),
               ),
               targets=(RISKY_RUINS,), confidence="low"),
+        # Two Drakloak on the board are not interchangeable: promote the one holding Energy at
+        # full health, use its Ability, evolve it. The hurt one stays benched, keeps drawing,
+        # and is what Munkidori's counter-move is for.
+        _hint("promote_readiest_drakloak", "promote", DRAKLOAK_BODY,
+              conditions=(
+                  ActivationCondition("own.active.card_id", "eq", None),
+                  ActivationCondition(f"own.card.{DRAKLOAK}.in_play", "eq", True),
+              ), targets=(DRAKLOAK,)),
         _hint("promote_budew_wall", "promote", f"own.body.card:{BUDEW}:first",
               conditions=(ActivationCondition("own.active.card_id", "eq", None),),
               targets=(BUDEW,), confidence="medium"),

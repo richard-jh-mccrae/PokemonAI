@@ -5,7 +5,8 @@ from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 
-from common.energy import payment_fraction
+from common.damage import compute_active_damage
+from common.energy import payment_fraction, unmet_cost_slots
 
 _SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
@@ -191,6 +192,30 @@ def _attack_ready(body: dict, stats) -> bool:
                for cost in requirements)
 
 
+def _knocks_out(attacker_body: dict, defender_body: dict, stats) -> bool:
+    """Whether a cost the attacker can already pay reaches the defender's remaining HP.
+
+    Card facts only: printed damage against printed HP. Whether taking the knockout is the
+    right play is Bellman's to weigh -- this only makes sure the option is searched.
+    """
+    if not attacker_body or not defender_body or stats is None:
+        return False
+    attacker = stats.get(attacker_body.get("id"))
+    defender = stats.get(defender_body.get("id"))
+    remaining = int(defender_body.get("hp", 0) or 0)
+    if attacker is None or defender is None or remaining <= 0:
+        return False
+    provisions = tuple(attacker_body.get("energies") or ())
+    for attack_id in getattr(attacker, "attacks", ()) or ():
+        attack = stats.attack(attack_id)
+        if attack is None or unmet_cost_slots(
+                provisions, tuple(getattr(attack, "energyTypes", ()) or ())):
+            continue
+        if compute_active_damage(attack, attacker, defender) >= remaining:
+            return True
+    return False
+
+
 def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
                    opponent_role_worth=None) -> dict:
     current = observation.get("current") or {}
@@ -231,6 +256,8 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
         "opponent.bench.highest_role.hp": int(_recipient_body(
             observation, seat, "opponent.bench.highest_role", roles,
             opponent_role_worth).get("hp", 0)),
+        "own.active.knocks_out_defender": _knocks_out(
+            active, _active_body(opponent), stats),
         "turn.commitment_available": commitment_available,
         # The condition language has no OR; a boost pays off while a commitment can still create
         # an attack OR one is already offered (PR #533 review: the post-attach committed case).
@@ -284,7 +311,8 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
             internals = None
         if internals is not None:
             ko_turn = tuple(internals.get("ko_turn") or ())
-            ko_window = seat < len(ko_turn) and int(ko_turn[seat]) == int(current.get("turn", 0)) - 1
+            ko_window = (seat < len(ko_turn)
+                         and int(ko_turn[seat]) == int(current.get("turn", 0)) - 1)
     ko_window = ko_window or any(
         body and int(body.get("hp", 1)) <= 0
         for body in player.get("active") or ())
@@ -321,14 +349,24 @@ def _recipient_body(observation: dict, seat: int, selector: str, roles,
         card_id = int(selector[len(_BENCH_CARD):])
         return next((body for body in player.get("bench") or ()
                      if body and int(body.get("id", -1)) == card_id), {})
-    if selector.startswith("own.body.card:") and selector.endswith(":first"):
+    if (selector.startswith("own.body.card:")
+            and selector.split(":")[-1] in {"first", "readiest"}):
         try:
             card_id = int(selector.split(":")[1])
         except (IndexError, ValueError):
             return {}
-        return next((body for body in (
+        copies = tuple(body for body in (
             tuple(player.get("active") or ()) + tuple(player.get("bench") or ()))
-                     if body and int(body.get("id", 0)) == card_id), {})
+            if body and int(body.get("id", 0)) == card_id)
+        if selector.endswith(":readiest"):
+            # The copy in the best shape to attack: most Energy, then least hurt. A deck running
+            # four of a card must be able to name the one worth promoting, not the first listed.
+            return max(copies, key=lambda body: (
+                len(body.get("energies") or ()),
+                int(body.get("hp", 0)) / max(1, int(body.get("maxHp", body.get("hp", 1)))),
+                -int(body.get("serial", 0)),
+            ), default={})
+        return copies[0] if copies else {}
     if selector == "opponent.bench.highest_role":
         opponent = _player(observation, 1 - seat)
         worth = opponent_role_worth or {}
@@ -509,6 +547,22 @@ GENERAL_STRATEGIES = (
         "shared-general",
     ),
     StrategyHint(
+        # Surfacing the knockout, not choosing it: an attack that takes a prize must at least be
+        # searched. Whether it beats developing instead is Bellman's comparison to make.
+        #
+        # this_turn, NOT immediate: the knockout is still there after the bench is filled and
+        # the Energy is down, so it is not lost by developing first. Calling it immediate said
+        # "swing now" and pulled the attack in front of the setup that should precede it.
+        "general.take_the_knockout_in_front_of_you",
+        "general",
+        (ActivationCondition("own.active.knocks_out_defender", "eq", True),),
+        (DesiredFact("knock_out", "own.active"),),
+        "own.active",
+        "this_turn",
+        "high",
+        "shared-general",
+    ),
+    StrategyHint(
         # A this-turn damage boost pays off only if the boosted attack is still ahead of it in
         # the same epoch; schedule it early so search reaches that attack before the caps.
         "general.boost_the_committed_attack",
@@ -523,7 +577,8 @@ GENERAL_STRATEGIES = (
 )
 
 
-def general_card_strategies(deck, roles, functions, stats, effects=None) -> tuple[StrategyHint, ...]:
+def general_card_strategies(deck, roles, functions, stats,
+                            effects=None) -> tuple[StrategyHint, ...]:
     hints = []
     for card_id in sorted(set(int(value) for value in deck)):
         card_roles = frozenset(roles.get(card_id, ()))

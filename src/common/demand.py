@@ -12,7 +12,7 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
-from .damage import bench_reach
+from .damage import bench_reach, compute_active_damage
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
@@ -424,6 +424,14 @@ class StrategyBeamBuilder:
                 best = max(best, float(bool(matching)))
         return best
 
+    def _reaches_defender(self, attack, attacker_body, defender_body) -> bool:
+        attacker = self.stats.get(attacker_body.get("id")) if self.stats is not None else None
+        defender = self.stats.get(defender_body.get("id")) if self.stats is not None else None
+        remaining = int(defender_body.get("hp", 0) or 0)
+        if attacker is None or defender is None or remaining <= 0:
+            return False
+        return compute_active_damage(attack, attacker, defender) >= remaining
+
     def _priority(self, state, action) -> tuple[
             float, tuple[str, ...], tuple, SequenceCoverage]:
         """Score, matched hint ids, lexicographic search rank, and distinct outcome coverage."""
@@ -454,7 +462,8 @@ class StrategyBeamBuilder:
                   and recipient == hint.recipient_serial):
                 probability = 1.0
             elif hint.kind == "item_lock" and action.identity.kind == "attack":
-                active = next((body for body in self._player(state).get("active") or () if body), {})
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
                 if (self.registry is not None and "item_lock" in self.registry.functions.get(
                         int(active.get("id", 0)), ())):
                     probability = 1.0
@@ -477,6 +486,25 @@ class StrategyBeamBuilder:
                   and action.identity.kind == "play" and source_id is not None
                   and source_id in hint.target_card_ids):
                 probability = 1.0
+            elif hint.kind == "knock_out" and action.identity.kind == "attack":
+                # Credit the attack that actually reaches, not every attack the body prints.
+                option = self._option(state, action) or {}
+                attack = (self.stats.attack(option.get("attackId"))
+                          if self.stats is not None and option.get("attackId") is not None
+                          else None)
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
+                defender = next((body for body in self._opponent(state).get("active") or ()
+                                 if body), {})
+                if (attack is not None and (not hint.target_card_ids
+                                            or int(active.get("id", 0)) in hint.target_card_ids)
+                        and self._reaches_defender(attack, active, defender)):
+                    probability = 1.0
+            elif hint.kind == "promote" and action.identity.kind == "card":
+                # Which copy is promoted is the whole decision, so the recipient must match.
+                # The generic target-card branch below cannot tell two copies apart.
+                if recipient == hint.recipient_serial:
+                    probability = 1.0
             elif hint.kind == "damage_setup" and action.identity.kind == "attack":
                 option = self._option(state, action) or {}
                 attack_id = option.get("attackId")
@@ -495,7 +523,8 @@ class StrategyBeamBuilder:
                 elif target_exists and bench_reach(attack) > 0:
                     probability = 1.0
             elif hint.kind == "status_setup" and action.identity.kind == "attack":
-                active = next((body for body in self._player(state).get("active") or () if body), {})
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
                 active_id = int(active.get("id", 0))
                 if (self.registry is not None and "confuse" in self.registry.functions.get(
                         active_id, ()) and (not hint.target_card_ids
