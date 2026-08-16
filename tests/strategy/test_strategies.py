@@ -1605,3 +1605,49 @@ def test_a_body_hp_fraction_reports_the_most_threatened_copy():
     facts = _visible_facts(observation, roles=Roles())
 
     assert facts[f"own.card.{drakloak}.hp_fraction"] == pytest.approx(20 / 90)
+
+
+def test_the_parameterised_selectors_are_admitted_but_still_shape_checked():
+    """A card id is the deck's to name, so these families cannot be enumerated. Their shape is
+    still closed: a misspelt suffix is rejected exactly like a misspelt fixed selector."""
+    from common.strategy.strategies import known_recipient_selector
+
+    assert known_recipient_selector("own.body.card:120:first")
+    assert known_recipient_selector("own.body.card:120:readiest")
+    assert known_recipient_selector("own.bench.card:673")
+    assert not known_recipient_selector("own.body.card:120:frist")
+    assert not known_recipient_selector("own.body.card:abc:first")
+    assert not known_recipient_selector("own.body.card:120")
+    assert not known_recipient_selector("own.bench.card:abc")
+    assert not known_recipient_selector("own.bench.card:")
+    assert not known_recipient_selector("own.actve")
+
+
+@pytest.mark.parametrize("deck", ["dragapult_ex", "mega_lucario", "mega_starmie"])
+def test_every_shipped_deck_declares_only_known_selectors(deck):
+    """Closing the selector set is only safe if the set covers what the decks actually
+    declare. Mega Lucario's benched-body selector was left out of it and the deck stopped
+    importing at all."""
+    import importlib
+
+    from common.strategy.strategies import known_recipient_selector
+
+    strategy = importlib.import_module(f"agents.{deck}.strategy").STRATEGY
+
+    assert all(known_recipient_selector(hint.recipient_selector)
+               for hint in strategy.strategies)
+
+
+def test_a_hint_naming_a_parameterised_body_selector_constructs():
+    hint = StrategyHint(
+        "deck.readiest", "deck", (),
+        (DesiredFact("evolve", "own.body.card:120:readiest"),),
+        "own.body.card:120:readiest", "this_turn", "high", "test")
+
+    assert hint.recipient_selector == "own.body.card:120:readiest"
+
+    with pytest.raises(ValueError, match="unknown strategy recipient selector"):
+        StrategyHint(
+            "deck.typo", "deck", (),
+            (DesiredFact("evolve", "own.body.card:120:frist"),),
+            "own.body.card:120:frist", "this_turn", "high", "test")

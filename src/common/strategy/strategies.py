@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
+import re
 
 from common.damage import compute_active_damage
 from common.energy import payment_fraction, unmet_cost_slots
@@ -22,6 +23,19 @@ _RECIPIENT_SELECTORS = frozenset({
     "own.active", "own.bench", "own.bench.evolvable:first",
     "opponent.bench.highest_role", "turn",
 })
+#: The parameterised families, which name a card id and so cannot be enumerated. Their SHAPE is
+#: still closed, so a misspelt suffix or a non-numeric id is rejected exactly as a misspelt fixed
+#: selector is -- which is the whole point of the closed set.
+_PARAMETERISED_SELECTORS = (
+    re.compile(r"^own\.bench\.card:\d+$"),
+    re.compile(r"^own\.body\.card:\d+:(?:first|readiest)$"),
+)
+
+
+def known_recipient_selector(selector) -> bool:
+    selector = str(selector)
+    return (selector in _RECIPIENT_SELECTORS
+            or any(pattern.match(selector) for pattern in _PARAMETERISED_SELECTORS))
 
 
 @dataclass(frozen=True)
@@ -65,7 +79,7 @@ class StrategyHint:
     waypoint: int = 0
 
     def __post_init__(self) -> None:
-        if self.recipient_selector not in _RECIPIENT_SELECTORS:
+        if not known_recipient_selector(self.recipient_selector):
             raise ValueError(
                 f"unknown strategy recipient selector: {self.recipient_selector!r}")
         if (not self.identifier or self.scope not in _SCOPES
