@@ -43,7 +43,10 @@ MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
 #: The forced continuation after End is expected to be a few plies of checkup menus; these caps
-#: keep a pathological or cyclic forced chain from eating the clock or the interpreter stack.
+#: keep a pathological or cyclic forced chain from exhausting the interpreter stack.  Both are
+#: spent per chain: a capped chain reports -inf/incomplete, which deletes the End line carrying
+#: a cut sequence's remaining EV, so a decision-wide budget retired whole root actions once a
+#: busy decision had valued enough unrelated forced menus.
 END_CHAIN_DEPTH_CAP = 32
 END_CHAIN_NODE_CAP = 512
 #: Board commitments a free peek weakly dominates (ADR-0140 amendment clause 3).  Trainer plays
@@ -321,17 +324,16 @@ class ReferenceSolver:
             return self._end_transition(state, action, node)
         return self._transition(state, action, self._provider_transition(state, action), sleep)
 
-    def _end_chain_available(self) -> bool:
-        return self._end_chain_nodes < END_CHAIN_NODE_CAP
-
     def _end_transition(self, before: DecisionState, action: LegalAction, node,
                         depth: int = END_CHAIN_DEPTH_CAP) -> Evaluation:
         """Value only the forced turn-boundary outcome, without planning the opponent's turn.
-        Carries its own depth/node caps (production adds its deadline via
-        ``_end_chain_available``): a cyclic forced menu degrades to incomplete, never a
-        RecursionError."""
+        Carries structural depth/node caps so a cyclic forced menu degrades to incomplete rather
+        than a RecursionError.  Structural and never a clock: stopping this chain on wall time
+        decides the turn by machine load."""
+        if depth == END_CHAIN_DEPTH_CAP:             # the top of one chain
+            self._end_chain_nodes = 0
         self._end_chain_nodes += 1
-        if depth <= 0 or not self._end_chain_available():
+        if depth <= 0 or self._end_chain_nodes > END_CHAIN_NODE_CAP:
             return Evaluation(-math.inf, Ledger(), False, "End continuation capped")
         if isinstance(node, Unknown):
             return Evaluation(-math.inf, Ledger(), False,
@@ -638,10 +640,6 @@ class ProductionSolver(ReferenceSolver):
         }
         return RootDecision(decision.chosen, decision.action, decision.value,
                             decision.complete, diagnostics, decision.plan_suffix)
-
-    def _end_chain_available(self) -> bool:
-        return (super()._end_chain_available()
-                and monotonic() < getattr(self, "_hard_deadline", math.inf))
 
     @staticmethod
     def _sequence_signature(action, result) -> tuple[str, ...]:
