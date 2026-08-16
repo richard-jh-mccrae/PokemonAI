@@ -78,12 +78,9 @@ def _hand_count(player) -> int:
 
 
 def board_parity(board: float, role_pressure: float) -> float:
-    """Our in-play strength as a fraction of the opponent's, clamped to ``[0, 1]``.
+    """Our board Worth over the opponent's role pressure (its positive magnitude), in ``[0, 1]``.
 
-    ``role_pressure`` is the positive magnitude of the ``opponent_roles`` family. Card Worth is
-    registry-keyed, so the opponent's stacks carry no comparable ``_board_resources`` figure and
-    their scouted role pressure is the only symmetric reading of their board. With no pressure
-    resolved there is nothing to be behind of, so parity is whole.
+    ADR-0141: no resolved pressure means nothing to be behind of, so parity is whole.
     """
     if role_pressure <= 0.0:
         return 1.0
@@ -127,9 +124,8 @@ class BoardPotential:
         self.isolated_selection = bool(isolated_selection)
         # Every consumer of the opponent-hand term must read THIS share, or the paths disagree.
         self.opponent_hand_share = max(0.0, float(opponent_hand_share))
-        # How far behind on board we are is a read of the position we are deciding from, not a
-        # property of each hypothetical successor: pinning it here keeps the scaling out of the
-        # damage and development families, which would otherwise move it as a side effect.
+        # Pinned to the deciding position, never per successor: ADR-0141 amendment, or the scaling
+        # leaks into the damage and development families.
         self.board_parity = 1.0
         self._stat_cache = {}
         self._attack_cache = {}
@@ -156,8 +152,9 @@ class BoardPotential:
     def _root_board_parity(self, observation) -> float:
         current = observation.get("current") or {}
         seat, me, opponent = self._sides(current)
+        role_pressure = -self._opponent_role_pressure(opponent)
         return board_parity(self._board_resources(me, stadium=own_stadium(current, seat)),
-                            -self._opponent_role_pressure(opponent))
+                            role_pressure)
 
     def _stat(self, card_id):
         if not self.stats or card_id is None:
@@ -949,4 +946,4 @@ class BoardPotential:
         return self.scale.game
 
 
-__all__ = ("BoardPotential", "UtilityScale", "board_parity", "own_stadium")
+__all__ = ("BoardPotential", "UtilityScale")

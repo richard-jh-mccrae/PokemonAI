@@ -47,22 +47,37 @@ Harlequin, two Salvatore and a Mega Signal, of which only Harlequin does anythin
 Pokémon is a Stage 2 Cinderace with no evolution above it and no Staryu anywhere on board), and
 `baede6accfac` attacks. Two things follow.
 
-**Board parity scales the term.** The potential prices our own in-play strength (`board`) but has
-no comparable reading of the opponent's, because card Worth is registry-keyed and their stacks
-carry none; their scouted role pressure is the only symmetric figure. `board_parity` is our board
-Worth over that pressure, clamped to `[0, 1]`, and multiplies both the `opponent_hand` family and
+**Board parity scales the term.** `board_parity` is our `_board_resources` Worth over the positive
+magnitude of `opponent_roles`, clamped to `[0, 1]`, multiplying both the `opponent_hand` family and
 the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to protect the
 leader's card economy — they have to dig. The parity is **pinned to the root observation** rather
 than recomputed per successor: how far behind we are is a read of the position being decided from,
 and letting successors move it would price board development and damage partly through a hand term.
 
+The denominator is role pressure rather than the opponent's own `_board_resources` because that
+call is **not** symmetric in the matchup that matters. `_board_resources` is side-agnostic and card
+Worth floors at `KNOWN_CARD_FLOOR` for any id in our registry, so against a mirror it returns a
+real figure (measured 0.50–0.67 across three `mega_starmie_*` stores) — but against any unregistered
+deck it returns exactly `0.0`, which reads as *infinitely ahead* precisely when we are losing to an
+unknown list. `opponent_roles` covers both, because the runtime seeds generic roles for every
+recognised opponent body: at `496a7657096f`, where the opponent's `_board_resources` is `0.0`, role
+pressure still reads `0.910` against our `0.375`.
+
 **The magnitude is a tenth of the known-card floor.** Scaling alone does not carry these frames:
 every line that ends the turn also hands the opponent their draw, so shrinking the term shrinks the
 attack line's own charge too, and the gap at `496a7657096f` closes only from 0.071 to 0.022 prizes.
-Sweeping the effective rate puts the ruled line back in front below roughly 0.15 at that frame and
-below 0.05 at `baede6accfac`; `value.opponent_hand_share = 0.1` is the largest share holding both
-once parity is applied. On the corrections corpus this is not a regression: armed fails seven, dark
-on the same tree fails eight, and the armed set is a strict subset of the dark one.
+Measured parity is 0.412 at `496a7657096f` and 0.509 at `baede6accfac`, so `share = 0.1` charges an
+effective 0.041 and 0.051 there. Forcing `_root_board_parity` to a constant (one value per process;
+a loop of `runtime()` builds in one process exceeds the decision clock) brackets the flip: the ruled
+line returns below ~0.15 effective at `496a7657096f`, and between 0.05 and 0.10 at `baede6accfac`.
+`value.opponent_hand_share = 0.1` is the largest share landing inside both brackets, and both ruled
+picks were then confirmed by decision, not by extrapolation.
+
+On the corrections corpus, armed fails seven where the same suite on the same tree dark fails eight,
+and `tests/bellman` acceptance fails three against four pre-change. **Both deltas are 1, inside the
+3-to-5 flake floor recorded below — the count is not the evidence.** What carries is set inclusion:
+each armed failure set is a strict subset of its dark counterpart, so no frame fails that did not
+already fail without the term.
 
 ADR-0060's ratified 4:8 STRIP:GIFT asymmetry remains unbuilt; the term stays symmetric.
 

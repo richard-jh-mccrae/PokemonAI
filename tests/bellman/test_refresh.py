@@ -257,8 +257,8 @@ class _ParityPotential:
 
 
 def test_the_refresh_ledger_charges_the_strip_at_the_evaluators_board_parity():
-    # ADR-0141 amendment: the closed-form ledger and the potential family must scale together, or
-    # a shuffled path prices the same strip differently from a stepped one.
+    # ADR-0141: the ledger and the potential family must scale together, or a shuffled path
+    # prices the same strip differently from a stepped one.
     hidden = (LINE_TOP, *(FILLER for _ in range(9)))
     deck = (REFRESH_CARD, LINE_BASE, *hidden)
     observation = _observation((REFRESH_CARD,))
