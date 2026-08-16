@@ -15,9 +15,9 @@ The audit that followed PR #531/#532 found three mechanics the live valuation co
    player and nothing in `src/common` read any of them: a paralyzed opponent Active still priced as
    a full incoming threat, Munkidori's Mind Bend rider was worth zero, and the poison tick never
    entered damage progress.
-3. **The stadium zone.** `_board_resources` walked only Pokémon stacks, so a Stadium in play carried
-   no Worth and playing one was a strict ledger loss (hand cost, no board credit): Risky Ruins ×2
-   and Gravity Mountain ×2 were structurally never played.
+3. **The stadium zone.** `_own_board_resources` walked only Pokémon stacks, so a Stadium in play
+   carried no Worth and playing one was a strict ledger loss (hand cost, no board credit): Risky
+   Ruins ×2 and Gravity Mountain ×2 were structurally never played.
 
 ## Decision
 
@@ -27,15 +27,15 @@ everywhere):
 - **`opponent_hand` family, shipped dark.** Value `-share × worth_to_prizes(KNOWN_CARD_FLOOR) ×
   opponent hand count`; the refresh ledger's new `refresh_opponent_hand` row prices the same swing
   with the same constant and the same share, so the closed-form and engine-stepped paths cannot
-  disagree. `value.opponent_hand_share` (PilotProfile, default **0.0**) arms both at once — a
-  kill-switch that covers every consumer of the term.
+  disagree. `value.opponent_hand_share` (PilotProfile, default **0.1** — see the amendment) arms
+  both at once, a kill-switch that covers every consumer of the term.
 - **Condition shares.** The Active's conditions scale its forecast attack value: incoming
   `asleep 0.5 / paralyzed 0.0 / confused 0.5` (checkup and rules facts, not tuning), own-side
   `asleep 0.75 / confused 0.5` (paralysis clears before our next attack window and menus already
   enforce this turn). Poison (10) and burn (20 — the counters land unconditionally; the coin only
   decides the cure, docs/rules.md L161) enter `_damage_progress` as pending checkup damage, both
   sides, capped by remaining HP.
-- **Stadium Worth.** Our own Stadium in `current["stadium"]` joins `_board_resources` as a
+- **Stadium Worth.** Our own Stadium in `current["stadium"]` joins `_own_board_resources` as a
   one-card stack, making a Stadium play value-neutral statically so its printed effect (visible
   through successor HP and readiness) decides.
 
@@ -47,21 +47,22 @@ Harlequin, two Salvatore and a Mega Signal, of which only Harlequin does anythin
 Pokémon is a Stage 2 Cinderace with no evolution above it and no Staryu anywhere on board), and
 `baede6accfac` attacks. Two things follow.
 
-**Board parity scales the term.** `board_parity` is our `_board_resources` Worth over the positive
-magnitude of `opponent_roles`, clamped to `[0, 1]`, multiplying both the `opponent_hand` family and
-the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to protect the
+**Board parity scales the term.** `board_parity` is our `_own_board_resources` Worth over the
+positive magnitude of `opponent_roles`, clamped to `[0, 1]`, multiplying both the `opponent_hand`
+family and the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to protect the
 leader's card economy — they have to dig. The parity is **pinned to the root observation** rather
 than recomputed per successor: how far behind we are is a read of the position being decided from,
 and letting successors move it would price board development and damage partly through a hand term.
 
-The denominator is role pressure rather than the opponent's own `_board_resources` because that
-call is **not** symmetric in the matchup that matters. `_board_resources` is side-agnostic and card
-Worth floors at `KNOWN_CARD_FLOOR` for any id in our registry, so against a mirror it returns a
-real figure (measured 0.50–0.67 across three `mega_starmie_*` stores) — but against any unregistered
-deck it returns exactly `0.0`, which reads as *infinitely ahead* precisely when we are losing to an
-unknown list. `opponent_roles` covers both, because the runtime seeds generic roles for every
-recognised opponent body: at `496a7657096f`, where the opponent's `_board_resources` is `0.0`, role
-pressure still reads `0.910` against our `0.375`.
+The denominator is role pressure rather than a board figure taken from the opponent's stacks,
+because no such figure is trustworthy. `_own_board_resources` was written side-agnostic and card
+Worth floors at `KNOWN_CARD_FLOOR` for any id in our registry, so pointed at the opponent it
+returns a real number against a mirror (measured 0.50–0.67 across three `mega_starmie_*` stores)
+and exactly `0.0` against any unregistered deck — *infinitely ahead* precisely when we are losing
+to an unknown list. It is now named and documented for our side alone; nothing in `src/` had ever
+called it otherwise. `opponent_roles` covers both matchups instead, because the runtime seeds
+generic roles for every recognised opponent body: at `496a7657096f`, where the opponent's stacks
+yield no registry Worth at all, role pressure still reads `0.910` against our `0.375`.
 
 **The magnitude is a tenth of the known-card floor.** Scaling alone does not carry these frames:
 every line that ends the turn also hands the opponent their draw, so shrinking the term shrinks the
@@ -75,8 +76,8 @@ picks were then confirmed by decision, not by extrapolation.
 
 On the corrections corpus, armed fails seven where the same suite on the same tree dark fails eight,
 and `tests/bellman` acceptance fails three against four pre-change. **Both deltas are 1, inside the
-3-to-5 flake floor recorded below — the count is not the evidence.** What carries is set inclusion:
-each armed failure set is a strict subset of its dark counterpart, so no frame fails that did not
+3-to-5 flake floor recorded below — the count is not the evidence.** What carries is set
+inclusion: each armed failure set is a strict subset of its dark counterpart, so no frame fails that did not
 already fail without the term.
 
 ADR-0060's ratified 4:8 STRIP:GIFT asymmetry remains unbuilt; the term stays symmetric.
@@ -99,5 +100,7 @@ implementation is symmetric at the known-card floor until the round says otherwi
 - Every potential carries the `opponent_hand` family (zero while dark) and its FAMILY_OWNERS entry.
 - Condition and stadium pricing are live immediately; neither moved a deterministic corpus verdict
   (no shipped frame carries a condition flag; the stadium term is own-side only).
+- `_own_board_resources` is named and documented for our side alone: registry Worth reads `0.0` for
+  any card outside our deck, which is not the same fact as "no board".
 - `RefreshEvaluator` accepts an explicit `opponent_hand_share` and otherwise inherits the board
   potential's share, keeping one authority for the constant.

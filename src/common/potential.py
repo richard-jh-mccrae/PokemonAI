@@ -153,7 +153,7 @@ class BoardPotential:
         current = observation.get("current") or {}
         seat, me, opponent = self._sides(current)
         role_pressure = -self._opponent_role_pressure(opponent)
-        return board_parity(self._board_resources(me, stadium=own_stadium(current, seat)),
+        return board_parity(self._own_board_resources(me, stadium=own_stadium(current, seat)),
                             role_pressure)
 
     def _stat(self, card_id):
@@ -610,7 +610,8 @@ class BoardPotential:
         self._prize_job_capacities_cache = capacities
         return capacities
 
-    def _board_resources(self, me, stadium=()) -> float:
+    def _own_board_resources(self, me, stadium=()) -> float:
+        """OUR side only: registry Worth reads 0.0 for cards outside our deck, not "no board"."""
         capacities = self._prize_job_capacities()
         body_ids = {int(body.get("id", 0)) for body in _bodies(me)}
         required_partners = dict(self.profile.partners)
@@ -914,7 +915,7 @@ class BoardPotential:
             include_incoming=not promoted_after_attack)
         if promoted_after_attack:
             readiness = self._next_attachment_coverage(me, opponent)
-        board = self._board_resources(me, stadium=own_stadium(current, seat))
+        board = self._own_board_resources(me, stadium=own_stadium(current, seat))
         opponent_roles = self._opponent_role_pressure(opponent)
         families = {
             "game": 0.0,
