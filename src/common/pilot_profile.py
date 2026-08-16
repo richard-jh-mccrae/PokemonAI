@@ -137,19 +137,11 @@ DEFINITIONS = (
                         "boolean", False),
     ParameterDefinition("terminal.enabled", "terminal_proof", 1.0, 0.0, 1.0,
                         "boolean", False),
-    # The prover is cheap when a win exists and expensive when one does not: it stops at the first
-    # proof, so a HIGH cap buys nothing on the frames it proves and pays in full on the ~98% it
-    # abstains on. Measured over 370 recorded mega_lucario frames (8 proofs) with the pinned-clock
-    # `terminal.max_seconds`: every proof survives at 64 choosing the identical action, the cliff
-    # is between 32 and 16, and prover time falls from 519s to 60s. Raise only alongside a proof
-    # that a real win needs the depth.
-    ParameterDefinition("terminal.max_nodes", "terminal_proof", 64.0, 1.0, 100000.0,
+    # Lowering this trades refutation soundness for time the clock below already saves (ADR-0142).
+    ParameterDefinition("terminal.max_nodes", "terminal_proof", 1024.0, 1.0, 100000.0,
                         "nodes", False),
-    # 1.2s is a CEILING, not a default: `maximum` equals the default, so an overlay, a deck
-    # override or a learned delta asking for more raises instead of applying. `planner.py` also
-    # takes `min(epoch_seconds, ...)`, so the prover can never outlive the decision either. At the
-    # 64-node cap the NODE budget binds first anyway (measured max 1.0s, median 141ms over 370
-    # frames), which is what keeps replays reproducible now that nothing lifts this clock.
+    # A CEILING, not a default: `maximum` equals the default, so any layer asking for more is
+    # rejected rather than applied. Sized and measured in ADR-0142.
     ParameterDefinition("terminal.max_seconds", "terminal_proof", 1.2, 0.01, 1.2,
                         "seconds", False),
     ParameterDefinition("terminal.max_decisions", "terminal_proof", 16.0, 1.0, 64.0,

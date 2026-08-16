@@ -23,9 +23,8 @@ GRAVITY_MOUNTAIN = 1252
 # One named outcome, whichever half of the pair is missing.
 SOLROCK_PAIR = "mega_lucario.complete_the_solrock_pair"
 
-# Sparse deck intent over portable card facts. Meowth ex is deliberately absent: its Supporter
-# tutor is a shared Card Function, so `general_pokemon_roles` resolves it the same way in every
-# deck that plays it. Evolution relationships come from card facts, not from this table.
+# Sparse deck intent. Meowth ex is absent on purpose: its Supporter tutor is a shared Card
+# Function. Evolution relationships come from card facts, not from this table.
 ROLES = Roles({
     RIOLU: ["primary_attacker"],
     MEGA_LUCARIO_EX: ["primary_attacker", "accel_source"],
@@ -40,21 +39,15 @@ STRATEGY = Strategy(
     roles=ROLES,
     # Cosmic Beam and Lunar Cycle each read the other body in play, so either alone is dead weight.
     partners={SOLROCK: (LUNATONE,), LUNATONE: (SOLROCK,)},
-    # The COMPLETE pregame ACTIVE ranking, best first (ADR-0079). Solrock opens: one Energy buys 70,
-    # and unlike Riolu it is not the base of the primary line. Meowth ex is last — a setup Active
-    # cannot use Last-Ditch Catch, which is the only reason the card is here.
+    # The COMPLETE pregame ACTIVE ranking, best first (ADR-0079). Solrock opens: one Energy buys
+    # 70 and it is not the primary line's base. Meowth ex last: a setup Active cannot use its draw.
     starter_priority=(SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX),
-    # No `prize_plan`. Solrock/Hariyama around two Mega Lucario ex genuinely makes the opponent take
-    # EIGHT prizes, but declaring the route ALSO caps board and hand Worth per resource job at the
-    # route's own count (`BoardPotential._prize_job_capacities`). This deck plays three Solrock
-    # against a route naming one, so the third scored ZERO and the setup decisions moved with it:
-    # measured 27/70 against 32/70 on the correction corpus. Restore only with that coupling split.
+    # No `prize_plan`: a route also CAPS Worth per resource job at its own count, and this deck
+    # plays three Solrock against a route naming one. Its −5 frame measurement is pre-guard-repair.
     params={"preferred_start": "first"},
     strategies=(
-        # A Solrock without its partner cannot attack at all, so completing the pair outranks the
-        # ordinary bench fill. Declared per Solrock position because the Active is not on the Bench.
-        # All three share ONE bundle: they are one outcome — the pair completed — and the allocator
-        # protects only two bundles, so separate ids would spend both slots on the same Lunatone.
+        # A Solrock without its partner cannot attack, so the pair outranks an ordinary bench
+        # fill. One bundle across all three: one outcome must not spend both protected slots.
         StrategyHint(
             "mega_lucario.pair_active_solrock_with_lunatone",
             "deck",

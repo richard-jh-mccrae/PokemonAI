@@ -176,6 +176,14 @@ class BoardPotential:
                 self.stats.attack(attack_id) if hasattr(self.stats, "attack") else None)
         return self._attack_cache[attack_id]
 
+    def _usable_attacks(self, body, stat):
+        """This body's printed attacks minus the ones a self-lock bars at the current turn."""
+        barred = locked_attack_ids(self._attack_locks, body, self._turn)
+        for attack_id in getattr(stat, "attacks", ()) or ():
+            attack = self._attack(attack_id)
+            if attack is not None and int(attack_id) not in barred:
+                yield attack_id, attack
+
     def _prizes(self, body) -> int:
         stat = self._stat(body.get("id"))
         return int(getattr(stat, "prize_value", 1) if stat is not None else 1)
@@ -358,11 +366,7 @@ class BoardPotential:
         transient = self._defender_tool_transient(defender)
         defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
-        barred = locked_attack_ids(self._attack_locks, body, self._turn)
-        for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self._attack(attack_id)
-            if attack is None or int(attack_id) in barred:
-                continue
+        for attack_id, attack in self._usable_attacks(body, stat):
             required = tuple(getattr(attack, "energyTypes", ()) or ())
             readiness = _pay_fraction(codes, required)
             if require_ready and readiness < 1.0:
@@ -526,11 +530,8 @@ class BoardPotential:
         defender_tags = self._tags(defender.get("id", 0))
         transient = self._defender_tool_transient(defender)
         best = 0.0
-        barred = locked_attack_ids(self._attack_locks, body, self._turn)
-        for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self._attack(attack_id)
-            if attack is None or int(attack_id) in barred or _pay_fraction(
-                    codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+        for attack_id, attack in self._usable_attacks(body, stat):
+            if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                 continue
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
@@ -565,11 +566,8 @@ class BoardPotential:
             context = self._context(
                 self._side_facts(me, attacking_body=body), defender_facts)
             codes = self._codes(body)
-            barred = locked_attack_ids(self._attack_locks, body, self._turn)
-            for attack_id in getattr(stat, "attacks", ()) or ():
-                attack = self._attack(attack_id)
-                if attack is None or int(attack_id) in barred or _pay_fraction(
-                        codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+            for attack_id, attack in self._usable_attacks(body, stat):
+                if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                     continue
                 active_damage = compute_active_damage(
                     attack, stat, defender_stat, defender_tags, context=context,
@@ -610,15 +608,9 @@ class BoardPotential:
                 continue
             context = self._context(
                 self._side_facts(attacker_side, attacking_body=body), defender_facts)
-            # The ledger records BOTH seats: `fold_attack_locks` keys every ATTACK log row by
-            # serial without filtering by side. An opponent who just spent a one-shot cannot
-            # land it on the turn this function prices, so fearing it is as wrong as crediting
-            # our own. The stride is exactly one of their turns, so this never under-fears.
-            barred = locked_attack_ids(self._attack_locks, body, self._turn)
-            for attack_id in getattr(stat, "attacks", ()) or ():
-                attack = self._attack(attack_id)
-                if attack is None or int(attack_id) in barred:
-                    continue
+            # The ledger records BOTH seats, so an opponent's spent one-shot is already in it:
+            # fearing a hit they cannot land is as wrong as crediting our own (ADR-0142).
+            for attack_id, attack in self._usable_attacks(body, stat):
                 exposed = 0.0
                 lethal_active = False
                 active_damage = compute_active_damage(

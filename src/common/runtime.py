@@ -120,11 +120,8 @@ class BellmanRuntime:
             pilot_overrides.update({
                 "clock.adaptive_enabled": 0.0,
                 "clock.remaining_200_seconds": self.decision_clock.bellman_seconds,
-                # No `terminal.max_seconds` override. It used to be lifted to 60s here so a pinned
-                # clock would stop the prover on its node/decision caps only, since a wall-clock
-                # stop varies with machine load. The 64-node cap now supplies that determinism on
-                # its own — the node budget binds long before 1.2s — and lifting the clock was what
-                # let a single abstention eat 9s of a 10s decision and forfeit the match.
+                # No `terminal.max_seconds` override: lifting it to 60s here let one abstention
+                # eat 9s of a 10s decision and forfeit a match (ADR-0142).
             })
         self.pilot_profile = PilotProfile.resolve(
             global_values=experiment,
@@ -147,9 +144,8 @@ class BellmanRuntime:
         self._fallback_scope = None
         self._fallback_effect = None
         self._fallback_pending = False
-        # Match-scoped: `logs` is a DELTA, so a self-lock spent two selections ago is no longer in
-        # the observation. Held on the runtime rather than in `make_agent` so replay and test
-        # callers of `decide` see the same board state the deployed agent does.
+        # Match-scoped: `logs` is a DELTA, so a lock spent two selections ago is no longer in the
+        # observation. On the runtime so replay and test callers see the deployed board state.
         self._attack_locks: dict = {}
 
     @staticmethod
@@ -403,8 +399,8 @@ class BellmanRuntime:
             self._strategy_snapshot = None
             self._attack_locks = {}
             return self._pregame(observation)
-        # Folded before any early return: `logs` is a delta, so a selection answered by the
-        # Strategy fallback still has to contribute its attack rows or the ledger loses them.
+        # Above every early return: a selection answered by the Strategy fallback still has to
+        # contribute its ATTACK rows, or the delta carries them away for good.
         self._attack_locks = fold_attack_locks(
             self._attack_locks, observation.get("logs"), stats=self.stats,
             turn=int(current.get("turn", 0)))

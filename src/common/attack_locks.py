@@ -29,16 +29,10 @@ def _self_locking(stats, attack_id: int) -> bool:
 
 
 def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
-    """``{"serial": {"attack_id": locked_turn}}`` after applying one log delta.
-
-    ``turn`` is the observation's turn at the END of the delta. A delta that spans a turn boundary
-    carries its own ``TURN_START`` markers, so the walk counts backwards from ``turn`` to place each
-    ATTACK on the turn it actually happened rather than on the turn we read it.
-
-    Keys are STRINGS. This map rides inside the observation, which both providers round-trip through
-    JSON, and JSON has no integer keys — an int-keyed map comes back stringified and every lookup
-    silently misses. Canonical string keys make the round trip a no-op instead.
-    """
+    """``{"serial": {"attack_id": locked_turn}}`` after one log delta ending at ``turn``."""
+    # A delta spanning a turn boundary carries its own TURN_START markers, so walk back from
+    # `turn` to date each ATTACK. Keys are STRINGS: JSON has none of the integer kind, and both
+    # providers round-trip this map through it, so int keys return stringified and never match.
     locks = {str(serial): dict(rows) for serial, rows in (prior or {}).items()}
     entries = tuple(logs or ())
     starts = sum(1 for entry in entries if int(entry.get("type", -1)) == LOG_TURN_START)
@@ -60,8 +54,18 @@ def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
     return locks
 
 
+def carry_attack_locks(prior_obs, observation, *, stats) -> None:
+    """Fold this step's ATTACK rows onto the parent's ledger, in place on ``observation``."""
+    # Written only when non-empty: the key is part of state identity, so an empty map present
+    # here would not match the absent key on the live observation the next turn arrives as.
+    locks = fold_attack_locks(
+        (prior_obs or {}).get("attack_locks"), observation.get("logs"), stats=stats,
+        turn=int((observation.get("current") or {}).get("turn", 0)))
+    if locks:
+        observation["attack_locks"] = locks
+
 def body_serials(body: Mapping) -> tuple[str, ...]:
-    """A body's own serial plus every card beneath it — a lock predates an evolution on the stack."""
+    """A body's serial plus every card beneath it: a lock predates an evolution on the stack."""
     serials = []
     if body.get("serial") is not None:
         serials.append(str(int(body["serial"])))
@@ -72,12 +76,9 @@ def body_serials(body: Mapping) -> tuple[str, ...]:
 
 
 def locked_attack_ids(locks: Mapping | None, body: Mapping, turn: int) -> frozenset:
-    """Attack ids this body may not use at ``turn`` or on its next attacking turn.
-
-    A lock stamped for turn ``L`` bars the attack exactly at ``L``. Reading it as barred for every
-    turn from ``L`` onward under-credits our own readiness by at most one turn — the safe direction,
-    since over-credit is what buys a knockout the agent cannot actually make.
-    """
+    """Attack ids this body may not use at ``turn``, on either seat."""
+    # A lock stamped for L bars exactly L; reading L-onward as barred can under-credit our own
+    # readiness by a turn, which is the safe side — over-credit buys a knockout we cannot make.
     if not locks:
         return frozenset()
     barred = set()
@@ -88,4 +89,5 @@ def locked_attack_ids(locks: Mapping | None, body: Mapping, turn: int) -> frozen
     return frozenset(barred)
 
 
-__all__ = ("LOCK_TURN_STRIDE", "body_serials", "fold_attack_locks", "locked_attack_ids")
+__all__ = ("LOCK_TURN_STRIDE", "body_serials", "carry_attack_locks",
+           "fold_attack_locks", "locked_attack_ids")

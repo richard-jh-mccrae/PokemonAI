@@ -29,17 +29,13 @@ NEXT_STAGE_OFFSET = 1
 NEXT_TURN_OPTION_DISCOUNT = 1.0
 BENCH_HEAL_VALUE_SHARE = 0.25
 HEAL_DAMAGE_PER_VALUE = 200.0
-#: A second fetch step is a second place the line can break — the link is prized, the Supporter
-#: for the turn is gone, the turn ends first. Purely an ORDERING weight: Strategy never enters a
-#: Bellman value, so this decides what is searched first and nothing else. Its one hard job is
-#: keeping the front of a chain behind the tutor that reaches the card outright.
+#: A second fetch step is a second place the line breaks. Ordering only: its one job is keeping
+#: the front of a chain behind the tutor that reaches the card outright.
 CHAIN_STEP_DISCOUNT = 0.5
-#: Which printed effect satisfies a need that names no card ids. Without this every tutor scored
-#: 0.0 against such a need, because nothing said which cards would answer it.
-NEED_CLAUSE_KINDS = {"damage_boost": "damage_boost"}
-#: A bench-play trigger is not a gamble: putting the Pokemon down IS the action being scored, so
-#: the fetch fires. `_demand_fetch_target_matches` refuses every triggered clause by default.
-PLAY_TRIGGERS = frozenset({"on_bench_play"})
+#: The one need whose answering cards are named by a printed clause rather than by the hint.
+NEED_CLAUSE_KIND = "damage_boost"
+#: Benching the Pokemon IS the scored action, so its fetch fires; other triggers stay refused.
+PLAY_TRIGGER = "on_bench_play"
 
 
 def _record_id(value) -> str:
@@ -265,23 +261,18 @@ class StrategyBeamBuilder:
 
     def _need_cards(self, state, hint) -> tuple[int, ...]:
         """Deck cards whose PRINTED effect answers a need that declares no card ids."""
-        clause_kind = NEED_CLAUSE_KINDS.get(hint.kind)
-        if clause_kind is None or self.effects is None:
+        if hint.kind != NEED_CLAUSE_KIND or self.effects is None:
             return ()
         return tuple(
             int(card_id) for card_id, count in state.deck_counts if count > 0
-            and any(clause.get("kind") == clause_kind
+            and any(clause.get("kind") == NEED_CLAUSE_KIND
                     for clause in self.effects.clauses(card_id))
         )
 
     def _chain_reach(self, state, clause, eligible, pool) -> float:
-        """One extra hop: this clause fetches a card that ITSELF fetches something eligible.
-
-        Meowth ex fetches a Supporter, never the boost card, so it scored nothing against a
-        boost demand — yet it is the front of a real line: Supporter -> Petrel -> Trainer ->
-        Premium Power Pro. Priced as the product of both accesses and then discounted, so the
-        front of a chain can never outrank the tutor that reaches the card outright.
-        """
+        """One extra hop: this clause fetches a card that ITSELF fetches something eligible."""
+        # Meowth ex fetches a Supporter, never the boost card, so it matched nothing directly -
+        # yet it fronts a real line. Both accesses multiplied, then discounted below the direct.
         if self.effects is None or self.stats is None:
             return 0.0
         supporter_spent = bool((state.obs.get("current") or {}).get("supporterPlayed"))
@@ -567,13 +558,10 @@ def _accel_target_matches(clause, stat) -> bool:
 
 
 def _matches_on_play(clause, stat) -> bool:
-    """As ``_demand_fetch_target_matches``, but a bench-play trigger does not disqualify.
-
-    That matcher refuses every triggered clause, which is right for a rider we do not control.
-    Meowth ex's Supporter fetch fires from Benching it, and Benching it is the very action being
-    scored, so refusing it hides the front of the line rather than pricing a gamble.
-    """
-    if clause.get("trigger") in PLAY_TRIGGERS:
+    """As ``_demand_fetch_target_matches``, but a bench-play trigger does not disqualify."""
+    # That matcher refuses every triggered clause, right for a rider we do not control. Benching
+    # Meowth ex IS the scored action, so refusing its fetch hides a line rather than pricing risk.
+    if clause.get("trigger") == PLAY_TRIGGER:
         clause = {key: value for key, value in clause.items() if key != "trigger"}
     return _demand_fetch_target_matches(clause, stat)
 

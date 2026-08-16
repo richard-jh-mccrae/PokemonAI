@@ -8,7 +8,7 @@ from .algebra import (
     Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
-from .attack_locks import fold_attack_locks
+from .attack_locks import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction
 from .state import DecisionState
@@ -470,11 +470,7 @@ class CgpyTransitionProvider:
             observation["known_top"] = state.obs["known_top"]
         # Same carry-forward as the native adapter: a self-lock spent inside the search is only
         # visible in this step's log, and the parent's locks must survive it.
-        locks = fold_attack_locks(
-            state.obs.get("attack_locks"), observation.get("logs"), stats=self.stats,
-            turn=int((observation.get("current") or {}).get("turn", 0)))
-        if locks:
-            observation["attack_locks"] = locks
+        carry_attack_locks(state.obs, observation, stats=self.stats)
         return state.with_observation(observation)
 
     def _register_successor(self, state, child, action):
