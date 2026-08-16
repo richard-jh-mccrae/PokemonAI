@@ -1,6 +1,7 @@
 """Deterministic exhaustive Bellman reference solver."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 import math
 import sys
@@ -14,7 +15,7 @@ from .algebra import (
 from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
-from .fetch import WINDOW, fetch_target_matches
+from .fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .demand import StrategyBeamBuilder, semantic_action_key
 from .refresh import played_card_id
@@ -37,6 +38,7 @@ DEFAULT_EFFECT_CHOICE_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.effect_choic
 DEFAULT_ROOT_PROBE_NODES = int(DEFAULT_PILOT_PROFILE.get("search.shallow_nodes"))
 DEFAULT_ROOT_REFINEMENT_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.refinement_width"))
 SMALL_ROOT_FULL_REFINEMENT_ACTIONS = 3
+_UNSET = object()
 MAIN_DECISION_CONTEXT = 0
 VALUE_TIE_DECIMALS = 12
 TERMINAL_WIN_REASON = "win"
@@ -44,6 +46,9 @@ TERMINAL_WIN_REASON = "win"
 #: keep a pathological or cyclic forced chain from eating the clock or the interpreter stack.
 END_CHAIN_DEPTH_CAP = 32
 END_CHAIN_NODE_CAP = 512
+#: Board commitments a free peek weakly dominates (ADR-0140 amendment clause 3).  Trainer plays
+#: are excluded: the Supporter allowance makes them non-neutral, and an urgent play outranks a peek.
+DOMINATED_COMMITMENT_KINDS = frozenset({"attach", "evolve", "retreat"})
 
 
 class TransitionProvider(Protocol):
@@ -515,6 +520,8 @@ class ProductionSolver(ReferenceSolver):
         self._budget = FairBudgetPrototype(limits.max_seconds)
         self._por_memo: dict[tuple[str, tuple[tuple[str, ...], ...]], StateEvaluation] = {}
         self._diamond_cache: dict[tuple[str, tuple[str, ...], tuple[str, ...]], bool] = {}
+        # Printed card text, so the clauses are decision-invariant and outlive the state cache.
+        self._dead_fetch_clauses: dict[int, tuple[dict, ...] | None] = {}
         self.por_pruned = 0
         self.information_pruned = 0
         self._structural_prunes: list[dict] = []
@@ -775,6 +782,19 @@ class ProductionSolver(ReferenceSolver):
 
         return tuple(sorted(node.choices, key=priority))
 
+    def _peek_is_look_class(self, state: DecisionState, action: LegalAction) -> bool:
+        """Whether this peek only looks at a bounded slice of the deck (a printed ``dig``).  A
+        whole-deck tutor certainly spends itself for a known card, so playing it is a commitment."""
+        effects = self.oracle.effects
+        if effects is None:
+            return True
+        card_id = played_card_id(state, action)
+        if card_id is None:
+            return True
+        fetches = tuple(clause for clause in effects.clauses(card_id)
+                        if clause.get("kind") == "fetch")
+        return bool(fetches) and all(clause.get("dig") for clause in fetches)
+
     def _peek_is_live(self, state: DecisionState, action: LegalAction) -> bool:
         """Whether this peek can still reveal anything: a fetch window with zero live targets in
         the remaining deck carries zero information, so it must not order anyone (ADR-0140)."""
@@ -792,6 +812,65 @@ class ProductionSolver(ReferenceSolver):
             count > 0 and any(fetch_target_matches(clause, stats.get(target_id), reading=WINDOW)
                               for clause in fetches)
             for target_id, count in state.deck_counts)
+
+    def _zone_counts(self, state: DecisionState, zone: str):
+        """The card ids still reachable in one fetch zone, as ``(card_id, count)`` pairs.  Constant
+        per state and asked once per candidate play, so it lives on the scratch that dies with it."""
+        if zone == "deck":
+            return state.deck_counts
+        scratch = state.action_scratch
+        key = ("zone_counts", zone)
+        if key not in scratch:
+            players = (state.obs.get("current") or {}).get("players") or ()
+            player = players[state.root_seat] if state.root_seat < len(players) else {}
+            held = Counter(int(card["id"]) for card in (player.get(zone) or ())
+                           if card and card.get("id") is not None)
+            scratch[key] = tuple(held.items())
+        return scratch[key]
+
+    def _dead_fetch_cards(self, card_id: int) -> tuple[dict, ...] | None:
+        """The fetch clauses of a card whose whole printed effect is an unconditional fetch."""
+        cached = self._dead_fetch_clauses.get(card_id, _UNSET)
+        if cached is not _UNSET:
+            return cached
+        clauses = tuple(self.oracle.effects.clauses(card_id))
+        usable = (bool(clauses)
+                  and all(clause.get("kind") == "fetch" for clause in clauses)
+                  and not any(clause.get("cost") or clause.get("cost_required")
+                              or clause.get("rider") for clause in clauses))
+        self._dead_fetch_clauses[card_id] = result = clauses if usable else None
+        return result
+
+    def _fetch_is_dead(self, state: DecisionState, action: LegalAction) -> bool:
+        """Whether this play is entirely a fetch reaching nothing in its named zones.  Only the card
+        itself moves, so skipping it keeps every continuation and a strictly larger hand."""
+        stats = self.oracle.stats
+        if self.oracle.effects is None or stats is None or action.identity.kind != "play":
+            return False
+        card_id = played_card_id(state, action)
+        if card_id is None:
+            return False
+        clauses = self._dead_fetch_cards(card_id)
+        if clauses is None:
+            return False
+        return not any(
+            count > 0 and fetch_target_matches(clause, stats.get(target_id), reading=DEADNESS)
+            for clause in clauses
+            for target_id, count in self._zone_counts(state, str(clause.get("zone", "deck"))))
+
+    def _dead_fetch_filter(self, state, actions):
+        """Drop plays that provably fetch nothing: they spend a card and change nothing else."""
+        retained = []
+        for action in actions:
+            if action.identity.kind == "play" and self._fetch_is_dead(state, action):
+                self._structural_prunes.append({
+                    "proof_type": "dead_fetch",
+                    "pruned": str(action.identity),
+                    "retained_event": ("hold_the_card",),
+                })
+                continue
+            retained.append(action)
+        return tuple(retained) if retained else actions
 
     def _hand_payment_available(self, state: DecisionState, actions) -> bool:
         """Whether any legal play this turn pays a discard-from-hand cost (Ultra Ball class).
@@ -814,27 +893,14 @@ class ProductionSolver(ReferenceSolver):
         return False
 
     def _information_dominance_filter(self, state, actions, footprints):
-        """Free-peek dominance: play costless pure deck peeks before neutral commitments.
-
-        A pure hidden fetch reads and writes only the deck and the acting hand slot, consumes no
-        allowance, and reveals information.  Any hand-and-deck-neutral commitment (attach, evolve,
-        retreat, a declared-deterministic trainer play) is exactly as playable after the peek, so
-        every line taking such a commitment first is weakly dominated by the peek-first line and
-        is pruned.  Barrier actions are never pruned — a shuffle or draw can destroy the peek's
-        knowledge, so peek-first is not dominant over them — and attack/End stay reachable as the
-        guaranteed-executable safety fallback.
-
-        The gate defers to the value model where the model already knows better: a dead peek
-        (zero live window targets) orders nothing, and the presence of a discard-cost play means
-        the peek may be fodder, so the whole node is left ungated.
-        """
-        peek_available = False
-        for action in actions:
-            footprint = footprints.get(action.identity)
-            if (footprint is not None and footprint.information_first
-                    and self._peek_is_live(state, action)):
-                peek_available = True
-                break
+        """Order a live look-class peek before the board commitments it leaves exactly as playable,
+        pruning those orderings.  Barriers, attack and End stay; ADR-0140 records every exemption."""
+        peek_available = any(
+            footprints.get(action.identity) is not None
+            and footprints[action.identity].information_first
+            and self._peek_is_look_class(state, action)
+            and self._peek_is_live(state, action)
+            for action in actions)
         if not peek_available:
             return actions
         if self._hand_payment_available(state, actions):
@@ -843,7 +909,7 @@ class ProductionSolver(ReferenceSolver):
         for action in actions:
             footprint = footprints.get(action.identity)
             if (footprint is not None and footprint.commitment and not footprint.barrier
-                    and action.identity.kind not in ("attack", "end")):
+                    and action.identity.kind in DOMINATED_COMMITMENT_KINDS):
                 self.information_pruned += 1
                 self._structural_prunes.append({
                     "proof_type": "information_dominance",
@@ -1164,6 +1230,8 @@ class ProductionSolver(ReferenceSolver):
                     else:
                         self.por_pruned += 1
             actions = filtered
+            if self.profile.get("search.dead_fetch_pruning_enabled") >= 0.5:
+                actions = self._dead_fetch_filter(state, actions)
             if self.profile.get("search.information_dominance_enabled") >= 0.5:
                 actions = self._information_dominance_filter(state, actions, footprints)
         strategy_focus = (actor is Actor.OURS

@@ -24,19 +24,25 @@ MAX_CORRECTION_DECISION_SECONDS = 60.0
     ("c8ebc06190d5", (0,)),  # beneficial attack beats ending the turn
     ("0395fcb0da0f", (2,)),  # recorded evolution commutes; attach/item still precede Lillie
     ("ab708777810c", (0,)),  # free denial before the resolving attack
-    ("231db774b45e", (1,)),  # Water recovery outranks a redundant fourth Staryu
+    ("231db774b45e", (0,)),  # an unreplaceable Active is a lost game: recover the Staryu, not Energy
     ("26007ba948e7", (0,)),  # urgent Wally and Night Stretcher are exact-value commutative prefixes
     ("79789ec5d19e", (1,)),  # simultaneous Active/Bench KO readiness is preserved
-    ("6a0242d3e39a", (1,)),  # energy goes to the empty healthy attacker
 ))
 def test_corrected_choice(correction_id, expected):
     assert RUNTIME.decide(ROWS[correction_id].obs).chosen == expected
 
 
+def test_6a02_energy_goes_to_the_empty_healthy_attacker():
+    # Ruled attach readies the 330/330 Active to KO the 10HP Mega Lucario ex; the Mega Signal that
+    # used to win here is a whole-deck tutor, which the narrowed trigger no longer treats as free.
+    assert RUNTIME.decide(ROWS["6a0242d3e39a"].obs).chosen == (1,)
+
+
 def test_free_information_forms_the_first_strategy_line():
+    # The choice is unpinned: 8db4265d078d has no human frame ruling and its turn_plan is ungraded,
+    # and replacement-risk pricing now prefers securing a body. Beam order is the live contract.
     decision = runtime().decide(ROWS["8db4265d078d"].obs)
 
-    assert decision.chosen == (1,)
     assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
         "general.low_cost_information_access_before_commitment",)
     assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][

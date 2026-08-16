@@ -21,13 +21,17 @@ def test_f20_collects_pokegear_information_before_attaching():
 
 
 def test_f21_does_not_spend_a_dead_setup_fetch():
-    assert runtime().decide(ROWS["25c423bbb0ec"].obs).chosen == (0,)
+    # No Staryu remain and Cinderace is a 160HP Stage 2, so the Poffin reaches nothing and is
+    # pruned outright rather than losing on a value margin a deadline can erase (ADR-0140).
+    assert RUNTIME.decide(ROWS["25c423bbb0ec"].obs).chosen == (0,)
 
 
-def test_turn_6_searches_information_before_energy_lines():
+def test_turn_6_collects_information_before_committing_energy():
+    # Re-pinned 2026-08-16 to the human turn_plan ("pokegear > replan > attach basic energy to
+    # active"): 546369c9's (1,) tracked a solver budget flip, not a ruling (ADR-0140 amendment).
     decision = runtime().decide(ROWS["810eb9a2ae5c"].obs)
 
-    assert decision.chosen == (1,)
+    assert decision.chosen == (0,)
     assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
         "general.low_cost_information_access_before_commitment",)
     assert '"id":1122' in decision.diagnostics["production"][
