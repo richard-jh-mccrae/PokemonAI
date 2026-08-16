@@ -1000,9 +1000,9 @@ class ProductionSolver(ReferenceSolver):
         after_current = after.obs.get("current") or {}
         if int(before_current.get("turn", 0)) != int(after_current.get("turn", 0)):
             return ()
-        footprint = self._footprint(before, action)
-        if footprint is not None and footprint.barrier:
-            return ()
+        # No barrier check: this branch only runs when `after` was computed exactly, and the
+        # runtime re-verifies every saved step against the live board (turn, seat, legal menu,
+        # plan key) before trusting it, so a stale suffix invalidates instead of misfiring.
         step = PlanStep(
             after.plan_key, after.legal_menu_digest, continuation.action.selection,
             continuation.action.identity, self.profile.hash,

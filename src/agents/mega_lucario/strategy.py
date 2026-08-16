@@ -23,8 +23,16 @@ GRAVITY_MOUNTAIN = 1252
 # One named outcome, whichever half of the pair is missing.
 SOLROCK_PAIR = "mega_lucario.complete_the_solrock_pair"
 GUST_EVOLUTION = "mega_lucario.evolve_into_the_gust"
+# The wincon line, one waypoint at a time: body, Energy, evolution. One bundle so the line
+# never spends more than one protected slot on itself.
+LUCARIO_LINE = "mega_lucario.raise_the_lucario_line"
+PROMOTE_WINCON = "mega_lucario.promote_the_wincon"
 # Named, not `evolvable:first`: Riolu also evolves, so first-on-the-Bench binds the wrong body.
 BENCHED_MAKUHITA = f"own.bench.card:{MAKUHITA}"
+# `:readiest` keeps every stage of the line pointed at the same copy — the one already
+# holding Energy — instead of whichever copy sits earliest on the Bench.
+RIOLU_BODY = f"own.body.card:{RIOLU}:readiest"
+LUCARIO_BODY = f"own.body.card:{MEGA_LUCARIO_EX}:readiest"
 
 # Sparse deck intent. Meowth ex is absent on purpose: its Supporter tutor is a shared Card
 # Function. Evolution relationships come from card facts, not from this table.
@@ -47,7 +55,9 @@ STRATEGY = Strategy(
     starter_priority=(SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX),
     # No `prize_plan`: a route also CAPS Worth per resource job at its own count, and this deck
     # plays three Solrock against a route naming one. Its −5 frame measurement is pre-guard-repair.
-    params={"preferred_start": "first"},
+    # Card-fact hints mint from Function Tags: Lunatone's `draw` tag becomes the Lunar Cycle
+    # use-Ability hint the deck otherwise never declares.
+    params={"preferred_start": "first", "use_general_card_strategies": True},
     strategies=(
         # A Solrock without its partner cannot attack, so the pair outranks an ordinary bench
         # fill. One bundle across all three: one outcome must not spend both protected slots.
@@ -88,6 +98,73 @@ STRATEGY = Strategy(
             (DesiredFact("deploy", "own.bench", target_card_ids=(SOLROCK,)),),
             "own.bench", "immediate", "high", "mega_lucario.strategy",
             bundle_id=SOLROCK_PAIR,
+        ),
+        # --- The wincon line. Bench a Riolu, put Energy on it, evolve it. Aura Jab (one
+        # --- Energy, 130) then refunds the Bench from the discard, so the line pays for
+        # --- itself once it is standing. Waypoints hold each stage until the last is done.
+        StrategyHint(
+            "mega_lucario.bench_a_riolu",
+            "deck",
+            (
+                ActivationCondition("own.bench.card_ids", "not_contains", RIOLU),
+                ActivationCondition("own.bench.space", "gt", 0),
+            ),
+            (DesiredFact("deploy", "own.bench", target_card_ids=(RIOLU,)),),
+            "own.bench", "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=LUCARIO_LINE, waypoint=0,
+        ),
+        StrategyHint(
+            "mega_lucario.fund_the_readiest_riolu",
+            "deck",
+            (ActivationCondition(f"own.card.{RIOLU}.in_play", "eq", True),),
+            (DesiredFact("fund_attack", RIOLU_BODY),),
+            RIOLU_BODY, "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=LUCARIO_LINE, waypoint=1,
+        ),
+        StrategyHint(
+            "mega_lucario.evolve_riolu_into_mega_lucario",
+            "deck",
+            (ActivationCondition(f"own.card.{RIOLU}.in_play", "eq", True),),
+            (DesiredFact("evolve", RIOLU_BODY, target_card_ids=(MEGA_LUCARIO_EX,)),),
+            RIOLU_BODY, "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=LUCARIO_LINE, waypoint=2,
+        ),
+        # Mega Brave (270) reads two Energy; the second one wants to be down the turn BEFORE
+        # the swing is needed. Unbundled: a standing Lucario funds while a new line rises.
+        StrategyHint(
+            "mega_lucario.fund_the_readiest_mega_lucario",
+            "deck",
+            (
+                ActivationCondition(f"own.card.{MEGA_LUCARIO_EX}.in_play", "eq", True),
+                ActivationCondition(f"own.card.{MEGA_LUCARIO_EX}.energy_count", "lt", 2),
+            ),
+            (DesiredFact("fund_attack", LUCARIO_BODY),),
+            LUCARIO_BODY, "this_turn", "high", "mega_lucario.strategy",
+        ),
+        # --- After a loss the replacement is the wincon, not whatever stands nearest. A bare
+        # --- Riolu goes up only when no Mega Lucario ex is in play to take the slot.
+        StrategyHint(
+            "mega_lucario.promote_the_readiest_mega_lucario",
+            "deck",
+            (
+                ActivationCondition("own.active.card_id", "eq", None),
+                ActivationCondition(f"own.card.{MEGA_LUCARIO_EX}.in_play", "eq", True),
+            ),
+            (DesiredFact("promote", LUCARIO_BODY, target_card_ids=(MEGA_LUCARIO_EX,)),),
+            LUCARIO_BODY, "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=PROMOTE_WINCON,
+        ),
+        StrategyHint(
+            "mega_lucario.promote_a_riolu_to_grow",
+            "deck",
+            (
+                ActivationCondition("own.active.card_id", "eq", None),
+                ActivationCondition(f"own.card.{RIOLU}.in_play", "eq", True),
+                ActivationCondition(f"own.card.{MEGA_LUCARIO_EX}.in_play", "missing"),
+            ),
+            (DesiredFact("promote", RIOLU_BODY, target_card_ids=(RIOLU,)),),
+            RIOLU_BODY, "this_turn", "medium", "mega_lucario.strategy",
+            bundle_id=PROMOTE_WINCON,
         ),
         # Heave-Ho Catcher rides the evolution, so the Makuhita line is worth most on the turn the
         # opposing Bench holds something worth dragging out. Declared per position, one bundle:

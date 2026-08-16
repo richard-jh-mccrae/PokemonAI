@@ -25,6 +25,11 @@ ROLES = Roles({
     CINDERACE: ["backup_attacker", "accel_source"],
 })
 
+PROMOTE_WINCON = "mega_starmie.promote_the_wincon"
+# `:readiest` binds the copy already holding Energy, not whichever sits earliest.
+STARYU_BODY = f"own.body.card:{STARYU}:readiest"
+STARMIE_BODY = f"own.body.card:{MEGA_STARMIE_EX}:readiest"
+
 STRATEGY = Strategy(
     name="mega_starmie",
     roles=ROLES,
@@ -52,6 +57,49 @@ STRATEGY = Strategy(
             "immediate",
             "high",
             "mega_starmie.strategy",
+        ),
+        # The evolution is the whole deck: 70 HP behind the wall becomes 330 in front of it,
+        # and Nebula Beam's three Colorless slots are one Ignition Energy on the Evolution.
+        StrategyHint(
+            "mega_starmie.evolve_staryu_into_mega_starmie",
+            "deck",
+            (ActivationCondition(f"own.card.{STARYU}.in_play", "eq", True),),
+            (DesiredFact("evolve", STARYU_BODY, target_card_ids=(MEGA_STARMIE_EX,)),),
+            STARYU_BODY, "this_turn", "high", "mega_starmie.strategy",
+        ),
+        StrategyHint(
+            "mega_starmie.fund_the_readiest_mega_starmie",
+            "deck",
+            (ActivationCondition(f"own.card.{MEGA_STARMIE_EX}.in_play", "eq", True),),
+            (DesiredFact("fund_attack", STARMIE_BODY),),
+            STARMIE_BODY, "this_turn", "high", "mega_starmie.strategy",
+        ),
+        # After a loss the replacement is the wincon; the Cinderace wall goes up only while
+        # no Mega Starmie ex is in play to take the slot.
+        StrategyHint(
+            "mega_starmie.promote_the_readiest_mega_starmie",
+            "deck",
+            (
+                ActivationCondition("own.active.card_id", "eq", None),
+                ActivationCondition(f"own.card.{MEGA_STARMIE_EX}.in_play", "eq", True),
+            ),
+            (DesiredFact("promote", STARMIE_BODY, target_card_ids=(MEGA_STARMIE_EX,)),),
+            STARMIE_BODY, "this_turn", "high", "mega_starmie.strategy",
+            bundle_id=PROMOTE_WINCON,
+        ),
+        StrategyHint(
+            "mega_starmie.promote_the_cinderace_wall",
+            "deck",
+            (
+                ActivationCondition("own.active.card_id", "eq", None),
+                ActivationCondition(f"own.card.{CINDERACE}.in_play", "eq", True),
+                ActivationCondition(f"own.card.{MEGA_STARMIE_EX}.in_play", "missing"),
+            ),
+            (DesiredFact("promote", f"own.body.card:{CINDERACE}:first",
+                         target_card_ids=(CINDERACE,)),),
+            f"own.body.card:{CINDERACE}:first", "this_turn", "medium",
+            "mega_starmie.strategy",
+            bundle_id=PROMOTE_WINCON,
         ),
         StrategyHint(
             # Wally's full heal bounces every Energy on the Mega to hand; general healing already

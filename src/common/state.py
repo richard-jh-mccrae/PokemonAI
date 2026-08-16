@@ -16,7 +16,15 @@ FROZEN_TAGGED_PAIR_LENGTH = 2
 SEMANTICALLY_VOLATILE_KEYS = frozenset({
     "logs", "name", "remainingOverageTime", "serial", "step",
     "turnActionCount",
+    # A body's playerIndex restates which player's zone holds it, and the native search step
+    # omits it while a live prompt includes it, so hashing it falsified every predicted plan
+    # key. Cost of dropping it: a stadium differing ONLY in owner aliases — the engine still
+    # resolves ownership itself, so at worst two value-cache entries merge.
+    "playerIndex",
 })
+#: Search-side annotations that distinguish semantically distinct search states but never appear
+#: on a live prompt observation.  They reach the semantic key only, never the plan key.
+_SEMANTIC_ONLY_KEYS = ("search_begin_input", "bellmanBeliefKey")
 UNORDERED_PLAYER_ZONES = ("hand", "discard")
 SUBTREE_DIGEST_BYTES = 16
 
@@ -202,14 +210,16 @@ def _feed_current(update, current):
 
 def _feed_semantic_observation(update, observation):
     """Mirror ``_semantic_observation``: volatile keys, hidden zones, and label noise never reach
-    the hash; order-free zones contribute as sorted per-card digests.  ``search_begin_input`` is
-    deliberately absent here — the key builder appends it separately so the plan key can omit it."""
+    the hash; order-free zones contribute as sorted per-card digests.  ``search_begin_input`` and
+    ``bellmanBeliefKey`` are deliberately absent here — the key builder appends them separately so
+    the plan key can omit them: both are search-side annotations a live prompt observation never
+    carries, and a plan key that hashed either could never match the live state it predicts."""
     current = observation.get("current")
     your_index = current.get("yourIndex") if type(current) is dict else None
     drop_actor = observation.get("bellmanActor") == your_index
     update(b"{")
     for key in sorted(observation, key=str):
-        if key in SEMANTICALLY_VOLATILE_KEYS or key == "search_begin_input":
+        if key in SEMANTICALLY_VOLATILE_KEYS or key in _SEMANTIC_ONLY_KEYS:
             continue
         if key == "bellmanActor" and drop_actor:
             continue
@@ -361,8 +371,10 @@ class DecisionState:
     def _state_keys(self) -> tuple[str, str]:
         """``(semantic_key, plan_key)`` from one observation walk.
 
-        Both keys hash identical material except ``search_begin_input``, which only the semantic
-        key sees.  The shared prefix is hashed once and forked with ``hasher.copy()``.
+        Both keys hash identical material except the search-side annotations in
+        ``_SEMANTIC_ONLY_KEYS``, which only the semantic key sees: a plan key predicts a live
+        observation, and a live observation never carries them.  The shared prefix is hashed once
+        and extended in place after the plan key is taken.
         """
         hasher = hashlib.sha256()
         update = hasher.update
@@ -380,11 +392,13 @@ class DecisionState:
         update(_belief_digest(self.belief))
         _feed(update, self.value_registry_identity)
         plan_key = hasher.hexdigest()
-        if "search_begin_input" in obs:
-            update(b"SBI")
-            _feed(update, obs["search_begin_input"])
-            return hasher.hexdigest(), plan_key
-        return plan_key, plan_key
+        semantic_only = False
+        for key in _SEMANTIC_ONLY_KEYS:
+            if key in obs:
+                update(key.encode("utf-8"))
+                _feed(update, obs[key])
+                semantic_only = True
+        return (hasher.hexdigest(), plan_key) if semantic_only else (plan_key, plan_key)
 
     @property
     def semantic_key(self) -> str:

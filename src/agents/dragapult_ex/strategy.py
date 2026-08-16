@@ -165,6 +165,14 @@ STRATEGY = Strategy(
                   ActivationCondition("own.bench.space", "gt", 0),
               ),
               targets=(RISKY_RUINS,), confidence="low"),
+        # A standing Dragapult ex outranks every other replacement: it is the attacker the
+        # whole line was built to raise, and promoting anything past it wastes the build.
+        _hint("promote_readiest_dragapult", "promote",
+              f"own.body.card:{DRAGAPULT_EX}:readiest",
+              conditions=(
+                  ActivationCondition("own.active.card_id", "eq", None),
+                  ActivationCondition(f"own.card.{DRAGAPULT_EX}.in_play", "eq", True),
+              ), targets=(DRAGAPULT_EX,)),
         # Two Drakloak on the board are not interchangeable: promote the one holding Energy at
         # full health, use its Ability, evolve it. The hurt one stays benched, keeps drawing,
         # and is what Munkidori's counter-move is for.
