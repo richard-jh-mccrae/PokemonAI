@@ -71,6 +71,13 @@ def _card_at(frame, seat, area, index):
     return cards[index] if index < len(cards) else None
 
 
+def _is_implicit_play(option: dict) -> bool:
+    """Main-menu Play encodes its hand slot as a bare ``index`` rather than an explicit HAND area.
+    The engine still EMITS the ``area`` key holding ``None``, so a ``get("area", AREA_HAND)``
+    default never fires — every consumer must normalize the area, not lean on a fallback."""
+    return option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
+
+
 def option_source_card(option: dict, frame: dict | None):
     """Resolve the visible card selected by an option's primary area/index reference."""
     if not isinstance(option, dict):
@@ -78,7 +85,10 @@ def option_source_card(option: dict, frame: dict | None):
     seat = option.get("playerIndex")
     if seat is None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
-    return _card_at(frame, seat, option.get("area", AREA_HAND), option.get("index"))
+    area = option.get("area", AREA_HAND)
+    if area is None and _is_implicit_play(option):
+        area = AREA_HAND
+    return _card_at(frame, seat, area, option.get("index"))
 
 
 def option_fingerprint(option: dict, frame: dict | None) -> str | None:
@@ -90,11 +100,9 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
     if seat is None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
     cards = []
-    # Main-menu Play encodes its hand slot as a bare ``index`` rather than an explicit HAND area.
-    # It is still a visible zone reference; normalize it so physical copies of one card remain one
-    # semantic decision everywhere, including correction retests.
-    implicit_play = option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
-    if implicit_play:
+    # The implicit Play's bare index is still a visible zone reference; normalize it so physical
+    # copies of one card remain one semantic decision everywhere, including correction retests.
+    if _is_implicit_play(option):
         card = _card_at(frame, seat, AREA_HAND, option.get("index"))
         if card is None:
             return None
@@ -121,8 +129,7 @@ def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:
         seat = ((frame or {}).get("current") or {}).get("yourIndex", 0)
     cards = []
     referenced = set()
-    implicit_play = option.get("type") in (OPTION_PLAY, "Play") and option.get("area") is None
-    if implicit_play:
+    if _is_implicit_play(option):
         card = _card_at(frame, seat, AREA_HAND, option.get("index"))
         if card is None:
             return None

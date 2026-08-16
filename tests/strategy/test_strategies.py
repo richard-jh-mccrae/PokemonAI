@@ -11,6 +11,7 @@ from common.strategy.strategies import (
 )
 from common.strategy.strategy import Roles
 from common.demand import StrategyBeamBuilder, semantic_action_key
+from common.effects import CardEffects
 from common.options import enumerate_legal_actions
 from types import SimpleNamespace
 
@@ -292,6 +293,49 @@ def test_heal_hint_ignores_play_actions_without_a_source_card():
     beam = StrategyBeamBuilder(snapshot, effects=Effects()).build(state, [action])
 
     assert beam.focused == ()
+
+
+def _engine_play(index):
+    """A Play exactly as `cg.game` emits it — EVERY field present, unused ones ``None``. The
+    hand-written `{"type": 7, "index": 0}` used elsewhere here omits `area` entirely, a shape the
+    engine never produces, so it cannot exercise the source-card lookup the way a real match does."""
+    return {"area": None, "attackId": None, "cardId": None, "count": None, "energyIndex": None,
+            "inPlayArea": None, "inPlayIndex": None, "index": index, "number": None,
+            "playerIndex": None, "serial": None, "specialConditionType": None,
+            "toolIndex": None, "type": 7}
+
+
+def _heal_beam(option):
+    rule = StrategyHint(
+        "general.heal_damaged_active_attacker", "general",
+        (ActivationCondition("own.active.role", "contains", "primary_attacker"),
+         ActivationCondition("own.active.hp_fraction", "lt", 0.70)),
+        (DesiredFact("heal", "own.active"),),
+        "own.active", "immediate", "high", "general",
+    )
+    observation = _observation(hand=[{"id": 50, "serial": 99}])
+    observation["current"]["players"][0]["active"] = [
+        {"id": 10, "serial": 77, "energies": [], "hp": 30, "maxHp": 100}]
+    observation["select"]["option"] = [option, {"type": 14}]
+    snapshot = activate_strategies(
+        observation, resolve_strategies((rule,), (), ()), roles=Roles({10: ["primary_attacker"]}))
+    # The REAL CardEffects, not a stub: its `int(card_id)` lookup is the thing that raised.
+    effects = CardEffects({"50": [{"kind": "heal", "amount": 30}]})
+
+    actions = enumerate_legal_actions(observation)
+    beam = StrategyBeamBuilder(snapshot, effects=effects).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+    return beam, next(action for action in actions if action.identity.kind == "play")
+
+
+def test_heal_hint_reads_an_engine_shaped_play_and_survives_an_unresolvable_one():
+    beam, play = _heal_beam(_engine_play(0))
+    assert semantic_action_key(play) in {row.action_key for row in beam.focused}
+
+    # An index past the hand names no card. Score it zero — never hand `None` to a clause lookup,
+    # which raised TypeError and killed the whole agent process mid-Match.
+    beam, play = _heal_beam(_engine_play(9))
+    assert semantic_action_key(play) in {row.action_key for row in beam.inactive}
 
 
 def test_information_hint_includes_free_search_but_excludes_discard_commitments():

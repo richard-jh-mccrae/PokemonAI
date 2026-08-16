@@ -5,7 +5,7 @@ import json
 from common import DecisionState, RootDecision
 from common.board_cards import body_card_ids
 from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
-from common.option_equivalence import class_representatives, fan_out
+from common.option_equivalence import class_representatives, fan_out, option_source_card
 from common.strategy import PrizePlan, Roles, Strategy
 from common.telemetry import to_record
 
@@ -64,6 +64,30 @@ def test_option_equivalence_helpers_preserve_the_best_member():
     classes = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
     assert class_representatives(classes, 5) == [0, 1, 2, 4]
     assert fan_out([5.0, 10.0, None, 7.0], classes) == [5.0, 10.0, None, 10.0]
+
+
+#: A main-menu Play exactly as `cg.game` emits it: EVERY field present, unused ones ``None``. A
+#: hand-written ``{"type": 7, "index": 1}`` omits `area` and so exercises a shape the engine never
+#: produces — the gap that let `option_source_card` return None for every real Play.
+ENGINE_PLAY_OPTION = {
+    "area": None, "attackId": None, "cardId": None, "count": None, "energyIndex": None,
+    "inPlayArea": None, "inPlayIndex": None, "index": 1, "number": None, "playerIndex": None,
+    "serial": None, "specialConditionType": None, "toolIndex": None, "type": 7,
+}
+
+
+def test_option_source_card_resolves_the_engine_shaped_main_menu_play():
+    frame = {"current": {"yourIndex": 0, "players": [
+        {"hand": [{"id": 500, "serial": 1}, {"id": 1223, "serial": 2}]},
+        {"hand": None},
+    ]}}
+
+    card = option_source_card(ENGINE_PLAY_OPTION, frame)
+
+    assert card == {"id": 1223, "serial": 2}          # the bare `index` IS a hand slot
+    assert option_source_card({**ENGINE_PLAY_OPTION, "index": 9}, frame) is None   # off the end
+    # Not a Play: a null area stays unresolvable rather than being guessed as HAND.
+    assert option_source_card({**ENGINE_PLAY_OPTION, "type": 9}, frame) is None
 
 
 def test_telemetry_exposes_only_the_bellman_decision_contract():
