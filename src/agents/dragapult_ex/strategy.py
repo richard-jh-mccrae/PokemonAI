@@ -127,11 +127,16 @@ STRATEGY = Strategy(
         _hint("unfair_stamp_before_draw", "play_card", "own.active",
               conditions=(ActivationCondition("turn.pokemon_ko_window", "eq", True),),
               targets=(UNFAIR_STAMP,), deadline="immediate", confidence="medium"),
+        # Cruel Arrow is a pinch attack, not a plan: it costs two prizes if Fezandipiti falls.
+        # Wanted only while no Dragapult ex is on the board at all, so a turn that could promote
+        # or evolve into the real attacker is never spent shooting with the fallback.
         _hint("fezandipiti_bench_snipe_fallback", "damage_setup",
               "opponent.bench.highest_role",
-              conditions=(ActivationCondition(
-                  "own.active.card_id", "eq", FEZANDIPITI_EX),),
-              targets=(FEZANDIPITI_EX,), confidence="medium"),
+              conditions=(
+                  ActivationCondition("own.active.card_id", "eq", FEZANDIPITI_EX),
+                  ActivationCondition(f"own.card.{DRAGAPULT_EX}.in_play", "missing"),
+              ),
+              targets=(FEZANDIPITI_EX,), confidence="low"),
         _hint("risky_ruins_counter_loop", "play_card", "own.bench",
               conditions=(
                   ActivationCondition(f"own.card.{MUNKIDORI}.ability_ready", "eq", True),

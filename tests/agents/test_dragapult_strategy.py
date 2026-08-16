@@ -366,3 +366,48 @@ def test_munkidori_declares_its_darkness_ability_slot_from_the_card():
         if row.identifier == "general.card.112.fund_ability")
 
     assert hint.desired_facts[0].target_card_ids == (DARKNESS_ENERGY,)
+
+
+def _active_snapshot(card_id, bench=()):
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+
+    def _body(row, serial):
+        maximum = int(stats.get(row).hp)
+        return {"id": row, "serial": serial, "hp": maximum, "maxHp": maximum,
+                "energies": [], "energyCards": [], "preEvolution": [], "tools": []}
+
+    observation = {"current": {"turn": 5, "yourIndex": 0, "result": -1, "players": [
+        {"active": [_body(card_id, 1)],
+         "bench": [_body(row, index + 2) for index, row in enumerate(bench)],
+         "hand": [], "prize": [None] * 6, "benchMax": 5},
+        {"active": [], "bench": [_body(121, 20)], "prize": [None] * 6, "benchMax": 5},
+    ]}, "select": {"context": 0, "option": []}}
+    return activate_strategies(observation, resolved, roles=roles, stats=stats, effects=effects,
+                               opponent_role_worth={121: 30.0})
+
+
+def test_cruel_arrow_is_a_pinch_attack_not_a_plan():
+    """Fezandipiti ex gives up two prizes. It shoots only while no Dragapult ex is on the board,
+    so a turn that could promote the real attacker is never spent on the fallback."""
+    fallback = "dragapult.fezandipiti_bench_snipe_fallback"
+
+    assert fallback in _active_snapshot(140).active_ids
+    assert fallback not in _active_snapshot(140, bench=(121,)).active_ids
+    assert fallback not in _active_snapshot(121).active_ids
+
+
+def test_the_pinch_attacker_never_outranks_the_real_line():
+    by_id = {hint.identifier: hint for hint in STRATEGY.strategies}
+    pinch = by_id["dragapult.fezandipiti_bench_snipe_fallback"]
+    plan = by_id["dragapult.phantom_dive_damage_setup"]
+
+    assert (pinch.deadline, pinch.conviction) == ("this_turn", "low")
+    assert (plan.deadline, plan.conviction) == ("immediate", "high")
