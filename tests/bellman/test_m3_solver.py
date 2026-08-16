@@ -687,6 +687,34 @@ def test_protected_bundles_rank_context_not_strategy_identifier():
     assert solver._protected_bundle_diagnostics["overflow"] == ("general.need",)
 
 
+def test_held_hints_are_excluded_from_protected_bundle_grouping():
+    def row(strategy_id, bundle_id, status, kind, recipient, waypoint=0):
+        return {
+            "strategy_id": strategy_id, "bundle_id": bundle_id,
+            "urgency": "high", "conviction": "high", "status": status,
+            "kind": kind, "recipient": recipient, "recipient_serial": None,
+            "target_card_ids": (), "waypoint": waypoint,
+        }
+
+    rows = (
+        row("mega_lucario.now", "lucario.turn", "guaranteed", "evolve", "own.active"),
+        row("mega_lucario.later", "lucario.route", "held", "deploy", "own.bench", 1),
+    )
+
+    class Builder:
+        @staticmethod
+        def outcome_statuses(_state):
+            return rows
+
+    solver = ProductionSolver(Graph({}, {}), _oracle())
+    solver._strategy_builder = Builder()
+
+    protected = solver._protected_bundles(_state("held-excluded"))
+
+    assert protected == ("lucario.turn",)
+    assert "lucario.route" not in solver._protected_bundle_diagnostics["eligible"]
+
+
 def test_complete_equal_damage_placements_use_engine_selection_order():
     from common.solver import Evaluation, _select_our_action
 

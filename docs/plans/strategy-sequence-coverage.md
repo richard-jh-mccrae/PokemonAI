@@ -62,6 +62,14 @@ from the access matcher, which already scores dead peeks, costed searches, and s
 `strategy.information_partition_enabled` (default on, not learnable) is the kill switch, and the
 runtime timeout fallback deliberately receives the same flag so its pick agrees with the rule.
 
+## Waypoint holds
+
+Within one `bundle_id`, hints past the bundle's lowest still-unsatisfied (and not impossible)
+waypoint are held: `outcome_statuses` reports them as `"held"` and they contribute no beam focus,
+no coverage, and no protected-bundle weight until every earlier waypoint satisfies on the
+branch-local state. Hints without a bundle, or all at waypoint 0, are unaffected. The solver's
+`deep_strategy` switch (any waypoint > 0 widens focus to every own node) stays its own effect.
+
 ## Validation
 
 Contracts live in `tests/strategy/test_strategies.py` and `tests/bellman/test_m3_solver.py`.

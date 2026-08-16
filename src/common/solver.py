@@ -715,7 +715,7 @@ class ProductionSolver(ReferenceSolver):
         grouped = {}
         for row in rows:
             if (row["urgency"] != "high" or row["conviction"] != "high"
-                    or row["status"] in {"satisfied", "impossible"}):
+                    or row["status"] in {"satisfied", "impossible", "held"}):
                 continue
             bundle = str(row["bundle_id"] or row["strategy_id"])
             grouped.setdefault(bundle, []).append(row)

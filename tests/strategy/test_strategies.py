@@ -698,10 +698,10 @@ def _coverage_observation(hand_ids, *, bench_ids=()):
 
 
 def _deploy_hint(strategy_id, targets, *, deadline="immediate", conviction="high",
-                 waypoint=0):
+                 waypoint=0, bundle=None):
     return ActivatedStrategy(
         strategy_id, "deploy", "own.bench", None, None, tuple(targets),
-        deadline, conviction, None, waypoint)
+        deadline, conviction, bundle, waypoint)
 
 
 class _BasicStats:
@@ -894,6 +894,63 @@ def test_prefix_outcomes_stop_recounting_already_advanced_outcomes():
     by_key = {row.action_key: row for row in beam.focused}
     assert len(by_key[plays[1]].coverage) == 1
     assert len(by_key[plays[0]].coverage) == 1
+
+
+def test_later_waypoint_hint_is_held_until_the_earlier_one_satisfies():
+    hints = (
+        _deploy_hint("deck.first", (101,), bundle="deck.route"),
+        _deploy_hint("deck.second", (102,), waypoint=1, bundle="deck.route"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    assert [row.action_key for row in beam.focused] == [plays[0]]
+    assert plays[1] in {row.action_key for row in beam.inactive}
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.second"] == "held"
+
+
+def test_held_hint_releases_once_the_earlier_waypoint_is_satisfied():
+    hints = (
+        _deploy_hint("deck.first", (101,), bundle="deck.route"),
+        _deploy_hint("deck.second", (102,), waypoint=1, bundle="deck.route"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102), bench_ids=(101,))
+
+    assert plays[1] in {row.action_key for row in beam.focused}
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.first"] == "satisfied"
+    assert statuses["deck.second"] != "held"
+
+
+def test_hints_in_different_bundles_do_not_hold_each_other():
+    hints = (
+        _deploy_hint("deck.first", (101,), bundle="deck.route_a"),
+        _deploy_hint("deck.second", (102,), waypoint=1, bundle="deck.route_b"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    focused = {row.action_key for row in beam.focused}
+    assert {plays[0], plays[1]} <= focused
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.second"] != "held"
+
+
+def test_held_hint_contributes_no_coverage_to_another_action():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,), bundle="deck.route"),
+        _deploy_hint("deck.beta_later", (102, 300), waypoint=1, bundle="deck.route"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    by_key = {row.action_key: row for row in beam.focused}
+    assert len(by_key[plays[1]].coverage) == 1
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.beta_later"] == "held"
 
 
 def test_sequence_coverage_off_keeps_the_legacy_scalar_order():
@@ -1122,3 +1179,51 @@ def test_rank_legal_returns_the_live_peek_first_with_the_partition_on():
     ranked = builder.rank_legal(state, actions)
     peek = next(action for action in actions if action.identity.kind == "play")
     assert ranked[0] is peek
+
+
+def test_a_held_information_hint_does_not_lead_the_beam():
+    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    hints = (
+        ActivatedStrategy("deck.develop_active", "evolve", "own.active", 10, 77,
+                          (_EVOLUTION,), "immediate", "high", None, 0),
+        ActivatedStrategy("deck.first", "deploy", "own.bench", None, None,
+                          (400,), "immediate", "high", "deck.route", 0),
+        ActivatedStrategy("deck.peek_later", "low_cost_information_access", "turn",
+                          None, None, (), "immediate", "high", "deck.route", 1),
+    )
+    observation = _observation(hand=[
+        {"id": _EVOLUTION, "serial": 90, "playerIndex": 0},
+        {"id": _PEEK, "serial": 91, "playerIndex": 0},
+    ])
+    observation["select"]["option"] = [
+        {"type": 9, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+        {"type": 7, "index": 1},
+        {"type": 14},
+    ]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return dig if card_id == _PEEK else ()
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(
+                is_pokemon=card_id in {_EVOLUTION, 11}, is_energy=False,
+                is_supporter=False, stage="basic" if card_id == 11 else "stage1")
+
+    builder = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), sequence_coverage=True,
+        information_partition=True)
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1), (12, 8)))
+    actions = enumerate_legal_actions(observation)
+    beam = builder.build(state, actions)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert [row.action_key for row in beam.focused] == [semantic_action_key(evolve)]
+    assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.peek_later"] == "held"
