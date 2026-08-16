@@ -2105,9 +2105,65 @@ def test_harvest_hands_the_beam_the_prefix_outcomes_already_advanced(monkeypatch
          ("prefix-middle", "follow"): Terminal(middle, "resolved")},
     )
 
-    ProductionSolver(
+    decision = ProductionSolver(
         graph, _oracle(), limits=ProductionLimits(max_nodes=20),
         strategy_snapshot=object()).decide(root)
 
     assert ("prefix-root", ()) in seen
     assert ("prefix-middle", ("evolve|77|333|678|0",)) in seen
+    # The two-need line is the first completed candidate: the sequence that also advances the
+    # second outcome is searched before any line that stops at the first.
+    completed = decision.diagnostics["production"]["candidate_harvest"]["completed"]
+    assert completed[0]["sequence"] == (str(start.identity), str(follow.identity))
+
+
+
+def test_dominance_prune_set_is_identical_under_the_coverage_toggle():
+    """A structural proof must not depend on beam width or coverage sort order: with focus
+    width 1 and two protected evolutions, the retained set is the same toggled on or off."""
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from common.demand import StrategyBeamBuilder
+
+    hints = (
+        ActivatedStrategy("deck.develop_active", "evolve", "own.active", 10, 77,
+                          (201,), "immediate", "high", "bundle.active", 0),
+        ActivatedStrategy("deck.develop_bench", "evolve", "own.bench.evolvable:first", 11, 78,
+                          (202,), "immediate", "high", "bundle.bench", 0),
+        ActivatedStrategy("deck.bench_extra", "evolve", "own.bench.evolvable:first", 11, 78,
+                          (202, 300), "next_turn", "low", "bundle.bench", 0),
+    )
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+    observation = {
+        "current": {"turn": 4, "yourIndex": 0, "players": [
+            {"active": [{"id": 10, "serial": 77, "energies": []}],
+             "bench": [{"id": 11, "serial": 78, "energies": []}],
+             "hand": [{"id": 201, "serial": 90}, {"id": 202, "serial": 91}]},
+            {"active": [], "bench": []},
+        ]},
+        "select": {"context": 0, "option": [
+            {"type": 9, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+            {"type": 9, "index": 1, "inPlayArea": 5, "inPlayIndex": 0},
+            {"type": 7, "index": 0},
+            {"type": 14},
+        ]},
+    }
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+    actions = enumerate_legal_actions(observation)
+    evolve_active = next(action for action in actions if action.selection == (0,))
+    evolve_bench = next(action for action in actions if action.selection == (1,))
+    peek = next(action for action in actions if action.selection == (2,))
+    footprints = {
+        evolve_active.identity: ActionFootprint(("evolve", "77"), commitment=True),
+        evolve_bench.identity: ActionFootprint(("evolve", "78"), commitment=True),
+        peek.identity: ActionFootprint(("peek",), information_first=True),
+    }
+
+    def retained(enabled):
+        solver = ProductionSolver(Graph({}, {}), _oracle(), strategy_snapshot=snapshot)
+        solver._strategy_builder = StrategyBeamBuilder(
+            snapshot, width=1, sequence_coverage=enabled)
+        kept = solver._information_dominance_filter(state, actions, footprints)
+        return {action.identity for action in kept}
+
+    assert retained(True) == retained(False)
+    assert {evolve_active.identity, evolve_bench.identity} <= retained(True)

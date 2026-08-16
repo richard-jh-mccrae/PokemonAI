@@ -1,9 +1,8 @@
 # Contextual Strategy sequence coverage
 
-Status: implemented on `claude/strategy-sequence-coverage-bcb41e`
+Status: implemented
 
 Extends [strategy-beam-bellman.md](strategy-beam-bellman.md); its invariants remain in force.
-Depends on PR #541 (`codex/strategy-anytime-fallback`).
 
 ## Problem
 
@@ -30,33 +29,27 @@ Five low-priority outcomes must not outrank one high-urgency outcome. A line sat
 high-urgency outcome plus useful secondary outcomes searches before a line satisfying only the
 high-urgency outcome. Bellman's value remains the final chooser.
 
-## Shape
+## Why the boundaries sit where they do
 
-- `StrategyBeamBuilder._priority` produces the lexicographic rank and per-action coverage; `build`
-  sorts the focused beam by that rank. `outcome_identity` is the shared deduplication key — desired
-  kind, bound recipient body (serial and card id, never the authoring selector or the strategy
-  identifier), target set, and waypoint — so equal declarations collapse to one need.
-- Coverage counts only certain direct advances (evolve, attach, deploy, heal, damage classes). An
-  access match (a card that may *find* a need) keeps setting the primary tier, reachability, and
-  odds, but adds zero coverage: one action never counts the alternatives it merely reaches.
-  With coverage restricted to certainty, the written coverage-before-reachability order and the
-  protected-bundle reachability-first rank cannot disagree.
-- `SequenceCoverage`/`combined_coverage` are the pure projection for a searched prefix or candidate
-  continuation: best need tier reached plus the ordered distinct outcomes advanced. The solver folds
-  it along the harvest prefix (`prefix_outcomes`), so a sequence counts each distinct outcome once.
-- Satisfied and externally-proven-impossible outcomes stop contributing; unknown reachability fails
-  open. Ordering only: Bellman values, bounds, dominance and terminal proofs, and the exhaustive
-  policy are unchanged, enforced by tests.
-- `strategy.sequence_coverage_enabled` (default on, not learnable) is the kill switch for paired
-  slow-frame comparison. The runtime effect-safe timeout fallback keeps the legacy ordering.
-- The protected two-slot bundle pool from PR #541 keeps its reachability-first rank and its time
-  shares; sequence coverage never multiplies a bundle's reserved time.
+- Coverage counts only certain direct advances. An access match — a card that may *find* a need —
+  has not advanced it; counting reach would let any generic draw card saturate the cap and outrank
+  the play that actually does the thing. Restricting coverage to certainty also makes the written
+  coverage-before-reachability order provably agree with the protected-bundle reachability-first
+  rank: an action with any coverage already carries reachability one.
+- Outcomes deduplicate on the bound recipient body, never the authoring selector or the strategy
+  identifier, so renaming or re-declaring guidance cannot manufacture search preference.
+- A sequence counts each distinct outcome once: the solver hands the beam the outcomes the searched
+  prefix already advanced, and re-advancing one adds nothing.
+- Impossibility marks are an epoch-scoped external proof with no in-repo producer yet; the beam
+  honors them as a caller-owned contract and treats unknown reachability as fail-open.
+- This is traversal and publication order only. A structural proof may not depend on beam width or
+  sort order, so the dominance filter reads the full match set, not the width-truncated beam.
+- The runtime effect-safe timeout fallback keeps legacy ordering: its contract was frozen by this
+  design's non-goals, and any change to it must land as its own measured decision.
 
 ## Validation
 
-Contracts live in `tests/strategy/test_strategies.py` (rank properties, dedup, rename/scope
-neutrality, cap, prefix, Riolu/Lunatone fixture) and `tests/bellman/test_m3_solver.py` (toggle
-changes no value, bound, or exhaustive policy; harvest hands the beam the prefix outcomes).
+Contracts live in `tests/strategy/test_strategies.py` and `tests/bellman/test_m3_solver.py`.
 Acceptance: no correction movement, no exhaustive policy difference, no p95 total-time regression;
 improvement expected in first-complete-line timing on turns with several compatible active needs,
-measured via `tools/sim/strategy_bench.py` with only this switch toggled.
+measured via `tools/sim/strategy_bench.py` with only the coverage switch toggled.

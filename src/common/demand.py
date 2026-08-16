@@ -298,7 +298,8 @@ class StrategyBeamBuilder:
                 best = max(best, float(bool(matching)))
         return best
 
-    def _priority(self, state, action) -> tuple[float, tuple[str, ...], tuple, tuple[str, ...]]:
+    def _priority(self, state, action) -> tuple[
+            float, tuple[str, ...], tuple, SequenceCoverage]:
         """Score, matched hint ids, lexicographic search rank, and distinct outcome coverage."""
         matched = []
         advanced: dict[str, tuple[float, float]] = {}
@@ -382,7 +383,8 @@ class StrategyBeamBuilder:
         best_probability = max(row[2] for row in tiers)
         prefix = set(self.prefix_outcomes)
         coverage = tuple(sorted(key for key in advanced if key not in prefix))
-        protected = sum(1 for key in coverage if advanced[key] == (3.0, 3.0))
+        top_tier = (self._URGENCY["high"], self._CONVICTION["high"])
+        protected = sum(1 for key in coverage if advanced[key] == top_tier)
         rank = (
             *primary,
             float(min(COVERAGE_DISTINCT_CAP, protected)),
@@ -412,8 +414,8 @@ class StrategyBeamBuilder:
     def build(self, state, actions, *, ranking=None) -> StrategyBeam:
         started = perf_counter()
         self.last_odds = {}
-        # An impossible mark is an external Odds/Bellman proof about the epoch, not a per-build
-        # observation; every other reachability entry is rebuilt from this build's matches.
+        # An impossible mark is an epoch-scoped external proof (no in-repo producer yet — a
+        # caller-owned contract); every other reachability entry is rebuilt from this build.
         self.last_reachability = {
             strategy_id: status for strategy_id, status in self.last_reachability.items()
             if status == "impossible"}

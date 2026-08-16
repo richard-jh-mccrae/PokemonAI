@@ -1175,7 +1175,14 @@ class ProductionSolver(ReferenceSolver):
         protected_bundles = set(self._protected_bundles(state))
         if protected_bundles and self._strategy_builder is not None:
             self._sync_prefix_outcomes()
-            beam = self._strategy_builder.build(state, actions)
+            # A dominance proof must not depend on beam width or sort order: build unbounded so
+            # the protected set is the full match set, whatever coverage put in the top slots.
+            width = self._strategy_builder.width
+            self._strategy_builder.width = max(width, len(actions))
+            try:
+                beam = self._strategy_builder.build(state, actions)
+            finally:
+                self._strategy_builder.width = width
             by_id = {
                 hint.strategy_id: str(hint.bundle_id or hint.strategy_id)
                 for hint in self.strategy_snapshot.hints
