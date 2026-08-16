@@ -9,7 +9,7 @@ from .algebra import (
     WeightedEdge,
 )
 from .option_equivalence import option_in_play_source_id
-from .options import LegalAction
+from .options import LegalAction, recycled_card_ids
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
@@ -452,7 +452,7 @@ class CgpyTransitionProvider:
         except Exception as exc:  # noqa: BLE001 - stays explicit
             return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")
 
-    def _state_from_engine(self, state, child):
+    def _state_from_engine(self, state, child, action):
         from cgpy.search import export_token
 
         observation = child.observation(
@@ -461,11 +461,14 @@ class CgpyTransitionProvider:
         observation["own_prizes"] = _own_prize_export(child, state.root_seat)
         if "known_top" in state.obs:
             observation["known_top"] = state.obs["known_top"]
+        recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
+        if recycled:
+            observation["bellmanRecycledCardIds"] = recycled
         return state.with_observation(observation)
 
     def _register_successor(self, state, child, action):
         try:
-            successor = self._state_from_engine(state, child)
+            successor = self._state_from_engine(state, child, action)
             committed = self._attack_committed.get(state.semantic_key, False) or \
                 action.identity.kind == "attack"
             if successor.semantic_key not in self._engines:

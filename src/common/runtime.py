@@ -38,7 +38,7 @@ from common.strategy.context import (
     _YES,
 )
 from common.strategy.strategies import (
-    GENERAL_STRATEGIES, activate_strategies, resolve_strategies,
+    GENERAL_STRATEGIES, activate_strategies, general_card_strategies, resolve_strategies,
 )
 from common.value import ValueRegistry
 from common.terminal import proof_lock_step
@@ -81,6 +81,7 @@ class BellmanRuntime:
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
                  scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None):
         self.strategy = strategy
+        self.potential_type = strategy.potential_factory or BoardPotential
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
             stats = EngineCardStatProvider()
@@ -116,6 +117,9 @@ class BellmanRuntime:
         self.strategies = None
         self._strategy_snapshot = None
         self._strategy_history = ()
+        self._strategy_ko_window_turn = -1
+        self._strategy_previous_turn = -1
+        self._strategy_previous_bodies = frozenset()
         self.last_brief = None
         self.opponent_role_worth = {}
         self._plan_suffix = ()
@@ -228,7 +232,7 @@ class BellmanRuntime:
         for card_id, card_roles in generic_roles.items():
             self.opponent_role_worth[card_id] = max(
                 self.opponent_role_worth.get(card_id, 0.0), role_value(card_roles))
-        potential = BoardPotential(
+        potential = self.potential_type(
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=self.opponent_role_worth,
             isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0,
@@ -245,15 +249,39 @@ class BellmanRuntime:
             profile=self.pilot_profile, **planner_kwargs)
 
     def _planning_epoch_strategy(self, observation):
+        current = observation.get("current") or {}
+        turn = int(current.get("turn", 0))
+        seat = int(current.get("yourIndex", 0))
+        players = current.get("players") or ()
+        player = players[seat] if 0 <= seat < len(players) else {}
+        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
+        serials = frozenset(int(body.get("serial", -1)) for body in bodies if body)
+        lost_between_turns = (
+            self._strategy_previous_turn >= 0
+            and turn > self._strategy_previous_turn
+            and bool(self._strategy_previous_bodies - serials)
+        )
+        if lost_between_turns:
+            self._strategy_ko_window_turn = turn
+        self._strategy_previous_turn = turn
+        self._strategy_previous_bodies = serials
+        if self._strategy_ko_window_turn == turn:
+            observation["strategyPokemonKoWindow"] = True
+        card_strategies = general_card_strategies(
+            self.deck, self.roles, self.functions, self.stats, self.effects
+        ) if self.strategy.params.get("use_general_card_strategies") else ()
         self.strategies = resolve_strategies(
-            GENERAL_STRATEGIES,
+            (*GENERAL_STRATEGIES, *card_strategies),
             getattr(self.strategy, "strategies", ()),
             getattr(self.last_brief, "strategies", ()) if self.last_brief is not None else (),
             getattr(self.strategy, "strategy_overrides", ()),
         )
         candidate = activate_strategies(
             observation, self.strategies, roles=self.roles, stats=self.stats,
+            effects=self.effects,
             opponent_role_worth=self.opponent_role_worth)
+        if any(hint.strategy_id.endswith(".deploy_after_ko") for hint in candidate.hints):
+            self._strategy_ko_window_turn = turn
         history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
                         for row in observation.get("logs") or ())
         same_history = (len(history) >= len(self._strategy_history)

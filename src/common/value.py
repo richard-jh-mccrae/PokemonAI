@@ -85,6 +85,11 @@ FAMILY_OWNERS = {
     "hand_demand": ("visible missing board jobs", "prospective hand access"),
     "opponent_roles": ("scouted opponent role pressure",),
     "opponent_hand": ("opponent accessible resources",),
+    "ability_fuel": ("printed ability energy requirements",),
+    "special_conditions": ("persistent special conditions",),
+    "item_lock": ("opposing item denial",),
+    "counter_efficiency": ("damage-counter placement efficiency",),
+    "reusable_draw_line": ("recycled draw-engine access",),
 }
 
 
