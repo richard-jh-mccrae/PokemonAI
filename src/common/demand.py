@@ -253,6 +253,45 @@ class StrategyBeamBuilder:
         body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
         return int(body["serial"]) if body and body.get("serial") is not None else None
 
+    def _body_by_serial(self, state, serial):
+        if serial is None:
+            return None
+        player = self._player(state)
+        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
+        return next((body for body in bodies if body
+                     and int(body.get("serial", -1)) == int(serial)), None)
+
+    def _funding_energy_ids(self, state, hint) -> tuple[int, ...]:
+        """Deck Energy that advances a printed attack cost the recipient cannot yet pay.
+
+        An attack's cost is a card fact. Reading it from the stat provider keeps a deck from
+        restating it in a declaration, where a half-named cost silently scores the other half
+        at zero and nothing catches the drift when the card is reprinted.
+        """
+        body = self._body_by_serial(state, hint.recipient_serial)
+        stat = self.stats.get(body.get("id")) if body and self.stats is not None else None
+        if stat is None:
+            return ()
+        provisions = tuple(body.get("energies") or ())
+        owed = {energy_type
+                for attack_id in getattr(stat, "attacks", ()) or ()
+                for _slot, energy_type in unmet_cost_slots(
+                    provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
+        if not owed:
+            return ()
+        return tuple(sorted(
+            int(card_id) for card_id, count in state.deck_counts
+            if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+            and any(pays_energy_type(
+                int(getattr(self.stats.get(card_id), "energyType", DEFAULT_ENERGY_CODE) or 0),
+                energy_type) for energy_type in owed)))
+
+    def _funds_the_cost(self, state, hint, source_id) -> bool:
+        if hint.target_card_ids:
+            return source_id in hint.target_card_ids
+        eligible = self._funding_energy_ids(state, hint)
+        return not eligible or source_id in eligible
+
     def _eligible_targets(self, state, hint) -> tuple[int, ...]:
         if hint.target_card_ids:
             targets = tuple(card_id for card_id in hint.target_card_ids
@@ -274,7 +313,7 @@ class StrategyBeamBuilder:
                 )
             return targets
         if hint.kind == "fund_attack" and self.stats is not None:
-            return tuple(
+            return self._funding_energy_ids(state, hint) or tuple(
                 int(card_id) for card_id, count in state.deck_counts
                 if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
             )
@@ -397,7 +436,7 @@ class StrategyBeamBuilder:
             via_access = False
             if (hint.kind == "fund_attack" and action.identity.kind == "attach"
                     and recipient == hint.recipient_serial
-                    and (not hint.target_card_ids or source_id in hint.target_card_ids)
+                    and self._funds_the_cost(state, hint, source_id)
                     and bool(getattr(source_stat, "is_energy", False))):
                 probability = 1.0
             elif (hint.kind == "fund_ability" and action.identity.kind == "attach"

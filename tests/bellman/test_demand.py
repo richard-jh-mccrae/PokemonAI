@@ -401,3 +401,40 @@ def test_next_turn_evolution_option_disappears_when_the_enabling_clock_or_body_i
     assert resolved.value == 0.0
     assert resolved.options == ()
 
+
+
+def test_undeclared_funding_reads_the_cost_off_the_card():
+    """A fund_attack hint that names no Energy funds the recipient's own unmet printed cost, so
+    an Energy that pays nothing it owes is not treated as funding."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, fire, psychic, darkness = 810, 2, 5, 7
+    stats = DictCardStatProvider(
+        {
+            attacker: CardStat(attacker, hp=320, attacks=(11,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+            darkness: CardStat(darkness, cardType=5, energyType=darkness),
+        },
+        attacks={11: AttackStat(11, damage=200, energyTypes=(fire, psychic))},
+    )
+    hint = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", attacker, 1, (), "immediate", "high", None, 0)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+    observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+        {"active": [{"id": attacker, "serial": 1, "hp": 320, "maxHp": 320,
+                     "energies": [fire]}], "bench": []},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+    state = SimpleNamespace(
+        obs=observation, root_seat=0,
+        deck_counts=((fire, 3), (psychic, 3), (darkness, 2)))
+
+    # One Fire is already attached, so only the Psychic slot is still owed.
+    assert builder._funding_energy_ids(state, hint) == (psychic,)
+    assert builder._funds_the_cost(state, hint, psychic)
+    assert not builder._funds_the_cost(state, hint, darkness)

@@ -245,15 +245,15 @@ def test_only_the_phantom_dive_line_and_its_conversions_are_immediate():
     }
 
 
-def test_phantom_dive_funding_names_both_halves_of_its_printed_cost():
-    stats = EngineCardStatProvider()
-    cost = frozenset(stats.attack(154).energyTypes)
+def test_funding_hints_do_not_restate_a_printed_attack_cost():
+    """An attack's cost is a card fact. A deck that copies it into a declaration names half of
+    it sooner or later, and scores the other half at zero."""
     funding = [hint for hint in STRATEGY.strategies
                if hint.desired_facts[0].kind == "fund_attack"]
 
     assert funding
     for hint in funding:
-        assert cost <= frozenset(hint.desired_facts[0].target_card_ids)
+        assert hint.desired_facts[0].target_card_ids == ()
 
 
 def test_the_crispin_declarations_state_one_desired_outcome():

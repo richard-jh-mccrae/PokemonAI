@@ -13,11 +13,6 @@ NIGHT_STRETCHER, CRUSHING_HAMMER = 1097, 1120
 BOSS_ORDERS, CRISPIN, RISKY_RUINS = 1182, 1198, 1260
 UNFAIR_STAMP = 1080
 
-#: Phantom Dive costs one Fire AND one Psychic. Naming only one half scored the other attach at
-#: zero, which dropped the very attach that completes the cost.
-FIRE_ENERGY, PSYCHIC_ENERGY = 2, 5
-PHANTOM_DIVE_COST = (FIRE_ENERGY, PSYCHIC_ENERGY)
-
 PHANTOM_DIVE = "dragapult.phantom_dive"
 DRAKLOAK_BODY = f"own.body.card:{DRAKLOAK}:first"
 DUNSPARCE_BODY = f"own.body.card:{DUNSPARCE}:first"
@@ -73,8 +68,7 @@ STRATEGY = Strategy(
               conditions=(
                   ActivationCondition("own.active.card_id", "eq", DRAGAPULT_EX),
                   ActivationCondition("own.active.attack_ready", "eq", False),
-              ), targets=PHANTOM_DIVE_COST, deadline="immediate",
-              bundle_id=PHANTOM_DIVE, waypoint=0),
+              ), deadline="immediate", bundle_id=PHANTOM_DIVE, waypoint=0),
         _hint("evolve_ready_drakloak", "evolve", DRAKLOAK_BODY,
               conditions=(
                   ActivationCondition(f"own.card.{DRAKLOAK}.energy_count", "ge", 2),
@@ -101,7 +95,7 @@ STRATEGY = Strategy(
               conditions=(
                   ActivationCondition(f"own.card.{DRAKLOAK}.in_play", "eq", True),
                   ActivationCondition(f"own.card.{DRAKLOAK}.energy_count", "lt", 2),
-              ), targets=PHANTOM_DIVE_COST),
+              )),
         # Two board shapes, one desired outcome: Crispin's recipient does not select the action,
         # so both declare the same outcome and are deduplicated to a single unit of coverage.
         _hint("crispin_fuel_the_line", "play_card", "own.active",
