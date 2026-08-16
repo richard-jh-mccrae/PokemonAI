@@ -164,7 +164,8 @@ def _observation(*, hand):
             "yourIndex": 0,
             "energyAttached": False,
             "players": [
-                {"active": [{"id": 10, "serial": 77, "energies": []}],
+                {"active": [{"id": 10, "serial": 77, "energies": [],
+                             "hp": 330, "maxHp": 330}],
                  "bench": [], "hand": hand},
                 {"active": [{"id": 20, "serial": 88, "energies": []}], "bench": []},
             ],
@@ -270,6 +271,26 @@ def test_general_funding_strategy_accepts_primary_and_backup_attackers():
             _observation(hand=[]), resolve_strategies(GENERAL_STRATEGIES),
             roles=Roles({10: [role]}), stats=Stats())
         assert "general.fund_active_attacker" in snapshot.active_ids
+
+
+def test_general_funding_strategy_survives_chip_damage_above_half_health():
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(attacks=(90,))
+
+        @staticmethod
+        def attack(_attack_id):
+            return SimpleNamespace(energyTypes=(3,))
+
+    for hp, expected in ((330, True), (250, True), (100, False)):
+        observation = _observation(hand=[])
+        observation["current"]["players"][0]["active"][0].update(
+            {"hp": hp, "maxHp": 330})
+        snapshot = activate_strategies(
+            observation, resolve_strategies(GENERAL_STRATEGIES),
+            roles=Roles({10: ["primary_attacker"]}), stats=Stats())
+        assert ("general.fund_active_attacker" in snapshot.active_ids) is expected, hp
 
 
 def test_strategy_beam_targets_the_declared_recipient_without_pruning_other_actions():

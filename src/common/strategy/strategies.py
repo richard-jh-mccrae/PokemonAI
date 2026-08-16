@@ -201,9 +201,6 @@ def _visible_facts(observation: dict, *, roles, stats=None,
         "own.active.is_attacker": bool(
             {"primary_attacker", "backup_attacker"}.intersection(card_roles)),
         "own.active.energy_count": len(active.get("energies") or ()),
-        "own.active.full_health": (
-            bool(active)
-            and int(active.get("hp", 0)) >= int(active.get("maxHp", active.get("hp", 0)))),
         "own.active.hp_fraction": (
             int(active.get("hp", 0)) / max(1, int(active.get("maxHp", active.get("hp", 1))))
             if active else 0.0),
@@ -371,7 +368,9 @@ GENERAL_STRATEGIES = (
         "general",
         (
             ActivationCondition("own.active.is_attacker", "eq", True),
-            ActivationCondition("own.active.full_health", "eq", True),
+            # Below half health the body is a heal-or-replace question; above it funding
+            # stays live — exact viability of the recipient is Bellman's call.
+            ActivationCondition("own.active.hp_fraction", "ge", 0.5),
             ActivationCondition("own.active.attack_ready", "eq", False),
         ),
         (DesiredFact("fund_attack", "own.active"),),
