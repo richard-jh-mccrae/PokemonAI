@@ -87,6 +87,16 @@ def summarize_decisions(records) -> dict:
     }
 
 
+def summarize_matches(matches) -> dict:
+    durations = [row["seconds"] for row in matches if row.get("seconds") is not None]
+    return {
+        "samples": len(durations),
+        "avg": mean(durations) if durations else 0.0,
+        "min": min(durations, default=0.0),
+        "max": max(durations, default=0.0),
+    }
+
+
 def decision_metrics(records, *, match_index, contestants) -> list[dict]:
     from common.telemetry import lethal_proof_seconds
 
@@ -161,6 +171,7 @@ def format_report(payload: dict, hotspot_count=10) -> str:
     decision = summary["decision_seconds"]
     trip = summary["round_trip_seconds"]
     matches = payload["matches"]
+    match_time = summary.get("match_seconds", summarize_matches(matches))
     emit = bool(config.get("emit", True))
     wins = [sum(row["winner_seat"] == seat for row in matches) for seat in (0, 1)]
     lines = [
@@ -173,10 +184,16 @@ def format_report(payload: dict, hotspot_count=10) -> str:
         f"decision timeouts {sum(bool(row['timed_out']) for row in matches)} | "
         f"agent crashes {sum(bool(row.get('crashed')) for row in matches)} | "
         f"match timeouts {sum(row['match_deadline_hit'] for row in matches)}",
+        f"Match time avg {match_time['avg']:.2f}s | min {match_time['min']:.2f}s | "
+        f"max {match_time['max']:.2f}s",
         f"Decisions {summary['decisions']} | measured Bellman searches "
         f"{summary['stabilized_decisions']} | deadline hits {summary['deadline_hits']}",
         f"Telemetry emission {'on' if emit else 'off'} | round trip avg {trip['avg']:.2f}s | "
         f"p95 {trip['p95']:.2f}s | max {trip['max']:.2f}s",
+        "",
+        "Match time per match:",
+        *(f"Match {row['match']}: {row['seconds']:.3f}s"
+          for row in matches if row.get("seconds") is not None),
     ]
     if not summary["timed_decisions"]:
         lines.append(
@@ -185,12 +202,6 @@ def format_report(payload: dict, hotspot_count=10) -> str:
     first = summary["first_found_seconds"]
     stable = summary["stabilized_seconds"]
     lethal = summary["lethal_proof_seconds"]
-    lethal_by_match = [
-        (match, summarize_decisions(
-            [row for row in payload["decisions"] if row["match"] == match]
-        )["lethal_proof_seconds"])
-        for match in sorted({row["match"] for row in payload["decisions"]})
-    ]
     lines += [
         f"Decision time avg {decision['avg']:.2f}s | p95 {decision['p95']:.2f}s | max {decision['max']:.2f}s",
         f"Final incumbent first found avg {first['avg']:.2f}s | p95 {first['p95']:.2f}s | max {first['max']:.2f}s",
@@ -198,11 +209,6 @@ def format_report(payload: dict, hotspot_count=10) -> str:
         f"Lethal solver avg {lethal['avg']:.3f}s | min {lethal['min']:.3f}s | max {lethal['max']:.3f}s",
         f"Final Strategy wave: first {summary['strategy_waves']['first']} | "
         f"widening {summary['strategy_waves']['widening']}",
-        "",
-        "Lethal solver per match:",
-        *(f"Match {match}: avg {sample['avg']:.3f}s | min {sample['min']:.3f}s | "
-          f"max {sample['max']:.3f}s"
-          for match, sample in lethal_by_match),
         "",
         "Hotspots by final-incumbent stabilization time:",
     ]
@@ -305,7 +311,10 @@ def run(config: dict) -> dict:
     matches = [result["match"] for result in results]
     decisions = [decision for result in results for decision in result["decisions"]]
     payload = {"config": config, "matches": matches, "decisions": decisions}
-    payload["summary"] = summarize_decisions(decisions)
+    payload["summary"] = {
+        **summarize_decisions(decisions),
+        "match_seconds": summarize_matches(matches),
+    }
     payload["decision_csv"] = write_decisions_csv(run_dir, decisions).name
     (run_dir / "report.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
