@@ -171,28 +171,61 @@ def test_a_spread_attack_reaches_the_bench_in_forecasts():
     assert value == 1.0                               # a full KO reach, not zero
 
 
-def test_a_defenders_tool_reduction_caps_the_forecast_ko():
-    tool = 1174
+PAYAPA, SACRED_CHARM, THICK_SCALE = 1164, 1177, 1179
+
+
+def _tool_forecast(tool_stat, *, attacker_stat=None, defender_stat=None):
+    """Forecast value of a 60-damage hit into a 60 HP defender carrying ``tool_stat``."""
     stats = DictCardStatProvider(
-        {ATTACKER: CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,)),
-         DEFENDER: CardStat(DEFENDER, name="Defender", hp=60),
-         tool: CardStat(tool, name="Guard", damageReduction=30)},
+        {ATTACKER: attacker_stat or CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,)),
+         DEFENDER: defender_stat or CardStat(DEFENDER, name="Defender", hp=60),
+         tool_stat.cardId: tool_stat},
         attacks={1: AttackStat(1, name="Hit", damage=60)},
     )
     potential = BoardPotential(stats, registry=_registry(), root_seat=0)
     attacker = _body(ATTACKER)
-    bare = _body(DEFENDER, hp=60, max_hp=60)
-    guarded = _body(DEFENDER, hp=60, max_hp=60)
-    guarded["tools"] = [{"id": tool, "serial": 9}]
+    defender = _body(DEFENDER, hp=60, max_hp=60)
+    defender["tools"] = [{"id": tool_stat.cardId, "serial": 9}]
     me = {"active": [attacker], "bench": [], "hand": [], "discard": [], "prize": []}
+    side = {"active": [defender], "bench": [], "hand": None, "discard": [], "prize": []}
+    return potential._attack_value(
+        attacker, [], defender, potential._side_facts(me), potential._side_facts(side))
 
-    def value(defender):
-        side = {"active": [defender], "bench": [], "hand": None, "discard": [], "prize": []}
-        return potential._attack_value(
-            attacker, [], defender, potential._side_facts(me), potential._side_facts(side))
 
-    assert value(bare) == 1.0                         # 60 into 60: a forecast KO
-    assert value(guarded) == 0.5                      # the attached tool absorbs 30
+def test_a_berry_tool_guards_only_against_its_printed_attacker_type():
+    # Payapa Berry, gates per the CSV wording: 60 less, {P} (=5) attackers only.
+    berry = CardStat(PAYAPA, name="Payapa Berry", damageReduction=60,
+                     damageReductionTypes=(5,))
+    psychic = CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,), energyType=5)
+    water = CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,), energyType=3)
+
+    assert _tool_forecast(berry, attacker_stat=psychic) == 0.0   # 60 - 60: fully absorbed
+    assert _tool_forecast(berry, attacker_stat=water) == 1.0     # wrong type: a full KO
+
+
+def test_sacred_charm_guards_only_against_ability_attackers():
+    charm = CardStat(SACRED_CHARM, name="Sacred Charm", damageReduction=30,
+                     damageReductionRequiresAbility=True)
+    with_ability = CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,), hasAbility=True)
+    plain = CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,))
+
+    assert _tool_forecast(charm, attacker_stat=with_ability) == 0.5  # 30 absorbed
+    assert _tool_forecast(charm, attacker_stat=plain) == 1.0         # no Ability: full KO
+
+
+def test_thick_scale_guards_only_its_own_type_holder():
+    # 50 less for a {N} (=9) holder against {G}{R}{W}{L} attackers; wrong holder = inert.
+    scale = CardStat(THICK_SCALE, name="Thick Scale", damageReduction=50,
+                     damageReductionTypes=(1, 2, 3, 4), damageReductionHolderTypes=(9,))
+    water_attacker = CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,), energyType=3)
+    dragon_holder = CardStat(DEFENDER, name="Defender", hp=60, energyType=9)
+    water_holder = CardStat(DEFENDER, name="Defender", hp=60, energyType=3)
+
+    guarded = _tool_forecast(scale, attacker_stat=water_attacker, defender_stat=dragon_holder)
+    unguarded = _tool_forecast(scale, attacker_stat=water_attacker, defender_stat=water_holder)
+
+    assert guarded == pytest.approx(10 / 60)          # 60 - 50 = 10 into 60 HP
+    assert unguarded == 1.0                           # holder gate fails: full KO
 
 
 def test_our_own_stadium_in_play_carries_its_board_worth():

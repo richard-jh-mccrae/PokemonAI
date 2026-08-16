@@ -571,6 +571,30 @@ def test_boost_general_strategy_is_declared():
         hint.identifier for hint in GENERAL_STRATEGIES}
 
 
+def test_boost_hint_survives_the_committed_attack_it_names():
+    """PR #533 review: after the manual attach, a boost Trainer can still pay onto the offered
+    attack — the old commitment_available gate turned the hint off in exactly that spot."""
+    observation = _observation(hand=[])
+    observation["current"]["energyAttached"] = True     # attach committed, Active not evolvable
+    observation["select"]["option"] = [{"type": 13, "attackId": 1}, {"type": 14}]
+
+    snapshot = activate_strategies(
+        observation, resolve_strategies(GENERAL_STRATEGIES), roles=Roles({}))
+
+    assert "general.boost_the_committed_attack" in snapshot.active_ids
+
+
+def test_boost_hint_rests_with_no_commitment_and_no_offered_attack():
+    observation = _observation(hand=[])
+    observation["current"]["energyAttached"] = True
+    observation["select"]["option"] = [{"type": 14}]    # End only: nothing to boost
+
+    snapshot = activate_strategies(
+        observation, resolve_strategies(GENERAL_STRATEGIES), roles=Roles({}))
+
+    assert "general.boost_the_committed_attack" not in snapshot.active_ids
+
+
 def test_damage_setup_hint_matches_a_spread_attacker():
     hint = SimpleNamespace(
         kind="damage_setup", target_card_ids=(), recipient_serial=88,

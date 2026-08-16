@@ -129,6 +129,14 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
             return 0
         if defender_transient.get("reduction"):
             dmg = max(0, dmg - defender_transient["reduction"])
+        for amount, r_types, needs_ability in defender_transient.get("typed") or ():
+            # Attacker-gated Tool reductions (Payapa/Haban/Thick Scale typed, Sacred Charm's
+            # Ability gate). Fail-open: an unknown attacker stat invents no reduction.
+            if r_types is not None and atype not in r_types:
+                continue
+            if needs_ability and not (attacker is not None and attacker.hasAbility):
+                continue
+            dmg = max(0, dmg - amount)
     return dmg
 
 

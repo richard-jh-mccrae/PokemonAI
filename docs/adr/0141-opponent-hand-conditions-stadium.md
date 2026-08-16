@@ -1,4 +1,4 @@
-# ADR-0141: The Bellman potential prices the opponent's hand (dark), special conditions, and the stadium zone
+# ADR-0141: The Bellman potential prices the opponent's hand, special conditions, and the stadium zone
 
 Status: Accepted; built from the 2026-08-16 src/ crash-and-valuation audit.
 
@@ -24,7 +24,7 @@ The audit that followed PR #531/#532 found three mechanics the live valuation co
 All three become facts of the absolute potential (ADR-0136 shape — priced once, differenced
 everywhere):
 
-- **`opponent_hand` family, shipped dark.** Value `-share × worth_to_prizes(KNOWN_CARD_FLOOR) ×
+- **`opponent_hand` family** (dark at birth; armed by the amendment below). Value `-share × worth_to_prizes(KNOWN_CARD_FLOOR) ×
   opponent hand count`; the refresh ledger's new `refresh_opponent_hand` row prices the same swing
   with the same constant and the same share, so the closed-form and engine-stepped paths cannot
   disagree. `value.opponent_hand_share` (PilotProfile, default **0.1** — see the amendment) arms

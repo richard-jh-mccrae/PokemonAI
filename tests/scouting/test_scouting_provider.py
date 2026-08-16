@@ -181,6 +181,44 @@ def test_build_cache_parses_flat_hp_bonus_and_carries_an_owner_gate_with_it():
 
 
 @pytest.mark.req("REQ-GEN-0024")
+@pytest.mark.req("REQ-SCOUT-0008")
+def test_build_cache_parses_every_tool_damage_reduction_wording():
+    """PR #533 review: the pool's four reduction Tools use holder-scoped and conditional wordings
+    that the Pokémon-body patterns never matched. Source text verified against the CSV."""
+    cards = [
+        _tool(1164, "Payapa Berry",
+              "If the Pokémon this card is attached to is damaged by an attack from your "
+              "opponent’s {P} Pokémon, it takes 60 less damage (after applying Weakness and "
+              "Resistance), and discard this card."),
+        _tool(1170, "Haban Berry",
+              "If the Pokémon this card is attached to is damaged by an attack from your "
+              "opponent’s {N} Pokémon, it takes 60 less damage (after applying Weakness and "
+              "Resistance), and discard this card."),
+        _tool(1177, "Sacred Charm",
+              "The Pokémon this card is attached to takes 30 less damage from attacks from your "
+              "opponent’s Pokémon that have an Ability (after applying Weakness and Resistance)."),
+        _tool(1179, "Thick Scale",
+              "The {N} Pokémon this card is attached to takes 50 less damage from attacks from "
+              "your opponent’s {G}, {R}, {W}, or {L} Pokémon (after applying Weakness and "
+              "Resistance)."),
+        _tool(1159, "Hero's Cape", "The Pokémon this card is attached to gets +100 HP.",
+              ace_spec=True),
+    ]
+
+    cache = _build_cache(cards, [])
+
+    def gates(card_id):
+        stat = cache[card_id]
+        return (stat.damageReduction, stat.damageReductionTypes,
+                stat.damageReductionHolderTypes, stat.damageReductionRequiresAbility)
+
+    assert gates(1164) == (60, (5,), None, False)      # {P} attackers only
+    assert gates(1170) == (60, (9,), None, False)      # {N} attackers only
+    assert gates(1177) == (30, None, None, True)       # any attacker WITH an Ability
+    assert gates(1179) == (50, (1, 2, 3, 4), (9,), False)  # {N} holder vs {G}{R}{W}{L}
+    assert gates(1159) == (0, None, None, False)       # an HP tool grants no reduction
+
+
 def test_build_cache_hp_bonus_defaults_to_zero_without_skills():
     cards = [SimpleNamespace(cardId=678, name="Mega Lucario ex", hp=220, ex=True, megaEx=True,
                              weakness=6, resistance=None, energyType=6, evolvesFrom="Riolu", attacks=[])]

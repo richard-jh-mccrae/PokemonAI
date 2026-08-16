@@ -78,10 +78,8 @@ def _hand_count(player) -> int:
 
 
 def board_parity(board: float, role_pressure: float) -> float:
-    """Our board Worth over the opponent's role pressure (its positive magnitude), in ``[0, 1]``.
-
-    ADR-0141: no resolved pressure means nothing to be behind of, so parity is whole.
-    """
+    """Our board Worth over the opponent's role-pressure magnitude, in ``[0, 1]`` (ADR-0141).
+    No resolved pressure means nothing to be behind of, so parity stays whole."""
     if role_pressure <= 0.0:
         return 1.0
     return min(1.0, max(0.0, board) / role_pressure)
@@ -303,11 +301,29 @@ class BoardPotential:
             found = cache.get(key, _UNSET)
             if found is not _UNSET:
                 return found
-        reduction = 0
+        holder_stat = self._stat(defender.get("id"))
+        holder_type = getattr(holder_stat, "energyType", None) if holder_stat else None
+        reduction, typed = 0, []
         for tool in (defender.get("tools") or ()):
             stat = self._stat(tool.get("id") if isinstance(tool, dict) else tool)
-            reduction += int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
-        result = {"reduction": reduction} if reduction else None
+            amount = int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
+            if not amount:
+                continue
+            holders = getattr(stat, "damageReductionHolderTypes", None)
+            if holders is not None and holder_type not in holders:
+                continue                               # Thick Scale on a non-{N} holder is inert
+            types = getattr(stat, "damageReductionTypes", None)
+            needs_ability = bool(getattr(stat, "damageReductionRequiresAbility", False))
+            if types is None and not needs_ability:
+                reduction += amount
+            else:                                      # attacker-gated: resolved per attack
+                typed.append((amount, types, needs_ability))
+        result = {}
+        if reduction:
+            result["reduction"] = reduction
+        if typed:
+            result["typed"] = tuple(typed)
+        result = result or None
         if cache is not None:
             cache[key] = result
         return result

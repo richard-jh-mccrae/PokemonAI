@@ -182,6 +182,9 @@ def _visible_facts(observation: dict, *, roles, stats=None,
     opponent_bench = tuple(body for body in opponent.get("bench") or () if body)
     opponent_role_worth = opponent_role_worth or {}
     options = tuple((observation.get("select") or {}).get("option") or ())
+    can_attack = any(int(option.get("type", -1)) == 13 for option in options)
+    commitment_available = (not bool(current.get("energyAttached"))
+                            or (card_id in roles.evolves if card_id is not None else False))
     facts = {
         "own.active.card_id": card_id,
         "own.active.role": card_roles,
@@ -195,8 +198,7 @@ def _visible_facts(observation: dict, *, roles, stats=None,
             int(active.get("hp", 0)) / max(1, int(active.get("maxHp", active.get("hp", 1))))
             if active else 0.0),
         "own.active.attack_ready": _attack_ready(active, stats),
-        "own.active.can_attack": any(int(option.get("type", -1)) == 13
-                                     for option in options),
+        "own.active.can_attack": can_attack,
         "own.active.evolvable": card_id in roles.evolves if card_id is not None else False,
         "own.bench.evolvable_count": sum(
             1 for body in bench if body.get("id") in roles.evolves),
@@ -207,10 +209,10 @@ def _visible_facts(observation: dict, *, roles, stats=None,
         "opponent.bench.role_target_count": sum(
             float(opponent_role_worth.get(int(body.get("id", 0)), 0.0)) > 0.0
             for body in opponent_bench),
-        "turn.commitment_available": (
-            not bool(current.get("energyAttached"))
-            or (card_id in roles.evolves if card_id is not None else False)
-        ),
+        "turn.commitment_available": commitment_available,
+        # The condition language has no OR; a boost pays off while a commitment can still create
+        # an attack OR one is already offered (PR #533 review: the post-attach committed case).
+        "turn.boostable_attack_available": commitment_available or can_attack,
     }
     return facts
 
@@ -404,7 +406,7 @@ GENERAL_STRATEGIES = (
         # the same epoch; schedule it early so search reaches that attack before the caps.
         "general.boost_the_committed_attack",
         "general",
-        (ActivationCondition("turn.commitment_available", "eq", True),),
+        (ActivationCondition("turn.boostable_attack_available", "eq", True),),
         (DesiredFact("damage_boost", "turn"),),
         "turn",
         "this_turn",
