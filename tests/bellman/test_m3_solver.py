@@ -652,6 +652,41 @@ def test_unresolved_challenger_replaces_strategy_only_after_its_lower_bound_clos
     assert closed[0] == challenger
 
 
+def test_protected_bundles_rank_context_not_strategy_identifier():
+    def row(strategy_id, bundle_id, status, kind, recipient, waypoint=0):
+        return {
+            "strategy_id": strategy_id, "bundle_id": bundle_id,
+            "urgency": "high", "conviction": "high", "status": status,
+            "kind": kind, "recipient": recipient, "recipient_serial": None,
+            "target_card_ids": (), "waypoint": waypoint,
+        }
+
+    rows = (
+        row("general.aaa", "general.need", "unknown", "deploy", "own.bench"),
+        row("mega_lucario.zzz", "lucario.turn", "guaranteed", "evolve", "own.active"),
+        row("mega_lucario.lunatone_a", "lucario.engine", "probabilistic",
+            "deploy", "own.bench"),
+        row("mega_lucario.lunatone_b", "lucario.engine", "probabilistic",
+            "deploy", "own.bench"),
+        row("mega_lucario.power", "lucario.engine", "probabilistic",
+            "fund_attack", "own.active", 1),
+    )
+
+    class Builder:
+        @staticmethod
+        def outcome_statuses(_state):
+            return rows
+
+    solver = ProductionSolver(Graph({}, {}), _oracle())
+    solver._strategy_builder = Builder()
+
+    protected = solver._protected_bundles(_state("context-ranked"))
+
+    assert protected == ("lucario.turn", "lucario.engine")
+    assert solver._protected_bundle_diagnostics["eligible"].count("lucario.engine") == 1
+    assert solver._protected_bundle_diagnostics["overflow"] == ("general.need",)
+
+
 def test_complete_equal_damage_placements_use_engine_selection_order():
     from common.solver import Evaluation, _select_our_action
 

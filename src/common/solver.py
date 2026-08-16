@@ -706,19 +706,43 @@ class ProductionSolver(ReferenceSolver):
                 self._strategy_builder, "outcome_statuses"):
             return ()
         rows = self._strategy_builder.outcome_statuses(state)
-        bundle_ids = []
+        grouped = {}
         for row in rows:
             if (row["urgency"] != "high" or row["conviction"] != "high"
                     or row["status"] in {"satisfied", "impossible"}):
                 continue
             bundle = str(row["bundle_id"] or row["strategy_id"])
-            if bundle not in bundle_ids:
-                bundle_ids.append(bundle)
+            grouped.setdefault(bundle, []).append(row)
+        reachability = {"unknown": 0, "probabilistic": 1, "guaranteed": 2}
+
+        def outcome(row):
+            return (
+                row.get("kind"), row.get("recipient"), row.get("recipient_serial"),
+                tuple(row.get("target_card_ids") or ()), int(row.get("waypoint", 0)),
+            )
+
+        ranked = []
+        for bundle, members in grouped.items():
+            outcomes = tuple(sorted({outcome(row) for row in members}, key=repr))
+            score = (
+                max(reachability.get(str(row["status"]), 0) for row in members),
+                len(outcomes),
+            )
+            ranked.append((bundle, score, outcomes))
+        ranked.sort(key=lambda item: (
+            -item[1][0], -item[1][1], repr(item[2]),
+        ))
+        bundle_ids = tuple(bundle for bundle, _score, _outcomes in ranked)
         limit = int(self.profile.get("search.protected_bundle_count"))
         protected = tuple(bundle_ids[:limit])
         self._protected_bundle_diagnostics = {
             "eligible": tuple(bundle_ids), "protected": protected,
             "overflow": tuple(bundle_ids[limit:]),
+            "ranked": tuple({
+                "bundle_id": bundle,
+                "reachability": score[0],
+                "distinct_outcomes": score[1],
+            } for bundle, score, _outcomes in ranked),
         }
         return protected
 
