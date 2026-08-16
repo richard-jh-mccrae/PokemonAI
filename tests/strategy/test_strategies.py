@@ -96,11 +96,16 @@ def test_this_turn_urgency_rises_when_the_branch_reaches_closing_actions():
     snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (hint,))
     builder = StrategyBeamBuilder(snapshot)
     open_state = SimpleNamespace(obs=_observation(hand=[]), root_seat=0)
+    end_only = _observation(hand=[])
+    end_only["select"]["option"] = [{"type": 14}]
+    end_only_state = SimpleNamespace(obs=end_only, root_seat=0)
     closing = _observation(hand=[])
     closing["select"]["option"] = [{"type": 13, "attackId": 1}]
     closing_state = SimpleNamespace(obs=closing, root_seat=0)
 
     assert builder.urgency(open_state, hint) == "medium"
+    # End is on essentially every main-phase menu; it must not read as a closing action.
+    assert builder.urgency(end_only_state, hint) == "medium"
     assert builder.urgency(closing_state, hint) == "high"
 
 
