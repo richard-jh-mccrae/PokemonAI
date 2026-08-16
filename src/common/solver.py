@@ -738,7 +738,17 @@ class ProductionSolver(ReferenceSolver):
 
     def _footprint(self, state: DecisionState, action: LegalAction) -> ActionFootprint | None:
         footprint = getattr(self.provider, "footprint", None)
-        return footprint(state, action) if footprint is not None else None
+        if footprint is None:
+            return None
+        # Pure per (state, action); the sleep-set machinery asks for the same footprints once per
+        # sleeping event per state.  The scratch lives on the exact state object: semantically
+        # equal states can differ in the physical serials footprint events mention, so equal
+        # semantic keys must not share footprints — and the cache must not outlive the state.
+        scratch = state.action_scratch
+        key = ("footprint", action.identity)
+        if key not in scratch:
+            scratch[key] = footprint(state, action)
+        return scratch[key]
 
     def _information_priority(self, state: DecisionState, action: LegalAction) -> float:
         if self._strategy_builder is not None:

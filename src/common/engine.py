@@ -8,8 +8,8 @@ from .algebra import (
     Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
-from .options import LegalAction, enumerate_legal_actions
-from .state import DecisionState, freeze
+from .options import LegalAction
+from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
@@ -104,7 +104,7 @@ class CgpyTransitionProvider:
     def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
         if not self._local_nested and state.semantic_key not in self._engines:
             return ()
-        return enumerate_legal_actions(state.obs)
+        return state.legal_actions
 
     def actor(self, state: DecisionState) -> Actor:
         if self._local_nested:
@@ -176,11 +176,14 @@ class CgpyTransitionProvider:
             if (action.identity.kind in {"ability", "skill"}
                     and not self.terminal_action_supported(state, action)
                     and isinstance(successor, Deterministic)):
-                before = copy.deepcopy((state.obs.get("current") or {}))
-                after = copy.deepcopy((successor.state.obs.get("current") or {}))
-                before.pop("turnActionCount", None)
-                after.pop("turnActionCount", None)
-                if freeze(before) == freeze(after):
+                before = state.obs.get("current") or {}
+                after = successor.state.obs.get("current") or {}
+                # Same comparison the old deepcopy-then-freeze form made: every key except the
+                # action counter, by value.  Both trees come out of ``thaw`` and are never
+                # mutated, so they can be compared in place.
+                if all(before.get(key) == after.get(key)
+                       for key in before.keys() | after.keys()
+                       if key != "turnActionCount"):
                     return Unknown("unsupported ability produced no observable effect",
                                    str(action.identity))
             return successor

@@ -1,6 +1,7 @@
 """Bellman-only agent runtime shared by every deck."""
 from __future__ import annotations
 
+import gc
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,6 @@ from common.card_worth import role_value
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
-from common.options import enumerate_legal_actions
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.pilot_profile import PilotProfile
@@ -278,7 +278,7 @@ class BellmanRuntime:
             invalidations = stats["invalidations"]
             invalidations[failure] = invalidations.get(failure, 0) + 1
             return None, failure
-        action = next((candidate for candidate in enumerate_legal_actions(state.obs)
+        action = next((candidate for candidate in state.legal_actions
                        if candidate.identity == step.action), None)
         if action is None:
             self._plan_suffix = ()
@@ -311,7 +311,7 @@ class BellmanRuntime:
             self._proof_suffix = ()
             self._proof_id = ""
             return None, failure
-        action = next((candidate for candidate in enumerate_legal_actions(state.obs)
+        action = next((candidate for candidate in state.legal_actions
                        if candidate.identity == step.action), None)
         if action is None:
             self._proof_suffix = ()
@@ -366,6 +366,19 @@ class BellmanRuntime:
             self.last_read = Read()
             self._strategy_snapshot = None
             return self._pregame(observation)
+        # One decision allocates heavily but builds trees, so cyclic garbage is rare and the
+        # collector's constant generational scans reclaim almost nothing until the search ends.
+        # Pause it for the decision; collection resumes with the first allocation afterwards.
+        collector_was_enabled = gc.isenabled()
+        if collector_was_enabled:
+            gc.disable()
+        try:
+            return self._decide_with_planner(observation)
+        finally:
+            if collector_was_enabled:
+                gc.enable()
+
+    def _decide_with_planner(self, observation: dict) -> RootDecision:
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
         self.last_decision_limit = planner._epoch_seconds(request)
