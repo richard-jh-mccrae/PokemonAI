@@ -36,7 +36,7 @@ HEAL_DAMAGE_PER_VALUE = 200.0
 CHAIN_STEP_DISCOUNT = 0.5
 #: Which printed effect satisfies a need that names no card ids. Without this every tutor scored
 #: 0.0 against such a need, because nothing said which cards would answer it.
-NEED_CLAUSE_KINDS = {"damage_boost": "damage_boost", "heal": "heal"}
+NEED_CLAUSE_KINDS = {"damage_boost": "damage_boost"}
 #: A bench-play trigger is not a gamble: putting the Pokemon down IS the action being scored, so
 #: the fetch fires. `_demand_fetch_target_matches` refuses every triggered clause by default.
 PLAY_TRIGGERS = frozenset({"on_bench_play"})

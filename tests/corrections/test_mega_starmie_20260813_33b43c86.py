@@ -16,8 +16,13 @@ def test_f20_collects_pokegear_information_before_attaching():
     decision = runtime().decide(ROWS["b8de42dc17f0"].obs)
 
     assert decision.chosen in {(0,), (6,)}
+    # The human ruling is the CHOSEN card above and it is unchanged. This second assertion only
+    # records which needs that play serves, and the play now serves two: a deck search reaches a
+    # card that reaches an Evolution, so `_chain_reach` credits the evolve demand as well. Both
+    # entries are true of the same unchanged move.
     assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
-        "general.low_cost_information_access_before_commitment",)
+        "general.evolve_active_attacker",
+        "general.low_cost_information_access_before_commitment")
 
 
 def test_f21_does_not_spend_a_dead_setup_fetch():
