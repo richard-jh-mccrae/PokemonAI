@@ -152,10 +152,15 @@ class StrategyBeamBuilder:
             own_bodies = tuple(own.get("active") or ()) + tuple(own.get("bench") or ())
             opponent_bodies = (tuple(opponent.get("active") or ())
                                + tuple(opponent.get("bench") or ()))
-            if hint.kind == "damage_setup" and not any(
-                    body and int(body.get("serial", -1)) == hint.recipient_serial
-                    for body in opponent_bodies):
-                status = "satisfied"
+            if hint.kind == "damage_setup":
+                target = next(
+                    (body for body in opponent_bodies if body
+                     and int(body.get("serial", -1)) == hint.recipient_serial), None)
+                in_range = int(getattr(hint, "amount", 1))
+                # amount > 1 is an authored in-range threshold; the default 1 keeps
+                # target-left-the-board as the only satisfaction.
+                if target is None or (in_range > 1 and int(target.get("hp", 0)) <= in_range):
+                    status = "satisfied"
             elif hint.kind == "deploy" and hint.target_card_ids and any(
                     body and int(body.get("id", -1)) in hint.target_card_ids
                     for body in own.get("bench") or ()):

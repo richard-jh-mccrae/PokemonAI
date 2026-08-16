@@ -118,6 +118,7 @@ class ActivatedStrategy:
     conviction: str
     bundle_id: str | None = None
     waypoint: int = 0
+    amount: int = 1
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,9 @@ def _visible_facts(observation: dict, *, roles, stats=None,
         "opponent.bench.role_target_count": sum(
             float(opponent_role_worth.get(int(body.get("id", 0)), 0.0)) > 0.0
             for body in opponent_bench),
+        "opponent.bench.highest_role.hp": int(_recipient_body(
+            observation, seat, "opponent.bench.highest_role", roles,
+            opponent_role_worth).get("hp", 0)),
         "turn.commitment_available": commitment_available,
         # The condition language has no OR; a boost pays off while a commitment can still create
         # an attack OR one is already offered (PR #533 review: the post-attach committed case).
@@ -302,6 +306,7 @@ def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, role
                 row.identifier, desired.kind, desired.recipient,
                 recipient_card_id, recipient_serial,
                 targets, row.deadline, row.conviction, row.bundle_id, row.waypoint,
+                int(desired.amount),
             ))
     payload = {
         "turn": turn,

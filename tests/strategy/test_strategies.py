@@ -683,6 +683,116 @@ def test_damage_setup_hint_matches_a_spread_attacker():
 
 
 
+def _softening_setup(*, target_hp, amount=None):
+    fact = (DesiredFact("damage_setup", "opponent.bench.highest_role")
+            if amount is None else
+            DesiredFact("damage_setup", "opponent.bench.highest_role", amount))
+    rule = StrategyHint(
+        "deck.soften_role_target", "deck", (), (fact,),
+        "opponent.bench.highest_role", "this_turn", "medium", "deck")
+    observation = _observation(hand=[])
+    observation["current"]["players"][1]["bench"] = [
+        {"id": 20, "serial": 89, "hp": target_hp, "energies": []}]
+    observation["select"]["option"] = [{"type": 13, "attackId": 90}, {"type": 14}]
+
+    class Stats:
+        @staticmethod
+        def attack(_attack_id):
+            return SimpleNamespace(benchSnipe=30)
+
+    snapshot = activate_strategies(
+        observation, resolve_strategies((), (rule,)), roles=Roles({}),
+        opponent_role_worth={20: 30.0})
+    builder = StrategyBeamBuilder(snapshot, stats=Stats(), sequence_coverage=True)
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+    return builder, state, enumerate_legal_actions(observation)
+
+
+def test_damage_setup_target_already_in_range_reads_satisfied():
+    builder, state, actions = _softening_setup(target_hp=200, amount=210)
+
+    statuses = {row["strategy_id"]: row for row in builder.outcome_statuses(state)}
+    assert statuses["deck.soften_role_target"]["status"] == "satisfied"
+
+    beam = builder.build(state, actions)
+    attack = next(action for action in actions if action.identity.kind == "attack")
+    assert semantic_action_key(attack) not in {row.action_key for row in beam.focused}
+    assert builder.action_coverage(state, attack).outcomes == ()
+
+
+def test_damage_setup_target_above_range_stays_focused():
+    builder, state, actions = _softening_setup(target_hp=260, amount=210)
+
+    statuses = {row["strategy_id"]: row for row in builder.outcome_statuses(state)}
+    assert statuses["deck.soften_role_target"]["status"] == "unknown"
+
+    beam = builder.build(state, actions)
+    attack = next(action for action in actions if action.identity.kind == "attack")
+    assert semantic_action_key(attack) in {row.action_key for row in beam.focused}
+
+
+def test_damage_setup_default_amount_keeps_target_on_board_unsatisfied():
+    builder, state, actions = _softening_setup(target_hp=5)
+
+    statuses = {row["strategy_id"]: row for row in builder.outcome_statuses(state)}
+    assert statuses["deck.soften_role_target"]["status"] == "unknown"
+
+    beam = builder.build(state, actions)
+    attack = next(action for action in actions if action.identity.kind == "attack")
+    assert semantic_action_key(attack) in {row.action_key for row in beam.focused}
+
+
+def test_opponent_bench_highest_role_hp_fact_gates_activation():
+    rule = StrategyHint(
+        "deck.soften", "deck",
+        (ActivationCondition("opponent.bench.highest_role.hp", "gt", 210),),
+        (DesiredFact("damage_setup", "opponent.bench.highest_role"),),
+        "opponent.bench.highest_role", "this_turn", "medium", "deck")
+    resolved = resolve_strategies((), (rule,))
+
+    def snapshot_for(bench):
+        observation = _observation(hand=[])
+        observation["current"]["players"][1]["bench"] = bench
+        return activate_strategies(
+            observation, resolved, roles=Roles({}), opponent_role_worth={20: 30.0})
+
+    above = snapshot_for([{"id": 20, "serial": 89, "hp": 260, "energies": []}])
+    below = snapshot_for([{"id": 20, "serial": 89, "hp": 200, "energies": []}])
+    empty = snapshot_for([])
+
+    assert above.active_ids == ("deck.soften",)
+    assert below.inactive_ids == ("deck.soften",)
+    assert empty.inactive_ids == ("deck.soften",)
+
+
+def test_in_range_damage_setup_waypoint_releases_the_next_waypoint():
+    hints = (
+        ActivatedStrategy(
+            "deck.soften", "damage_setup", "opponent.bench.highest_role",
+            20, 89, (), "this_turn", "medium", "deck.route", 0, 210),
+        ActivatedStrategy(
+            "deck.finish", "deploy", "own.bench", None, None, (1030,),
+            "this_turn", "high", "deck.route", 1),
+    )
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+
+    def statuses_for(target_hp):
+        observation = _observation(hand=[])
+        observation["current"]["players"][1]["bench"] = [
+            {"id": 20, "serial": 89, "hp": target_hp, "energies": []}]
+        state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+        return {row["strategy_id"]: row["status"]
+                for row in StrategyBeamBuilder(snapshot).outcome_statuses(state)}
+
+    in_range = statuses_for(200)
+    assert in_range["deck.soften"] == "satisfied"
+    assert in_range["deck.finish"] == "unknown"
+
+    above_range = statuses_for(260)
+    assert above_range["deck.soften"] == "unknown"
+    assert above_range["deck.finish"] == "held"
+
+
 def _coverage_observation(hand_ids, *, bench_ids=()):
     observation = _observation(hand=[
         {"id": card_id, "serial": 90 + index, "playerIndex": 0}
