@@ -80,6 +80,7 @@ def test_end_observation_can_preserve_the_actual_next_turn_actor():
     ]}, "select": {"context": 0, "option": []}}
     parent = DecisionState.from_observation(observation, deck=(), deck_name="test")
     provider = object.__new__(NativeCgTransitionProvider)
+    provider.stats = None            # no printed attacks to read, so no self-lock can fold
 
     successor = provider._observation(observation, parent, actor_seat=1)
 
@@ -99,6 +100,7 @@ def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips()
     ]}, "select": {"context": 0, "option": []}}
     parent = DecisionState.from_observation(parent_observation, deck=(), deck_name="test")
     provider = object.__new__(NativeCgTransitionProvider)
+    provider.stats = None            # no printed attacks to read, so no self-lock can fold
 
     successor = provider._observation(native_successor, parent, actor_seat=1)
 

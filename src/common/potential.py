@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .attack_locks import locked_attack_ids
 from .card_worth import KNOWN_CARD_FLOOR, function_role
 from .energy import ENERGY_COLORLESS, payment_fraction, provision_units
 from .information import BellmanDeckProfile
@@ -135,6 +136,12 @@ class BoardPotential:
         # player/body dicts.  The observation is immutable for the duration of one ``__call__``, so
         # results are keyed by object identity and the cache lives only for that call.
         self._call_cache = None
+        # Per-observation scratch, refreshed at the top of every `_evaluate`. A self-locked attack
+        # is board state the observation does not carry, so it arrives beside it under
+        # `attack_locks` and has to reach `_attack_value` somehow. Defaulted BEFORE the root-parity
+        # read below, which walks the same attack valuations.
+        self._attack_locks: dict = {}
+        self._turn = 0
         if root_observation is not None:
             self.board_parity = self._root_board_parity(root_observation)
 
@@ -168,6 +175,14 @@ class BoardPotential:
             self._attack_cache[attack_id] = (
                 self.stats.attack(attack_id) if hasattr(self.stats, "attack") else None)
         return self._attack_cache[attack_id]
+
+    def _usable_attacks(self, body, stat):
+        """This body's printed attacks minus the ones a self-lock bars at the current turn."""
+        barred = locked_attack_ids(self._attack_locks, body, self._turn)
+        for attack_id in getattr(stat, "attacks", ()) or ():
+            attack = self._attack(attack_id)
+            if attack is not None and int(attack_id) not in barred:
+                yield attack_id, attack
 
     def _prizes(self, body) -> int:
         stat = self._stat(body.get("id"))
@@ -351,10 +366,7 @@ class BoardPotential:
         transient = self._defender_tool_transient(defender)
         defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
-        for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self._attack(attack_id)
-            if attack is None:
-                continue
+        for attack_id, attack in self._usable_attacks(body, stat):
             required = tuple(getattr(attack, "energyTypes", ()) or ())
             readiness = _pay_fraction(codes, required)
             if require_ready and readiness < 1.0:
@@ -518,10 +530,8 @@ class BoardPotential:
         defender_tags = self._tags(defender.get("id", 0))
         transient = self._defender_tool_transient(defender)
         best = 0.0
-        for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self._attack(attack_id)
-            if attack is None or _pay_fraction(
-                    codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+        for attack_id, attack in self._usable_attacks(body, stat):
+            if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                 continue
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
@@ -556,10 +566,8 @@ class BoardPotential:
             context = self._context(
                 self._side_facts(me, attacking_body=body), defender_facts)
             codes = self._codes(body)
-            for attack_id in getattr(stat, "attacks", ()) or ():
-                attack = self._attack(attack_id)
-                if attack is None or _pay_fraction(
-                        codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+            for attack_id, attack in self._usable_attacks(body, stat):
+                if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                     continue
                 active_damage = compute_active_damage(
                     attack, stat, defender_stat, defender_tags, context=context,
@@ -600,10 +608,9 @@ class BoardPotential:
                 continue
             context = self._context(
                 self._side_facts(attacker_side, attacking_body=body), defender_facts)
-            for attack_id in getattr(stat, "attacks", ()) or ():
-                attack = self._attack(attack_id)
-                if attack is None:
-                    continue
+            # The ledger records BOTH seats, so an opponent's spent one-shot is already in it:
+            # fearing a hit they cannot land is as wrong as crediting our own (ADR-0142).
+            for attack_id, attack in self._usable_attacks(body, stat):
                 exposed = 0.0
                 lethal_active = False
                 active_damage = compute_active_damage(
@@ -959,6 +966,8 @@ class BoardPotential:
 
     def _evaluate(self, observation) -> Potential:
         current = observation.get("current") or {}
+        self._attack_locks = observation.get("attack_locks") or {}
+        self._turn = int(current.get("turn", 0))
         seat, me, opponent = self._sides(current)
         result = int(current.get("result", -1))
         if result != -1:

@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0142.**
+**Next free number: 0143.**
 
 ## Index
 
@@ -290,3 +290,4 @@ recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 | [0139](0139-mega-starmie-uses-one-bellman-style-full-turn-planner.md) | Mega Starmie uses one Bellman-style full-turn planner | Accepted and implemented (Issue #507, 2026-08-11). Post-Set-Up Mega Starmie uses one recursive benefit-minus-cost objective with exact-zero End, full action/nested transition generation, chance and opponent-response nodes, complete attack resolution, and no legacy strategic fallback. The unfiltered 259-row corpus closes with zero excluded/unexplained rows and 62 explicitly named tuning errors. |
 | [0140](0140-free-peek-dominance-orders-the-search-walk.md) | Free-peek dominance orders the search walk | Accepted for production activation by developer request (2026-08-16, PR #534), knowingly overriding part of the ruling corpus; the corpus is split on peek-first vs commit-first and the armed gate resolves the two disputed budget-flip frames while contradicting four prior rulings. Row added here at the ADR-0141 collision repair — PR #534 shipped the file without one. |
 | [0141](0141-opponent-hand-conditions-stadium.md) | The Bellman potential prices the opponent's hand, special conditions, and the stadium zone | Accepted; built from the 2026-08-16 src/ crash-and-valuation audit. opponent_hand family + refresh_opponent_hand row ARMED by the 2026-08-16 amendment at `value.opponent_hand_share` 0.1, scaled by root-pinned board parity after both overturned frames were re-ruled and upheld; special-condition forecast shares and pending poison/burn ticks plus own-stadium board Worth are live. |
+| [0142](0142-bound-the-lethal-solver-by-clock-not-node-count.md) | Bound the Lethal Solver by a wall-clock ceiling no layer can lift, and leave its node cap alone | Accepted. `terminal.max_seconds` 1.2 with `maximum` equal to the default, and the 60s pinned-clock override removed from runtime.py and strategy_lab.py; `terminal.max_nodes` stays 1024 because lowering it to 64 saves 0.38s per decision and turns 53% of refutations into budget-limited guesses. |

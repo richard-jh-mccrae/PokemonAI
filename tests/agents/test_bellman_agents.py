@@ -70,6 +70,45 @@ def test_deck_declarations_are_the_only_per_deck_policy_surface():
     assert dragapult.roles.evolves == {}
 
 
+def test_one_outcome_claims_one_protected_bundle():
+    """Two Mega Lucario declarations ask for the same Lunatone. The allocator protects at most
+    two bundles, so an outcome that spends both slots on itself starves every other demand."""
+    from common.demand import StrategyBeamBuilder
+    from common.pilot_profile import PilotProfile
+    from common.solver import ProductionSolver
+    from common.strategy.strategies import activate_strategies, resolve_strategies
+    from types import SimpleNamespace
+
+    strategy = _strategy("mega_lucario")
+    solrock, riolu = 676, 677
+    observation = {
+        "current": {
+            "turn": 3, "yourIndex": 0,
+            "players": [
+                {"hand": [], "active": [{"id": solrock, "serial": 1, "hp": 90, "maxHp": 90}],
+                 "bench": [{"id": solrock, "serial": 2, "hp": 90, "maxHp": 90},
+                           {"id": riolu, "serial": 3, "hp": 70, "maxHp": 70}],
+                 "benchMax": 5, "discard": [], "prize": []},
+                {"hand": None, "active": [], "bench": [], "discard": [], "prize": []},
+            ],
+        },
+        "select": {"context": 0, "option": []},
+    }
+    snapshot = activate_strategies(
+        observation, resolve_strategies((), strategy.strategies), roles=strategy.roles)
+    pairing = [row for row in snapshot.hints if "solrock_with_lunatone" in row.strategy_id]
+    assert len(pairing) == 2, "the Active and the Benched Solrock both want the partner"
+
+    solver = ProductionSolver.__new__(ProductionSolver)
+    solver.profile = PilotProfile.resolve(
+        global_values={}, authored_deck_overrides={}, provenance="test")
+    solver._protected_bundle_diagnostics = {}
+    solver._strategy_builder = StrategyBeamBuilder(snapshot)
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+
+    assert solver._protected_bundles(state) == ("mega_lucario.complete_the_solrock_pair",)
+
+
 def test_external_decision_seconds_reserve_the_fallback_tail(monkeypatch):
     strategy = _strategy("mega_starmie")
     strategy.pilot_overrides["clock.remaining_200_seconds"] = 99
@@ -82,6 +121,25 @@ def test_external_decision_seconds_reserve_the_fallback_tail(monkeypatch):
     assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 6
     assert runtime.decision_clock.fallback_tail_seconds == 1
     assert runtime.pilot_profile.get("clock.adaptive_enabled") == 0
-    # The pinned clock also unbinds the prover from the wall clock (node/decision caps only),
-    # so replayed node counts cannot vary with machine load.
-    assert runtime.pilot_profile.get("terminal.max_seconds") == 60
+    # The pinned clock no longer lifts the prover's own clock. That lift is what let one
+    # abstention eat 9s of a 10s decision and forfeit a match; the 64-node cap supplies the
+    # replay determinism it was there for.
+    assert runtime.pilot_profile.get("terminal.max_seconds") == 1.2
+
+
+def test_the_prover_clock_is_a_ceiling_no_layer_can_raise():
+    """1.2s must hold against every source, not merely be the default: `PilotProfile.resolve`
+    rejects an out-of-bounds value, so `maximum` is what makes the ceiling real."""
+    from common.pilot_profile import PilotProfile
+
+    assert PilotProfile.resolve(
+        global_values={"terminal.max_seconds": 1.2},
+        authored_deck_overrides={}, provenance="test").get("terminal.max_seconds") == 1.2
+    for layer in ("global_values", "authored_deck_overrides"):
+        with pytest.raises(ValueError):
+            PilotProfile.resolve(**{layer: {"terminal.max_seconds": 1.21}},
+                                 provenance="test")
+    # A learned delta cannot climb past it either — that layer clamps rather than raises.
+    assert PilotProfile.resolve(
+        deck_learned={"terminal.max_seconds": 100.0},
+        provenance="test").get("terminal.max_seconds") == 1.2

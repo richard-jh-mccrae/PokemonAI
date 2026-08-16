@@ -137,9 +137,12 @@ DEFINITIONS = (
                         "boolean", False),
     ParameterDefinition("terminal.enabled", "terminal_proof", 1.0, 0.0, 1.0,
                         "boolean", False),
+    # Lowering this trades refutation soundness for time the clock below already saves (ADR-0142).
     ParameterDefinition("terminal.max_nodes", "terminal_proof", 1024.0, 1.0, 100000.0,
                         "nodes", False),
-    ParameterDefinition("terminal.max_seconds", "terminal_proof", 0.25, 0.01, 60.0,
+    # A CEILING, not a default: `maximum` equals the default, so any layer asking for more is
+    # rejected rather than applied. Sized and measured in ADR-0142.
+    ParameterDefinition("terminal.max_seconds", "terminal_proof", 1.2, 0.01, 1.2,
                         "seconds", False),
     ParameterDefinition("terminal.max_decisions", "terminal_proof", 16.0, 1.0, 64.0,
                         "decisions", False),

@@ -29,6 +29,13 @@ NEXT_STAGE_OFFSET = 1
 NEXT_TURN_OPTION_DISCOUNT = 1.0
 BENCH_HEAL_VALUE_SHARE = 0.25
 HEAL_DAMAGE_PER_VALUE = 200.0
+#: A second fetch step is a second place the line breaks. Ordering only: its one job is keeping
+#: the front of a chain behind the tutor that reaches the card outright.
+CHAIN_STEP_DISCOUNT = 0.5
+#: The one need whose answering cards are named by a printed clause rather than by the hint.
+NEED_CLAUSE_KIND = "damage_boost"
+#: Benching the Pokemon IS the scored action, so its fetch fires; other triggers stay refused.
+PLAY_TRIGGER = "on_bench_play"
 
 
 def _record_id(value) -> str:
@@ -256,17 +263,66 @@ class StrategyBeamBuilder:
                 available = set(hand) | {
                     int(card_id) for card_id, count in state.deck_counts if count > 0
                 }
-                targets = tuple(base for base in targets if any(
-                    parent == base and top in available
-                    for top, parent in self.registry.line_parents.items()
-                ))
+                # The reachability test belongs to Evolution BASES only: a base is worth
+                # searching for while something can still evolve onto it. A Basic with no
+                # Line at all is already its own payoff, so it never had a top to lose.
+                targets = tuple(
+                    base for base in targets
+                    if base not in self.registry.line_parents.values()
+                    or any(parent == base and top in available
+                           for top, parent in self.registry.line_parents.items())
+                )
             return targets
-        if hint.kind != "fund_attack" or self.stats is None:
+        if hint.kind == "fund_attack" and self.stats is not None:
+            return tuple(
+                int(card_id) for card_id, count in state.deck_counts
+                if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+            )
+        return self._need_cards(state, hint)
+
+    def _need_cards(self, state, hint) -> tuple[int, ...]:
+        """Deck cards whose PRINTED effect answers a need that declares no card ids."""
+        if hint.kind != NEED_CLAUSE_KIND or self.effects is None:
             return ()
         return tuple(
-            int(card_id) for card_id, count in state.deck_counts
-            if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+            int(card_id) for card_id, count in state.deck_counts if count > 0
+            and any(clause.get("kind") == NEED_CLAUSE_KIND
+                    for clause in self.effects.clauses(card_id))
         )
+
+    def _chain_reach(self, state, clause, eligible, pool) -> float:
+        """One extra hop: this clause fetches a card that ITSELF fetches something eligible."""
+        # Meowth ex fetches a Supporter, never the boost card, so it matched nothing directly -
+        # yet it fronts a real line. Both accesses multiplied, then discounted below the direct.
+        if self.effects is None or self.stats is None:
+            return 0.0
+        supporter_spent = bool((state.obs.get("current") or {}).get("supporterPlayed"))
+        here = int(clause.get("dig", 0) or 0)
+        best = 0.0
+        for card_id, count in state.deck_counts:
+            card_id = int(card_id)
+            if count <= 0 or card_id in eligible:
+                continue
+            link = self.stats.get(card_id)
+            if not _matches_on_play(clause, link):
+                continue
+            # The only link is a Supporter and this turn's Supporter is spent: the line is dead
+            # until next turn, so it earns nothing now.
+            if supporter_spent and bool(getattr(link, "is_supporter", False)):
+                continue
+            reach = access_probability(pool, here, (card_id,)) if here else 1.0
+            for onward in self.effects.clauses(card_id):
+                if onward.get("kind") != "fetch" or onward.get("zone") != "deck":
+                    continue
+                matching = tuple(target for target in eligible
+                                 if _demand_fetch_target_matches(
+                                     onward, self.stats.get(target)))
+                if not matching:
+                    continue
+                depth = int(onward.get("dig", 0) or 0)
+                onward_odds = access_probability(pool, depth, matching) if depth else 1.0
+                best = max(best, reach * onward_odds * CHAIN_STEP_DISCOUNT)
+        return best
 
     def _access_odds(self, state, action, hint) -> float:
         source_id = self._source_card_id(state, action)
@@ -310,6 +366,7 @@ class StrategyBeamBuilder:
                 depth = int(clause.get("dig", 0) or 0)
                 best = max(best, access_probability(pool, depth, matching) if depth else
                            float(bool(matching)))
+                best = max(best, self._chain_reach(state, clause, eligible, pool))
             elif kind == "accel" and clause.get("source") == "deck":
                 # Energy acceleration is a funding OUT: it reaches the same deck Energy a
                 # fetch would, so it earns the same certainty of access.
@@ -519,6 +576,15 @@ def _accel_target_matches(clause, stat) -> bool:
         return False
     required_type = clause.get("energy_type")
     return required_type is None or getattr(stat, "energyType", None) == required_type
+
+
+def _matches_on_play(clause, stat) -> bool:
+    """As ``_demand_fetch_target_matches``, but a bench-play trigger does not disqualify."""
+    # That matcher refuses every triggered clause, right for a rider we do not control. Benching
+    # Meowth ex IS the scored action, so refusing its fetch hides a line rather than pricing risk.
+    if clause.get("trigger") == PLAY_TRIGGER:
+        clause = {key: value for key, value in clause.items() if key != "trigger"}
+    return _demand_fetch_target_matches(clause, stat)
 
 
 def _demand_fetch_target_matches(clause, stat) -> bool:

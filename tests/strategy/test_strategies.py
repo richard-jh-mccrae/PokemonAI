@@ -610,6 +610,37 @@ def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
     assert beam.focused == ()
 
 
+def test_deploy_fetch_is_focused_for_a_terminal_basic_partner():
+    # "The evolution payoff is gone" and "this Basic never had one" are different boards. A
+    # partner like Lunatone IS the payoff, so searching for it keeps its deploy demand.
+    observation = _observation(hand=[{"id": 50}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy("deck.pair", "deploy", "own.bench",
+                          None, None, (675,), "immediate", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 675,
+                                   stage="basic" if card_id == 675 else None)
+
+    registry = SimpleNamespace(line_parents={1031: 1030})
+    beam = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=((675, 1),)),
+            enumerate_legal_actions(observation),
+        )
+
+    assert [row.family for row in beam.focused] == ["play"]
+
+
 def test_accelerator_clauses_earn_funding_access_odds():
     # An accel card is an OUT for a fund_attack demand: Crispin-class clauses previously scored
     # access odds 0.0 and never entered the focused beam.
@@ -666,6 +697,157 @@ def test_damage_boost_hint_prioritizes_the_boost_play():
 
     play = next(action for action in actions if action.identity.kind == "play")
     assert semantic_action_key(play) in {row.action_key for row in beam.focused}
+
+
+def _chain_beam(hand, *, deck_counts, supporter_played=False):
+    """One beam over the REAL card data, so the chain under test is the shipped one."""
+    from common.effects import CardEffects
+    from common.scouting.provider import EngineCardStatProvider
+
+    hint = SimpleNamespace(
+        kind="damage_boost", target_card_ids=(), recipient_serial=None,
+        strategy_id="general.boost_the_committed_attack", deadline="this_turn",
+        conviction="medium")
+    observation = _observation(hand=[{"id": card_id, "serial": 30 + index, "playerIndex": 0}
+                                     for index, card_id in enumerate(hand)])
+    observation["current"]["supporterPlayed"] = supporter_played
+    observation["select"]["option"] = [{"type": 7, "index": index}
+                                       for index in range(len(hand))] + [{"type": 14}]
+    builder = StrategyBeamBuilder(
+        SimpleNamespace(hints=(hint,)), effects=CardEffects.load(),
+        stats=EngineCardStatProvider())
+    actions = enumerate_legal_actions(observation)
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=tuple(deck_counts))
+    beam = builder.build(state, actions)
+    focused = {row.action_key for row in beam.focused}
+    plays = [action for action in actions if action.identity.kind == "play"]
+    return builder, {hand[action.selection[0]]: semantic_action_key(action) in focused
+                     for action in plays if action.selection[0] < len(hand)}
+
+
+# Meowth ex fetches a Supporter when Benched; Team Rocket's Petrel fetches any Trainer;
+# Premium Power Pro is the Trainer that satisfies a damage_boost need. Real ids.
+MEOWTH_EX, PETREL, PREMIUM_POWER_PRO, POKE_PAD = 1071, 1219, 1141, 1152
+
+
+def test_a_fetch_that_reaches_the_boost_card_earns_the_boost_demand():
+    """A need with no declared card ids had NO notion of which cards satisfy it, so every
+    tutor scored 0.0 — Petrel fetches any Trainer, Premium Power Pro included."""
+    _builder, focused = _chain_beam([PETREL],
+                                    deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1)))
+
+    assert focused[PETREL]
+
+
+def test_a_two_step_fetch_chain_reaches_the_boost_card():
+    """Meowth ex fetches a Supporter, not the boost card. It is still the front of a real line:
+    Supporter -> Petrel -> Trainer -> Premium Power Pro."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)))
+
+    assert focused[MEOWTH_EX]
+
+
+def test_the_chain_is_worth_less_than_the_direct_fetch():
+    """Two steps can fail in two places, so the front of the chain must never outrank the
+    tutor that reaches the card outright."""
+    builder, focused = _chain_beam(
+        [PETREL, MEOWTH_EX],
+        deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)))
+    odds = sorted(builder.last_odds.values(), reverse=True)
+
+    assert focused[PETREL] and focused[MEOWTH_EX]
+    assert len(odds) == 2 and odds[0] > odds[1]
+
+
+def test_no_chain_credit_once_the_supporter_for_the_turn_is_spent():
+    """The only link to the boost card is a Supporter, and one Supporter is allowed per turn."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)),
+        supporter_played=True)
+
+    assert not focused[MEOWTH_EX]
+
+
+def test_no_chain_credit_without_a_link_that_reaches_the_need():
+    """Negative control: Poke Pad fetches Pokemon only, so nothing in this deck connects
+    Meowth ex's Supporter fetch to a boost card."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (POKE_PAD, 4), (MEOWTH_EX, 1)))
+
+    assert not focused[MEOWTH_EX]
+
+
+RIOLU, MAKUHITA, HARIYAMA = 677, 673, 674
+
+
+def _bench_observation():
+    """Riolu sits BEFORE Makuhita, and both evolve — the case that breaks `evolvable:first`."""
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["bench"] = [
+        {"id": RIOLU, "serial": 41, "energies": []},
+        {"id": MAKUHITA, "serial": 42, "energies": []},
+    ]
+    observation["current"]["players"][1]["bench"] = [{"id": 20, "serial": 89, "hp": 100}]
+    return observation
+
+
+def _lucario_roles():
+    """The REAL resolved roles: `evolves` comes from card facts, not from a hand-built table."""
+    from pathlib import Path
+
+    from agents.mega_lucario.strategy import STRATEGY
+    from common.cards import CardFunctions
+    from common.scouting.provider import EngineCardStatProvider
+
+    repo = Path(__file__).resolve().parents[2]
+    deck = [int(v) for v in
+            (repo / "src" / "agents" / "mega_lucario" / "deck.csv").read_text().split()]
+    return STRATEGY.roles.resolve(deck, EngineCardStatProvider(), CardFunctions.load())
+
+
+def test_a_named_bench_selector_binds_that_card_not_the_first_evolvable():
+    roles = _lucario_roles()
+    assert {RIOLU, MAKUHITA} <= set(roles.evolves), "both Basics must evolve for this to bite"
+    observation = _bench_observation()
+
+    def bind(selector):
+        rule = StrategyHint(
+            "deck.evolve_bench", "deck", (),
+            (DesiredFact("evolve", selector, target_card_ids=(HARIYAMA,)),),
+            selector, "this_turn", "high", "deck")
+        snapshot = activate_strategies(
+            observation, resolve_strategies((), (rule,)), roles=roles)
+        return snapshot.hints[0].recipient_serial
+
+    assert bind("own.bench.evolvable:first") == 41       # Riolu — the wrong body
+    assert bind(f"own.bench.card:{MAKUHITA}") == 42      # the Makuhita we meant
+
+
+def test_a_named_bench_selector_binds_nothing_when_that_card_is_absent():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["bench"] = [{"id": RIOLU, "serial": 41}]
+    rule = StrategyHint(
+        "deck.evolve_bench", "deck", (),
+        (DesiredFact("evolve", f"own.bench.card:{MAKUHITA}", target_card_ids=(HARIYAMA,)),),
+        f"own.bench.card:{MAKUHITA}", "this_turn", "high", "deck")
+
+    snapshot = activate_strategies(
+        observation, resolve_strategies((), (rule,)), roles=Roles({}))
+
+    assert snapshot.hints[0].recipient_serial is None
+
+
+def test_mega_lucario_wants_the_gust_evolution_from_the_bench_too():
+    """Heave-Ho Catcher rides the evolution wherever the Makuhita stands."""
+    from agents.mega_lucario.strategy import STRATEGY
+
+    snapshot = activate_strategies(
+        _bench_observation(), resolve_strategies((), STRATEGY.strategies),
+        roles=STRATEGY.roles, opponent_role_worth={20: 30.0})
+    gust = [hint for hint in snapshot.hints if "gust" in hint.strategy_id]
+
+    assert gust and all(hint.recipient_serial == 42 for hint in gust)
 
 
 def test_boost_general_strategy_is_declared():

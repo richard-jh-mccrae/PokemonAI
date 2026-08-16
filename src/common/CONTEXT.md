@@ -134,6 +134,8 @@ The flattened Bellman core owns the decision model:
 - `strategy/strategies.py`: General, Deck, and Opponent Strategy declarations and Planning-Epoch
   activation snapshots;
 - `demand.py`: Strategy Beam scheduling plus value-side Demand Slots and exact access odds;
+- `attack_locks.py`: pure fold of the printed "can't use this attack next turn" state, which the
+  observation omits, from the public ATTACK log; read by `potential.py` on both seats;
 - `refresh.py`: analytic shuffle-refresh commitments. It integrates demand-coverage classes with exact
   hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
   never constructs or searches a hypothetical redraw;

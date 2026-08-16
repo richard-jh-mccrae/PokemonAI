@@ -8,6 +8,7 @@ from .algebra import (
     Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
+from .attack_locks import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction
 from .state import DecisionState
@@ -170,7 +171,13 @@ class CgpyTransitionProvider:
             successor = self._register_successor(state, child, action)
             if (action.identity.kind in {"ability", "skill"}
                     and not self.terminal_action_supported(state, action)
-                    and isinstance(successor, Deterministic)):
+                    and isinstance(successor, Deterministic)
+                    # An ability that has PAUSED for a required sub-selection has not failed, it
+                    # has merely not finished: a cost-first Ability (Lunar Cycle discards a Basic
+                    # {F} Energy before drawing) resolves nothing until the choice is answered, so
+                    # `current` is legitimately unchanged and the walk continues through the menu.
+                    and int((successor.state.obs.get("select") or {}).get(
+                        "context", _MAIN)) == _MAIN):
                 before = state.obs.get("current") or {}
                 after = successor.state.obs.get("current") or {}
                 # Same comparison the old deepcopy-then-freeze form made: every key except the
@@ -461,6 +468,9 @@ class CgpyTransitionProvider:
         observation["own_prizes"] = _own_prize_export(child, state.root_seat)
         if "known_top" in state.obs:
             observation["known_top"] = state.obs["known_top"]
+        # Same carry-forward as the native adapter: a self-lock spent inside the search is only
+        # visible in this step's log, and the parent's locks must survive it.
+        carry_attack_locks(state.obs, observation, stats=self.stats)
         return state.with_observation(observation)
 
     def _register_successor(self, state, child, action):
