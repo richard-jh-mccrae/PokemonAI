@@ -164,6 +164,10 @@ DEFINITIONS = (
                         "multiplier", False),
     ParameterDefinition("plan_reuse.enabled", "plan_reuse", 1.0, 0.0, 1.0, "boolean", False),
     ParameterDefinition("scouting.posture_scale", "scouting", 1.0, 0.0, 2.0, "multiplier"),
+    # Without this the Brief's whole-line stamp prices every stage identically, so a snipe cannot
+    # tell the body about to become the win condition from the Basic behind it. 1.0 = flat stamp.
+    ParameterDefinition("scouting.line_distance_decay", "scouting", 0.8, 0.0, 1.0,
+                        "multiplier", False),
     ParameterDefinition("telemetry.family_detail", "diagnostics", 0.0, 0.0, 1.0,
                         "boolean", False),
 )

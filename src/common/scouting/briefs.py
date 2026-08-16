@@ -154,8 +154,22 @@ class _StatLookup:
         self.forward_card_ids = forward_card_ids or (lambda _card_id: ())
 
 
-def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=(), functions=None) -> dict[int, float]:
-    """Posterior expected role Worth from authored Briefs, with dossier targets as fallback."""
+_STAGE_RANK = {"basic": 0, "stage1": 1, "stage2": 2}
+
+
+def _stage_rank(stats, card_id: int) -> int:
+    stat = stats.get(card_id) if stats is not None else None
+    return _STAGE_RANK.get(str(getattr(stat, "stage", "") or "").lower(), 0)
+
+
+def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=(), functions=None,
+                               line_decay: float = 1.0) -> dict[int, float]:
+    """Posterior expected role Worth from authored Briefs, with dossier targets as fallback.
+
+    ``line_decay`` discounts a primary attacker's line per evolution step still owed before the
+    payoff; 1.0 keeps the flat stamp that values a Basic exactly like the body about to become
+    the win condition.
+    """
     expected: dict[int, float] = {}
     dossiers = getattr(artifact, "dossiers", {}) if artifact is not None else {}
     for candidate, probability in (read.candidates if read is not None else ()):
@@ -182,9 +196,15 @@ def resolve_scouted_role_worth(read: Read | None, artifact, stats, *, briefs=(),
                     payoff_prizes = max(
                         (int(getattr(stats.get(card_id), "prize_value", 1) or 1)
                          for card_id in line_ids), default=1)
+                    # Each step still owed costs the opponent a turn and a card, so the body one
+                    # evolution short of the win condition outranks the Basic two behind it.
+                    payoff_rank = max(
+                        (_stage_rank(stats, card_id) for card_id in line_ids), default=0)
                     for card_id in line_ids:
+                        owed = max(0, payoff_rank - _stage_rank(stats, card_id))
                         candidate_worth[card_id] = max(
-                            candidate_worth.get(card_id, 0.0), worth * payoff_prizes)
+                            candidate_worth.get(card_id, 0.0),
+                            worth * payoff_prizes * (line_decay ** owed))
             primary_worth = role_value(("primary_attacker",))
             for card_id, role in target_roles.items():
                 if role == "primary_attacker":

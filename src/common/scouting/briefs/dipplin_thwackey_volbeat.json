@@ -1,7 +1,7 @@
 {
   "slug": "dipplin_thwackey_volbeat",
   "label": "Dipplin / Thwackey / Volbeat",
-  "covers": ["Dipplin / Thwackey", "Dipplin / Thwackey / Volbeat"],
+  "covers": ["Dipplin / Thwackey", "Dipplin / Thwackey / Volbeat", "Dipplin / Seaking / Thwackey"],
   "authored": "2026-08-12",
   "opponent_properties": {"opp_tempo": "fast", "opp_donk_vulnerable": true, "opp_comeback_disruptor": true},
   "pokemon": [
@@ -14,7 +14,9 @@
     {"card": "Seaking", "roles": ["backup_attacker"]},
     {"card": "Psyduck", "roles": ["support_pokemon"]},
     {"card": "Rellor", "roles": ["support_pokemon"]},
-    {"card": "Rabsca", "roles": ["support_pokemon"]}
+    {"card": "Rabsca", "roles": ["support_pokemon"]},
+    {"card": "Volbeat", "roles": ["support_pokemon"]},
+    {"card": "Shaymin", "roles": ["support_pokemon"]}
   ],
   "key_cards": [
     {"card": "Festival Grounds", "role": "stadium_gate"},

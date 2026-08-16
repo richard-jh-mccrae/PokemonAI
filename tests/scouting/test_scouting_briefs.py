@@ -165,7 +165,38 @@ def test_bellman_role_worth_expands_primary_attacker_to_its_ancestors():
     worth = resolve_scouted_role_worth(
         _read(("Mega Lucario ex", 1.0)), SimpleNamespace(dossiers={}), Stats(), briefs=(brief,))
 
-    assert worth[677] == worth[678] > 0
+    assert worth[677] == worth[678] > 0          # line_decay defaults to the flat 1.0 stamp
+
+
+def test_bellman_role_worth_ranks_a_line_by_the_evolution_steps_still_owed():
+    """A Brief names ONE primary attacker and the stamp covers its whole line, so at line_decay=1.0
+    the Basic prices exactly like the body about to become the win condition and a snipe has no
+    reason to prefer either. Frame fa978d4e6fe4: it sniped a spare Marnie's Impidimp over the lone
+    Marnie's Morgrem one evolution short of Marnie's Grimmsnarl ex."""
+    brief = _ml_brief()
+
+    class Stats:
+        @staticmethod
+        def ids_for_name(name):
+            return {"Riolu": {677}, "Mega Lucario ex": {678}}.get(name, ())
+
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(
+                prize_value=3 if card_id == 678 else 1,
+                stage="basic" if card_id == 677 else "stage1",
+                evolvesFrom="Riolu" if card_id == 678 else None)
+
+        @staticmethod
+        def forward_card_ids(card_id):
+            return {678} if card_id == 677 else set()
+
+    worth = resolve_scouted_role_worth(
+        _read(("Mega Lucario ex", 1.0)), SimpleNamespace(dossiers={}), Stats(), briefs=(brief,),
+        line_decay=0.8)
+
+    assert worth[678] > worth[677] > 0
+    assert worth[677] == pytest.approx(worth[678] * 0.8)
 
 
 def test_bellman_role_worth_does_not_promote_every_dossier_line_to_wincon():

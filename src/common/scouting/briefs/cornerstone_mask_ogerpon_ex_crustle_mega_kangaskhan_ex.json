@@ -17,7 +17,8 @@
     {"card": "Mega Kangaskhan ex", "roles": ["primary_attacker"]},
     {"card": "Budew", "roles": []},
     {"card": "Fezandipiti ex", "roles": []},
-    {"card": "Meowth ex", "roles": []}
+    {"card": "Meowth ex", "roles": []},
+    {"card": "Shaymin", "roles": ["support_pokemon"]}
   ],
   "key_cards": [
     {"card": "Crushing Hammer", "role": "energy_denial"},

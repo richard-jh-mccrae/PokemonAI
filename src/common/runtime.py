@@ -242,7 +242,8 @@ class BellmanRuntime:
             properties=(brief.opponent_properties if brief is not None else None))
         self.opponent_role_worth = resolve_scouted_role_worth(
             self.last_read, getattr(self.scout, "artifact", None), self.stats,
-            briefs=self.briefs, functions=self.functions)
+            briefs=self.briefs, functions=self.functions,
+            line_decay=self.pilot_profile.get("scouting.line_distance_decay"))
         players = current.get("players") or ()
         opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
         bodies = tuple(body for body in
