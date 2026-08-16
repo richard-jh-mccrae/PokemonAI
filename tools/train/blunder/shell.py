@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import json
 import math
+import mimetypes
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from .batch import load_game
 from .categories import CATEGORIES
@@ -107,6 +109,27 @@ def _send_html(handler: BaseHTTPRequestHandler, text: str, code: int = 200) -> N
     handler.wfile.write(body)
 
 
+def _viewer_asset(request_path: str, viewer_dir: str) -> Path | None:
+    if not viewer_dir:
+        return None
+    root = Path(viewer_dir).resolve()
+    relative = unquote(urlsplit(request_path).path).lstrip("/")
+    if relative.startswith("viewer/"):
+        relative = relative.removeprefix("viewer/")
+    candidate = (root / relative).resolve()
+    return candidate if root.is_dir() and candidate.is_relative_to(root) and candidate.is_file() else None
+
+
+def _send_file(handler: BaseHTTPRequestHandler, path: Path) -> None:
+    body = path.read_bytes()
+    content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    handler.send_response(200)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # quiet
         pass
@@ -138,6 +161,9 @@ class _Handler(BaseHTTPRequestHandler):
             if index.exists():
                 return _send_html(self, index.read_text(encoding="utf-8"))
             return _send_html(self, _VIEWER_PLACEHOLDER)
+        asset = _viewer_asset(self.path, STATE.get("viewer_dir", ""))
+        if asset is not None:
+            return _send_file(self, asset)
         return _send_html(self, "<h1>404</h1>", 404)
 
     def do_POST(self):
@@ -401,8 +427,9 @@ function openPlain(force=false){
 }
 function watchPlainControls(){
   const doc=$('viewer').contentDocument;
-  if(!doc||doc.documentElement.dataset.shellWatching) return;
-  doc.documentElement.dataset.shellWatching='1';
+  const root=doc&&doc.documentElement;
+  if(!root||root.dataset.shellWatching) return;
+  root.dataset.shellWatching='1';
   const tidy=()=>{
     const seen=new Set();
     for(const button of doc.querySelectorAll('button')){
@@ -410,8 +437,10 @@ function watchPlainControls(){
       if(seen.has(key)) button.remove(); else seen.add(key);
     }
   };
-  new MutationObserver(tidy).observe(doc.documentElement,{childList:true,subtree:true});
-  tidy();
+  try{
+    new MutationObserver(tidy).observe(root,{childList:true,subtree:true});
+    tidy();
+  }catch(_e){}
 }
 window.addEventListener('message',event=>{
   if(event.source===$('viewer').contentWindow&&event.data&&event.data.ready){

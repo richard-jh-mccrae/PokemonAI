@@ -3,7 +3,7 @@ import os
 from sim.record import MatchRecorder
 from sim.strategy_bench import (
     _agent_decision_seconds, _run_jobs, decision_metrics, default_jobs, format_report,
-    save_match_artifacts, summarize_decisions, write_decisions_csv,
+    save_match_artifacts, summarize_decisions, summarize_matches, write_decisions_csv,
 )
 from train.blunder.batch import discover_replays, load_game
 
@@ -54,7 +54,8 @@ def test_report_uses_strategy_wave_and_focus_position_language():
             "mode": "versus", "decision_timeout": 60.0, "match_timeout": 600.0,
             "jobs": 10,
         },
-        "matches": [{"winner_seat": 1, "timed_out": (), "match_deadline_hit": False}],
+        "matches": [{"match": 2, "winner_seat": 1, "timed_out": (),
+                     "match_deadline_hit": False, "seconds": 12.5}],
         "decisions": decisions,
         "summary": summarize_decisions(decisions),
     }
@@ -66,7 +67,14 @@ def test_report_uses_strategy_wave_and_focus_position_language():
     assert "Strategy wave: first" in report
     assert "Strategy focus position: 3 of 8" in report
     assert "Lethal solver avg 0.125s | min 0.125s | max 0.125s" in report
-    assert "Match 2: avg 0.125s | min 0.125s | max 0.125s" in report
+    assert "Match time avg 12.50s | min 12.50s | max 12.50s" in report
+    assert "Match time per match:\nMatch 2: 12.500s" in report
+
+
+def test_match_summary_reports_min_max_and_average():
+    assert summarize_matches([{"seconds": 1.0}, {"seconds": 2.0}, {"seconds": 3.0}]) == {
+        "samples": 3, "avg": 2.0, "min": 1.0, "max": 3.0,
+    }
 
 
 def test_decision_csv_contains_both_seats_and_timing_metrics(tmp_path):
@@ -96,10 +104,13 @@ def test_no_emit_run_still_prices_every_decision_off_the_harness_clock():
     report = format_report({
         "config": {"mode": "mirror", "decision_timeout": 60.0, "match_timeout": 600.0,
                    "jobs": 1, "emit": False},
-        "matches": [{"winner_seat": 0, "timed_out": (), "match_deadline_hit": False}],
+        "matches": [{"match": 1, "winner_seat": 0, "timed_out": (),
+                     "match_deadline_hit": False, "seconds": 8.0}],
         "decisions": rows, "summary": summary,
     })
     assert "Telemetry emission off | round trip avg 4.00s" in report
+    assert "Match time avg 8.00s | min 8.00s | max 8.00s" in report
+    assert "Match time per match:\nMatch 1: 8.000s" in report
     assert "Search timing needs telemetry" in report
     assert "Lethal solver" not in report           # diagnostics sections would be all zeros
 
