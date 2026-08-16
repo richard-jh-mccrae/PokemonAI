@@ -40,6 +40,25 @@ def freeze(value):
     return value
 
 
+def canonical(value):
+    """Exactly the tree ``thaw(freeze(value))`` produces — keys str-coerced and sorted — in one
+    walk instead of two.  What a state stores and hands out as ``obs``."""
+    value_type = type(value)
+    if value_type is dict:
+        return {str(key): canonical(child) for key, child in
+                sorted(value.items(), key=lambda item: str(item[0]))}
+    if value_type is list:
+        return [canonical(child) for child in value]
+    if value_type is tuple:
+        return tuple(canonical(child) for child in value)
+    if value_type is set or value_type is frozenset:
+        return {canonical(child) for child in value}
+    if isinstance(value, Mapping):
+        return {str(key): canonical(child) for key, child in
+                sorted(value.items(), key=lambda item: str(item[0]))}
+    return value
+
+
 def thaw(value):
     if (isinstance(value, tuple) and len(value) == FROZEN_TAGGED_PAIR_LENGTH
             and value[0] == "__map__"):
@@ -285,7 +304,7 @@ def _visible_own_ids(observation: Mapping, seat: int) -> Counter:
 
 @dataclass(frozen=True)
 class DecisionState:
-    observation: tuple
+    observation: dict
     root_seat: int
     deck_name: str
     deck: tuple[int, ...]
@@ -312,15 +331,15 @@ class DecisionState:
         if belief is None:
             belief = OpponentBelief(visible=freeze(opponent), unknown_mass=PROBABILITY_MAX)
         return cls(
-            observation=freeze(dict(observation)), root_seat=seat, deck_name=str(deck_name),
+            observation=canonical(observation), root_seat=seat, deck_name=str(deck_name),
             deck=tuple(int(card_id) for card_id in deck), deck_counts=tuple(sorted(remaining.items())),
             prize_counts=tuple(sorted(prizes.items())), budgets=TurnBudgets.from_observation(observation),
             belief=belief, value_registry_identity=str(value_registry_identity),
         )
 
-    @cached_property
+    @property
     def obs(self) -> dict:
-        return thaw(self.observation)
+        return self.observation
 
     @cached_property
     def legal_actions(self) -> tuple:
@@ -393,4 +412,4 @@ class DecisionState:
         return replace(successor, root_seat=self.root_seat)
 
 
-__all__ = ("DecisionState", "OpponentBelief", "TurnBudgets", "freeze", "thaw")
+__all__ = ("DecisionState", "OpponentBelief", "TurnBudgets", "canonical", "freeze", "thaw")
