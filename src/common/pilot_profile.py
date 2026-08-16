@@ -155,7 +155,7 @@ DEFINITIONS = (
     ParameterDefinition("clock.emergency_seconds", "planning_clock", 2.0, 0.1, 15.0,
                         "seconds", False),
     ParameterDefinition("clock.adaptive_enabled", "planning_clock", 0.0, 0.0, 1.0,
-                        "boolean", False),
+                        "boolean", True),
     ParameterDefinition("belief.unknown_mass", "belief", 1.0, 0.0, 1.0, "probability"),
     # ADR-0060's opponent strip/gift pricing, armed by developer ruling 2026-08-16. The magnitude
     # is the ratified one: a hidden opponent card is worth a tenth of the known-card floor, the
