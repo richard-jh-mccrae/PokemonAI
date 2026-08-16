@@ -829,15 +829,19 @@ class ProductionSolver(ReferenceSolver):
         return scratch[key]
 
     def _dead_fetch_cards(self, card_id: int) -> tuple[dict, ...] | None:
-        """The fetch clauses of a card whose whole printed effect is an unconditional fetch."""
+        """The fetch clauses of a Trainer whose whole printed effect is an unconditional fetch.
+        Playing a Pokemon benches a body, so its play changes the board whatever the fetch finds."""
         cached = self._dead_fetch_clauses.get(card_id, _UNSET)
         if cached is not _UNSET:
             return cached
+        stat = self.oracle.stats.get(card_id)
         clauses = tuple(self.oracle.effects.clauses(card_id))
         usable = (bool(clauses)
+                  and stat is not None and not getattr(stat, "is_pokemon", False)
                   and all(clause.get("kind") == "fetch" for clause in clauses)
                   and not any(clause.get("cost") or clause.get("cost_required")
-                              or clause.get("rider") for clause in clauses))
+                              or clause.get("rider") or clause.get("trigger")
+                              for clause in clauses))
         self._dead_fetch_clauses[card_id] = result = clauses if usable else None
         return result
 
@@ -858,8 +862,32 @@ class ProductionSolver(ReferenceSolver):
             for clause in clauses
             for target_id, count in self._zone_counts(state, str(clause.get("zone", "deck"))))
 
+    def _hand_size_sensitive_play(self, state: DecisionState, actions) -> bool:
+        """Whether any legal play reads or moves the whole hand (draw-to-hand-size, shuffle-hand).
+        Against one, a smaller hand can be better, so the dead-fetch proof does not hold here."""
+        effects = self.oracle.effects
+        if effects is None:
+            return False
+        for action in actions:
+            if action.identity.kind != "play":
+                continue
+            card_id = played_card_id(state, action)
+            if card_id is None:
+                continue
+            for clause in effects.clauses(card_id):
+                if clause.get("to_hand_size") is not None:
+                    return True
+                if "hand" in str(clause.get("rider", "")) or "hand" in str(clause.get("cost", "")):
+                    return True
+                conditional = clause.get("amount_if") or {}
+                if "hand" in str(conditional.get("condition", "")) or "to_hand_size" in conditional:
+                    return True
+        return False
+
     def _dead_fetch_filter(self, state, actions):
         """Drop plays that provably fetch nothing: they spend a card and change nothing else."""
+        if self._hand_size_sensitive_play(state, actions):
+            return actions
         retained = []
         for action in actions:
             if action.identity.kind == "play" and self._fetch_is_dead(state, action):
