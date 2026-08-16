@@ -41,8 +41,13 @@ def _identity_record_id(identity) -> str:
 
 def semantic_action_key(action) -> str:
     # The solver asks for the same identity's key in every ordering pass; identities are
-    # immutable, so the digest is memoized rather than recomputed per call.
-    return _identity_record_id(action.identity)
+    # immutable, so the digest is memoized rather than recomputed per call.  An identity
+    # carrying unhashable parts cannot be memoized; digest it directly.
+    identity = action.identity
+    try:
+        return _identity_record_id(identity)
+    except TypeError:
+        return _record_id(identity)
 
 
 @dataclass(frozen=True)
