@@ -633,7 +633,11 @@ def _last_resort_selection(observation: dict) -> list[int]:
             position = option.get("index")
             body = (bodies[position] if isinstance(position, int)
                     and 0 <= position < len(bodies) else {})
-            hp = max(0, int((body or {}).get("hp", 10 ** 9)))
+            hp = int((body or {}).get("hp", 10 ** 9))
+            # An already-KO'd body (hp <= 0) must sort last: it is going to be discarded once
+            # the attack finishes resolving, so any further counter placed on it is pure waste.
+            if hp <= 0:
+                return (2, 0, index)
             return (0 if hp <= counters * 10 else 1, hp, index)
 
         return [min(range(len(options)), key=target)]
