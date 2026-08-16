@@ -653,6 +653,85 @@ def test_damage_boost_hint_prioritizes_the_boost_play():
     assert semantic_action_key(play) in {row.action_key for row in beam.focused}
 
 
+def _chain_beam(hand, *, deck_counts, supporter_played=False):
+    """One beam over the REAL card data, so the chain under test is the shipped one."""
+    from common.effects import CardEffects
+    from common.scouting.provider import EngineCardStatProvider
+
+    hint = SimpleNamespace(
+        kind="damage_boost", target_card_ids=(), recipient_serial=None,
+        strategy_id="general.boost_the_committed_attack", deadline="this_turn",
+        conviction="medium")
+    observation = _observation(hand=[{"id": card_id, "serial": 30 + index, "playerIndex": 0}
+                                     for index, card_id in enumerate(hand)])
+    observation["current"]["supporterPlayed"] = supporter_played
+    observation["select"]["option"] = [{"type": 7, "index": index}
+                                       for index in range(len(hand))] + [{"type": 14}]
+    builder = StrategyBeamBuilder(
+        SimpleNamespace(hints=(hint,)), effects=CardEffects.load(),
+        stats=EngineCardStatProvider())
+    actions = enumerate_legal_actions(observation)
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=tuple(deck_counts))
+    beam = builder.build(state, actions)
+    focused = {row.action_key for row in beam.focused}
+    plays = [action for action in actions if action.identity.kind == "play"]
+    return builder, {hand[action.selection[0]]: semantic_action_key(action) in focused
+                     for action in plays if action.selection[0] < len(hand)}
+
+
+# Meowth ex fetches a Supporter when Benched; Team Rocket's Petrel fetches any Trainer;
+# Premium Power Pro is the Trainer that satisfies a damage_boost need. Real ids.
+MEOWTH_EX, PETREL, PREMIUM_POWER_PRO, POKE_PAD = 1071, 1219, 1141, 1152
+
+
+def test_a_fetch_that_reaches_the_boost_card_earns_the_boost_demand():
+    """A need with no declared card ids had NO notion of which cards satisfy it, so every
+    tutor scored 0.0 — Petrel fetches any Trainer, Premium Power Pro included."""
+    _builder, focused = _chain_beam([PETREL],
+                                    deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1)))
+
+    assert focused[PETREL]
+
+
+def test_a_two_step_fetch_chain_reaches_the_boost_card():
+    """Meowth ex fetches a Supporter, not the boost card. It is still the front of a real line:
+    Supporter -> Petrel -> Trainer -> Premium Power Pro."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)))
+
+    assert focused[MEOWTH_EX]
+
+
+def test_the_chain_is_worth_less_than_the_direct_fetch():
+    """Two steps can fail in two places, so the front of the chain must never outrank the
+    tutor that reaches the card outright."""
+    builder, focused = _chain_beam(
+        [PETREL, MEOWTH_EX],
+        deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)))
+    odds = sorted(builder.last_odds.values(), reverse=True)
+
+    assert focused[PETREL] and focused[MEOWTH_EX]
+    assert len(odds) == 2 and odds[0] > odds[1]
+
+
+def test_no_chain_credit_once_the_supporter_for_the_turn_is_spent():
+    """The only link to the boost card is a Supporter, and one Supporter is allowed per turn."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (PETREL, 1), (MEOWTH_EX, 1)),
+        supporter_played=True)
+
+    assert not focused[MEOWTH_EX]
+
+
+def test_no_chain_credit_without_a_link_that_reaches_the_need():
+    """Negative control: Poke Pad fetches Pokemon only, so nothing in this deck connects
+    Meowth ex's Supporter fetch to a boost card."""
+    _builder, focused = _chain_beam(
+        [MEOWTH_EX], deck_counts=((PREMIUM_POWER_PRO, 4), (POKE_PAD, 4), (MEOWTH_EX, 1)))
+
+    assert not focused[MEOWTH_EX]
+
+
 def test_boost_general_strategy_is_declared():
     assert "general.boost_the_committed_attack" in {
         hint.identifier for hint in GENERAL_STRATEGIES}
