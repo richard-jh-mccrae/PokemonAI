@@ -627,11 +627,12 @@ class BoardPotential:
         return -worst, frozenset(reachable)
 
     def _bench_ko_indices(self, attack, bench) -> tuple[int, ...]:
-        """Bench positions this attack can knock out on its own. Decks whose cards change who a
-        bench attack may legally touch override this, so reach and prizes never disagree."""
+        """Bench positions this attack can knock out on its own. A Tera body takes no damage from
+        attacks while benched, so neither snipe nor concentrated spread reaches it."""
         reach = bench_reach(attack)
         return tuple(index for index, target in enumerate(bench)
-                     if reach >= int(target.get("hp", MINIMUM_HP)))
+                     if not bool(getattr(self._stat(target.get("id")), "tera", False))
+                     and reach >= int(target.get("hp", MINIMUM_HP)))
 
     def _bench_ko_prizes(self, attack, bench) -> float:
         return float(max((self._prizes(bench[index])

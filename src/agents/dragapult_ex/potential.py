@@ -13,18 +13,16 @@ SPECIAL_CONDITION_PRIZE_SHARES = {
 
 
 class DragapultPotential(BoardPotential):
-    def _bench_ko_indices(self, attack, bench) -> tuple[int, ...]:
-        snipe = int(getattr(attack, "benchSnipe", 0) or 0)
-        return tuple(index for index, target in enumerate(bench)
-                     if not bool(getattr(self._stat(target.get("id")), "tera", False))
-                     and snipe >= int(target.get("hp", 1)))
-
     def _bench_ko_prizes(self, attack, bench) -> float:
+        """Phantom Dive splits its counters, so several small benched bodies can fall together
+        where the shared single-target reach sees only the largest one it can reach."""
         direct = max((self._prizes(bench[index])
                       for index in self._bench_ko_indices(attack, bench)), default=0)
         counter_budget = int(getattr(attack, "benchSpread", 0) or 0) // 10
         prizes = [0] * (counter_budget + 1)
         for target in bench:
+            if bool(getattr(self._stat(target.get("id")), "tera", False)):
+                continue
             hp = int(target.get("hp", 0) or 0)
             cost = (hp + 9) // 10
             if hp <= 0 or cost > counter_budget:

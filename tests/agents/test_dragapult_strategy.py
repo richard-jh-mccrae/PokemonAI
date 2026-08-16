@@ -62,11 +62,9 @@ def test_dragapult_has_dense_executable_strategy_doctrine():
     assert len(identifiers) >= 15
     assert {
         "dragapult.risky_ruins_counter_loop",
-        "dragapult.preserve_drakloak_draw_engine",
         "dragapult.phantom_dive_damage_setup",
-        "dragapult.crispin_dragapult_acceleration",
-        "dragapult.crispin_munkidori_fallback",
-        "dragapult.crispin_fezandipiti_fallback",
+        "dragapult.crispin_fuel_the_line",
+        "dragapult.crispin_fuel_the_payoff",
         "dragapult.unfair_stamp_before_draw",
     } <= identifiers
 
@@ -212,3 +210,86 @@ def test_boss_gate_sees_an_unscouted_softened_multi_prize_target():
         roles=STRATEGY.roles, stats=stats, opponent_role_worth={})
 
     assert "dragapult.boss_softened_two_prize_target" in snapshot.active_ids
+
+
+def _outcome(hint):
+    """The identity of a desired outcome: what is wanted, of whom, from which cards, when.
+
+    Matches the key protected-bundle ranking deduplicates on, so a doctrine that states one
+    intention twice contributes one unit of coverage, not two.
+    """
+    fact = hint.desired_facts[0]
+    return (fact.kind, hint.recipient_selector, fact.target_card_ids, hint.waypoint)
+
+
+def test_deck_doctrine_spans_the_urgency_and_conviction_tiers():
+    """Ranking is lexicographic on urgency then conviction. A doctrine that authors every hint
+    into one tier ranks nothing, and leaves the order to whatever tie-break sits underneath."""
+    deadlines = {hint.deadline for hint in STRATEGY.strategies}
+    convictions = {hint.conviction for hint in STRATEGY.strategies}
+
+    assert {"immediate", "this_turn"} <= deadlines
+    assert {"high", "medium", "low"} <= convictions
+
+
+def test_only_the_phantom_dive_line_and_its_conversions_are_immediate():
+    immediate = {hint.identifier for hint in STRATEGY.strategies
+                 if hint.deadline == "immediate"}
+
+    assert immediate == {
+        "dragapult.fund_active_phantom_dive",
+        "dragapult.evolve_ready_drakloak",
+        "dragapult.phantom_dive_damage_setup",
+        "dragapult.boss_softened_two_prize_target",
+        "dragapult.unfair_stamp_before_draw",
+    }
+
+
+def test_phantom_dive_funding_names_both_halves_of_its_printed_cost():
+    stats = EngineCardStatProvider()
+    cost = frozenset(stats.attack(154).energyTypes)
+    funding = [hint for hint in STRATEGY.strategies
+               if hint.desired_facts[0].kind == "fund_attack"]
+
+    assert funding
+    for hint in funding:
+        assert cost <= frozenset(hint.desired_facts[0].target_card_ids)
+
+
+def test_the_crispin_declarations_state_one_desired_outcome():
+    """Crispin's recipient does not select the play, so three recipient-distinct declarations
+    were one intention counted three times."""
+    crispin = [hint for hint in STRATEGY.strategies
+               if 1198 in hint.desired_facts[0].target_card_ids]
+
+    assert len(crispin) > 1
+    assert len({_outcome(hint) for hint in crispin}) == 1
+
+
+def test_hints_sharing_an_outcome_activate_on_different_boards():
+    """Two hints may share an outcome to cover different boards, as Crispin's do. Sharing the
+    activation as well means the second says nothing the first did not."""
+    seen = {}
+    for hint in STRATEGY.strategies:
+        key = (_outcome(hint), hint.conditions)
+        assert key not in seen, f"{hint.identifier} repeats {seen.get(key)}"
+        seen[key] = hint.identifier
+
+
+def test_every_deck_hint_is_gated_on_a_board_that_makes_it_true():
+    """An always-active hint claims search attention, and coverage, on every turn including the
+    ones where it cannot act."""
+    ungated = [hint.identifier for hint in STRATEGY.strategies if not hint.conditions]
+
+    assert ungated == []
+
+
+def test_the_dunsparce_draw_line_has_a_driver():
+    """Neither Dunsparce nor Dudunsparce is an attacker, so the shared evolution machinery drops
+    the relationship and no general hint ever reaches it."""
+    roles = STRATEGY.roles.resolve(_deck(), EngineCardStatProvider(), CardFunctions.load())
+    assert 305 not in roles.evolves
+
+    evolve = {hint.desired_facts[0].target_card_ids for hint in STRATEGY.strategies
+              if hint.desired_facts[0].kind == "evolve"}
+    assert (66,) in evolve
