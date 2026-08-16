@@ -588,6 +588,7 @@ async function boot(){
   loadGame();
 }
 async function loadGame(){
+  $('ids').textContent='loading match…';
   const g=await (await fetch('/games.json')).json();
   $('gpos').textContent=(g.current+1)+'/'+g.count; $('gep').textContent=g.episode_id??'?';
   $('gprev').disabled=g.current<=0; $('gnext').disabled=g.current>=g.count-1;
@@ -605,7 +606,9 @@ async function loadGame(){
   $('step').max=total; $('oftotal').textContent='/'+total;
   fillPick();
   editingId=null;
-  openPlain(); show(0); refreshList();
+  // Not frame 0: the film opens on the coin flip, whose board is empty (nothing dealt yet), so
+  // landing there shows a blank board.
+  openPlain(); show(p.opening_frame||0); refreshList();
 }
 async function switchGame(d){
   const g=await (await fetch('/games.json')).json();

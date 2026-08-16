@@ -18,7 +18,7 @@ from .seats import detect_seat
 from .store import DEFAULT_PATH, append_correction, load_corrections
 from .telemetry_log import (
     decision_seconds as telemetry_decision_seconds, lethal_proof_seconds, record_for,
-    search_timing,
+    records_for, search_timing,
 )
 
 
@@ -61,6 +61,29 @@ def _film(replay: dict) -> list[dict]:
     return (steps[0][0].get("visualize") or []) if steps and steps[0] else []
 
 
+def _opening_frame(film: list[dict]) -> int:
+    """The first frame the board viewer can actually show. The film opens before the deal — the coin
+    flip's board has no cards at all, so landing there renders an empty board."""
+    for idx, raw in enumerate(film):
+        current = raw.get("current") or {}
+        if current.get("stadium"):
+            return idx
+        for player in current.get("players") or []:
+            if any(player.get(area) for area in ("active", "bench", "hand")):
+                return idx
+    return 0
+
+
+def _records_by_seat(live_records, live_seat, live_records_by_seat) -> dict[int, list[dict]]:
+    """Seat -> the seat's ``@T`` stream. The by-seat map wins; the single-seat stream fills in the
+    seat it was loaded for."""
+    by_seat = {int(seat): records
+               for seat, records in (live_records_by_seat or {}).items() if records is not None}
+    if live_records is not None and live_seat is not None and int(live_seat) not in by_seat:
+        by_seat[int(live_seat)] = live_records
+    return by_seat
+
+
 def frames_payload(replay: dict, our_team: str | None = None,
                    live_records: list[dict] | None = None, live_seat: int | None = None,
                    live_records_by_seat: dict[int, list[dict]] | None = None) -> dict:
@@ -68,7 +91,12 @@ def frames_payload(replay: dict, our_team: str | None = None,
     the @T record the SHIPPED agent emitted at that decision (ADR-0019)."""
     info = replay.get("info") or {}
     film = _film(replay)
-    by_frame: dict[int, Decision] = {d.frame: d for d in iter_decisions(replay)}
+    decisions = iter_decisions(replay)
+    by_frame: dict[int, Decision] = {d.frame: d for d in decisions}
+    # The positional join walks every Decision, so run it ONCE for all seats: per-frame `record_for`
+    # re-extracts (and deep-copies) the whole film each call, which is quadratic in the film length.
+    live_by_frame = records_for(
+        decisions, _records_by_seat(live_records, live_seat, live_records_by_seat))
 
     frames = []
     for idx, raw in enumerate(film):
@@ -81,13 +109,7 @@ def frames_payload(replay: dict, our_team: str | None = None,
             selected_label = _labels_for(decision, decision.chosen)
         else:
             options, chosen, selected_label = [], (raw.get("selected") or []), ""
-        live = None
-        if decision is not None:
-            records = (live_records_by_seat or {}).get(decision.seat)
-            if records is None and live_records is not None and decision.seat == live_seat:
-                records = live_records
-            if records is not None:
-                live = record_for(replay, records, seat=decision.seat, frame=idx)
+        live = live_by_frame.get((decision.seat, idx)) if decision is not None else None
         seconds = telemetry_decision_seconds(live)
         if seconds is None and decision is not None and decision.decision_seconds != 0.0:
             seconds = decision.decision_seconds
@@ -109,23 +131,21 @@ def frames_payload(replay: dict, our_team: str | None = None,
     return {
         "episode_id": info.get("EpisodeId"), "team_names": info.get("TeamNames"),
         "seat": detect_seat(replay, our_team) if our_team else None,
-        "total": len(film), "frames": frames,
+        "total": len(film), "frames": frames, "opening_frame": _opening_frame(film),
     }
-
-
-def _live_for(replay, live_records, *, seat, frame):
-    return record_for(replay, live_records, seat=seat, frame=frame) if live_records is not None else None
 
 
 def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict]:
     """No per-Decision ``current``: the Anchor carries the one board a human reads, and a full-info
     snapshot per Decision would cost ~10 KB each (ADR-0049)."""
+    decisions = iter_decisions(replay)
+    live_by_frame = records_for(decisions, {seat: live_records} if live_records is not None else {})
     return [
         {"frame": d.frame, "select_context": d.select_context, "select_type": d.select_type,
          "chosen": list(d.chosen), "chosen_label": _labels_for(d, d.chosen), "obs": d.obs,
          "decision_seconds": d.decision_seconds,
-         "live_trace": _live_for(replay, live_records, seat=seat, frame=d.frame)}
-        for d in iter_decisions(replay) if d.seat == seat and d.turn == turn
+         "live_trace": live_by_frame.get((seat, d.frame))}
+        for d in decisions if d.seat == seat and d.turn == turn
     ]
 
 
