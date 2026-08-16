@@ -565,9 +565,10 @@ class BoardPotential:
             context = self._context(
                 self._side_facts(me, attacking_body=body), defender_facts)
             codes = self._codes(body)
+            barred = locked_attack_ids(self._attack_locks, body, self._turn)
             for attack_id in getattr(stat, "attacks", ()) or ():
                 attack = self._attack(attack_id)
-                if attack is None or _pay_fraction(
+                if attack is None or int(attack_id) in barred or _pay_fraction(
                         codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                     continue
                 active_damage = compute_active_damage(
@@ -609,9 +610,14 @@ class BoardPotential:
                 continue
             context = self._context(
                 self._side_facts(attacker_side, attacking_body=body), defender_facts)
+            # The ledger records BOTH seats: `fold_attack_locks` keys every ATTACK log row by
+            # serial without filtering by side. An opponent who just spent a one-shot cannot
+            # land it on the turn this function prices, so fearing it is as wrong as crediting
+            # our own. The stride is exactly one of their turns, so this never under-fears.
+            barred = locked_attack_ids(self._attack_locks, body, self._turn)
             for attack_id in getattr(stat, "attacks", ()) or ():
                 attack = self._attack(attack_id)
-                if attack is None:
+                if attack is None or int(attack_id) in barred:
                     continue
                 exposed = 0.0
                 lethal_active = False
