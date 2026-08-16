@@ -12,6 +12,12 @@ _CONVICTIONS = frozenset({"high", "medium", "low"})
 _OPERATORS = frozenset({
     "eq", "ne", "lt", "le", "gt", "ge", "contains", "not_contains", "missing",
 })
+# Binding selectors resolved by _recipient_body plus the declared non-binding
+# ones ("own.bench", "turn"); a typo here would otherwise bind nothing, silently.
+_RECIPIENT_SELECTORS = frozenset({
+    "own.active", "own.bench", "own.bench.evolvable:first",
+    "opponent.bench.highest_role", "turn",
+})
 
 
 @dataclass(frozen=True)
@@ -55,7 +61,10 @@ class StrategyHint:
     waypoint: int = 0
 
     def __post_init__(self) -> None:
-        if (not self.identifier or self.scope not in _SCOPES or not self.recipient_selector
+        if self.recipient_selector not in _RECIPIENT_SELECTORS:
+            raise ValueError(
+                f"unknown strategy recipient selector: {self.recipient_selector!r}")
+        if (not self.identifier or self.scope not in _SCOPES
                 or self.deadline not in _DEADLINES or self.conviction not in _CONVICTIONS
                 or not self.provenance or not self.desired_facts or int(self.waypoint) < 0):
             raise ValueError("invalid strategy declaration")
