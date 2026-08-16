@@ -550,16 +550,17 @@ GENERAL_STRATEGIES = (
         # Surfacing the knockout, not choosing it: an attack that takes a prize must at least be
         # searched. Whether it beats developing instead is Bellman's comparison to make.
         #
-        # this_turn, NOT immediate: the knockout is still there after the bench is filled and
-        # the Energy is down, so it is not lost by developing first. Calling it immediate said
-        # "swing now" and pulled the attack in front of the setup that should precede it.
+        # this_turn and medium, NOT immediate/high: the knockout is still there after the bench
+        # is filled and the Energy is down, so it is not lost by developing first, and taking it
+        # is usually -- not always -- better than developing. Authored at immediate/high it
+        # displaced the Poffin-two-Staryu setup that the Mega Starmie correction rules first.
         "general.take_the_knockout_in_front_of_you",
         "general",
         (ActivationCondition("own.active.knocks_out_defender", "eq", True),),
         (DesiredFact("knock_out", "own.active"),),
         "own.active",
         "this_turn",
-        "high",
+        "medium",
         "shared-general",
     ),
     StrategyHint(

@@ -483,3 +483,74 @@ def test_a_colorless_slot_does_not_make_every_energy_funding():
     assert eligible(attacker) == (fire, psychic)
     # Nothing typed is owed anywhere on this body, so every Energy genuinely does fund it.
     assert eligible(colorless_only) == (fire, psychic, darkness)
+
+
+def test_funding_satisfies_only_once_the_body_owes_nothing():
+    """A bundle holds every later waypoint until the earlier ones satisfy, so a fund_attack
+    outcome that can never report satisfied strands the attack behind it for the whole turn."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, fire, psychic = 830, 2, 5
+    stats = DictCardStatProvider(
+        {
+            attacker: CardStat(attacker, hp=320, attacks=(14,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+        },
+        attacks={14: AttackStat(14, damage=200, energyTypes=(fire, psychic))},
+    )
+    funding = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", attacker, 1, (),
+        "immediate", "high", "deck.line", 0)
+    swing = ActivatedStrategy(
+        "deck.swing", "damage_setup", "opponent.bench.highest_role", attacker, 9, (),
+        "immediate", "high", "deck.line", 1)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (funding, swing)), stats=stats)
+
+    def _status(energies):
+        observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+            {"active": [{"id": attacker, "serial": 1, "hp": 320, "maxHp": 320,
+                         "energies": list(energies)}], "bench": []},
+            {"active": [], "bench": [{"id": attacker, "serial": 9, "hp": 60, "maxHp": 320}]},
+        ]}, "select": {"context": 0, "option": []}}
+        rows = builder.outcome_statuses(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=()))
+        return {row["strategy_id"]: row["status"] for row in rows}
+
+    # Half the cost down: funding is still live, so the swing behind it stays held.
+    assert _status((fire,))["deck.fund"] != "satisfied"
+    assert _status((fire,))["deck.swing"] == "held"
+    # Cost fully paid: funding satisfies and the swing is released within the same turn.
+    assert _status((fire, psychic))["deck.fund"] == "satisfied"
+    assert _status((fire, psychic))["deck.swing"] != "held"
+
+
+def test_an_unreadable_body_never_reports_its_funding_satisfied():
+    """"No cost we can see" is not "no cost owed" -- calling it satisfied would release a
+    bundle on missing information."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    mystery = 831
+    stats = DictCardStatProvider({mystery: CardStat(mystery, hp=100)})
+    hint = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", mystery, 1, (),
+        "immediate", "high", None, 0)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+    observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+        {"active": [{"id": mystery, "serial": 1, "hp": 100, "maxHp": 100, "energies": []}],
+         "bench": []},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+
+    rows = builder.outcome_statuses(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()))
+
+    assert rows[0]["status"] != "satisfied"

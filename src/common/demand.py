@@ -177,6 +177,15 @@ class StrategyBeamBuilder:
                     and int(body.get("id", -1)) in hint.target_card_ids
                     for body in own_bodies):
                 status = "satisfied"
+            elif hint.kind == "fund_attack" and self.stats is not None:
+                body = next((body for body in own_bodies if body
+                             and int(body.get("serial", -1)) == hint.recipient_serial), None)
+                # Needs a body printing at least one readable attack: "no cost we can see" is
+                # not "no cost owed", and calling it satisfied would hold the rest of the
+                # bundle behind funding that was never proven done.
+                printed = getattr(self.stats.get(body.get("id")), "attacks", ()) if body else ()
+                if body is not None and printed and not self._unmet_energy_types(body):
+                    status = "satisfied"
             elif hint.kind == "heal":
                 body = next((body for body in own_bodies if body
                              and int(body.get("serial", -1)) == hint.recipient_serial), None)
@@ -261,6 +270,22 @@ class StrategyBeamBuilder:
         return next((body for body in bodies if body
                      and int(body.get("serial", -1)) == int(serial)), None)
 
+    def _unmet_energy_types(self, body) -> set:
+        """Printed cost slots this body cannot yet pay, across every attack it prints.
+
+        One reading of the card serves two questions: which Energy still funds the body, and
+        whether a fund_attack outcome is already satisfied. They must not disagree -- a bundle
+        holds every later waypoint until the earlier ones satisfy.
+        """
+        stat = self.stats.get(body.get("id")) if body and self.stats is not None else None
+        if stat is None:
+            return set()
+        provisions = tuple(body.get("energies") or ())
+        return {energy_type
+                for attack_id in getattr(stat, "attacks", ()) or ()
+                for _slot, energy_type in unmet_cost_slots(
+                    provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
+
     def _funding_energy_ids(self, state, hint) -> tuple[int, ...]:
         """Deck Energy that advances a printed attack cost the recipient cannot yet pay.
 
@@ -268,15 +293,7 @@ class StrategyBeamBuilder:
         restating it in a declaration, where a half-named cost silently scores the other half
         at zero and nothing catches the drift when the card is reprinted.
         """
-        body = self._body_by_serial(state, hint.recipient_serial)
-        stat = self.stats.get(body.get("id")) if body and self.stats is not None else None
-        if stat is None:
-            return ()
-        provisions = tuple(body.get("energies") or ())
-        owed = {energy_type
-                for attack_id in getattr(stat, "attacks", ()) or ()
-                for _slot, energy_type in unmet_cost_slots(
-                    provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
+        owed = self._unmet_energy_types(self._body_by_serial(state, hint.recipient_serial))
         if not owed:
             return ()
         # A Colorless slot accepts anything, so a body owing one looks funded by every Energy in
