@@ -399,6 +399,18 @@ GENERAL_STRATEGIES = (
         "high",
         "shared-general",
     ),
+    StrategyHint(
+        # A this-turn damage boost pays off only if the boosted attack is still ahead of it in
+        # the same epoch; schedule it early so search reaches that attack before the caps.
+        "general.boost_the_committed_attack",
+        "general",
+        (ActivationCondition("turn.commitment_available", "eq", True),),
+        (DesiredFact("damage_boost", "turn"),),
+        "turn",
+        "this_turn",
+        "medium",
+        "shared-general",
+    ),
 )
 
 

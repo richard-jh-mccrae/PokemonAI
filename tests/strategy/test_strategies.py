@@ -506,3 +506,92 @@ def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
         )
 
     assert beam.focused == ()
+
+
+def test_accelerator_clauses_earn_funding_access_odds():
+    # An accel card is an OUT for a fund_attack demand: Crispin-class clauses previously scored
+    # access odds 0.0 and never entered the focused beam.
+    hint = SimpleNamespace(
+        kind="fund_attack", target_card_ids=(), recipient_serial=77,
+        strategy_id="general.fund_active_attacker", deadline="this_turn", confidence="high")
+    snapshot = SimpleNamespace(hints=(hint,))
+    observation = _observation(hand=[{"id": 1198, "serial": 5, "playerIndex": 0}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return (({"kind": "accel", "amount": 1, "source": "deck", "energy": "basic"},)
+                    if card_id == 1198 else ())
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=card_id == 1198, is_pokemon=False,
+                                   is_energy=card_id == 906, is_basic_energy=card_id == 906,
+                                   energyType=3)
+
+    actions = enumerate_legal_actions(observation)
+    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=((906, 4),)), actions)
+
+    play = next(action for action in actions if action.identity.kind == "play")
+    assert semantic_action_key(play) in {row.action_key for row in beam.focused}
+
+
+def test_damage_boost_hint_prioritizes_the_boost_play():
+    hint = SimpleNamespace(
+        kind="damage_boost", target_card_ids=(), recipient_serial=None,
+        strategy_id="general.boost_the_committed_attack", deadline="this_turn",
+        confidence="medium")
+    snapshot = SimpleNamespace(hints=(hint,))
+    observation = _observation(hand=[{"id": 1141, "serial": 5, "playerIndex": 0}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return ({"kind": "damage_boost"},) if card_id == 1141 else ()
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=False)
+
+    actions = enumerate_legal_actions(observation)
+    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    play = next(action for action in actions if action.identity.kind == "play")
+    assert semantic_action_key(play) in {row.action_key for row in beam.focused}
+
+
+def test_boost_general_strategy_is_declared():
+    assert "general.boost_the_committed_attack" in {
+        hint.identifier for hint in GENERAL_STRATEGIES}
+
+
+def test_damage_setup_hint_matches_a_spread_attacker():
+    hint = SimpleNamespace(
+        kind="damage_setup", target_card_ids=(), recipient_serial=88,
+        strategy_id="deck.setup", deadline="this_turn", confidence="high")
+    snapshot = SimpleNamespace(hints=(hint,))
+    observation = _observation(hand=[])
+    observation["current"]["players"][1]["bench"] = [{"id": 30, "serial": 88}]
+    observation["select"]["option"] = [{"type": 13, "attackId": 500}, {"type": 14}]
+
+    class Stats:
+        @staticmethod
+        def get(_card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=True)
+
+        @staticmethod
+        def attack(_attack_id):
+            return SimpleNamespace(benchSnipe=0, benchSpread=60)
+
+    actions = enumerate_legal_actions(observation)
+    beam = StrategyBeamBuilder(snapshot, effects=None, stats=Stats()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    attack = next(action for action in actions if action.identity.kind == "attack")
+    assert semantic_action_key(attack) in {row.action_key for row in beam.focused}

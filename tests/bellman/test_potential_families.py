@@ -99,6 +99,52 @@ def test_poison_on_the_opponent_active_is_pending_damage_progress():
     assert dict(poisoned.families)["damage"] > dict(clean.families)["damage"]
 
 
+def test_a_spread_attack_reaches_the_bench_in_forecasts():
+    # benchSpread counters can all land on one benched target, so forecast reach is
+    # max(benchSnipe, benchSpread) — not snipe-only with spread read as zero.
+    stats = DictCardStatProvider(
+        {ATTACKER: CardStat(ATTACKER, name="Spreader", hp=120, attacks=(2,)),
+         DEFENDER: CardStat(DEFENDER, name="Bench", hp=60)},
+        attacks={2: AttackStat(2, name="Spread", damage=0, benchSpread=60)},
+    )
+    potential = BoardPotential(stats, registry=_registry(), root_seat=0)
+    attacker = _body(ATTACKER)
+    bench_defender = _body(DEFENDER, hp=60, max_hp=60)
+
+    value = potential._attack_value(
+        attacker, [], bench_defender,
+        potential._side_facts({"active": [attacker], "bench": [], "hand": [],
+                               "discard": [], "prize": []}),
+        potential._side_facts({"active": [bench_defender], "bench": [], "hand": None,
+                               "discard": [], "prize": []}))
+
+    assert value == 1.0                               # a full KO reach, not zero
+
+
+def test_a_defenders_tool_reduction_caps_the_forecast_ko():
+    tool = 1174
+    stats = DictCardStatProvider(
+        {ATTACKER: CardStat(ATTACKER, name="Attacker", hp=120, attacks=(1,)),
+         DEFENDER: CardStat(DEFENDER, name="Defender", hp=60),
+         tool: CardStat(tool, name="Guard", damageReduction=30)},
+        attacks={1: AttackStat(1, name="Hit", damage=60)},
+    )
+    potential = BoardPotential(stats, registry=_registry(), root_seat=0)
+    attacker = _body(ATTACKER)
+    bare = _body(DEFENDER, hp=60, max_hp=60)
+    guarded = _body(DEFENDER, hp=60, max_hp=60)
+    guarded["tools"] = [{"id": tool, "serial": 9}]
+    me = {"active": [attacker], "bench": [], "hand": [], "discard": [], "prize": []}
+
+    def value(defender):
+        side = {"active": [defender], "bench": [], "hand": None, "discard": [], "prize": []}
+        return potential._attack_value(
+            attacker, [], defender, potential._side_facts(me), potential._side_facts(side))
+
+    assert value(bare) == 1.0                         # 60 into 60: a forecast KO
+    assert value(guarded) == 0.5                      # the attached tool absorbs 30
+
+
 def test_our_own_stadium_in_play_carries_its_board_worth():
     bare = _potential()(_observation())
     ours = _potential()(_observation(

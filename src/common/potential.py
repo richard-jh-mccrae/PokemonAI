@@ -85,6 +85,13 @@ def _active_condition_share(player, table) -> float:
     return share
 
 
+def _bench_reach(attack) -> int:
+    """Single-target bench damage this attack can deliver: snipe hits one target; spread counters
+    can all concentrate on one, so its total is an equivalent (conservative, no-split) reach."""
+    return max(int(getattr(attack, "benchSnipe", 0) or 0),
+               int(getattr(attack, "benchSpread", 0) or 0))
+
+
 class BoardPotential:
     """Absolute observable-state utility used at every Bellman transition.
 
@@ -257,6 +264,15 @@ class BoardPotential:
             deck_basic_by_type=deck_basic_by_type,
         )
 
+    def _defender_tool_transient(self, defender) -> dict | None:
+        """Attached-tool damage reduction on the defending BODY — without it the forecast reads
+        only the Pokémon card's own printed defenses and overestimates every KO."""
+        reduction = 0
+        for tool in (defender.get("tools") or ()):
+            stat = self._stat(tool.get("id") if isinstance(tool, dict) else tool)
+            reduction += int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
+        return {"reduction": reduction} if reduction else None
+
     def _attack_value(self, body, codes, defender, attacker_facts, defender_facts, *,
                       require_ready: bool = False) -> float:
         card_id = body.get("id")
@@ -267,6 +283,7 @@ class BoardPotential:
         hp = max(MINIMUM_HP, int(defender.get("hp", MINIMUM_HP)))
         prizes = self._prizes(defender)
         context = self._context(attacker_facts, defender_facts)
+        transient = self._defender_tool_transient(defender)
         defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
@@ -278,8 +295,9 @@ class BoardPotential:
             if require_ready and readiness < 1.0:
                 continue
             damage = max(float(compute_active_damage(
-                             attack, stat, defender_stat, defender_tags, context=context)),
-                         float(getattr(attack, "benchSnipe", 0) or 0))
+                             attack, stat, defender_stat, defender_tags, context=context,
+                             defender_transient=transient)),
+                         float(_bench_reach(attack)))
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
         return best
 
@@ -415,12 +433,13 @@ class BoardPotential:
                 continue
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
-                context=self._context(attacker_facts, defender_facts))
+                context=self._context(attacker_facts, defender_facts),
+                defender_transient=self._defender_tool_transient(defender))
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
-            snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+            reach = _bench_reach(attack)
             bench_prizes = max((self._prizes(target) for target in opponent.get("bench") or ()
-                                if target and snipe >= int(target.get("hp", MINIMUM_HP))),
+                                if target and reach >= int(target.get("hp", MINIMUM_HP))),
                                default=0)
             best = max(best, float(self._prizes(defender) + bench_prizes))
         return best
@@ -450,12 +469,13 @@ class BoardPotential:
                         codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
                     continue
                 active_damage = compute_active_damage(
-                    attack, stat, defender_stat, defender_tags, context=context)
+                    attack, stat, defender_stat, defender_tags, context=context,
+                    defender_transient=self._defender_tool_transient(defender))
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
-                snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+                reach = _bench_reach(attack)
                 target_prizes = max((self._prizes(target) for target in bench
-                                     if snipe >= int(target.get("hp", MINIMUM_HP))), default=0)
+                                     if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
                 if target_prizes:
                     best = max(best, float(self._prizes(defender) + target_prizes))
         return best
@@ -488,12 +508,13 @@ class BoardPotential:
                     continue
                 exposed = 0.0
                 active_damage = compute_active_damage(
-                    attack, stat, active_stat, active_tags, context=context)
+                    attack, stat, active_stat, active_tags, context=context,
+                    defender_transient=self._defender_tool_transient(active))
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
-                snipe = int(getattr(attack, "benchSnipe", 0) or 0)
+                reach = _bench_reach(attack)
                 exposed += max((self._prizes(target) for target in bench
-                                if snipe >= int(target.get("hp", MINIMUM_HP))), default=0)
+                                if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
                 if body is attacker_active:
                     exposed *= attacker_active_share
                 worst = max(worst, exposed)
