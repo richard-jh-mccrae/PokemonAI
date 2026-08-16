@@ -103,7 +103,7 @@ DEFINITIONS = (
                         "decision_clock_share", False),
     ParameterDefinition("search.uncertainty_margin", "search_waves", 0.10, 0.0, 10.0,
                         "bellman_value"),
-    ParameterDefinition("search.information_dominance_enabled", "search_waves", 0.0, 0.0, 1.0,
+    ParameterDefinition("search.information_dominance_enabled", "search_waves", 1.0, 0.0, 1.0,
                         "boolean", False),
     ParameterDefinition("strategy.focus_enabled", "strategy_beam", 1.0, 0.0, 1.0,
                         "boolean", False),

@@ -1,12 +1,14 @@
 # ADR-0140: Free-peek dominance orders the search walk
 
-Status: Built, shipped ARMED-OFF (2026-08-16).  Activation is blocked by the ruling corpus
-itself: mega_starmie_20260813_33b43c86 rules Pokégear-before-energy on one frame
-(d31f6bfa4803) and Ignition-attach-before-Pokégear on another (810eb9a2ae5c), so no
-unconditional peek-first gate can satisfy both.  Armed-on, the gate fixed the two disputed
-frames and broke four previously passing rulings, including one where pruning cheap
-completable commitment lines degraded capped lower bounds enough to surface a ruled-out dead
-fetch (25c423bbb0ec).  See Consequences.
+Status: Accepted for production activation by developer request (2026-08-16), knowingly
+overriding part of the ruling corpus.  The corpus is split on the principle:
+mega_starmie_20260813_33b43c86 rules Pokégear-before-energy on one frame (d31f6bfa4803) and
+Ignition-attach-before-Pokégear on another (810eb9a2ae5c), so no unconditional peek-first gate
+can satisfy both.  Armed on, the gate resolves the two disputed budget-flip frames and
+contradicts four previously passing rulings, including one where pruning cheap completable
+commitment lines degraded capped lower bounds enough to surface a ruled-out dead fetch
+(25c423bbb0ec).  Those four rulings are the open re-adjudication worklist; the switch below
+restores the full walk at any time.
 
 ## Context
 
@@ -48,12 +50,13 @@ The rule is a per-node filter (it re-evaluates at every state; once the peek is 
 commitments reappear), runs after sleep-set pruning and before strategy focus and width caps,
 counts into `information_first_permutations_pruned`, and records
 `{"proof_type": "information_dominance"}` rows in `structural_prunes`.  Switch:
-`search.information_dominance_enabled`, default **off**.  The reference solver stays exhaustive.
+`search.information_dominance_enabled`, default **on**.  The reference solver stays exhaustive.
 
 ## Consequences
 
-- Armed on, the gate resolves the two disputed budget-flip frames to their ruled
-  information-first plays by construction — and contradicts four other rulings, so it ships dark.
+- The gate resolves the two disputed budget-flip frames to their ruled information-first plays
+  by construction — and overrides four other rulings, accepted by the developer to observe the
+  rule live; those four are the re-adjudication worklist.
 - Two limits of the dominance argument surfaced by the corpus, recorded for any future arming:
   1. *In-model free is not free.*  Pokégear's reveal shows the fetched Supporter to the opponent;
      tutors classified `information_first` (Mega Signal) are spendable resources.  The model
