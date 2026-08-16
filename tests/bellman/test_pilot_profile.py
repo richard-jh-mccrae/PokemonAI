@@ -104,6 +104,15 @@ def test_anytime_allocation_defaults_are_central_and_bounded():
     assert profile.get("search.stability_patience_max_seconds") == pytest.approx(10.0)
 
 
+def test_sequence_coverage_ships_on_with_a_kill_switch():
+    definitions = {row.name: row for row in DEFINITIONS}
+
+    assert definitions["strategy.sequence_coverage_enabled"].default == 1.0
+    assert not definitions["strategy.sequence_coverage_enabled"].learnable
+    off = PilotProfile.resolve(global_values={"strategy.sequence_coverage_enabled": 0.0})
+    assert off.get("strategy.sequence_coverage_enabled") == 0.0
+
+
 @pytest.mark.parametrize(("external", "tail", "bellman"), [
     (120.0, 5.0, 115.0),
     (15.0, 1.0, 14.0),

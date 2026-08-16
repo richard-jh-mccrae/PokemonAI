@@ -131,6 +131,8 @@ DEFINITIONS = (
                         "boolean", False),
     ParameterDefinition("strategy.focus_width", "strategy_beam", 8.0, 1.0, 64.0,
                         "actions"),
+    ParameterDefinition("strategy.sequence_coverage_enabled", "strategy_beam", 1.0, 0.0, 1.0,
+                        "boolean", False),
     ParameterDefinition("terminal.enabled", "terminal_proof", 1.0, 0.0, 1.0,
                         "boolean", False),
     ParameterDefinition("terminal.max_nodes", "terminal_proof", 1024.0, 1.0, 100000.0,

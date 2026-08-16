@@ -675,3 +675,303 @@ def test_damage_setup_hint_matches_a_spread_attacker():
 
     attack = next(action for action in actions if action.identity.kind == "attack")
     assert semantic_action_key(attack) in {row.action_key for row in beam.focused}
+
+
+
+def _coverage_observation(hand_ids, *, bench_ids=()):
+    observation = _observation(hand=[
+        {"id": card_id, "serial": 90 + index, "playerIndex": 0}
+        for index, card_id in enumerate(hand_ids)])
+    observation["current"]["players"][0]["bench"] = [
+        {"id": card_id, "serial": 60 + index, "energies": []}
+        for index, card_id in enumerate(bench_ids)]
+    observation["select"]["option"] = [
+        *({"type": 7, "index": index} for index in range(len(hand_ids))),
+        {"type": 14},
+    ]
+    return observation
+
+
+def _deploy_hint(strategy_id, targets, *, deadline="immediate", conviction="high",
+                 waypoint=0):
+    return ActivatedStrategy(
+        strategy_id, "deploy", "own.bench", None, None, tuple(targets),
+        deadline, conviction, None, waypoint)
+
+
+class _BasicStats:
+    @staticmethod
+    def get(_card_id):
+        return SimpleNamespace(is_pokemon=True, stage="basic", is_supporter=False,
+                               is_energy=False)
+
+
+def _coverage_beam(hints, hand_ids, *, bench_ids=(), sequence_coverage=True,
+                   prefix_outcomes=()):
+    observation = _coverage_observation(hand_ids, bench_ids=bench_ids)
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), tuple(hints))
+    builder = StrategyBeamBuilder(
+        snapshot, stats=_BasicStats(), sequence_coverage=sequence_coverage)
+    builder.prefix_outcomes = tuple(prefix_outcomes)
+    actions = enumerate_legal_actions(observation)
+    beam = builder.build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+    plays = {action.selection[0]: semantic_action_key(action)
+             for action in actions if action.identity.kind == "play"}
+    return beam, plays, builder
+
+
+def test_one_high_need_outranks_any_number_of_weaker_needs():
+    hints = (
+        _deploy_hint("deck.primary", (101,)),
+        *(_deploy_hint(f"deck.minor_{index}", (102, 200 + index),
+                       deadline="next_turn", conviction="low")
+          for index in range(5)),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    assert [row.action_key for row in beam.focused] == [plays[0], plays[1]]
+
+
+def test_equal_primary_tier_prefers_the_line_with_more_distinct_outcomes():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_extra", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    assert [row.action_key for row in beam.focused] == [plays[1], plays[0]]
+    by_key = {row.action_key: row for row in beam.focused}
+    assert len(by_key[plays[1]].coverage) == 2
+    assert len(by_key[plays[0]].coverage) == 1
+
+
+def test_duplicate_desired_outcomes_count_once():
+    duplicated = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta_one", (102,)),
+        _deploy_hint("deck.beta_two", (102,)),
+    )
+    single = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta_one", (102,)),
+    )
+
+    left, plays, _builder = _coverage_beam(duplicated, (101, 102))
+    right, _plays, _builder = _coverage_beam(single, (101, 102))
+
+    assert [row.action_key for row in left.focused] == [
+        row.action_key for row in right.focused]
+    assert all(len(row.coverage) == 1 for row in left.focused)
+
+
+def test_renaming_and_reordering_strategy_identifiers_keeps_search_order():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_extra", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )
+    renamed = tuple(reversed((
+        _deploy_hint("zzz.renamed_1", (101,)),
+        _deploy_hint("aaa.renamed_2", (102,)),
+        _deploy_hint("mmm.renamed_3", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )))
+
+    left, _plays, _builder = _coverage_beam(hints, (101, 102))
+    right, _plays, _builder = _coverage_beam(renamed, (101, 102))
+
+    assert [row.action_key for row in left.focused] == [
+        row.action_key for row in right.focused]
+
+
+def test_general_and_deck_scope_share_one_need_set_without_precedence():
+    def resolved_beam(general_targets, deck_targets):
+        general = StrategyHint(
+            "general.deploy", "general", (),
+            (DesiredFact("deploy", "own.bench", target_card_ids=general_targets),),
+            "own.bench", "immediate", "high", "general")
+        deck = StrategyHint(
+            "deck.deploy", "deck", (),
+            (DesiredFact("deploy", "own.bench", target_card_ids=deck_targets),),
+            "own.bench", "immediate", "high", "deck")
+        observation = _coverage_observation((101, 102))
+        snapshot = activate_strategies(
+            observation, resolve_strategies((general,), (deck,)), roles=Roles({}))
+        actions = enumerate_legal_actions(observation)
+        beam = StrategyBeamBuilder(
+            snapshot, stats=_BasicStats(), sequence_coverage=True).build(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+        return [row.action_key for row in beam.focused]
+
+    assert resolved_beam((101,), (102,)) == resolved_beam((102,), (101,))
+
+
+def test_satisfied_and_impossible_outcomes_stop_contributing_coverage():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_satisfied", (102, 400)),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102), bench_ids=(400,))
+    by_key = {row.action_key: row for row in beam.focused}
+    assert len(by_key[plays[1]].coverage) == 1
+
+    observation = _coverage_observation((101, 102))
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_dead", (102, 500)),
+    ))
+    builder = StrategyBeamBuilder(
+        snapshot, stats=_BasicStats(), sequence_coverage=True)
+    builder.last_reachability["deck.beta_dead"] = "impossible"
+    actions = enumerate_legal_actions(observation)
+    beam = builder.build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+    by_key = {row.action_key: row for row in beam.focused}
+    plays = {action.selection[0]: semantic_action_key(action)
+             for action in actions if action.identity.kind == "play"}
+    assert len(by_key[plays[1]].coverage) == 1
+
+
+def test_unknown_reachability_fails_open_and_never_prunes():
+    hints = (_deploy_hint("deck.alpha", (101,)),)
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102))
+
+    statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
+    assert statuses["deck.alpha"] in {"unknown", "guaranteed"}
+    assert plays[1] in {row.action_key for row in beam.inactive}
+    assert plays[0] in {row.action_key for row in beam.focused}
+
+
+def test_extra_coverage_beyond_the_cap_cannot_reorder():
+    def order(first_extras, second_extras):
+        hints = (
+            _deploy_hint("deck.alpha", (101,)),
+            _deploy_hint("deck.beta", (102,)),
+            *(_deploy_hint(f"deck.a_extra_{index}", (101, 600 + index),
+                           deadline="next_turn", conviction="low")
+              for index in range(first_extras)),
+            *(_deploy_hint(f"deck.b_extra_{index}", (102, 700 + index),
+                           deadline="next_turn", conviction="low")
+              for index in range(second_extras)),
+        )
+        beam, _plays, _builder = _coverage_beam(hints, (101, 102))
+        return [row.action_key for row in beam.focused]
+
+    assert order(5, 8) == order(8, 5)
+
+
+def test_prefix_outcomes_stop_recounting_already_advanced_outcomes():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_extra", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )
+    reference, plays, _builder = _coverage_beam(hints, (101, 102))
+    extra_key = next(
+        key for key in
+        {row.action_key: row for row in reference.focused}[plays[1]].coverage
+        if "300" in key)
+
+    beam, plays, _builder = _coverage_beam(
+        hints, (101, 102), prefix_outcomes=(extra_key,))
+
+    by_key = {row.action_key: row for row in beam.focused}
+    assert len(by_key[plays[1]].coverage) == 1
+    assert len(by_key[plays[0]].coverage) == 1
+
+
+def test_sequence_coverage_off_keeps_the_legacy_scalar_order():
+    hints = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_extra", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )
+
+    beam, plays, _builder = _coverage_beam(hints, (101, 102), sequence_coverage=False)
+
+    assert {row.action_key for row in beam.focused} == {plays[0], plays[1]}
+    assert all(row.coverage == () for row in beam.focused)
+    assert sorted(row.action_key for row in beam.focused) == [
+        row.action_key for row in beam.focused]
+
+
+def test_combined_coverage_reports_best_tier_and_ordered_distinct_outcomes():
+    from common.demand import SequenceCoverage, combined_coverage
+
+    merged = combined_coverage((
+        SequenceCoverage((1.0, 2.0), ("deploy|a", "deploy|b")),
+        SequenceCoverage((3.0, 1.0), ("deploy|b", "evolve|c")),
+        SequenceCoverage(),
+    ))
+
+    assert merged.tier == (3.0, 1.0)
+    assert merged.outcomes == ("deploy|a", "deploy|b", "evolve|c")
+    assert combined_coverage(()).tier == (0.0, 0.0)
+
+
+def test_riolu_primary_line_with_lunatone_coverage_searches_first():
+    from common.demand import combined_coverage
+
+    riolu, riolu_evolution, lunatone = 333, 678, 500
+    hints = (
+        ActivatedStrategy(
+            "mega_lucario.develop_riolu", "evolve", "own.active", riolu, 77,
+            (riolu_evolution,), "immediate", "high", "lucario.turn", 0),
+        ActivatedStrategy(
+            "mega_lucario.establish_lunatone", "deploy", "own.bench", None, None,
+            (lunatone,), "this_turn", "medium", "lucario.engine", 0),
+    )
+    observation = _observation(hand=[
+        {"id": riolu_evolution, "serial": 90, "playerIndex": 0},
+        {"id": lunatone, "serial": 91, "playerIndex": 0},
+    ])
+    observation["current"]["players"][0]["active"] = [
+        {"id": riolu, "serial": 77, "energies": []}]
+    observation["select"]["option"] = [
+        {"type": 9, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+        {"type": 7, "index": 1},
+        {"type": 14},
+    ]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(
+                is_pokemon=True, is_energy=False, is_supporter=False,
+                stage="basic" if card_id == lunatone else "stage1",
+                evolvesFrom=None if card_id == lunatone else "Riolu")
+
+    state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
+    actions = enumerate_legal_actions(observation)
+    builder = StrategyBeamBuilder(snapshot, stats=Stats(), sequence_coverage=True)
+    beam = builder.build(state, actions)
+
+    evolve = next(action for action in actions if action.selection == (0,))
+    deploy = next(action for action in actions if action.selection == (1,))
+    # The contextual primary need is Riolu development: its line searches first.
+    assert [row.action_key for row in beam.focused] == [
+        semantic_action_key(evolve), semantic_action_key(deploy)]
+
+    # At the same primary tier, the line that also establishes Lunatone carries more
+    # distinct coverage than the line that only develops Riolu.
+    riolu_only = combined_coverage((builder.action_coverage(state, evolve),))
+    riolu_and_lunatone = combined_coverage((
+        builder.action_coverage(state, evolve),
+        builder.action_coverage(state, deploy),
+    ))
+    assert riolu_and_lunatone.tier == riolu_only.tier
+    assert len(riolu_and_lunatone.outcomes) == 2
+    assert len(riolu_only.outcomes) == 1
