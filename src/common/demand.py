@@ -185,6 +185,20 @@ class StrategyBeamBuilder:
                 "conviction": getattr(hint, "conviction", getattr(hint, "confidence", "low")),
                 "status": status,
             })
+        # A bundle advances one waypoint at a time: hints past the lowest still-live waypoint
+        # are held.  Deep search focus (solver deep_strategy) is a separate waypoint effect.
+        frontiers: dict[str, int] = {}
+        for row in rows:
+            if row["bundle_id"] is not None and row["status"] not in {
+                    "satisfied", "impossible"}:
+                bundle = str(row["bundle_id"])
+                frontiers[bundle] = min(
+                    frontiers.get(bundle, row["waypoint"]), row["waypoint"])
+        for row in rows:
+            if (row["bundle_id"] is not None
+                    and row["status"] not in {"satisfied", "impossible"}
+                    and row["waypoint"] > frontiers[str(row["bundle_id"])]):
+                row["status"] = "held"
         return tuple(rows)
 
     @staticmethod
@@ -313,7 +327,7 @@ class StrategyBeamBuilder:
         statuses = {row["strategy_id"]: row for row in self.outcome_statuses(state)}
         tiers: list[tuple[float, float, float]] = []
         for hint in self.snapshot.hints:
-            if statuses[hint.strategy_id]["status"] in {"satisfied", "impossible"}:
+            if statuses[hint.strategy_id]["status"] in {"satisfied", "impossible", "held"}:
                 continue
             probability = 0.0
             via_access = False
