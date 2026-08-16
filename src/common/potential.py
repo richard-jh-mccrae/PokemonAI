@@ -45,6 +45,8 @@ BURN_CHECKUP_DAMAGE = 20.0
 INCOMING_CONDITION_SHARE = {"asleep": 0.5, "paralyzed": 0.0, "confused": 0.5}
 OWN_CONDITION_SHARE = {"asleep": 0.75, "confused": 0.5}
 
+_UNSET = object()
+
 
 @dataclass(frozen=True)
 class UtilityScale:
@@ -258,11 +260,30 @@ class BoardPotential:
     def _defender_tool_transient(self, defender) -> dict | None:
         """Attached-tool damage reduction on the defending BODY — without it the forecast reads
         only the Pokémon card's own printed defenses and overestimates every KO."""
+        cache = self._call_cache
+        if cache is not None:
+            key = ("tool", id(defender))
+            found = cache.get(key, _UNSET)
+            if found is not _UNSET:
+                return found
         reduction = 0
         for tool in (defender.get("tools") or ()):
             stat = self._stat(tool.get("id") if isinstance(tool, dict) else tool)
             reduction += int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
-        return {"reduction": reduction} if reduction else None
+        result = {"reduction": reduction} if reduction else None
+        if cache is not None:
+            cache[key] = result
+        return result
+
+    def _condition_share(self, player, table) -> float:
+        cache = self._call_cache
+        if cache is None:
+            return _active_condition_share(player, table)
+        key = ("cond", id(player), id(table))
+        found = cache.get(key)
+        if found is None:
+            found = cache[key] = _active_condition_share(player, table)
+        return found
 
     def _attack_value(self, body, codes, defender, attacker_facts, defender_facts, *,
                       require_ready: bool = False) -> float:
@@ -353,11 +374,11 @@ class BoardPotential:
                         body, self._codes(body), defender, attacker_facts, opponent_facts)
                         for defender in defenders), default=0.0))
         own = max(max(active_values, default=0.0)
-                  * _active_condition_share(me, OWN_CONDITION_SHARE),
+                  * self._condition_share(me, OWN_CONDITION_SHARE),
                   BENCH_ATTACK_ACCESS_SHARE * max(bench_values, default=0.0))
         incoming_values = []
         if include_incoming and mine is not None:
-            incoming_active_share = _active_condition_share(opponent, INCOMING_CONDITION_SHARE)
+            incoming_active_share = self._condition_share(opponent, INCOMING_CONDITION_SHARE)
             for body in _bodies(opponent):
                 attacker_facts = self._side_facts(opponent, attacking_body=body)
                 incoming_values.append(self._attack_value(
@@ -486,7 +507,7 @@ class BoardPotential:
         defender_facts = self._side_facts(defender_side)
         attacker_active = next(
             (body for body in (attacker_side.get("active") or ()) if body), None)
-        attacker_active_share = _active_condition_share(
+        attacker_active_share = self._condition_share(
             attacker_side, INCOMING_CONDITION_SHARE)
         active_transient = self._defender_tool_transient(active)
         worst = 0.0

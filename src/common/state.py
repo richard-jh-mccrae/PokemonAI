@@ -376,7 +376,7 @@ class DecisionState:
         _feed(update, (self.root_seat, self.deck_name, self.deck_counts, self.prize_counts))
         budgets = self.budgets
         _feed(update, (budgets.supporter, budgets.manual_attach, budgets.retreat,
-                       budgets.ability, budgets.attack, budgets.stadium))
+                       budgets.attack, budgets.stadium))
         update(_belief_digest(self.belief))
         _feed(update, self.value_registry_identity)
         plan_key = hasher.hexdigest()

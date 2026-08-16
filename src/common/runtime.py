@@ -391,12 +391,12 @@ class BellmanRuntime:
         planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
         try:
-            return self._decide_with_planner(planner, request, observation)
+            return self._planner_epoch(planner, request, observation)
         except Exception:
             planner.discard_precheck()               # release the retained native session
             raise
 
-    def _decide_with_planner(self, planner, request, observation) -> RootDecision:
+    def _planner_epoch(self, planner, request, observation) -> RootDecision:
         self.last_decision_limit = planner._epoch_seconds(request)
         proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
         if proof_cached is not None:
