@@ -1,8 +1,12 @@
-"""Unfiltered Mega Starmie correction sweep for Bellman development.
+"""Unfiltered per-deck correction sweep for Bellman development.
 
 This reader never consults ``reviewed.json`` to exclude a record.  It preserves every rationale and
 reports exact/equivalent agreement separately, so later M8 adjudication can treat prose as the primary
 human ruling without erasing historical labels.
+
+``--deck`` selects which agent's corrections are swept and which ``src/agents/<deck>`` declarations
+replay them.  A sweep is only sound within one deck: a correction replayed through another deck's
+decklist is off-policy, so the deck name filters the store and names the baseline file together.
 """
 from __future__ import annotations
 
@@ -31,11 +35,18 @@ from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
 
 
-DEFAULT_OUTPUT = REPO / "docs" / "plans" / "mega-starmie-live-corpus-baseline.json"
+DEFAULT_DECK = "mega_starmie"
 
 
-def _build_runtime(max_seconds: float | None = None):
-    agent_dir = REPO / "src" / "agents" / "mega_starmie"
+def default_output(deck: str) -> Path:
+    return REPO / "docs" / "plans" / f"{deck.replace('_', '-')}-live-corpus-baseline.json"
+
+
+DEFAULT_OUTPUT = default_output(DEFAULT_DECK)
+
+
+def _build_runtime(max_seconds: float | None = None, deck_name: str = DEFAULT_DECK):
+    agent_dir = REPO / "src" / "agents" / deck_name
     spec = importlib.util.spec_from_file_location("_bellman_corpus_strategy",
                                                   agent_dir / "strategy.py")
     module = importlib.util.module_from_spec(spec)
@@ -78,8 +89,9 @@ def _episode(correction) -> int:
     return -1 if correction.episode_id is None else int(correction.episode_id)
 
 
-def _sweep_episode(corrections, max_seconds: float | None = None) -> list[dict]:
-    runtime = _build_runtime(max_seconds)
+def _sweep_episode(corrections, max_seconds: float | None = None,
+                   deck_name: str = DEFAULT_DECK) -> list[dict]:
+    runtime = _build_runtime(max_seconds, deck_name)
     rows = []
     for c in corrections:
         result = _retest(c, runtime)
@@ -123,12 +135,12 @@ def _sweep_episode(corrections, max_seconds: float | None = None) -> list[dict]:
     return rows
 
 
-def _payload(rows: list[dict]) -> dict:
+def _payload(rows: list[dict], deck_name: str = DEFAULT_DECK) -> dict:
     rows.sort(key=lambda row: (row["episode"], row["frame"]))
     contexts = Counter(str(row["context"]) for row in rows)
     return {
         "schema": 2,
-        "deck": "mega_starmie",
+        "deck": deck_name,
         "git_rev": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO,
                                             text=True).strip(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -144,9 +156,9 @@ def _payload(rows: list[dict]) -> dict:
     }
 
 
-def _write_payload(path: Path, rows: list[dict]) -> None:
+def _write_payload(path: Path, rows: list[dict], deck_name: str = DEFAULT_DECK) -> None:
     temporary = path.with_suffix(path.suffix + ".partial")
-    rendered = json.dumps(_payload(list(rows)), indent=2, ensure_ascii=False) + "\n"
+    rendered = json.dumps(_payload(list(rows), deck_name), indent=2, ensure_ascii=False) + "\n"
     temporary.write_text(rendered, encoding="utf-8")
     for attempt in range(20):
         try:
@@ -160,60 +172,67 @@ def _write_payload(path: Path, rows: list[dict]) -> None:
 
 def sweep_corrections(corrections, *, workers: int = 1,
                       checkpoint: Path | None = None,
-                      max_seconds: float | None = None) -> dict:
-    corrections = [c for c in corrections if c.agent == "mega_starmie"]
+                      max_seconds: float | None = None,
+                      deck: str = DEFAULT_DECK) -> dict:
+    corrections = [c for c in corrections if c.agent == deck]
     corrections.sort(key=lambda c: (_episode(c), _frame(c), c.id))
     # One frame per task prevents a hard episode from retaining native search graphs for every
     # later correction assigned to the same worker. It is isolation, never corpus filtering.
     groups = [[correction] for correction in corrections]
     if workers > 1:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_sweep_episode, group, max_seconds): group[0]
+            futures = {pool.submit(_sweep_episode, group, max_seconds, deck): group[0]
                        for group in groups}
             rows = []
             for completed, future in enumerate(as_completed(futures), start=1):
                 rows.extend(future.result())
                 if checkpoint is not None:
-                    _write_payload(checkpoint, rows)
+                    _write_payload(checkpoint, rows, deck)
                 correction = futures[future]
                 print(f"[{completed}/{len(groups)}] {_episode(correction)}-{_frame(correction)}",
                       flush=True)
     else:
         rows = []
         for completed, group in enumerate(groups, start=1):
-            rows.extend(_sweep_episode(group, max_seconds))
+            rows.extend(_sweep_episode(group, max_seconds, deck))
             if checkpoint is not None:
-                _write_payload(checkpoint, rows)
+                _write_payload(checkpoint, rows, deck)
             print(f"[{completed}/{len(groups)}] {_episode(group[0])}-{_frame(group[0])}", flush=True)
 
-    return _payload(rows)
+    return _payload(rows, deck)
 
 
 def sweep(*, store, limit: int | None = None, workers: int = 1,
-          checkpoint: Path | None = None, max_seconds: float | None = None) -> dict:
-    corrections = [c for c in load_corrections(store) if c.agent == "mega_starmie"]
+          checkpoint: Path | None = None, max_seconds: float | None = None,
+          deck: str = DEFAULT_DECK) -> dict:
+    corrections = [c for c in load_corrections(store) if c.agent == deck]
     if limit is not None:
         corrections = corrections[:limit]
     return sweep_corrections(corrections, workers=workers, checkpoint=checkpoint,
-                             max_seconds=max_seconds)
+                             max_seconds=max_seconds, deck=deck)
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--store", default=str(REPO / "data" / "corrections"))
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--deck", default=DEFAULT_DECK)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--max-seconds", type=float)
     args = parser.parse_args(argv)
+    if args.output is None:
+        args.output = default_output(args.deck)
     checkpoint = args.output if args.limit is None else None
     payload = sweep(store=args.store, limit=args.limit, workers=max(1, args.workers),
-                    checkpoint=checkpoint, max_seconds=args.max_seconds)
+                    checkpoint=checkpoint, max_seconds=args.max_seconds, deck=args.deck)
     rendered = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     if args.limit is None:
         args.output.write_text(rendered, encoding="utf-8")
     else:
-        print(rendered)
+        # Option labels carry card-text glyphs (arrows, accents) that a cp1252 console cannot
+        # encode; write the bytes rather than let `print` pick the console codec.
+        sys.stdout.buffer.write(rendered.encode("utf-8"))
     return 0
 
 

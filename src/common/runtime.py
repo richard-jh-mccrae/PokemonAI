@@ -11,6 +11,7 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
+from common.attack_locks import fold_attack_locks
 from common.budget_prototype import DecisionClock
 from common.cards import CardFunctions
 from common.card_worth import role_value
@@ -144,6 +145,10 @@ class BellmanRuntime:
         self._fallback_scope = None
         self._fallback_effect = None
         self._fallback_pending = False
+        # Match-scoped: `logs` is a DELTA, so a self-lock spent two selections ago is no longer in
+        # the observation. Held on the runtime rather than in `make_agent` so replay and test
+        # callers of `decide` see the same board state the deployed agent does.
+        self._attack_locks: dict = {}
 
     @staticmethod
     def _player(observation, seat):
@@ -394,7 +399,15 @@ class BellmanRuntime:
             self._proof_id = ""
             self.last_read = Read()
             self._strategy_snapshot = None
+            self._attack_locks = {}
             return self._pregame(observation)
+        # Folded before any early return: `logs` is a delta, so a selection answered by the
+        # Strategy fallback still has to contribute its attack rows or the ledger loses them.
+        self._attack_locks = fold_attack_locks(
+            self._attack_locks, observation.get("logs"), stats=self.stats,
+            turn=int(current.get("turn", 0)))
+        if self._attack_locks:
+            observation["attack_locks"] = self._attack_locks
         scope = (int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
         select = observation.get("select") or {}
         context = int(select.get("context", -1))

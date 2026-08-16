@@ -6,6 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
+from .attack_locks import fold_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction
 from .commutativity import action_footprint
@@ -307,6 +308,15 @@ class NativeCgTransitionProvider:
             observation["own_prizes"] = parent.obs["own_prizes"]
         if "known_top" in parent.obs:
             observation["known_top"] = parent.obs["known_top"]
+        # A self-lock the SEARCH just spent is only visible in this step's log, so carry the
+        # parent's locks forward and fold this successor's own ATTACK entries onto them. Written
+        # only when non-empty: the key participates in the state identity, and an empty map present
+        # here would not match the absent key on the live observation the next turn arrives as.
+        locks = fold_attack_locks(
+            parent.obs.get("attack_locks"), observation.get("logs"), stats=self.stats,
+            turn=int((observation.get("current") or {}).get("turn", 0)))
+        if locks:
+            observation["attack_locks"] = locks
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
