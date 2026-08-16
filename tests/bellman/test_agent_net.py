@@ -98,6 +98,30 @@ def test_a_planning_crash_takes_the_maximum_fetch_to_hand(monkeypatch):
     assert agent(observation) == [0, 1]
 
 
+def test_a_planning_crash_respects_a_zero_maximum_fetch(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    observation = _menu(
+        [engine_opt(type=3, area=12, index=0)],
+        min_count=0, max_count=0, context=7)
+
+    assert agent(observation) == []
+
+
+def test_a_planning_crash_fills_a_multi_card_field_placement(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    observation = _menu(
+        [engine_opt(type=3, area=12, index=index) for index in range(3)],
+        min_count=2, max_count=3, context=5)
+
+    assert agent(observation) == [0, 1]
+
+
 def test_a_planning_crash_places_damage_on_an_available_ko(monkeypatch):
     def boom(_observation):
         raise RuntimeError("search deadline")

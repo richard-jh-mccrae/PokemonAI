@@ -572,9 +572,9 @@ def _last_resort_selection(observation: dict) -> list[int]:
     if not options:
         return []
     if context == _TO_HAND:
-        return list(range(max(1, maximum)))
+        return list(range(maximum))
     if context in {_TO_BENCH, _TO_FIELD}:
-        return [0]
+        return list(range(max(minimum, min(1, maximum))))
     if context in {_DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY}:
         players = ((observation.get("current") or {}).get("players") or ())
         counters = max(1, int(select.get("remainDamageCounter") or 1))

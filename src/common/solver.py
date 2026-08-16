@@ -823,7 +823,7 @@ class ProductionSolver(ReferenceSolver):
         for action in actions:
             if action.identity == incumbent_action.identity:
                 continue
-            bound = self._action_bounds.get((state.semantic_key, action.identity))
+            bound = self._action_bounds.get(action.identity)
             if bound is None:
                 candidate = self._candidate_bank.checkpoint.get(action.identity)
                 if (candidate is None or self._candidate_bank.checkpoint_tiers.get(
@@ -885,7 +885,7 @@ class ProductionSolver(ReferenceSolver):
             focused,
             key=lambda pair: (focus[semantic_action_key(pair[0])], str(pair[0].identity)),
         )
-        bound = self._action_bounds.get((state.semantic_key, preferred[0].identity))
+        bound = self._action_bounds.get(preferred[0].identity)
         upper = float(bound.get("q_upper", math.inf)) if bound else math.inf
         return selected if round(result.value, VALUE_TIE_DECIMALS) > round(
             upper, VALUE_TIE_DECIMALS) else preferred
@@ -1711,8 +1711,10 @@ class ProductionSolver(ReferenceSolver):
             challenger_enabled = self.profile.get("search.challenger_enabled") >= 0.5
             probe_share = (self.profile.get("search.challenger_time_share")
                            if challenger_enabled else 0.4)
-            probe_hard_deadline = probe_started + max(
-                0.0, self._hard_deadline - probe_started) * probe_share
+            probe_hard_deadline = min(
+                self._hard_deadline,
+                probe_started + max(
+                    0.0, self._hard_deadline - self._search_started) * probe_share)
             remaining = [index for index, pair in enumerate(results_list) if pair is None]
             finite_before_probe = tuple(
                 pair for pair in results_list

@@ -581,8 +581,8 @@ def test_stability_stop_requires_two_full_checkpoints_patience_and_closed_bounds
         chosen, Evaluation(1.0, Ledger(), False, execution_complete=True))
     solver._candidate_bank.publish()
     solver._action_bounds = {
-        (root.semantic_key, chosen.identity): {"q_upper": 1.0},
-        (root.semantic_key, challenger.identity): {"q_upper": 0.5},
+        chosen.identity: {"q_upper": 1.0},
+        challenger.identity: {"q_upper": 0.5},
     }
 
     assert not solver._stable_checkpoint(root, (chosen, challenger), 0, now=0.0)
@@ -634,7 +634,7 @@ def test_unresolved_challenger_replaces_strategy_only_after_its_lower_bound_clos
     }
     solver._protected_bundle_diagnostics = {"protected": ("test.bundle",)}
     solver._action_bundles = lambda action: ("test.bundle",) if action == focused else ()
-    solver._action_bounds[(state.semantic_key, focused.identity)] = {"q_upper": 5.0}
+    solver._action_bounds[focused.identity] = {"q_upper": 5.0}
     focus_result = Evaluation(1.0, Ledger(), False)
 
     preferred = solver._prefer_unresolved_strategy(
