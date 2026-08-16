@@ -70,11 +70,16 @@ def _families(potential) -> dict[str, float]:
 class RefreshEvaluator:
     """Exact draw Odds over Bellman hand value minus surrendered visible options."""
 
-    def __init__(self, registry, family_evaluator, *, effects=None, stats=None, **_ignored):
+    def __init__(self, registry, family_evaluator, *, effects=None, stats=None,
+                 opponent_hand_share=None, **_ignored):
         self.registry = registry
         self.family_evaluator = family_evaluator
         self.effects = effects
         self.stats = stats
+        # One share for both pricing paths: default to whatever the board potential runs with.
+        self.opponent_hand_share = (
+            max(0.0, float(opponent_hand_share)) if opponent_hand_share is not None
+            else float(getattr(family_evaluator, "opponent_hand_share", 0.0)))
         self.demand = DemandModel(registry, family_evaluator, effects=effects, stats=stats)
 
     def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
@@ -105,6 +110,7 @@ class RefreshEvaluator:
             available_targets=Counter(dict(state.deck_counts)),
             observation=observation, seat=state.root_seat)
         weighted_draw = 0.0
+        weighted_opponent = 0.0
         branch_probability = 1.0 / len(node.draws)
         for own_draw, opponent_draw in node.draws:
             draw_mean, draw_deviation = self._draw_value_moments(
@@ -123,6 +129,7 @@ class RefreshEvaluator:
                 - KNOWN_CARD_FLOOR * int(opponent_draw))
                               if node.opponent_shuffles else 0.0)
             weighted_draw += branch_probability * draw_mean
+            weighted_opponent += branch_probability * opponent_value * self.opponent_hand_share
             branch_rows.append({
                 "own_draw": int(own_draw), "opponent_draw": int(opponent_draw),
                 "expected_hand_value": draw_mean,
@@ -137,7 +144,10 @@ class RefreshEvaluator:
         costs = {}
         if held_cost > 0.0:
             costs["refresh_held_options"] = held_cost
-        for label, value in (("refresh_expected_hand", weighted_draw),):
+        # The opponent swing is ADR-0060's certain strip/gift value; dropping it priced Judge,
+        # Unfair Stamp, and Harlequin as pure self-harm exactly when they are strongest.
+        for label, value in (("refresh_expected_hand", weighted_draw),
+                             ("refresh_opponent_hand", weighted_opponent)):
             if value > 0.0:
                 benefits[label] = value
             elif value < 0.0:

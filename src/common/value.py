@@ -83,6 +83,7 @@ FAMILY_OWNERS = {
     "hand": ("accessible future-turn resources",),
     "hand_demand": ("visible missing board jobs", "prospective hand access"),
     "opponent_roles": ("scouted opponent role pressure",),
+    "opponent_hand": ("opponent accessible resources",),
 }
 
 
