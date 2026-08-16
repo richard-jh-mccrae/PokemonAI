@@ -466,7 +466,9 @@ class BellmanRuntime:
             actions = enumerate_legal_actions(observation)
             builder = StrategyBeamBuilder(
                 snapshot, effects=self.effects, stats=self.stats, registry=self.registry,
-                width=int(self.pilot_profile.get("strategy.focus_width")))
+                width=int(self.pilot_profile.get("strategy.focus_width")),
+                information_partition=(self.pilot_profile.get(
+                    "strategy.information_partition_enabled") >= 0.5))
             ranked = builder.rank_legal(state, actions)
             focused = builder.last_beam.focused if builder.last_beam is not None else ()
             if not focused:

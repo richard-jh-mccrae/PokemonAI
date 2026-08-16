@@ -113,6 +113,16 @@ def test_sequence_coverage_ships_on_with_a_kill_switch():
     assert off.get("strategy.sequence_coverage_enabled") == 0.0
 
 
+def test_information_partition_ships_on_with_a_kill_switch():
+    definitions = {row.name: row for row in DEFINITIONS}
+
+    assert definitions["strategy.information_partition_enabled"].default == 1.0
+    assert not definitions["strategy.information_partition_enabled"].learnable
+    off = PilotProfile.resolve(global_values={
+        "strategy.information_partition_enabled": 0.0})
+    assert off.get("strategy.information_partition_enabled") == 0.0
+
+
 @pytest.mark.parametrize(("external", "tail", "bellman"), [
     (120.0, 5.0, 115.0),
     (15.0, 1.0, 14.0),

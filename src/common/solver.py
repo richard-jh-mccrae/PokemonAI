@@ -592,7 +592,9 @@ class ProductionSolver(ReferenceSolver):
                 registry=self.oracle.registry,
                 width=self.profile.get("strategy.focus_width"),
                 sequence_coverage=(
-                    self.profile.get("strategy.sequence_coverage_enabled") >= 0.5))
+                    self.profile.get("strategy.sequence_coverage_enabled") >= 0.5),
+                information_partition=(
+                    self.profile.get("strategy.information_partition_enabled") >= 0.5))
         self._completed_rounds = 0
         self._bound_prunes.clear()
         self._action_bounds.clear()

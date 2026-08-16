@@ -2100,6 +2100,54 @@ def test_sequence_coverage_changes_no_value_bound_or_exhaustive_policy(monkeypat
     assert on_bounds == off_bounds
 
 
+def test_information_partition_changes_no_value_bound_or_exhaustive_policy(monkeypatch):
+    root = _state("partition-ab-root")
+    weak = _state("partition-ab-weak", board=0.2)
+    strong = _state("partition-ab-strong", board=0.7)
+    first, second, end = _action("alpha"), _action("beta", 1), _action("end", 2)
+
+    class FocusWeak:
+        def __init__(self, *_args, **_kwargs):
+            self.prefix_outcomes = ()
+
+        def build(self, _state, _actions, ranking=None):
+            return StrategyBeam(
+                (ActionFocus(semantic_action_key(first), "alpha", (), 1.0, "strategy_hint",
+                             ("deploy|77|10||0",)),),
+                (ActionFocus(semantic_action_key(end), "end", (), 0.0, "safety"),),
+                (), (), (), 0.0, False,
+            )
+
+    monkeypatch.setattr(solver_module, "StrategyBeamBuilder", FocusWeak)
+    graph = Graph(
+        {"partition-ab-root": (first, second, end),
+         "partition-ab-weak": (end,), "partition-ab-strong": (end,)},
+        {("partition-ab-root", "alpha"): Deterministic(weak),
+         ("partition-ab-root", "beta"): Deterministic(strong)},
+    )
+    limits = ProductionLimits(max_nodes=50, root_probe_nodes=50, root_refinement_width=3)
+
+    def run(enabled):
+        profile = PilotProfile.resolve(global_values={
+            "strategy.information_partition_enabled": enabled})
+        solver = ProductionSolver(
+            graph, _oracle(), limits=limits, profile=profile, strategy_snapshot=object())
+        decision = solver.decide(root)
+        bounds = {
+            row["action"]: (row.get("q_lower"), row.get("q_upper"), row.get("complete"))
+            for row in decision.diagnostics["production"]["action_bounds"]
+            if "action" in row}
+        return decision, bounds
+
+    on_decision, on_bounds = run(1.0)
+    off_decision, off_bounds = run(0.0)
+
+    assert on_decision.complete and off_decision.complete
+    assert on_decision.action == off_decision.action == second.identity
+    assert on_decision.value == off_decision.value
+    assert on_bounds == off_bounds
+
+
 def test_harvest_hands_the_beam_the_prefix_outcomes_already_advanced(monkeypatch):
     root, middle = _state("prefix-root"), _state("prefix-middle")
     start, follow, end = _action("start"), _action("follow"), _action("end", 1)

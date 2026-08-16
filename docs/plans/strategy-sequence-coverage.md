@@ -47,6 +47,17 @@ high-urgency outcome. Bellman's value remains the final chooser.
 - The runtime effect-safe timeout fallback keeps legacy ordering: its contract was frozen by this
   design's non-goals, and any change to it must land as its own measured decision.
 
+## Information leads by rule
+
+A live free peek is not more urgent, believed, or likely than a commitment — it is cheaper and
+reversible, a sequencing property no ladder rung can express: an honest hypergeometric read never
+reaches 1.0 on a dig, so a guaranteed high/high hint always outscores it. `build` therefore
+partitions the focused sort: rows matching a `low_cost_information_access` hint form the leading
+class, and the full lexicographic rank applies unchanged inside each class. Liveness is inherited
+from the access matcher, which already scores dead peeks, costed searches, and supporters at 0.0.
+`strategy.information_partition_enabled` (default on, not learnable) is the kill switch, and the
+runtime timeout fallback deliberately receives the same flag so its pick agrees with the rule.
+
 ## Validation
 
 Contracts live in `tests/strategy/test_strategies.py` and `tests/bellman/test_m3_solver.py`.

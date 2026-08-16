@@ -109,13 +109,14 @@ class StrategyBeamBuilder:
     _CONVICTION = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
     def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8,
-                 sequence_coverage=False):
+                 sequence_coverage=False, information_partition=False):
         self.snapshot = snapshot
         self.effects = effects
         self.stats = stats
         self.registry = registry
         self.width = max(1, int(width))
         self.sequence_coverage = bool(sequence_coverage)
+        self.information_partition = bool(information_partition)
         #: Outcome identities the searched prefix already advanced; they stop adding coverage.
         self.prefix_outcomes: tuple[str, ...] = ()
         self.last_odds: dict[str, float] = {}
@@ -443,8 +444,12 @@ class StrategyBeamBuilder:
             hint.strategy_id for hint in self.snapshot.hints
             if hint.kind == "low_cost_information_access"
         }
+        # Free information is cheaper and reversible, not preferred: a sequencing class
+        # ABOVE the ladder, never a rung inside it.  Liveness is the access matcher's.
         focused = tuple(sorted(
             focused, key=lambda row: (
+                0 if (self.information_partition
+                      and information_ids.intersection(row.path_ids)) else 1,
                 tuple(-value for value in ranks[row.action_key]),
                 (0 if row.family == "evolve" else
                  1 if information_ids.intersection(row.path_ids) else
