@@ -1,6 +1,7 @@
 """Serializable strategy declarations that form the first Bellman search beam."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
@@ -8,6 +9,7 @@ import re
 
 from common.damage import compute_active_damage
 from common.energy import payment_fraction, unmet_cost_slots
+from common.state import _visible_own_ids
 
 _SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
@@ -230,8 +232,47 @@ def _knocks_out(attacker_body: dict, defender_body: dict, stats) -> bool:
     return False
 
 
+def _zone_card_ids(zone) -> tuple[int, ...]:
+    return tuple(int(card["id"]) for card in zone or () if card and card.get("id") is not None)
+
+
+def _side_bodies(player: dict) -> tuple[dict, ...]:
+    return tuple(body for body in (
+        tuple(player.get("active") or ()) + tuple(player.get("bench") or ())) if body)
+
+
+def _hand_count(player: dict) -> int:
+    hand = player.get("hand")
+    if isinstance(hand, (list, tuple)):
+        return len(hand)
+    return int(player.get("handCount", 0) or 0)
+
+
+def _special_energy_ids(bodies, stats) -> tuple[int, ...]:
+    """Attached Energy cards beyond Basic — the hint names the id; the engine prices the text."""
+    if stats is None:
+        return ()
+    ids = []
+    for body in bodies:
+        for card in body.get("energyCards") or ():
+            if not card or card.get("id") is None:
+                continue
+            stat = stats.get(int(card["id"]))
+            name = str(getattr(stat, "name", "") or "")
+            if stat is not None and getattr(stat, "is_energy", False) \
+                    and not name.startswith("Basic"):
+                ids.append(int(card["id"]))
+    return tuple(sorted(set(ids)))
+
+
+def _tool_ids(bodies) -> tuple[int, ...]:
+    return tuple(sorted(set(
+        int(card["id"]) for body in bodies for card in body.get("tools") or ()
+        if card and card.get("id") is not None)))
+
+
 def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
-                   opponent_role_worth=None) -> dict:
+                   opponent_role_worth=None, deck=None) -> dict:
     current = observation.get("current") or {}
     seat = int(current.get("yourIndex", 0))
     player = _player(observation, seat)
@@ -315,6 +356,66 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
         and int(getattr(stats.get(int(body.get("id", 0))), "prize_value", 1)) > 1
         for body in opponent_bench
     ) if stats is not None else 0
+    # --- The public census: counts and contents on both sides, so a condition can read the
+    # --- same board Bellman prices. Opponent per-card facts mirror the own.card family.
+    opponent_active = _active_body(opponent)
+    opponent_active_id = (int(opponent_active["id"])
+                          if opponent_active.get("id") is not None else None)
+    own_bodies = _side_bodies(player)
+    opponent_bodies = _side_bodies(opponent)
+    facts.update({
+        "own.deck.count": int(player.get("deckCount", 0) or 0),
+        "opponent.deck.count": int(opponent.get("deckCount", 0) or 0),
+        "own.hand.count": _hand_count(player),
+        "opponent.hand.count": _hand_count(opponent),
+        "own.prizes.remaining": len(player.get("prize") or ()),
+        "opponent.prizes.remaining": len(opponent.get("prize") or ()),
+        "own.discard.card_ids": _zone_card_ids(player.get("discard")),
+        "opponent.discard.card_ids": _zone_card_ids(opponent.get("discard")),
+        "own.discard.basic_energy_count": (sum(
+            1 for card_id in _zone_card_ids(player.get("discard"))
+            if getattr(stats.get(card_id), "is_energy", False)
+            and str(getattr(stats.get(card_id), "name", "") or "").startswith("Basic")
+        ) if stats is not None else 0),
+        # Behind on prizes, as the cards gate it: MORE prize cards remaining than the opponent.
+        "own.prizes.more_remaining_than_opponent": (
+            len(player.get("prize") or ()) > len(opponent.get("prize") or ())),
+        "opponent.active.card_id": opponent_active_id,
+        "opponent.active.energy_count": len(opponent_active.get("energies") or ()),
+        "opponent.active.hp": int(opponent_active.get("hp", 0) or 0),
+        "opponent.active.is_role_target": (
+            float(opponent_role_worth.get(opponent_active_id, 0.0)) > 0.0
+            if opponent_active_id is not None else False),
+        "own.energy_in_play": sum(len(body.get("energies") or ()) for body in own_bodies),
+        "opponent.energy_in_play": sum(
+            len(body.get("energies") or ()) for body in opponent_bodies),
+        "own.active.energy_card_ids": _zone_card_ids(active.get("energyCards")),
+        "opponent.active.energy_card_ids": _zone_card_ids(
+            opponent_active.get("energyCards")),
+        "own.active.tool_card_ids": _zone_card_ids(active.get("tools")),
+        "opponent.active.tool_card_ids": _zone_card_ids(opponent_active.get("tools")),
+        "own.tools.in_play": _tool_ids(own_bodies),
+        "opponent.tools.in_play": _tool_ids(opponent_bodies),
+        "own.special_energy_in_play": _special_energy_ids(own_bodies, stats),
+        "opponent.special_energy_in_play": _special_energy_ids(opponent_bodies, stats),
+    })
+    for body in opponent_bodies:
+        prefix = f"opponent.card.{int(body.get('id', 0))}"
+        facts[prefix + ".in_play"] = True
+        facts[prefix + ".energy_count"] = max(
+            int(facts.get(prefix + ".energy_count", 0)), len(body.get("energies") or ()))
+    # Our own hidden zones, exact once own_prizes records the first search's split. Absent
+    # without a decklist, so a condition distinguishes "empty" from "unknown" via `missing`.
+    if deck:
+        remaining = Counter(int(value) for value in deck)
+        remaining.subtract(_visible_own_ids(observation, seat))
+        prizes = Counter({int(card_id): int(count) for card_id, count in
+                          (observation.get("own_prizes") or {}).items()})
+        remaining.subtract(prizes)
+        facts["own.deck.card_ids"] = tuple(sorted(
+            card_id for card_id, count in remaining.items() if count > 0))
+        facts["own.prizes.card_ids"] = tuple(sorted(
+            card_id for card_id, count in prizes.items() if count > 0))
     ko_window = bool(observation.get("strategyPokemonKoWindow"))
     if not ko_window:
         try:
@@ -427,13 +528,14 @@ def _condition_matches(condition: ActivationCondition, facts: dict) -> bool:
 
 
 def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, roles,
-                        stats=None, effects=None, opponent_role_worth=None) -> StrategySnapshot:
+                        stats=None, effects=None, opponent_role_worth=None,
+                        deck=None) -> StrategySnapshot:
     current = observation.get("current") or {}
     turn = int(current.get("turn", 0))
     seat = int(current.get("yourIndex", 0))
     facts = _visible_facts(
         observation, roles=roles, stats=stats, effects=effects,
-        opponent_role_worth=opponent_role_worth)
+        opponent_role_worth=opponent_role_worth, deck=deck)
     active_rows = tuple(
         row for row in resolved.effective
         if all(_condition_matches(condition, facts) for condition in row.conditions)
@@ -587,6 +689,19 @@ GENERAL_STRATEGIES = (
         "shared-general",
     ),
     StrategyHint(
+        # The Read's role worth marks which Benched opponent body the matchup turns on. Only
+        # attacks that actually reach the Bench are credited, so a deck with no bench reach
+        # carries this hint inert.
+        "general.press_the_scouted_role_target",
+        "general",
+        (ActivationCondition("opponent.bench.role_target_count", "gt", 0),),
+        (DesiredFact("damage_setup", "opponent.bench.highest_role"),),
+        "opponent.bench.highest_role",
+        "this_turn",
+        "medium",
+        "shared-general",
+    ),
+    StrategyHint(
         # A this-turn damage boost pays off only if the boosted attack is still ahead of it in
         # the same epoch; schedule it early so search reaches that attack before the caps.
         "general.boost_the_committed_attack",
@@ -608,6 +723,54 @@ def general_card_strategies(deck, roles, functions, stats,
         card_roles = frozenset(roles.get(card_id, ()))
         tags = frozenset(functions.tags(card_id)) if functions is not None else frozenset()
         recipient = f"own.body.card:{card_id}:first"
+        stat = stats.get(card_id) if stats is not None else None
+        clauses = tuple(effects.clauses(card_id)) if effects is not None else ()
+        is_trainer = (stat is not None and not getattr(stat, "is_pokemon", False)
+                      and not getattr(stat, "is_energy", False))
+        if is_trainer:
+            # A gust converts only while the scouted Bench holds a body worth dragging out.
+            if any(clause.get("kind") == "gust" for clause in clauses):
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.gust_the_role_target", "general",
+                    (ActivationCondition("opponent.bench.role_target_count", "gt", 0),),
+                    (DesiredFact("play_card", "opponent.bench.highest_role",
+                                 target_card_ids=(card_id,)),),
+                    "opponent.bench.highest_role", "this_turn", "medium",
+                    "shared-card-role"))
+            # A card usable only in the turn after a loss (Unfair Stamp) is taken now or lost.
+            if any(clause.get("condition") == "pokemon_ko_last_turn" for clause in clauses):
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.play_in_the_ko_window", "general",
+                    (ActivationCondition("turn.pokemon_ko_window", "eq", True),),
+                    (DesiredFact("play_card", "own.active", target_card_ids=(card_id,)),),
+                    "own.active", "immediate", "medium", "shared-card-role"))
+            # An acceleration trainer fires under the conditions its own clause declares:
+            # Rosa's Encouragement wants the prize deficit AND Basic Energy in the discard.
+            # WHICH body receives the Energy stays Bellman's pick.
+            accel = next((clause for clause in clauses
+                          if clause.get("kind") == "accel"), None)
+            if accel is not None:
+                conditions = []
+                if accel.get("source") == "discard":
+                    conditions.append(ActivationCondition(
+                        "own.discard.basic_energy_count", "gt", 0))
+                if accel.get("condition") == "more_prizes_remaining_than_opp":
+                    conditions.append(ActivationCondition(
+                        "own.prizes.more_remaining_than_opponent", "eq", True))
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.accelerate_energy", "general",
+                    tuple(conditions),
+                    (DesiredFact("play_card", "own.active", target_card_ids=(card_id,)),),
+                    "own.active", "this_turn", "medium", "shared-card-role"))
+            # Denial is live only while their board holds Energy to take. WHICH body loses
+            # it stays Bellman's pick — this only puts the card in the searched set.
+            if "energy_denial" in tags:
+                hints.append(StrategyHint(
+                    f"general.card.{card_id}.deny_the_energy", "general",
+                    (ActivationCondition("opponent.energy_in_play", "gt", 0),),
+                    (DesiredFact("play_card", "own.active", target_card_ids=(card_id,)),),
+                    "own.active", "this_turn", "medium", "shared-card-role"))
+            continue
         if "item_locker" in card_roles:
             hints.append(StrategyHint(
                 f"general.card.{card_id}.item_lock", "general",

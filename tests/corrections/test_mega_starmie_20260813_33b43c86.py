@@ -20,9 +20,9 @@ def test_f20_collects_pokegear_information_before_attaching():
     # records which needs that play serves, and the play now serves two: a deck search reaches a
     # card that reaches an Evolution, so `_chain_reach` credits the evolve demand as well. Both
     # entries are true of the same unchanged move.
-    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
-        "general.evolve_active_attacker",
-        "general.low_cost_information_access_before_commitment")
+    assert {"general.evolve_active_attacker",
+            "general.low_cost_information_access_before_commitment"} <= set(
+        decision.diagnostics["strategy_beam"].focused[0].path_ids)
 
 
 def test_f21_does_not_spend_a_dead_setup_fetch():

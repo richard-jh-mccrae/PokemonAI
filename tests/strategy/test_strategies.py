@@ -1607,6 +1607,85 @@ def test_a_body_hp_fraction_reports_the_most_threatened_copy():
     assert facts[f"own.card.{drakloak}.hp_fraction"] == pytest.approx(20 / 90)
 
 
+def test_the_board_census_reports_both_sides_zones_and_attachments():
+    """Every count and contents fact a condition can read: decks, hands, prizes, discards,
+    the opponent's Active, energy and tool attachments, and our exact hidden zones once
+    own_prizes records the first search's split."""
+    from types import SimpleNamespace
+
+    from common.strategy import Roles
+    from common.strategy.strategies import _visible_facts
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            if card_id == 17:
+                return SimpleNamespace(is_energy=True, name="Ignition Energy")
+            if card_id == 3:
+                return SimpleNamespace(is_energy=True, name="Basic {W} Energy")
+            if card_id == 6:
+                return SimpleNamespace(is_energy=True, name="Basic {F} Energy")
+            return SimpleNamespace(is_energy=False, name="Pokemon", prize_value=1)
+
+    observation = {
+        "current": {"turn": 4, "yourIndex": 0, "players": [
+            {"deckCount": 30, "handCount": 4, "hand": [{"id": 1121}, {"id": 6}],
+             "prize": [None] * 5, "discard": [{"id": 6}, {"id": 675}],
+             "benchMax": 5,
+             "active": [{"id": 678, "serial": 1, "hp": 340, "maxHp": 340,
+                         "energies": [6], "energyCards": [{"id": 6}],
+                         "tools": [{"id": 1174}]}],
+             "bench": [{"id": 676, "serial": 2, "hp": 110, "maxHp": 110,
+                        "energies": []}]},
+            {"deckCount": 28, "handCount": 7, "hand": None,
+             "prize": [None] * 6, "discard": [{"id": 1120}],
+             "active": [{"id": 1031, "serial": 9, "hp": 330, "maxHp": 330,
+                         "energies": [17, 17, 17], "energyCards": [{"id": 17}],
+                         "tools": []}],
+             "bench": [{"id": 666, "serial": 10, "hp": 160, "maxHp": 160,
+                        "energies": [3]}]},
+        ]},
+        "select": {"context": 0, "option": []},
+        "own_prizes": {"678": 1, "6": 2},
+    }
+    deck = [678] * 3 + [676] * 3 + [675] * 2 + [6] * 11 + [1121] * 4 + [1174] * 2 + [1120] * 4
+
+    facts = _visible_facts(
+        observation, roles=Roles(), stats=Stats(),
+        opponent_role_worth={1031: 5.0}, deck=deck)
+
+    assert facts["own.deck.count"] == 30
+    assert facts["opponent.deck.count"] == 28
+    assert facts["own.hand.count"] == 2          # the visible hand, not the stale handCount
+    assert facts["opponent.hand.count"] == 7
+    assert facts["own.prizes.remaining"] == 5
+    assert facts["opponent.prizes.remaining"] == 6
+    assert facts["own.discard.card_ids"] == (6, 675)
+    assert facts["opponent.discard.card_ids"] == (1120,)
+    assert facts["own.discard.basic_energy_count"] == 1
+    assert facts["own.prizes.more_remaining_than_opponent"] is False
+    assert facts["opponent.active.card_id"] == 1031
+    assert facts["opponent.active.energy_count"] == 3
+    assert facts["opponent.active.hp"] == 330
+    assert facts["opponent.active.is_role_target"] is True
+    assert facts["own.energy_in_play"] == 1
+    assert facts["opponent.energy_in_play"] == 4
+    assert facts["own.active.energy_card_ids"] == (6,)
+    assert facts["opponent.active.energy_card_ids"] == (17,)
+    assert facts["own.active.tool_card_ids"] == (1174,)
+    assert facts["opponent.active.tool_card_ids"] == ()
+    assert facts["own.tools.in_play"] == (1174,)
+    assert facts["opponent.special_energy_in_play"] == (17,)
+    assert facts["own.special_energy_in_play"] == ()
+    assert facts["opponent.card.1031.in_play"] is True
+    assert facts["opponent.card.1031.energy_count"] == 3
+    assert facts["opponent.card.666.energy_count"] == 1
+    # deck = 60 total; visible: hand 2 + discard 2 + board 2 bodies + 1 energy card + 1 tool;
+    # prizes: one 678 and two 6. Remaining ids still in the deck:
+    assert 1120 in facts["own.deck.card_ids"]
+    assert facts["own.prizes.card_ids"] == (6, 678)
+
+
 def test_the_parameterised_selectors_are_admitted_but_still_shape_checked():
     """A card id is the deck's to name, so these families cannot be enumerated. Their shape is
     still closed: a misspelt suffix is rejected exactly like a misspelt fixed selector."""

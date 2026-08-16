@@ -41,8 +41,11 @@ def test_c7fd_searches_cheap_information_then_bellman_attacks():
     decision = runtime().decide(ROWS["c7fd0670fb3e"].obs)
 
     assert decision.chosen in {(3,), (4,)}
-    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
-        "general.low_cost_information_access_before_commitment",)
+    # The ruling is that the free look LEADS and is credited to the information hint. Exact
+    # single-hint credit was an artifact of a two-hint deck: the tutor hints added later also
+    # ride the same look through access odds, without displacing it from the front.
+    assert "general.low_cost_information_access_before_commitment" in (
+        decision.diagnostics["strategy_beam"].focused[0].path_ids)
     assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][
         "root_action"].startswith("ActionIdentity(kind='play'")
 

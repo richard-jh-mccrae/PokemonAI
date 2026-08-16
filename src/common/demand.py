@@ -553,9 +553,13 @@ class StrategyBeamBuilder:
             elif (action.identity.kind == "card" and source_id is not None
                   and source_id in hint.target_card_ids):
                 probability = 1.0
-            elif action.identity.kind in {"play", "ability"} and not bool(
+            # A play_card hint names a card to PLAY; it fires when that card is in hand and
+            # must not also ride every look that might find it — the information hint already
+            # leads those looks, and the double credit reordered adjudicated beams.
+            elif (hint.kind != "play_card"
+                  and action.identity.kind in {"play", "ability"} and not bool(
                     getattr(source_stat, "is_supporter", False)
-                    and (state.obs.get("current") or {}).get("supporterPlayed")):
+                    and (state.obs.get("current") or {}).get("supporterPlayed"))):
                 probability = self._access_odds(state, action, hint)
                 via_access = True
             if probability <= 0.0:

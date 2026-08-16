@@ -290,9 +290,11 @@ class BellmanRuntime:
         self._strategy_previous_bodies = serials
         if self._strategy_ko_window_turn == turn:
             observation["strategyPokemonKoWindow"] = True
+        # Default-on: card facts mint their own hints for every deck; a deck opts OUT, not in.
+        # Opt-in left dragapult_ex the only deck whose Abilities and gusts the beam ever saw.
         card_strategies = general_card_strategies(
             self.deck, self.roles, self.functions, self.stats, self.effects
-        ) if self.strategy.params.get("use_general_card_strategies") else ()
+        ) if self.strategy.params.get("use_general_card_strategies", True) else ()
         self.strategies = resolve_strategies(
             (*GENERAL_STRATEGIES, *card_strategies),
             getattr(self.strategy, "strategies", ()),
@@ -300,7 +302,7 @@ class BellmanRuntime:
             getattr(self.strategy, "strategy_overrides", ()),
         )
         candidate = activate_strategies(
-            observation, self.strategies, roles=self.roles, stats=self.stats,
+            observation, self.strategies, deck=self.deck, roles=self.roles, stats=self.stats,
             effects=self.effects,
             opponent_role_worth=self.opponent_role_worth)
         if any(hint.strategy_id.endswith(".deploy_after_ko") for hint in candidate.hints):

@@ -32,8 +32,9 @@ def test_f64_searches_supporter_information_then_bellman_attaches():
     decision = runtime().decide(ROWS["e99b5c183656"].obs)
 
     assert decision.chosen in {(1,), (3,), (6,)}
-    assert decision.diagnostics["strategy_beam"].focused[0].path_ids == (
-        "general.low_cost_information_access_before_commitment",)
+    # Info leads and is credited; later deck hints co-sign the same look via access odds.
+    assert "general.low_cost_information_access_before_commitment" in (
+        decision.diagnostics["strategy_beam"].focused[0].path_ids)
     assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][
         "root_action"].startswith("ActionIdentity(kind='play'")
 
