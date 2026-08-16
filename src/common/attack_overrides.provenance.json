@@ -1161,6 +1161,18 @@
    },
    "evidence": []
   },
+  "526": {
+   "method": "text_verified",
+   "fields": {
+    "benchSnipe": 210,
+    "ignoresWeakness": true,
+    "ignoresResistance": true,
+    "ignoresEffects": true
+   },
+   "owner": "#553",
+   "note": "377 Zeraora, Thunder Raid: \"Discard all Energy from this Pokemon, and this attack does 210 damage to 1 of your opponent's Benched Pokemon {ex}. (Don't apply Weakness and Resistance for Benched Pokemon.)\" The free-target parse misses the Benched-{ex} tail, so the attack read as 0. Shipped as 183 Cruel Arrow's shape; benchSnipe cannot carry the ex-only target class, so reach is over-claimed against non-ex benches — #553 owes the fit and that caveat.",
+   "evidence": []
+  },
   "533": {
    "method": "unaudited",
    "fields": {

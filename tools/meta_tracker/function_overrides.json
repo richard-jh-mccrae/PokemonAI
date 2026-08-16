@@ -27,6 +27,10 @@
  "120": [
   "dig:2"
  ],
+ "_note_slowking_batch": "slowking coverage 2026-08-16, each re-verified against data/EN_Card_Data.csv: 144 Kyurem spread (Trifrost, 110 to 3 of the opponent's Pokemon — the 5-Energy cost keeps every probe board from ever affording it); 1156 Lucky Helmet and 1175 Brave Bangle tool (the 1174 Air Balloon precedent; Bangle's +30-vs-ex and no-Rule-Box holder gate are CardStat parses, Helmet's hit-reactive draw has no tag or clause vocabulary and is deliberately not over-claimed as `draw`).",
+ "144": [
+  "spread"
+ ],
  "344": [
   "search"
  ],
@@ -83,10 +87,16 @@
  "1134": [
   "search"
  ],
+ "1156": [
+  "tool"
+ ],
  "1159": [
   "tool"
  ],
  "1174": [
+  "tool"
+ ],
+ "1175": [
   "tool"
  ],
  "1189": [

@@ -143,6 +143,12 @@
   "damageMin": 10,
   "damageMax": 10
  },
+ "526": {
+  "benchSnipe": 210,
+  "ignoresWeakness": true,
+  "ignoresResistance": true,
+  "ignoresEffects": true
+ },
  "533": {
   "damageMin": 0,
   "damageMax": 920

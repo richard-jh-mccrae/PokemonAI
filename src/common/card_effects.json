@@ -416,8 +416,23 @@
 "1248": {
 "covers": "full",
 "reason": "granted action places one hand card on top; ordered Known Top owns the destination"
+},
+"9": {
+"covers": "partial",
+"reason": "the {C} provision is carried; the return leg — \"If this card is discarded by an effect of an attack used by the Pokemon this card is attached to, attach this card from your discard pile to that Pokemon after attacking\" — has no rider vocabulary and no consumer, so it is named here rather than faked (the 1085/1089 direction: an uncarried leg under-prices the card, never over-prices it). It is the leg the slowking engine leans on: a copied Trifrost/Thunder Raid discards Slowking's own Energy and Boomerang refunds itself"
+},
+"756": {
+"covers": "partial",
+"reason": "draw 2 + the per-card Ability allowance are carried; the Active-Spot gate is not — draws.draw_shape_problem admits no board-position condition, so the clause set misses that printed restriction. The engine only ever POSES Run Errand from the Active Spot, so the live option cannot misfire; what over-claims is a forecast read on a benched body"
 }
 },
+"9": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"type": "colorless"
+}
+],
 "17": [
 {
 "kind": "energy_provide",
@@ -522,6 +537,13 @@
 "zone": "discard",
 "trigger": "on_attack",
 "target": "bench_only"
+}
+],
+"756": [
+{
+"kind": "draw",
+"amount": 2,
+"allowance": "card"
 }
 ],
 "1071": [
