@@ -20,6 +20,9 @@ BOSS_ORDERS, BLACK_BELTS_TRAINING, JUDGE = 1182, 1211, 1213
 TEAM_ROCKETS_PETREL, LILLIES_DETERMINATION, WALLYS_COMPASSION = 1219, 1227, 1229
 GRAVITY_MOUNTAIN = 1252
 
+# One named outcome, whichever half of the pair is missing.
+SOLROCK_PAIR = "mega_lucario.complete_the_solrock_pair"
+
 # Sparse deck intent over portable card facts. Meowth ex is deliberately absent: its Supporter
 # tutor is a shared Card Function, so `general_pokemon_roles` resolves it the same way in every
 # deck that plays it. Evolution relationships come from card facts, not from this table.
@@ -50,6 +53,8 @@ STRATEGY = Strategy(
     strategies=(
         # A Solrock without its partner cannot attack at all, so completing the pair outranks the
         # ordinary bench fill. Declared per Solrock position because the Active is not on the Bench.
+        # All three share ONE bundle: they are one outcome — the pair completed — and the allocator
+        # protects only two bundles, so separate ids would spend both slots on the same Lunatone.
         StrategyHint(
             "mega_lucario.pair_active_solrock_with_lunatone",
             "deck",
@@ -60,6 +65,7 @@ STRATEGY = Strategy(
             ),
             (DesiredFact("deploy", "own.bench", target_card_ids=(LUNATONE,)),),
             "own.bench", "immediate", "high", "mega_lucario.strategy",
+            bundle_id=SOLROCK_PAIR,
         ),
         StrategyHint(
             "mega_lucario.pair_benched_solrock_with_lunatone",
@@ -71,6 +77,7 @@ STRATEGY = Strategy(
             ),
             (DesiredFact("deploy", "own.bench", target_card_ids=(LUNATONE,)),),
             "own.bench", "immediate", "high", "mega_lucario.strategy",
+            bundle_id=SOLROCK_PAIR,
         ),
         # Lunar Cycle is the draw engine and it reads Solrock anywhere in play, so a lone Lunatone
         # wants its partner just as much.
@@ -84,6 +91,7 @@ STRATEGY = Strategy(
             ),
             (DesiredFact("deploy", "own.bench", target_card_ids=(SOLROCK,)),),
             "own.bench", "immediate", "high", "mega_lucario.strategy",
+            bundle_id=SOLROCK_PAIR,
         ),
         # Heave-Ho Catcher rides the evolution itself, so the Makuhita line is worth the most on the
         # turn there is something on the opposing Bench worth dragging out. This raises that turn's

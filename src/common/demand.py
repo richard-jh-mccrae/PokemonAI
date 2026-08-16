@@ -235,10 +235,15 @@ class StrategyBeamBuilder:
                 available = set(hand) | {
                     int(card_id) for card_id, count in state.deck_counts if count > 0
                 }
-                targets = tuple(base for base in targets if any(
-                    parent == base and top in available
-                    for top, parent in self.registry.line_parents.items()
-                ))
+                # The reachability test belongs to Evolution BASES only: a base is worth
+                # searching for while something can still evolve onto it. A Basic with no
+                # Line at all is already its own payoff, so it never had a top to lose.
+                targets = tuple(
+                    base for base in targets
+                    if base not in self.registry.line_parents.values()
+                    or any(parent == base and top in available
+                           for top, parent in self.registry.line_parents.items())
+                )
             return targets
         if hint.kind != "fund_attack" or self.stats is None:
             return ()

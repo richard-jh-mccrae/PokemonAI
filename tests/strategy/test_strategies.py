@@ -564,6 +564,37 @@ def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
     assert beam.focused == ()
 
 
+def test_deploy_fetch_is_focused_for_a_terminal_basic_partner():
+    # "The evolution payoff is gone" and "this Basic never had one" are different boards. A
+    # partner like Lunatone IS the payoff, so searching for it keeps its deploy demand.
+    observation = _observation(hand=[{"id": 50}])
+    observation["select"]["option"] = [{"type": 7, "index": 0}]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy("deck.pair", "deploy", "own.bench",
+                          None, None, (675,), "immediate", "high"),
+    ))
+
+    class Effects:
+        @staticmethod
+        def clauses(_card_id):
+            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 675,
+                                   stage="basic" if card_id == 675 else None)
+
+    registry = SimpleNamespace(line_parents={1031: 1030})
+    beam = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=((675, 1),)),
+            enumerate_legal_actions(observation),
+        )
+
+    assert [row.family for row in beam.focused] == ["play"]
+
+
 def test_accelerator_clauses_earn_funding_access_odds():
     # An accel card is an OUT for a fund_attack demand: Crispin-class clauses previously scored
     # access odds 0.0 and never entered the focused beam.
