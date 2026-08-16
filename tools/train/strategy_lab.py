@@ -34,7 +34,9 @@ def _runtime(focused: bool, *, reuse=True, planning_seconds=None):
               "plan_reuse.enabled": float(reuse)}
     if planning_seconds is not None:
         values.update({"clock.adaptive_enabled": 0.0,
-                       "clock.remaining_200_seconds": float(planning_seconds)})
+                       "clock.remaining_200_seconds": float(planning_seconds),
+                       # Node/decision caps only: a wall-clock prover stop varies with load.
+                       "terminal.max_seconds": 60.0})
     runtime.pilot_profile = PilotProfile.resolve(
         global_values=values,
         authored_deck_overrides=getattr(module.STRATEGY, "pilot_overrides", {}),

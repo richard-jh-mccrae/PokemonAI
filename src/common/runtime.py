@@ -106,6 +106,9 @@ class BellmanRuntime:
             pilot_overrides.update({
                 "clock.adaptive_enabled": 0.0,
                 "clock.remaining_200_seconds": float(decision_seconds),
+                # A pinned clock promises reproducible decisions, so the prover must stop on
+                # its node/decision caps: a wall-clock stop varies with machine load.
+                "terminal.max_seconds": 60.0,
             })
         self.pilot_profile = PilotProfile.resolve(
             global_values=experiment,
