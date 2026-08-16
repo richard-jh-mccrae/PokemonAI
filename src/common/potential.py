@@ -614,9 +614,7 @@ class BoardPotential:
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
                     lethal_active = True
-                reach = bench_reach(attack)
-                sniped = tuple(index for index, target in enumerate(bench)
-                               if reach >= int(target.get("hp", MINIMUM_HP)))
+                sniped = self._bench_ko_indices(attack, bench)
                 exposed += self._bench_ko_prizes(attack, bench)
                 share = attacker_active_share if body is attacker_active else 1.0
                 exposed *= share
@@ -628,10 +626,16 @@ class BoardPotential:
                 worst = max(worst, exposed)
         return -worst, frozenset(reachable)
 
+    def _bench_ko_indices(self, attack, bench) -> tuple[int, ...]:
+        """Bench positions this attack can knock out on its own. Decks whose cards change who a
+        bench attack may legally touch override this, so reach and prizes never disagree."""
+        reach = bench_reach(attack)
+        return tuple(index for index, target in enumerate(bench)
+                     if reach >= int(target.get("hp", MINIMUM_HP)))
+
     def _bench_ko_prizes(self, attack, bench) -> float:
-        snipe = bench_reach(attack)
-        return float(max((self._prizes(target) for target in bench
-                          if snipe >= int(target.get("hp", MINIMUM_HP))), default=0))
+        return float(max((self._prizes(bench[index])
+                          for index in self._bench_ko_indices(attack, bench)), default=0))
 
     @staticmethod
     def _stack_ids(body):

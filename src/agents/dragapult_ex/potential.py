@@ -13,11 +13,15 @@ SPECIAL_CONDITION_PRIZE_SHARES = {
 
 
 class DragapultPotential(BoardPotential):
-    def _bench_ko_prizes(self, attack, bench) -> float:
+    def _bench_ko_indices(self, attack, bench) -> tuple[int, ...]:
         snipe = int(getattr(attack, "benchSnipe", 0) or 0)
-        direct = max((self._prizes(target) for target in bench
-                      if not bool(getattr(self._stat(target.get("id")), "tera", False))
-                      and snipe >= int(target.get("hp", 1))), default=0)
+        return tuple(index for index, target in enumerate(bench)
+                     if not bool(getattr(self._stat(target.get("id")), "tera", False))
+                     and snipe >= int(target.get("hp", 1)))
+
+    def _bench_ko_prizes(self, attack, bench) -> float:
+        direct = max((self._prizes(bench[index])
+                      for index in self._bench_ko_indices(attack, bench)), default=0)
         counter_budget = int(getattr(attack, "benchSpread", 0) or 0) // 10
         prizes = [0] * (counter_budget + 1)
         for target in bench:
@@ -32,9 +36,9 @@ class DragapultPotential(BoardPotential):
 
     def __call__(self, observation) -> Potential:
         base = super().__call__(observation)
-        if dict(base.families).get("game"):
-            return base
         current = observation.get("current") or {}
+        if int(current.get("result", -1)) != -1:
+            return base
         seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
         players = current.get("players") or ()
         me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
