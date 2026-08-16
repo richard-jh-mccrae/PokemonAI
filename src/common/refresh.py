@@ -14,8 +14,10 @@ from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
 SHUFFLE_OWN_HAND_RIDER = "shuffle_own_hand_in"
 SHUFFLE_BOTH_HANDS_RIDER = "shuffle_both_hands"
 SHUFFLE_RIDERS = frozenset({SHUFFLE_OWN_HAND_RIDER, SHUFFLE_BOTH_HANDS_RIDER})
-HELD_OPTION_FAMILIES = frozenset({"hand", "hand_demand", "prize_plan"})
-HAND_SIZE_TACTICAL_FAMILIES = frozenset({"readiness"})
+# Both feed float sums below, and float addition is order-sensitive: ordered tuples keep the
+# addition order in the code instead of letting PYTHONHASHSEED pick it per process.
+HELD_OPTION_FAMILIES = ("hand", "hand_demand", "prize_plan")
+HAND_SIZE_TACTICAL_FAMILIES = ("readiness",)
 FUTURE_PAYOFF_ACCESS_DISCOUNT = 0.75
 
 

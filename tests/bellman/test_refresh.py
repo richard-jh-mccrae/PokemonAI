@@ -309,3 +309,12 @@ def test_refresh_does_not_create_next_turn_demand_rewards_or_costs():
 
     assert not any("demand" in key for key in (*dict(ledger.benefits), *dict(ledger.costs)))
     assert "expected_hand_value" in branches[0]
+
+
+def test_family_fold_orders_are_written_in_code_not_hashing():
+    """Both constants feed float sums, and float addition is order-sensitive: a set here
+    would let PYTHONHASHSEED pick the addition order and wobble totals per process."""
+    from common.refresh import HAND_SIZE_TACTICAL_FAMILIES, HELD_OPTION_FAMILIES
+
+    assert HELD_OPTION_FAMILIES == ("hand", "hand_demand", "prize_plan")
+    assert HAND_SIZE_TACTICAL_FAMILIES == ("readiness",)

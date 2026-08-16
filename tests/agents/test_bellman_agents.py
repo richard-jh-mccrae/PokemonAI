@@ -81,3 +81,6 @@ def test_experiment_decision_seconds_exactly_overrides_deck_clock(monkeypatch):
         strategy, deck, stats=None, functions=None, scout=None, briefs=[])
     assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 7
     assert runtime.pilot_profile.get("clock.adaptive_enabled") == 0
+    # The pinned clock also unbinds the prover from the wall clock (node/decision caps only),
+    # so replayed node counts cannot vary with machine load.
+    assert runtime.pilot_profile.get("terminal.max_seconds") == 60
