@@ -17,11 +17,12 @@ from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
 from .fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
+from .option_equivalence import option_source_card
 from .demand import StrategyBeamBuilder, semantic_action_key
 from .refresh import played_card_id
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
-from .strategy.context import _DISCARD
+from .strategy.context import _DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY, _DISCARD
 from .value import ValueOracle
 
 
@@ -30,7 +31,6 @@ PRODUCTION_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.max_nodes"))
 PRODUCTION_CHANCE_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.chance_max_nodes"))
 PRODUCTION_REVEAL_MAX_NODES = int(DEFAULT_PILOT_PROFILE.get("search.reveal_max_nodes"))
 UNCERTAINTY_REFINEMENT_VALUE_MARGIN = DEFAULT_PILOT_PROFILE.get("search.uncertainty_margin")
-ROOT_PROBE_TIME_SHARE = 0.4
 PRODUCTION_MAX_SECONDS = DEFAULT_PILOT_PROFILE.get("clock.remaining_200_seconds")
 PRODUCTION_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.beam_width"))
 DEFAULT_ROOT_BEAM_WIDTH = int(DEFAULT_PILOT_PROFILE.get("search.root_beam_width"))
@@ -133,17 +133,24 @@ def _ordered_evaluation(result: Evaluation, actor: Actor) -> tuple[float, bool, 
 class _CompletedCandidateBank:
     live: dict[object, Evaluation] = field(default_factory=dict)
     checkpoint: dict[object, Evaluation] = field(default_factory=dict)
+    live_tiers: dict[object, str] = field(default_factory=dict)
+    checkpoint_tiers: dict[object, str] = field(default_factory=dict)
 
-    def offer(self, action: LegalAction, result: Evaluation) -> None:
+    def offer(self, action: LegalAction, result: Evaluation, tier: str | None = None) -> None:
+        if not math.isfinite(result.value):
+            return
+        tier = tier or ("full" if result.execution_complete else "recoverable")
+        ranks = {"safety": 0, "recoverable": 1, "full": 2}
         incumbent = self.live.get(action.identity)
-        if (result.execution_complete
-                and (incumbent is None
-                     or _ordered_evaluation(result, Actor.OURS)
-                     > _ordered_evaluation(incumbent, Actor.OURS))):
+        incumbent_tier = self.live_tiers.get(action.identity, "safety")
+        if (incumbent is None or (ranks[tier], _ordered_evaluation(result, Actor.OURS))
+                > (ranks[incumbent_tier], _ordered_evaluation(incumbent, Actor.OURS))):
             self.live[action.identity] = result
+            self.live_tiers[action.identity] = tier
 
     def publish(self) -> None:
         self.checkpoint = dict(self.live)
+        self.checkpoint_tiers = dict(self.live_tiers)
 
 
 def _select_our_action(finite, context: int):
@@ -155,7 +162,16 @@ def _select_our_action(finite, context: int):
             == round(immediate, VALUE_TIE_DECIMALS)
         )
         return min(leaders, key=lambda pair: str(pair[0].identity))
-    return max(finite, key=lambda pair: _ordered_evaluation(pair[1], Actor.OURS))
+    selected = max(finite, key=lambda pair: _ordered_evaluation(pair[1], Actor.OURS))
+    if not selected[1].complete or context not in {
+            _DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY}:
+        return selected
+    leaders = tuple(
+        pair for pair in finite
+        if _ordered_evaluation(pair[1], Actor.OURS)
+        == _ordered_evaluation(selected[1], Actor.OURS)
+    )
+    return min(leaders, key=lambda pair: (pair[0].selection, str(pair[0].identity)))
 
 
 def _commutative_order(action: LegalAction):
@@ -543,6 +559,11 @@ class ProductionSolver(ReferenceSolver):
         self._harvest_prefix: list[object] = []
         self._harvest_exclusions: set[tuple[object, ...]] = set()
         self._candidate_timeout_fallback = False
+        self._phase_budgets = {}
+        self._protected_bundle_diagnostics = {}
+        self._challenger_diagnostics = {}
+        self._stability_stop = False
+        self._stability_history = None
 
     def decide(self, state: DecisionState) -> RootDecision:
         self._search_started = monotonic()
@@ -584,6 +605,8 @@ class ProductionSolver(ReferenceSolver):
         self._harvest_prefix = []
         self._harvest_exclusions = set()
         self._candidate_timeout_fallback = False
+        self._stability_stop = False
+        self._stability_history = None
         self._hard_deadline = self._budget.hard_deadline(monotonic())
         self._deadline = self._hard_deadline
         decision = super().decide(state)
@@ -613,6 +636,13 @@ class ProductionSolver(ReferenceSolver):
             "deadline_hit": self._deadline_hit,
             "candidate_harvest": self._candidate_harvest,
             "candidate_timeout_fallback": self._candidate_timeout_fallback,
+            "execution_tier": self._candidate_bank.checkpoint_tiers.get(
+                decision.action,
+                "full" if decision.complete else "recoverable"),
+            "phase_budgets": dict(self._phase_budgets),
+            "protected_bundles": dict(self._protected_bundle_diagnostics),
+            "challengers": dict(self._challenger_diagnostics),
+            "stability_stop": self._stability_stop,
             "lower_bound": not decision.complete,
             "commutative_permutations_pruned": self.por_pruned,
             "information_first_permutations_pruned": self.information_pruned,
@@ -664,17 +694,124 @@ class ProductionSolver(ReferenceSolver):
             (action for action in actions if semantic_action_key(action) in focus_ranks),
             key=lambda action: focus_ranks[semantic_action_key(action)],
         )
-        safety = next(iter(self._safety_candidates(actions)), None)
         target = int(self.profile.get("search.completed_candidate_target"))
-        reserved = 1 if safety is not None and safety not in focused[:target] else 0
-        ordered = focused[:max(0, target - reserved)]
-        if safety is not None and safety not in ordered:
-            ordered.append(safety)
+        ordered = focused[:target]
         ordered.extend(action for action in focused if action not in ordered)
-        ordered.extend(action for action in actions
-                       if action not in ordered and action.identity.kind not in {"attack", "end"})
-        ordered.extend(action for action in actions if action not in ordered)
+        ordered.extend(action for action in self._safety_candidates(actions)
+                       if action not in ordered)
         return tuple(ordered)
+
+    def _protected_bundles(self, state) -> tuple[str, ...]:
+        if self._strategy_builder is None or not hasattr(
+                self._strategy_builder, "outcome_statuses"):
+            return ()
+        rows = self._strategy_builder.outcome_statuses(state)
+        bundle_ids = []
+        for row in rows:
+            if (row["urgency"] != "high" or row["conviction"] != "high"
+                    or row["status"] in {"satisfied", "impossible"}):
+                continue
+            bundle = str(row["bundle_id"] or row["strategy_id"])
+            if bundle not in bundle_ids:
+                bundle_ids.append(bundle)
+        limit = int(self.profile.get("search.protected_bundle_count"))
+        protected = tuple(bundle_ids[:limit])
+        self._protected_bundle_diagnostics = {
+            "eligible": tuple(bundle_ids), "protected": protected,
+            "overflow": tuple(bundle_ids[limit:]),
+        }
+        return protected
+
+    def _action_bundles(self, action) -> tuple[str, ...]:
+        beam = self._strategy_beams.get(self._root_key)
+        if (beam is None or self.strategy_snapshot is None
+                or not hasattr(self.strategy_snapshot, "hints")):
+            return ()
+        focus = next((row for row in beam.focused
+                      if row.action_key == semantic_action_key(action)), None)
+        if focus is None:
+            return ()
+        by_id = {hint.strategy_id: str(hint.bundle_id or hint.strategy_id)
+                 for hint in self.strategy_snapshot.hints}
+        return tuple(dict.fromkeys(by_id[strategy_id] for strategy_id in focus.path_ids
+                                   if strategy_id in by_id))
+
+    def _credible_challengers(self, state, actions, indices, finite, context):
+        if context != MAIN_DECISION_CONTEXT:
+            selected = tuple(indices)
+            self._challenger_diagnostics = {
+                "selected": tuple(str(actions[index].identity) for index in selected),
+                "rejected_by_bound": (), "limit": len(selected),
+            }
+            return selected
+        focus = self._strategy_focus_ranks.get(self._root_key, {})
+        incumbent = self._select_our_action(state, finite, context) if finite else None
+        rows = []
+        rejected = []
+        for index in indices:
+            action = actions[index]
+            if (semantic_action_key(action) in focus
+                    or action.identity.kind in {"attack", "end"}):
+                continue
+            q_upper, _terms = self._root_upper_bound(state, action)
+            if incumbent is not None and math.isfinite(q_upper):
+                _incumbent_action, incumbent_result = incumbent
+                if round(q_upper, VALUE_TIE_DECIMALS) < round(
+                        incumbent_result.value, VALUE_TIE_DECIMALS):
+                    rejected.append(str(action.identity))
+                    continue
+            rows.append((index, q_upper))
+        rows.sort(key=lambda row: (
+            -row[1] if math.isfinite(row[1]) else -math.inf,
+            str(actions[row[0]].identity)))
+        limit = int(self.profile.get("search.challenger_count"))
+        selected = tuple(index for index, _bound in rows[:limit])
+        self._challenger_diagnostics = {
+            "selected": tuple(str(actions[index].identity) for index in selected),
+            "rejected_by_bound": tuple(rejected), "limit": limit,
+        }
+        return selected
+
+    def _stable_checkpoint(self, state, actions, context: int, *, now=None) -> bool:
+        now = monotonic() if now is None else float(now)
+        full = tuple(
+            (action, self._candidate_bank.checkpoint[action.identity])
+            for action in actions
+            if self._candidate_bank.checkpoint_tiers.get(action.identity) == "full")
+        if not full:
+            self._stability_history = None
+            return False
+        incumbent_action, incumbent = self._select_our_action(state, full, context)
+        identity = self._sequence_signature(incumbent_action, incumbent)
+        if self._stability_history is None or self._stability_history[0] != identity:
+            self._stability_history = (identity, now, 1)
+            return False
+        first_seen, count = self._stability_history[1], self._stability_history[2] + 1
+        self._stability_history = (identity, first_seen, count)
+        patience = min(
+            self.profile.get("search.stability_patience_max_seconds"),
+            max(self.profile.get("search.stability_patience_min_seconds"),
+                self.production_limits.max_seconds
+                * self.profile.get("search.stability_patience_share")))
+        if (count < int(self.profile.get("search.stability_checkpoints"))
+                or now - first_seen < patience):
+            return False
+        for action in actions:
+            if action.identity == incumbent_action.identity:
+                continue
+            bound = self._action_bounds.get((state.semantic_key, action.identity))
+            if bound is None:
+                candidate = self._candidate_bank.checkpoint.get(action.identity)
+                if (candidate is None or self._candidate_bank.checkpoint_tiers.get(
+                        action.identity) != "full"):
+                    return False
+                upper = candidate.value
+            else:
+                upper = float(bound.get("q_upper", math.inf))
+            if round(upper, VALUE_TIE_DECIMALS) >= round(
+                    incumbent.value, VALUE_TIE_DECIMALS):
+                return False
+        return True
 
     @staticmethod
     def _safety_candidates(actions, *, allow_fallback=False) -> tuple[LegalAction, ...]:
@@ -686,8 +823,48 @@ class ProductionSolver(ReferenceSolver):
             if allow_fallback else None
         return (fallback,) if fallback is not None else ()
 
-    def _bank_candidate(self, action: LegalAction, result: Evaluation) -> None:
-        self._candidate_bank.offer(action, result)
+    def _bank_candidate(self, action: LegalAction, result: Evaluation,
+                        tier: str | None = None) -> None:
+        self._candidate_bank.offer(action, result, tier)
+
+    def _select_timeout_candidate(self, finite, context: int):
+        if context == _DISCARD:
+            return _select_our_action(finite, context)
+        ranks = {"safety": 0, "recoverable": 1, "full": 2}
+
+        def score(pair):
+            return (
+                ranks[self._candidate_bank.checkpoint_tiers.get(
+                    pair[0].identity,
+                    "full" if pair[1].execution_complete else "recoverable")],
+                _ordered_evaluation(pair[1], Actor.OURS),
+            )
+        best = max(score(pair) for pair in finite)
+        return min((pair for pair in finite if score(pair) == best),
+                   key=lambda pair: str(pair[0].identity))
+
+    def _prefer_unresolved_strategy(self, state, finite, selected, context: int):
+        action, result = selected
+        focus = self._strategy_focus_ranks.get(self._root_key, {})
+        if (context != MAIN_DECISION_CONTEXT or result.complete
+                or semantic_action_key(action) in focus or not focus):
+            return selected
+        protected = set(self._protected_bundle_diagnostics.get("protected", ()))
+        focused = tuple(
+            pair for pair in finite
+            if (semantic_action_key(pair[0]) in focus
+                and protected.intersection(self._action_bundles(pair[0])))
+        )
+        if not focused:
+            return selected
+        preferred = min(
+            focused,
+            key=lambda pair: (focus[semantic_action_key(pair[0])], str(pair[0].identity)),
+        )
+        bound = self._action_bounds.get((state.semantic_key, preferred[0].identity))
+        upper = float(bound.get("q_upper", math.inf)) if bound else math.inf
+        return selected if round(result.value, VALUE_TIE_DECIMALS) > round(
+            upper, VALUE_TIE_DECIMALS) else preferred
 
     def _search_action(self, state, action, sleep) -> Evaluation:
         if not self._harvesting_candidates:
@@ -709,6 +886,8 @@ class ProductionSolver(ReferenceSolver):
             "sequence": self._sequence_signature(action, result),
             "value": result.value,
             "complete": result.complete,
+            "execution_tier": (
+                "full" if result.execution_complete else "recoverable"),
             "phase": phase,
             "strategy_wave": ("first" if self._strategy_waves.get(
                 self._root_key, {}).get(action, 0) == 0 else "widening"),
@@ -716,10 +895,11 @@ class ProductionSolver(ReferenceSolver):
                 focus_ranks[key] + 1 if key in focus_ranks else None),
             "strategy_focus_count": len(focus_ranks),
         }
-        identity = (event["sequence"], event["value"], event["complete"])
+        identity = (event["sequence"], event["value"], event["complete"],
+                    event["execution_tier"])
         if not self._incumbent_timeline or identity != tuple(
                 self._incumbent_timeline[-1][name]
-                for name in ("sequence", "value", "complete")):
+                for name in ("sequence", "value", "complete", "execution_tier")):
             self._incumbent_timeline.append(event)
 
     def _incumbent_summary(self, decision, search_seconds) -> dict:
@@ -731,6 +911,12 @@ class ProductionSolver(ReferenceSolver):
             return {"search_seconds": search_seconds, "found": False}
         complete_matches = [index for index in matches
                             if self._incumbent_timeline[index]["complete"]]
+        recoverable_matches = [index for index in matches
+                               if self._incumbent_timeline[index].get("execution_tier", "full")
+                               in {"recoverable", "full"}]
+        full_matches = [index for index in matches
+                        if self._incumbent_timeline[index].get(
+                            "execution_tier", "full") == "full"]
         first_index = (complete_matches[0] if complete_matches else matches[0])
         last_other = max(
             (index for index, event in enumerate(self._incumbent_timeline)
@@ -743,6 +929,12 @@ class ProductionSolver(ReferenceSolver):
             "search_seconds": search_seconds,
             "found": True,
             "first_found_seconds": first["elapsed_seconds"],
+            "first_recoverable_seconds": (
+                self._incumbent_timeline[recoverable_matches[0]]["elapsed_seconds"]
+                if recoverable_matches else None),
+            "first_full_seconds": (
+                self._incumbent_timeline[full_matches[0]]["elapsed_seconds"]
+                if full_matches else None),
             "stabilized_seconds": (
                 stable["elapsed_seconds"] if stable_index is not None else search_seconds),
             "strategy_wave": stable["strategy_wave"],
@@ -933,11 +1125,34 @@ class ProductionSolver(ReferenceSolver):
             return actions
         if self._hand_payment_available(state, actions):
             return actions
+        protected_keys = set()
+        protected_bundles = set(self._protected_bundles(state))
+        if protected_bundles and self._strategy_builder is not None:
+            beam = self._strategy_builder.build(state, actions)
+            by_id = {
+                hint.strategy_id: str(hint.bundle_id or hint.strategy_id)
+                for hint in self.strategy_snapshot.hints
+                if hint.deadline == "immediate"
+            }
+            protected_keys = {
+                row.action_key for row in beam.focused
+                if any(by_id.get(strategy_id) in protected_bundles
+                       for strategy_id in row.path_ids)
+            }
         retained = []
         for action in actions:
             footprint = footprints.get(action.identity)
+            options = tuple((state.obs.get("select") or {}).get("option") or ())
+            index = action.selection[0] if len(action.selection) == 1 else -1
+            option = options[index] if 0 <= index < len(options) else None
+            source = option_source_card(option, state.obs)
+            source_id = int(source["id"]) if source and source.get("id") is not None else None
+            source_stat = self.oracle.stats.get(source_id) \
+                if source_id is not None and self.oracle.stats is not None else None
             if (footprint is not None and footprint.commitment and not footprint.barrier
-                    and action.identity.kind in DOMINATED_COMMITMENT_KINDS):
+                    and action.identity.kind in DOMINATED_COMMITMENT_KINDS
+                    and not bool(getattr(source_stat, "is_tool", False))
+                    and semantic_action_key(action) not in protected_keys):
                 self.information_pruned += 1
                 self._structural_prunes.append({
                     "proof_type": "information_dominance",
@@ -1262,10 +1477,16 @@ class ProductionSolver(ReferenceSolver):
                 actions = self._dead_fetch_filter(state, actions)
             if self.profile.get("search.information_dominance_enabled") >= 0.5:
                 actions = self._information_dominance_filter(state, actions, footprints)
+        deep_strategy = bool(
+            self.strategy_snapshot is not None
+            and hasattr(self.strategy_snapshot, "hints")
+            and any(hint.waypoint > 0 for hint in self.strategy_snapshot.hints)
+        )
         strategy_focus = (actor is Actor.OURS
-                          and (key == self._root_key or self._harvesting_candidates)
                           and self._strategy_builder is not None
-                          and self.profile.get("strategy.focus_enabled") >= 0.5)
+                          and self.profile.get("strategy.focus_enabled") >= 0.5
+                          and (key == self._root_key or self._harvesting_candidates
+                               or deep_strategy))
         if strategy_focus:
             beam = self._strategy_builder.build(state, actions)
             self._strategy_beams[key] = beam
@@ -1335,7 +1556,11 @@ class ProductionSolver(ReferenceSolver):
 
             harvest_started = monotonic()
             harvest_target = int(self.profile.get("search.completed_candidate_target"))
-            harvest_share = self.profile.get("search.completed_candidate_time_share")
+            harvest_goal = harvest_target
+            protected_bundles = self._protected_bundles(state)
+            harvest_share = (self.profile.get("search.protected_bundle_exploration_share")
+                             if protected_bundles else
+                             self.profile.get("search.completed_candidate_time_share"))
             harvest_deadline = harvest_started + max(
                 0.0, self._hard_deadline - harvest_started) * harvest_share
             harvest_order = self._candidate_order(actions)
@@ -1344,10 +1569,10 @@ class ProductionSolver(ReferenceSolver):
             self._harvesting_candidates = True
             self.limits = SearchLimits(self.production_limits.max_nodes)
             for position, action in enumerate(harvest_order):
-                if len(completed) >= harvest_target or monotonic() >= harvest_deadline:
+                if len(completed) >= harvest_goal or monotonic() >= harvest_deadline:
                     break
                 index = actions.index(action)
-                while len(completed) < harvest_target and monotonic() < harvest_deadline:
+                while len(completed) < harvest_goal and monotonic() < harvest_deadline:
                     self._deadline = self._budget.root_deadline(
                         monotonic(), harvest_deadline, len(harvest_order) - position)
                     self.nodes = 1
@@ -1357,6 +1582,20 @@ class ProductionSolver(ReferenceSolver):
                             or _ordered_evaluation(result, Actor.OURS)
                             > _ordered_evaluation(incumbent[1], Actor.OURS)):
                         results_list[index] = (action, result)
+                    self._bank_candidate(action, result)
+                    if (position == 0 and result.execution_complete
+                            and semantic_action_key(action) in self._strategy_focus_ranks.get(
+                                self._root_key, {})):
+                        harvest_goal = min(3, harvest_target + 1)
+                    if (set(self._action_bundles(action)).intersection(protected_bundles)
+                            and math.isfinite(result.value)
+                            and self._candidate_bank.live_tiers.get(action.identity)
+                            in {"recoverable", "full"}):
+                        harvest_share = self.profile.get("search.protected_bundle_time_share")
+                        harvest_deadline = max(
+                            harvest_deadline,
+                            harvest_started + max(
+                                0.0, self._hard_deadline - harvest_started) * harvest_share)
                     branch_nodes[index] += max(1, self.nodes)
                     branch_capped[index] = not result.complete and (
                         self.nodes >= self.production_limits.max_nodes
@@ -1381,17 +1620,18 @@ class ProductionSolver(ReferenceSolver):
                     if pair is not None and math.isfinite(pair[1].value))
                 self._record_incumbent(state, finite_results, context, "candidate_harvest")
             while (self._strategy_builder is not None
-                   and len(completed) < harvest_target
+                   and len(completed) < harvest_goal
                    and monotonic() < harvest_deadline):
                 progress = False
                 for action in harvest_order:
-                    if len(completed) >= harvest_target or monotonic() >= harvest_deadline:
+                    if len(completed) >= harvest_goal or monotonic() >= harvest_deadline:
                         break
                     index = actions.index(action)
                     self._deadline = harvest_deadline
                     self.nodes = 1
                     result = self._search_action(state, action, child_sleeps[action.identity])
                     branch_nodes[index] += max(1, self.nodes)
+                    self._bank_candidate(action, result)
                     sequence = self._sequence_signature(action, result)
                     identities = self._sequence_identities(action, result)
                     if (not self._is_executable_candidate(action, result)
@@ -1399,7 +1639,7 @@ class ProductionSolver(ReferenceSolver):
                         continue
                     seen_sequences.add(sequence)
                     self._harvest_exclusions.add(identities)
-                    self._bank_candidate(action, result)
+                    self._bank_candidate(action, result, "safety")
                     completed.append({
                         "root_action": str(action.identity), "sequence": sequence,
                         "value": result.value, "bellman_complete": result.complete,
@@ -1428,20 +1668,53 @@ class ProductionSolver(ReferenceSolver):
             self._harvesting_candidates = False
             self._candidate_harvest = {
                 "target": harvest_target,
+                "expanded_target": harvest_goal,
                 "time_share": harvest_share,
                 "elapsed_seconds": monotonic() - harvest_started,
                 "attempted_count": sum(pair is not None for pair in results_list),
                 "completed_count": len(completed),
                 "completed": tuple(completed),
+                "protected_bundles": protected_bundles,
             }
             self._candidate_bank.publish()
+            self._stable_checkpoint(state, actions, context)
+            self._phase_budgets["candidate_harvest"] = {
+                "share": harvest_share,
+                "elapsed_seconds": monotonic() - harvest_started,
+            }
 
             probe_started = monotonic()
+            challenger_enabled = self.profile.get("search.challenger_enabled") >= 0.5
+            probe_share = (self.profile.get("search.challenger_time_share")
+                           if challenger_enabled else 0.4)
             probe_hard_deadline = probe_started + max(
-                0.0, self._hard_deadline - probe_started) * ROOT_PROBE_TIME_SHARE
+                0.0, self._hard_deadline - probe_started) * probe_share
             remaining = [index for index, pair in enumerate(results_list) if pair is None]
+            finite_before_probe = tuple(
+                pair for pair in results_list
+                if pair is not None and math.isfinite(pair[1].value))
+            challenger_indices = (set(self._credible_challengers(
+                state, actions, remaining, finite_before_probe, context))
+                if challenger_enabled else set(remaining))
             for position, index in enumerate(remaining):
                 action = actions[index]
+                if index not in challenger_indices:
+                    if action.identity.kind == "end":
+                        result = self._search_action(
+                            state, action, child_sleeps[action.identity])
+                        results_list[index] = (action, result)
+                        self._bank_candidate(action, result, "safety")
+                    else:
+                        self.limits = SearchLimits(1)
+                        self._deadline = probe_hard_deadline
+                        self.nodes = 1
+                        result = self._search_action(
+                            state, action, child_sleeps[action.identity])
+                        results_list[index] = (action, result)
+                        self._bank_candidate(action, result)
+                        branch_nodes[index] = self.nodes
+                        branch_capped[index] = not result.complete
+                    continue
                 wave = action_waves.get(action, 0)
                 widening = wave > 0
                 probe_nodes = min(
@@ -1463,10 +1736,16 @@ class ProductionSolver(ReferenceSolver):
                     tuple(pair for pair in results_list
                           if pair is not None and math.isfinite(pair[1].value)),
                     context, "probe")
+            self._phase_budgets["challenger"] = {
+                "share": probe_share,
+                "elapsed_seconds": monotonic() - probe_started,
+            }
             results_list = [pair for pair in results_list if pair is not None]
             if len(results_list) == len(actions):
                 self._completed_rounds = 1
                 self._candidate_bank.publish()
+                self._stability_stop = self._stable_checkpoint(
+                    state, actions, context)
             self._deadline = self._hard_deadline
 
             # Bellman probe values order bounded widening rounds; exact results need no more work.
@@ -1475,6 +1754,8 @@ class ProductionSolver(ReferenceSolver):
                 for index, (action, result) in enumerate(results_list)
                 if not result.complete
             ]
+            if self._stability_stop:
+                incomplete = []
             incomplete.sort(
                 key=lambda row: _ordered_evaluation(row[2], actor),
                 reverse=actor is Actor.OURS,
@@ -1614,12 +1895,17 @@ class ProductionSolver(ReferenceSolver):
                     self._candidate_bank.publish()
                     self._completed_rounds = max(
                         self._completed_rounds, 2 + refinement_index // refinement_width)
+                    if self._stable_checkpoint(state, actions, context):
+                        self._stability_stop = True
+                        break
             if (ordered_refinements and not refinement_interrupted and refinement_width
                     and len(ordered_refinements) % refinement_width):
                 self._candidate_bank.publish()
                 self._completed_rounds = max(
                     self._completed_rounds,
                     2 + (len(ordered_refinements) - 1) // refinement_width)
+                self._stability_stop = self._stable_checkpoint(
+                    state, actions, context)
 
             self._root_branch_nodes.extend(branch_nodes)
             self._root_branch_capped.extend(branch_capped)
@@ -1701,11 +1987,13 @@ class ProductionSolver(ReferenceSolver):
                     for candidate, _evaluated in finite
                     if candidate.identity in self._candidate_bank.checkpoint)
                 if key == self._root_key and self._deadline_hit and candidate_finite:
-                    action, result = self._select_our_action(
-                        state, candidate_finite, context)
+                    action, result = self._select_timeout_candidate(candidate_finite, context)
                     self._candidate_timeout_fallback = True
                 else:
                     action, result = self._select_our_action(state, finite, context)
+                    if key == self._root_key:
+                        action, result = self._prefer_unresolved_strategy(
+                            state, finite, (action, result), context)
             else:
                 action, result = min(
                     finite, key=lambda pair: _ordered_evaluation(pair[1], actor))

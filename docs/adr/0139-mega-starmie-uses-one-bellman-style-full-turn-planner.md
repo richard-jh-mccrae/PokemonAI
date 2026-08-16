@@ -430,3 +430,27 @@ ordinary development demand from outweighing a certain victory.
 The implementation contract, recovered-solver review, bound proof obligations, and acceptance gates are
 specified in
 [`terminal-proof-strategy-guided-bellman.md`](../plans/terminal-proof-strategy-guided-bellman.md).
+
+## 2026-08-16 rejected latency experiment: continuation reuse and earlier refinement stops
+
+Status: Rejected as a combined patch; never merge without isolated, clean-load A/B evidence.
+
+The experiment combined exact-guarded continuation reuse across deterministic information boundaries,
+a smaller refinement budget for narrow nested choices, and an early stop when a completed incumbent's
+lower bound dominated every remaining root upper bound. Candidate harvesting retained information
+boundaries, and the early stop reused Bellman's existing admissible bounds and tie rules.
+
+Three seed-1 mirror matches used three jobs, a 3,595-second agent budget, and no observed deadline,
+decision timeout, match timeout, or crash. Against detached `23c67a98`, average final-incumbent first
+discovery moved 1.765 -> 4.857 seconds, stabilization 2.162 -> 4.894, and complete decision time
+3.231 -> 7.318. Total decision compute moved 781.933 -> 1,697.815 seconds despite 242 -> 232
+decisions; decisions over 30 seconds moved 6 -> 19. Match durations moved
+391/207/206 -> 989/703/49 seconds. Worst stabilization improved only 75.297 -> 72.187 seconds.
+
+The dominance stop fired once and Plan Suffix reuse produced zero hits. The narrower nested-choice
+budget was therefore the only broadly active behavioral change and is the leading regression suspect:
+local work became cheaper, but changed paths produced two much longer games and more expensive later
+decisions. The candidate run overlapped four external CPU-bound replay jobs for roughly its first ten
+minutes, so its exact wall-clock slowdown is contaminated; the experiment establishes no speedup, not
+a clean causal multiplier. Retest each hypothesis separately under matched machine load and preserve
+game-path, first-found, stabilization, total-decision, and match-duration metrics.

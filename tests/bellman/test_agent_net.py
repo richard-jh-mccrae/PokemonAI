@@ -1,8 +1,4 @@
-"""The deployment hook's last-resort net: a planning failure submits a legal choice, never dies.
-
-Distinct from decision-quality fallbacks (which packaging bans): the net decides NOTHING — it
-surrenders the turn as cheaply as the menu allows and reports the failure on stderr.
-"""
+"""Planning failure and deadline fallback always submit a productive legal choice."""
 from __future__ import annotations
 
 import importlib.util
@@ -76,6 +72,62 @@ def test_a_planning_crash_without_an_end_action_submits_the_minimum_picks(monkey
         min_count=2, max_count=2)
 
     assert agent(observation) == [0, 1]
+
+
+def test_a_planning_crash_never_declines_an_optional_productive_fetch(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    observation = _menu(
+        [engine_opt(type=3, area=12, index=0), engine_opt(type=3, area=12, index=1)],
+        min_count=0, max_count=1, context=7)
+
+    assert agent(observation) == [0]
+
+
+def test_a_planning_crash_takes_the_maximum_fetch_to_hand(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    observation = _menu(
+        [engine_opt(type=3, area=12, index=index) for index in range(3)],
+        min_count=0, max_count=2, context=7)
+
+    assert agent(observation) == [0, 1]
+
+
+def test_a_planning_crash_places_damage_on_an_available_ko(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    observation = _menu(
+        [engine_opt(type=3, area=5, index=0, playerIndex=1),
+         engine_opt(type=3, area=5, index=1, playerIndex=1)],
+        context=14)
+    observation["select"]["remainDamageCounter"] = 6
+    observation["current"]["players"][1]["bench"] = [
+        {"id": 10, "serial": 10, "hp": 120, "maxHp": 120},
+        {"id": 11, "serial": 11, "hp": 50, "maxHp": 100},
+    ]
+
+    assert agent(observation) == [1]
+
+
+def test_a_planning_crash_spends_the_full_draw_or_damage_count(monkeypatch):
+    def boom(_observation):
+        raise RuntimeError("search deadline")
+
+    agent = _agent_with_boom(monkeypatch, boom)
+    draw = _menu(
+        [engine_opt(type=0, number=1), engine_opt(type=0, number=3)], context=38)
+    counters = _menu(
+        [engine_opt(type=0, number=1), engine_opt(type=0, number=6)], context=39)
+
+    assert agent(draw) == [1]
+    assert agent(counters) == [1]
 
 
 def test_a_telemetry_failure_never_discards_a_computed_decision(monkeypatch, capsys):
@@ -153,6 +205,41 @@ def test_a_planner_failure_still_closes_the_retained_native_session():
     runtime._planner = lambda _observation: planner
     observation = _menu([engine_opt(type=3, area=2, index=0), engine_opt(type=14)])
 
-    with pytest.raises(RuntimeError):
-        runtime.decide(observation)
+    decision = runtime.decide(observation)
+
     assert planner.discarded
+    assert decision.chosen == (1,)
+    assert decision.diagnostics["fallback"]["cause"] == "exception:RuntimeError"
+
+
+def test_one_effect_timeout_latches_strategy_fallback_until_main_returns():
+    deployed = _mega_starmie_runtime()
+    calls = 0
+
+    def timed_out(_observation):
+        nonlocal calls
+        calls += 1
+        return runtime_module.RootDecision(
+            (0,), runtime_module.ActionIdentity("card"), 1.0, False,
+            {"production": {"deadline_hit": True}})
+
+    deployed._decide_with_planner = timed_out
+    observation = _menu(
+        [engine_opt(type=3, area=5, index=0, playerIndex=1),
+         engine_opt(type=3, area=5, index=1, playerIndex=1)], context=14)
+    observation["select"]["remainDamageCounter"] = 6
+    observation["current"]["players"][1]["bench"] = [
+        {"id": 10, "serial": 10, "hp": 120, "maxHp": 120},
+        {"id": 11, "serial": 11, "hp": 50, "maxHp": 100},
+    ]
+
+    assert deployed.decide(observation).chosen == (0,)
+    assert deployed.decide(observation).chosen == (1,)
+    assert calls == 1
+
+    observation["select"] = {
+        "context": 0, "minCount": 1, "maxCount": 1,
+        "option": [engine_opt(type=14)],
+    }
+    deployed.decide(observation)
+    assert calls == 2

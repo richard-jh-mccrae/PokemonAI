@@ -9,6 +9,19 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class DecisionClock:
+    external_seconds: float
+
+    @property
+    def fallback_tail_seconds(self) -> float:
+        return min(5.0, max(1.0, float(self.external_seconds) * 0.05))
+
+    @property
+    def bellman_seconds(self) -> float:
+        return max(0.1, float(self.external_seconds) - self.fallback_tail_seconds)
+
+
+@dataclass(frozen=True)
 class FairBudgetPrototype:
     seconds: float
 
@@ -21,4 +34,4 @@ class FairBudgetPrototype:
         return min(hard_deadline, now + share)
 
 
-__all__ = ("FairBudgetPrototype",)
+__all__ = ("DecisionClock", "FairBudgetPrototype")

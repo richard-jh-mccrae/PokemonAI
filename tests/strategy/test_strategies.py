@@ -8,6 +8,7 @@ from common.strategy.strategies import (
     StrategySnapshot,
     resolve_strategies,
     activate_strategies,
+    strategy_hint_from_dict,
 )
 from common.strategy.strategy import Roles
 from common.demand import StrategyBeamBuilder, semantic_action_key
@@ -37,8 +38,10 @@ def _rule(identifier="general.fund_active"):
         desired_facts=(DesiredFact("fund_attack", "own.active", 1),),
         recipient_selector="own.active",
         deadline="this_turn",
-        confidence="high",
+        conviction="high",
         provenance="general",
+        bundle_id="turn.attack",
+        waypoint=1,
     )
 
 
@@ -56,6 +59,59 @@ def test_strategy_resolution_is_serializable_stable_and_explicit():
         overrides=(StrategyOverride("general.fund_active", enabled=False),),
     ).content_hash
     assert resolved.as_dict()["overrides"][0]["strategy_id"] == "general.fund_active"
+    assert resolved.as_dict()["general"][0]["conviction"] == "high"
+    assert "confidence" not in resolved.as_dict()["general"][0]
+    assert resolved.as_dict()["general"][0]["bundle_id"] == "turn.attack"
+    assert resolved.as_dict()["general"][0]["waypoint"] == 1
+
+
+def test_legacy_strategy_confidence_loads_as_authored_conviction():
+    loaded = strategy_hint_from_dict({
+        "identifier": "brief.legacy",
+        "conditions": [],
+        "desired_facts": [{"kind": "fund_attack", "recipient": "own.active"}],
+        "recipient_selector": "own.active",
+        "deadline": "this_turn",
+        "confidence": "medium",
+    }, scope="opponent", provenance="brief:test")
+
+    assert loaded.conviction == "medium"
+    assert loaded.bundle_id is None
+    assert loaded.waypoint == 0
+
+
+def test_strategy_bundle_metadata_reaches_the_planning_snapshot():
+    snapshot = activate_strategies(
+        _observation(hand=[]), resolve_strategies((_rule(),)), roles=Roles({}))
+
+    assert snapshot.hints[0].conviction == "high"
+    assert snapshot.hints[0].bundle_id == "turn.attack"
+    assert snapshot.hints[0].waypoint == 1
+
+
+def test_this_turn_urgency_rises_when_the_branch_reaches_closing_actions():
+    hint = ActivatedStrategy(
+        "deck.attack", "fund_attack", "own.active", 10, 77, (),
+        "this_turn", "high", "turn.attack", 0)
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (hint,))
+    builder = StrategyBeamBuilder(snapshot)
+    open_state = SimpleNamespace(obs=_observation(hand=[]), root_seat=0)
+    closing = _observation(hand=[])
+    closing["select"]["option"] = [{"type": 13, "attackId": 1}]
+    closing_state = SimpleNamespace(obs=closing, root_seat=0)
+
+    assert builder.urgency(open_state, hint) == "medium"
+    assert builder.urgency(closing_state, hint) == "high"
+
+
+def test_missing_damage_setup_recipient_is_satisfied_not_impossible():
+    hint = ActivatedStrategy(
+        "deck.snipe", "damage_setup", "opponent.bench.highest_role",
+        20, 999, (), "this_turn", "high", "turn.attack", 2)
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (hint,))
+    state = SimpleNamespace(obs=_observation(hand=[]), root_seat=0)
+
+    assert StrategyBeamBuilder(snapshot).outcome_statuses(state)[0]["status"] == "satisfied"
 
 
 def test_strategy_resolution_combines_general_deck_and_opponent_layers():
@@ -81,7 +137,7 @@ def test_strategy_rejects_conflicting_recipient_declarations():
         StrategyHint(
             identifier="general.bad", scope="general", conditions=(),
             desired_facts=(DesiredFact("fund_attack", "own.bench", 1),),
-            recipient_selector="own.active", deadline="this_turn", confidence="high",
+            recipient_selector="own.active", deadline="this_turn", conviction="high",
             provenance="general",
         )
 
@@ -277,7 +333,7 @@ def test_live_odds_refresh_against_the_cached_turn_snapshot():
 def test_heal_hint_ignores_play_actions_without_a_source_card():
     hint = SimpleNamespace(
         kind="heal", target_card_ids=(), recipient_serial=None,
-        strategy_id="deck.heal", deadline="this_turn", confidence="high")
+        strategy_id="deck.heal", deadline="this_turn", conviction="high")
     snapshot = SimpleNamespace(hints=(hint,))
     action = SimpleNamespace(identity=SimpleNamespace(kind="play"), selection=(0,))
     state = SimpleNamespace(
@@ -513,7 +569,7 @@ def test_accelerator_clauses_earn_funding_access_odds():
     # access odds 0.0 and never entered the focused beam.
     hint = SimpleNamespace(
         kind="fund_attack", target_card_ids=(), recipient_serial=77,
-        strategy_id="general.fund_active_attacker", deadline="this_turn", confidence="high")
+        strategy_id="general.fund_active_attacker", deadline="this_turn", conviction="high")
     snapshot = SimpleNamespace(hints=(hint,))
     observation = _observation(hand=[{"id": 1198, "serial": 5, "playerIndex": 0}])
     observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
@@ -543,7 +599,7 @@ def test_damage_boost_hint_prioritizes_the_boost_play():
     hint = SimpleNamespace(
         kind="damage_boost", target_card_ids=(), recipient_serial=None,
         strategy_id="general.boost_the_committed_attack", deadline="this_turn",
-        confidence="medium")
+        conviction="medium")
     snapshot = SimpleNamespace(hints=(hint,))
     observation = _observation(hand=[{"id": 1141, "serial": 5, "playerIndex": 0}])
     observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
@@ -598,7 +654,7 @@ def test_boost_hint_rests_with_no_commitment_and_no_offered_attack():
 def test_damage_setup_hint_matches_a_spread_attacker():
     hint = SimpleNamespace(
         kind="damage_setup", target_card_ids=(), recipient_serial=88,
-        strategy_id="deck.setup", deadline="this_turn", confidence="high")
+        strategy_id="deck.setup", deadline="this_turn", conviction="high")
     snapshot = SimpleNamespace(hints=(hint,))
     observation = _observation(hand=[])
     observation["current"]["players"][1]["bench"] = [{"id": 30, "serial": 88}]

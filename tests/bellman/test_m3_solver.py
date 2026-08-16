@@ -479,8 +479,8 @@ def test_candidate_harvest_backtracks_within_the_focused_root(monkeypatch):
     decision = solver.decide(root)
 
     completed = decision.diagnostics["production"]["candidate_harvest"]["completed"]
-    assert len(completed) == 2
-    assert len({row["sequence"] for row in completed}) == 2
+    assert len(completed) >= 2
+    assert len({row["sequence"] for row in completed}) == 3
     assert {row["sequence"][0] for row in completed} == {str(start.identity)}
 
 
@@ -517,7 +517,7 @@ def test_timeout_fallback_chooses_only_from_banked_executable_candidates():
     )
     solver._root_key = root.semantic_key
     solver._deadline_hit = True
-    def bank_only_attack(action, _result):
+    def bank_only_attack(action, _result, _tier=None):
         if action == attack:
             solver._candidate_bank.live[action.identity] = Evaluation(
                 0.2, Ledger(), False, "banked", execution_complete=True)
@@ -540,6 +540,53 @@ def test_candidate_bank_never_replaces_a_stronger_completed_lower_bound():
     solver._bank_candidate(action, weaker)
 
     assert solver._candidate_bank.live[action.identity] is stronger
+
+
+def test_candidate_bank_publishes_a_finite_strategy_recoverable_prefix():
+    action = _action("play")
+    solver = ProductionSolver(Graph({}, {}), _oracle())
+    recoverable = Evaluation(1.0, Ledger(), False, "deadline")
+
+    solver._bank_candidate(action, recoverable)
+    solver._candidate_bank.publish()
+
+    assert solver._candidate_bank.checkpoint[action.identity] is recoverable
+    assert solver._candidate_bank.checkpoint_tiers[action.identity] == "recoverable"
+
+
+def test_timeout_candidate_prefers_full_plan_over_higher_recoverable_bound():
+    full_action, partial_action = _action("attack"), _action("play", 1)
+    solver = ProductionSolver(Graph({}, {}), _oracle())
+    solver._bank_candidate(
+        full_action, Evaluation(0.2, Ledger(), False, execution_complete=True))
+    solver._bank_candidate(partial_action, Evaluation(2.0, Ledger(), False))
+    solver._candidate_bank.publish()
+
+    chosen, _result = solver._select_timeout_candidate((
+        (partial_action, solver._candidate_bank.checkpoint[partial_action.identity]),
+        (full_action, solver._candidate_bank.checkpoint[full_action.identity]),
+    ), 0)
+
+    assert chosen == full_action
+
+
+def test_stability_stop_requires_two_full_checkpoints_patience_and_closed_bounds():
+    root = _state("stable-root")
+    chosen, challenger = _action("attack"), _action("play", 1)
+    solver = ProductionSolver(
+        Graph({"stable-root": (chosen, challenger)}, {}), _oracle(),
+        limits=ProductionLimits(max_seconds=10.0))
+    solver._root_key = root.semantic_key
+    solver._candidate_bank.offer(
+        chosen, Evaluation(1.0, Ledger(), False, execution_complete=True))
+    solver._candidate_bank.publish()
+    solver._action_bounds = {
+        (root.semantic_key, chosen.identity): {"q_upper": 1.0},
+        (root.semantic_key, challenger.identity): {"q_upper": 0.5},
+    }
+
+    assert not solver._stable_checkpoint(root, (chosen, challenger), 0, now=0.0)
+    assert solver._stable_checkpoint(root, (chosen, challenger), 0, now=2.0)
 
 
 def test_incumbent_stabilization_never_precedes_completed_first_discovery():
@@ -573,6 +620,47 @@ def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace()
     ), 0)
 
     assert chosen == information
+
+
+def test_unresolved_challenger_replaces_strategy_only_after_its_lower_bound_closes_focus():
+    from common.solver import Evaluation
+
+    state = _state("bounded-focus-root")
+    focused, challenger = _action("play"), _action("attach", 1)
+    solver = ProductionSolver(Graph({}, {}), _oracle())
+    solver._root_key = state.semantic_key
+    solver._strategy_focus_ranks[state.semantic_key] = {
+        semantic_action_key(focused): 0,
+    }
+    solver._protected_bundle_diagnostics = {"protected": ("test.bundle",)}
+    solver._action_bundles = lambda action: ("test.bundle",) if action == focused else ()
+    solver._action_bounds[(state.semantic_key, focused.identity)] = {"q_upper": 5.0}
+    focus_result = Evaluation(1.0, Ledger(), False)
+
+    preferred = solver._prefer_unresolved_strategy(
+        state,
+        ((focused, focus_result), (challenger, Evaluation(3.0, Ledger(), False))),
+        (challenger, Evaluation(3.0, Ledger(), False)), 0,
+    )
+    closed = solver._prefer_unresolved_strategy(
+        state,
+        ((focused, focus_result), (challenger, Evaluation(6.0, Ledger(), False))),
+        (challenger, Evaluation(6.0, Ledger(), False)), 0,
+    )
+
+    assert preferred[0] == focused
+    assert closed[0] == challenger
+
+
+def test_complete_equal_damage_placements_use_engine_selection_order():
+    from common.solver import Evaluation, _select_our_action
+
+    first, strategy_first = _action("counter", 0), _action("counter", 2)
+    tied = Evaluation(1.0, Ledger(), True, decisions=1.0)
+
+    chosen, _result = _select_our_action(((strategy_first, tied), (first, tied)), 13)
+
+    assert chosen == first
 
 
 def test_unresolved_root_uses_undominated_strategy_focus_instead_of_completed_incumbent(

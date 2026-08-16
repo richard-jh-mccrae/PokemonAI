@@ -76,8 +76,8 @@ class StrategyBeam:
 class StrategyBeamBuilder:
     """Order legal actions against one immutable planning-epoch Strategy Snapshot."""
 
-    _DEADLINE = {"immediate": 3.0, "this_turn": 2.0, "next_turn": 1.0}
-    _CONFIDENCE = {"high": 3.0, "medium": 2.0, "low": 1.0}
+    _URGENCY = {"high": 3.0, "medium": 2.0, "low": 1.0}
+    _CONVICTION = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
     def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8):
         self.snapshot = snapshot
@@ -86,6 +86,57 @@ class StrategyBeamBuilder:
         self.registry = registry
         self.width = max(1, int(width))
         self.last_odds: dict[str, float] = {}
+        self.last_reachability: dict[str, str] = {}
+        self.last_beam: StrategyBeam | None = None
+
+    def urgency(self, state, hint) -> str:
+        turn = int((state.obs.get("current") or {}).get("turn", 0))
+        if hint.deadline == "immediate":
+            return "high"
+        if hint.deadline == "next_turn":
+            return "high" if turn > int(self.snapshot.turn) else "low"
+        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        closing = any(int(option.get("type", -1)) in (13, 14) for option in options)
+        return "high" if closing else "medium"
+
+    def outcome_statuses(self, state) -> tuple[dict, ...]:
+        own = self._player(state)
+        opponent = self._opponent(state)
+        rows = []
+        for hint in self.snapshot.hints:
+            status = "unknown"
+            own_bodies = tuple(own.get("active") or ()) + tuple(own.get("bench") or ())
+            opponent_bodies = (tuple(opponent.get("active") or ())
+                               + tuple(opponent.get("bench") or ()))
+            if hint.kind == "damage_setup" and not any(
+                    body and int(body.get("serial", -1)) == hint.recipient_serial
+                    for body in opponent_bodies):
+                status = "satisfied"
+            elif hint.kind == "deploy" and hint.target_card_ids and any(
+                    body and int(body.get("id", -1)) in hint.target_card_ids
+                    for body in own.get("bench") or ()):
+                status = "satisfied"
+            elif hint.kind == "evolve" and hint.target_card_ids and any(
+                    body and int(body.get("serial", -1)) == hint.recipient_serial
+                    and int(body.get("id", -1)) in hint.target_card_ids
+                    for body in own_bodies):
+                status = "satisfied"
+            elif hint.kind == "heal":
+                body = next((body for body in own_bodies if body
+                             and int(body.get("serial", -1)) == hint.recipient_serial), None)
+                if body and int(body.get("hp", 0)) >= int(body.get("maxHp", body.get("hp", 0))):
+                    status = "satisfied"
+            if status == "unknown":
+                status = self.last_reachability.get(hint.strategy_id, status)
+            rows.append({
+                "strategy_id": hint.strategy_id,
+                "bundle_id": getattr(hint, "bundle_id", None),
+                "waypoint": int(getattr(hint, "waypoint", 0)),
+                "urgency": self.urgency(state, hint),
+                "conviction": getattr(hint, "conviction", getattr(hint, "confidence", "low")),
+                "status": status,
+            })
+        return tuple(rows)
 
     @staticmethod
     def _option(state, action):
@@ -116,10 +167,14 @@ class StrategyBeamBuilder:
         option = self._option(state, action)
         if not option:
             return None
-        area = option.get("inPlayArea")
-        index = option.get("inPlayIndex")
-        bodies = ((self._player(state).get("active") or ()) if area == _ACTIVE else
-                  (self._player(state).get("bench") or ()) if area == _BENCH else ())
+        area = option.get("inPlayArea", option.get("area"))
+        index = option.get("inPlayIndex", option.get("index"))
+        owner = option.get("playerIndex")
+        owner = int(getattr(state, "root_seat", 0)) if owner is None else int(owner)
+        player = self._player(state) if owner == int(getattr(state, "root_seat", 0)) \
+            else self._opponent(state)
+        bodies = ((player.get("active") or ()) if area == _ACTIVE else
+                  (player.get("bench") or ()) if area == _BENCH else ())
         body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
         return int(body["serial"]) if body and body.get("serial") is not None else None
 
@@ -203,10 +258,14 @@ class StrategyBeamBuilder:
         recipient = self._recipient_serial(state, action)
         source_id = self._source_card_id(state, action)
         source_stat = self.stats.get(source_id) if source_id is not None and self.stats else None
+        statuses = {row["strategy_id"]: row for row in self.outcome_statuses(state)}
         for hint in self.snapshot.hints:
+            if statuses[hint.strategy_id]["status"] == "satisfied":
+                continue
             probability = 0.0
             if (hint.kind == "fund_attack" and action.identity.kind == "attach"
                     and recipient == hint.recipient_serial
+                    and (not hint.target_card_ids or source_id in hint.target_card_ids)
                     and bool(getattr(source_stat, "is_energy", False))):
                 probability = 1.0
             elif (hint.kind == "evolve" and action.identity.kind == "evolve"
@@ -234,6 +293,9 @@ class StrategyBeamBuilder:
                     for body in self._opponent(state).get("bench") or () if body)
                 if target_exists and bench_reach(attack) > 0:
                     probability = 1.0
+            elif (hint.kind == "damage_setup" and action.identity.kind == "card"
+                  and recipient == hint.recipient_serial):
+                probability = 1.0
             elif (action.identity.kind == "card" and source_id is not None
                   and source_id in hint.target_card_ids):
                 probability = 1.0
@@ -244,18 +306,33 @@ class StrategyBeamBuilder:
             if probability <= 0.0:
                 continue
             matched.append(hint.strategy_id)
+            self.last_reachability[hint.strategy_id] = (
+                "guaranteed" if probability >= 1.0 else "probabilistic")
             key = semantic_action_key(action)
             self.last_odds[key] = max(self.last_odds.get(key, 0.0), probability)
-            priority = max(priority, self._DEADLINE[hint.deadline] * 100.0
-                           + self._CONFIDENCE[hint.confidence] * 10.0 + probability)
+            priority = max(priority, self._URGENCY[self.urgency(state, hint)] * 100.0
+                           + self._CONVICTION[getattr(
+                               hint, "conviction", getattr(hint, "confidence", "low"))]
+                           * 10.0 + probability)
         return priority, tuple(sorted(set(matched)))
 
     def action_priority(self, state, action) -> float:
         return self._priority(state, action)[0]
 
+    def rank_legal(self, state, actions) -> tuple:
+        """Strategy-first legal order with stable deterministic completion."""
+        actions = tuple(actions)
+        beam = self.build(state, actions)
+        focus = {row.action_key: index for index, row in enumerate(beam.focused)}
+        return tuple(sorted(actions, key=lambda action: (
+            focus.get(semantic_action_key(action), len(actions)), action.identity,
+            action.selection,
+        )))
+
     def build(self, state, actions, *, ranking=None) -> StrategyBeam:
         started = perf_counter()
         self.last_odds = {}
+        self.last_reachability = {}
         focused = []
         safety = []
         unknown = []
@@ -286,10 +363,12 @@ class StrategyBeamBuilder:
                 row.action_key,
             ))[:self.width])
         elapsed = (perf_counter() - started) * 1000.0
-        return StrategyBeam(
-            focused, tuple(safety), tuple(unknown), (), (), elapsed, False,
+        statuses = self.outcome_statuses(state)
+        self.last_beam = StrategyBeam(
+            focused, tuple(safety), tuple(unknown), tuple(statuses), (), elapsed, False,
             (), tuple(inactive),
         )
+        return self.last_beam
 
 
 def access_probability(pool_ids, draws: int, eligible_ids) -> float:
