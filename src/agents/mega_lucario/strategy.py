@@ -22,6 +22,9 @@ GRAVITY_MOUNTAIN = 1252
 
 # One named outcome, whichever half of the pair is missing.
 SOLROCK_PAIR = "mega_lucario.complete_the_solrock_pair"
+GUST_EVOLUTION = "mega_lucario.evolve_into_the_gust"
+# Named, not `evolvable:first`: Riolu also evolves, so first-on-the-Bench binds the wrong body.
+BENCHED_MAKUHITA = f"own.bench.card:{MAKUHITA}"
 
 # Sparse deck intent. Meowth ex is absent on purpose: its Supporter tutor is a shared Card
 # Function. Evolution relationships come from card facts, not from this table.
@@ -86,9 +89,9 @@ STRATEGY = Strategy(
             "own.bench", "immediate", "high", "mega_lucario.strategy",
             bundle_id=SOLROCK_PAIR,
         ),
-        # Heave-Ho Catcher rides the evolution itself, so the Makuhita line is worth the most on the
-        # turn there is something on the opposing Bench worth dragging out. This raises that turn's
-        # search priority; it never suppresses the general evolve, which Bellman still values.
+        # Heave-Ho Catcher rides the evolution, so the Makuhita line is worth most on the turn the
+        # opposing Bench holds something worth dragging out. Declared per position, one bundle:
+        # the gust is one outcome and it does not care which slot the Makuhita stands in.
         StrategyHint(
             "mega_lucario.evolve_makuhita_for_the_gust",
             "deck",
@@ -98,6 +101,18 @@ STRATEGY = Strategy(
             ),
             (DesiredFact("evolve", "own.active", target_card_ids=(HARIYAMA,)),),
             "own.active", "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=GUST_EVOLUTION,
+        ),
+        StrategyHint(
+            "mega_lucario.evolve_benched_makuhita_for_the_gust",
+            "deck",
+            (
+                ActivationCondition("own.bench.card_ids", "contains", MAKUHITA),
+                ActivationCondition("opponent.bench.role_target_count", "gt", 0),
+            ),
+            (DesiredFact("evolve", BENCHED_MAKUHITA, target_card_ids=(HARIYAMA,)),),
+            BENCHED_MAKUHITA, "this_turn", "high", "mega_lucario.strategy",
+            bundle_id=GUST_EVOLUTION,
         ),
     ),
 )

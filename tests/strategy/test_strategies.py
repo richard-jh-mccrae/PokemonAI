@@ -732,6 +732,78 @@ def test_no_chain_credit_without_a_link_that_reaches_the_need():
     assert not focused[MEOWTH_EX]
 
 
+RIOLU, MAKUHITA, HARIYAMA = 677, 673, 674
+
+
+def _bench_observation():
+    """Riolu sits BEFORE Makuhita, and both evolve — the case that breaks `evolvable:first`."""
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["bench"] = [
+        {"id": RIOLU, "serial": 41, "energies": []},
+        {"id": MAKUHITA, "serial": 42, "energies": []},
+    ]
+    observation["current"]["players"][1]["bench"] = [{"id": 20, "serial": 89, "hp": 100}]
+    return observation
+
+
+def _lucario_roles():
+    """The REAL resolved roles: `evolves` comes from card facts, not from a hand-built table."""
+    from pathlib import Path
+
+    from agents.mega_lucario.strategy import STRATEGY
+    from common.cards import CardFunctions
+    from common.scouting.provider import EngineCardStatProvider
+
+    repo = Path(__file__).resolve().parents[2]
+    deck = [int(v) for v in
+            (repo / "src" / "agents" / "mega_lucario" / "deck.csv").read_text().split()]
+    return STRATEGY.roles.resolve(deck, EngineCardStatProvider(), CardFunctions.load())
+
+
+def test_a_named_bench_selector_binds_that_card_not_the_first_evolvable():
+    roles = _lucario_roles()
+    assert {RIOLU, MAKUHITA} <= set(roles.evolves), "both Basics must evolve for this to bite"
+    observation = _bench_observation()
+
+    def bind(selector):
+        rule = StrategyHint(
+            "deck.evolve_bench", "deck", (),
+            (DesiredFact("evolve", selector, target_card_ids=(HARIYAMA,)),),
+            selector, "this_turn", "high", "deck")
+        snapshot = activate_strategies(
+            observation, resolve_strategies((), (rule,)), roles=roles)
+        return snapshot.hints[0].recipient_serial
+
+    assert bind("own.bench.evolvable:first") == 41       # Riolu — the wrong body
+    assert bind(f"own.bench.card:{MAKUHITA}") == 42      # the Makuhita we meant
+
+
+def test_a_named_bench_selector_binds_nothing_when_that_card_is_absent():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["bench"] = [{"id": RIOLU, "serial": 41}]
+    rule = StrategyHint(
+        "deck.evolve_bench", "deck", (),
+        (DesiredFact("evolve", f"own.bench.card:{MAKUHITA}", target_card_ids=(HARIYAMA,)),),
+        f"own.bench.card:{MAKUHITA}", "this_turn", "high", "deck")
+
+    snapshot = activate_strategies(
+        observation, resolve_strategies((), (rule,)), roles=Roles({}))
+
+    assert snapshot.hints[0].recipient_serial is None
+
+
+def test_mega_lucario_wants_the_gust_evolution_from_the_bench_too():
+    """Heave-Ho Catcher rides the evolution wherever the Makuhita stands."""
+    from agents.mega_lucario.strategy import STRATEGY
+
+    snapshot = activate_strategies(
+        _bench_observation(), resolve_strategies((), STRATEGY.strategies),
+        roles=STRATEGY.roles, opponent_role_worth={20: 30.0})
+    gust = [hint for hint in snapshot.hints if "gust" in hint.strategy_id]
+
+    assert gust and all(hint.recipient_serial == 42 for hint in gust)
+
+
 def test_boost_general_strategy_is_declared():
     assert "general.boost_the_committed_attack" in {
         hint.identifier for hint in GENERAL_STRATEGIES}

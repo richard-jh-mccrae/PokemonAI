@@ -9,6 +9,8 @@ import json
 _SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
 _CONVICTIONS = frozenset({"high", "medium", "low"})
+#: Prefix of the card-named Bench recipient selector: ``own.bench.card:<card_id>``.
+_BENCH_CARD = "own.bench.card:"
 _OPERATORS = frozenset({
     "eq", "ne", "lt", "le", "gt", "ge", "contains", "not_contains", "missing",
 })
@@ -234,6 +236,12 @@ def _recipient_body(observation: dict, seat: int, selector: str, roles,
     if selector == "own.bench.evolvable:first":
         return next((body for body in player.get("bench") or ()
                      if body and body.get("id") in roles.evolves), {})
+    if selector.startswith(_BENCH_CARD):
+        # `evolvable:first` binds whichever Basic sits earliest, which is the wrong body as soon
+        # as a deck Benches two evolving Basics. This names the one the declaration meant.
+        card_id = int(selector[len(_BENCH_CARD):])
+        return next((body for body in player.get("bench") or ()
+                     if body and int(body.get("id", -1)) == card_id), {})
     if selector == "opponent.bench.highest_role":
         opponent = _player(observation, 1 - seat)
         worth = opponent_role_worth or {}
