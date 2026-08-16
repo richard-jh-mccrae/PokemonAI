@@ -256,7 +256,11 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
         facts[prefix + ".in_play"] = True
         facts[prefix + ".energy_count"] = max(
             int(facts.get(prefix + ".energy_count", 0)), len(body.get("energies") or ()))
-        facts[prefix + ".hp_fraction"] = (
+        # The MOST threatened copy, not whichever the loop reached last. A deck running four
+        # Drakloak asks "is a Drakloak in danger", and a last-wins reading answers about an
+        # arbitrary one.
+        facts[prefix + ".hp_fraction"] = min(
+            float(facts.get(prefix + ".hp_fraction", 1.0)),
             int(body.get("hp", 0)) / max(1, int(body.get("maxHp", body.get("hp", 1)))))
         if int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0))):
             facts["own.damaged_count"] += 1

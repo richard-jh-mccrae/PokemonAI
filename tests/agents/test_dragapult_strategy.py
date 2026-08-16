@@ -172,7 +172,7 @@ def test_drakloak_general_evolution_waits_for_the_deck_gate():
     )
 
     assert "general.evolve_active_attacker" not in snapshot.active_ids
-    assert "dragapult.evolve_ready_drakloak" in snapshot.active_ids
+    assert "dragapult.evolve_drakloak_for_the_attack" in snapshot.active_ids
 
 
 def test_threatened_drakloak_can_evolve_before_it_is_attack_ready():
@@ -241,7 +241,7 @@ def test_only_the_phantom_dive_line_and_its_conversions_are_immediate():
 
     assert immediate == {
         "dragapult.fund_active_phantom_dive",
-        "dragapult.evolve_ready_drakloak",
+        "dragapult.evolve_drakloak_for_the_attack",
         "dragapult.phantom_dive_damage_setup",
         "dragapult.boss_softened_two_prize_target",
         "dragapult.unfair_stamp_before_draw",
@@ -411,3 +411,72 @@ def test_the_pinch_attacker_never_outranks_the_real_line():
 
     assert (pinch.deadline, pinch.conviction) == ("this_turn", "low")
     assert (plan.deadline, plan.conviction) == ("immediate", "high")
+
+
+def test_drakloak_is_held_while_a_dragapult_is_already_doing_the_job():
+    """Evolving spends a draw engine and puts a two-prize body down, and it can be done on the
+    very turn it attacks. With a Dragapult ex already in play the benched Drakloak keeps
+    drawing."""
+    attacking = _active_snapshot(121, bench=(120,))
+
+    assert "dragapult.evolve_drakloak_for_the_attack" not in attacking.active_ids
+    assert "dragapult.evolve_threatened_drakloak" not in attacking.active_ids
+
+
+def test_drakloak_evolves_once_the_line_has_no_payoff_of_its_own():
+    """No Dragapult ex anywhere is what makes the evolution wanted -- not our active, which is
+    fixed at the planning-epoch boundary and would strand a promote-then-evolve turn."""
+    from types import SimpleNamespace
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+
+    def _snapshot(energies):
+        observation = {"current": {"turn": 6, "yourIndex": 0, "result": -1, "players": [
+            {"active": [{"id": 119, "serial": 1, "hp": 70, "maxHp": 70, "energies": [],
+                         "energyCards": [], "preEvolution": [], "tools": []}],
+             "bench": [{"id": 120, "serial": 2, "hp": 90, "maxHp": 90, "energies": list(energies),
+                        "energyCards": [], "preEvolution": [], "tools": []}],
+             "hand": [], "prize": [None] * 6, "benchMax": 5},
+            {"active": [], "bench": [], "prize": [None] * 6, "benchMax": 5},
+        ]}, "select": {"context": 0, "option": []}}
+        return activate_strategies(
+            observation, resolved, roles=roles, stats=stats, effects=effects)
+
+    # Benched, not active: the hint must still be live so a promote-then-evolve turn is guided.
+    assert "dragapult.evolve_drakloak_for_the_attack" in _snapshot((2, 5)).active_ids
+    # Unfunded: evolving would put down a two-prize body that cannot swing.
+    assert "dragapult.evolve_drakloak_for_the_attack" not in _snapshot(()).active_ids
+
+
+def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
+    """90 HP becomes 320 and the damage already on it stops being lethal. Losing the Drakloak
+    loses the line behind the attacker."""
+    from types import SimpleNamespace
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+    observation = {"current": {"turn": 6, "yourIndex": 0, "result": -1, "players": [
+        {"active": [{"id": 121, "serial": 1, "hp": 320, "maxHp": 320, "energies": [2, 5],
+                     "energyCards": [], "preEvolution": [], "tools": []}],
+         "bench": [{"id": 120, "serial": 2, "hp": 30, "maxHp": 90, "energies": [],
+                    "energyCards": [], "preEvolution": [], "tools": []}],
+         "hand": [], "prize": [None] * 6, "benchMax": 5},
+        {"active": [], "bench": [], "prize": [None] * 6, "benchMax": 5},
+    ]}, "select": {"context": 0, "option": []}}
+    snapshot = activate_strategies(
+        observation, resolved, roles=roles, stats=stats, effects=effects)
+
+    assert "dragapult.evolve_threatened_drakloak" in snapshot.active_ids

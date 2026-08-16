@@ -14,6 +14,8 @@ from common.strategy.strategy import Roles
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.options import enumerate_legal_actions
+import pytest
+
 from types import SimpleNamespace
 
 
@@ -1583,3 +1585,23 @@ def test_a_held_information_hint_does_not_lead_the_beam():
     assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
     statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
     assert statuses["deck.peek_later"] == "held"
+
+
+def test_a_body_hp_fraction_reports_the_most_threatened_copy():
+    """A deck running four Drakloak asks whether A Drakloak is in danger. Reading whichever copy
+    the loop reached last answers about an arbitrary one."""
+    from common.strategy.strategies import _visible_facts
+    from common.strategy import Roles
+
+    drakloak = 120
+    observation = {"current": {"turn": 4, "yourIndex": 0, "players": [
+        {"active": [], "benchMax": 5, "bench": [
+            {"id": drakloak, "serial": 1, "hp": 20, "maxHp": 90, "energies": []},
+            {"id": drakloak, "serial": 2, "hp": 90, "maxHp": 90, "energies": []},
+        ]},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+
+    facts = _visible_facts(observation, roles=Roles())
+
+    assert facts[f"own.card.{drakloak}.hp_fraction"] == pytest.approx(20 / 90)

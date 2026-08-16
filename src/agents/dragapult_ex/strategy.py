@@ -69,10 +69,15 @@ STRATEGY = Strategy(
                   ActivationCondition("own.active.card_id", "eq", DRAGAPULT_EX),
                   ActivationCondition("own.active.attack_ready", "eq", False),
               ), deadline="immediate", bundle_id=PHANTOM_DIVE, waypoint=0),
-        _hint("evolve_ready_drakloak", "evolve", DRAKLOAK_BODY,
+        # Drakloak is held, not raced through. Evolving spends a draw engine and puts a
+        # two-prize body on the board, and the evolution can be made on the very turn it
+        # attacks -- so it is wanted only once the line has no payoff of its own and the
+        # Energy to swing is already down. A Dragapult ex in play means the job is taken:
+        # the benched Drakloak keeps drawing instead.
+        _hint("evolve_drakloak_for_the_attack", "evolve", DRAKLOAK_BODY,
               conditions=(
+                  ActivationCondition(f"own.card.{DRAGAPULT_EX}.in_play", "missing"),
                   ActivationCondition(f"own.card.{DRAKLOAK}.energy_count", "ge", 2),
-                  ActivationCondition("turn.ability.card_ids", "not_contains", DRAKLOAK),
               ), targets=(DRAGAPULT_EX,), deadline="immediate",
               bundle_id=PHANTOM_DIVE, waypoint=1),
         # Gated on the opponent's bench, not on ours: a turn that evolves Drakloak and THEN
@@ -117,6 +122,9 @@ STRATEGY = Strategy(
         _hint("evolve_dunsparce_draw_line", "evolve", DUNSPARCE_BODY,
               conditions=(ActivationCondition(f"own.card.{DUNSPARCE}.in_play", "eq", True),),
               targets=(DUDUNSPARCE,), confidence="low"),
+        # The other reason to evolve: 90 HP becomes 320 and the damage already on it stops
+        # being lethal. Worth it even while a Dragapult ex is already attacking, because
+        # losing the Drakloak loses the line behind it.
         _hint("evolve_threatened_drakloak", "evolve", DRAKLOAK_BODY,
               conditions=(ActivationCondition(
                   f"own.card.{DRAKLOAK}.hp_fraction", "lt", 0.75),),
