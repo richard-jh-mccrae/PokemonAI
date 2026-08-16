@@ -207,6 +207,7 @@ class AgentServer:
         self.last_telemetry = []
         self.last_timeout = False
         self.last_error = None
+        self.last_seconds: float | None = None
 
     def _read_responses(self) -> None:
         for line in self.proc.stdout:
@@ -228,10 +229,15 @@ class AgentServer:
         return self.proc.poll() is None
 
     def act(self, obs: dict, timeout=None) -> list[int] | None:
-        """The chosen indices, or None after a process failure or decision timeout."""
+        """The chosen indices, or None after a process failure or decision timeout.
+
+        `last_seconds` is the harness-side round trip — search *plus* whatever telemetry the
+        contestant serialises back down the pipe. Unlike the agent's own `decision_seconds`
+        it survives `AGENT_NO_TELEMETRY=1`, so it is the one clock that compares the two."""
         self.last_timeout = False
         self.last_telemetry = []
         self.last_error = None
+        started = monotonic()
         try:
             self.proc.stdin.write(json.dumps(obs) + "\n")
             self.proc.stdin.flush()
@@ -253,6 +259,8 @@ class AgentServer:
         except (BrokenPipeError, OSError, ValueError) as exc:
             self.last_error = f"agent protocol failed: {type(exc).__name__}: {exc}"
             return None
+        finally:
+            self.last_seconds = monotonic() - started
 
     def close(self) -> None:
         try:
@@ -326,9 +334,12 @@ def play_match(server_a: AgentServer, server_b: AgentServer,
                 failure = getattr(servers[seat], "last_error", None)
                 break
             if metrics is not None:
-                metrics.extend({**record, "engine_seat": seat,
-                                "decision_index": decision_index}
+                measured = {"engine_seat": seat, "decision_index": decision_index,
+                            "round_trip_seconds": servers[seat].last_seconds}
+                metrics.extend({**record, **measured}
                                for record in servers[seat].last_telemetry)
+                if not servers[seat].last_telemetry:   # telemetry off: the clock is the whole row
+                    metrics.append(measured)
             decision_index += 1
             if recorder is not None:
                 recorder.step(obs, choice)         # (obs shown, choice made) — paired for the +1-offset film

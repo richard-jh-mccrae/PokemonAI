@@ -83,6 +83,12 @@ class BoardPotential:
         self._attack_cache = {}
         self._resource_job_cache = {}
         self._prize_job_capacities_cache = None
+        self._cost_cap_cache = {}
+        self._tags_cache = {}
+        # Facts, energy codes, and damage contexts recur ~17x within one evaluation over the same
+        # player/body dicts.  The observation is immutable for the duration of one ``__call__``, so
+        # results are keyed by object identity and the cache lives only for that call.
+        self._call_cache = None
 
     def _stat(self, card_id):
         if not self.stats or card_id is None:
@@ -107,7 +113,45 @@ class BoardPotential:
         stat = self._stat(card_id)
         return int(getattr(stat, "prize_value", 1) if stat is not None else 1)
 
+    def _codes(self, body):
+        cache = self._call_cache
+        if cache is None:
+            return _energy_codes(body)
+        key = ("codes", id(body))
+        found = cache.get(key)
+        if found is None:
+            found = cache[key] = _energy_codes(body)
+        return found
+
+    def _tags(self, card_id) -> frozenset:
+        card_id = int(card_id)
+        found = self._tags_cache.get(card_id)
+        if found is None:
+            found = self._tags_cache[card_id] = frozenset(
+                self.registry.functions.get(card_id, ()))
+        return found
+
+    def _context(self, attacker_facts: SideFacts, defender_facts: SideFacts) -> dict:
+        cache = self._call_cache
+        if cache is None:
+            return damage_context(attacker_facts, defender_facts)
+        key = ("ctx", id(attacker_facts), id(defender_facts))
+        found = cache.get(key)
+        if found is None:
+            found = cache[key] = damage_context(attacker_facts, defender_facts)
+        return found
+
     def _side_facts(self, player, *, attacking_body=None) -> SideFacts:
+        cache = self._call_cache
+        if cache is None:
+            return self._build_side_facts(player, attacking_body=attacking_body)
+        key = ("sf", id(player), id(attacking_body))
+        found = cache.get(key)
+        if found is None:
+            found = cache[key] = self._build_side_facts(player, attacking_body=attacking_body)
+        return found
+
+    def _build_side_facts(self, player, *, attacking_body=None) -> SideFacts:
         bodies = _bodies(player)
         active = attacking_body or next(
             (body for body in (player.get("active") or ()) if body), None)
@@ -166,7 +210,7 @@ class BoardPotential:
         hand_size = len(hand) if hand is not None else int(player.get("handCount", 0) or 0)
         return SideFacts(
             hand_size=hand_size,
-            active_energy=len(_energy_codes(active)) if active else 0,
+            active_energy=len(self._codes(active)) if active else 0,
             bench_count=len(bench),
             prizes_taken=prizes_taken,
             active_counters=counters(active) if active else 0,
@@ -193,8 +237,8 @@ class BoardPotential:
             return 0.0
         hp = max(MINIMUM_HP, int(defender.get("hp", MINIMUM_HP)))
         prizes = self._prizes(defender)
-        context = damage_context(attacker_facts, defender_facts)
-        defender_tags = frozenset(self.registry.functions.get(int(defender.get("id", 0)), ()))
+        context = self._context(attacker_facts, defender_facts)
+        defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
             attack = self._attack(attack_id)
@@ -261,7 +305,7 @@ class BoardPotential:
                 for body in (body for body in bodies if body):
                     attacker_facts = self._side_facts(me, attacking_body=body)
                     values.append(min((self._attack_value(
-                        body, _energy_codes(body), defender, attacker_facts, opponent_facts)
+                        body, self._codes(body), defender, attacker_facts, opponent_facts)
                         for defender in defenders), default=0.0))
         own = max(max(active_values, default=0.0),
                   BENCH_ATTACK_ACCESS_SHARE * max(bench_values, default=0.0))
@@ -270,7 +314,7 @@ class BoardPotential:
             for body in _bodies(opponent):
                 attacker_facts = self._side_facts(opponent, attacking_body=body)
                 incoming_values.append(self._attack_value(
-                    body, _energy_codes(body), mine, attacker_facts, me_facts)
+                    body, self._codes(body), mine, attacker_facts, me_facts)
                     * (1.0 + OPPONENT_ROLE_THREAT_SHARE
                        * self.opponent_role_worth.get(int(body.get("id", 0)), 0.0)
                        / OPPONENT_ROLE_WORTH_NORMALIZER))
@@ -308,7 +352,7 @@ class BoardPotential:
                     self.registry.functions, int(card.get("id", 0)),
                     evolved=bool(active.get("preEvolution")))
                 energy_provisions.append((int(energy_type), max(1, units)))
-        codes = _energy_codes(active)
+        codes = self._codes(active)
         return max((self._attack_ko_coverage(
             active, [*codes, *([energy_type] * units)], me, opponent)
                     for energy_type, units in energy_provisions), default=0.0)
@@ -323,7 +367,7 @@ class BoardPotential:
             return 0.0
         attacker_facts = self._side_facts(me, attacking_body=body)
         defender_facts = self._side_facts(opponent)
-        defender_tags = frozenset(self.registry.functions.get(int(defender.get("id", 0)), ()))
+        defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
             attack = self._attack(attack_id)
@@ -332,7 +376,7 @@ class BoardPotential:
                 continue
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
-                context=damage_context(attacker_facts, defender_facts))
+                context=self._context(attacker_facts, defender_facts))
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
             snipe = int(getattr(attack, "benchSnipe", 0) or 0)
@@ -352,15 +396,15 @@ class BoardPotential:
         if defender_stat is None:
             return 0.0
         defender_facts = self._side_facts(opponent)
-        defender_tags = frozenset(self.registry.functions.get(int(defender.get("id", 0)), ()))
+        defender_tags = self._tags(defender.get("id", 0))
         best = 0.0
         for body in _bodies(me):
             stat = self._stat(body.get("id"))
             if stat is None:
                 continue
-            context = damage_context(
+            context = self._context(
                 self._side_facts(me, attacking_body=body), defender_facts)
-            codes = _energy_codes(body)
+            codes = self._codes(body)
             for attack_id in getattr(stat, "attacks", ()) or ():
                 attack = self._attack(attack_id)
                 if attack is None or _pay_fraction(
@@ -386,14 +430,14 @@ class BoardPotential:
         active_stat = self._stat(active.get("id"))
         if active_stat is None:
             return 0.0
-        active_tags = frozenset(self.registry.functions.get(int(active.get("id", 0)), ()))
+        active_tags = self._tags(active.get("id", 0))
         defender_facts = self._side_facts(defender_side)
         worst = 0.0
         for body in _bodies(attacker_side):
             stat = self._stat(body.get("id"))
             if stat is None:
                 continue
-            context = damage_context(
+            context = self._context(
                 self._side_facts(attacker_side, attacking_body=body), defender_facts)
             for attack_id in getattr(stat, "attacks", ()) or ():
                 attack = self._attack(attack_id)
@@ -474,7 +518,7 @@ class BoardPotential:
         bodies = _bodies(me)
         if getattr(stat, "is_energy", False):
             return self.isolated_selection or any(
-                len(_energy_codes(body)) < self._energy_cost_cap(int(body.get("id", 0)))
+                len(self._codes(body)) < self._energy_cost_cap(int(body.get("id", 0)))
                 for body in bodies)
         evolves_from = getattr(stat, "evolvesFrom", None)
         if not evolves_from:
@@ -487,6 +531,14 @@ class BoardPotential:
         )
 
     def _energy_cost_cap(self, card_id: int) -> int:
+        card_id = int(card_id)
+        found = self._cost_cap_cache.get(card_id)
+        if found is not None:
+            return found
+        found = self._cost_cap_cache[card_id] = self._build_energy_cost_cap(card_id)
+        return found
+
+    def _build_energy_cost_cap(self, card_id: int) -> int:
         candidates = [int(card_id)]
         if hasattr(self.stats, "forward_card_ids"):
             candidates.extend(int(candidate)
@@ -506,7 +558,7 @@ class BoardPotential:
         if attacker is None or defender is None:
             return False
         return self._attack_value(
-            attacker, _energy_codes(attacker), defender,
+            attacker, self._codes(attacker), defender,
             self._side_facts(me, attacking_body=attacker), self._side_facts(opponent),
         ) >= self._prizes(defender)
 
@@ -542,18 +594,18 @@ class BoardPotential:
                 remaining -= units
             if not values:
                 values = [worth_to_prizes(self.registry.seeds.energy)] * min(
-                    cap, len(_energy_codes(body)))
+                    cap, len(self._codes(body)))
             diversify = (not self.isolated_selection or active_ko_ready
                           or bool(body.get("preEvolution")))
             shaped = sum(value / (index + 1) if diversify else value * (index + 1)
                          for index, value in enumerate(values))
             if not self.isolated_selection or historical_context != _DAMAGE:
-                shaped *= self._attack_coverage(body, _energy_codes(body), me, opponent)
+                shaped *= self._attack_coverage(body, self._codes(body), me, opponent)
             total += survival * shaped - overcap
         active = next((body for body in (me.get("active") or ()) if body), None)
         if active is not None and not self.isolated_selection:
             cap = self._energy_cost_cap(int(active.get("id", 0)))
-            missing = max(0, cap - len(_energy_codes(active)))
+            missing = max(0, cap - len(self._codes(active)))
             active_maximum = max(
                 MINIMUM_HP, int(active.get("maxHp", active.get("hp", MINIMUM_HP))))
             active_full = int(active.get("hp", 0)) >= active_maximum
@@ -563,7 +615,7 @@ class BoardPotential:
                                 and int(body.get("hp", 0)) >= max(
                                     MINIMUM_HP,
                                     int(body.get("maxHp", body.get("hp", MINIMUM_HP)))))
-                stranded_units = sum(len(_energy_codes(body)) for body in backups)
+                stranded_units = sum(len(self._codes(body)) for body in backups)
                 total -= (self._prizes(active) * missing
                           * min(1.0, stranded_units / max(1, cap)))
         return total
@@ -713,6 +765,13 @@ class BoardPotential:
         return max(values, default=0.0)
 
     def __call__(self, observation) -> Potential:
+        self._call_cache = {}
+        try:
+            return self._evaluate(observation)
+        finally:
+            self._call_cache = None
+
+    def _evaluate(self, observation) -> Potential:
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
         players = current.get("players") or ()

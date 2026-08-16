@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
-from .options import LegalAction, enumerate_legal_actions
+from .options import LegalAction
 from .commutativity import action_footprint
 from .refresh import refresh_transition
 from .refresh import played_card_id
@@ -187,7 +187,7 @@ class NativeCgTransitionProvider:
     def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
         if state.semantic_key not in self._worlds:
             return ()
-        return enumerate_legal_actions(state.obs)
+        return state.legal_actions
 
     def actor(self, state: DecisionState) -> Actor:
         seat = int(state.obs.get("bellmanActor", state.root_seat))

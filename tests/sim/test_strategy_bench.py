@@ -12,6 +12,7 @@ def _telemetry():
     return [{
         "engine_seat": 1,
         "decision_index": 4,
+        "round_trip_seconds": 61.5,
         "action": {"kind": "card", "card_id": 7},
         "value": 12.5,
         "complete": True,
@@ -60,6 +61,7 @@ def test_report_uses_strategy_wave_and_focus_position_language():
     report = format_report(payload)
     assert "1 matches -- 10 jobs" in report
     assert "Decision timeout 60.0s | agent budget 57s" in report
+    assert "Telemetry emission on | round trip avg 61.50s" in report
     assert "Final incumbent first found avg 4.00s" in report
     assert "Strategy wave: first" in report
     assert "Strategy focus position: 3 of 8" in report
@@ -80,6 +82,26 @@ def test_decision_csv_contains_both_seats_and_timing_metrics(tmp_path):
     assert "lethal_proof_seconds" in text
     assert "0.125" in text
     assert {line.split(",")[3] for line in text.splitlines()[1:]} == {"0", "1"}
+
+
+def test_no_emit_run_still_prices_every_decision_off_the_harness_clock():
+    rows = decision_metrics(                       # what a telemetry-off match hands back
+        [{"engine_seat": 0, "decision_index": 0, "round_trip_seconds": 3.0},
+         {"engine_seat": 1, "decision_index": 1, "round_trip_seconds": 5.0}],
+        match_index=1, contestants=("a", "b"))
+    summary = summarize_decisions(rows)
+
+    assert summary["timed_decisions"] == 0         # no agent-side clock survives --no-emit
+    assert summary["round_trip_seconds"] == {"samples": 2, "avg": 4.0, "p95": 5.0, "max": 5.0}
+    report = format_report({
+        "config": {"mode": "mirror", "decision_timeout": 60.0, "match_timeout": 600.0,
+                   "jobs": 1, "emit": False},
+        "matches": [{"winner_seat": 0, "timed_out": (), "match_deadline_hit": False}],
+        "decisions": rows, "summary": summary,
+    })
+    assert "Telemetry emission off | round trip avg 4.00s" in report
+    assert "Search timing needs telemetry" in report
+    assert "Lethal solver" not in report           # diagnostics sections would be all zeros
 
 
 def test_default_jobs_leaves_two_logical_processors_for_the_host(monkeypatch):

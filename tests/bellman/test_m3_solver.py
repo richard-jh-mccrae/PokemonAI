@@ -23,6 +23,14 @@ from common.value import CardFacts, Potential, ValueOracle, ValueRegistry
 CARD = 900
 DECK = (CARD,)
 
+# The ordering-layer contracts below predate the ADR-0140 dominance gate, which deliberately
+# DOES delete neutral commitments while a live peek is legal.  They keep guarding the ordering
+# machinery with the gate off; the deletion behaviour has its own suite
+# (test_information_dominance.py).
+GATE_OFF = PilotProfile.resolve(
+    global_values={"search.information_dominance_enabled": 0.0},
+    authored_deck_overrides={}, provenance="test-gate-off")
+
 
 def _obs(node, *, hand=(), board=0.0, supporter=False, context=0):
     return {"node": node, "current": {"yourIndex": 0, "board": board,
@@ -622,7 +630,7 @@ def test_unresolved_root_uses_undominated_strategy_focus_instead_of_completed_in
     decision = ProductionSolver(
         graph, ValueOracle(REGISTRY, OpenCeiling()),
         limits=ProductionLimits(max_nodes=1, root_probe_nodes=1, root_refinement_width=2),
-        strategy_snapshot=object(),
+        profile=GATE_OFF, strategy_snapshot=object(),
     ).decide(root)
 
     assert not decision.complete
@@ -1011,6 +1019,7 @@ def test_information_first_ordering_does_not_delete_commitment_first():
 
     decision = ProductionSolver(
         graph, _oracle(), limits=ProductionLimits(max_nodes=50, root_probe_nodes=50),
+        profile=GATE_OFF,
     ).decide(root)
 
     assert decision.action.kind == "attach"
@@ -1187,6 +1196,7 @@ def test_information_orders_before_heal_without_blocking_later_widening():
         graph, oracle,
         limits=ProductionLimits(
             max_nodes=10, root_probe_nodes=1, root_refinement_width=1),
+        profile=GATE_OFF,
     ).decide(root)
 
     assert ("priority-informed", "finish_information") in graph.calls

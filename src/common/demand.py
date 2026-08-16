@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections import Counter
 import copy
 from dataclasses import dataclass
+from functools import lru_cache
 import hashlib
 from time import perf_counter
 
@@ -33,8 +34,20 @@ def _record_id(value) -> str:
     return hashlib.sha256(repr(value).encode("utf-8")).hexdigest()[:20]
 
 
+@lru_cache(maxsize=8192)
+def _identity_record_id(identity) -> str:
+    return _record_id(identity)
+
+
 def semantic_action_key(action) -> str:
-    return _record_id(action.identity)
+    # The solver asks for the same identity's key in every ordering pass; identities are
+    # immutable, so the digest is memoized rather than recomputed per call.  An identity
+    # carrying unhashable parts cannot be memoized; digest it directly.
+    identity = action.identity
+    try:
+        return _identity_record_id(identity)
+    except TypeError:
+        return _record_id(identity)
 
 
 @dataclass(frozen=True)
