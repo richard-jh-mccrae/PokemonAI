@@ -16,7 +16,9 @@ RUNTIME = runtime()
 @pytest.mark.parametrize(("correction_id", "expected"), (
     ("d11d625a6db3", (0,)),  # expiring Energy must be converted into damage before End
     ("c070b8acd261", (3,)),  # same expiring-Energy attack from the damaged Active
-    ("dbf1ff1d6fef", (3,)),  # complete Bellman value favors preserving the damaged attacker
+    # Wally's heals 50 off a benched Mega no attack reaches, which per-body doom pricing now values
+    # at a tenth of a fully exposed heal; the ruled Salvatore wins on supporter opportunity cost.
+    ("dbf1ff1d6fef", (0,)),
     ("8dfa2f8ef65d", (0,)),  # promote the fully powered attacker, not the empty pre-evolution
     ("9fb08842a8df", ()),  # prior Salvatore spend is sunk; do not encode intent as a decline rule
     ("670360dc929a", (0,)),  # snipe the developed attacker, not its empty pre-evolution

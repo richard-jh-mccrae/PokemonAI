@@ -105,6 +105,8 @@ DEFINITIONS = (
                         "bellman_value"),
     ParameterDefinition("search.information_dominance_enabled", "search_waves", 1.0, 0.0, 1.0,
                         "boolean", False),
+    ParameterDefinition("search.dead_fetch_pruning_enabled", "search_waves", 1.0, 0.0, 1.0,
+                        "boolean", False),
     ParameterDefinition("strategy.focus_enabled", "strategy_beam", 1.0, 0.0, 1.0,
                         "boolean", False),
     ParameterDefinition("strategy.focus_width", "strategy_beam", 8.0, 1.0, 64.0,

@@ -30,11 +30,9 @@ def _correction(episode, frame):
     (83966968, 79, [1]),        # damaged multi-prize gust target
     (84897262, 110, [1]),       # fetched Water unlocks the game win
     (82749168, 21, [2]),        # attach is a commutative prefix to Hammer on the energized Bench
-    (82228017, 4, [2]),         # Cape is a commutative free prefix to the ruled Water attach
     (82752604, 16, [2]),        # redundant Mega Signal loses to the resolving attack
     (82717711, 18, [1]),        # a legal beneficial attack beats exact-zero End
     (83116081, 76, [5]),        # heal then reattach then KO survives bounded search
-    (83456015, 35, [3]),        # exposed Active is healed before the typed KO line
     (81785223, 39, [2]),        # visible Energy makes Clefairy the immediate snipe threat
     (81785223, 45, [2]),        # the same threat rule survives a different Bench ordering
     (82225138, 46, [0]),        # current Scouting overrides the stale Dwebble target label
@@ -42,6 +40,9 @@ def _correction(episode, frame):
     (92102433, 44, [0]),        # reachable stage-two line outranks a lower-value draw body
     (92102433, 89, [0]),        # Cinderace preserves the attach -> Turbo -> Nebula line
     (92104376, 86, [0]),        # promotion keeps the deliberate seven-prize route available
+    (82228017, 4, [2]),         # Cape commutes into the ruled Water attach; the hand-redundant
+                                # Mega Signal is a whole-deck tutor, so it orders nothing
+    (83456015, 35, [3]),        # the ruled heal is a Supporter play, which no peek dominates
 ))
 def test_rationale_led_hard_gates(episode, frame, expected):
     chosen = runtime().decide(_correction(episode, frame).obs).chosen

@@ -366,22 +366,46 @@ class BoardPotential:
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
         return best
 
-    def _damage_progress(self, player) -> float:
+    def _replacement_risk(self, me, opponent, exposed) -> float:
+        """An Active knocked out with nothing to promote ends the game (``docs/rules.md`` 7.2), so
+        holding no replacement costs the whole remaining prize race, not one Active's prizes."""
+        if any(body for body in (me.get("bench") or ())):
+            return 0.0
+        hand = me.get("hand")
+        if hand is None:                       # a hidden hand cannot be shown to hold no Basic
+            return 0.0
+        for card in hand:
+            stat = self._stat(card.get("id")) if card else None
+            if (stat is not None and getattr(stat, "is_pokemon", False)
+                    and not getattr(stat, "evolvesFrom", None)):
+                return 0.0                     # benchable this turn, so the loss is not forced
+        # Reachable now it is the live liability; otherwise the board is merely one unanswered
+        # knockout from losing, which is held in reserve exactly as unreachable damage is.
+        reserve = 1.0 if 0 in exposed else SAFE_DAMAGE_RESERVE_SHARE
+        return -reserve * float(len(opponent.get("prize") or ()))
+
+    def _damage_progress(self, player, *, exposed=None) -> float:
         total = 0.0
         body_ids = Counter(int(body.get("id", 0)) for body in _bodies(player))
-        for body in _bodies(player):
+        for position, body in enumerate(_bodies(player)):
             maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
             health = max(KNOCKED_OUT_HP, int(body.get("hp", maximum)))
             damage = maximum - health
+            # Damage only converts into prizes on a body the opponent can actually reach, so a
+            # body no printed attack knocks out next turn holds its counters in reserve.
+            reserve = (1.0 if exposed is None or position in exposed
+                       else SAFE_DAMAGE_RESERVE_SHARE)
             # Linear progress prices every damage counter.  Convex KO pressure additionally
             # prices concentration: the same new damage is more useful on an already injured
             # target because it is closer to converting into prizes.
-            total += (damage / DAMAGE_COUNTERS_PER_PRIZE
-                      + (self._prizes(body) * KO_PRESSURE_SHARE * (damage / maximum) ** 2
-                         if (self.isolated_selection
-                             and body_ids[int(body.get("id", 0))] > 1) else 0.0))
+            total += reserve * (
+                damage / DAMAGE_COUNTERS_PER_PRIZE
+                + (self._prizes(body) * KO_PRESSURE_SHARE * (damage / maximum) ** 2
+                   if (self.isolated_selection
+                       and body_ids[int(body.get("id", 0))] > 1) else 0.0))
         active = next((body for body in (player.get("active") or ()) if body), None)
         if active is not None:
+            # Checkup damage lands whether or not any attack reaches, so it carries no reserve.
             pending = ((POISON_CHECKUP_DAMAGE if player.get("poisoned") else 0.0)
                        + (BURN_CHECKUP_DAMAGE if player.get("burned") else 0.0))
             if pending:
@@ -547,15 +571,18 @@ class BoardPotential:
                     best = max(best, float(self._prizes(defender) + target_prizes))
         return best
 
-    def _lethal_exposure(self, defender_side, attacker_side) -> float:
-        """Prize liability reachable by an opposing printed attack on a future turn."""
-        active = next((body for body in (defender_side.get("active") or ()) if body), None)
+    def _lethal_exposure(self, defender_side, attacker_side) -> tuple[float, frozenset[int]]:
+        """The (negative) worst prize liability an opposing printed attack reaches next turn, plus
+        the ``_bodies`` positions it can knock out so damage elsewhere is not priced as reachable."""
+        actives = tuple(body for body in (defender_side.get("active") or ()) if body)
+        active = actives[0] if actives else None
         bench = tuple(body for body in (defender_side.get("bench") or ()) if body)
+        bench_offset = len(actives)
         if active is None:
-            return 0.0
+            return 0.0, frozenset()
         active_stat = self._stat(active.get("id"))
         if active_stat is None:
-            return 0.0
+            return 0.0, frozenset()
         active_tags = self._tags(active.get("id", 0))
         defender_facts = self._side_facts(defender_side)
         attacker_active = next(
@@ -564,6 +591,7 @@ class BoardPotential:
             attacker_side, INCOMING_CONDITION_SHARE)
         active_transient = self._defender_tool_transient(active)
         worst = 0.0
+        reachable: set[int] = set()
         for body in _bodies(attacker_side):
             stat = self._stat(body.get("id"))
             if stat is None:
@@ -575,18 +603,26 @@ class BoardPotential:
                 if attack is None:
                     continue
                 exposed = 0.0
+                lethal_active = False
                 active_damage = compute_active_damage(
                     attack, stat, active_stat, active_tags, context=context,
                     defender_transient=active_transient)
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
+                    lethal_active = True
                 reach = bench_reach(attack)
-                exposed += max((self._prizes(target) for target in bench
-                                if reach >= int(target.get("hp", MINIMUM_HP))), default=0)
-                if body is attacker_active:
-                    exposed *= attacker_active_share
+                sniped = tuple(index for index, target in enumerate(bench)
+                               if reach >= int(target.get("hp", MINIMUM_HP)))
+                exposed += max((self._prizes(bench[index]) for index in sniped), default=0)
+                share = attacker_active_share if body is attacker_active else 1.0
+                exposed *= share
+                # A body that cannot attack next turn reaches nothing, so it marks nothing.
+                if share > 0.0:
+                    reachable.update(index + bench_offset for index in sniped)
+                    if lethal_active:
+                        reachable.add(0)
                 worst = max(worst, exposed)
-        return -worst
+        return -worst, frozenset(reachable)
 
     @staticmethod
     def _stack_ids(body):
@@ -775,13 +811,21 @@ class BoardPotential:
         )
         return evolved + deployed
 
+    def _occupied_jobs(self, me, *, skip_energy: bool = False) -> Counter:
+        """Board jobs already staffed, counted in cards: ``_prize_job_capacities`` counts the cards
+        along a prize route, so a stack supplies its pre-evolution's slot as well as its own."""
+        occupied = Counter()
+        for body in _bodies(me):
+            for card_id in self._stack_ids(body):
+                stat = self._stat(card_id)
+                if skip_energy and stat is not None and getattr(stat, "is_energy", False):
+                    continue
+                occupied[self._resource_job(card_id)] += 1
+        return occupied
+
     def _hand_resources(self, me, *, setup_complete: bool) -> float:
         capacities = self._prize_job_capacities()
-        occupied = Counter(self._resource_job(card_id)
-                           for body in _bodies(me) for card_id in self._stack_ids(body)
-                           if not (self.isolated_selection
-                                   and self._stat(card_id) is not None
-                                   and getattr(self._stat(card_id), "is_energy", False)))
+        occupied = self._occupied_jobs(me, skip_energy=self.isolated_selection)
         candidates: dict[tuple, list[float]] = {}
         for card in (me.get("hand") or ()):
             if not card or card.get("id") is None:
@@ -807,8 +851,7 @@ class BoardPotential:
 
     def _hand_demand(self, me) -> float:
         """Value visible cards and general access by presently missing board jobs."""
-        occupied = Counter(self._resource_job(card_id)
-                           for body in _bodies(me) for card_id in self._stack_ids(body))
+        occupied = self._occupied_jobs(me)
         capacities = self._prize_job_capacities()
         missing_slots = sum(max(0, capacity - occupied[job])
                             for job, capacity in capacities.items())
@@ -919,7 +962,7 @@ class BoardPotential:
         if result != -1:
             game = self.scale.game if result == seat else -self.scale.game
             return Potential(game, (("game", game),))
-        lethal_exposure = self._lethal_exposure(me, opponent)
+        _liability, exposed_bodies = self._lethal_exposure(me, opponent)
         historical_context = observation.get("bellmanHistoricalContext")
         selection_context = (historical_context if historical_context is not None
                              else (observation.get("select") or {}).get("context"))
@@ -934,11 +977,10 @@ class BoardPotential:
         board = self._own_board_resources(me, stadium=own_stadium(current, seat))
         opponent_roles = self._opponent_role_pressure(opponent)
         families = {
-            "game": 0.0,
+            "game": self._replacement_risk(me, opponent, exposed_bodies),
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
             "damage": (self._damage_progress(opponent)
-                       - self._damage_progress(me) * (
-                           1.0 if lethal_exposure < 0.0 else SAFE_DAMAGE_RESERVE_SHARE)),
+                       - self._damage_progress(me, exposed=exposed_bodies)),
             "readiness": readiness,
             "multi_target_ko": (0.0 if observation.get("bellmanHistoricalMain")
                                 else self._multi_target_ko_ready(me, opponent)),

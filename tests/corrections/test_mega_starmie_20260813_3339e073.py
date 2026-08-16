@@ -30,7 +30,6 @@ RUNTIME = runtime()
     ("feafb8ef77c5", (0,)),  # information action before Turbo Flare
     ("496a7657096f", (0,)),  # dead Mega Signal must not detour the Harlequin line
     ("baede6accfac", (8,)),  # dead Mega Signal must not detour the ruled attack
-    ("cb70b1405932", (4,)),  # expiring Energy is lost at End in either line
     ("79767ab416a7", (0,)),  # persistent basic Energy beats expiring Energy
     ("3c2afa3f1f28", (0,)),  # beneficial attack beats End
 ))
@@ -46,3 +45,9 @@ def test_c7fd_searches_cheap_information_then_bellman_attacks():
         "general.low_cost_information_access_before_commitment",)
     assert decision.diagnostics["production"]["candidate_harvest"]["completed"][0][
         "root_action"].startswith("ActionIdentity(kind='play'")
+
+
+def test_cb70_retreat_keeps_the_three_prize_body():
+    # PR #523 ruling stands; reviewed.json refutes the [3] label. The Mega Signal that used to
+    # order this node away from retreat is a whole-deck tutor, not a free peek (ADR-0140).
+    assert RUNTIME.decide(ROWS["cb70b1405932"].obs).chosen == (4,)
