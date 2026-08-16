@@ -49,9 +49,9 @@ Pokémon is a Stage 2 Cinderace with no evolution above it and no Staryu anywher
 
 **Board parity scales the term.** `board_parity` is our `_own_board_resources` Worth over the
 positive magnitude of `opponent_roles`, clamped to `[0, 1]`, multiplying both the `opponent_hand`
-family and the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to protect the
-leader's card economy — they have to dig. The parity is **pinned to the root observation** rather
-than recomputed per successor: how far behind we are is a read of the position being decided from,
+family and the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to
+protect the leader's card economy — they have to dig. The parity is **pinned to the root
+observation** rather than recomputed per successor: how far behind we are is a read of the position being decided from,
 and letting successors move it would price board development and damage partly through a hand term.
 
 The denominator is role pressure rather than a board figure taken from the opponent's stacks,
@@ -77,8 +77,8 @@ picks were then confirmed by decision, not by extrapolation.
 On the corrections corpus, armed fails seven where the same suite on the same tree dark fails eight,
 and `tests/bellman` acceptance fails three against four pre-change. **Both deltas are 1, inside the
 3-to-5 flake floor recorded below — the count is not the evidence.** What carries is set
-inclusion: each armed failure set is a strict subset of its dark counterpart, so no frame fails that did not
-already fail without the term.
+inclusion: each armed failure set is a strict subset of its dark counterpart, so no frame fails
+that did not already fail without the term.
 
 ADR-0060's ratified 4:8 STRIP:GIFT asymmetry remains unbuilt; the term stays symmetric.
 
