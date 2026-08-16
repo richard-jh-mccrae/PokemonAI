@@ -1,4 +1,4 @@
-# ADR-0140: The Bellman potential prices the opponent's hand (dark), special conditions, and the stadium zone
+# ADR-0141: The Bellman potential prices the opponent's hand (dark), special conditions, and the stadium zone
 
 Status: Accepted; built from the 2026-08-16 src/ crash-and-valuation audit.
 
