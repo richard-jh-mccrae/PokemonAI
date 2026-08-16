@@ -14,6 +14,8 @@ from common.strategy.strategy import Roles
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.options import enumerate_legal_actions
+import pytest
+
 from types import SimpleNamespace
 
 
@@ -558,6 +560,29 @@ def test_damage_setup_strategy_focuses_a_bench_snipe_attack():
 
     assert [row.family for row in beam.focused] == ["attack"]
     assert [row.family for row in beam.safety] == ["attack", "end"]
+
+
+def test_status_setup_strategy_focuses_a_confusion_attack():
+    observation = _observation(hand=[])
+    observation["current"]["players"][0]["active"] = [
+        {"id": 112, "serial": 7, "hp": 110, "energies": [5, 7]}]
+    observation["current"]["players"][1]["bench"] = [
+        {"id": 20, "serial": 89, "hp": 100, "energies": []}]
+    observation["select"]["option"] = [{"type": 13, "attackId": 141}, {"type": 14}]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), (
+        ActivatedStrategy(
+            "general.card.112.confusion_attack", "status_setup",
+            "opponent.bench.highest_role", 20, 89, (112,), "this_turn", "medium"),
+    ))
+    actions = enumerate_legal_actions(observation)
+
+    class Registry:
+        functions = {112: ("confuse",)}
+
+    beam = StrategyBeamBuilder(snapshot, registry=Registry()).build(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
+
+    assert [row.family for row in beam.focused] == ["attack"]
 
 
 def test_cached_strategy_orders_a_forced_recovery_target():
@@ -1560,3 +1585,69 @@ def test_a_held_information_hint_does_not_lead_the_beam():
     assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
     statuses = {row["strategy_id"]: row["status"] for row in beam.paths}
     assert statuses["deck.peek_later"] == "held"
+
+
+def test_a_body_hp_fraction_reports_the_most_threatened_copy():
+    """A deck running four Drakloak asks whether A Drakloak is in danger. Reading whichever copy
+    the loop reached last answers about an arbitrary one."""
+    from common.strategy.strategies import _visible_facts
+    from common.strategy import Roles
+
+    drakloak = 120
+    observation = {"current": {"turn": 4, "yourIndex": 0, "players": [
+        {"active": [], "benchMax": 5, "bench": [
+            {"id": drakloak, "serial": 1, "hp": 20, "maxHp": 90, "energies": []},
+            {"id": drakloak, "serial": 2, "hp": 90, "maxHp": 90, "energies": []},
+        ]},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+
+    facts = _visible_facts(observation, roles=Roles())
+
+    assert facts[f"own.card.{drakloak}.hp_fraction"] == pytest.approx(20 / 90)
+
+
+def test_the_parameterised_selectors_are_admitted_but_still_shape_checked():
+    """A card id is the deck's to name, so these families cannot be enumerated. Their shape is
+    still closed: a misspelt suffix is rejected exactly like a misspelt fixed selector."""
+    from common.strategy.strategies import known_recipient_selector
+
+    assert known_recipient_selector("own.body.card:120:first")
+    assert known_recipient_selector("own.body.card:120:readiest")
+    assert known_recipient_selector("own.bench.card:673")
+    assert not known_recipient_selector("own.body.card:120:frist")
+    assert not known_recipient_selector("own.body.card:abc:first")
+    assert not known_recipient_selector("own.body.card:120")
+    assert not known_recipient_selector("own.bench.card:abc")
+    assert not known_recipient_selector("own.bench.card:")
+    assert not known_recipient_selector("own.actve")
+
+
+@pytest.mark.parametrize("deck", ["dragapult_ex", "mega_lucario", "mega_starmie"])
+def test_every_shipped_deck_declares_only_known_selectors(deck):
+    """Closing the selector set is only safe if the set covers what the decks actually
+    declare. Mega Lucario's benched-body selector was left out of it and the deck stopped
+    importing at all."""
+    import importlib
+
+    from common.strategy.strategies import known_recipient_selector
+
+    strategy = importlib.import_module(f"agents.{deck}.strategy").STRATEGY
+
+    assert all(known_recipient_selector(hint.recipient_selector)
+               for hint in strategy.strategies)
+
+
+def test_a_hint_naming_a_parameterised_body_selector_constructs():
+    hint = StrategyHint(
+        "deck.readiest", "deck", (),
+        (DesiredFact("evolve", "own.body.card:120:readiest"),),
+        "own.body.card:120:readiest", "this_turn", "high", "test")
+
+    assert hint.recipient_selector == "own.body.card:120:readiest"
+
+    with pytest.raises(ValueError, match="unknown strategy recipient selector"):
+        StrategyHint(
+            "deck.typo", "deck", (),
+            (DesiredFact("evolve", "own.body.card:120:frist"),),
+            "own.body.card:120:frist", "this_turn", "high", "test")

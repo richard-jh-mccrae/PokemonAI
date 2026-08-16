@@ -401,3 +401,156 @@ def test_next_turn_evolution_option_disappears_when_the_enabling_clock_or_body_i
     assert resolved.value == 0.0
     assert resolved.options == ()
 
+
+
+def test_undeclared_funding_reads_the_cost_off_the_card():
+    """A fund_attack hint that names no Energy funds the recipient's own unmet printed cost, so
+    an Energy that pays nothing it owes is not treated as funding."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, fire, psychic, darkness = 810, 2, 5, 7
+    stats = DictCardStatProvider(
+        {
+            attacker: CardStat(attacker, hp=320, attacks=(11,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+            darkness: CardStat(darkness, cardType=5, energyType=darkness),
+        },
+        attacks={11: AttackStat(11, damage=200, energyTypes=(fire, psychic))},
+    )
+    hint = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", attacker, 1, (), "immediate", "high", None, 0)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+    observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+        {"active": [{"id": attacker, "serial": 1, "hp": 320, "maxHp": 320,
+                     "energies": [fire]}], "bench": []},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+    state = SimpleNamespace(
+        obs=observation, root_seat=0,
+        deck_counts=((fire, 3), (psychic, 3), (darkness, 2)))
+
+    # One Fire is already attached, so only the Psychic slot is still owed.
+    assert builder._funding_energy_ids(state, hint) == (psychic,)
+    assert builder._funds_the_cost(state, hint, psychic)
+    assert not builder._funds_the_cost(state, hint, darkness)
+
+
+def test_a_colorless_slot_does_not_make_every_energy_funding():
+    """A Colorless slot accepts anything, so a body owing one looked funded by every Energy in
+    the deck -- including one another body needs by type. A printed TYPE owed anywhere wins."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, colorless_only, fire, psychic, darkness = 820, 821, 2, 5, 7
+    stats = DictCardStatProvider(
+        {
+            # Two attacks, as Dragapult ex has: a one-Colorless poke and the real typed attack.
+            attacker: CardStat(attacker, hp=320, attacks=(12, 13)),
+            colorless_only: CardStat(colorless_only, hp=210, attacks=(12,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+            darkness: CardStat(darkness, cardType=5, energyType=darkness),
+        },
+        attacks={
+            12: AttackStat(12, damage=70, energyTypes=(0,)),
+            13: AttackStat(13, damage=200, energyTypes=(fire, psychic)),
+        },
+    )
+    counts = ((fire, 3), (psychic, 3), (darkness, 2))
+
+    def eligible(card_id):
+        hint = ActivatedStrategy(
+            "deck.fund", "fund_attack", "own.active", card_id, 1, (),
+            "immediate", "high", None, 0)
+        builder = StrategyBeamBuilder(
+            StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+        observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+            {"active": [{"id": card_id, "serial": 1, "hp": 320, "maxHp": 320,
+                         "energies": []}], "bench": []},
+            {"active": [], "bench": []},
+        ]}, "select": {"context": 0, "option": []}}
+        return builder._funding_energy_ids(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=counts), hint)
+
+    # The Colorless slot is unpaid too, but a printed type is owed, so Darkness is not funding.
+    assert eligible(attacker) == (fire, psychic)
+    # Nothing typed is owed anywhere on this body, so every Energy genuinely does fund it.
+    assert eligible(colorless_only) == (fire, psychic, darkness)
+
+
+def test_funding_satisfies_only_once_the_body_owes_nothing():
+    """A bundle holds every later waypoint until the earlier ones satisfy, so a fund_attack
+    outcome that can never report satisfied strands the attack behind it for the whole turn."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, fire, psychic = 830, 2, 5
+    stats = DictCardStatProvider(
+        {
+            attacker: CardStat(attacker, hp=320, attacks=(14,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+        },
+        attacks={14: AttackStat(14, damage=200, energyTypes=(fire, psychic))},
+    )
+    funding = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", attacker, 1, (),
+        "immediate", "high", "deck.line", 0)
+    swing = ActivatedStrategy(
+        "deck.swing", "damage_setup", "opponent.bench.highest_role", attacker, 9, (),
+        "immediate", "high", "deck.line", 1)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (funding, swing)), stats=stats)
+
+    def _status(energies):
+        observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+            {"active": [{"id": attacker, "serial": 1, "hp": 320, "maxHp": 320,
+                         "energies": list(energies)}], "bench": []},
+            {"active": [], "bench": [{"id": attacker, "serial": 9, "hp": 60, "maxHp": 320}]},
+        ]}, "select": {"context": 0, "option": []}}
+        rows = builder.outcome_statuses(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=()))
+        return {row["strategy_id"]: row["status"] for row in rows}
+
+    # Half the cost down: funding is still live, so the swing behind it stays held.
+    assert _status((fire,))["deck.fund"] != "satisfied"
+    assert _status((fire,))["deck.swing"] == "held"
+    # Cost fully paid: funding satisfies and the swing is released within the same turn.
+    assert _status((fire, psychic))["deck.fund"] == "satisfied"
+    assert _status((fire, psychic))["deck.swing"] != "held"
+
+
+def test_an_unreadable_body_never_reports_its_funding_satisfied():
+    """"No cost we can see" is not "no cost owed" -- calling it satisfied would release a
+    bundle on missing information."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    mystery = 831
+    stats = DictCardStatProvider({mystery: CardStat(mystery, hp=100)})
+    hint = ActivatedStrategy(
+        "deck.fund", "fund_attack", "own.active", mystery, 1, (),
+        "immediate", "high", None, 0)
+    builder = StrategyBeamBuilder(
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+    observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+        {"active": [{"id": mystery, "serial": 1, "hp": 100, "maxHp": 100, "energies": []}],
+         "bench": []},
+        {"active": [], "bench": []},
+    ]}, "select": {"context": 0, "option": []}}
+
+    rows = builder.outcome_statuses(
+        SimpleNamespace(obs=observation, root_seat=0, deck_counts=()))
+
+    assert rows[0]["status"] != "satisfied"

@@ -238,3 +238,30 @@ def test_our_own_stadium_in_play_carries_its_board_worth():
     board = lambda potential: dict(potential.families)["board"]
     assert board(ours) == board(bare) + worth_to_prizes(KNOWN_CARD_FLOOR)
     assert board(theirs) == board(bare)
+
+
+def test_a_benched_tera_body_is_not_exposed_to_a_bench_attack():
+    """Tera is a printed card fact, not deck doctrine: every deck must price it the same."""
+    sniper, tera_body, plain = 800, 801, 802
+    stats = DictCardStatProvider(
+        {
+            sniper: CardStat(sniper, name="Sniper", hp=100, attacks=(9,)),
+            tera_body: CardStat(tera_body, name="Tera", hp=320, tera=True),
+            plain: CardStat(plain, name="Plain", hp=320),
+        },
+        attacks={9: AttackStat(9, name="Snipe", damage=10, benchSnipe=100)},
+    )
+    registry = ValueRegistry(facts={
+        sniper: CardFacts(pokemon=True),
+        tera_body: CardFacts(pokemon=True, prize_value=2),
+        plain: CardFacts(pokemon=True, prize_value=2),
+    })
+    potential = BoardPotential(stats, registry=registry, root_seat=0)
+    attack = stats.attack(9)
+    shielded = [_body(tera_body, hp=80, max_hp=320)]
+    reachable = [_body(plain, hp=80, max_hp=320)]
+
+    assert potential._bench_ko_indices(attack, shielded) == ()
+    assert potential._bench_ko_indices(attack, reachable) == (0,)
+    assert potential._bench_ko_prizes(attack, shielded) == 0.0
+    assert potential._bench_ko_prizes(attack, reachable) > 0.0

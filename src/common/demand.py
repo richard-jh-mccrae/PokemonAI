@@ -12,7 +12,7 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
-from .damage import bench_reach
+from .damage import bench_reach, compute_active_damage
 from .fetch import REACH, WINDOW, fetch_target_matches
 from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
@@ -177,6 +177,15 @@ class StrategyBeamBuilder:
                     and int(body.get("id", -1)) in hint.target_card_ids
                     for body in own_bodies):
                 status = "satisfied"
+            elif hint.kind == "fund_attack" and self.stats is not None:
+                body = next((body for body in own_bodies if body
+                             and int(body.get("serial", -1)) == hint.recipient_serial), None)
+                # Needs a body printing at least one readable attack: "no cost we can see" is
+                # not "no cost owed", and calling it satisfied would hold the rest of the
+                # bundle behind funding that was never proven done.
+                printed = getattr(self.stats.get(body.get("id")), "attacks", ()) if body else ()
+                if body is not None and printed and not self._unmet_energy_types(body):
+                    status = "satisfied"
             elif hint.kind == "heal":
                 body = next((body for body in own_bodies if body
                              and int(body.get("serial", -1)) == hint.recipient_serial), None)
@@ -253,6 +262,59 @@ class StrategyBeamBuilder:
         body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
         return int(body["serial"]) if body and body.get("serial") is not None else None
 
+    def _body_by_serial(self, state, serial):
+        if serial is None:
+            return None
+        player = self._player(state)
+        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
+        return next((body for body in bodies if body
+                     and int(body.get("serial", -1)) == int(serial)), None)
+
+    def _unmet_energy_types(self, body) -> set:
+        """Printed cost slots this body cannot yet pay, across every attack it prints.
+
+        One reading of the card serves two questions: which Energy still funds the body, and
+        whether a fund_attack outcome is already satisfied. They must not disagree -- a bundle
+        holds every later waypoint until the earlier ones satisfy.
+        """
+        stat = self.stats.get(body.get("id")) if body and self.stats is not None else None
+        if stat is None:
+            return set()
+        provisions = tuple(body.get("energies") or ())
+        return {energy_type
+                for attack_id in getattr(stat, "attacks", ()) or ()
+                for _slot, energy_type in unmet_cost_slots(
+                    provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
+
+    def _funding_energy_ids(self, state, hint) -> tuple[int, ...]:
+        """Deck Energy that advances a printed attack cost the recipient cannot yet pay.
+
+        An attack's cost is a card fact. Reading it from the stat provider keeps a deck from
+        restating it in a declaration, where a half-named cost silently scores the other half
+        at zero and nothing catches the drift when the card is reprinted.
+        """
+        owed = self._unmet_energy_types(self._body_by_serial(state, hint.recipient_serial))
+        if not owed:
+            return ()
+        # A Colorless slot accepts anything, so a body owing one looks funded by every Energy in
+        # the deck -- including one another body needs by type. While a printed TYPE is still
+        # owed anywhere, only Energy paying a typed slot counts; Colorless-only bodies still
+        # take any Energy, because for them nothing else is true.
+        wanted = {energy_type for energy_type in owed
+                  if energy_type != ENERGY_COLORLESS} or owed
+        return tuple(sorted(
+            int(card_id) for card_id, count in state.deck_counts
+            if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+            and any(pays_energy_type(
+                int(getattr(self.stats.get(card_id), "energyType", DEFAULT_ENERGY_CODE) or 0),
+                energy_type) for energy_type in wanted)))
+
+    def _funds_the_cost(self, state, hint, source_id) -> bool:
+        if hint.target_card_ids:
+            return source_id in hint.target_card_ids
+        eligible = self._funding_energy_ids(state, hint)
+        return not eligible or source_id in eligible
+
     def _eligible_targets(self, state, hint) -> tuple[int, ...]:
         if hint.target_card_ids:
             targets = tuple(card_id for card_id in hint.target_card_ids
@@ -274,7 +336,7 @@ class StrategyBeamBuilder:
                 )
             return targets
         if hint.kind == "fund_attack" and self.stats is not None:
-            return tuple(
+            return self._funding_energy_ids(state, hint) or tuple(
                 int(card_id) for card_id, count in state.deck_counts
                 if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
             )
@@ -338,6 +400,8 @@ class StrategyBeamBuilder:
                 if clause.get("cost_required") or discard_cost(clause):
                     continue
                 if clause.get("kind") == "draw":
+                    if clause.get("condition") is not None:
+                        continue
                     best = max(best, float(int(clause.get("amount", 0) or 0) > 0))
                     continue
                 if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
@@ -377,6 +441,14 @@ class StrategyBeamBuilder:
                 best = max(best, float(bool(matching)))
         return best
 
+    def _reaches_defender(self, attack, attacker_body, defender_body) -> bool:
+        attacker = self.stats.get(attacker_body.get("id")) if self.stats is not None else None
+        defender = self.stats.get(defender_body.get("id")) if self.stats is not None else None
+        remaining = int(defender_body.get("hp", 0) or 0)
+        if attacker is None or defender is None or remaining <= 0:
+            return False
+        return compute_active_damage(attack, attacker, defender) >= remaining
+
     def _priority(self, state, action) -> tuple[
             float, tuple[str, ...], tuple, SequenceCoverage]:
         """Score, matched hint ids, lexicographic search rank, and distinct outcome coverage."""
@@ -395,9 +467,23 @@ class StrategyBeamBuilder:
             via_access = False
             if (hint.kind == "fund_attack" and action.identity.kind == "attach"
                     and recipient == hint.recipient_serial
-                    and (not hint.target_card_ids or source_id in hint.target_card_ids)
+                    and self._funds_the_cost(state, hint, source_id)
                     and bool(getattr(source_stat, "is_energy", False))):
                 probability = 1.0
+            elif (hint.kind == "fund_ability" and action.identity.kind == "attach"
+                  and recipient == hint.recipient_serial
+                  and (not hint.target_card_ids or source_id in hint.target_card_ids)
+                  and bool(getattr(source_stat, "is_energy", False))):
+                probability = 1.0
+            elif (hint.kind == "use_ability" and action.identity.kind == "ability"
+                  and recipient == hint.recipient_serial):
+                probability = 1.0
+            elif hint.kind == "item_lock" and action.identity.kind == "attack":
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
+                if (self.registry is not None and "item_lock" in self.registry.functions.get(
+                        int(active.get("id", 0)), ())):
+                    probability = 1.0
             elif (hint.kind == "evolve" and action.identity.kind == "evolve"
                   and recipient == hint.recipient_serial
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)):
@@ -413,6 +499,29 @@ class StrategyBeamBuilder:
                   and bool(getattr(source_stat, "is_pokemon", False))
                   and str(getattr(source_stat, "stage", "")).lower() == "basic"):
                 probability = 1.0
+            elif (hint.kind == "play_card"
+                  and action.identity.kind == "play" and source_id is not None
+                  and source_id in hint.target_card_ids):
+                probability = 1.0
+            elif hint.kind == "knock_out" and action.identity.kind == "attack":
+                # Credit the attack that actually reaches, not every attack the body prints.
+                option = self._option(state, action) or {}
+                attack = (self.stats.attack(option.get("attackId"))
+                          if self.stats is not None and option.get("attackId") is not None
+                          else None)
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
+                defender = next((body for body in self._opponent(state).get("active") or ()
+                                 if body), {})
+                if (attack is not None and (not hint.target_card_ids
+                                            or int(active.get("id", 0)) in hint.target_card_ids)
+                        and self._reaches_defender(attack, active, defender)):
+                    probability = 1.0
+            elif hint.kind == "promote" and action.identity.kind == "card":
+                # Which copy is promoted is the whole decision, so the recipient must match.
+                # The generic target-card branch below cannot tell two copies apart.
+                if recipient == hint.recipient_serial:
+                    probability = 1.0
             elif hint.kind == "damage_setup" and action.identity.kind == "attack":
                 option = self._option(state, action) or {}
                 attack_id = option.get("attackId")
@@ -421,7 +530,22 @@ class StrategyBeamBuilder:
                 target_exists = any(
                     int(body.get("serial", -1)) == hint.recipient_serial
                     for body in self._opponent(state).get("bench") or () if body)
-                if target_exists and bench_reach(attack) > 0:
+                if hint.target_card_ids and target_exists:
+                    active = next((body for body in self._player(state).get("active") or ()
+                                   if body), {})
+                    active_id = int(active.get("id", 0))
+                    if (active_id in hint.target_card_ids
+                            and bench_reach(attack) > 0):
+                        probability = 1.0
+                elif target_exists and bench_reach(attack) > 0:
+                    probability = 1.0
+            elif hint.kind == "status_setup" and action.identity.kind == "attack":
+                active = next((body for body in self._player(state).get("active") or ()
+                               if body), {})
+                active_id = int(active.get("id", 0))
+                if (self.registry is not None and "confuse" in self.registry.functions.get(
+                        active_id, ()) and (not hint.target_card_ids
+                                           or active_id in hint.target_card_ids)):
                     probability = 1.0
             elif (hint.kind == "damage_setup" and action.identity.kind == "card"
                   and recipient == hint.recipient_serial):

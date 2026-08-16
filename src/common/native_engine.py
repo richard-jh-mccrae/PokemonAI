@@ -8,7 +8,7 @@ import hashlib
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
 from .attack_locks import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
-from .options import LegalAction
+from .options import LegalAction, recycled_card_ids
 from .commutativity import action_footprint
 from .refresh import refresh_transition
 from .refresh import played_card_id
@@ -241,6 +241,9 @@ class NativeCgTransitionProvider:
                 committed = world.attack_committed or action.identity.kind == "attack"
                 observation = self._observation(
                     stepped.observation, state, actor_seat=forced_next_actor)
+                recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
+                if recycled:
+                    observation["bellmanRecycledCardIds"] = recycled
                 if int(((observation.get("select") or {}).get("context", -1))) == MANUAL_COIN_CONTEXT:
                     children.extend(self._coin_children(
                         stepped.searchId, world.probability, committed, state, observation,
