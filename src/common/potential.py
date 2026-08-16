@@ -416,6 +416,7 @@ class BoardPotential:
         attacker_facts = self._side_facts(me, attacking_body=body)
         defender_facts = self._side_facts(opponent)
         defender_tags = self._tags(defender.get("id", 0))
+        transient = self._defender_tool_transient(defender)
         best = 0.0
         for attack_id in getattr(stat, "attacks", ()) or ():
             attack = self._attack(attack_id)
@@ -425,7 +426,7 @@ class BoardPotential:
             damage = compute_active_damage(
                 attack, stat, defender_stat, defender_tags,
                 context=self._context(attacker_facts, defender_facts),
-                defender_transient=self._defender_tool_transient(defender))
+                defender_transient=transient)
             if damage < int(defender.get("hp", MINIMUM_HP)):
                 continue
             reach = bench_reach(attack)
@@ -446,6 +447,7 @@ class BoardPotential:
             return 0.0
         defender_facts = self._side_facts(opponent)
         defender_tags = self._tags(defender.get("id", 0))
+        transient = self._defender_tool_transient(defender)
         best = 0.0
         for body in _bodies(me):
             stat = self._stat(body.get("id"))
@@ -461,7 +463,7 @@ class BoardPotential:
                     continue
                 active_damage = compute_active_damage(
                     attack, stat, defender_stat, defender_tags, context=context,
-                    defender_transient=self._defender_tool_transient(defender))
+                    defender_transient=transient)
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
                 reach = bench_reach(attack)
@@ -486,6 +488,7 @@ class BoardPotential:
             (body for body in (attacker_side.get("active") or ()) if body), None)
         attacker_active_share = _active_condition_share(
             attacker_side, INCOMING_CONDITION_SHARE)
+        active_transient = self._defender_tool_transient(active)
         worst = 0.0
         for body in _bodies(attacker_side):
             stat = self._stat(body.get("id"))
@@ -500,7 +503,7 @@ class BoardPotential:
                 exposed = 0.0
                 active_damage = compute_active_damage(
                     attack, stat, active_stat, active_tags, context=context,
-                    defender_transient=self._defender_tool_transient(active))
+                    defender_transient=active_transient)
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
                 reach = bench_reach(attack)
