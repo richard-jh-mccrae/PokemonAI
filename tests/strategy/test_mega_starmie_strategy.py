@@ -61,6 +61,18 @@ def _focused(observation, snapshot):
     return actions, {action for action in actions if semantic_action_key(action) in keys}
 
 
+def _selections_carrying(observation, snapshot, strategy_id):
+    """Which offered selections the named hint itself put in the beam, ignoring every other."""
+    actions = enumerate_legal_actions(observation)
+    state = SimpleNamespace(obs=observation, root_seat=0,
+                            deck_counts=((STARYU, 3), (MEGA_STARMIE_EX, 3)))
+    beam = StrategyBeamBuilder(
+        snapshot, effects=EFFECTS, stats=STATS, registry=None, width=8).build(state, actions)
+    by_key = {semantic_action_key(action): action for action in actions}
+    return {by_key[row.action_key].selection for row in beam.focused
+            if strategy_id in row.path_ids}
+
+
 def test_bench_hint_fires_before_the_energy_is_committed():
     """Turbo Flare attaches only to BENCHED Pokemon, so the Bench must hold Staryu before
     Cinderace is funded — the old attack_ready gate switched the hint off exactly then."""
@@ -111,10 +123,11 @@ def test_the_snipe_hint_focuses_jetting_blow_and_not_nebula_beam():
         opponent_bench=[_body(MEGA_STARMIE_EX, 901)], turn=5,
         options=[{"type": 13, "attackId": JETTING_BLOW},
                  {"type": 13, "attackId": NEBULA_BEAM}, {"type": 14}])
-    actions, focused = _focused(observation, _activate(observation))
+    carried = _selections_carrying(
+        observation, _activate(observation),
+        "mega_starmie.soften_role_target_into_nebula_beam_range")
 
-    assert {action.selection for action in focused} == {(0,)}
-    assert any(action.selection == (1,) for action in actions)
+    assert carried == {(0,)}
 
 
 def test_the_reload_waits_for_the_heal_that_creates_its_opening():

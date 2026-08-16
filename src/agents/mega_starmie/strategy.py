@@ -60,7 +60,7 @@ STRATEGY = Strategy(
             "deck",
             (
                 ActivationCondition("own.active.card_id", "eq", MEGA_STARMIE_EX),
-                ActivationCondition("own.active.full_health", "eq", True),
+                ActivationCondition("own.active.hp_fraction", "ge", 1.0),
                 ActivationCondition("own.active.energy_count", "eq", 0),
             ),
             (DesiredFact("fund_attack", "own.active",
