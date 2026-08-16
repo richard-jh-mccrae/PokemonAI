@@ -39,7 +39,34 @@ everywhere):
   one-card stack, making a Stadium play value-neutral statically so its printed effect (visible
   through successor HP and readiness) decides.
 
-## Why the opponent-hand share ships at zero
+## Amendment 2026-08-16: armed at a tenth, scaled by board parity
+
+The measurement round below was held as a live adjudication session. Both flipped frames were
+re-ruled and both rulings stand: `496a7657096f` plays Harlequin (the hand is Wally's Compassion, a
+Harlequin, two Salvatore and a Mega Signal, of which only Harlequin does anything — our only
+Pokémon is a Stage 2 Cinderace with no evolution above it and no Staryu anywhere on board), and
+`baede6accfac` attacks. Two things follow.
+
+**Board parity scales the term.** The potential prices our own in-play strength (`board`) but has
+no comparable reading of the opponent's, because card Worth is registry-keyed and their stacks
+carry none; their scouted role pressure is the only symmetric figure. `board_parity` is our board
+Worth over that pressure, clamped to `[0, 1]`, and multiplies both the `opponent_hand` family and
+the `refresh_opponent_hand` ledger row. A player losing on board cannot afford to protect the
+leader's card economy — they have to dig. The parity is **pinned to the root observation** rather
+than recomputed per successor: how far behind we are is a read of the position being decided from,
+and letting successors move it would price board development and damage partly through a hand term.
+
+**The magnitude is a tenth of the known-card floor.** Scaling alone does not carry these frames:
+every line that ends the turn also hands the opponent their draw, so shrinking the term shrinks the
+attack line's own charge too, and the gap at `496a7657096f` closes only from 0.071 to 0.022 prizes.
+Sweeping the effective rate puts the ruled line back in front below roughly 0.15 at that frame and
+below 0.05 at `baede6accfac`; `value.opponent_hand_share = 0.1` is the largest share holding both
+once parity is applied. On the corrections corpus this is not a regression: armed fails seven, dark
+on the same tree fails eight, and the armed set is a strict subset of the dark one.
+
+ADR-0060's ratified 4:8 STRIP:GIFT asymmetry remains unbuilt; the term stays symmetric.
+
+## Why the opponent-hand share shipped at zero
 
 Armed at full share the term deterministically flips two ruled corpus frames whose margins were
 graded without it: `496a7657096f` (opponent at 2 cards — the gift charge of 2 × floor flips a

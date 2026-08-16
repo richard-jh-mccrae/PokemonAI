@@ -111,6 +111,10 @@ class RefreshEvaluator:
             observation=observation, seat=state.root_seat)
         weighted_draw = 0.0
         weighted_opponent = 0.0
+        # ADR-0141 amendment: the same board-parity scaling the potential family charges at, read
+        # from the evaluator that owns it so the closed-form and stepped paths cannot disagree.
+        opponent_hand_rate = self.opponent_hand_share * float(
+            getattr(self.family_evaluator, "board_parity", 1.0))
         branch_probability = 1.0 / len(node.draws)
         for own_draw, opponent_draw in node.draws:
             draw_mean, draw_deviation = self._draw_value_moments(
@@ -129,7 +133,7 @@ class RefreshEvaluator:
                 - KNOWN_CARD_FLOOR * int(opponent_draw))
                               if node.opponent_shuffles else 0.0)
             weighted_draw += branch_probability * draw_mean
-            weighted_opponent += branch_probability * opponent_value * self.opponent_hand_share
+            weighted_opponent += branch_probability * opponent_value * opponent_hand_rate
             branch_rows.append({
                 "own_draw": int(own_draw), "opponent_draw": int(opponent_draw),
                 "expected_hand_value": draw_mean,

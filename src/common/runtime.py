@@ -232,7 +232,8 @@ class BellmanRuntime:
             self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=self.opponent_role_worth,
             isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0,
-            opponent_hand_share=self.pilot_profile.get("value.opponent_hand_share"))
+            opponent_hand_share=self.pilot_profile.get("value.opponent_hand_share"),
+            root_observation=observation)
         planner_kwargs = {}
         if self.provider_factory is not None:
             planner_kwargs["provider_factory"] = self.provider_factory

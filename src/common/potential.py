@@ -77,6 +77,25 @@ def _hand_count(player) -> int:
     return len(hand) if hand is not None else int(player.get("handCount", 0) or 0)
 
 
+def board_parity(board: float, role_pressure: float) -> float:
+    """Our in-play strength as a fraction of the opponent's, clamped to ``[0, 1]``.
+
+    ``role_pressure`` is the positive magnitude of the ``opponent_roles`` family. Card Worth is
+    registry-keyed, so the opponent's stacks carry no comparable ``_board_resources`` figure and
+    their scouted role pressure is the only symmetric reading of their board. With no pressure
+    resolved there is nothing to be behind of, so parity is whole.
+    """
+    if role_pressure <= 0.0:
+        return 1.0
+    return min(1.0, max(0.0, board) / role_pressure)
+
+
+def own_stadium(current, seat: int) -> tuple:
+    return tuple(card for card in (current.get("stadium") or ())
+                 if card and card.get("playerIndex") is not None
+                 and int(card["playerIndex"]) == seat)
+
+
 def _active_condition_share(player, table) -> float:
     """Special conditions ride the player payload and apply to that side's Active only."""
     share = 1.0
@@ -97,7 +116,7 @@ class BoardPotential:
                  profile: BellmanDeckProfile | None = None,
                  scale: UtilityScale = UtilityScale(), root_seat: int | None = None,
                  opponent_role_worth=None, isolated_selection: bool = False,
-                 opponent_hand_share: float = 0.0):
+                 opponent_hand_share: float = 0.0, root_observation=None):
         self.stats = stats
         self.registry = registry
         self.profile = profile or BellmanDeckProfile.from_registry(registry)
@@ -108,6 +127,10 @@ class BoardPotential:
         self.isolated_selection = bool(isolated_selection)
         # Every consumer of the opponent-hand term must read THIS share, or the paths disagree.
         self.opponent_hand_share = max(0.0, float(opponent_hand_share))
+        # How far behind on board we are is a read of the position we are deciding from, not a
+        # property of each hypothetical successor: pinning it here keeps the scaling out of the
+        # damage and development families, which would otherwise move it as a side effect.
+        self.board_parity = 1.0
         self._stat_cache = {}
         self._attack_cache = {}
         self._resource_job_cache = {}
@@ -118,6 +141,23 @@ class BoardPotential:
         # player/body dicts.  The observation is immutable for the duration of one ``__call__``, so
         # results are keyed by object identity and the cache lives only for that call.
         self._call_cache = None
+        if root_observation is not None:
+            self.board_parity = self._root_board_parity(root_observation)
+
+    def _sides(self, current):
+        seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
+        players = current.get("players") or ()
+
+        def side(index):
+            return players[index] if 0 <= index < len(players) and players[index] else {}
+
+        return seat, side(seat), side(1 - seat)
+
+    def _root_board_parity(self, observation) -> float:
+        current = observation.get("current") or {}
+        seat, me, opponent = self._sides(current)
+        return board_parity(self._board_resources(me, stadium=own_stadium(current, seat)),
+                            -self._opponent_role_pressure(opponent))
 
     def _stat(self, card_id):
         if not self.stats or card_id is None:
@@ -860,12 +900,7 @@ class BoardPotential:
 
     def _evaluate(self, observation) -> Potential:
         current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0)) if self.root_seat is None else self.root_seat
-        players = current.get("players") or ()
-        me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-        opponent_seat = 1 - seat
-        opponent = (players[opponent_seat]
-                    if 0 <= opponent_seat < len(players) and players[opponent_seat] else {})
+        seat, me, opponent = self._sides(current)
         result = int(current.get("result", -1))
         if result != -1:
             game = self.scale.game if result == seat else -self.scale.game
@@ -882,6 +917,8 @@ class BoardPotential:
             include_incoming=not promoted_after_attack)
         if promoted_after_attack:
             readiness = self._next_attachment_coverage(me, opponent)
+        board = self._board_resources(me, stadium=own_stadium(current, seat))
+        opponent_roles = self._opponent_role_pressure(opponent)
         families = {
             "game": 0.0,
             "prize_race": float(len(opponent.get("prize") or ()) - len(me.get("prize") or ())),
@@ -893,17 +930,15 @@ class BoardPotential:
                                 else self._multi_target_ko_ready(me, opponent)),
             # Historical isolated effect menus lack the parent attack continuation. Do not infer a
             # future multi-target line from that deliberately partial state.
-            "board": self._board_resources(me, stadium=tuple(
-                card for card in (current.get("stadium") or ())
-                if card and card.get("playerIndex") is not None
-                and int(card["playerIndex"]) == seat)),
+            "board": board,
             "energy_position": self._energy_position(
                 me, opponent, historical_context=selection_context),
             "development": self._development(me),
             "hand": self._hand_resources(me, setup_complete=int(current.get("turn", 0)) > 0),
             "hand_demand": self._hand_demand(me),
-            "opponent_roles": self._opponent_role_pressure(opponent),
-            "opponent_hand": (-self.opponent_hand_share
+            "opponent_roles": opponent_roles,
+            "opponent_hand": (-self.board_parity
+                              * self.opponent_hand_share
                               * worth_to_prizes(OPPONENT_HAND_CARD_WORTH)
                               * _hand_count(opponent)),
             "prize_plan": self._prize_plan(me, opponent),
@@ -914,4 +949,4 @@ class BoardPotential:
         return self.scale.game
 
 
-__all__ = ("BoardPotential", "UtilityScale")
+__all__ = ("BoardPotential", "UtilityScale", "board_parity", "own_stadium")

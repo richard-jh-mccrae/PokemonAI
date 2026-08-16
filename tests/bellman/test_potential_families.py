@@ -62,6 +62,52 @@ def test_opponent_hand_size_is_a_priced_liability_when_armed():
     assert small.total - large.total == pytest.approx(6 * worth_to_prizes(KNOWN_CARD_FLOOR))
 
 
+def test_opponent_hand_charge_shrinks_as_our_board_falls_behind():
+    """ADR-0141 amendment: a player losing on board cannot afford to protect the leader's hand."""
+    observation = _observation(opp_hand_count=4)
+    even = _potential(opponent_hand_share=1.0)(observation)
+    behind = _potential(opponent_hand_share=1.0, opponent_role_worth={DEFENDER: 30.0},
+                        root_observation=observation)(observation)
+
+    behind_families = dict(behind.families)
+    parity = dict(even.families)["board"] / -behind_families["opponent_roles"]
+    assert 0.0 < parity < 1.0                          # the fixture really is behind on board
+    assert behind_families["opponent_hand"] == pytest.approx(
+        dict(even.families)["opponent_hand"] * parity)
+
+
+def test_opponent_hand_charge_stays_whole_at_board_parity_or_better():
+    observation = _observation(opp_hand_count=4)
+    even = _potential(opponent_hand_share=1.0)(observation)
+    ahead = _potential(opponent_hand_share=1.0, opponent_role_worth={DEFENDER: 0.05},
+                       root_observation=observation)(observation)
+
+    assert dict(ahead.families)["opponent_hand"] == dict(even.families)["opponent_hand"]
+
+
+def test_opponent_hand_charge_vanishes_with_nothing_of_our_own_in_play():
+    observation = _observation(opp_hand_count=4)
+    observation["current"]["players"][0]["active"] = []
+    potential = BoardPotential(_stats(), registry=_registry(), root_seat=0,
+                               opponent_hand_share=1.0,
+                               opponent_role_worth={DEFENDER: 30.0},
+                               root_observation=observation)
+
+    assert dict(potential(observation).families)["opponent_hand"] == 0.0
+
+
+def test_board_parity_holds_across_successors_of_the_position_it_was_read_from():
+    """The read is of the root position: attacking must not move the opponent-hand charge."""
+    root = _observation(opp_hand_count=4)
+    potential = _potential(opponent_hand_share=1.0, opponent_role_worth={DEFENDER: 30.0},
+                           root_observation=root)
+    damaged = _observation(opp_hand_count=4)
+    damaged["current"]["players"][1]["active"] = [_body(DEFENDER, hp=10)]
+
+    assert (dict(potential(damaged).families)["opponent_hand"]
+            == dict(potential(root).families)["opponent_hand"])
+
+
 def test_opponent_hand_pricing_ships_dark_by_default():
     families = dict(_potential()(_observation(opp_hand_count=8)).families)
 
