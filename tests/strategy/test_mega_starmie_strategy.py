@@ -1,7 +1,9 @@
 """Executable claims about the shipped Mega Starmie declarations, read against real card data."""
 from types import SimpleNamespace
 
-from agents.mega_starmie.strategy import CINDERACE, MEGA_STARMIE_EX, STARYU, STRATEGY
+from agents.mega_starmie.strategy import (
+    CINDERACE, IGNITION_ENERGY, MEGA_STARMIE_EX, STARYU, STRATEGY,
+)
 from common.cards import CardFunctions
 from common.damage import bench_reach
 from common.demand import StrategyBeamBuilder, semantic_action_key
@@ -23,10 +25,11 @@ ROLES = STRATEGY.roles.resolve((STARYU, MEGA_STARMIE_EX, CINDERACE), STATS, FUNC
 RESOLVED = resolve_strategies(GENERAL_STRATEGIES, STRATEGY.strategies)
 
 
-def _body(card_id, serial, energies=(), pre=()):
+def _body(card_id, serial, energies=(), pre=(), hp=None):
     maximum = int(getattr(STATS.get(card_id), "hp", 100) or 100)
     return {"id": card_id, "serial": serial, "energies": list(energies), "energyCards": [],
-            "hp": maximum, "maxHp": maximum, "preEvolution": list(pre), "tools": []}
+            "hp": maximum if hp is None else hp, "maxHp": maximum,
+            "preEvolution": list(pre), "tools": []}
 
 
 def _observation(active, bench=(), *, hand=(), options=(), opponent_bench=(), turn=1):
@@ -112,3 +115,28 @@ def test_the_snipe_hint_focuses_jetting_blow_and_not_nebula_beam():
 
     assert {action.selection for action in focused} == {(0,)}
     assert any(action.selection == (1,) for action in actions)
+
+
+def test_the_reload_waits_for_the_heal_that_creates_its_opening():
+    """Correction 83116081-76 rules the Wally's play, not the attach. general healing already
+    asks for the heal, so this hint declares only the repayment and rests until it lands."""
+    damaged = _observation(
+        _body(MEGA_STARMIE_EX, 2, energies=[3, 3], pre=[{"id": STARYU}], hp=60), turn=5)
+    healed = _observation(_body(MEGA_STARMIE_EX, 2, pre=[{"id": STARYU}]), turn=5)
+
+    assert ("mega_starmie.reload_the_healed_mega_with_ignition"
+            in _activate(damaged).inactive_ids)
+    assert ("mega_starmie.reload_the_healed_mega_with_ignition"
+            in _activate(healed).active_ids)
+
+
+def test_the_reload_names_the_energy_that_repays_a_full_bounce_in_one_attach():
+    from common.energy import provision_units
+
+    tags = {IGNITION_ENERGY: tuple(FUNCTIONS.tags(IGNITION_ENERGY))}
+    reload_hint = next(hint for hint in STRATEGY.strategies
+                       if hint.identifier == "mega_starmie.reload_the_healed_mega_with_ignition")
+
+    assert reload_hint.desired_facts[0].target_card_ids == (IGNITION_ENERGY,)
+    assert provision_units(tags, IGNITION_ENERGY, evolved=True) == len(
+        STATS.attack(NEBULA_BEAM).energyTypes)

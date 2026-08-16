@@ -54,6 +54,23 @@ STRATEGY = Strategy(
             "mega_starmie.strategy",
         ),
         StrategyHint(
+            # Wally's full heal bounces every Energy on the Mega to hand; general healing already
+            # asks for the heal, so only the repayment is this deck's to declare.
+            "mega_starmie.reload_the_healed_mega_with_ignition",
+            "deck",
+            (
+                ActivationCondition("own.active.card_id", "eq", MEGA_STARMIE_EX),
+                ActivationCondition("own.active.full_health", "eq", True),
+                ActivationCondition("own.active.energy_count", "eq", 0),
+            ),
+            (DesiredFact("fund_attack", "own.active",
+                         target_card_ids=(IGNITION_ENERGY,)),),
+            "own.active",
+            "immediate",
+            "high",
+            "mega_starmie.strategy",
+        ),
+        StrategyHint(
             # Nebula Beam cannot reach the Bench, so the softening is Jetting Blow's 50-damage
             # rider: it drops a scouted role target into the 210 one Nebula Beam takes once gusted.
             "mega_starmie.soften_role_target_into_nebula_beam_range",
