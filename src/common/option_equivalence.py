@@ -38,6 +38,11 @@ _ZONE_REFS = (("area", "index"), ("inPlayArea", "inPlayIndex"))
 #: A fingerprint's embedded zone reference is exactly ``[area, card]``.
 _FINGERPRINT_REFERENCE_LENGTH = 2
 
+#: Non-zone fields that make two same-body options DIFFERENT decisions: an ENERGY_CARD option
+#: names WHICH attachment by ``energyIndex`` — grouping across it called "discard the Fire" and
+#: "discard the Water" one decision.
+_DISCRIMINATOR_FIELDS = ("count", "energyIndex", "number", "specialConditionType", "toolIndex")
+
 
 def without_engine_serial(obj):
     """Recursive because ``energyCards`` / ``tools`` / ``preEvolution`` carry their own serials —
@@ -99,9 +104,10 @@ def option_in_play_source_id(option, frame: dict | None, seat: int | None = None
     """The card id an ability/skill/tool option acts through, surviving BOTH engine shapes.
 
     The deployed engine emits every option key with ``None`` for unused ones, so a
-    ``get("inPlayArea", option.get("area"))`` fallback never fires there (PR #532 class); the cgpy
-    twin omits unused keys instead. Present-but-None is treated as absent. A reference that
-    materializes but does not resolve fails closed — never a guess from the other pair."""
+    ``get("inPlayArea", option.get("area"))`` fallback never fires there (PR #532 class); the
+    offline twin engine omits unused keys instead. Present-but-None is treated as absent. A
+    reference that materializes but does not resolve fails closed — never a guess from the other
+    pair."""
     if not isinstance(option, dict):
         return None
     card_id = option.get("cardId")
@@ -181,7 +187,9 @@ def option_fingerprint(option: dict, frame: dict | None) -> str | None:
         cards.append([area, without_engine_serial(card)])
     if not cards:
         return None
-    return json.dumps([option.get("type"), seat, cards], sort_keys=True)
+    discriminators = [[field, option[field]] for field in _DISCRIMINATOR_FIELDS
+                      if option.get(field) is not None]
+    return json.dumps([option.get("type"), seat, cards, discriminators], sort_keys=True)
 
 
 def semantic_option_fingerprint(option: dict, frame: dict | None) -> str | None:

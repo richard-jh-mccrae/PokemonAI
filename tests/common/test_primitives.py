@@ -119,6 +119,20 @@ def test_in_play_source_prefers_the_explicit_card_and_fails_closed():
     assert option_in_play_source_id({"type": 10, "area": 4, "index": 0}, IN_PLAY_FRAME) == 112
 
 
+def test_two_attachments_on_one_body_are_two_decisions():
+    from common.option_equivalence import option_fingerprint
+
+    frame = {"current": {"yourIndex": 0, "players": [
+        {"active": [{"id": 700, "serial": 1,
+                     "energyCards": [{"id": 3, "serial": 2}, {"id": 5, "serial": 4}]}]},
+        {},
+    ]}}
+    fire = {"type": 5, "area": 4, "index": 0, "playerIndex": 0, "energyIndex": 0}
+    water = {"type": 5, "area": 4, "index": 0, "playerIndex": 0, "energyIndex": 1}
+
+    assert option_fingerprint(fire, frame) != option_fingerprint(water, frame)
+
+
 def test_fingerprint_source_card_id_reads_the_embedded_reference():
     ability_part = semantic_option_fingerprint(engine_opt(type=10, area=4, index=0), IN_PLAY_FRAME)
     skill_part = semantic_option_fingerprint(engine_opt(type=15, cardId=678), IN_PLAY_FRAME)
