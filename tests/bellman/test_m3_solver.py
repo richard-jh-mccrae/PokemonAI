@@ -1701,6 +1701,30 @@ def test_a_cyclic_forced_end_chain_is_budgeted_not_a_recursion_error():
     assert not decision.complete
 
 
+def test_the_end_chain_node_budget_is_spent_per_chain_not_per_decision(monkeypatch):
+    # A decision-wide End budget silently retired root actions: once enough unrelated forced
+    # menus had been valued, every later End chain reported -inf/incomplete, deleting the line
+    # that carries a cut sequence's remaining EV.  Each chain gets the whole budget.
+    monkeypatch.setattr(solver_module, "END_CHAIN_NODE_CAP", 2)
+    cheap_menu, cheap_done = _state("cheap-menu", context=5), _state("cheap-done", board=0.1)
+    rich_menu, rich_done = _state("rich-menu", context=5), _state("rich-done", board=0.9)
+    actions = {"root": (_action("cheap", 0), _action("rich", 1)),
+               "cheap": (_action("end"),), "rich": (_action("end"),),
+               "cheap-menu": (_action("card"),), "rich-menu": (_action("card"),)}
+    transitions = {("root", "cheap"): Deterministic(_state("cheap")),
+                   ("root", "rich"): Deterministic(_state("rich")),
+                   ("cheap", "end"): Deterministic(cheap_menu),
+                   ("rich", "end"): Deterministic(rich_menu),
+                   ("cheap-menu", "card"): Deterministic(cheap_done),
+                   ("rich-menu", "card"): Deterministic(rich_done)}
+    solver = ReferenceSolver(ResolvedEndGraph(actions, transitions), _oracle())
+
+    decision = solver.decide(_state("root"))
+
+    assert decision.chosen == (1,)                    # the second chain is valued, not deleted
+    assert decision.value == pytest.approx(0.9)
+
+
 def test_bounded_own_choice_keeps_a_finite_lower_bound_from_one_legal_branch():
     root = _state("choice-lower-root")
     exact = _state("choice-lower-exact", board=0.5)
