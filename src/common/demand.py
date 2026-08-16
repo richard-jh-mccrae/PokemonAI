@@ -18,7 +18,7 @@ from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_c
 from .information import OutcomeGroup, hypergeometric_classes
 from .option_equivalence import option_source_card
 from .scouting.card_text import name_in_family
-from .strategy.context import _ACTIVE, _BENCH
+from .strategy.context import _ACTIVE, _ATTACK, _BENCH
 
 
 DEFAULT_BENCH_CAPACITY = 5
@@ -147,7 +147,7 @@ class StrategyBeamBuilder:
         options = tuple((state.obs.get("select") or {}).get("option") or ())
         # An offered attack marks the commit point where the turn is about to be spent; a
         # merely-legal End is on almost every main-phase menu and signals no such urgency.
-        closing = any(int(option.get("type", -1)) == 13 for option in options)
+        closing = any(int(option.get("type", -1)) == _ATTACK for option in options)
         return "high" if closing else "medium"
 
     def outcome_statuses(self, state) -> tuple[dict, ...]:
