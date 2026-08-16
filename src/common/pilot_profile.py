@@ -133,6 +133,8 @@ DEFINITIONS = (
                         "actions"),
     ParameterDefinition("strategy.sequence_coverage_enabled", "strategy_beam", 1.0, 0.0, 1.0,
                         "boolean", False),
+    ParameterDefinition("strategy.information_partition_enabled", "strategy_beam", 1.0, 0.0, 1.0,
+                        "boolean", False),
     ParameterDefinition("terminal.enabled", "terminal_proof", 1.0, 0.0, 1.0,
                         "boolean", False),
     ParameterDefinition("terminal.max_nodes", "terminal_proof", 1024.0, 1.0, 100000.0,

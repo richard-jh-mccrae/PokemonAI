@@ -975,3 +975,145 @@ def test_riolu_primary_line_with_lunatone_coverage_searches_first():
     assert riolu_and_lunatone.tier == riolu_only.tier
     assert len(riolu_and_lunatone.outcomes) == 2
     assert len(riolu_only.outcomes) == 1
+
+
+_PEEK, _EVOLUTION = 50, 200
+
+
+def _partition_beam(peek_clauses, *, deck_counts=((11, 1), (12, 8)),
+                    information_partition=True, extra_hand=(), extra_hints=()):
+    hints = (
+        ActivatedStrategy("deck.develop_active", "evolve", "own.active", 10, 77,
+                          (_EVOLUTION,), "immediate", "high", None, 0),
+        ActivatedStrategy("general.information", "low_cost_information_access", "turn",
+                          None, None, (), "immediate", "high", None, 0),
+        *extra_hints,
+    )
+    hand = [{"id": _EVOLUTION, "serial": 90, "playerIndex": 0},
+            {"id": _PEEK, "serial": 91, "playerIndex": 0},
+            *({"id": card_id, "serial": 92 + index, "playerIndex": 0}
+              for index, card_id in enumerate(extra_hand))]
+    observation = _observation(hand=hand)
+    observation["select"]["option"] = [
+        {"type": 9, "index": 0, "inPlayArea": 4, "inPlayIndex": 0},
+        *({"type": 7, "index": index} for index in range(1, len(hand))),
+        {"type": 14},
+    ]
+    snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
+
+    class Effects:
+        @staticmethod
+        def clauses(card_id):
+            return tuple(peek_clauses) if card_id == _PEEK else ()
+
+    class Stats:
+        @staticmethod
+        def get(card_id):
+            return SimpleNamespace(
+                is_pokemon=card_id in {_EVOLUTION, 11, 101, 102}, is_energy=False,
+                is_supporter=False,
+                stage="basic" if card_id in {11, 101, 102} else "stage1")
+
+    builder = StrategyBeamBuilder(
+        snapshot, effects=Effects(), stats=Stats(), sequence_coverage=True,
+        information_partition=information_partition)
+    state = SimpleNamespace(obs=observation, root_seat=0,
+                            deck_counts=tuple(deck_counts))
+    actions = enumerate_legal_actions(observation)
+    beam = builder.build(state, actions)
+    return beam, actions, builder, state
+
+
+def test_a_live_free_peek_leads_the_beam_by_rule_not_by_score():
+    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+
+    beam, actions, builder, _state = _partition_beam(dig)
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert [row.action_key for row in beam.focused] == [
+        semantic_action_key(peek), semantic_action_key(evolve)]
+    assert 0.0 < builder.last_odds[semantic_action_key(peek)] < 1.0
+
+    legacy, actions, _builder, _state = _partition_beam(
+        dig, information_partition=False)
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert [row.action_key for row in legacy.focused] == [
+        semantic_action_key(evolve), semantic_action_key(peek)]
+
+
+def test_a_dead_peek_does_not_lead_the_beam():
+    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+
+    beam, actions, _builder, _state = _partition_beam(dig, deck_counts=((12, 8),))
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert [row.action_key for row in beam.focused] == [semantic_action_key(evolve)]
+    assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
+
+
+def test_a_costed_search_does_not_lead_the_beam():
+    costed = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3,
+               "cost": "discard_2", "cost_required": True},)
+
+    beam, actions, _builder, _state = _partition_beam(costed)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert [row.action_key for row in beam.focused] == [semantic_action_key(evolve)]
+    assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
+
+
+def test_a_whole_deck_tutor_does_not_lead_over_a_guaranteed_evolve():
+    tutor = ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    beam, actions, _builder, _state = _partition_beam(tutor)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert beam.focused[0].action_key == semantic_action_key(evolve)
+    assert semantic_action_key(peek) in {row.action_key for row in beam.focused}
+
+
+def test_a_pure_draw_card_does_not_lead_over_a_guaranteed_evolve():
+    draw = ({"kind": "draw", "amount": 1},)
+
+    beam, actions, _builder, _state = _partition_beam(draw)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert beam.focused[0].action_key == semantic_action_key(evolve)
+    assert semantic_action_key(peek) in {row.action_key for row in beam.focused}
+
+
+def test_partition_keeps_the_coverage_order_inside_each_class():
+    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    extras = (
+        _deploy_hint("deck.alpha", (101,)),
+        _deploy_hint("deck.beta", (102,)),
+        _deploy_hint("deck.beta_extra", (102, 300),
+                     deadline="next_turn", conviction="low"),
+    )
+
+    on, actions, _builder, _state = _partition_beam(
+        dig, extra_hand=(101, 102), extra_hints=extras)
+    peek_key = semantic_action_key(
+        next(action for action in actions if action.selection == (1,)))
+    off, _actions, _builder, _state = _partition_beam(
+        dig, extra_hand=(101, 102), extra_hints=extras,
+        information_partition=False)
+
+    off_order = [row.action_key for row in off.focused]
+    assert [row.action_key for row in on.focused] == [
+        peek_key, *(key for key in off_order if key != peek_key)]
+
+
+def test_rank_legal_returns_the_live_peek_first_with_the_partition_on():
+    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+
+    _beam, actions, builder, state = _partition_beam(dig)
+
+    ranked = builder.rank_legal(state, actions)
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert ranked[0] is peek
