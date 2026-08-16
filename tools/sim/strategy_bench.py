@@ -19,6 +19,8 @@ from statistics import mean
 from time import monotonic
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "src"))
+from common.budget_prototype import DecisionClock
 
 
 def default_jobs() -> int:
@@ -26,9 +28,7 @@ def default_jobs() -> int:
 
 
 def _agent_decision_seconds(decision_timeout: float) -> float:
-    timeout = float(decision_timeout)
-    grace = min(5.0, max(0.25, timeout * 0.05))
-    return max(0.1, timeout - grace)
+    return DecisionClock(float(decision_timeout)).bellman_seconds
 
 
 def _percentile(values, fraction):
@@ -42,6 +42,10 @@ def summarize_decisions(records) -> dict:
     timed = [row for row in records if row.get("decision_seconds") is not None]
     found = [row for row in timed if row.get("first_found_seconds") is not None]
     stabilized = [row for row in timed if row.get("stabilized_seconds") is not None]
+    recoverable = [row["first_recoverable_seconds"] for row in timed
+                   if row.get("first_recoverable_seconds") is not None]
+    full = [row["first_full_seconds"] for row in timed
+            if row.get("first_full_seconds") is not None]
     totals = [row["decision_seconds"] for row in timed]
     first = [row["first_found_seconds"] for row in found]
     stable = [row["stabilized_seconds"] for row in stabilized]
@@ -71,6 +75,16 @@ def summarize_decisions(records) -> dict:
             "avg": mean(first) if first else 0.0,
             "p95": _percentile(first, 0.95),
             "max": max(first, default=0.0),
+        },
+        "first_recoverable_seconds": {
+            "avg": mean(recoverable) if recoverable else 0.0,
+            "p95": _percentile(recoverable, 0.95),
+            "max": max(recoverable, default=0.0),
+        },
+        "first_full_seconds": {
+            "avg": mean(full) if full else 0.0,
+            "p95": _percentile(full, 0.95),
+            "max": max(full, default=0.0),
         },
         "stabilized_seconds": {
             "avg": mean(stable) if stable else 0.0,
@@ -105,6 +119,7 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
         production = ((record.get("diagnostics") or {}).get("production") or {})
         incumbent = production.get("final_incumbent") or {}
         snapshot = (record.get("diagnostics") or {}).get("strategy_snapshot") or {}
+        fallback = (record.get("diagnostics") or {}).get("fallback") or {}
         seat = int(record.get("engine_seat", record.get("seat", 0)))
         rows.append({
             "match": match_index,
@@ -122,6 +137,8 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
             "lethal_proof_seconds": lethal_proof_seconds(record),
             "total_search_seconds": incumbent.get("search_seconds", record.get("decision_seconds")),
             "first_found_seconds": incumbent.get("first_found_seconds"),
+            "first_recoverable_seconds": incumbent.get("first_recoverable_seconds"),
+            "first_full_seconds": incumbent.get("first_full_seconds"),
             "stabilized_seconds": incumbent.get("stabilized_seconds"),
             "remaining_search_seconds": (
                 max(0.0, float(incumbent.get("search_seconds", record.get("decision_seconds")))
@@ -133,6 +150,12 @@ def decision_metrics(records, *, match_index, contestants) -> list[dict]:
             "strategy_focus_position": incumbent.get("strategy_focus_position"),
             "strategy_focus_count": incumbent.get("strategy_focus_count"),
             "incumbent_timeline": production.get("incumbent_timeline") or [],
+            "execution_tier": production.get("execution_tier"),
+            "fallback_cause": fallback.get("cause"),
+            "fallback_choice": fallback.get("chosen"),
+            "phase_budgets": production.get("phase_budgets") or {},
+            "protected_bundles": production.get("protected_bundles") or {},
+            "challengers": production.get("challengers") or {},
         })
     return rows
 
@@ -141,7 +164,8 @@ _CSV_FIELDS = (
     "match", "decision", "turn", "seat", "agent", "action", "value", "complete",
     "round_trip_seconds",
     "decision_seconds", "decision_limit_seconds", "deadline_hit", "lethal_proof_seconds",
-    "total_search_seconds", "first_found_seconds", "stabilized_seconds",
+    "total_search_seconds", "first_found_seconds", "first_recoverable_seconds",
+    "first_full_seconds", "stabilized_seconds", "execution_tier", "fallback_cause",
     "remaining_search_seconds", "strategy_wave", "strategy_focus_position",
     "strategy_focus_count",
 )
@@ -201,10 +225,14 @@ def format_report(payload: dict, hotspot_count=10) -> str:
         return "\n".join(lines)
     first = summary["first_found_seconds"]
     stable = summary["stabilized_seconds"]
+    recoverable = summary["first_recoverable_seconds"]
+    full = summary["first_full_seconds"]
     lethal = summary["lethal_proof_seconds"]
     lines += [
         f"Decision time avg {decision['avg']:.2f}s | p95 {decision['p95']:.2f}s | max {decision['max']:.2f}s",
         f"Final incumbent first found avg {first['avg']:.2f}s | p95 {first['p95']:.2f}s | max {first['max']:.2f}s",
+        f"First recoverable avg {recoverable['avg']:.2f}s | p95 {recoverable['p95']:.2f}s | max {recoverable['max']:.2f}s",
+        f"First fully planned avg {full['avg']:.2f}s | p95 {full['p95']:.2f}s | max {full['max']:.2f}s",
         f"Final incumbent stabilized avg {stable['avg']:.2f}s | p95 {stable['p95']:.2f}s | max {stable['max']:.2f}s",
         f"Lethal solver avg {lethal['avg']:.3f}s | min {lethal['min']:.3f}s | max {lethal['max']:.3f}s",
         f"Final Strategy wave: first {summary['strategy_waves']['first']} | "
@@ -263,7 +291,7 @@ def _run_match_job(task: dict) -> dict:
             raise ValueError(f"unknown working-tree agent {name!r}")
     servers = tuple(AgentServer(
         directory, [REPO / "src"], capture_telemetry=bool(config.get("emit", True)),
-        decision_seconds=_agent_decision_seconds(config["decision_timeout"])) for directory in dirs)
+        decision_seconds=config["decision_timeout"]) for directory in dirs)
     recorder = MatchRecorder()
     captured = []
     started = monotonic()

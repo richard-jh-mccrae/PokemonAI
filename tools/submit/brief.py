@@ -183,7 +183,7 @@ def render_brief(manifest: dict, **_ignored) -> str:
     strategy_catalog = manifest["strategy_catalog"]
     effective_rows = "".join(
         f"<li><code>{html.escape(row['identifier'])}</code> · "
-        f"{html.escape(row['deadline'])} · {html.escape(row['confidence'])}<br>"
+        f"{html.escape(row['deadline'])} · {html.escape(row['conviction'])}<br>"
         f"when {html.escape(str(row['conditions']))}<br>"
         f"seek {html.escape(str(row['desired_facts']))}</li>"
         for row in strategy_catalog["resolved"]["effective"])

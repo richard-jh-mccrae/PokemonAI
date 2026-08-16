@@ -25,13 +25,20 @@ def _telemetry():
             "production": {
                 "final_incumbent": {
                     "first_found_seconds": 4.0,
+                    "first_recoverable_seconds": 2.0,
+                    "first_full_seconds": 4.0,
                     "stabilized_seconds": 5.0,
                     "strategy_wave": "first",
                     "strategy_focus_position": 3,
                     "strategy_focus_count": 8,
                 },
                 "incumbent_timeline": [{"elapsed_seconds": 4.0}],
+                "execution_tier": "full",
+                "phase_budgets": {"candidate_harvest": {"share": 0.2}},
+                "challengers": {"selected": ["play"]},
+                "protected_bundles": {"protected": ["turn.attack"]},
             },
+            "fallback": {"cause": "effect_latch", "chosen": [1]},
         },
     }]
 
@@ -40,6 +47,10 @@ def test_metrics_preserve_final_incumbent_timing_and_friendly_focus_coordinates(
     rows = decision_metrics(_telemetry(), match_index=2, contestants=("a", "b"))
     assert rows[0]["agent"] == "b"
     assert rows[0]["first_found_seconds"] == 4.0
+    assert rows[0]["first_recoverable_seconds"] == 2.0
+    assert rows[0]["first_full_seconds"] == 4.0
+    assert rows[0]["execution_tier"] == "full"
+    assert rows[0]["fallback_cause"] == "effect_latch"
     assert rows[0]["stabilized_seconds"] == 5.0
     assert rows[0]["strategy_wave"] == "first"
     assert rows[0]["strategy_focus_position"] == 3

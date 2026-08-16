@@ -11,13 +11,16 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
+from common.budget_prototype import DecisionClock
 from common.cards import CardFunctions
 from common.card_worth import role_value
 from common.deck_tracker import OwnCardModel
+from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
+from common.options import enumerate_legal_actions
 from common.pilot_profile import PilotProfile
 from common.pokemon_roles import general_pokemon_roles
 from common.scouting.artifact import load_artifact
@@ -28,6 +31,10 @@ from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
     _DRAW_COUNT,
+    _DAMAGE,
+    _DAMAGE_COUNTER,
+    _DAMAGE_COUNTER_ANY,
+    _DAMAGE_COUNTER_COUNT,
     _END,
     _HAND,
     _IS_FIRST,
@@ -35,11 +42,15 @@ from common.strategy.context import (
     _NO,
     _SETUP_ACTIVE,
     _SETUP_BENCH,
+    _TO_BENCH,
+    _TO_FIELD,
+    _TO_HAND,
     _YES,
 )
 from common.strategy.strategies import (
     GENERAL_STRATEGIES, activate_strategies, resolve_strategies,
 )
+from common.state import DecisionState
 from common.value import ValueRegistry
 from common.terminal import proof_lock_step
 
@@ -102,10 +113,12 @@ class BellmanRuntime:
         experiment, experiment_path = _pilot_overlay()
         pilot_overrides = dict(getattr(strategy, "pilot_overrides", {}))
         decision_seconds = os.environ.get("AGENT_DECISION_SECONDS")
+        self.decision_clock = DecisionClock(float(decision_seconds)) \
+            if decision_seconds is not None else None
         if decision_seconds is not None:
             pilot_overrides.update({
                 "clock.adaptive_enabled": 0.0,
-                "clock.remaining_200_seconds": float(decision_seconds),
+                "clock.remaining_200_seconds": self.decision_clock.bellman_seconds,
                 # A pinned clock promises reproducible decisions, so the prover must stop on
                 # its node/decision caps: a wall-clock stop varies with machine load.
                 "terminal.max_seconds": 60.0,
@@ -128,6 +141,9 @@ class BellmanRuntime:
         self.last_read = Read()
         self.last_decision_limit = None
         self.last_deadline_hit = False
+        self._fallback_scope = None
+        self._fallback_effect = None
+        self._fallback_pending = False
 
     @staticmethod
     def _player(observation, seat):
@@ -379,6 +395,24 @@ class BellmanRuntime:
             self.last_read = Read()
             self._strategy_snapshot = None
             return self._pregame(observation)
+        scope = (int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
+        select = observation.get("select") or {}
+        context = int(select.get("context", -1))
+        effect = select.get("effect") or {}
+        effect_key = tuple(effect.get(key) for key in ("playerIndex", "id", "serial")) \
+            if effect else None
+        new_effect = (self._fallback_effect is not None and effect_key is not None
+                      and effect_key != self._fallback_effect)
+        if (context == 0 or new_effect
+                or (self._fallback_scope is not None and self._fallback_scope != scope)):
+            self._fallback_scope = None
+            self._fallback_effect = None
+            self._fallback_pending = False
+        elif self._fallback_scope == scope or self._fallback_pending:
+            self._fallback_scope = scope
+            self._fallback_effect = effect_key or self._fallback_effect
+            self._fallback_pending = False
+            return self._fallback_decision(observation, "effect_latch")
         # One decision allocates heavily but builds trees, so cyclic garbage is rare and the
         # collector's constant generational scans reclaim almost nothing until the search ends.
         # Pause it for the decision; collection resumes with the first allocation afterwards.
@@ -386,10 +420,73 @@ class BellmanRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
-            return self._decide_with_planner(observation)
+            decision = self._decide_with_planner(observation)
+            production = (decision.diagnostics.get("production") or {})
+            if bool(production.get("deadline_hit")):
+                if context == 0:
+                    self._fallback_pending = production.get("execution_tier") == "recoverable"
+                else:
+                    self._fallback_scope = scope
+                    self._fallback_effect = effect_key
+            return decision
+        except Exception as exc:
+            return self._fallback_decision(observation, f"exception:{type(exc).__name__}")
         finally:
             if collector_was_enabled:
                 gc.enable()
+
+    def _fallback_decision(self, observation: dict, cause: str) -> RootDecision:
+        chosen = tuple(self._strategy_fallback_selection(observation))
+        select = observation.get("select") or {}
+        current = observation.get("current") or {}
+        if int(select.get("context", -1)) != 0:
+            self._fallback_scope = (
+                int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
+            effect = select.get("effect") or {}
+            self._fallback_effect = (tuple(effect.get(key) for key in (
+                "playerIndex", "id", "serial")) if effect else self._fallback_effect)
+        self._plan_suffix = ()
+        self._proof_suffix = ()
+        diagnostics = {
+            "backend": "strategy-fallback",
+            "fallback": {"cause": cause, "latched": self._fallback_scope is not None,
+                         "context": int(select.get("context", -1)), "chosen": chosen},
+        }
+        return RootDecision(
+            chosen, ActionIdentity("strategy_fallback", (int(select.get("context", -1)),)),
+            0.0, False, diagnostics)
+
+    def _strategy_fallback_selection(self, observation: dict) -> list[int]:
+        default = _last_resort_selection(observation)
+        try:
+            snapshot = self._planning_epoch_strategy(observation)
+            state = DecisionState.from_observation(
+                observation, deck=self.deck, deck_name=self.strategy.name,
+                value_registry_identity=self.registry.identity)
+            actions = enumerate_legal_actions(observation)
+            builder = StrategyBeamBuilder(
+                snapshot, effects=self.effects, stats=self.stats, registry=self.registry,
+                width=int(self.pilot_profile.get("strategy.focus_width")))
+            ranked = builder.rank_legal(state, actions)
+            focused = builder.last_beam.focused if builder.last_beam is not None else ()
+            if not focused:
+                return default
+            focused_keys = {row.action_key for row in focused}
+            action = next((row for row in ranked
+                           if semantic_action_key(row) in focused_keys), None)
+            if action is None:
+                return default
+            select = observation.get("select") or {}
+            context = int(select.get("context", -1))
+            if context == _TO_HAND:
+                maximum = min(len(select.get("option") or ()),
+                              int(select.get("maxCount", len(action.selection))))
+                remainder = [index for index in range(len(select.get("option") or ()))
+                             if index not in action.selection]
+                return list((*action.selection, *remainder)[:maximum])
+            return list(action.selection) if action.selection else default
+        except Exception:
+            return default
 
     def _decide_with_planner(self, observation: dict) -> RootDecision:
         planner = self._planner(observation)
@@ -401,7 +498,9 @@ class BellmanRuntime:
             raise
 
     def _planner_epoch(self, planner, request, observation) -> RootDecision:
-        self.last_decision_limit = planner._epoch_seconds(request)
+        self.last_decision_limit = (
+            self.decision_clock.external_seconds if self.decision_clock is not None
+            else planner._epoch_seconds(request))
         proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
         if proof_cached is not None:
             return proof_cached
@@ -458,17 +557,45 @@ def _read_deck() -> list[int]:
 
 
 def _last_resort_selection(observation: dict) -> list[int]:
-    """The cheapest legal submission after a planning failure: End when offered, else the
-    minimum picks. Decides nothing — this is a survival move, not a decision-quality fallback."""
+    """Deterministic legal choice when planning cannot return."""
     select = observation.get("select") or {}
     options = tuple(select.get("option") or ())
+    context = int(select.get("context", -1))
     end_index = next((index for index, option in enumerate(options)
                       if isinstance(option, dict) and option.get("type") is not None
                       and int(option["type"]) == _END),
                      None)
-    if end_index is not None:
+    if context == 0 and end_index is not None:
         return [end_index]
     minimum = min(max(0, int(select.get("minCount") or 0)), len(options))
+    maximum = min(max(minimum, int(select.get("maxCount") or 0)), len(options))
+    if not options:
+        return []
+    if context == _TO_HAND:
+        return list(range(maximum))
+    if context in {_TO_BENCH, _TO_FIELD}:
+        return list(range(max(minimum, min(1, maximum))))
+    if context in {_DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY}:
+        players = ((observation.get("current") or {}).get("players") or ())
+        counters = max(1, int(select.get("remainDamageCounter") or 1))
+
+        def target(index):
+            option = options[index]
+            seat = int(option.get("playerIndex", 1))
+            area = int(option.get("area", -1))
+            player = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+            bodies = ((player.get("active") or ()) if area == 4 else
+                      (player.get("bench") or ()) if area == 5 else ())
+            position = option.get("index")
+            body = (bodies[position] if isinstance(position, int)
+                    and 0 <= position < len(bodies) else {})
+            hp = max(0, int((body or {}).get("hp", 10 ** 9)))
+            return (0 if hp <= counters * 10 else 1, hp, index)
+
+        return [min(range(len(options)), key=target)]
+    if context in {_DRAW_COUNT, _DAMAGE_COUNTER_COUNT}:
+        return [max(range(len(options)), key=lambda index: (
+            int(options[index].get("number", -1)), -index))]
     return list(range(minimum))
 
 

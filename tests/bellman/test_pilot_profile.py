@@ -4,6 +4,7 @@ import pytest
 
 from common.pilot_profile import DEFINITIONS, PilotProfile
 from common.runtime import _pilot_overlay
+from common.budget_prototype import DecisionClock
 
 
 def test_authored_deck_value_overwrites_global_and_learned_layers():
@@ -86,7 +87,30 @@ def test_completed_candidate_harvest_defaults_are_central_and_tunable():
         "search.completed_candidate_time_share": 0.35,
     })
 
-    assert definitions["search.completed_candidate_target"].default == 3.0
+    assert definitions["search.completed_candidate_target"].default == 2.0
     assert definitions["search.completed_candidate_time_share"].default == 0.20
     assert profile.get("search.completed_candidate_target") == 5
     assert profile.get("search.completed_candidate_time_share") == pytest.approx(0.35)
+
+
+def test_anytime_allocation_defaults_are_central_and_bounded():
+    profile = PilotProfile.resolve()
+
+    assert profile.get("search.protected_bundle_time_share") == pytest.approx(0.50)
+    assert profile.get("search.challenger_time_share") == pytest.approx(0.10)
+    assert profile.get("search.challenger_count") == 2
+    assert profile.get("search.protected_bundle_count") == 2
+    assert profile.get("search.stability_patience_share") == pytest.approx(0.20)
+    assert profile.get("search.stability_patience_max_seconds") == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize(("external", "tail", "bellman"), [
+    (120.0, 5.0, 115.0),
+    (15.0, 1.0, 14.0),
+    (200.0, 5.0, 195.0),
+])
+def test_decision_clock_reserves_a_bounded_fallback_tail(external, tail, bellman):
+    clock = DecisionClock(external)
+
+    assert clock.fallback_tail_seconds == pytest.approx(tail)
+    assert clock.bellman_seconds == pytest.approx(bellman)

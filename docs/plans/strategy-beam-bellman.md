@@ -1,6 +1,6 @@
 # Strategy-guided Bellman beam
 
-Status: implemented
+Status: implemented on `codex/strategy-anytime-fallback`; full-suite validation in progress
 
 This specification replaces the per-state, additive-value interpretation of demand in
 `terminal-proof-strategy-guided-bellman.md`. Its terminal-proof requirements remain in force.
@@ -27,6 +27,206 @@ same-turn Terminal Proof
 → Strategy-ordered bounded Bellman
 → iterative widening of every unresolved line
 ```
+
+## Implementation plan
+
+Implement this as extensions to the current owners. Do not add a second Strategy evaluator, value
+function, planner, or fallback doctrine.
+
+### 1. Lock the contracts with tests
+
+Add failing tests before each production slice:
+
+- `tests/strategy/test_strategies.py`: authored conviction is fixed; urgency changes with the
+  branch-local deadline window; optional bundle IDs and ordered waypoints round-trip through the
+  manifest and stable hash; Strategy activation never claims feasibility.
+- `tests/bellman/test_m3_solver.py`: Strategy only reorders; exhaustive Strategy ON/OFF policy is
+  identical; deep own-node ordering remains active in every search phase; candidate tiers,
+  protected bundle shares, challenger reserve, and stable-incumbent stopping follow this plan.
+- `tests/bellman/test_m7_runtime.py`: a timeout inside an effect latches Strategy fallback through
+  the rest of that effect, clears at the next effect boundary, and cannot produce an illegal or
+  empty productive selection.
+- `tests/bellman/test_m5_attacks.py`: Dragapult's attack may publish a recoverable line before all
+  six counters are planned; timeout fallback places all six legally and deterministically, with
+  Strategy preferring a KO or pressure on the primary attacker.
+- `tests/sim/test_strategy_bench.py`: the report exposes first recoverable, first fully planned,
+  stabilization, phase allocation, fallback, reachability, challenger, and timeout metrics.
+
+Keep focused fixtures small enough to run on every Bellman CI job. Use recorded slow frames for a
+separate deterministic performance suite; do not use full mirrors during development.
+
+### 2. Extend the authored Strategy model
+
+`src/common/strategy/strategies.py` remains the declaration and activation owner.
+
+- Replace ambiguous authored `confidence` terminology with `conviction`. Accept `confidence` only
+  as a serialized migration alias, emit `conviction`, and register the retired name.
+- Add an optional `bundle_id` and ordered outcome window to each hint. A hint remains a desired
+  fact, never an action script.
+- Keep conviction immutable for the match artifact. Compute urgency from the current waypoint's
+  window and elapsed turn progress; do not alter conviction when feasibility changes.
+- Represent branch-local outcome status explicitly: satisfied, guaranteed, probabilistic,
+  proven impossible, or unknown. Strategy can bind a visible recipient and determine satisfaction;
+  Bellman/Odds supplies every reachability status beyond satisfaction.
+- Recompute activation only at the existing planning-epoch boundary. Re-evaluate satisfaction,
+  urgency, and the current waypoint cheaply at every simulated own state.
+
+Update the shared manifest/brief projection and package hashes from this same model. Add initial
+Dragapult bundle declarations only as minimal integration fixtures; the separate Dragapult strategy
+work remains the owner of its full doctrine.
+
+### 3. Make the existing beam the single guidance engine
+
+Evolve `src/common/demand.py::StrategyBeamBuilder` instead of creating a fallback Strategy path.
+
+- Split authored preference from feasibility evidence. Urgency plus conviction orders preferences;
+  a Bellman/Odds reachability overlay controls whether protected search budget may be borrowed.
+- Evaluate bundle and waypoint progress against every simulated own state, in candidate harvest,
+  probing, and refinement. A satisfied waypoint stops receiving focus; later bundle endpoints stay
+  active when still relevant.
+- Expose one pure, bounded legal-option ranker from the same matcher for runtime fallback. Its
+  fallback mode may inspect the cached snapshot, current visible state, and offered legal options;
+  it must not call Odds, native transitions, or Bellman.
+- Preserve stable semantic-action ordering as the final tie-break. Unknown evidence fails open.
+
+### 4. Publish anytime candidates by execution tier
+
+Extend `src/common/solver.py` and the existing candidate bank with an explicit execution tier:
+
+1. fully planned: every mandatory choice through the next information/effect boundary is planned;
+2. Strategy-recoverable: the legal prefix is publishable and the first unresolved mandatory choice
+   can be completed by the shared fallback ranker;
+3. safety: the current deterministic safe action.
+
+Publish candidate-bank checkpoints atomically. Never expose a half-mutated recursive result.
+Attack lines with unresolved mandatory post-attack choices are recoverable, not fully planned.
+Rank recoverables by sound Bellman lower bound, then urgency, conviction, and stable deterministic
+tie-break. When no trustworthy lower bound exists, Strategy preference owns the fallback order.
+
+Return the best fully planned candidate first, then the best recoverable candidate, then safety.
+Preserve the existing guarded plan suffix only through the last planned step; runtime replans or
+falls back at the first new or unresolved choice.
+
+### 5. Replace fixed phases with bounded allocation
+
+Move the percentages into `src/common/pilot_profile.py`; `src/common/solver.py` only consumes the
+resolved profile. Keep each phase independently toggleable for attribution.
+
+- Reserve the fallback tail first: five percent of the external decision limit, clamped to one to
+  five seconds. All search shares use the remaining Bellman budget.
+- Normal candidate harvest receives 20%. Guarantee two slots: primary Strategy and safety. Permit a
+  third Strategy variation only after the primary becomes fully planned or its slice expires or
+  stalls.
+- High-urgency/high-conviction work may use at most one shared 50% protected pool. One compatible
+  bundle may use all of it. With two incompatible bundles, spend the first 25% equally, then give
+  the remaining 25% to the bundle with more structural progress.
+- Protect at most two bundles. Report additional high/high bundles and send them through ordinary
+  widening.
+- Count only waypoint reached, mandatory nested choice resolved, recoverable published, or fully
+  planned published as structural progress. Node count, action count, and value churn do not count.
+- Give a protected bundle only a cheap initial probe. It may borrow toward 50% while feasibility is
+  guaranteed, probabilistic and competitive, or unknown but structurally progressing. Proven
+  impossible or dominated work releases its unused share immediately.
+- Replace the unconditional all-root probe with a 10% challenger reserve. Probe at most the top two
+  credible off-Strategy roots selected by cheap optimistic Bellman bounds; skip any root whose
+  upper bound cannot beat the incumbent lower bound.
+- Return every unused slice to ordinary refinement. With no protected bundle the nominal split is
+  20% harvest, 10% challenger, 70% refinement. With protected work, refinement retains at least 40%.
+
+Use one monotonic `DecisionClock` created at callback entry. Make the end-to-end external limit
+available to runtime, give Bellman the pre-tail deadline, and leave the process watchdog as final
+containment. Remove the current ambiguity where the benchmark subtracts grace before runtime sees
+the limit.
+
+### 6. Add sound stability stopping
+
+Use the existing incumbent timeline and upper bounds in `src/common/solver.py`.
+
+- Stop immediately on Terminal Proof.
+- Otherwise stop only when a fully planned incumbent is unchanged across two published checkpoints
+  and no credible challenger upper bound can beat its lower bound.
+- Require patience of 20% of the Bellman budget, clamped to one to ten seconds.
+- A recoverable-only incumbent never triggers stability stopping.
+
+Strategy satisfaction alone never stops search. Strategy fields never enter Bellman value, lower
+bounds, upper bounds, dominance, or pruning.
+
+### 7. Make timeout fallback effect-safe
+
+`src/common/runtime.py` owns the effect-scoped fallback latch and final legal submission.
+
+- Terminal Proof still runs once before planning and may abstain.
+- If Bellman times out at any choice inside a multi-step effect, latch Strategy fallback for every
+  remaining choice in that effect; do not rerun Bellman for each Dragapult counter.
+- Clear the latch on a proven new effect, return to main action context, turn change, or seat change.
+- Rank only currently offered legal options with the shared Strategy matcher. With no Strategy
+  opinion, use a deterministic effect-specific default, then the canonical legal sanitizer.
+- Never voluntarily decline an already-spent productive fetch/draw/placement effect when an
+  eligible option exists. Fetch-to-hand chooses the maximum allowed; fetch-to-bench chooses a legal
+  Strategy-preferred count from one through maximum; mandatory damage placement spends every
+  counter. Empty selection is valid only when no eligible target exists or rules force zero.
+- Replace `_last_resort_selection` with this same legal fallback, including exception handling. An
+  in-process planning exception must not forfeit the match. The outer process watchdog remains the
+  containment boundary for an actual hung or dead process.
+
+### 8. Instrument before optimizing
+
+Extend `src/common/telemetry.py` and `tools/sim/strategy_bench.py` from the same decision record:
+
+- first recoverable, first fully planned, and final stabilization timestamps;
+- execution tier and incumbent lower bound;
+- phase budgets, used time, released time, and structural-progress events;
+- bundle, waypoint, urgency, conviction, and reachability status;
+- challenger attempts and whether a challenger replaced the incumbent;
+- fallback cause, effect latch, selected waypoint, choice, and remaining tail;
+- external limit, Bellman deadline, deadline hit, exception fallback, and process timeout.
+
+The text, CSV, and JSON reports must be projections of the same fields. Keep policy independent of
+telemetry emission.
+
+### 9. Validate in isolated slices
+
+Run targeted tests after each numbered slice, then:
+
+```text
+python -m pytest tests/strategy tests/bellman/test_m3_solver.py tests/bellman/test_m7_runtime.py -q
+python -m pytest tests/bellman tests/agents tests/common tests/sim/test_strategy_bench.py -q
+python -m pytest tests/parity tests/cards tests/submit -q
+python -m pytest tests/test_doc_links_resolve.py tests/test_line_endings_policy.py -q
+python -m tools.doc_budget src/common --detail
+```
+
+For every allocator/stop feature, compare the same recorded slow frames with only that feature
+toggled. Do not combine narrow nested budgets, continuation reuse, and bound stopping in one first
+measurement; the prior combined experiment regressed both first-pick and total time and could not
+attribute the cause.
+
+Use paired seeds and full-budget Bellman as the policy reference. Initial release gates are:
+
+- zero crashes, external decision timeouts, illegal fallbacks, or voluntary empty productive fetches;
+- first recoverable within 20% of the Bellman budget;
+- at least 25% median improvement in first-fully-planned time on high/high frames versus Strategy OFF;
+- no constrained top-pick agreement regression;
+- no p95 total-decision regression;
+- exhaustive Strategy ON/OFF policy identity.
+
+After fast gates pass, amend ADR 0139 with measured evidence while preserving its rejected-experiment
+record. Then hand the user one three-match native mirror command, producing six Pilot seat-runs, for
+the final timing measurement. Mirror win rate is secondary to correctness and latency gates.
+
+## Implementation gate evidence
+
+The implementation adds authored conviction, bundle waypoints, anytime execution tiers, a reserved
+fallback tail, protected allocation, bounded challengers, stability checks, effect-scoped fallback,
+and shared Strategy legal-option ranking. The focused architecture suite passes: 159 tests across
+Strategy, solver, runtime, profile, agent, and benchmark contracts.
+
+After rebasing onto current `main`, all 63 historical correction gates pass. The final bounded-policy
+rule lets only a protected high-urgency/high-conviction Strategy hold an unresolved incumbent, and
+only until a challenger's lower bound closes that focused line's upper bound. Ordinary Strategy stays
+reorder-only. Focused architecture and regression groups pass; the full repository suite reached 86%
+with no failure before its long integration tail was interrupted for the requested checkpoint commit.
+PR validation resumes after that checkpoint.
 
 ## Core invariants
 

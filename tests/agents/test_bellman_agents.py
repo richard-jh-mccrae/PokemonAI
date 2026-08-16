@@ -70,7 +70,7 @@ def test_deck_declarations_are_the_only_per_deck_policy_surface():
     assert dragapult.roles.evolves == {}
 
 
-def test_experiment_decision_seconds_exactly_overrides_deck_clock(monkeypatch):
+def test_external_decision_seconds_reserve_the_fallback_tail(monkeypatch):
     strategy = _strategy("mega_starmie")
     strategy.pilot_overrides["clock.remaining_200_seconds"] = 99
     monkeypatch.setenv("AGENT_DECISION_SECONDS", "7")
@@ -79,7 +79,8 @@ def test_experiment_decision_seconds_exactly_overrides_deck_clock(monkeypatch):
             if value.strip()]
     runtime = build_runtime(
         strategy, deck, stats=None, functions=None, scout=None, briefs=[])
-    assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 7
+    assert runtime.pilot_profile.get("clock.remaining_200_seconds") == 6
+    assert runtime.decision_clock.fallback_tail_seconds == 1
     assert runtime.pilot_profile.get("clock.adaptive_enabled") == 0
     # The pinned clock also unbinds the prover from the wall clock (node/decision caps only),
     # so replayed node counts cannot vary with machine load.

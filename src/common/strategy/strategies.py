@@ -8,7 +8,7 @@ import json
 
 _SCOPES = frozenset({"general", "deck", "opponent"})
 _DEADLINES = frozenset({"immediate", "this_turn", "next_turn"})
-_CONFIDENCE = frozenset({"high", "medium", "low"})
+_CONVICTIONS = frozenset({"high", "medium", "low"})
 _OPERATORS = frozenset({
     "eq", "ne", "lt", "le", "gt", "ge", "contains", "not_contains", "missing",
 })
@@ -48,17 +48,22 @@ class StrategyHint:
     desired_facts: tuple[DesiredFact, ...]
     recipient_selector: str
     deadline: str
-    confidence: str
+    conviction: str
     provenance: str
     enabled: bool = True
+    bundle_id: str | None = None
+    waypoint: int = 0
 
     def __post_init__(self) -> None:
         if (not self.identifier or self.scope not in _SCOPES or not self.recipient_selector
-                or self.deadline not in _DEADLINES or self.confidence not in _CONFIDENCE
-                or not self.provenance or not self.desired_facts):
+                or self.deadline not in _DEADLINES or self.conviction not in _CONVICTIONS
+                or not self.provenance or not self.desired_facts or int(self.waypoint) < 0):
             raise ValueError("invalid strategy declaration")
         object.__setattr__(self, "conditions", tuple(self.conditions))
         object.__setattr__(self, "desired_facts", tuple(self.desired_facts))
+        object.__setattr__(self, "waypoint", int(self.waypoint))
+        if self.bundle_id is not None and not self.bundle_id:
+            raise ValueError("invalid strategy bundle")
         if any(fact.recipient != self.recipient_selector for fact in self.desired_facts):
             raise ValueError("desired fact recipient must match strategy recipient selector")
 
@@ -110,7 +115,9 @@ class ActivatedStrategy:
     recipient_serial: int | None
     target_card_ids: tuple[int, ...]
     deadline: str
-    confidence: str
+    conviction: str
+    bundle_id: str | None = None
+    waypoint: int = 0
 
 
 @dataclass(frozen=True)
@@ -133,9 +140,11 @@ def strategy_hint_from_dict(raw: dict, *, scope: str, provenance: str) -> Strate
         desired_facts=tuple(DesiredFact(**row) for row in raw.get("desired_facts", ())),
         recipient_selector=str(raw["recipient_selector"]),
         deadline=str(raw["deadline"]),
-        confidence=str(raw["confidence"]),
+        conviction=str(raw.get("conviction", raw.get("confidence", ""))),
         provenance=provenance,
         enabled=bool(raw.get("enabled", True)),
+        bundle_id=(str(raw["bundle_id"]) if raw.get("bundle_id") is not None else None),
+        waypoint=int(raw.get("waypoint", 0)),
     )
 
 
@@ -292,7 +301,7 @@ def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, role
             hints.append(ActivatedStrategy(
                 row.identifier, desired.kind, desired.recipient,
                 recipient_card_id, recipient_serial,
-                targets, row.deadline, row.confidence,
+                targets, row.deadline, row.conviction, row.bundle_id, row.waypoint,
             ))
     payload = {
         "turn": turn,
