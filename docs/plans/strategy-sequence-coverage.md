@@ -53,7 +53,11 @@ A live free peek is not more urgent, believed, or likely than a commitment — i
 reversible, a sequencing property no ladder rung can express: an honest hypergeometric read never
 reaches 1.0 on a dig, so a guaranteed high/high hint always outscores it. `build` therefore
 partitions the focused sort: rows matching a `low_cost_information_access` hint form the leading
-class, and the full lexicographic rank applies unchanged inside each class. Liveness is inherited
+class, and the full lexicographic rank applies unchanged inside each class. The class is bounded to
+look-class plays (`look_class_clauses`, shared with the solver's ADR-0140 gate): a dig-bounded peek
+only looks at a bounded slice, while a whole-deck tutor or pure draw certainly spends itself for a
+known outcome — a commitment, still reachable through Bellman value but never forced above a look.
+Liveness is inherited
 from the access matcher, which already scores dead peeks, costed searches, and supporters at 0.0.
 `strategy.information_partition_enabled` (default on, not learnable) is the kill switch, and the
 runtime timeout fallback deliberately receives the same flag so its pick agrees with the rule.

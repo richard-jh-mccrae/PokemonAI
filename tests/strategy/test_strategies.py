@@ -1065,6 +1065,28 @@ def test_a_costed_search_does_not_lead_the_beam():
     assert semantic_action_key(peek) in {row.action_key for row in beam.inactive}
 
 
+def test_a_whole_deck_tutor_does_not_lead_over_a_guaranteed_evolve():
+    tutor = ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+
+    beam, actions, _builder, _state = _partition_beam(tutor)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert beam.focused[0].action_key == semantic_action_key(evolve)
+    assert semantic_action_key(peek) in {row.action_key for row in beam.focused}
+
+
+def test_a_pure_draw_card_does_not_lead_over_a_guaranteed_evolve():
+    draw = ({"kind": "draw", "amount": 1},)
+
+    beam, actions, _builder, _state = _partition_beam(draw)
+
+    evolve = next(action for action in actions if action.identity.kind == "evolve")
+    peek = next(action for action in actions if action.identity.kind == "play")
+    assert beam.focused[0].action_key == semantic_action_key(evolve)
+    assert semantic_action_key(peek) in {row.action_key for row in beam.focused}
+
+
 def test_partition_keeps_the_coverage_order_inside_each_class():
     dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
     extras = (

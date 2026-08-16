@@ -395,6 +395,14 @@ class StrategyBeamBuilder:
         return (priority, tuple(sorted(set(matched))), rank,
                 SequenceCoverage(advanced_tier, coverage))
 
+    def _look_class_action(self, state, action) -> bool:
+        # An unknown card must not jump the queue: no effects or no source fails OPEN
+        # into the commitment class.
+        source_id = self._source_card_id(state, action)
+        if self.effects is None or source_id is None:
+            return False
+        return look_class_clauses(self.effects.clauses(source_id))
+
     def action_priority(self, state, action) -> float:
         return self._priority(state, action)[0]
 
@@ -425,6 +433,11 @@ class StrategyBeamBuilder:
         safety = []
         unknown = []
         inactive = []
+        leading: set[str] = set()
+        information_ids = {
+            hint.strategy_id for hint in self.snapshot.hints
+            if hint.kind == "low_cost_information_access"
+        }
         for action in actions:
             key = semantic_action_key(action)
             priority, strategy_ids, rank, coverage = self._priority(state, action)
@@ -433,6 +446,10 @@ class StrategyBeamBuilder:
                 if priority <= 0.0:
                     continue
             if priority > 0.0:
+                if (self.information_partition
+                        and information_ids.intersection(strategy_ids)
+                        and self._look_class_action(state, action)):
+                    leading.add(key)
                 ranks[key] = rank
                 focused.append(ActionFocus(
                     key, action.identity.kind, strategy_ids, priority, "strategy_hint",
@@ -440,16 +457,11 @@ class StrategyBeamBuilder:
             else:
                 inactive.append(ActionFocus(
                     key, action.identity.kind, (), 0.0, "no_strategy_hint"))
-        information_ids = {
-            hint.strategy_id for hint in self.snapshot.hints
-            if hint.kind == "low_cost_information_access"
-        }
-        # Free information is cheaper and reversible, not preferred: a sequencing class
-        # ABOVE the ladder, never a rung inside it.  Liveness is the access matcher's.
+        # A live look is cheaper and reversible, not preferred: a sequencing class ABOVE
+        # the ladder, never a rung inside it.  Liveness is the access matcher's.
         focused = tuple(sorted(
             focused, key=lambda row: (
-                0 if (self.information_partition
-                      and information_ids.intersection(row.path_ids)) else 1,
+                0 if row.action_key in leading else 1,
                 tuple(-value for value in ranks[row.action_key]),
                 (0 if row.family == "evolve" else
                  1 if information_ids.intersection(row.path_ids) else
@@ -463,6 +475,12 @@ class StrategyBeamBuilder:
             (), tuple(inactive),
         )
         return self.last_beam
+
+
+def look_class_clauses(clauses) -> bool:
+    """A look digs a bounded deck slice; a whole-deck tutor (or pure draw) is a commitment."""
+    fetches = tuple(clause for clause in clauses if clause.get("kind") == "fetch")
+    return bool(fetches) and all(clause.get("dig") for clause in fetches)
 
 
 def access_probability(pool_ids, draws: int, eligible_ids) -> float:
@@ -1144,5 +1162,5 @@ __all__ = (
     "ResolvedAssignment",
     "RetainedAssignment", "RetainedOption", "access_probability", "best_assignment",
     "best_retained_assignment", "combined_coverage", "coverage_signature",
-    "outcome_identity", "semantic_action_key",
+    "look_class_clauses", "outcome_identity", "semantic_action_key",
 )

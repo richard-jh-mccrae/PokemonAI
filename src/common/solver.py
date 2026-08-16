@@ -18,7 +18,8 @@ from .commutativity import ActionFootprint, independent
 from .fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .option_equivalence import option_source_card
-from .demand import StrategyBeamBuilder, outcome_identity, semantic_action_key
+from .demand import (StrategyBeamBuilder, look_class_clauses, outcome_identity,
+                     semantic_action_key)
 from .refresh import played_card_id
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
 from .state import DecisionState
@@ -1029,9 +1030,7 @@ class ProductionSolver(ReferenceSolver):
         card_id = played_card_id(state, action)
         if card_id is None:
             return True
-        fetches = tuple(clause for clause in effects.clauses(card_id)
-                        if clause.get("kind") == "fetch")
-        return bool(fetches) and all(clause.get("dig") for clause in fetches)
+        return look_class_clauses(effects.clauses(card_id))
 
     def _peek_is_live(self, state: DecisionState, action: LegalAction) -> bool:
         """Whether this peek can still reveal anything: a fetch window with zero live targets in
