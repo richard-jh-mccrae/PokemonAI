@@ -1,7 +1,10 @@
 from pathlib import Path
 import json
 
+import pytest
+
 from agents.dragapult_ex.strategy import STRATEGY
+from common.demand import StrategyBeamBuilder
 from agents.dragapult_ex.potential import DragapultPotential
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -293,3 +296,73 @@ def test_the_dunsparce_draw_line_has_a_driver():
     evolve = {hint.desired_facts[0].target_card_ids for hint in STRATEGY.strategies
               if hint.desired_facts[0].kind == "evolve"}
     assert (66,) in evolve
+
+
+def _funding_energy(card_id, attached=()):
+    """Deck Energy the shared beam would treat as funding this body as our active."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.strategy.strategies import GENERAL_STRATEGIES
+
+    stats, functions, effects = (
+        EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
+    deck = _deck()
+    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    resolved = resolve_strategies(
+        (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
+        STRATEGY.strategies, (), STRATEGY.strategy_overrides)
+    maximum = int(stats.get(card_id).hp)
+    observation = {"current": {"turn": 3, "yourIndex": 0, "result": -1, "players": [
+        {"active": [{"id": card_id, "serial": 1, "hp": maximum, "maxHp": maximum,
+                     "energies": list(attached), "energyCards": [], "preEvolution": [],
+                     "tools": []}],
+         "bench": [], "hand": [], "prize": [None] * 6, "benchMax": 5},
+        {"active": [], "bench": [], "prize": [None] * 6, "benchMax": 5},
+    ]}, "select": {"context": 0, "option": []}}
+    snapshot = activate_strategies(
+        observation, resolved, roles=roles, stats=stats, effects=effects)
+    builder = StrategyBeamBuilder(snapshot, effects=effects, stats=stats)
+    state = SimpleNamespace(
+        obs=observation, root_seat=0,
+        deck_counts=tuple({row: deck.count(row) for row in set(deck)}.items()))
+    funding = set()
+    for hint in snapshot.hints:
+        if hint.kind == "fund_attack":
+            funding.update(builder._funding_energy_ids(state, hint))
+    return funding
+
+
+DARKNESS_ENERGY, FIRE_ENERGY, PSYCHIC_ENERGY = 7, 2, 5
+
+
+@pytest.mark.parametrize("card_id", [119, 120, 121])
+def test_darkness_is_never_funding_for_the_dragapult_line(card_id):
+    """Darkness fuels Munkidori's Ability. Dragapult ex also prints a one-Colorless attack, and
+    a Colorless slot accepts anything, so an empty Dragapult once read as wanting Darkness."""
+    assert DARKNESS_ENERGY not in _funding_energy(card_id)
+    assert DARKNESS_ENERGY not in _funding_energy(card_id, attached=(FIRE_ENERGY,))
+    assert _funding_energy(card_id) == {FIRE_ENERGY, PSYCHIC_ENERGY}
+
+
+@pytest.mark.parametrize("card_id", [1071, 305, 66])
+def test_support_pokemon_are_never_funded(card_id):
+    """Meowth ex, Dunsparce and Dudunsparce hold no attacker role, so no funding hint reaches
+    them. The requirement lives in the shared role vocabulary, not in this deck's doctrine."""
+    roles = STRATEGY.roles.resolve(_deck(), EngineCardStatProvider(), CardFunctions.load())
+
+    assert not {"primary_attacker", "backup_attacker"} & set(roles.get(card_id, ()))
+    assert _funding_energy(card_id) == set()
+
+
+def test_munkidori_declares_its_darkness_ability_slot_from_the_card():
+    """The Ability's Energy requirement is printed on the card; general_card_strategies reads it
+    rather than the deck naming Darkness."""
+    stats, functions = EngineCardStatProvider(), CardFunctions.load()
+    assert stats.get(112).abilityEnergyTypes == (7,)
+
+    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    hint = next(row for row in general_card_strategies(
+        _deck(), roles, functions, stats, CardEffects.load())
+        if row.identifier == "general.card.112.fund_ability")
+
+    assert hint.desired_facts[0].target_card_ids == (DARKNESS_ENERGY,)

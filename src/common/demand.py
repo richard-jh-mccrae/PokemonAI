@@ -279,12 +279,18 @@ class StrategyBeamBuilder:
                     provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
         if not owed:
             return ()
+        # A Colorless slot accepts anything, so a body owing one looks funded by every Energy in
+        # the deck -- including one another body needs by type. While a printed TYPE is still
+        # owed anywhere, only Energy paying a typed slot counts; Colorless-only bodies still
+        # take any Energy, because for them nothing else is true.
+        wanted = {energy_type for energy_type in owed
+                  if energy_type != ENERGY_COLORLESS} or owed
         return tuple(sorted(
             int(card_id) for card_id, count in state.deck_counts
             if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
             and any(pays_energy_type(
                 int(getattr(self.stats.get(card_id), "energyType", DEFAULT_ENERGY_CODE) or 0),
-                energy_type) for energy_type in owed)))
+                energy_type) for energy_type in wanted)))
 
     def _funds_the_cost(self, state, hint, source_id) -> bool:
         if hint.target_card_ids:
@@ -441,7 +447,8 @@ class StrategyBeamBuilder:
                 probability = 1.0
             elif (hint.kind == "fund_ability" and action.identity.kind == "attach"
                   and recipient == hint.recipient_serial
-                  and (not hint.target_card_ids or source_id in hint.target_card_ids)):
+                  and (not hint.target_card_ids or source_id in hint.target_card_ids)
+                  and bool(getattr(source_stat, "is_energy", False))):
                 probability = 1.0
             elif (hint.kind == "use_ability" and action.identity.kind == "ability"
                   and recipient == hint.recipient_serial):

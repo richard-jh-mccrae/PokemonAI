@@ -438,3 +438,48 @@ def test_undeclared_funding_reads_the_cost_off_the_card():
     assert builder._funding_energy_ids(state, hint) == (psychic,)
     assert builder._funds_the_cost(state, hint, psychic)
     assert not builder._funds_the_cost(state, hint, darkness)
+
+
+def test_a_colorless_slot_does_not_make_every_energy_funding():
+    """A Colorless slot accepts anything, so a body owing one looked funded by every Energy in
+    the deck -- including one another body needs by type. A printed TYPE owed anywhere wins."""
+    from types import SimpleNamespace
+    from common.demand import StrategyBeamBuilder
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+
+    attacker, colorless_only, fire, psychic, darkness = 820, 821, 2, 5, 7
+    stats = DictCardStatProvider(
+        {
+            # Two attacks, as Dragapult ex has: a one-Colorless poke and the real typed attack.
+            attacker: CardStat(attacker, hp=320, attacks=(12, 13)),
+            colorless_only: CardStat(colorless_only, hp=210, attacks=(12,)),
+            fire: CardStat(fire, cardType=5, energyType=fire),
+            psychic: CardStat(psychic, cardType=5, energyType=psychic),
+            darkness: CardStat(darkness, cardType=5, energyType=darkness),
+        },
+        attacks={
+            12: AttackStat(12, damage=70, energyTypes=(0,)),
+            13: AttackStat(13, damage=200, energyTypes=(fire, psychic)),
+        },
+    )
+    counts = ((fire, 3), (psychic, 3), (darkness, 2))
+
+    def eligible(card_id):
+        hint = ActivatedStrategy(
+            "deck.fund", "fund_attack", "own.active", card_id, 1, (),
+            "immediate", "high", None, 0)
+        builder = StrategyBeamBuilder(
+            StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+        observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
+            {"active": [{"id": card_id, "serial": 1, "hp": 320, "maxHp": 320,
+                         "energies": []}], "bench": []},
+            {"active": [], "bench": []},
+        ]}, "select": {"context": 0, "option": []}}
+        return builder._funding_energy_ids(
+            SimpleNamespace(obs=observation, root_seat=0, deck_counts=counts), hint)
+
+    # The Colorless slot is unpaid too, but a printed type is owed, so Darkness is not funding.
+    assert eligible(attacker) == (fire, psychic)
+    # Nothing typed is owed anywhere on this body, so every Energy genuinely does fund it.
+    assert eligible(colorless_only) == (fire, psychic, darkness)

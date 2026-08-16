@@ -534,9 +534,13 @@ def general_card_strategies(deck, roles, functions, stats, effects=None) -> tupl
         if "counter_mover" in card_roles:
             stat = stats.get(card_id) if stats is not None else None
             required = frozenset(getattr(stat, "abilityEnergyTypes", ()) or ())
+            # energyType alone also matches a Pokemon OF that type -- Fezandipiti ex is a
+            # Darkness Pokemon, not Darkness Energy -- which credited any search that could
+            # find it as funding the Ability.
             energy_ids = tuple(sorted(set(
                 int(energy_id) for energy_id in deck
-                if getattr(stats.get(int(energy_id)), "energyType", None) in required
+                if bool(getattr(stats.get(int(energy_id)), "is_energy", False))
+                and getattr(stats.get(int(energy_id)), "energyType", None) in required
             ))) if stats is not None else ()
             hints.extend((
                 StrategyHint(
