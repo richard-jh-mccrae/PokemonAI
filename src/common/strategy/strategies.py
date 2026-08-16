@@ -273,9 +273,10 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
     ko_window = bool(observation.get("strategyPokemonKoWindow"))
     if not ko_window:
         try:
-            from cgpy.search import parse_token
-            internals = parse_token(observation.get("search_begin_input"))
-        except ImportError:
+            token = observation.get("search_begin_input")
+            payload = token.split(":", 1)[1] if isinstance(token, str) and ":" in token else ""
+            internals = json.loads(payload) if payload else None
+        except (ValueError, TypeError):
             internals = None
         if internals is not None:
             ko_turn = tuple(internals.get("ko_turn") or ())
