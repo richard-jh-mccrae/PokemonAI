@@ -98,10 +98,11 @@ def test_native_refresh_transition_never_steps_a_hypothetical_draw_world():
             cls.calls += 1
             raise AssertionError("refresh valuation must not step the native engine")
 
+    from common.cards.card_facts import Clause, SUPPORTER, TrainerCard
     provider = object.__new__(NativeCgTransitionProvider)
-    provider.effects = CardEffects({REFRESH_CARD: [{
-        "kind": "draw", "amount": 6, "rider": "shuffle_own_hand_in",
-    }]})
+    provider.cards = {REFRESH_CARD: TrainerCard(
+        REFRESH_CARD, "Test Refresh", SUPPORTER,
+        clauses=(Clause("draw", amount=6, rider="shuffle_own_hand_in"),))}
     provider._worlds = {state.semantic_key: (_NativeWorld(1.0, 77),)}
     provider._api = Api
 

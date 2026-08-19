@@ -159,7 +159,7 @@ class CgpyTransitionProvider:
         if engine is None:
             return Unknown("engine state unavailable", self._error or state.semantic_key)
         try:
-            refresh = refresh_transition(state, action, self.effects)
+            refresh = refresh_transition(state, action, self.cards)
             if refresh is not None:
                 return refresh
             reveal = self._revealing_transition(state, engine, action)
@@ -299,12 +299,12 @@ class CgpyTransitionProvider:
     def _drawing_transition(self, state, engine, action):
         """Branch hidden draws from effect clauses; continuation, never static Worth, values them."""
         card_id = self._played_card_id(engine, action)
-        clauses = self.effects.clauses(card_id) if self.effects is not None and card_id else ()
-        draw_clauses = tuple(clause for clause in clauses if clause.get("kind") == "draw")
+        clauses = play_clauses(self.cards.get(int(card_id))) if card_id else ()
+        draw_clauses = tuple(clause for clause in clauses if clause.kind == "draw")
         if len(draw_clauses) != 1:
             return None
         clause = draw_clauses[0]
-        if clause.get("opponent_amount") or clause.get("rider") is not None:
+        if clause.opponent_amount or clause.rider is not None:
             return None
         from .cards.functions.draw import draw_branches
 

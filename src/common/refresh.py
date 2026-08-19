@@ -6,7 +6,7 @@ from collections import Counter
 from math import sqrt
 
 from .algebra import Ledger, Refresh
-from .cards import card_store
+from .cards import card_store, play_clauses
 from .cards.functions.draw import draw_branches, draw_shape_problem
 from .demand import DemandModel, access_probability
 from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
@@ -44,12 +44,13 @@ def played_card_id(state, action) -> int | None:
     return int(hand[hand_index]["id"])
 
 
-def refresh_transition(state, action, effects) -> Refresh | None:
+def refresh_transition(state, action, cards=None) -> Refresh | None:
     """Describe a generic shuffle-refresh as printed counts, with no sampled successor."""
     card_id = played_card_id(state, action)
-    clauses = effects.clauses(card_id) if effects is not None and card_id is not None else ()
+    cards = card_store() if cards is None else cards
+    clauses = play_clauses(cards.get(int(card_id))) if card_id is not None else ()
     candidates = tuple(clause for clause in clauses
-                       if clause.get("kind") == "draw" and clause.get("rider") in SHUFFLE_RIDERS)
+                       if clause.kind == "draw" and clause.rider in SHUFFLE_RIDERS)
     if len(candidates) != 1 or draw_shape_problem(candidates[0]) is not None:
         return None
     current = state.obs.get("current") or {}
@@ -63,7 +64,7 @@ def refresh_transition(state, action, effects) -> Refresh | None:
     if not branches:
         return None
     return Refresh(card_id, branches,
-                   candidates[0].get("rider") == SHUFFLE_BOTH_HANDS_RIDER)
+                   candidates[0].rider == SHUFFLE_BOTH_HANDS_RIDER)
 
 
 def _families(potential) -> dict[str, float]:
