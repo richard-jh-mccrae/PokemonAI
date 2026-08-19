@@ -188,44 +188,39 @@ def _active_body(player: dict) -> dict:
     return active[0] if active and active[0] else {}
 
 
-def _attack_ready(body: dict, stats) -> bool:
-    if not body or stats is None:
-        return False
-    stat = stats.get(body.get("id")) if body.get("id") is not None else None
-    attacks = tuple(getattr(stat, "attacks", ()) or ()) if stat is not None else ()
-    attack_lookup = (getattr(stats, "attack", None)
-                     or getattr(stats, "get_attack", None))
-    if not attacks or attack_lookup is None:
+def _attack_ready(body: dict, cards) -> bool:
+    if not body or body.get("id") is None:
         return False
     from common.cards.functions.energy import unmet_cost_slots
 
+    card = cards.get(int(body["id"]))
+    attacks = getattr(card, "attacks", ()) or ()
+    if not attacks:
+        return False
     provisions = body.get("energies") or ()
-    requirements = tuple(
-        tuple(getattr(attack_lookup(attack_id), "energyTypes", ()) or ())
-        for attack_id in attacks)
-    maximum = max((len(cost) for cost in requirements), default=0)
-    return any(len(cost) == maximum and not unmet_cost_slots(provisions, cost)
-               for cost in requirements)
+    maximum = max(len(attack.cost) for attack in attacks)
+    return any(len(attack.cost) == maximum and not unmet_cost_slots(provisions, attack.cost)
+               for attack in attacks)
 
 
-def _knocks_out(attacker_body: dict, defender_body: dict, stats) -> bool:
+def _knocks_out(attacker_body: dict, defender_body: dict, cards) -> bool:
     """Whether a cost the attacker can already pay reaches the defender's remaining HP.
 
     Card facts only: printed damage against printed HP. Whether taking the knockout is the
     right play is Bellman's to weigh -- this only makes sure the option is searched.
     """
-    if not attacker_body or not defender_body or stats is None:
+    if not attacker_body or not defender_body:
         return False
-    attacker = stats.get(attacker_body.get("id"))
-    defender = stats.get(defender_body.get("id"))
+    attacker = cards.get(int(attacker_body["id"])) \
+        if attacker_body.get("id") is not None else None
+    defender = cards.get(int(defender_body["id"])) \
+        if defender_body.get("id") is not None else None
     remaining = int(defender_body.get("hp", 0) or 0)
     if attacker is None or defender is None or remaining <= 0:
         return False
     provisions = tuple(attacker_body.get("energies") or ())
-    for attack_id in getattr(attacker, "attacks", ()) or ():
-        attack = stats.attack(attack_id)
-        if attack is None or unmet_cost_slots(
-                provisions, tuple(getattr(attack, "energyTypes", ()) or ())):
+    for attack in getattr(attacker, "attacks", ()) or ():
+        if unmet_cost_slots(provisions, attack.cost):
             continue
         if compute_active_damage(attack, attacker, defender) >= remaining:
             return True
@@ -272,7 +267,10 @@ def _tool_ids(bodies) -> tuple[int, ...]:
 
 
 def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
-                   opponent_role_worth=None, deck=None) -> dict:
+                   opponent_role_worth=None, deck=None, cards=None) -> dict:
+    from common.cards import card_store
+
+    cards = card_store() if cards is None else cards
     current = observation.get("current") or {}
     seat = int(current.get("yourIndex", 0))
     player = _player(observation, seat)
@@ -296,7 +294,7 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
         "own.active.hp_fraction": (
             int(active.get("hp", 0)) / max(1, int(active.get("maxHp", active.get("hp", 1))))
             if active else 0.0),
-        "own.active.attack_ready": _attack_ready(active, stats),
+        "own.active.attack_ready": _attack_ready(active, cards),
         "own.active.can_attack": can_attack,
         "own.active.evolvable": card_id in roles.evolves if card_id is not None else False,
         "own.bench.evolvable_count": sum(
@@ -312,7 +310,7 @@ def _visible_facts(observation: dict, *, roles, stats=None, effects=None,
             observation, seat, "opponent.bench.highest_role", roles,
             opponent_role_worth).get("hp", 0)),
         "own.active.knocks_out_defender": _knocks_out(
-            active, _active_body(opponent), stats),
+            active, _active_body(opponent), cards),
         "turn.commitment_available": commitment_available,
         # The condition language has no OR; a boost pays off while a commitment can still create
         # an attack OR one is already offered (PR #533 review: the post-attach committed case).
@@ -529,13 +527,13 @@ def _condition_matches(condition: ActivationCondition, facts: dict) -> bool:
 
 def activate_strategies(observation: dict, resolved: ResolvedStrategies, *, roles,
                         stats=None, effects=None, opponent_role_worth=None,
-                        deck=None) -> StrategySnapshot:
+                        deck=None, cards=None) -> StrategySnapshot:
     current = observation.get("current") or {}
     turn = int(current.get("turn", 0))
     seat = int(current.get("yourIndex", 0))
     facts = _visible_facts(
         observation, roles=roles, stats=stats, effects=effects,
-        opponent_role_worth=opponent_role_worth, deck=deck)
+        opponent_role_worth=opponent_role_worth, deck=deck, cards=cards)
     active_rows = tuple(
         row for row in resolved.effective
         if all(_condition_matches(condition, facts) for condition in row.conditions)

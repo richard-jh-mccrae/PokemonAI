@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from .cards import energy_card_store
+from .cards import card_store
+from .cards.card_facts import BASIC_ENERGY, EnergyCard, PokemonCard, STAGE2
 from .cards.functions.attack_lock import locked_attack_ids
 from .card_worth import KNOWN_CARD_FLOOR, function_role
 from .cards.functions.energy import ENERGY_COLORLESS, payment_fraction, provision_units
@@ -109,12 +110,13 @@ class BoardPotential:
     printed attacks. No action kind, named card, matchup, or tactical sequence is preferred here.
     """
 
-    def __init__(self, stats, *, registry: ValueRegistry,
+    def __init__(self, cards=None, *, registry: ValueRegistry,
                  profile: BellmanDeckProfile | None = None,
                  scale: UtilityScale = UtilityScale(), root_seat: int | None = None,
                  opponent_role_worth=None, isolated_selection: bool = False,
                  opponent_hand_share: float = 0.0, root_observation=None):
-        self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         self.registry = registry
         self.profile = profile or BellmanDeckProfile.from_registry(registry)
         self.scale = scale
@@ -127,12 +129,10 @@ class BoardPotential:
         # Pinned to the deciding position, never per successor: ADR-0141 amendment, or the scaling
         # leaks into the damage and development families.
         self.board_parity = 1.0
-        self._stat_cache = {}
-        self._attack_cache = {}
         self._resource_job_cache = {}
         self._prize_job_capacities_cache = None
         self._cost_cap_cache = {}
-        self._tags_cache = {}
+        self._forward_cache = {}
         # Facts, energy codes, and damage contexts recur ~17x within one evaluation over the same
         # player/body dicts.  The observation is immutable for the duration of one ``__call__``, so
         # results are keyed by object identity and the cache lives only for that call.
@@ -162,36 +162,41 @@ class BoardPotential:
         return board_parity(self._own_board_resources(me, stadium=own_stadium(current, seat)),
                             role_pressure)
 
-    def _stat(self, card_id):
-        if not self.stats or card_id is None:
-            return None
+    def _card(self, card_id):
+        return self.cards.get(int(card_id)) if card_id is not None else None
+
+    def _forward_ids(self, card_id) -> tuple[int, ...]:
+        """Store Pokemon that evolve onto this card — the WHOLE line above it, name-matched,
+        because a Basic's threat and cost ceiling live at the top of its line, not one hop up."""
         card_id = int(card_id)
-        if card_id not in self._stat_cache:
-            self._stat_cache[card_id] = self.stats.get(card_id)
-        return self._stat_cache[card_id]
+        found = self._forward_cache.get(card_id)
+        if found is None:
+            forwards: list[int] = []
+            frontier = [getattr(self._card(card_id), "name", None)]
+            while frontier:
+                name = frontier.pop()
+                for other_id, other in self.cards.items():
+                    if (name is not None and isinstance(other, PokemonCard)
+                            and other.evolves_from == name and other_id not in forwards):
+                        forwards.append(other_id)
+                        frontier.append(other.name)
+            found = self._forward_cache[card_id] = tuple(sorted(forwards))
+        return found
 
-    def _attack(self, attack_id):
-        attack_id = int(attack_id)
-        if attack_id not in self._attack_cache:
-            self._attack_cache[attack_id] = (
-                self.stats.attack(attack_id) if hasattr(self.stats, "attack") else None)
-        return self._attack_cache[attack_id]
-
-    def _usable_attacks(self, body, stat):
+    def _usable_attacks(self, body, card):
         """This body's printed attacks minus the ones a self-lock bars at the current turn."""
         barred = locked_attack_ids(self._attack_locks, body, self._turn)
-        for attack_id in getattr(stat, "attacks", ()) or ():
-            attack = self._attack(attack_id)
-            if attack is not None and int(attack_id) not in barred:
-                yield attack_id, attack
+        for attack in getattr(card, "attacks", ()) or ():
+            if attack.attack_id not in barred:
+                yield attack
 
     def _prizes(self, body) -> int:
-        stat = self._stat(body.get("id"))
-        return int(getattr(stat, "prize_value", 1) if stat is not None else 1)
+        card = self._card(body.get("id"))
+        return int(getattr(card, "prize_value", 1) if card is not None else 1)
 
     def _card_prizes(self, card_id: int) -> int:
-        stat = self._stat(card_id)
-        return int(getattr(stat, "prize_value", 1) if stat is not None else 1)
+        card = self._card(card_id)
+        return int(getattr(card, "prize_value", 1) if card is not None else 1)
 
     def _codes(self, body):
         cache = self._call_cache
@@ -201,14 +206,6 @@ class BoardPotential:
         found = cache.get(key)
         if found is None:
             found = cache[key] = _energy_codes(body)
-        return found
-
-    def _tags(self, card_id) -> frozenset:
-        card_id = int(card_id)
-        found = self._tags_cache.get(card_id)
-        if found is None:
-            found = self._tags_cache[card_id] = frozenset(
-                self.registry.functions.get(card_id, ()))
         return found
 
     def _context(self, attacker_facts: SideFacts, defender_facts: SideFacts) -> dict:
@@ -237,52 +234,49 @@ class BoardPotential:
             (body for body in (player.get("active") or ()) if body), None)
         bench = tuple(body for body in (player.get("bench") or ()) if body)
 
-        def stat_for(card):
-            return self._stat(card.get("id")) if card else None
+        def record_for(card):
+            return self._card(card.get("id")) if card else None
+
+        def is_basic_energy(record) -> bool:
+            return isinstance(record, EnergyCard) and record.kind == BASIC_ENERGY
 
         def counters(body):
             maximum = int(body.get("maxHp", body.get("hp", 0)) or 0)
             return max(0, maximum - int(body.get("hp", maximum) or 0)) // DAMAGE_COUNTER_SIZE
 
-        discard_stats = tuple(stat_for(card) for card in (player.get("discard") or ()))
+        discard_records = tuple(record_for(card) for card in (player.get("discard") or ()))
         basic_by_type: dict[int, int] = {}
-        for stat in discard_stats:
-            if stat is None or not getattr(stat, "is_basic_energy", False):
+        for record in discard_records:
+            if not is_basic_energy(record):
                 continue
-            energy_type = getattr(stat, "energyType", None)
-            if energy_type is not None:
-                basic_by_type[int(energy_type)] = basic_by_type.get(int(energy_type), 0) + 1
+            provides = int(record.provides)
+            basic_by_type[provides] = basic_by_type.get(provides, 0) + 1
 
         def card_name(body):
-            stat = stat_for(body)
-            return str(getattr(stat, "name", "") or "")
+            return str(getattr(record_for(body), "name", "") or "")
 
         def attack_names(body):
-            stat = stat_for(body)
-            if stat is None:
-                return ()
-            return tuple(str(getattr(self._attack(attack_id), "name", "") or "")
-                         for attack_id in (getattr(stat, "attacks", ()) or ()))
+            record = record_for(body)
+            return tuple(attack.name for attack in getattr(record, "attacks", ()) or ())
 
         boosts = []
         for tool in (active.get("tools") or ()) if active else ():
-            stat = stat_for(tool)
-            amount = int(getattr(stat, "damageBoost", 0) or 0) if stat is not None else 0
-            if amount:
-                boosts.append((amount, getattr(stat, "damageBoostType", None),
-                               bool(getattr(stat, "damageBoostVsEx", False))))
+            record = record_for(tool)
+            clause = record.clause("damage_boost") if record is not None \
+                and hasattr(record, "clause") else None
+            if clause is not None and clause.amount:
+                boosts.append((int(clause.amount), clause.attacker_type,
+                               bool(clause.vs_ex)))
 
         deck_cards = tuple(player.get("deck") or ())
         deck_basic_by_type: dict[int, int] | None = {} if deck_cards else None
         if deck_basic_by_type is not None:
             for card in deck_cards:
-                stat = stat_for(card)
-                if stat is None or not getattr(stat, "is_basic_energy", False):
+                record = record_for(card)
+                if not is_basic_energy(record):
                     continue
-                energy_type = getattr(stat, "energyType", None)
-                if energy_type is not None:
-                    deck_basic_by_type[int(energy_type)] = (
-                        deck_basic_by_type.get(int(energy_type), 0) + 1)
+                provides = int(record.provides)
+                deck_basic_by_type[provides] = deck_basic_by_type.get(provides, 0) + 1
 
         prize = player.get("prize")
         prizes_taken = STANDARD_PRIZE_COUNT - len(prize) if prize is not None else 0
@@ -295,10 +289,12 @@ class BoardPotential:
             prizes_taken=prizes_taken,
             active_counters=counters(active) if active else 0,
             counters_in_play=sum(counters(body) for body in bodies),
-            bench_stage2=sum(bool(getattr(stat_for(body), "stage2", False)) for body in bench),
-            ex_in_play=sum(bool(getattr(stat_for(body), "is_ex_body", False)) for body in bodies),
-            discard_energy_total=sum(bool(getattr(stat, "is_energy", False))
-                                     for stat in discard_stats if stat is not None),
+            bench_stage2=sum(getattr(record_for(body), "stage", None) == STAGE2
+                             for body in bench),
+            ex_in_play=sum(bool(getattr(record_for(body), "is_rule_box", False))
+                           for body in bodies),
+            discard_energy_total=sum(isinstance(record, EnergyCard)
+                                     for record in discard_records),
             discard_basic_by_type=basic_by_type,
             bench_names=tuple(card_name(body) for body in bench),
             in_play_names=tuple(card_name(body) for body in bodies),
@@ -317,19 +313,21 @@ class BoardPotential:
             found = cache.get(key, _UNSET)
             if found is not _UNSET:
                 return found
-        holder_stat = self._stat(defender.get("id"))
-        holder_type = getattr(holder_stat, "energyType", None) if holder_stat else None
+        holder = self._card(defender.get("id"))
+        holder_type = getattr(holder, "energy_type", None)
         reduction, typed = 0, []
         for tool in (defender.get("tools") or ()):
-            stat = self._stat(tool.get("id") if isinstance(tool, dict) else tool)
-            amount = int(getattr(stat, "damageReduction", 0) or 0) if stat else 0
+            record = self._card(tool.get("id") if isinstance(tool, dict) else tool)
+            clause = record.clause("damage_reduction") if record is not None \
+                and hasattr(record, "clause") else None
+            amount = int(clause.amount or 0) if clause is not None else 0
             if not amount:
                 continue
-            holders = getattr(stat, "damageReductionHolderTypes", None)
-            if holders is not None and holder_type not in holders:
+            if (clause.holder_types is not None
+                    and holder_type not in clause.holder_types):
                 continue                               # Thick Scale on a non-{N} holder is inert
-            types = getattr(stat, "damageReductionTypes", None)
-            needs_ability = bool(getattr(stat, "damageReductionRequiresAbility", False))
+            types = clause.attacker_types
+            needs_ability = bool(clause.requires_ability)
             if types is None and not needs_ability:
                 reduction += amount
             else:                                      # attacker-gated: resolved per attack
@@ -356,24 +354,22 @@ class BoardPotential:
 
     def _attack_value(self, body, codes, defender, attacker_facts, defender_facts, *,
                       require_ready: bool = False) -> float:
-        card_id = body.get("id")
-        stat = self._stat(card_id)
-        defender_stat = self._stat(defender.get("id")) if defender else None
-        if stat is None or defender is None or defender_stat is None:
+        card = self._card(body.get("id"))
+        defender_card = self._card(defender.get("id")) if defender else None
+        if card is None or defender is None or defender_card is None:
             return 0.0
         hp = max(MINIMUM_HP, int(defender.get("hp", MINIMUM_HP)))
         prizes = self._prizes(defender)
         context = self._context(attacker_facts, defender_facts)
         transient = self._defender_tool_transient(defender)
-        defender_tags = self._tags(defender.get("id", 0))
+        defender_tags = getattr(defender_card, "tags", frozenset())
         best = 0.0
-        for attack_id, attack in self._usable_attacks(body, stat):
-            required = tuple(getattr(attack, "energyTypes", ()) or ())
-            readiness = _pay_fraction(codes, required)
+        for attack in self._usable_attacks(body, card):
+            readiness = _pay_fraction(codes, attack.cost)
             if require_ready and readiness < 1.0:
                 continue
             damage = max(float(compute_active_damage(
-                             attack, stat, defender_stat, defender_tags, context=context,
+                             attack, card, defender_card, defender_tags, context=context,
                              defender_transient=transient)),
                          float(bench_reach(attack)))
             best = max(best, prizes * min(1.0, damage / hp) * readiness)
@@ -390,9 +386,8 @@ class BoardPotential:
         # Only while the turn is still ours: a Basic held past End cannot reach the Bench before
         # the opponent's knockout, so it must not discharge a liability it can no longer answer.
         for card in hand if can_bench else ():
-            stat = self._stat(card.get("id")) if card else None
-            if (stat is not None and getattr(stat, "is_pokemon", False)
-                    and not getattr(stat, "evolvesFrom", None)):
+            record = self._card(card.get("id")) if card else None
+            if isinstance(record, PokemonCard) and not record.evolves_from:
                 return 0.0
         # Reachable now it is the live liability; otherwise the board is merely one unanswered
         # knockout from losing, which is held in reserve exactly as unreachable damage is.
@@ -430,19 +425,19 @@ class BoardPotential:
 
     def _reachable_defenders(self, body, *, opponent_moves_next: bool):
         variants = [body]
-        if not opponent_moves_next or not hasattr(self.stats, "forward_card_ids"):
+        if not opponent_moves_next:
             return tuple(variants)
         maximum = max(MINIMUM_HP, int(body.get("maxHp", body.get("hp", MINIMUM_HP))))
         damage = max(KNOCKED_OUT_HP, maximum - int(body.get("hp", maximum)))
-        for card_id in self.stats.forward_card_ids(int(body.get("id", 0))) or ():
+        for card_id in self._forward_ids(int(body.get("id", 0))):
             if card_id not in self.opponent_role_worth:
                 continue
-            stat = self._stat(card_id)
-            if stat is None:
+            card = self._card(card_id)
+            if card is None:
                 continue
             evolved = dict(body)
             evolved["id"] = int(card_id)
-            evolved["maxHp"] = int(getattr(stat, "hp", maximum) or maximum)
+            evolved["maxHp"] = int(getattr(card, "hp", maximum) or maximum)
             evolved["hp"] = max(MINIMUM_HP, evolved["maxHp"] - damage)
             variants.append(evolved)
         return tuple(variants)
@@ -504,8 +499,8 @@ class BoardPotential:
             return 0.0
         energy_provisions = []
         for card in me.get("hand") or ():
-            record = energy_card_store().get(int(card.get("id", 0))) if card else None
-            if record is None:
+            record = self._card(card.get("id")) if card else None
+            if not isinstance(record, EnergyCard):
                 continue
             units = provision_units(record, evolved=bool(active.get("preEvolution")))
             energy_provisions.append((int(record.provides), max(1, units)))
@@ -518,20 +513,20 @@ class BoardPotential:
         defender = next((target for target in (opponent.get("active") or ()) if target), None)
         if defender is None:
             return 0.0
-        stat = self._stat(body.get("id"))
-        defender_stat = self._stat(defender.get("id"))
-        if stat is None or defender_stat is None:
+        card = self._card(body.get("id"))
+        defender_card = self._card(defender.get("id"))
+        if card is None or defender_card is None:
             return 0.0
         attacker_facts = self._side_facts(me, attacking_body=body)
         defender_facts = self._side_facts(opponent)
-        defender_tags = self._tags(defender.get("id", 0))
+        defender_tags = getattr(defender_card, "tags", frozenset())
         transient = self._defender_tool_transient(defender)
         best = 0.0
-        for attack_id, attack in self._usable_attacks(body, stat):
-            if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+        for attack in self._usable_attacks(body, card):
+            if _pay_fraction(codes, attack.cost) < 1.0:
                 continue
             damage = compute_active_damage(
-                attack, stat, defender_stat, defender_tags,
+                attack, card, defender_card, defender_tags,
                 context=self._context(attacker_facts, defender_facts),
                 defender_transient=transient)
             if damage < int(defender.get("hp", MINIMUM_HP)):
@@ -546,25 +541,25 @@ class BoardPotential:
         bench = tuple(body for body in (opponent.get("bench") or ()) if body)
         if defender is None or not bench:
             return 0.0
-        defender_stat = self._stat(defender.get("id"))
-        if defender_stat is None:
+        defender_card = self._card(defender.get("id"))
+        if defender_card is None:
             return 0.0
         defender_facts = self._side_facts(opponent)
-        defender_tags = self._tags(defender.get("id", 0))
+        defender_tags = getattr(defender_card, "tags", frozenset())
         transient = self._defender_tool_transient(defender)
         best = 0.0
         for body in _bodies(me):
-            stat = self._stat(body.get("id"))
-            if stat is None:
+            card = self._card(body.get("id"))
+            if card is None:
                 continue
             context = self._context(
                 self._side_facts(me, attacking_body=body), defender_facts)
             codes = self._codes(body)
-            for attack_id, attack in self._usable_attacks(body, stat):
-                if _pay_fraction(codes, tuple(getattr(attack, "energyTypes", ()) or ())) < 1.0:
+            for attack in self._usable_attacks(body, card):
+                if _pay_fraction(codes, attack.cost) < 1.0:
                     continue
                 active_damage = compute_active_damage(
-                    attack, stat, defender_stat, defender_tags, context=context,
+                    attack, card, defender_card, defender_tags, context=context,
                     defender_transient=transient)
                 if active_damage < int(defender.get("hp", MINIMUM_HP)):
                     continue
@@ -582,10 +577,10 @@ class BoardPotential:
         bench_offset = len(actives)
         if active is None:
             return 0.0, frozenset()
-        active_stat = self._stat(active.get("id"))
-        if active_stat is None:
+        active_card = self._card(active.get("id"))
+        if active_card is None:
             return 0.0, frozenset()
-        active_tags = self._tags(active.get("id", 0))
+        active_tags = getattr(active_card, "tags", frozenset())
         defender_facts = self._side_facts(defender_side)
         attacker_active = next(
             (body for body in (attacker_side.get("active") or ()) if body), None)
@@ -595,18 +590,18 @@ class BoardPotential:
         worst = 0.0
         reachable: set[int] = set()
         for body in _bodies(attacker_side):
-            stat = self._stat(body.get("id"))
-            if stat is None:
+            card = self._card(body.get("id"))
+            if card is None:
                 continue
             context = self._context(
                 self._side_facts(attacker_side, attacking_body=body), defender_facts)
             # The ledger records BOTH seats, so an opponent's spent one-shot is already in it:
             # fearing a hit they cannot land is as wrong as crediting our own (ADR-0142).
-            for attack_id, attack in self._usable_attacks(body, stat):
+            for attack in self._usable_attacks(body, card):
                 exposed = 0.0
                 lethal_active = False
                 active_damage = compute_active_damage(
-                    attack, stat, active_stat, active_tags, context=context,
+                    attack, card, active_card, active_tags, context=context,
                     defender_transient=active_transient)
                 if active_damage >= int(active.get("hp", MINIMUM_HP)):
                     exposed += self._prizes(active)
@@ -628,7 +623,7 @@ class BoardPotential:
         attacks while benched, so neither snipe nor concentrated spread reaches it."""
         reach = bench_reach(attack)
         return tuple(index for index, target in enumerate(bench)
-                     if not bool(getattr(self._stat(target.get("id")), "tera", False))
+                     if not bool(getattr(self._card(target.get("id")), "tera", False))
                      and reach >= int(target.get("hp", MINIMUM_HP)))
 
     def _bench_ko_prizes(self, attack, bench) -> float:
@@ -681,8 +676,7 @@ class BoardPotential:
         jobs: dict[tuple, list[float]] = {}
         for body in _bodies(me):
             for card_id in self._stack_ids(body):
-                stat = self._stat(card_id)
-                if stat is not None and getattr(stat, "is_energy", False):
+                if isinstance(self._card(card_id), EnergyCard):
                     continue
                 partners = required_partners.get(card_id, ())
                 if partners and not set(partners).issubset(body_ids):
@@ -700,21 +694,21 @@ class BoardPotential:
         return float(worth_to_prizes(worth))
 
     def _held_card_usable(self, me, card_id: int) -> bool:
-        stat = self._stat(card_id)
-        if stat is None:
+        card = self._card(card_id)
+        if card is None:
             return True
         bodies = _bodies(me)
-        if getattr(stat, "is_energy", False):
+        if isinstance(card, EnergyCard):
             return self.isolated_selection or any(
                 len(self._codes(body)) < self._energy_cost_cap(int(body.get("id", 0)))
                 for body in bodies)
-        evolves_from = getattr(stat, "evolvesFrom", None)
+        evolves_from = getattr(card, "evolves_from", None)
         if not evolves_from:
             return True
         parent = self.registry.line_parents.get(int(card_id))
         return any(
             (parent is not None and int(body.get("id", 0)) == int(parent))
-            or getattr(self._stat(body.get("id")), "name", None) == evolves_from
+            or getattr(self._card(body.get("id")), "name", None) == evolves_from
             for body in bodies
         )
 
@@ -727,17 +721,12 @@ class BoardPotential:
         return found
 
     def _build_energy_cost_cap(self, card_id: int) -> int:
-        candidates = [int(card_id)]
-        if hasattr(self.stats, "forward_card_ids"):
-            candidates.extend(int(candidate)
-                              for candidate in (self.stats.forward_card_ids(int(card_id)) or ()))
+        candidates = [int(card_id), *self._forward_ids(card_id)]
         cap = 0
         for candidate in candidates:
-            stat = self._stat(candidate)
-            for attack_id in (getattr(stat, "attacks", ()) or ()) if stat is not None else ():
-                attack = self._attack(attack_id)
-                cap = max(cap, len(tuple(getattr(attack, "energyTypes", ()) or ()))
-                          if attack is not None else 0)
+            card = self._card(candidate)
+            for attack in (getattr(card, "attacks", ()) or ()):
+                cap = max(cap, len(attack.cost))
         return cap
 
     def _active_ko_ready(self, me, opponent) -> bool:
@@ -769,8 +758,9 @@ class BoardPotential:
             values = []
             overcap = 0.0
             for card in cards:
+                record = self._card(card.get("id"))
                 supplied = provision_units(
-                    energy_card_store().get(int(card.get("id", 0))),
+                    record if isinstance(record, EnergyCard) else None,
                     evolved=bool(body.get("preEvolution")))
                 units = min(remaining, supplied)
                 unit_value = worth_to_prizes(
@@ -828,8 +818,7 @@ class BoardPotential:
         occupied = Counter()
         for body in _bodies(me):
             for card_id in self._stack_ids(body):
-                stat = self._stat(card_id)
-                if skip_energy and stat is not None and getattr(stat, "is_energy", False):
+                if skip_energy and isinstance(self._card(card_id), EnergyCard):
                     continue
                 occupied[self._resource_job(card_id)] += 1
         return occupied

@@ -591,7 +591,7 @@ class ProductionSolver(ReferenceSolver):
         if (self.strategy_snapshot is not None
                 and self.profile.get("strategy.focus_enabled") >= 0.5):
             self._strategy_builder = StrategyBeamBuilder(
-                self.strategy_snapshot, stats=self.oracle.stats,
+                self.strategy_snapshot, cards=self.oracle.cards,
                 registry=self.oracle.registry,
                 width=self.profile.get("strategy.focus_width"),
                 sequence_coverage=(

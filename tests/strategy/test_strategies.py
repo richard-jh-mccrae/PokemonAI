@@ -12,7 +12,7 @@ from common.strategy.strategies import (
 )
 from common.strategy.strategy import Roles
 from common.cards.card_facts import (
-    Ability, BASIC, BASIC_ENERGY, Clause, EnergyCard, ITEM, PokemonCard,
+    Ability, Attack, BASIC, BASIC_ENERGY, Clause, EnergyCard, ITEM, PokemonCard,
     SUPPORTER as SUPPORTER_KIND, TrainerCard,
 )
 from common.demand import StrategyBeamBuilder, semantic_action_key
@@ -276,18 +276,11 @@ def test_attack_ready_condition_uses_the_deployed_attack_provider():
     observation = _observation(hand=[])
     observation["current"]["players"][0]["active"][0]["energies"] = [3, 3]
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90, 91))
-
-        @staticmethod
-        def attack(attack_id):
-            return SimpleNamespace(energyTypes=(3,) if attack_id == 90 else (3, 3))
-
+    cards = {10: _basic(10, attacks=(Attack(90, "Small", (3,), 10),
+                                     Attack(91, "Big", (3, 3), 30)))}
     snapshot = activate_strategies(
         observation, resolve_strategies((rule,), (), ()),
-        roles=Roles({}), stats=Stats())
+        roles=Roles({}), cards=cards)
 
     assert snapshot.hints == ()
     assert snapshot.active_ids == ()
@@ -295,31 +288,17 @@ def test_attack_ready_condition_uses_the_deployed_attack_provider():
 
 
 def test_general_funding_strategy_accepts_primary_and_backup_attackers():
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90,))
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(energyTypes=(3,))
+    cards = {10: _basic(10, attacks=(Attack(90, "Hit", (3,), 30),))}
 
     for role in ("primary_attacker", "backup_attacker"):
         snapshot = activate_strategies(
             _observation(hand=[]), resolve_strategies(GENERAL_STRATEGIES),
-            roles=Roles({10: [role]}), stats=Stats())
+            roles=Roles({10: [role]}), cards=cards)
         assert "general.fund_active_attacker" in snapshot.active_ids
 
 
 def test_general_funding_strategy_survives_chip_damage_above_half_health():
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90,))
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(energyTypes=(3,))
+    cards = {10: _basic(10, attacks=(Attack(90, "Hit", (3,), 30),))}
 
     for hp, expected in ((330, True), (250, True), (100, False)):
         observation = _observation(hand=[])
@@ -327,7 +306,7 @@ def test_general_funding_strategy_survives_chip_damage_above_half_health():
             {"hp": hp, "maxHp": 330})
         snapshot = activate_strategies(
             observation, resolve_strategies(GENERAL_STRATEGIES),
-            roles=Roles({10: ["primary_attacker"]}), stats=Stats())
+            roles=Roles({10: ["primary_attacker"]}), cards=cards)
         assert ("general.fund_active_attacker" in snapshot.active_ids) is expected, hp
 
 
@@ -512,12 +491,7 @@ def test_deploy_strategy_focuses_the_declared_basic():
         observation, resolve_strategies((), (rule,)), roles=Roles({}))
     actions = enumerate_legal_actions(observation)
 
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_pokemon=card_id == 1030, stage="basic")
-
-    beam = StrategyBeamBuilder(snapshot, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards={1030: _basic(1030)}).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     assert [row.family for row in beam.focused] == ["play"]
@@ -534,16 +508,13 @@ def test_damage_setup_strategy_focuses_a_bench_snipe_attack():
         {"id": 20, "serial": 89, "hp": 100, "energies": []}]
     observation["select"]["option"] = [{"type": 13, "attackId": 90}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=30)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(90, "Snipe", (), 10, clauses=(Clause("bench_snipe", amount=30),)),))}
     snapshot = activate_strategies(
         observation, resolve_strategies((), (rule,)), roles=Roles({}),
         opponent_role_worth={20: 30.0})
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     assert [row.family for row in beam.focused] == ["attack"]
@@ -861,17 +832,10 @@ def test_damage_setup_hint_matches_a_spread_attacker():
     observation["current"]["players"][1]["bench"] = [{"id": 30, "serial": 88}]
     observation["select"]["option"] = [{"type": 13, "attackId": 500}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=True)
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=0, benchSpread=60)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(500, "Spread", (), 0, clauses=(Clause("bench_spread", amount=60),)),))}
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     attack = next(action for action in actions if action.identity.kind == "attack")
@@ -891,15 +855,12 @@ def _softening_setup(*, target_hp, amount=None):
         {"id": 20, "serial": 89, "hp": target_hp, "energies": []}]
     observation["select"]["option"] = [{"type": 13, "attackId": 90}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=30)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(90, "Snipe", (), 10, clauses=(Clause("bench_snipe", amount=30),)),))}
     snapshot = activate_strategies(
         observation, resolve_strategies((), (rule,)), roles=Roles({}),
         opponent_role_worth={20: 30.0})
-    builder = StrategyBeamBuilder(snapshot, stats=Stats(), sequence_coverage=True)
+    builder = StrategyBeamBuilder(snapshot, cards=cards, sequence_coverage=True)
     state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
     return builder, state, enumerate_legal_actions(observation)
 

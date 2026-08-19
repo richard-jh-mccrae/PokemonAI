@@ -16,6 +16,7 @@ from common.card_worth import (
 from .algebra import Ledger
 from .api import ActionIdentity
 from .cards import card_store, play_clauses
+from .cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, PokemonCard
 from .cards.functions.damage import bench_reach
 from .cards.functions.fetch import DEADNESS, fetch_target_matches
 from .option_equivalence import fingerprint_source_card_id
@@ -140,27 +141,29 @@ class ValueRegistry:
         self.seeds = seeds
 
     @classmethod
-    def from_strategy(cls, *, strategy, stats, functions, deck, roles=None) -> "ValueRegistry":
+    def from_strategy(cls, *, strategy, functions, deck, roles=None,
+                      cards=None) -> "ValueRegistry":
+        records = card_store() if cards is None else cards
         card_ids = set(int(card_id) for card_id in deck)
         roles = roles or getattr(strategy, "roles", {}) or {}
         role_rows = {card_id: tuple(roles.get(card_id, ())) for card_id in card_ids}
         tags = {card_id: tuple(functions.tags(card_id)) if functions else () for card_id in card_ids}
         facts = {}
         for card_id in card_ids:
-            stat = stats.get(card_id) if stats else None
-            attacks = (tuple(stats.attack(attack_id) for attack_id in getattr(stat, "attacks", ()) or ())
-                       if stat is not None and hasattr(stats, "attack") else ())
+            card = records.get(card_id)
+            is_energy = isinstance(card, EnergyCard)
             facts[card_id] = CardFacts(
-                known=stat is not None,
-                ace_spec=bool(stat is not None and getattr(stat, "aceSpec", False)),
-                typed_basic_energy=bool(stat is not None and
-                                        getattr(stat, "is_typed_basic_energy", False)),
-                pokemon=bool(stat is not None and getattr(stat, "is_pokemon", False)),
-                stage=(getattr(stat, "stage", None) if stat is not None else None),
-                prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
-                energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
+                known=card is not None,
+                ace_spec=bool(getattr(card, "ace_spec", False)),
+                typed_basic_energy=bool(is_energy and card.kind == BASIC_ENERGY
+                                        and card.provides != COLORLESS),
+                pokemon=isinstance(card, PokemonCard),
+                stage=getattr(card, "stage", None),
+                prize_value=(getattr(card, "prize_value", 1) if card is not None else 1),
+                energy_type=(card.provides if is_energy
+                             else getattr(card, "energy_type", None)),
                 bench_damage=max((bench_reach(attack)
-                                  for attack in attacks if attack is not None), default=0),
+                                  for attack in getattr(card, "attacks", ()) or ()), default=0),
             )
         declarations = tuple(line for line in getattr(roles, "lines", ()) if line.path)
         lines = tuple(tuple(line.path) for line in declarations)
@@ -456,15 +459,26 @@ class ValueOracle:
         return self._refresh.evaluate(state, node, include_next_turn=include_next_turn)
 
     def refresh_attack_independent(self, state: DecisionState, action) -> bool:
-        if self.stats is None or not hasattr(self.stats, "attack") or len(action.selection) != 1:
+        if len(action.selection) != 1:
             return False
         options = tuple((state.obs.get("select") or {}).get("option") or ())
         index = action.selection[0]
         option = options[index] if 0 <= index < len(options) else {}
         attack_id = option.get("attackId")
-        attack = self.stats.attack(attack_id) if attack_id is not None else None
-        return bool(attack is not None and getattr(attack, "scaleVar", None) != "atk_hand"
-                    and not getattr(attack, "hiddenPerUnit", 0))
+        players = (state.obs.get("current") or {}).get("players") or ()
+        seat = int(state.obs.get("bellmanActor", state.root_seat))
+        mine = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+        active = next((body for body in (mine.get("active") or ()) if body), None)
+        card = self.cards.get(int(active["id"])) if active and active.get("id") is not None \
+            else None
+        attack = next((attack for attack in getattr(card, "attacks", ()) or ()
+                       if attack.attack_id == int(attack_id)), None) \
+            if attack_id is not None else None
+        if attack is None:
+            return False
+        scale = attack.clause("scale")
+        return ((scale is None or scale.var != "atk_hand")
+                and attack.clause("hidden_scale") is None)
 
     def reveal_choice_priority(self, before: DecisionState, after: DecisionState) -> float:
         key = before.semantic_key, after.semantic_key

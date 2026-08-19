@@ -11,7 +11,7 @@ from __future__ import annotations
 from bellman_helpers import runtime
 
 from common import BoardPotential, CardFacts, ValueRegistry
-from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+from common.cards.card_facts import Attack, BASIC, Clause, PokemonCard
 
 
 ATTACKER, DEFENDER, SIDEKICK = 800, 801, 802
@@ -19,21 +19,17 @@ BIG, SMALL, OPPONENT_BIG = 1, 2, 3
 
 
 def _stats():
-    return DictCardStatProvider(
-        {
-            ATTACKER: CardStat(ATTACKER, name="Attacker", hp=200, attacks=(BIG, SMALL)),
-            DEFENDER: CardStat(DEFENDER, name="Defender", hp=120, attacks=(OPPONENT_BIG,)),
-            SIDEKICK: CardStat(SIDEKICK, name="Sidekick", hp=60, attacks=()),
-        },
-        attacks={
-            # One shot that knocks out the Active and snipes the Bench, then bars itself.
-            BIG: AttackStat(BIG, name="Overreach", damage=200, benchSnipe=60,
-                            nextTurnSameAttackLock=True),
-            SMALL: AttackStat(SMALL, name="Jab", damage=10),
-            OPPONENT_BIG: AttackStat(OPPONENT_BIG, name="Their Overreach", damage=200,
-                                     nextTurnSameAttackLock=True),
-        },
-    )
+    # One shot that knocks out the Active and snipes the Bench, then bars itself.
+    big = Attack(BIG, "Overreach", (), 200,
+                 clauses=(Clause("bench_snipe", amount=60), Clause("same_attack_lock")))
+    small = Attack(SMALL, "Jab", (), 10)
+    their_big = Attack(OPPONENT_BIG, "Their Overreach", (), 200,
+                       clauses=(Clause("same_attack_lock"),))
+    return {
+        ATTACKER: PokemonCard(ATTACKER, "Attacker", 200, 0, BASIC, attacks=(big, small)),
+        DEFENDER: PokemonCard(DEFENDER, "Defender", 120, 0, BASIC, attacks=(their_big,)),
+        SIDEKICK: PokemonCard(SIDEKICK, "Sidekick", 60, 0, BASIC),
+    }
 
 
 def _registry():

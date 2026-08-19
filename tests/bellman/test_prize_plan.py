@@ -9,15 +9,15 @@ from common.strategy import PrizePlan, Strategy
 CINDERACE, STARYU, MEGA_STARMIE = 666, 1030, 1031
 
 
-class _Stats:
-    _cards = {
-        CINDERACE: SimpleNamespace(prize_value=1),
-        STARYU: SimpleNamespace(prize_value=1),
-        MEGA_STARMIE: SimpleNamespace(prize_value=3),
-    }
+_CARDS = {
+    CINDERACE: SimpleNamespace(prize_value=1, name="Cinderace"),
+    STARYU: SimpleNamespace(prize_value=1, name="Staryu"),
+    MEGA_STARMIE: SimpleNamespace(prize_value=3, name="Mega Starmie ex"),
+}
 
-    def get(self, card_id):
-        return self._cards.get(card_id)
+
+def _Stats():
+    return dict(_CARDS)
 
 
 def _body(card_id):
@@ -31,7 +31,7 @@ def _player(active, bench=(), prizes=6):
 
 def _registry():
     return ValueRegistry(facts={card_id: CardFacts(pokemon=True, prize_value=stat.prize_value)
-                                for card_id, stat in _Stats._cards.items()})
+                                for card_id, stat in _CARDS.items()})
 
 
 def test_prize_plan_prefers_cinderace_between_two_three_prize_attackers():
@@ -80,7 +80,7 @@ def test_strategy_prize_plan_reaches_the_bellman_deck_profile():
         (MEGA_STARMIE, CINDERACE, MEGA_STARMIE),
     )))
     registry = ValueRegistry.from_strategy(
-        strategy=strategy, stats=_Stats(), functions=None,
+        strategy=strategy, functions=None,
         deck=(CINDERACE, STARYU, MEGA_STARMIE))
 
     profile = BellmanDeckProfile.from_registry(registry)

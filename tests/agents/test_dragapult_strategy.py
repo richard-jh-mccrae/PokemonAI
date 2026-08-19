@@ -48,7 +48,7 @@ def test_every_dragapult_card_has_machine_readable_purpose():
         )
         assert any(markers), card_id
     registry = ValueRegistry.from_strategy(
-        strategy=STRATEGY, stats=stats, functions=functions, deck=_deck(), roles=roles)
+        strategy=STRATEGY, functions=functions, deck=_deck(), roles=roles)
     assert all(registry.worth(card_id) > 0 for card_id in set(_deck()))
 
 
@@ -322,7 +322,7 @@ def _funding_energy(card_id, attached=()):
     ]}, "select": {"context": 0, "option": []}}
     snapshot = activate_strategies(
         observation, resolved, roles=roles, stats=stats, effects=effects)
-    builder = StrategyBeamBuilder(snapshot, stats=stats)
+    builder = StrategyBeamBuilder(snapshot)
     state = SimpleNamespace(
         obs=observation, root_seat=0,
         deck_counts=tuple({row: deck.count(row) for row in set(deck)}.items()))

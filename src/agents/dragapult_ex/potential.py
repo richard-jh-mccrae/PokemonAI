@@ -18,10 +18,11 @@ class DragapultPotential(BoardPotential):
         where the shared single-target reach sees only the largest one it can reach."""
         direct = max((self._prizes(bench[index])
                       for index in self._bench_ko_indices(attack, bench)), default=0)
-        counter_budget = int(getattr(attack, "benchSpread", 0) or 0) // 10
+        spread = attack.clause("bench_spread")
+        counter_budget = (int(spread.amount or 0) if spread is not None else 0) // 10
         prizes = [0] * (counter_budget + 1)
         for target in bench:
-            if bool(getattr(self._stat(target.get("id")), "tera", False)):
+            if bool(getattr(self._card(target.get("id")), "tera", False)):
                 continue
             hp = int(target.get("hp", 0) or 0)
             cost = (hp + 9) // 10
@@ -43,14 +44,25 @@ class DragapultPotential(BoardPotential):
         opponent_seat = 1 - seat
         opponent = players[opponent_seat] if opponent_seat < len(players) else {}
 
+        def ability_energy_cost(body):
+            """Energy an Ability needs to fire, off the record's typed clause parameters."""
+            types = []
+            for ability in getattr(self._card(body.get("id")), "abilities", ()) or ():
+                for clause in ability.clauses:
+                    if clause.condition_energy_type is not None:
+                        types.append(int(clause.condition_energy_type))
+                    if clause.rider_energy_type is not None:
+                        types.extend([int(clause.rider_energy_type)]
+                                     * int(clause.rider_amount or 1))
+            return tuple(types)
+
         def ability_fuel(player):
             return sum(
                 worth_to_prizes(self.registry.worth(int(body.get("id", 0))))
                 * ABILITY_FUEL_SHARE
-                * _pay_fraction(_energy_codes(body), tuple(
-                    getattr(self._stat(body.get("id")), "abilityEnergyTypes", ()) or ()))
+                * _pay_fraction(_energy_codes(body), cost)
                 for body in _bodies(player)
-                if tuple(getattr(self._stat(body.get("id")), "abilityEnergyTypes", ()) or ()))
+                if (cost := ability_energy_cost(body)))
 
         def conditions(player):
             return sum(value for condition, value in SPECIAL_CONDITION_PRIZE_SHARES.items()

@@ -204,10 +204,10 @@ def test_post_attack_potential_keeps_the_root_players_perspective():
     observation = _obs(_fixture(60))
     observation["current"]["yourIndex"] = 1
     registry = deployed.registry
-    potential = BoardPotential(deployed.stats, registry=registry, root_seat=0)
+    potential = BoardPotential(registry=registry, root_seat=0)
 
     assert potential(observation).total == pytest.approx(
-        BoardPotential(deployed.stats, registry=registry)(
+        BoardPotential(registry=registry)(
         {**observation, "current": {**observation["current"], "yourIndex": 0}}).total)
 
 
@@ -422,7 +422,7 @@ class _TerminalMenu:
 def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sample():
     deployed = runtime()
     registry = deployed.registry
-    oracle = ValueOracle(registry, BoardPotential(deployed.stats, registry=registry))
+    oracle = ValueOracle(registry, BoardPotential(registry=registry))
     rows = []
     for correction in load_corrections(REPO / "data" / "corrections"):
         if (correction.agent != "mega_starmie" or not correction.obs
@@ -457,7 +457,7 @@ def test_bounded_and_reference_solvers_have_zero_regret_on_terminal_attack_sampl
 def test_terminal_game_value_does_not_bank_resources_spent_before_the_win():
     deployed = runtime()
     registry = deployed.registry
-    potential = BoardPotential(deployed.stats, registry=registry)
+    potential = BoardPotential(registry=registry)
     engine = _fixture(50)
     before = _obs(engine)
     won = _obs(engine)

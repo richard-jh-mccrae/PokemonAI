@@ -1,17 +1,20 @@
 from common import BoardPotential, CardFacts, ValueRegistry
-from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+from common.cards.card_facts import (
+    Attack, BASIC, BASIC_ENERGY, EnergyCard, PokemonCard, STAGE1,
+)
 from copy import deepcopy
 
 
-class _Stats:
-    def get(self, card_id):
-        return CardStat(cardId=card_id, hp=100, attacks=(10,))
+class _Stats(dict):
+    """Explicit rows win; any other id resolves to a 100 HP Basic with one (3, 3)-cost
+    100-damage attack."""
 
-    def attack(self, attack_id):
-        return AttackStat(attackId=attack_id, energyTypes=(3, 3), damage=100)
-
-    def forward_card_ids(self, card_id):
-        return frozenset()
+    def get(self, card_id, default=None):
+        found = super().get(int(card_id))
+        if found is not None:
+            return found
+        return PokemonCard(int(card_id), f"Test Pokemon {card_id}", 100, 0, BASIC,
+                           attacks=(Attack(10, "Hit", (3, 3), 100),))
 
 
 def _body(card_id, *, hp=100, energy=True):
@@ -72,9 +75,10 @@ def test_full_health_active_is_funded_before_backup_energy_is_valued():
 
 
 def test_multi_unit_energy_saturates_attack_without_valuing_a_fourth_unit():
-    # 17 = Ignition Energy, the real provides_evo:3 record; provision now reads the card store.
+    # 17 = Ignition Energy, the real provides_evo:3 record; provision now reads the record.
+    from common.cards import card_store
     registry = ValueRegistry(facts={3: CardFacts(), 17: CardFacts()})
-    potential = BoardPotential(_Stats(), registry=registry, root_seat=0)
+    potential = BoardPotential(_Stats({17: card_store()[17]}), registry=registry, root_seat=0)
     before = _observation(_body(9), _body(2))
     active = before["current"]["players"][0]["active"][0]
     active.update({
@@ -94,12 +98,12 @@ def test_multi_unit_energy_saturates_attack_without_valuing_a_fourth_unit():
 
 def test_hand_value_requires_a_recipient_for_evolution_but_retains_future_energy():
     base, top, energy = 20, 21, 22
-    stats = DictCardStatProvider({
-        base: CardStat(base, name="Base", hp=60, stage="basic", attacks=(10,)),
-        top: CardStat(top, name="Top", hp=120, stage="stage1", evolvesFrom="Base",
-                      attacks=(10,)),
-        energy: CardStat(energy, cardType=5, energyType=3),
-    }, attacks={10: AttackStat(10, energyTypes=(3,), damage=100)})
+    hit = Attack(10, "Hit", (3,), 100)
+    stats = {
+        base: PokemonCard(base, "Base", 60, 0, BASIC, attacks=(hit,)),
+        top: PokemonCard(top, "Top", 120, 0, STAGE1, evolves_from="Base", attacks=(hit,)),
+        energy: EnergyCard(energy, "Test Water", BASIC_ENERGY, provides=3),
+    }
     registry = ValueRegistry(
         roles={base: ("primary_attacker",), top: ("primary_attacker",)},
         facts={base: CardFacts(pokemon=True, stage="basic"),

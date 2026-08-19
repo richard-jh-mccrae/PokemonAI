@@ -118,12 +118,11 @@ class StrategyBeamBuilder:
     _URGENCY = {"high": 3.0, "medium": 2.0, "low": 1.0}
     _CONVICTION = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
-    def __init__(self, snapshot, *, cards=None, stats=None, registry=None, width=8,
+    def __init__(self, snapshot, *, cards=None, registry=None, width=8,
                  sequence_coverage=False, information_partition=False):
         self.snapshot = snapshot
         #: Card records by id — the unified store unless a test injects its own records.
         self.cards = card_store() if cards is None else cards
-        self.stats = stats
         self.registry = registry
         self.width = max(1, int(width))
         self.sequence_coverage = bool(sequence_coverage)
@@ -444,9 +443,16 @@ class StrategyBeamBuilder:
                 best = max(best, float(bool(matching)))
         return best
 
+    def _body_attack(self, body, attack_id):
+        """The named printed attack on this body's record, or None."""
+        card = self._card(body.get("id")) if body else None
+        return next((attack for attack in getattr(card, "attacks", ()) or ()
+                     if attack.attack_id == int(attack_id)), None) \
+            if attack_id is not None else None
+
     def _reaches_defender(self, attack, attacker_body, defender_body) -> bool:
-        attacker = self.stats.get(attacker_body.get("id")) if self.stats is not None else None
-        defender = self.stats.get(defender_body.get("id")) if self.stats is not None else None
+        attacker = self._card(attacker_body.get("id"))
+        defender = self._card(defender_body.get("id"))
         remaining = int(defender_body.get("hp", 0) or 0)
         if attacker is None or defender is None or remaining <= 0:
             return False
@@ -507,11 +513,9 @@ class StrategyBeamBuilder:
             elif hint.kind == "knock_out" and action.identity.kind == "attack":
                 # Credit the attack that actually reaches, not every attack the body prints.
                 option = self._option(state, action) or {}
-                attack = (self.stats.attack(option.get("attackId"))
-                          if self.stats is not None and option.get("attackId") is not None
-                          else None)
                 active = next((body for body in self._player(state).get("active") or ()
                                if body), {})
+                attack = self._body_attack(active, option.get("attackId"))
                 defender = next((body for body in self._opponent(state).get("active") or ()
                                  if body), {})
                 if (attack is not None and (not hint.target_card_ids
@@ -525,9 +529,9 @@ class StrategyBeamBuilder:
                     probability = 1.0
             elif hint.kind == "damage_setup" and action.identity.kind == "attack":
                 option = self._option(state, action) or {}
-                attack_id = option.get("attackId")
-                attack = (self.stats.attack(attack_id)
-                          if self.stats is not None and attack_id is not None else None)
+                active = next((body for body in (self._player(state).get("active") or ())
+                               if body), {})
+                attack = self._body_attack(active, option.get("attackId"))
                 target_exists = any(
                     int(body.get("serial", -1)) == hint.recipient_serial
                     for body in self._opponent(state).get("bench") or () if body)
