@@ -10,6 +10,8 @@ CARD = PokemonCard(
     weakness=GRASS,
     retreat_cost=1,
     tags=frozenset(['draw']),
+    default_roles=('draw_engine',),
+    synergy=('Solrock',),
     abilities=(
         Ability(
             name='Lunar Cycle',

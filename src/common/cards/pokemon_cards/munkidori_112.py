@@ -11,6 +11,7 @@ CARD = PokemonCard(
     resistance=FIGHTING,
     retreat_cost=1,
     tags=frozenset(['confuse', 'heal', 'spread']),
+    default_roles=('backup_attacker', 'counter_mover'),
     abilities=(
         Ability(
             name='Adrena-Brain',

@@ -53,6 +53,35 @@ ABILITY_CLAUSES: dict[int, tuple[dict, ...]] = {
     666: ({"kind": "setup_active", "trigger": "setup"},),
 }
 
+# Each body's own job, read off its card text — never off its prize count. A deck that wants a
+# different job for a body declares it in `src/agents/<deck>/strategy.py` and that wins.
+DEFAULT_ROLES: dict[int, tuple[str, ...]] = {
+    66: ("draw_engine",),
+    112: ("backup_attacker", "counter_mover"),
+    119: ("primary_attacker",),
+    120: ("primary_attacker", "draw_engine"),
+    121: ("primary_attacker", "sniper"),
+    140: ("draw_engine",),
+    235: ("item_locker",),
+    305: ("draw_engine", "retreat_assist"),
+    666: ("accel_source", "backup_attacker"),
+    673: ("backup_attacker",),
+    674: ("backup_attacker", "gust"),
+    675: ("draw_engine",),
+    676: ("backup_attacker",),
+    677: ("primary_attacker",),
+    678: ("primary_attacker", "accel_source"),
+    1030: ("primary_attacker",),
+    1031: ("primary_attacker", "sniper"),
+    1071: ("supporter_tutor",),
+}
+
+# Bodies whose OWN text names another card to function. Symmetric, and asserted so.
+SYNERGY: dict[int, tuple[str, ...]] = {
+    675: ("Solrock",),          # Lunar Cycle draws only while Solrock is in play
+    676: ("Lunatone",),         # Cosmic Beam does nothing without Lunatone benched
+}
+
 # Continuous Tool modifiers `card_effects.json` does not cover; amounts are damage points.
 TOOL_CLAUSES: dict[int, tuple[dict, ...]] = {
     1159: ({"kind": "hp_bonus", "amount": 100},),
@@ -119,6 +148,9 @@ def _emit_pokemon(card: dict, attacks: dict, tags: list, ability_clauses: tuple)
             lines.append(f"    {side}={ENERGY_NAME[card[side]]},")
     lines.append(f"    retreat_cost={card['retreatCost']},")
     lines.append(f"    tags=frozenset({sorted(tags)!r}),")
+    lines.append(f"    default_roles={DEFAULT_ROLES[card['cardId']]!r},")
+    if card["cardId"] in SYNERGY:
+        lines.append(f"    synergy={SYNERGY[card['cardId']]!r},")
     if card.get("skills"):
         needed.add("Ability")
         lines.append("    abilities=(")
@@ -200,6 +232,8 @@ def main() -> None:
     for card_id in pokemon:
         card = cards[card_id]
         card["stage"] = ("stage2" if card["stage2"] else "stage1" if card["stage1"] else "basic")
+        if not DEFAULT_ROLES.get(card_id):
+            raise SystemExit(f"pokemon {card_id} ({card['name']}) has no authored default role")
         ability_clauses = ()
         if card.get("skills"):
             source = effects.get(str(card_id)) or ABILITY_CLAUSES.get(card_id)

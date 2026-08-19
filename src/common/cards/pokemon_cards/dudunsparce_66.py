@@ -11,6 +11,7 @@ CARD = PokemonCard(
     weakness=FIGHTING,
     retreat_cost=3,
     tags=frozenset(['dig:3', 'draw', 'recycle_line', 'stall']),
+    default_roles=('draw_engine',),
     abilities=(
         Ability(
             name='Run Away Draw',

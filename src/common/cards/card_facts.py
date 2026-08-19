@@ -83,6 +83,11 @@ class PokemonCard:
     resistance: int | None = None
     retreat_cost: int = 0
     tags: frozenset = frozenset()
+    #: This body's own job, authored from its text — see `pokemon_roles.POKEMON_ROLES`. A deck
+    #: that wants a different job for it overrides; prize count never enters this.
+    default_roles: tuple[str, ...] = ()
+    #: Cards this one's OWN text names to function (Solrock/Lunatone). Symmetric by construction.
+    synergy: tuple[str, ...] = ()
     abilities: tuple[Ability, ...] = ()
     attacks: tuple[Attack, ...] = ()
 

@@ -13,23 +13,11 @@ from cards_helpers import REPO, engine_attacks, engine_cards, engine_stage  # no
 
 from common.cards import CardFunctions, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
-from common.cards.pokemon_roles import purpose_pokemon_roles, structural_pokemon_roles
+from common.cards.pokemon_roles import resolve_pokemon_roles
 
 
 def _clause_projection(clause: Clause) -> dict:
     return {"kind": clause.kind, **clause.params}
-
-
-@pytest.fixture(scope="module")
-def stats():
-    """The engine-backed provider the store's derivations mirror; absent on a DLL-less box."""
-    try:
-        from common.scouting.provider import EngineCardStatProvider
-        provider = EngineCardStatProvider()
-        provider.get(66)
-    except Exception:
-        pytest.skip("engine unavailable on this box")
-    return provider
 
 
 def test_card_facts_match_the_engine_defs(engine_cards, engine_attacks):
@@ -82,32 +70,50 @@ def test_every_effect_text_carries_a_clause_encoding():
 
 def test_default_roles_pin():
     roles = pokemon_default_roles()
-    assert roles[121] == ("primary_attacker",)                       # a 2-prize body
-    assert roles[1030] == ("fragile_preevo",)                        # its line attacks forward
-    assert roles[674] == ("backup_attacker",)                        # attacks, nothing forward
-    assert roles[305] == ("fragile_preevo", "support_pokemon", "retreat_assist", "draw_engine")
-    assert roles[666] == ("backup_attacker", "accel_source")   # accel alone is not support-shaped
+    assert roles[121] == ("primary_attacker", "sniper")     # Phantom Dive reaches their Bench
+    assert roles[1030] == ("primary_attacker",)             # a Staryu is the Starmie line
+    assert roles[676] == ("backup_attacker",)
+    assert roles[1071] == ("supporter_tutor",)              # 2 prizes, but that is not its job
+    assert roles[140] == ("draw_engine",)                   # likewise
 
 
-def test_the_structural_layer_matches_the_shipped_ladder(stats):
-    """Feeding `derive_general_roles` from store records must rule exactly as `CardStat` does."""
-    from common.scouting.matchup_plan import BodyFacts, derive_general_roles
-    functions = CardFunctions.load()
-    expected = derive_general_roles({
-        card_id: BodyFacts(
-            tags=frozenset(functions.tags(card_id)),
-            prize_value=int(stats.get(card_id).prize_value),
-            own_damage=float(getattr(stats.get(card_id), "maxDamage", 0) or 0),
-            forward_damage=float(stats.forward_max_damage(card_id) or 0))
-        for card_id in pokemon_card_store()})
-    assert structural_pokemon_roles(pokemon_card_store()) == expected
+def test_no_role_is_assigned_by_prize_count():
+    """The two-prize bodies do not share a Role, and two of them never attack for the deck."""
+    roles = pokemon_default_roles()
+    two_prize = {card_id for card_id, card in pokemon_card_store().items()
+                 if card.prize_value == 2}
+    assert two_prize == {121, 140, 678, 1031, 1071}
+    assert "primary_attacker" not in roles[140] + roles[1071]
 
 
-def test_the_purpose_layer_matches_the_shipped_derivation(stats):
-    from common.pokemon_roles import general_pokemon_roles
-    expected = general_pokemon_roles(pokemon_card_store().keys(), stats, CardFunctions.load())
-    assert {k: tuple(v) for k, v in expected.items()} == purpose_pokemon_roles(
-        pokemon_card_store())
+def test_a_deck_declaration_replaces_the_default():
+    resolved = resolve_pokemon_roles(pokemon_card_store(), {140: ["backup_attacker"]})
+    assert resolved[140] == ("backup_attacker",)            # dragapult_ex's own reading
+    assert resolved[121] == pokemon_default_roles()[121]    # everything else untouched
+
+
+def test_synergy_is_symmetric_and_names_real_cards():
+    store = pokemon_card_store()
+    by_name = {card.name: card for card in store.values()}
+    for card in store.values():
+        for partner_name in card.synergy:
+            partner = by_name.get(partner_name)
+            assert partner is not None, (card.card_id, partner_name)
+            assert card.name in partner.synergy, f"{card.name}/{partner_name} is one-way"
+    assert store[675].synergy == ("Solrock",) and store[676].synergy == ("Lunatone",)
+
+
+def test_a_card_whose_text_names_another_card_declares_the_synergy():
+    """Solrock's `requires_bench` clause and Lunatone's condition are the printed halves of the
+    same pairing; the authored field must not disagree with them."""
+    store = pokemon_card_store()
+    named = {clause.name for card in store.values() for attack in card.attacks
+             for clause in attack.clauses if clause.name}
+    for partner_name in named:
+        holders = [c for c in store.values() if any(
+            cl.name == partner_name for a in c.attacks for cl in a.clauses)]
+        for holder in holders:
+            assert partner_name in holder.synergy, (holder.card_id, partner_name)
 
 
 def test_the_store_is_read_only():

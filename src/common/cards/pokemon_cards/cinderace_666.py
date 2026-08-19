@@ -11,6 +11,7 @@ CARD = PokemonCard(
     weakness=WATER,
     retreat_cost=0,
     tags=frozenset(['energy_accel', 'opener']),
+    default_roles=('accel_source', 'backup_attacker'),
     abilities=(
         Ability(
             name='Explosiveness',

@@ -10,13 +10,9 @@ from cards_helpers import (
     deck_card_ids_of_kind, engine_card_defs)
 from cgpy.schema import CardType
 
-from common.card_worth import ROLE_ALIASES, ROLE_TIER
 from common.cards import (
     card_store, energy_card_store, pokemon_card_store, pokemon_default_roles, trainer_card_store)
-from common.scouting.matchup_plan import ROLE_REGISTRY
-
-#: Every role name the shipped stores price or rank. An emitted role outside it is a typo.
-DECLARED_ROLES = frozenset(ROLE_REGISTRY) | frozenset(ROLE_TIER) | frozenset(ROLE_ALIASES)
+from common.cards.pokemon_roles import undeclared_pokemon_roles
 
 
 @pytest.mark.parametrize("deck", DECKS)
@@ -34,7 +30,7 @@ def test_every_pokemon_has_at_least_one_role():
 
 def test_every_emitted_role_is_declared_vocabulary():
     emitted = {role for roles in pokemon_default_roles().values() for role in roles}
-    assert sorted(emitted - DECLARED_ROLES) == []
+    assert undeclared_pokemon_roles(emitted) == []
 
 
 @pytest.mark.parametrize("store,card_types", [

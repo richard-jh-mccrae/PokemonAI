@@ -12,6 +12,7 @@ CARD = PokemonCard(
     weakness=LIGHTNING,
     retreat_cost=2,
     tags=frozenset([]),
+    default_roles=('primary_attacker', 'sniper'),
     attacks=(
         Attack(
             attack_id=1487,

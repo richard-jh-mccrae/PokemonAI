@@ -11,6 +11,7 @@ CARD = PokemonCard(
     weakness=FIGHTING,
     retreat_cost=1,
     tags=frozenset(['draw']),
+    default_roles=('draw_engine',),
     abilities=(
         Ability(
             name='Flip the Script',

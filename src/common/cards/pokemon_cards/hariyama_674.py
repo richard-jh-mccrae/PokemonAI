@@ -11,6 +11,7 @@ CARD = PokemonCard(
     weakness=PSYCHIC,
     retreat_cost=3,
     tags=frozenset(['gust']),
+    default_roles=('backup_attacker', 'gust'),
     abilities=(
         Ability(
             name='Heave-Ho Catcher',

@@ -10,6 +10,7 @@ CARD = PokemonCard(
     weakness=PSYCHIC,
     retreat_cost=2,
     tags=frozenset([]),
+    default_roles=('backup_attacker',),
     attacks=(
         Attack(
             attack_id=976,
