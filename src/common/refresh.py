@@ -84,7 +84,7 @@ class RefreshEvaluator:
         self.opponent_hand_share = (
             max(0.0, float(opponent_hand_share)) if opponent_hand_share is not None
             else float(getattr(family_evaluator, "opponent_hand_share", 0.0)))
-        self.demand = DemandModel(registry, family_evaluator)
+        self.demand = DemandModel(registry, family_evaluator, cards=self.cards)
 
     def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
         observation = state.obs

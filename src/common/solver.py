@@ -16,7 +16,7 @@ from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
 from .cards import play_clauses
-from .cards.card_facts import PokemonCard
+from .cards.card_facts import PokemonCard, TOOL, TrainerCard
 from .cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .option_equivalence import option_source_card
@@ -1193,11 +1193,11 @@ class ProductionSolver(ReferenceSolver):
             option = options[index] if 0 <= index < len(options) else None
             source = option_source_card(option, state.obs)
             source_id = int(source["id"]) if source and source.get("id") is not None else None
-            source_stat = self.oracle.stats.get(source_id) \
-                if source_id is not None and self.oracle.stats is not None else None
+            source_card = self.oracle.cards.get(source_id) if source_id is not None else None
             if (footprint is not None and footprint.commitment and not footprint.barrier
                     and action.identity.kind in DOMINATED_COMMITMENT_KINDS
-                    and not bool(getattr(source_stat, "is_tool", False))
+                    and not (isinstance(source_card, TrainerCard)
+                             and source_card.kind == TOOL)
                     and semantic_action_key(action) not in protected_keys):
                 self.information_pruned += 1
                 self._structural_prunes.append({

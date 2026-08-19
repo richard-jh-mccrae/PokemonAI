@@ -242,10 +242,10 @@ class ValueOracle:
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
         self._reveal_priority_cache = {}
-        if refresh_evaluator is None and effects is not None and stats is not None:
+        if refresh_evaluator is None:
             from .refresh import RefreshEvaluator
             refresh_evaluator = RefreshEvaluator(
-                registry, family_evaluator, effects=effects, stats=stats)
+                registry, family_evaluator, cards=self.cards)
         self._refresh = refresh_evaluator
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
