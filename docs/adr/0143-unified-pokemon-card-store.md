@@ -1,4 +1,4 @@
-# ADR-TEMP — One frozen record per card printing under `common/cards/`
+# ADR-0143 — One frozen record per card printing under `common/cards/`
 
 Status: Accepted; built for every card in the three shipped decks' lists.
 
