@@ -16,7 +16,7 @@ CARD = PokemonCard(
         Ability(
             name='Adrena-Brain',
             text='Once during your turn, if this Pokémon has any {D} Energy attached, you may move up to 3 damage counters from 1 of your Pokémon to 1 of your opponent’s Pokémon.',
-            clauses=(Clause('move_damage', amount=30, condition='dark_energy_attached', zone='own_any', dest='opp_any', allowance='body'),),
+            clauses=(Clause('move_damage', amount=30, condition='dark_energy_attached', condition_energy_type=DARKNESS, zone='own_any', dest='opp_any', allowance='body'),),
         ),
     ),
     attacks=(

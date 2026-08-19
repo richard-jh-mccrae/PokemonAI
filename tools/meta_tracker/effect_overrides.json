@@ -176,7 +176,7 @@
   "66": [{"kind": "draw", "amount": 3, "allowance": "body", "rider": "shuffle_self_in"}],
   "120": [{"kind": "draw", "amount": 1, "window": 2, "allowance": "body", "rider": "other_to_bottom"}],
   "140": [{"kind": "draw", "amount": 3, "condition": "pokemon_ko_last_turn", "allowance": "card"}],
-  "675": [{"kind": "draw", "amount": 3, "condition": "solrock_in_play", "allowance": "card", "rider": "discard_basic_f_energy"}],
+  "675": [{"kind": "draw", "amount": 3, "condition": "solrock_in_play", "allowance": "card", "rider": "discard_basic_f_energy", "rider_energy_type": 6, "rider_amount": 1}],
   "1080": [{"kind": "draw", "amount": 5, "condition": "pokemon_ko_last_turn", "opponent_amount": 2, "rider": "shuffle_both_hands"}],
   "1240": [{"kind": "accel", "amount": 2, "source": "discard", "target": "stage2", "energy": "basic", "condition": "more_prizes_remaining_than_opp"}],
   "1198": [{"kind": "accel", "amount": 1, "source": "deck", "target": "any_pokemon", "energy": "basic", "to_hand": 1, "distinct_types": true}],

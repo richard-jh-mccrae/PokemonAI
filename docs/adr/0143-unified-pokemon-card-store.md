@@ -48,6 +48,22 @@ authored cards on both seats. The tag and clause tables stay where they are — 
 opponent cards, which the scouting rework replaces. `card_worth.py` stays out: it prices a function
 rather than defining one, and ADR-0065 owns that currency.
 
+## How facts reach the functions (amended 2026-08-19)
+
+A function's hands hold records, never ids: `PokemonCard`, `Attack`, `Clause` arrive as plain
+arguments, and the id-to-record resolution happens once at the edge, where the board-state layer
+resolves each body it sees through the package's cached indexes (`card_store()`, `attack_index()`).
+The store's clause vocabulary is canonical — a function conforms to the card file, never the
+reverse — and derived readings live once, on the record (`prize_value`, `is_rule_box`,
+`has_ability`, `clause(kind)` as a plain scan; no caching machinery until a profile earns it).
+
+The native rewrite of the six function bodies and the rewiring of their call sites are ONE event,
+per function (energy first — already aligned; damage last — widest), against this finished
+vocabulary. Until then `tests/cards/test_function_wiring_prep.py` pins the seam: the typed
+ability-energy encodings, the index, and the two silent traps (`bench_reach` reading a store
+Attack as zero reach; the attack-lock fold reading one as never locking) stay asserted at today's
+wrong-but-quiet values so the rewire must flip them consciously.
+
 ## Consequences
 
 A mid-game card query is one dict hit plus attribute reads, and the store covers every card in

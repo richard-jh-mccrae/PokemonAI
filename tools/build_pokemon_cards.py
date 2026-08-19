@@ -49,7 +49,7 @@ ATTACK_CLAUSES: dict[int, tuple[dict, ...]] = {
 # Ability clauses for Pokémon `card_effects.json` does not cover yet.
 ABILITY_CLAUSES: dict[int, tuple[dict, ...]] = {
     112: ({"kind": "move_damage", "amount": 30, "condition": "dark_energy_attached",
-           "zone": "own_any", "dest": "opp_any", "allowance": "body"},),
+           "condition_energy_type": 7, "zone": "own_any", "dest": "opp_any", "allowance": "body"},),
     666: ({"kind": "setup_active", "trigger": "setup"},),
 }
 
@@ -102,9 +102,9 @@ def _clause_src(clause: dict, needed: set) -> str:
     for key, value in clause.items():
         if key == "kind":
             continue
-        if key == "energy_type":
+        if key.endswith("energy_type"):
             needed.add(ENERGY_NAME[int(value)])
-            parts.append(f"energy_type={ENERGY_NAME[int(value)]}")
+            parts.append(f"{key}={ENERGY_NAME[int(value)]}")
         else:
             parts.append(f"{key}={value!r}")
     return f"Clause({', '.join(parts)})"
