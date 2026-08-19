@@ -11,7 +11,7 @@ from time import perf_counter
 
 from common import telemetry
 from common.api import ActionIdentity, PlanRequest, RootDecision
-from common.attack_locks import fold_attack_locks
+from common.cards.functions.attack_lock import fold_attack_locks
 from common.budget_prototype import DecisionClock
 from common.cards import CardFunctions
 from common.card_worth import role_value

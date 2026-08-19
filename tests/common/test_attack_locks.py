@@ -1,11 +1,11 @@
-"""A self-locking attack is board state the observation does not carry (see common.attack_locks)."""
+"""A self-locking attack is board state the observation does not carry (see common.cards.functions.attack_lock)."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from common.attack_locks import LOCK_TURN_STRIDE, fold_attack_locks, locked_attack_ids
+from common.cards.functions.attack_lock import LOCK_TURN_STRIDE, fold_attack_locks, locked_attack_ids
 
 
 MEGA_BRAVE, AURA_JAB = 983, 982

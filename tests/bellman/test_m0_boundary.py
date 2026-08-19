@@ -10,9 +10,13 @@ from common import (
 
 REPO = Path(__file__).resolve().parents[2]
 PACKAGE = REPO / "src" / "common"
+#: Paths under `src/common/`. The per-card-function mechanics moved to `cards/functions/`; they
+#: stay in this guard because the boundary is about what the core may depend on, not where it sits.
 MODULES = (
-    "__init__.py", "algebra.py", "api.py", "commutativity.py", "damage.py", "damage_context.py", "draws.py",
-    "effects.py", "engine.py", "fetch.py", "information.py", "demand.py", "options.py", "planner.py",
+    "__init__.py", "algebra.py", "api.py", "commutativity.py", "cards/functions/damage.py",
+    "cards/functions/damage_context.py", "cards/functions/draw.py", "cards/functions/energy.py",
+    "cards/functions/attack_lock.py", "cards/functions/fetch.py",
+    "effects.py", "engine.py", "information.py", "demand.py", "options.py", "planner.py",
     "potential.py", "refresh.py", "solver.py", "state.py", "value.py",
 )
 

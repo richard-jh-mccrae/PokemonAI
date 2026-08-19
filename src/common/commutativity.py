@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .fetch import REACH, fetch_target_matches
+from .cards.functions.fetch import REACH, fetch_target_matches
 from common.strategy.context import _ACTIVE, _BENCH
 
 
