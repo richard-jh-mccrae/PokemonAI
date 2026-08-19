@@ -473,7 +473,7 @@ class CgpyTransitionProvider:
             observation["known_top"] = state.obs["known_top"]
         # Same carry-forward as the native adapter: a self-lock spent inside the search is only
         # visible in this step's log, and the parent's locks must survive it.
-        carry_attack_locks(state.obs, observation, stats=self.stats)
+        carry_attack_locks(state.obs, observation)
         recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
         if recycled:
             observation["bellmanRecycledCardIds"] = recycled

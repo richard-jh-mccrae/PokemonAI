@@ -55,15 +55,10 @@ def test_bench_reach_trap_stays_pinned_until_the_damage_rewire():
         assert bench_reach(attack_index()[attack_id]) == 0
 
 
-def test_attack_lock_trap_stays_pinned_until_the_rewire():
-    """The lock fold asks its stats provider, which reads legacy flags — fed store records it
-    silently folds NOTHING. Pinned so the wiring pass must flip this to a real lock."""
+def test_the_attack_lock_fold_reads_the_store_records():
+    """The trap this pinned is FLIPPED: the fold now resolves attack ids through the store's
+    `attack_index()` and reads the printed `same_attack_lock` clause off the Attack record."""
     assert attack_index()[983].clause("same_attack_lock") is not None     # Mega Brave
 
-    class StoreBackedStats:
-        def attack(self, attack_id):
-            return attack_index().get(int(attack_id))
-
     logs = ({"type": 15, "serial": 7, "attackId": 983},)
-    locks = fold_attack_locks(None, logs, stats=StoreBackedStats(), turn=4)
-    assert locks == {}
+    assert fold_attack_locks(None, logs, turn=4) == {"7": {"983": 6}}

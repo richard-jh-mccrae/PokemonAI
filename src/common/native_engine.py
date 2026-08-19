@@ -318,7 +318,7 @@ class NativeCgTransitionProvider:
         # parent's locks forward and fold this successor's own ATTACK entries onto them. Written
         # only when non-empty: the key participates in the state identity, and an empty map present
         # here would not match the absent key on the live observation the next turn arrives as.
-        carry_attack_locks(parent.obs, observation, stats=self.stats)
+        carry_attack_locks(parent.obs, observation)
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,

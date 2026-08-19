@@ -2,11 +2,12 @@
 
 An attack reading "During your next turn, this Pokémon can't use <attack>" is ENFORCED by the
 engine, which omits it from the menu. The observation carries no marker for it, so `BoardPotential`
-would keep crediting a spent one-shot attack as reachable value and fire it a turn early.
-`AttackStat.nextTurnSameAttackLock` records the printed fact; this module supplies the missing board
-state, from the one signal every transition provider publishes.
+would keep crediting a spent one-shot attack as reachable value and fire it a turn early. The
+Attack record's `same_attack_lock` clause records the printed fact; this module supplies the
+missing board state, from the one signal every transition provider publishes.
 
-Pure: no engine, no provider, no observation mutation. The fold is monotonic, so replaying an
+No engine, no provider, no observation mutation; attack ids resolve through the store's
+`attack_index()` unless a caller injects its own records. The fold is monotonic, so replaying an
 already-folded log delta cannot retract a lock.
 """
 from __future__ import annotations
@@ -21,17 +22,22 @@ LOG_ATTACK = 15
 LOCK_TURN_STRIDE = 2
 
 
-def _self_locking(stats, attack_id: int) -> bool:
-    lookup = getattr(stats, "attack", None) if stats is not None else None
-    attack = lookup(int(attack_id)) if lookup is not None else None
-    return bool(getattr(attack, "nextTurnSameAttackLock", False)
-                or getattr(attack, "nextTurnSelfLock", False))
+def _attack_records(attacks) -> Mapping:
+    if attacks is not None:
+        return attacks
+    from .. import attack_index
+    return attack_index()
 
 
-def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
+def _self_locking(attack) -> bool:
+    return attack is not None and attack.clause("same_attack_lock") is not None
+
+
+def fold_attack_locks(prior: Mapping | None, logs, *, turn: int, attacks=None) -> dict:
     """``{"serial": {"attack_id": locked_turn}}`` after one log delta ending at ``turn``."""
     # Walk back from `turn` over the delta's own TURN_START markers to date each ATTACK. Keys are
     # STRINGS: both providers round-trip this map through JSON, which returns int keys stringified.
+    records = _attack_records(attacks)
     locks = {str(serial): dict(rows) for serial, rows in (prior or {}).items()}
     entries = tuple(logs or ())
     starts = sum(1 for entry in entries if int(entry.get("type", -1)) == LOG_TURN_START)
@@ -44,7 +50,8 @@ def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
         if kind != LOG_ATTACK:
             continue
         serial, attack_id = entry.get("serial"), entry.get("attackId")
-        if serial is None or attack_id is None or not _self_locking(stats, attack_id):
+        if serial is None or attack_id is None \
+                or not _self_locking(records.get(int(attack_id))):
             continue
         rows = locks.setdefault(str(int(serial)), {})
         locked = current + LOCK_TURN_STRIDE
@@ -53,12 +60,12 @@ def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
     return locks
 
 
-def carry_attack_locks(prior_obs, observation, *, stats) -> None:
+def carry_attack_locks(prior_obs, observation, *, attacks=None) -> None:
     """Fold this step's ATTACK rows onto the parent's ledger, in place on ``observation``."""
     # Written only when non-empty: the key is part of state identity, so an empty map present
     # here would not match the absent key on the live observation the next turn arrives as.
     locks = fold_attack_locks(
-        (prior_obs or {}).get("attack_locks"), observation.get("logs"), stats=stats,
+        (prior_obs or {}).get("attack_locks"), observation.get("logs"), attacks=attacks,
         turn=int((observation.get("current") or {}).get("turn", 0)))
     if locks:
         observation["attack_locks"] = locks

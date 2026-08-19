@@ -433,7 +433,7 @@ class BellmanRuntime:
         # Above every early return: a selection answered by the Strategy fallback still has to
         # contribute its ATTACK rows, or the delta carries them away for good.
         self._attack_locks = fold_attack_locks(
-            self._attack_locks, observation.get("logs"), stats=self.stats,
+            self._attack_locks, observation.get("logs"),
             turn=int(current.get("turn", 0)))
         if self._attack_locks:
             observation["attack_locks"] = self._attack_locks
