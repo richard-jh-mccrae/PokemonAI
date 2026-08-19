@@ -1,64 +1,53 @@
-"""The unified Pokémon store stays true to the engine defs, the tag table, and the clause store.
+"""Pokémon records stay true to the engine defs, the tag table, and the clause store.
 
 Card modules are generated data; these guards are what lets a human edit slip be caught, so every
-fact class (printed stats, attacks, tags, Ability clauses, default Roles) is asserted at its source."""
+fact class (printed stats, attacks, tags, Ability clauses, both Role layers) is asserted at its
+source. Coverage of the decklists is `test_card_store.py`'s job, not this file's."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
+from cards_helpers import REPO, engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
 
 from common.cards import CardFunctions, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
-
-REPO = Path(__file__).resolve().parents[2]
-DECKS = ("dragapult_ex", "mega_lucario", "mega_starmie")
-
-
-@pytest.fixture(scope="module")
-def defs():
-    cards = {c["cardId"]: c for c in json.loads(
-        (REPO / "src" / "cgpy" / "defs" / "card_data.json").read_text(encoding="utf-8"))}
-    attacks = {a["attackId"]: a for a in json.loads(
-        (REPO / "src" / "cgpy" / "defs" / "attack_data.json").read_text(encoding="utf-8"))}
-    return cards, attacks
+from common.cards.pokemon_roles import purpose_pokemon_roles, structural_pokemon_roles
 
 
 def _clause_projection(clause: Clause) -> dict:
     return {"kind": clause.kind, **clause.params}
 
 
-def test_store_covers_every_pokemon_in_the_three_decks(defs):
-    cards, _ = defs
-    expected = set()
-    for deck in DECKS:
-        text = (REPO / "src" / "agents" / deck / "deck.csv").read_text(encoding="utf-8")
-        expected.update(i for i in (int(line) for line in text.splitlines() if line.strip())
-                        if cards[i]["cardType"] == 0)
-    assert set(pokemon_card_store()) == expected
+@pytest.fixture(scope="module")
+def stats():
+    """The engine-backed provider the store's derivations mirror; absent on a DLL-less box."""
+    try:
+        from common.scouting.provider import EngineCardStatProvider
+        provider = EngineCardStatProvider()
+        provider.get(66)
+    except Exception:
+        pytest.skip("engine unavailable on this box")
+    return provider
 
 
-def test_card_facts_match_the_engine_defs(defs):
-    cards, attacks = defs
+def test_card_facts_match_the_engine_defs(engine_cards, engine_attacks):
     for card_id, card in pokemon_card_store().items():
-        source = cards[card_id]
-        stage = "stage2" if source["stage2"] else "stage1" if source["stage1"] else "basic"
+        source = engine_cards[card_id]
         assert (card.name, card.hp, card.energy_type, card.stage) == (
-            source["name"], source["hp"], source["energyType"], stage), card_id
+            source["name"], source["hp"], source["energyType"], engine_stage(source)), card_id
         assert (card.evolves_from, card.ex, card.mega_ex, card.tera) == (
             source["evolvesFrom"], source["ex"], source["megaEx"], source["tera"]), card_id
         assert (card.weakness, card.resistance, card.retreat_cost) == (
             source["weakness"], source["resistance"], source["retreatCost"]), card_id
         assert [a.attack_id for a in card.attacks] == source["attacks"], card_id
         for attack in card.attacks:
-            wire = attacks[attack.attack_id]
+            wire = engine_attacks[attack.attack_id]
             assert (attack.name, attack.damage, list(attack.cost), attack.text) == (
                 wire["name"].strip(), wire["damage"], wire["energies"], wire["text"]), card_id
-        assert [a.name for a in card.abilities] == [
-            s["name"].strip() for s in source.get("skills") or []], card_id
-        assert [a.text for a in card.abilities] == [
-            s["text"] for s in source.get("skills") or []], card_id
+        assert [(a.name, a.text) for a in card.abilities] == [
+            (s["name"].strip(), s["text"]) for s in source.get("skills") or []], card_id
 
 
 def test_tags_match_the_shipped_tag_table():
@@ -93,22 +82,32 @@ def test_every_effect_text_carries_a_clause_encoding():
 
 def test_default_roles_pin():
     roles = pokemon_default_roles()
-    assert roles[305] == ("support_pokemon", "retreat_assist", "draw_engine")  # forward Dudunsparce
-    assert roles[119] == ("support_pokemon", "draw_engine")                    # forward Drakloak
-    assert roles[666] == ("accel_source",)                    # accel alone is not support-shaped
-    assert 121 not in roles and 678 not in roles and 1031 not in roles         # plain attackers
+    assert roles[121] == ("primary_attacker",)                       # a 2-prize body
+    assert roles[1030] == ("fragile_preevo",)                        # its line attacks forward
+    assert roles[674] == ("backup_attacker",)                        # attacks, nothing forward
+    assert roles[305] == ("fragile_preevo", "support_pokemon", "retreat_assist", "draw_engine")
+    assert roles[666] == ("backup_attacker", "accel_source")   # accel alone is not support-shaped
 
 
-def test_default_roles_match_the_shipped_derivation():
-    try:
-        from common.scouting.provider import EngineCardStatProvider
-        stats = EngineCardStatProvider()
-        stats.get(66)
-    except Exception:
-        pytest.skip("engine unavailable on this box")
+def test_the_structural_layer_matches_the_shipped_ladder(stats):
+    """Feeding `derive_general_roles` from store records must rule exactly as `CardStat` does."""
+    from common.scouting.matchup_plan import BodyFacts, derive_general_roles
+    functions = CardFunctions.load()
+    expected = derive_general_roles({
+        card_id: BodyFacts(
+            tags=frozenset(functions.tags(card_id)),
+            prize_value=int(stats.get(card_id).prize_value),
+            own_damage=float(getattr(stats.get(card_id), "maxDamage", 0) or 0),
+            forward_damage=float(stats.forward_max_damage(card_id) or 0))
+        for card_id in pokemon_card_store()})
+    assert structural_pokemon_roles(pokemon_card_store()) == expected
+
+
+def test_the_purpose_layer_matches_the_shipped_derivation(stats):
     from common.pokemon_roles import general_pokemon_roles
     expected = general_pokemon_roles(pokemon_card_store().keys(), stats, CardFunctions.load())
-    assert {k: tuple(v) for k, v in expected.items()} == dict(pokemon_default_roles())
+    assert {k: tuple(v) for k, v in expected.items()} == purpose_pokemon_roles(
+        pokemon_card_store())
 
 
 def test_the_store_is_read_only():
