@@ -217,8 +217,7 @@ def test_attack_demands_name_the_recipient_attack_typed_slot_and_matching_energy
 
 
 def test_multi_unit_energy_covers_multiple_slots_for_only_its_chosen_recipient():
-    registry = ValueRegistry(
-        functions={ENERGY: ("provides:3",)}, facts={ENERGY: CardFacts()})
+    registry = ValueRegistry(facts={ENERGY: CardFacts()})
     stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
     model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
     demands = tuple(
@@ -241,9 +240,7 @@ def test_multi_unit_energy_covers_multiple_slots_for_only_its_chosen_recipient()
 
 def test_multi_unit_energy_distributes_one_operation_gain_across_covered_slots():
     registry = ValueRegistry(
-        functions={ENERGY: ("provides:3",)},
-        facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()},
-    )
+        facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()})
     stats = DictCardStatProvider({
         LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
         ENERGY: CardStat(ENERGY, cardType=6, energyType=0),
@@ -275,8 +272,7 @@ def test_multi_unit_energy_distributes_one_operation_gain_across_covered_slots()
 
 
 def test_multi_unit_energy_never_combines_alternative_attacks_on_one_recipient():
-    registry = ValueRegistry(
-        functions={ENERGY: ("provides:3",)}, facts={ENERGY: CardFacts()})
+    registry = ValueRegistry(facts={ENERGY: CardFacts()})
     stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
     model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
     demands = (
@@ -298,8 +294,7 @@ def test_multi_unit_energy_never_combines_alternative_attacks_on_one_recipient()
 
 
 def test_one_multi_unit_energy_cannot_split_its_units_across_recipients():
-    registry = ValueRegistry(
-        functions={ENERGY: ("provides_evo:3",)}, facts={ENERGY: CardFacts()})
+    registry = ValueRegistry(facts={ENERGY: CardFacts()})
     stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
     model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
     demands = tuple(

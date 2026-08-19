@@ -144,12 +144,12 @@ def test_the_reload_waits_for_the_heal_that_creates_its_opening():
 
 
 def test_the_reload_names_the_energy_that_repays_a_full_bounce_in_one_attach():
+    from common.cards import energy_card_store
     from common.cards.functions.energy import provision_units
 
-    tags = {IGNITION_ENERGY: tuple(FUNCTIONS.tags(IGNITION_ENERGY))}
     reload_hint = next(hint for hint in STRATEGY.strategies
                        if hint.identifier == "mega_starmie.reload_the_healed_mega_with_ignition")
 
     assert reload_hint.desired_facts[0].target_card_ids == (IGNITION_ENERGY,)
-    assert provision_units(tags, IGNITION_ENERGY, evolved=True) == len(
+    assert provision_units(energy_card_store()[IGNITION_ENERGY], evolved=True) == len(
         STATS.attack(NEBULA_BEAM).energyTypes)

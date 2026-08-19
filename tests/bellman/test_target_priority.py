@@ -72,16 +72,14 @@ def test_full_health_active_is_funded_before_backup_energy_is_valued():
 
 
 def test_multi_unit_energy_saturates_attack_without_valuing_a_fourth_unit():
-    registry = ValueRegistry(
-        facts={3: CardFacts(), 13: CardFacts()},
-        functions={13: ("provides_evo:3",)},
-    )
+    # 17 = Ignition Energy, the real provides_evo:3 record; provision now reads the card store.
+    registry = ValueRegistry(facts={3: CardFacts(), 17: CardFacts()})
     potential = BoardPotential(_Stats(), registry=registry, root_seat=0)
     before = _observation(_body(9), _body(2))
     active = before["current"]["players"][0]["active"][0]
     active.update({
         "preEvolution": [{"id": 8}], "energies": [3, 3, 3],
-        "energyCards": [{"id": 13}],
+        "energyCards": [{"id": 17}],
     })
     after = deepcopy(before)
     after_active = after["current"]["players"][0]["active"][0]

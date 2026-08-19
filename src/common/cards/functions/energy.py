@@ -17,23 +17,13 @@ ENERGY_WILDCARD = 10
 MINIMUM_ENERGY_UNITS = 1
 
 
-def _tag_amount(tags, prefix: str) -> int:
-    amounts = []
-    for tag in tags:
-        if not str(tag).startswith(prefix):
-            continue
-        try:
-            amounts.append(max(0, int(str(tag).split(":", 1)[1])))
-        except ValueError:
-            continue
-    return max(amounts, default=0)
-
-
-def provision_units(functions, card_id: int, *, evolved: bool = False) -> int:
-    tags = functions.get(int(card_id), ()) if hasattr(functions, "get") else ()
-    base = _tag_amount(tags, "provides:")
-    evolution = _tag_amount(tags, "provides_evo:") if evolved else 0
-    return max(MINIMUM_ENERGY_UNITS, base, evolution)
+def provision_units(card, *, evolved: bool = False) -> int:
+    """Units one attached Energy card supplies: its record's `energy_provide` clause, else one."""
+    clause = card.clause("energy_provide") if card is not None else None
+    if clause is None:
+        return MINIMUM_ENERGY_UNITS
+    evolution = int(clause.amount_on_evolution or 0) if evolved else 0
+    return max(MINIMUM_ENERGY_UNITS, int(clause.amount or 0), evolution)
 
 
 def pays_energy_type(provision: int, required: int) -> bool:

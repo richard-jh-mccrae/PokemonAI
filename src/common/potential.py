@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from .cards import energy_card_store
 from .cards.functions.attack_lock import locked_attack_ids
 from .card_worth import KNOWN_CARD_FLOOR, function_role
 from .cards.functions.energy import ENERGY_COLORLESS, payment_fraction, provision_units
@@ -503,15 +504,11 @@ class BoardPotential:
             return 0.0
         energy_provisions = []
         for card in me.get("hand") or ():
-            stat = self._stat(card.get("id")) if card else None
-            if stat is None or not getattr(stat, "is_energy", False):
+            record = energy_card_store().get(int(card.get("id", 0))) if card else None
+            if record is None:
                 continue
-            energy_type = getattr(stat, "energyType", None)
-            if energy_type is not None:
-                units = provision_units(
-                    self.registry.functions, int(card.get("id", 0)),
-                    evolved=bool(active.get("preEvolution")))
-                energy_provisions.append((int(energy_type), max(1, units)))
+            units = provision_units(record, evolved=bool(active.get("preEvolution")))
+            energy_provisions.append((int(record.provides), max(1, units)))
         codes = self._codes(active)
         return max((self._attack_ko_coverage(
             active, [*codes, *([energy_type] * units)], me, opponent)
@@ -773,7 +770,7 @@ class BoardPotential:
             overcap = 0.0
             for card in cards:
                 supplied = provision_units(
-                    self.registry.functions, int(card.get("id", 0)),
+                    energy_card_store().get(int(card.get("id", 0))),
                     evolved=bool(body.get("preEvolution")))
                 units = min(remaining, supplied)
                 unit_value = worth_to_prizes(

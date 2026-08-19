@@ -12,6 +12,7 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
+from .cards import energy_card_store
 from .cards.functions.damage import bench_reach, compute_active_damage
 from .cards.functions.fetch import REACH, WINDOW, fetch_target_matches
 from .cards.functions.energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
@@ -1324,19 +1325,7 @@ class DemandModel:
 
     def _energy_units(self, card_id: int, body) -> int:
         return provision_units(
-            self.registry.functions, card_id, evolved=bool(body.get("preEvolution")))
-
-    @staticmethod
-    def _tag_amount(tags, prefix: str) -> int:
-        amounts = []
-        for tag in tags:
-            if not str(tag).startswith(prefix):
-                continue
-            try:
-                amounts.append(max(0, int(str(tag).split(":", 1)[1])))
-            except ValueError:
-                continue
-        return max(amounts, default=0)
+            energy_card_store().get(int(card_id)), evolved=bool(body.get("preEvolution")))
 
     @staticmethod
     def _remove_hand_positions(observation, seat: int, positions) -> None:
