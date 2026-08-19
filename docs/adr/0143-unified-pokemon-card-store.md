@@ -30,7 +30,7 @@ with the same semantics as `general_pokemon_roles`.
 
 `tools/build_pokemon_cards.py` generates every card module from the engine-twin defs plus the
 shipped tag/clause stores and refuses to emit any effect it has no encoding for. The former
-`common/cards.py` module folded into the package as `common/cards/functions.py`; the public
+The former `common/cards.py` module folded into the package as `common/cards/tags.py`; the public
 import `from common.cards import CardFunctions` is unchanged.
 
 ## Where a card function's logic lives
