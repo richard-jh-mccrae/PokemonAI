@@ -144,8 +144,10 @@ The flattened Bellman core owns the decision model:
   zones use low-discrepancy identity spacing so the deployment world cannot inherit numeric-id
   ordering as fake draw knowledge;
 - `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
-- `effects.py`: the effect-clause table; the per-function mechanics it feeds live one module each
-  under `cards/functions/` (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
+- `effects.py`: the legacy effect-clause table, still feeding the scouting/authoring layers and the
+  Lethal Solver's coverage gate; the per-function mechanics live one module each under
+  `cards/functions/` (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`) and read
+  the unified card records (ADR-0143), resolved once at each consumer's `cards` mapping;
 - `solver.py`: reference recursion plus production successive-halving search. Every legal root gets
   focused Strategy paths first, retains executable safety paths, then widens across unresolved legal
   roots until proof or timeout. Strategy changes order only; Bellman value selects the action;
