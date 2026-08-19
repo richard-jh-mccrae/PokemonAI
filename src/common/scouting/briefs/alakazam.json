@@ -11,7 +11,8 @@
     {"card": "Frillish", "roles": ["backup_attacker"]},
     {"card": "Team Rocket's Articuno", "roles": ["support_pokemon"]}
   ],
-  "key_cards": [{"card": "Boss's Orders", "role": "gust"}, {"card": "Enhanced Hammer", "role": "special_energy_denial"}],
+  "key_cards": [{"card": "Boss's Orders", "role": "gust"},
+    {"card": "Enhanced Hammer", "role": "special_energy_denial"}],
   "strategies": [
     {
       "identifier": "opponent.alakazam.disrupt_the_swelling_hand",
