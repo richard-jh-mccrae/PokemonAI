@@ -187,12 +187,12 @@ def test_refresh_charges_a_dead_fetch_only_as_known_discard_fodder():
         value = 0.2 * len(hand)
         return Potential(value, (("hand", value),))
 
+    from common.cards.card_facts import Clause, ITEM, TrainerCard
     evaluator = RefreshEvaluator(
         registry, hand_potential,
-        effects=CardEffects({POKEMON_TUTOR: [{
-            "kind": "fetch", "target": "pokemon", "zone": "deck",
-        }]}),
-        stats=_stats(),
+        cards={POKEMON_TUTOR: TrainerCard(
+            POKEMON_TUTOR, "Test Tutor", ITEM,
+            clauses=(Clause("fetch", target="pokemon", zone="deck"),))},
     )
 
     ledger, _branches = evaluator.evaluate(

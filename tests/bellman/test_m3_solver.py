@@ -12,6 +12,9 @@ from common import (
     Refresh, RootDecision, SearchLimits, Terminal,
 )
 from common.algebra import Edge, WeightedEdge
+from common.cards.card_facts import (
+    Clause, ITEM, PokemonCard, STAGE1, SUPPORTER as SUPPORTER_KIND, TrainerCard,
+)
 from common.commutativity import ActionFootprint, action_footprint, independent
 from common.demand import ActionFocus, StrategyBeam, semantic_action_key
 from common.options import LegalAction, enumerate_legal_actions
@@ -958,10 +961,10 @@ def test_same_body_attach_and_evolve_require_exact_diamond_proof():
     state = SimpleNamespace(obs=observation)
     attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
     evolve = LegalAction(ActionIdentity("evolve"), (1,), ((1,),), ())
-    stats = SimpleNamespace(get=lambda _card_id: SimpleNamespace(hasAbility=False))
+    cards = {1031: PokemonCard(1031, "Test Evolution", 100, 0, STAGE1)}
     assert not independent(
-        action_footprint(state, attach, stats=stats),
-        action_footprint(state, evolve, stats=stats),
+        action_footprint(state, attach, cards=cards),
+        action_footprint(state, evolve, cards=cards),
     )
 
 
@@ -1006,18 +1009,10 @@ def test_declared_deterministic_play_commutes_with_independent_attachment():
     attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
     play = LegalAction(ActionIdentity("play"), (1,), ((1,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "gust"},) if card_id == 902 else ()
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_supporter=card_id == 902, is_stadium=False)
-
-    attach_footprint = action_footprint(state, attach, effects=Effects(), stats=Stats())
-    play_footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+    cards = {902: TrainerCard(902, "Test Supporter", SUPPORTER_KIND,
+                              clauses=(Clause("gust"),))}
+    attach_footprint = action_footprint(state, attach, cards=cards)
+    play_footprint = action_footprint(state, play, cards=cards)
     assert independent(attach_footprint, play_footprint)
 
 
@@ -1032,12 +1027,9 @@ def test_information_effect_is_a_partial_order_barrier():
     state = SimpleNamespace(obs=observation)
     play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "draw", "amount": 2},)
-
-    footprint = action_footprint(state, play, effects=Effects())
+    cards = {905: TrainerCard(905, "Test Item", ITEM,
+                              clauses=(Clause("draw", amount=2),))}
+    footprint = action_footprint(state, play, cards=cards)
     assert footprint.barrier
 
 
@@ -1057,14 +1049,10 @@ def test_fetch_into_hand_is_an_information_barrier():
     attach = LegalAction(ActionIdentity("attach"), (0,), ((0,),), ())
     fetch = LegalAction(ActionIdentity("play"), (1,), ((1,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "fetch", "target": "supporter", "zone": "deck"},) \
-                if card_id == 905 else ()
-
-    attach_footprint = action_footprint(state, attach, effects=Effects())
-    fetch_footprint = action_footprint(state, fetch, effects=Effects())
+    cards = {905: TrainerCard(905, "Test Item", ITEM,
+                              clauses=(Clause("fetch", target="supporter", zone="deck"),))}
+    attach_footprint = action_footprint(state, attach, cards=cards)
+    fetch_footprint = action_footprint(state, fetch, cards=cards)
 
     assert fetch_footprint.barrier
     assert fetch_footprint.information_first
@@ -1082,18 +1070,10 @@ def test_supporter_fetch_is_a_commitment_not_free_information():
     state = SimpleNamespace(obs=observation)
     play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "evolution", "zone": "deck",
-                     "dest": "in_play"},)
-
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_supporter=True, is_stadium=False)
-
-    footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+    cards = {905: TrainerCard(
+        905, "Test Supporter", SUPPORTER_KIND,
+        clauses=(Clause("fetch", target="evolution", zone="deck", dest="in_play"),))}
+    footprint = action_footprint(state, play, cards=cards)
 
     assert footprint.barrier
     assert footprint.commitment
@@ -1111,18 +1091,10 @@ def test_bench_fetch_without_a_remaining_target_is_a_commitment():
     state = SimpleNamespace(obs=observation, deck_counts=((906, 2),))
     play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "basic_pokemon", "zone": "deck",
-                     "dest": "bench"},)
-
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_pokemon=False, is_supporter=False, is_stadium=False)
-
-    footprint = action_footprint(state, play, effects=Effects(), stats=Stats())
+    cards = {905: TrainerCard(
+        905, "Test Item", ITEM,
+        clauses=(Clause("fetch", target="basic_pokemon", zone="deck", dest="bench"),))}
+    footprint = action_footprint(state, play, cards=cards)
 
     assert footprint.barrier
     assert footprint.commitment
@@ -1140,12 +1112,10 @@ def test_shuffle_refresh_is_not_safe_information_first():
     state = SimpleNamespace(obs=observation)
     play = LegalAction(ActionIdentity("play"), (0,), ((0,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "draw", "amount": 4, "rider": "shuffle_both_hands"},)
-
-    footprint = action_footprint(state, play, effects=Effects())
+    cards = {1213: TrainerCard(
+        1213, "Test Supporter", SUPPORTER_KIND,
+        clauses=(Clause("draw", amount=4, rider="shuffle_both_hands"),))}
+    footprint = action_footprint(state, play, cards=cards)
     assert footprint.barrier
     assert not footprint.information_first
 
@@ -1419,15 +1389,12 @@ def test_retreat_depends_on_active_identity_that_can_change_its_cost():
     evolve = LegalAction(ActionIdentity("evolve"), (1,), ((1,),), ())
     retreat = LegalAction(ActionIdentity("retreat"), (2,), ((2,),), ())
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "fetch", "target": "basic_pokemon", "zone": "deck",
-                     "dest": "bench"},) if card_id == 905 else ()
-
-    fetch_footprint = action_footprint(state, fetch, effects=Effects())
-    evolve_footprint = action_footprint(state, evolve, effects=Effects())
-    retreat_footprint = action_footprint(state, retreat, effects=Effects())
+    cards = {905: TrainerCard(
+        905, "Test Item", ITEM,
+        clauses=(Clause("fetch", target="basic_pokemon", zone="deck", dest="bench"),))}
+    fetch_footprint = action_footprint(state, fetch, cards=cards)
+    evolve_footprint = action_footprint(state, evolve, cards=cards)
+    retreat_footprint = action_footprint(state, retreat, cards=cards)
 
     assert fetch_footprint.barrier
     assert not retreat_footprint.barrier
@@ -1450,14 +1417,10 @@ def test_same_body_attachment_and_evolution_require_exact_proof():
     state = SimpleNamespace(obs=observation)
     attach, evolve = enumerate_legal_actions(observation)
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(hasAbility=False)
-
+    cards = {1031: PokemonCard(1031, "Test Evolution", 100, 0, STAGE1)}
     assert not independent(
-        action_footprint(state, attach, stats=Stats()),
-        action_footprint(state, evolve, stats=Stats()),
+        action_footprint(state, attach, cards=cards),
+        action_footprint(state, evolve, cards=cards),
     )
 
 

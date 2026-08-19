@@ -6,6 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
+from .cards import card_store
 from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
@@ -158,11 +159,13 @@ class NativeCgTransitionProvider:
     backend = "native-cg-bellman"
 
     def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None,
-                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT):
+                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT, cards=None):
         self.root = root
         self.registry = registry
         self.effects = effects
         self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         self.world_count = max(1, int(world_count))
         self._worlds: dict[str, tuple[_NativeWorld, ...]] = {}
         self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
@@ -196,7 +199,7 @@ class NativeCgTransitionProvider:
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
     def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, effects=self.effects, stats=self.stats)
+        return action_footprint(state, action, cards=self.cards)
 
     def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
         kind = action.identity.kind

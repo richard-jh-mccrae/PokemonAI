@@ -322,7 +322,7 @@ def _funding_energy(card_id, attached=()):
     ]}, "select": {"context": 0, "option": []}}
     snapshot = activate_strategies(
         observation, resolved, roles=roles, stats=stats, effects=effects)
-    builder = StrategyBeamBuilder(snapshot, effects=effects, stats=stats)
+    builder = StrategyBeamBuilder(snapshot, stats=stats)
     state = SimpleNamespace(
         obs=observation, root_seat=0,
         deck_counts=tuple({row: deck.count(row) for row in set(deck)}.items()))

@@ -8,6 +8,7 @@ from .algebra import (
     Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
+from .cards import card_store, play_clauses
 from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
@@ -56,11 +57,14 @@ class CgpyTransitionProvider:
 
     backend = "cgpy-bellman"
 
-    def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None, engine=None):
+    def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None, engine=None,
+                 cards=None):
         self.root = root
         self.registry = registry
         self.effects = effects
         self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
         self._local_nested = False
@@ -117,7 +121,7 @@ class CgpyTransitionProvider:
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
     def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, effects=self.effects, stats=self.stats)
+        return action_footprint(state, action, cards=self.cards)
 
     def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
         kind = action.identity.kind
@@ -226,15 +230,15 @@ class CgpyTransitionProvider:
         here: the authoritative engine poses that choice and the solver values each continuation.
         """
         card_id = self._played_card_id(engine, action)
-        clauses = self.effects.clauses(card_id) if self.effects is not None and card_id else ()
+        clauses = play_clauses(self.cards.get(int(card_id))) if card_id else ()
         dig_clauses = tuple(clause for clause in clauses
-                            if clause.get("kind") == "fetch" and clause.get("dig"))
+                            if clause.kind == "fetch" and clause.dig)
         if not dig_clauses:
             return None
-        depths = {int(clause["dig"]) for clause in dig_clauses}
+        depths = {int(clause.dig) for clause in dig_clauses}
         if len(depths) != 1:
             return Unknown("reveal effect has inconsistent depths", repr(sorted(depths)))
-        amounts = {int(clause.get("amount", DEFAULT_REVEAL_AMOUNT)) for clause in dig_clauses}
+        amounts = {int(clause.amount or DEFAULT_REVEAL_AMOUNT) for clause in dig_clauses}
         if len(amounts) != 1:
             return Unknown("reveal effect has inconsistent amounts", repr(sorted(amounts)))
         pool = [engine.gs.card_id(serial) for serial in engine.gs.players[state.root_seat].deck]
@@ -247,8 +251,7 @@ class CgpyTransitionProvider:
             child.step(list(action.selection))
             return self._register_successor(state, child, action)
         matching = sorted({candidate for candidate in pool if any(
-            fetch_target_matches(clause, self.stats.get(candidate) if self.stats else None,
-                                 reading=WINDOW)
+            fetch_target_matches(clause, self.cards.get(int(candidate)), reading=WINDOW)
             for clause in dig_clauses)})
         distributions = reveal_sets(pool, draw_count, matching)
         matching_set = set(matching)

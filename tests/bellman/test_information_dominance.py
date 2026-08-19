@@ -139,23 +139,17 @@ from types import SimpleNamespace  # noqa: E402
 PEEK_CARD, PAYMENT_CARD, SUPPORTER_CARD = 901, 902, 903
 
 
-class _Effects:
-    CLAUSES = {
-        PEEK_CARD: ({"kind": "fetch", "target": "supporter", "dig": 7},),
-        PAYMENT_CARD: ({"kind": "fetch", "target": "pokemon", "cost": {"discard": 2}},),
-    }
+from common.cards.card_facts import (  # noqa: E402
+    Clause, ITEM, SUPPORTER as SUPPORTER_KIND, TrainerCard)
 
-    def clauses(self, card_id):
-        return self.CLAUSES.get(int(card_id), ())
-
-
-class _Stats:
-    def get(self, card_id):
-        if int(card_id) == SUPPORTER_CARD:
-            return SimpleNamespace(is_supporter=True, is_pokemon=False, is_energy=False,
-                                   is_basic_energy=False)
-        return SimpleNamespace(is_supporter=False, is_pokemon=False, is_energy=False,
-                               is_basic_energy=False)
+_CARDS = {
+    PEEK_CARD: TrainerCard(PEEK_CARD, "Test Peek", ITEM,
+                           clauses=(Clause("fetch", target="supporter", dig=7),)),
+    PAYMENT_CARD: TrainerCard(PAYMENT_CARD, "Test Payment", ITEM,
+                              clauses=(Clause("fetch", target="pokemon",
+                                              cost={"discard": 2}),)),
+    SUPPORTER_CARD: TrainerCard(SUPPORTER_CARD, "Test Supporter", SUPPORTER_KIND),
+}
 
 
 def _hand_obs(node, hand_ids, option_count, *, board=0.0):
@@ -180,7 +174,7 @@ def _rich_oracle():
     return ValueOracle(REGISTRY, lambda obs: Potential(
         float(obs["current"].get("board", 0.0)),
         (("board", float(obs["current"].get("board", 0.0))),)),
-        effects=_Effects(), stats=_Stats())
+        cards=_CARDS)
 
 
 PEEK_PLAY = LegalAction(ActionIdentity("play", ("peek",)), (0,), ((0,),), ())

@@ -5,8 +5,9 @@ from copy import deepcopy
 import pytest
 
 from common import ActionIdentity, DecisionState
-from common.effects import CardEffects
-from common.scouting.provider import CardStat, DictCardStatProvider
+from common.cards.card_facts import (
+    Ability, BASIC, Clause, ITEM, PokemonCard, STAGE1, TrainerCard,
+)
 from common.value import (
     KNOWN_CARD_FLOOR, CardFacts, FAMILY_OWNERS, Potential, ValueOracle, ValueRegistry,
     worth_to_prizes,
@@ -184,21 +185,19 @@ def test_fetching_an_evolution_without_a_recipient_charges_the_stranded_line():
                LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
                RUSH_EVOLUTION: CardFacts()},
         line_pairs=((LINE_BASE, LINE_TOP),), lines=((LINE_BASE, LINE_TOP),))
-    stats = DictCardStatProvider({
-        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
-        LINE_TOP: CardStat(LINE_TOP, name="Top", hp=330, stage="stage1",
-                           evolvesFrom="Base", megaEx=True),
-        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, cardType=1),
-    })
+    cards = {
+        LINE_BASE: PokemonCard(LINE_BASE, "Base", 60, 0, BASIC),
+        LINE_TOP: PokemonCard(LINE_TOP, "Top", 330, 0, STAGE1,
+                              evolves_from="Base", mega_ex=True),
+        RUSH_EVOLUTION: TrainerCard(
+            RUSH_EVOLUTION, "Rush Item", ITEM,
+            clauses=(Clause("fetch", target="mega", zone="deck"),)),
+    }
     before = DecisionState.from_observation(
         _obs([RUSH_EVOLUTION]), deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION),
         deck_name="test", value_registry_identity=registry.identity)
     after = before.with_observation(_obs([]))
-    oracle = ValueOracle(
-        registry, _families,
-        effects=CardEffects({RUSH_EVOLUTION: [{
-            "kind": "fetch", "target": "mega", "zone": "deck",
-        }]}), stats=stats)
+    oracle = ValueOracle(registry, _families, cards=cards)
     action = ActionIdentity(
         "play", ('[0,{"type":7},[[2,{"id":22,"playerIndex":0}]]]',))
 
@@ -223,12 +222,15 @@ def test_an_ability_fetch_charges_stranded_line_through_the_engine_shaped_option
                LINE_TOP: CardFacts(pokemon=True, stage="stage1"),
                RUSH_EVOLUTION: CardFacts(pokemon=True)},
         line_pairs=((LINE_BASE, LINE_TOP),), lines=((LINE_BASE, LINE_TOP),))
-    stats = DictCardStatProvider({
-        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
-        LINE_TOP: CardStat(LINE_TOP, name="Top", hp=330, stage="stage1",
-                           evolvesFrom="Base", megaEx=True),
-        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, name="Fetcher", hp=70, stage="basic"),
-    })
+    cards = {
+        LINE_BASE: PokemonCard(LINE_BASE, "Base", 60, 0, BASIC),
+        LINE_TOP: PokemonCard(LINE_TOP, "Top", 330, 0, STAGE1,
+                              evolves_from="Base", mega_ex=True),
+        RUSH_EVOLUTION: PokemonCard(
+            RUSH_EVOLUTION, "Fetcher", 70, 0, BASIC,
+            abilities=(Ability("Test Fetch",
+                               clauses=(Clause("fetch", target="mega", zone="deck"),)),)),
+    }
     before_obs = _obs([])
     before_obs["current"]["players"][0]["active"] = [{"id": RUSH_EVOLUTION, "serial": 30}]
     before_obs["select"] = {"context": 0, "minCount": 1, "maxCount": 1,
@@ -239,11 +241,7 @@ def test_an_ability_fetch_charges_stranded_line_through_the_engine_shaped_option
         before_obs, deck=(LINE_BASE, LINE_TOP, RUSH_EVOLUTION), deck_name="test",
         value_registry_identity=registry.identity)
     after = before.with_observation(after_obs)
-    oracle = ValueOracle(
-        registry, _families,
-        effects=CardEffects({RUSH_EVOLUTION: [{
-            "kind": "fetch", "target": "mega", "zone": "deck",
-        }]}), stats=stats)
+    oracle = ValueOracle(registry, _families, cards=cards)
     action = enumerate_legal_actions(before_obs)[0].identity
     assert action.kind == "ability"
 
@@ -259,19 +257,17 @@ def test_playing_a_fetch_that_acquires_nothing_loses_future_discard_fodder():
         facts={LINE_BASE: CardFacts(pokemon=True, stage="basic"),
                RUSH_EVOLUTION: CardFacts()},
     )
-    stats = DictCardStatProvider({
-        LINE_BASE: CardStat(LINE_BASE, name="Base", hp=60, stage="basic"),
-        RUSH_EVOLUTION: CardStat(RUSH_EVOLUTION, cardType=1),
-    })
+    cards = {
+        LINE_BASE: PokemonCard(LINE_BASE, "Base", 60, 0, BASIC),
+        RUSH_EVOLUTION: TrainerCard(
+            RUSH_EVOLUTION, "Rush Item", ITEM,
+            clauses=(Clause("fetch", target="pokemon", zone="deck"),)),
+    }
     before = DecisionState.from_observation(
         _obs([RUSH_EVOLUTION]), deck=(LINE_BASE, RUSH_EVOLUTION),
         deck_name="test", value_registry_identity=registry.identity)
     after = before.with_observation(_obs([]))
-    oracle = ValueOracle(
-        registry, _families,
-        effects=CardEffects({RUSH_EVOLUTION: [{
-            "kind": "fetch", "target": "pokemon", "zone": "deck",
-        }]}), stats=stats)
+    oracle = ValueOracle(registry, _families, cards=cards)
 
     costs = dict(oracle.transition_ledger(
         before, after, ActionIdentity("play", (RUSH_EVOLUTION,))).costs)

@@ -12,7 +12,9 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
-from .cards import energy_card_store
+from .cards import card_store, play_clauses
+from .cards.card_facts import (
+    BASIC, BASIC_ENERGY, SUPPORTER, Clause, EnergyCard, PokemonCard, TrainerCard)
 from .cards.functions.damage import bench_reach, compute_active_damage
 from .cards.functions.fetch import REACH, WINDOW, fetch_target_matches
 from .cards.functions.energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
@@ -116,10 +118,11 @@ class StrategyBeamBuilder:
     _URGENCY = {"high": 3.0, "medium": 2.0, "low": 1.0}
     _CONVICTION = {"high": 3.0, "medium": 2.0, "low": 1.0}
 
-    def __init__(self, snapshot, *, effects=None, stats=None, registry=None, width=8,
+    def __init__(self, snapshot, *, cards=None, stats=None, registry=None, width=8,
                  sequence_coverage=False, information_partition=False):
         self.snapshot = snapshot
-        self.effects = effects
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         self.stats = stats
         self.registry = registry
         self.width = max(1, int(width))
@@ -178,13 +181,13 @@ class StrategyBeamBuilder:
                     and int(body.get("id", -1)) in hint.target_card_ids
                     for body in own_bodies):
                 status = "satisfied"
-            elif hint.kind == "fund_attack" and self.stats is not None:
+            elif hint.kind == "fund_attack":
                 body = next((body for body in own_bodies if body
                              and int(body.get("serial", -1)) == hint.recipient_serial), None)
                 # Needs a body printing at least one readable attack: "no cost we can see" is
                 # not "no cost owed", and calling it satisfied would hold the rest of the
                 # bundle behind funding that was never proven done.
-                printed = getattr(self.stats.get(body.get("id")), "attacks", ()) if body else ()
+                printed = getattr(self._card(body.get("id")), "attacks", ()) if body else ()
                 if body is not None and printed and not self._unmet_energy_types(body):
                     status = "satisfied"
             elif hint.kind == "heal":
@@ -278,14 +281,13 @@ class StrategyBeamBuilder:
         whether a fund_attack outcome is already satisfied. They must not disagree -- a bundle
         holds every later waypoint until the earlier ones satisfy.
         """
-        stat = self.stats.get(body.get("id")) if body and self.stats is not None else None
-        if stat is None:
+        card = self._card(body.get("id")) if body else None
+        if not isinstance(card, PokemonCard):
             return set()
         provisions = tuple(body.get("energies") or ())
         return {energy_type
-                for attack_id in getattr(stat, "attacks", ()) or ()
-                for _slot, energy_type in unmet_cost_slots(
-                    provisions, getattr(self.stats.attack(attack_id), "energyTypes", ()) or ())}
+                for attack in card.attacks
+                for _slot, energy_type in unmet_cost_slots(provisions, attack.cost)}
 
     def _funding_energy_ids(self, state, hint) -> tuple[int, ...]:
         """Deck Energy that advances a printed attack cost the recipient cannot yet pay.
@@ -305,10 +307,9 @@ class StrategyBeamBuilder:
                   if energy_type != ENERGY_COLORLESS} or owed
         return tuple(sorted(
             int(card_id) for card_id, count in state.deck_counts
-            if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
-            and any(pays_energy_type(
-                int(getattr(self.stats.get(card_id), "energyType", DEFAULT_ENERGY_CODE) or 0),
-                energy_type) for energy_type in wanted)))
+            if count > 0 and isinstance(card := self._card(card_id), EnergyCard)
+            and any(pays_energy_type(int(card.provides), energy_type)
+                    for energy_type in wanted)))
 
     def _funds_the_cost(self, state, hint, source_id) -> bool:
         if hint.target_card_ids:
@@ -336,81 +337,82 @@ class StrategyBeamBuilder:
                            for top, parent in self.registry.line_parents.items())
                 )
             return targets
-        if hint.kind == "fund_attack" and self.stats is not None:
+        if hint.kind == "fund_attack":
             return self._funding_energy_ids(state, hint) or tuple(
                 int(card_id) for card_id, count in state.deck_counts
-                if count > 0 and bool(getattr(self.stats.get(card_id), "is_energy", False))
+                if count > 0 and isinstance(self._card(card_id), EnergyCard)
             )
         return self._need_cards(state, hint)
 
+    def _card(self, card_id):
+        return self.cards.get(int(card_id)) if card_id is not None else None
+
     def _need_cards(self, state, hint) -> tuple[int, ...]:
         """Deck cards whose PRINTED effect answers a need that declares no card ids."""
-        if hint.kind != NEED_CLAUSE_KIND or self.effects is None:
+        if hint.kind != NEED_CLAUSE_KIND:
             return ()
         return tuple(
             int(card_id) for card_id, count in state.deck_counts if count > 0
-            and any(clause.get("kind") == NEED_CLAUSE_KIND
-                    for clause in self.effects.clauses(card_id))
+            and any(clause.kind == NEED_CLAUSE_KIND
+                    for clause in play_clauses(self._card(card_id)))
         )
 
     def _chain_reach(self, state, clause, eligible, pool) -> float:
         """One extra hop: this clause fetches a card that ITSELF fetches something eligible."""
         # Meowth ex fetches a Supporter, never the boost card, so it matched nothing directly -
         # yet it fronts a real line. Both accesses multiplied, then discounted below the direct.
-        if self.effects is None or self.stats is None:
-            return 0.0
         supporter_spent = bool((state.obs.get("current") or {}).get("supporterPlayed"))
-        here = int(clause.get("dig", 0) or 0)
+        here = int(clause.dig or 0)
         best = 0.0
         for card_id, count in state.deck_counts:
             card_id = int(card_id)
             if count <= 0 or card_id in eligible:
                 continue
-            link = self.stats.get(card_id)
+            link = self._card(card_id)
             if not _matches_on_play(clause, link):
                 continue
             # The only link is a Supporter and this turn's Supporter is spent: the line is dead
             # until next turn, so it earns nothing now.
-            if supporter_spent and bool(getattr(link, "is_supporter", False)):
+            if supporter_spent and _is_supporter(link):
                 continue
             reach = access_probability(pool, here, (card_id,)) if here else 1.0
-            for onward in self.effects.clauses(card_id):
-                if onward.get("kind") != "fetch" or onward.get("zone") != "deck":
+            for onward in play_clauses(link):
+                if onward.kind != "fetch" or onward.zone != "deck":
                     continue
                 matching = tuple(target for target in eligible
                                  if _demand_fetch_target_matches(
-                                     onward, self.stats.get(target)))
+                                     onward, self._card(target)))
                 if not matching:
                     continue
-                depth = int(onward.get("dig", 0) or 0)
+                depth = int(onward.dig or 0)
                 onward_odds = access_probability(pool, depth, matching) if depth else 1.0
                 best = max(best, reach * onward_odds * CHAIN_STEP_DISCOUNT)
         return best
 
     def _access_odds(self, state, action, hint) -> float:
         source_id = self._source_card_id(state, action)
-        if source_id is None or self.effects is None:
+        if source_id is None:
             return 0.0
-        source_stat = self.stats.get(source_id) if self.stats is not None else None
+        source_card = self._card(source_id)
         if hint.kind == "low_cost_information_access":
-            if bool(getattr(source_stat, "is_supporter", False)) or self.stats is None:
+            if _is_supporter(source_card):
                 return 0.0
             pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
             best = 0.0
-            for clause in self.effects.clauses(source_id):
-                if clause.get("cost_required") or discard_cost(clause):
+            for clause in play_clauses(source_card):
+                if clause.cost_required or discard_cost(clause):
                     continue
-                if clause.get("kind") == "draw":
-                    if clause.get("condition") is not None:
+                if clause.kind == "draw":
+                    if clause.condition is not None:
                         continue
-                    best = max(best, float(int(clause.get("amount", 0) or 0) > 0))
+                    best = max(best, float(int(clause.amount or 0) > 0))
                     continue
-                if clause.get("kind") != "fetch" or clause.get("zone") != "deck":
+                if clause.kind != "fetch" or clause.zone != "deck":
                     continue
-                depth = int(clause.get("dig", 0) or 0)
+                depth = int(clause.dig or 0)
                 matching = tuple(card_id for card_id in pool
                                  if _demand_fetch_target_matches(
-                                     clause, self.stats.get(card_id)))
+                                     clause, self._card(card_id)))
                 best = max(best, access_probability(pool, depth, matching) if depth else
                            float(bool(matching)))
             return best
@@ -419,26 +421,26 @@ class StrategyBeamBuilder:
             return 0.0
         pool = tuple(card_id for card_id, count in state.deck_counts for _ in range(count))
         best = 0.0
-        for clause in self.effects.clauses(source_id):
-            kind = clause.get("kind")
+        for clause in play_clauses(source_card):
+            kind = clause.kind
             if kind == "draw":
                 best = max(best, access_probability(
-                    pool, int(clause.get("amount", 0) or 0), eligible))
-            elif kind == "fetch" and clause.get("zone") == "deck":
+                    pool, int(clause.amount or 0), eligible))
+            elif kind == "fetch" and clause.zone == "deck":
                 matching = tuple(card_id for card_id in eligible
                                  if _demand_fetch_target_matches(
-                                     clause, self.stats.get(card_id)))
-                depth = int(clause.get("dig", 0) or 0)
+                                     clause, self._card(card_id)))
+                depth = int(clause.dig or 0)
                 best = max(best, access_probability(pool, depth, matching) if depth else
                            float(bool(matching)))
                 best = max(best, self._chain_reach(state, clause, eligible, pool))
-            elif kind == "accel" and clause.get("source") == "deck":
+            elif kind == "accel" and clause.source == "deck":
                 # Energy acceleration is a funding OUT: it reaches the same deck Energy a
                 # fetch would, so it earns the same certainty of access.
-                if clause.get("trigger") or clause.get("condition"):
+                if clause.trigger or clause.condition:
                     continue
                 matching = tuple(card_id for card_id in eligible
-                                 if _accel_target_matches(clause, self.stats.get(card_id)))
+                                 if _accel_target_matches(clause, self._card(card_id)))
                 best = max(best, float(bool(matching)))
         return best
 
@@ -458,7 +460,7 @@ class StrategyBeamBuilder:
         priority = 0.0
         recipient = self._recipient_serial(state, action)
         source_id = self._source_card_id(state, action)
-        source_stat = self.stats.get(source_id) if source_id is not None and self.stats else None
+        source_card = self._card(source_id)
         statuses = {row["strategy_id"]: row for row in self.outcome_statuses(state)}
         tiers: list[tuple[float, float, float]] = []
         for hint in self.snapshot.hints:
@@ -469,12 +471,12 @@ class StrategyBeamBuilder:
             if (hint.kind == "fund_attack" and action.identity.kind == "attach"
                     and recipient == hint.recipient_serial
                     and self._funds_the_cost(state, hint, source_id)
-                    and bool(getattr(source_stat, "is_energy", False))):
+                    and isinstance(source_card, EnergyCard)):
                 probability = 1.0
             elif (hint.kind == "fund_ability" and action.identity.kind == "attach"
                   and recipient == hint.recipient_serial
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)
-                  and bool(getattr(source_stat, "is_energy", False))):
+                  and isinstance(source_card, EnergyCard)):
                 probability = 1.0
             elif (hint.kind == "use_ability" and action.identity.kind == "ability"
                   and recipient == hint.recipient_serial):
@@ -490,15 +492,13 @@ class StrategyBeamBuilder:
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)):
                 probability = 1.0
             elif (hint.kind in {"heal", "damage_boost"} and action.identity.kind == "play"
-                  and self.effects is not None
-                  and source_id is not None
-                  and any(clause.get("kind") == hint.kind
-                          for clause in self.effects.clauses(source_id))):
+                  and any(clause.kind == hint.kind
+                          for clause in play_clauses(source_card))):
                 probability = 1.0
             elif (hint.kind == "deploy" and action.identity.kind == "play"
                   and (not hint.target_card_ids or source_id in hint.target_card_ids)
-                  and bool(getattr(source_stat, "is_pokemon", False))
-                  and str(getattr(source_stat, "stage", "")).lower() == "basic"):
+                  and isinstance(source_card, PokemonCard)
+                  and source_card.stage == BASIC):
                 probability = 1.0
             elif (hint.kind == "play_card"
                   and action.identity.kind == "play" and source_id is not None
@@ -559,7 +559,7 @@ class StrategyBeamBuilder:
             # leads those looks, and the double credit reordered adjudicated beams.
             elif (hint.kind != "play_card"
                   and action.identity.kind in {"play", "ability"} and not bool(
-                    getattr(source_stat, "is_supporter", False)
+                    _is_supporter(source_card)
                     and (state.obs.get("current") or {}).get("supporterPlayed"))):
                 probability = self._access_odds(state, action, hint)
                 via_access = True
@@ -603,12 +603,12 @@ class StrategyBeamBuilder:
                 SequenceCoverage(advanced_tier, coverage))
 
     def _look_class_action(self, state, action) -> bool:
-        # An unknown card must not jump the queue: no effects or no source fails OPEN
+        # An unknown card must not jump the queue: no record or no source fails OPEN
         # into the commitment class.
         source_id = self._source_card_id(state, action)
-        if self.effects is None or source_id is None:
+        if source_id is None:
             return False
-        return look_class_clauses(self.effects.clauses(source_id))
+        return look_class_clauses(play_clauses(self._card(source_id)))
 
     def action_priority(self, state, action) -> float:
         return self._priority(state, action)[0]
@@ -686,8 +686,8 @@ class StrategyBeamBuilder:
 
 def look_class_clauses(clauses) -> bool:
     """A look digs a bounded deck slice; a whole-deck tutor (or pure draw) is a commitment."""
-    fetches = tuple(clause for clause in clauses if clause.get("kind") == "fetch")
-    return bool(fetches) and all(clause.get("dig") for clause in fetches)
+    fetches = tuple(clause for clause in clauses if clause.kind == "fetch")
+    return bool(fetches) and all(clause.dig for clause in fetches)
 
 
 def access_probability(pool_ids, draws: int, eligible_ids) -> float:
@@ -699,33 +699,39 @@ def access_probability(pool_ids, draws: int, eligible_ids) -> float:
     return sum(outcome.probability for outcome in classes if outcome.counts[0] > 0)
 
 
-def _accel_target_matches(clause, stat) -> bool:
+def _is_supporter(card) -> bool:
+    return isinstance(card, TrainerCard) and card.kind == SUPPORTER
+
+
+def _without_params(clause, dropped: frozenset) -> Clause:
+    return Clause(clause.kind, **{key: value for key, value in clause.params.items()
+                                  if key not in dropped})
+
+
+def _accel_target_matches(clause, card) -> bool:
     """An accel clause reaches Basic Energy, optionally one printed type."""
-    if not bool(getattr(stat, "is_basic_energy", False)):
+    if not (isinstance(card, EnergyCard) and card.kind == BASIC_ENERGY):
         return False
-    required_type = clause.get("energy_type")
-    return required_type is None or getattr(stat, "energyType", None) == required_type
+    return clause.energy_type is None or card.provides == clause.energy_type
 
 
-def _matches_on_play(clause, stat) -> bool:
+def _matches_on_play(clause, card) -> bool:
     """As ``_demand_fetch_target_matches``, but a bench-play trigger does not disqualify."""
     # That matcher refuses every triggered clause, right for a rider we do not control. Benching
     # Meowth ex IS the scored action, so refusing its fetch hides a line rather than pricing risk.
-    if clause.get("trigger") == PLAY_TRIGGER:
-        clause = {key: value for key, value in clause.items() if key != "trigger"}
-    return _demand_fetch_target_matches(clause, stat)
+    if clause.trigger == PLAY_TRIGGER:
+        clause = _without_params(clause, frozenset({"trigger"}))
+    return _demand_fetch_target_matches(clause, card)
 
 
-def _demand_fetch_target_matches(clause, stat) -> bool:
-    if clause.get("trigger") or clause.get("condition"):
+def _demand_fetch_target_matches(clause, card) -> bool:
+    if clause.trigger or clause.condition:
         return False
-    family = clause.get("name_family")
-    if family and not name_in_family(getattr(stat, "name", None), family):
+    if clause.name_family and not name_in_family(getattr(card, "name", None), clause.name_family):
         return False
-    base = {key: value for key, value in clause.items()
-            if key not in {"dig", "name_family"}}
-    reading = WINDOW if base.get("target") == "supporter" else REACH
-    return fetch_target_matches(base, stat, reading=reading)
+    base = _without_params(clause, frozenset({"dig", "name_family"}))
+    reading = WINDOW if base.target == "supporter" else REACH
+    return fetch_target_matches(base, card, reading=reading)
 
 
 @dataclass(frozen=True)
@@ -789,7 +795,7 @@ def body_rows(player):
 
 
 def discard_cost(clause) -> int:
-    cost = str(clause.get("cost") or "")
+    cost = str(clause.cost or "")
     if not cost.startswith("discard_"):
         return 0
     try:
@@ -887,14 +893,14 @@ def best_retained_assignment(options: tuple[RetainedOption, ...]) -> RetainedAss
 class DemandModel:
     """Derive immediate demands and deterministic next-turn visible-hand options."""
 
-    def __init__(self, registry, family_evaluator, *, effects=None, stats=None):
+    def __init__(self, registry, family_evaluator, *, cards=None):
         self.registry = registry
         self.family_evaluator = family_evaluator
-        self.effects = effects
-        self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
 
-    def stat(self, card_id):
-        return self.stats.get(int(card_id)) if self.stats is not None and card_id is not None else None
+    def _card(self, card_id):
+        return self.cards.get(int(card_id)) if card_id is not None else None
 
     def potential(self, observation):
         return self.family_evaluator(observation)
@@ -925,40 +931,26 @@ class DemandModel:
 
         funding_timing = "next_turn" if current.get("energyAttached") else "immediate"
         candidates = tuple(
-            (int(card_id), self.stat(card_id)) for card_id in self.registry.facts
-            if self.stat(card_id) is not None
-            and getattr(self.stat(card_id), "is_energy", False))
+            (int(card_id), record) for card_id in self.registry.facts
+            if isinstance(record := self._card(card_id), EnergyCard))
         for area, index, body in rows:
-            body_stat = self.stat(body.get("id"))
-            attacks = tuple(getattr(body_stat, "attacks", ()) or ()) if body_stat else ()
+            body_card = self._card(body.get("id"))
+            attacks = body_card.attacks if isinstance(body_card, PokemonCard) else ()
             recipient = self._recipient(area, index, body)
             gains = {}
-            for candidate, energy_stat in candidates:
+            for candidate, record in candidates:
                 attached = copy.deepcopy(observation)
                 target_body = attached["current"]["players"][seat][area][index]
                 units = self._energy_units(candidate, target_body)
-                energy_type = getattr(energy_stat, "energyType", None)
-                code = DEFAULT_ENERGY_CODE if energy_type is None else int(energy_type)
-                target_body.setdefault("energies", []).extend([code] * units)
+                target_body.setdefault("energies", []).extend([int(record.provides)] * units)
                 target_body.setdefault("energyCards", []).append({"id": candidate})
                 gains[candidate] = self.operation_gain(observation, attached)
-            for attack_id in attacks:
-                attack = (self.stats.attack(attack_id)
-                          if self.stats is not None and hasattr(self.stats, "attack") else None)
-                if attack is None:
-                    continue
-                requirements = tuple(getattr(attack, "energyTypes", ()) or ())
-                if not requirements:
-                    requirements = (ENERGY_COLORLESS,) * int(getattr(attack, "cost", 0) or 0)
-                missing_slots = unmet_cost_slots(body.get("energies") or (), requirements)
+            for attack in attacks:
+                missing_slots = unmet_cost_slots(body.get("energies") or (), attack.cost)
                 allocations = {}
-                for candidate, energy_stat in candidates:
+                for candidate, record in candidates:
                     compatible = sum(
-                        pays_energy_type(
-                            getattr(energy_stat, "energyType", DEFAULT_ENERGY_CODE)
-                            if getattr(energy_stat, "energyType", None) is not None
-                            else DEFAULT_ENERGY_CODE,
-                            required_type)
+                        pays_energy_type(int(record.provides), required_type)
                         for _slot_index, required_type in missing_slots
                     )
                     supplied = min(self._energy_units(candidate, body), compatible)
@@ -967,31 +959,27 @@ class DemandModel:
                 for slot_index, required_type in missing_slots:
                     direct = tuple(sorted(
                         (candidate, allocations[candidate])
-                        for candidate, energy_stat in candidates
+                        for candidate, record in candidates
                         if candidate in allocations
-                        if pays_energy_type(
-                            getattr(energy_stat, "energyType", DEFAULT_ENERGY_CODE)
-                            if getattr(energy_stat, "energyType", None) is not None
-                            else DEFAULT_ENERGY_CODE,
-                            required_type)
+                        if pays_energy_type(int(record.provides), required_type)
                     ))
                     if not direct:
                         continue
                     slot = f"{slot_index}:{required_type}"
                     demands.append(DemandSlot(
-                        f"fund_attack:{recipient}:{attack_id}:{slot}", direct,
+                        f"fund_attack:{recipient}:{attack.attack_id}:{slot}", direct,
                         timing=funding_timing, recipient=recipient,
                         capability="fund_attack", slot=slot,
                         ceiling=max(value for _card_id, value in direct),
-                        alternative=str(attack_id)))
+                        alternative=str(attack.attack_id)))
 
         for area, index, body in rows:
             recipient = self._recipient(area, index, body)
             heal_edges = {}
             for card_id in self.registry.facts:
-                clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
+                clauses = play_clauses(self._card(card_id))
                 gains = [self._heal_gain(observation, seat, clause, target=(area, index))
-                         for clause in clauses if clause.get("kind") == "heal"]
+                         for clause in clauses if clause.kind == "heal"]
                 gain = max(gains, default=0.0)
                 if gain > 0.0:
                     heal_edges[int(card_id)] = gain
@@ -1016,8 +1004,8 @@ class DemandModel:
             if missing <= 0:
                 continue
             deployed = copy.deepcopy(observation)
-            stat = self.stat(base)
-            hp = int(getattr(stat, "hp", MINIMUM_BODY_HP) or MINIMUM_BODY_HP)
+            card = self._card(base)
+            hp = int(getattr(card, "hp", MINIMUM_BODY_HP) or MINIMUM_BODY_HP)
             deployed["current"]["players"][seat].setdefault("bench", []).append(
                 {"id": base, "hp": hp, "maxHp": hp, "appearThisTurn": True,
                  "preEvolution": [], "energies": [], "energyCards": [], "tools": []})
@@ -1036,13 +1024,13 @@ class DemandModel:
     def _recipient(area: str, index: int, body) -> str:
         return str(body.get("serial", f"{area}:{index}:{body.get('id', 0)}"))
 
-    def _heal_gain(self, observation, seat: int, clause: dict, *, target=None) -> float:
-        if clause.get("rider") not in (None, "bounce_energy_to_hand"):
+    def _heal_gain(self, observation, seat: int, clause, *, target=None) -> float:
+        if clause.rider not in (None, "bounce_energy_to_hand"):
             return 0.0
-        restriction = clause.get("restriction")
+        restriction = clause.restriction
         if restriction not in (None, "active_only", "mega_only"):
             return 0.0
-        condition = clause.get("condition")
+        condition = clause.condition
         if condition not in (None, "energy_3_plus", "remaining_hp_30_or_less",
                              "played_supporter_this_turn"):
             return 0.0
@@ -1056,7 +1044,7 @@ class DemandModel:
             candidates = [row for row in candidates if row[0] == "active"]
         elif restriction == "mega_only":
             candidates = [row for row in candidates
-                          if bool(getattr(self.stat(row[2].get("id")), "megaEx", False))]
+                          if bool(getattr(self._card(row[2].get("id")), "mega_ex", False))]
         if condition == "played_supporter_this_turn" and not current.get("supporterPlayed"):
             return 0.0
 
@@ -1068,7 +1056,7 @@ class DemandModel:
             return int(body.get("hp", 0)) < int(body.get("maxHp", body.get("hp", 0)))
 
         candidates = [row for row in candidates if eligible(row[2])]
-        groups = (tuple(candidates),) if clause.get("each_of") else tuple((row,) for row in candidates)
+        groups = (tuple(candidates),) if clause.each_of else tuple((row,) for row in candidates)
         best = 0.0
         for group in groups:
             healed = copy.deepcopy(observation)
@@ -1076,13 +1064,13 @@ class DemandModel:
             for area, index, original in group:
                 body = healed["current"]["players"][seat][area][index]
                 maximum = int(body.get("maxHp", body.get("hp", 0)))
-                amount = maximum if clause.get("amount") == "all" else int(clause.get("amount", 0))
+                amount = maximum if clause.amount == "all" else int(clause.amount or 0)
                 restored = min(maximum - int(original.get("hp", 0)), amount)
                 gain += restored / HEAL_DAMAGE_PER_VALUE * (
                     1.0 if area == "active" else BENCH_HEAL_VALUE_SHARE)
                 body["hp"] = min(maximum, int(body.get("hp", 0)) + amount)
                 gain = max(gain, self.operation_gain(observation, healed))
-                if clause.get("rider") == "bounce_energy_to_hand":
+                if clause.rider == "bounce_energy_to_hand":
                     player = healed["current"]["players"][seat]
                     bounced = tuple(body.get("energyCards") or ())
                     if player.get("hand") is None:
@@ -1118,8 +1106,8 @@ class DemandModel:
                 index, value, target, group, demand.alternative, constraints)
 
         direct = tuple(edge(index, value) for index, value in sorted(edges.items()))
-        stat = self.stat(card_id)
-        if stat is not None and getattr(stat, "is_energy", False):
+        card = self._card(card_id)
+        if isinstance(card, EnergyCard):
             if recipient is None and recipient_units is not None:
                 tokens = []
                 for unit_index in range(max(recipient_units.values(), default=0)):
@@ -1134,35 +1122,34 @@ class DemandModel:
                 return tuple(tokens)
             units = max(1, int(provision_units))
             return tuple(direct for _ in range(units)) if direct else ()
-        if stat is None or getattr(stat, "is_pokemon", False):
+        if card is None or isinstance(card, PokemonCard):
             return (direct,) if direct else ()
-        if getattr(stat, "is_supporter", False) and not supporter_available:
+        if card.kind == SUPPORTER and not supporter_available:
             return (direct,) if direct else ()
         tokens = []
-        clauses = tuple(self.effects.clauses(card_id)) if self.effects is not None else ()
-        for clause in clauses:
-            kind = clause.get("kind")
+        for clause in play_clauses(card):
+            kind = clause.kind
             if kind == "fetch":
-                if clause.get("zone") != "deck":
+                if clause.zone != "deck":
                     continue
-                if not all(not clause.get(field) for field in
+                if not all(not clause.params.get(field) for field in
                            ("trigger", "dig", "condition", "name_family")):
                     continue
-                if bool(clause.get("cost_required")) and discard_cost(clause) > discard_capacity:
+                if bool(clause.cost_required) and discard_cost(clause) > discard_capacity:
                     continue
 
                 def matches(target, clause=clause):
-                    return fetch_target_matches(clause, self.stat(target), reading=REACH)
+                    return fetch_target_matches(clause, self._card(target), reading=REACH)
             elif kind == "accel":
                 # Energy acceleration reaches the same deck Energy a fetch would; without this
                 # token an accelerator counts as zero outs in every coverage question.
-                if clause.get("source") != "deck":
+                if clause.source != "deck":
                     continue
-                if clause.get("trigger") or clause.get("condition"):
+                if clause.trigger or clause.condition:
                     continue
 
                 def matches(target, clause=clause):
-                    return _accel_target_matches(clause, self.stat(target))
+                    return _accel_target_matches(clause, self._card(target))
             else:
                 continue
             reachable = tuple(
@@ -1179,7 +1166,7 @@ class DemandModel:
             remaining_targets = (sum(int(available_targets.get(target, 0))
                                      for target in matching_targets)
                                  if available_targets is not None else len(matching_targets))
-            printed_capacity = max(1, int(clause.get("amount", 1) or 1))
+            printed_capacity = max(1, int(clause.amount or 1))
             for _ in range(min(printed_capacity, remaining_targets)):
                 if reachable:
                     tokens.append(reachable)
@@ -1225,10 +1212,9 @@ class DemandModel:
                           seat: int = 0) -> tuple[DemandSlot, ...]:
         signatures = []
         for resource_index, card_id in enumerate(hand_ids):
-            stat = self.stat(card_id)
             recipient_units = (self.energy_units_by_recipient(observation, seat, card_id)
-                               if observation is not None and stat is not None
-                               and getattr(stat, "is_energy", False) else None)
+                               if observation is not None
+                               and isinstance(self._card(card_id), EnergyCard) else None)
             signatures.extend(self.coverage_slots(
                 int(card_id), demands,
                 supporter_available=supporter_available,
@@ -1245,10 +1231,9 @@ class DemandModel:
                               available_targets=None, observation=None, seat: int = 0) -> float:
         signatures = []
         for resource_index, card_id in enumerate(hand_ids):
-            stat = self.stat(card_id)
             recipient_units = (self.energy_units_by_recipient(observation, seat, card_id)
-                               if observation is not None and stat is not None
-                               and getattr(stat, "is_energy", False) else None)
+                               if observation is not None
+                               and isinstance(self._card(card_id), EnergyCard) else None)
             signatures.extend(self.coverage_slots(
                 int(card_id), demands,
                 supporter_available=supporter_available,
@@ -1312,20 +1297,21 @@ class DemandModel:
         self._remove_hand_positions(evolved, seat, consumed_cards)
         body = evolved["current"]["players"][seat][area][index]
         previous = int(body.get("id", 0))
-        target_stat = self.stat(target)
+        target_card = self._card(target)
         old_max = int(body.get("maxHp", body.get("hp", 0)) or 0)
         damage = max(0, old_max - int(body.get("hp", old_max) or 0))
         body.setdefault("preEvolution", []).append({"id": previous})
         body["id"] = int(target)
         body["appearThisTurn"] = True
-        if target_stat is not None and int(getattr(target_stat, "hp", 0) or 0) > 0:
-            body["maxHp"] = int(target_stat.hp)
-            body["hp"] = max(MINIMUM_BODY_HP, int(target_stat.hp) - damage)
+        if target_card is not None and int(getattr(target_card, "hp", 0) or 0) > 0:
+            body["maxHp"] = int(target_card.hp)
+            body["hp"] = max(MINIMUM_BODY_HP, int(target_card.hp) - damage)
         return evolved
 
     def _energy_units(self, card_id: int, body) -> int:
-        return provision_units(
-            energy_card_store().get(int(card_id)), evolved=bool(body.get("preEvolution")))
+        record = self._card(card_id)
+        return provision_units(record if isinstance(record, EnergyCard) else None,
+                               evolved=bool(body.get("preEvolution")))
 
     @staticmethod
     def _remove_hand_positions(observation, seat: int, positions) -> None:

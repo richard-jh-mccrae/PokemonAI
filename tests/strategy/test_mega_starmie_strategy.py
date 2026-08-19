@@ -56,7 +56,7 @@ def _focused(observation, snapshot):
     state = SimpleNamespace(obs=observation, root_seat=0,
                             deck_counts=((STARYU, 3), (MEGA_STARMIE_EX, 3)))
     beam = StrategyBeamBuilder(
-        snapshot, effects=EFFECTS, stats=STATS, registry=None, width=8).build(state, actions)
+        snapshot, stats=STATS, registry=None, width=8).build(state, actions)
     keys = {row.action_key for row in beam.focused}
     return actions, {action for action in actions if semantic_action_key(action) in keys}
 
@@ -67,7 +67,7 @@ def _selections_carrying(observation, snapshot, strategy_id):
     state = SimpleNamespace(obs=observation, root_seat=0,
                             deck_counts=((STARYU, 3), (MEGA_STARMIE_EX, 3)))
     beam = StrategyBeamBuilder(
-        snapshot, effects=EFFECTS, stats=STATS, registry=None, width=8).build(state, actions)
+        snapshot, stats=STATS, registry=None, width=8).build(state, actions)
     by_key = {semantic_action_key(action): action for action in actions}
     return {by_key[row.action_key].selection for row in beam.focused
             if strategy_id in row.path_ids}

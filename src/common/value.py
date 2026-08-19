@@ -15,6 +15,7 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
+from .cards import card_store, play_clauses
 from .cards.functions.damage import bench_reach
 from .cards.functions.fetch import DEADNESS, fetch_target_matches
 from .option_equivalence import fingerprint_source_card_id
@@ -30,22 +31,20 @@ def worth_to_prizes(worth: float) -> float:
     return float(worth) / WORTH_PER_PRIZE
 
 
-def held_card_worth(registry, effects, stats, state: DecisionState, card_id: int, *,
+def held_card_worth(registry, cards, state: DecisionState, card_id: int, *,
                     discount_redundant: bool = False) -> float:
     worth = registry.worth(card_id)
-    if effects is None or stats is None:
-        return worth
-    clauses = tuple(effects.clauses(card_id))
+    clauses = play_clauses(cards.get(int(card_id)))
     fetches = tuple(clause for clause in clauses
-                    if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+                    if clause.kind == "fetch" and clause.zone == "deck")
     if not fetches or len(fetches) != len(clauses):
         return worth
 
     def matches(clause, target_id):
-        stat = stats.get(target_id)
-        return (fetch_target_matches(clause, stat, reading=DEADNESS)
-                and (not clause.get("name_family") or clause["name_family"] in
-                     str(getattr(stat, "name", ""))))
+        card = cards.get(int(target_id))
+        return (fetch_target_matches(clause, card, reading=DEADNESS)
+                and (not clause.name_family or clause.name_family in
+                     str(getattr(card, "name", ""))))
 
     available = tuple(target_id for target_id, count in state.deck_counts if count > 0)
     if not any(matches(clause, target_id)
@@ -229,10 +228,12 @@ class ValueOracle:
 
     def __init__(self, registry: ValueRegistry,
                  family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
-                 refresh_evaluator=None):
+                 refresh_evaluator=None, cards=None):
         self.registry = registry
         self.effects = effects
         self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         if family_evaluator is None:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
@@ -283,7 +284,7 @@ class ValueOracle:
 
     def _unresolved_fetch_cost(self, before: DecisionState, after: DecisionState,
                                action: ActionIdentity) -> float:
-        if action.kind != "play" or self.effects is None:
+        if action.kind != "play":
             return 0.0
         if int((after.obs.get("select") or {}).get("context", 0)) != 0:
             return 0.0
@@ -292,8 +293,8 @@ class ValueOracle:
         if len(card_ids) != 1:
             return 0.0
         card_id = next(iter(card_ids))
-        clauses = tuple(self.effects.clauses(card_id))
-        if not clauses or any(clause.get("kind") != "fetch" for clause in clauses):
+        clauses = play_clauses(self.cards.get(int(card_id)))
+        if not clauses or any(clause.kind != "fetch" for clause in clauses):
             return 0.0
 
         def board(state):
@@ -322,8 +323,7 @@ class ValueOracle:
 
     def _stranded_fetch_cost(self, state: DecisionState, after: DecisionState,
                              action: ActionIdentity) -> float:
-        if (action.kind not in {"play", "ability", "skill"}
-                or self.effects is None or self.stats is None):
+        if action.kind not in {"play", "ability", "skill"}:
             return 0.0
 
         def card_ids(value):
@@ -345,9 +345,9 @@ class ValueOracle:
             card_id = next((found for part in action.parts
                             if (found := fingerprint_source_card_id(part, state.obs)) is not None),
                            None)
-        clauses = tuple(self.effects.clauses(card_id)) if card_id is not None else ()
+        clauses = play_clauses(self.cards.get(int(card_id))) if card_id is not None else ()
         fetches = tuple(clause for clause in clauses
-                        if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+                        if clause.kind == "fetch" and clause.zone == "deck")
         if not fetches or len(fetches) != len(clauses):
             return 0.0
         players = (state.obs.get("current") or {}).get("players") or ()
@@ -369,12 +369,12 @@ class ValueOracle:
             targets = tuple(acquired) if acquired else tuple(
                     int(target_id) for target_id, count in available.items()
                     if count > 0 and fetch_target_matches(
-                        clause, self.stats.get(target_id), reading=DEADNESS)
-                    and (not clause.get("name_family") or clause["name_family"] in
-                         str(getattr(self.stats.get(target_id), "name", ""))))
+                        clause, self.cards.get(int(target_id)), reading=DEADNESS)
+                    and (not clause.name_family or clause.name_family in
+                         str(getattr(self.cards.get(int(target_id)), "name", ""))))
             if not targets:
                 continue
-            if any(not getattr(self.stats.get(target_id), "evolvesFrom", None)
+            if any(not getattr(self.cards.get(int(target_id)), "evolves_from", None)
                    for target_id in targets):
                 return 0.0
             playable = {
@@ -437,7 +437,7 @@ class ValueOracle:
     def _held_card_worth(self, state: DecisionState, card_id: int, *,
                          discount_redundant: bool = False) -> float:
         return held_card_worth(
-            self.registry, self.effects, self.stats, state, card_id,
+            self.registry, self.cards, state, card_id,
             discount_redundant=discount_redundant)
 
     def continuation_upper_bound(self, state: DecisionState) -> float:
@@ -491,8 +491,8 @@ class ValueOracle:
 
         card_id = played_card_id(state, action)
         return bool(card_id is not None and any(
-            clause.get("kind") == "heal" and clause.get("rider") == "bounce_energy_to_hand"
-            for clause in self._refresh.effects.clauses(card_id)
+            clause.kind == "heal" and clause.rider == "bounce_energy_to_hand"
+            for clause in play_clauses(self.cards.get(int(card_id)))
         ))
 
 __all__ = (

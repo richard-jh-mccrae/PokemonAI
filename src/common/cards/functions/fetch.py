@@ -1,5 +1,9 @@
-"""Pure card-class predicates for Bellman reveal windows."""
+"""Pure card-class predicates for Bellman reveal windows, over the unified card records."""
 from __future__ import annotations
+
+from ..card_facts import (
+    BASIC_ENERGY, ITEM, STADIUM, STAGE1, STAGE2, SUPPORTER, TOOL, EnergyCard, PokemonCard,
+    TrainerCard)
 
 
 FETCH_POKEMON_TARGETS = frozenset({
@@ -12,67 +16,65 @@ _CONDITIONAL_FETCH_FIELDS = ("trigger", "dig", "condition", "name_family")
 _COLOUR_NARROWED_READINGS = frozenset({REACH, WINDOW})
 
 
-def fetch_is_unconditional(clause: dict) -> bool:
-    return not any(clause.get(field) for field in _CONDITIONAL_FETCH_FIELDS)
+def fetch_is_unconditional(clause) -> bool:
+    return not any(clause.params.get(field) for field in _CONDITIONAL_FETCH_FIELDS)
 
 
-def _pokemon_body_matches(clause: dict, stat, reading: str) -> bool:
-    if clause.get("no_rule_box") and getattr(stat, "is_ex_body", False):
+def _pokemon_body_matches(clause, card: PokemonCard, reading: str) -> bool:
+    if clause.no_rule_box and card.is_rule_box:
         return False
-    if clause.get("no_ability") and getattr(stat, "hasAbility", False):
+    if clause.no_ability and card.has_ability:
         return False
-    energy_type = clause.get("energy_type")
-    if (reading in _COLOUR_NARROWED_READINGS and energy_type is not None
-            and getattr(stat, "energyType", None) != energy_type):
+    if (reading in _COLOUR_NARROWED_READINGS and clause.energy_type is not None
+            and card.energy_type != clause.energy_type):
         return False
-    hp_max = clause.get("hp_max")
-    return hp_max is None or getattr(stat, "hp", 0) <= hp_max
+    return clause.hp_max is None or card.hp <= clause.hp_max
 
 
-def fetch_target_matches(clause: dict, stat, *, reading: str = REACH) -> bool:
-    """Whether ``stat`` belongs to a declared fetch class under a safe named reading."""
-    if stat is None:
+def fetch_target_matches(clause, card, *, reading: str = REACH) -> bool:
+    """Whether the card record belongs to a declared fetch class under a safe named reading."""
+    if card is None:
         return False
     reading = reading if reading in READINGS else REACH
     if reading == REACH and not fetch_is_unconditional(clause):
         return False
-    target = clause.get("target")
-    energy_type = clause.get("energy_type")
+    target = clause.target
     if target == "any":
         return reading == DEADNESS
     if target == "basic_energy":
-        return stat.is_basic_energy and (
-            energy_type is None or getattr(stat, "energyType", None) == energy_type)
+        return (isinstance(card, EnergyCard) and card.kind == BASIC_ENERGY
+                and (clause.energy_type is None or card.provides == clause.energy_type))
     if target == "energy":
-        return stat.is_energy and (
-            energy_type is None or getattr(stat, "energyType", None) == energy_type)
+        return (isinstance(card, EnergyCard)
+                and (clause.energy_type is None or card.provides == clause.energy_type))
     if target == "supporter":
-        return reading != REACH and bool(getattr(stat, "is_supporter", False))
+        return (reading != REACH
+                and isinstance(card, TrainerCard) and card.kind == SUPPORTER)
     if target == "item":
-        return bool(getattr(stat, "is_item", False))
+        return isinstance(card, TrainerCard) and card.kind == ITEM
     if target == "tool":
-        return bool(getattr(stat, "is_tool", False))
+        return isinstance(card, TrainerCard) and card.kind == TOOL
     if target == "stadium":
-        return bool(getattr(stat, "is_stadium", False))
+        return isinstance(card, TrainerCard) and card.kind == STADIUM
     if target == "trainer":
-        return not stat.is_pokemon and not stat.is_energy
-    if target not in FETCH_POKEMON_TARGETS or not stat.is_pokemon:
+        return isinstance(card, TrainerCard)
+    if target not in FETCH_POKEMON_TARGETS or not isinstance(card, PokemonCard):
         return False
-    if target == "mega" and not getattr(stat, "megaEx", False):
+    if target == "mega" and not card.mega_ex:
         return False
-    if target == "evolution" and not getattr(stat, "evolvesFrom", None):
+    if target == "evolution" and not card.evolves_from:
         return False
-    if target == "basic_pokemon" and getattr(stat, "evolvesFrom", None):
+    if target == "basic_pokemon" and card.evolves_from:
         return False
-    if target == "stage1" and getattr(stat, "stage", None) != "stage1":
+    if target == "stage1" and card.stage != STAGE1:
         return False
-    if target == "stage2" and getattr(stat, "stage", None) != "stage2":
+    if target == "stage2" and card.stage != STAGE2:
         return False
-    if target == "tera" and not getattr(stat, "tera", False):
+    if target == "tera" and not card.tera:
         return False
-    if target == "pokemon_ex" and not getattr(stat, "is_ex_body", False):
+    if target == "pokemon_ex" and not card.is_rule_box:
         return False
-    return _pokemon_body_matches(clause, stat, reading)
+    return _pokemon_body_matches(clause, card, reading)
 
 
 __all__ = ("WINDOW", "fetch_target_matches")

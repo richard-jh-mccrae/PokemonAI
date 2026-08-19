@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from common.effects import CardEffects
+from common.cards.card_facts import (
+    Attack, BASIC, BASIC_ENERGY, Clause, EnergyCard, ITEM, PokemonCard, STAGE1,
+    SUPPORTER as SUPPORTER_KIND, TrainerCard,
+)
 from common.demand import (
     CoverageEdge, DemandSlot, DemandModel, access_probability, best_assignment,
 )
-from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.value import CardFacts, Potential, ValueRegistry
 
 
@@ -20,6 +22,22 @@ ACCELERATOR = 907
 MARNIE_TARGET = 908
 ATTACK = 909
 FIRE_ENERGY = 910
+
+
+def _cards(**named):
+    """Synthetic records in the store's own vocabulary; ``named`` rows override by constant name."""
+    cards = {
+        LINE_BASE: PokemonCard(LINE_BASE, "Line Base", 60, 0, BASIC),
+        LINE_TOP: PokemonCard(LINE_TOP, "Line Top", 330, 0, STAGE1,
+                              evolves_from="Line Base", mega_ex=True),
+        SUPPORTER: TrainerCard(SUPPORTER, "Test Supporter", SUPPORTER_KIND),
+        UNRELATED: TrainerCard(UNRELATED, "Unrelated Item", ITEM),
+        ENERGY: EnergyCard(ENERGY, "Test Energy", BASIC_ENERGY, provides=0),
+        FIRE_ENERGY: EnergyCard(FIRE_ENERGY, "Test Fire Energy", BASIC_ENERGY, provides=2),
+    }
+    for card in named.values():
+        cards[card.card_id] = card
+    return cards
 
 
 def _potential(observation):
@@ -67,13 +85,7 @@ def _model():
         },
         lines=((LINE_BASE, LINE_TOP),), line_pairs=((LINE_BASE, LINE_TOP),),
     )
-    stats = DictCardStatProvider({
-        LINE_BASE: CardStat(LINE_BASE, hp=60, stage="basic"),
-        LINE_TOP: CardStat(LINE_TOP, hp=330, stage="stage1", megaEx=True),
-        SUPPORTER: CardStat(SUPPORTER, cardType=3),
-        UNRELATED: CardStat(UNRELATED, cardType=1),
-    })
-    return DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    return DemandModel(registry, _potential, cards=_cards())
 
 
 def test_assignment_never_uses_one_card_or_demand_twice():
@@ -121,8 +133,8 @@ def test_heal_bounce_accepts_hidden_hand_without_mutating_observation():
 
     gain = model._heal_gain(
         observation, 0,
-        {"kind": "heal", "amount": "all", "restriction": "mega_only",
-         "rider": "bounce_energy_to_hand"},
+        Clause("heal", amount="all", restriction="mega_only",
+               rider="bounce_energy_to_hand"),
         target=("bench", 0))
 
     assert gain > 0.0
@@ -136,10 +148,9 @@ def test_multi_target_fetch_provides_one_assignment_token_per_printed_target():
         DemandSlot("setup:one", ((LINE_BASE, 0.5),)),
         DemandSlot("setup:two", ((LINE_BASE, 0.5),)),
     )
-    effects = CardEffects({SUPPORTER: [{
-        "kind": "fetch", "target": "pokemon", "zone": "deck", "amount": 2,
-    }]})
-    model = DemandModel(model.registry, _potential, effects=effects, stats=model.stats)
+    tutor = TrainerCard(SUPPORTER, "Test Supporter", SUPPORTER_KIND,
+                        clauses=(Clause("fetch", target="pokemon", zone="deck", amount=2),))
+    model = DemandModel(model.registry, _potential, cards=_cards(tutor=tutor))
 
     tokens = model.coverage_slots(
         SUPPORTER, demands, supporter_available=True, discard_capacity=0,
@@ -153,10 +164,9 @@ def test_multi_target_fetch_provides_one_assignment_token_per_printed_target():
 def test_fetch_without_a_remaining_target_is_not_an_out():
     model = _model()
     demand = DemandSlot("develop", ((LINE_TOP, 1.0),))
-    effects = CardEffects({SUPPORTER: [{
-        "kind": "fetch", "target": "pokemon", "zone": "deck",
-    }]})
-    model = DemandModel(model.registry, _potential, effects=effects, stats=model.stats)
+    tutor = TrainerCard(SUPPORTER, "Test Supporter", SUPPORTER_KIND,
+                        clauses=(Clause("fetch", target="pokemon", zone="deck"),))
+    model = DemandModel(model.registry, _potential, cards=_cards(tutor=tutor))
 
     assert model.coverage_slots(
         SUPPORTER, (demand,), supporter_available=True, discard_capacity=0,
@@ -165,10 +175,9 @@ def test_fetch_without_a_remaining_target_is_not_an_out():
 
 def test_available_held_supporter_removes_the_demand_it_can_guarantee():
     base = _model()
-    effects = CardEffects({SUPPORTER: [{
-        "kind": "fetch", "target": "pokemon", "zone": "deck",
-    }]})
-    model = DemandModel(base.registry, _potential, effects=effects, stats=base.stats)
+    tutor = TrainerCard(SUPPORTER, "Test Supporter", SUPPORTER_KIND,
+                        clauses=(Clause("fetch", target="pokemon", zone="deck"),))
+    model = DemandModel(base.registry, _potential, cards=_cards(tutor=tutor))
     demand = DemandSlot("evolve", ((LINE_TOP, 1.0),))
 
     assert model.uncovered_by_hand(
@@ -186,18 +195,17 @@ def test_attack_demands_name_the_recipient_attack_typed_slot_and_matching_energy
             ENERGY: CardFacts(), FIRE_ENERGY: CardFacts(),
         },
     )
-    stats = DictCardStatProvider({
-        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
-        ENERGY: CardStat(ENERGY, cardType=5, energyType=3),
-        FIRE_ENERGY: CardStat(FIRE_ENERGY, cardType=5, energyType=2),
-    }, attacks={ATTACK: AttackStat(ATTACK, cost=2, energyTypes=(3, 2))})
+    cards = _cards(
+        attacker=PokemonCard(LINE_TOP, "Line Top", 100, 0, STAGE1, evolves_from="Line Base",
+                             attacks=(Attack(ATTACK, "Test Blast", (3, 2), 100),)),
+        water=EnergyCard(ENERGY, "Test Water Energy", BASIC_ENERGY, provides=3))
 
     def energy_potential(observation):
         active = observation["current"]["players"][0]["active"][0]
         value = float(len(active.get("energyCards") or ()))
         return Potential(value, (("energy_position", value),))
 
-    model = DemandModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, energy_potential, cards=cards)
     observation = _observation([])
     observation["current"]["energyAttached"] = False
     observation["current"]["players"][0]["bench"] = []
@@ -218,8 +226,7 @@ def test_attack_demands_name_the_recipient_attack_typed_slot_and_matching_energy
 
 def test_multi_unit_energy_covers_multiple_slots_for_only_its_chosen_recipient():
     registry = ValueRegistry(facts={ENERGY: CardFacts()})
-    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
-    model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, _potential, cards=_cards())
     demands = tuple(
         DemandSlot(f"fund_attack:77:1:{slot}:0", ((ENERGY, 0.5),),
              recipient="77", capability="fund_attack", slot=f"{slot}:0")
@@ -241,17 +248,16 @@ def test_multi_unit_energy_covers_multiple_slots_for_only_its_chosen_recipient()
 def test_multi_unit_energy_distributes_one_operation_gain_across_covered_slots():
     registry = ValueRegistry(
         facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()})
-    stats = DictCardStatProvider({
-        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
-        ENERGY: CardStat(ENERGY, cardType=6, energyType=0),
-    }, attacks={ATTACK: AttackStat(ATTACK, cost=3, energyTypes=(0, 0, 0))})
+    cards = _cards(attacker=PokemonCard(
+        LINE_TOP, "Line Top", 100, 0, STAGE1, evolves_from="Line Base",
+        attacks=(Attack(ATTACK, "Test Blast", (0, 0, 0), 100),)))
 
     def energy_potential(observation):
         active = observation["current"]["players"][0]["active"][0]
         value = float(len(active.get("energies") or ()))
         return Potential(value, (("energy_position", value),))
 
-    model = DemandModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, energy_potential, cards=cards)
     observation = _observation([])
     observation["current"]["energyAttached"] = False
     observation["current"]["players"][0]["bench"] = []
@@ -273,8 +279,7 @@ def test_multi_unit_energy_distributes_one_operation_gain_across_covered_slots()
 
 def test_multi_unit_energy_never_combines_alternative_attacks_on_one_recipient():
     registry = ValueRegistry(facts={ENERGY: CardFacts()})
-    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
-    model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, _potential, cards=_cards())
     demands = (
         DemandSlot("fund_attack:77:10:0:0", ((ENERGY, 0.8),), recipient="77",
              capability="fund_attack", slot="0:0", alternative="10"),
@@ -295,8 +300,7 @@ def test_multi_unit_energy_never_combines_alternative_attacks_on_one_recipient()
 
 def test_one_multi_unit_energy_cannot_split_its_units_across_recipients():
     registry = ValueRegistry(facts={ENERGY: CardFacts()})
-    stats = DictCardStatProvider({ENERGY: CardStat(ENERGY, cardType=6, energyType=0)})
-    model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, _potential, cards=_cards())
     demands = tuple(
         DemandSlot(f"fund_attack:77:1:{slot}:0", ((ENERGY, 1.0),), recipient="77",
              capability="fund_attack", slot=f"{slot}:0", alternative="1")
@@ -332,11 +336,9 @@ def test_global_assignment_preserves_cross_energy_attack_plan_complementarity():
     wildcard, b_one, b_two = 910, 911, 912
     registry = ValueRegistry(facts={
         wildcard: CardFacts(), b_one: CardFacts(), b_two: CardFacts()})
-    stats = DictCardStatProvider({
-        card_id: CardStat(card_id, cardType=5, energyType=0)
-        for card_id in (wildcard, b_one, b_two)
-    })
-    model = DemandModel(registry, _potential, effects=CardEffects({}), stats=stats)
+    cards = {card_id: EnergyCard(card_id, f"Test Energy {card_id}", BASIC_ENERGY, provides=0)
+             for card_id in (wildcard, b_one, b_two)}
+    model = DemandModel(registry, _potential, cards=cards)
     demands = (
         DemandSlot("a", ((wildcard, 0.9),), recipient="77", capability="fund_attack",
              slot="0", alternative="attack-a"),
@@ -364,16 +366,15 @@ def test_global_assignment_preserves_cross_energy_attack_plan_complementarity():
 def test_removing_a_recipient_removes_all_of_its_demand_roots():
     registry = ValueRegistry(
         facts={LINE_TOP: CardFacts(pokemon=True, stage="stage1"), ENERGY: CardFacts()})
-    stats = DictCardStatProvider({
-        LINE_TOP: CardStat(LINE_TOP, hp=100, stage="stage1", attacks=(ATTACK,)),
-        ENERGY: CardStat(ENERGY, cardType=5, energyType=0),
-    }, attacks={ATTACK: AttackStat(ATTACK, cost=1, energyTypes=(0,))})
+    cards = _cards(attacker=PokemonCard(
+        LINE_TOP, "Line Top", 100, 0, STAGE1, evolves_from="Line Base",
+        attacks=(Attack(ATTACK, "Test Jab", (0,), 70),)))
     def energy_potential(observation):
         active = observation["current"]["players"][0].get("active") or ()
         value = float(len(active[0].get("energyCards") or ())) if active else 0.0
         return Potential(value, (("energy_position", value),))
 
-    model = DemandModel(registry, energy_potential, effects=CardEffects({}), stats=stats)
+    model = DemandModel(registry, energy_potential, cards=cards)
     observation = _observation([])
     observation["current"]["energyAttached"] = False
     observation["current"]["players"][0]["active"] = [{
@@ -403,23 +404,19 @@ def test_undeclared_funding_reads_the_cost_off_the_card():
     an Energy that pays nothing it owes is not treated as funding."""
     from types import SimpleNamespace
     from common.demand import StrategyBeamBuilder
-    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
     from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
 
+    # 2/5/7 are the REAL Basic Fire/Psychic/Darkness Energy records in the store.
+    from common.cards import card_store
     attacker, fire, psychic, darkness = 810, 2, 5, 7
-    stats = DictCardStatProvider(
-        {
-            attacker: CardStat(attacker, hp=320, attacks=(11,)),
-            fire: CardStat(fire, cardType=5, energyType=fire),
-            psychic: CardStat(psychic, cardType=5, energyType=psychic),
-            darkness: CardStat(darkness, cardType=5, energyType=darkness),
-        },
-        attacks={11: AttackStat(11, damage=200, energyTypes=(fire, psychic))},
-    )
+    cards = dict(card_store())
+    cards[attacker] = PokemonCard(
+        attacker, "Test Attacker", 320, 0, BASIC,
+        attacks=(Attack(11, "Test Swing", (fire, psychic), 200),))
     hint = ActivatedStrategy(
         "deck.fund", "fund_attack", "own.active", attacker, 1, (), "immediate", "high", None, 0)
     builder = StrategyBeamBuilder(
-        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), cards=cards)
     observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
         {"active": [{"id": attacker, "serial": 1, "hp": 320, "maxHp": 320,
                      "energies": [fire]}], "bench": []},
@@ -439,25 +436,19 @@ def test_a_colorless_slot_does_not_make_every_energy_funding():
     """A Colorless slot accepts anything, so a body owing one looked funded by every Energy in
     the deck -- including one another body needs by type. A printed TYPE owed anywhere wins."""
     from types import SimpleNamespace
+    from common.cards import card_store
     from common.demand import StrategyBeamBuilder
-    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
     from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
 
     attacker, colorless_only, fire, psychic, darkness = 820, 821, 2, 5, 7
-    stats = DictCardStatProvider(
-        {
-            # Two attacks, as Dragapult ex has: a one-Colorless poke and the real typed attack.
-            attacker: CardStat(attacker, hp=320, attacks=(12, 13)),
-            colorless_only: CardStat(colorless_only, hp=210, attacks=(12,)),
-            fire: CardStat(fire, cardType=5, energyType=fire),
-            psychic: CardStat(psychic, cardType=5, energyType=psychic),
-            darkness: CardStat(darkness, cardType=5, energyType=darkness),
-        },
-        attacks={
-            12: AttackStat(12, damage=70, energyTypes=(0,)),
-            13: AttackStat(13, damage=200, energyTypes=(fire, psychic)),
-        },
-    )
+    poke = Attack(12, "Test Poke", (0,), 70)
+    typed = Attack(13, "Test Blast", (fire, psychic), 200)
+    cards = dict(card_store())
+    # Two attacks, as Dragapult ex has: a one-Colorless poke and the real typed attack.
+    cards[attacker] = PokemonCard(attacker, "Test Attacker", 320, 0, BASIC,
+                                  attacks=(poke, typed))
+    cards[colorless_only] = PokemonCard(colorless_only, "Test Poker", 210, 0, BASIC,
+                                        attacks=(poke,))
     counts = ((fire, 3), (psychic, 3), (darkness, 2))
 
     def eligible(card_id):
@@ -465,7 +456,7 @@ def test_a_colorless_slot_does_not_make_every_energy_funding():
             "deck.fund", "fund_attack", "own.active", card_id, 1, (),
             "immediate", "high", None, 0)
         builder = StrategyBeamBuilder(
-            StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+            StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), cards=cards)
         observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
             {"active": [{"id": card_id, "serial": 1, "hp": 320, "maxHp": 320,
                          "energies": []}], "bench": []},
@@ -484,19 +475,15 @@ def test_funding_satisfies_only_once_the_body_owes_nothing():
     """A bundle holds every later waypoint until the earlier ones satisfy, so a fund_attack
     outcome that can never report satisfied strands the attack behind it for the whole turn."""
     from types import SimpleNamespace
+    from common.cards import card_store
     from common.demand import StrategyBeamBuilder
-    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
     from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
 
     attacker, fire, psychic = 830, 2, 5
-    stats = DictCardStatProvider(
-        {
-            attacker: CardStat(attacker, hp=320, attacks=(14,)),
-            fire: CardStat(fire, cardType=5, energyType=fire),
-            psychic: CardStat(psychic, cardType=5, energyType=psychic),
-        },
-        attacks={14: AttackStat(14, damage=200, energyTypes=(fire, psychic))},
-    )
+    cards = dict(card_store())
+    cards[attacker] = PokemonCard(
+        attacker, "Test Attacker", 320, 0, BASIC,
+        attacks=(Attack(14, "Test Blast", (fire, psychic), 200),))
     funding = ActivatedStrategy(
         "deck.fund", "fund_attack", "own.active", attacker, 1, (),
         "immediate", "high", "deck.line", 0)
@@ -504,7 +491,7 @@ def test_funding_satisfies_only_once_the_body_owes_nothing():
         "deck.swing", "damage_setup", "opponent.bench.highest_role", attacker, 9, (),
         "immediate", "high", "deck.line", 1)
     builder = StrategyBeamBuilder(
-        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (funding, swing)), stats=stats)
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (funding, swing)), cards=cards)
 
     def _status(energies):
         observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
@@ -529,16 +516,15 @@ def test_an_unreadable_body_never_reports_its_funding_satisfied():
     bundle on missing information."""
     from types import SimpleNamespace
     from common.demand import StrategyBeamBuilder
-    from common.scouting.provider import CardStat, DictCardStatProvider
     from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
 
     mystery = 831
-    stats = DictCardStatProvider({mystery: CardStat(mystery, hp=100)})
     hint = ActivatedStrategy(
         "deck.fund", "fund_attack", "own.active", mystery, 1, (),
         "immediate", "high", None, 0)
     builder = StrategyBeamBuilder(
-        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)), stats=stats)
+        StrategySnapshot(1, 0, "hash", "snapshot", (), (), (hint,)),
+        cards={mystery: PokemonCard(mystery, "Mystery", 100, 0, BASIC)})
     observation = {"current": {"yourIndex": 0, "turn": 1, "players": [
         {"active": [{"id": mystery, "serial": 1, "hp": 100, "maxHp": 100, "energies": []}],
          "bench": []},

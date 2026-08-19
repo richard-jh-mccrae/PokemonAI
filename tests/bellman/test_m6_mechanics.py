@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from common import Chance, Choice, DecisionState, Deterministic, Terminal, Unknown, ValueRegistry
+from common import (
+    Chance, Choice, DecisionState, Deterministic, Refresh, RevealChoice, Terminal, Unknown,
+    ValueRegistry)
 from common.engine import CgpyTransitionProvider
 from train.blunder.store import load_corrections
 from bellman_helpers import runtime
@@ -105,6 +107,16 @@ def test_every_deck_source_resolves_all_nested_mechanics_without_unknown():
                 chance_nodes += isinstance(node, Chance)
                 for edge in node.children:
                     walk(edge.node)
+                return
+            # The store now supplies clauses even without an effects table, so reveal windows
+            # and shuffle-refreshes appear here exactly as they do in production search.
+            if isinstance(node, RevealChoice):
+                chance_nodes += 1
+                for edge in node.choices:
+                    walk(edge.node)
+                return
+            if isinstance(node, Refresh):
+                chance_nodes += 1
                 return
             assert isinstance(node, Deterministic)
             child = node.state
