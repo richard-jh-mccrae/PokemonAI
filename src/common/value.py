@@ -15,8 +15,8 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
-from .damage import bench_reach
-from .fetch import DEADNESS, fetch_target_matches
+from .cards.functions.damage import bench_reach
+from .cards.functions.fetch import DEADNESS, fetch_target_matches
 from .option_equivalence import fingerprint_source_card_id
 from .state import DecisionState
 

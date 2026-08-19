@@ -33,6 +33,21 @@ shipped tag/clause stores and refuses to emit any effect it has no encoding for.
 `common/cards.py` module folded into the package as `common/cards/functions.py`; the public
 import `from common.cards import CardFunctions` is unchanged.
 
+## Where a card function's logic lives
+
+`common/cards/functions/` holds one module per card function, named for the function it owns:
+`fetch.py`, `draw.py`, `damage.py` (with `damage_context.py` beside it for the scaling variables),
+`energy.py`, `attack_lock.py`. There is deliberately no registry — a function is found by its
+filename — and the package init stays empty of re-exports so importing one function cannot drag in
+its siblings or cycle back into the card records. Every one of these modules imports nothing from
+the project, which is what made the move free.
+
+These modules still read `CardStat`, not the card records. Wiring them to the records is deferred:
+it changes every call site at once, and the self-play-only scope makes it cheap to do later against
+authored cards on both seats. The tag and clause tables stay where they are — 88% of their rows are
+opponent cards, which the scouting rework replaces. `card_worth.py` stays out: it prices a function
+rather than defining one, and ADR-0065 owns that currency.
+
 ## Consequences
 
 A mid-game card query is one dict hit plus attribute reads, and the store covers every card in

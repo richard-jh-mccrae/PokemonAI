@@ -5,7 +5,7 @@ from agents.mega_starmie.strategy import (
     CINDERACE, IGNITION_ENERGY, MEGA_STARMIE_EX, STARYU, STRATEGY,
 )
 from common.cards import CardFunctions
-from common.damage import bench_reach
+from common.cards.functions.damage import bench_reach
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.options import enumerate_legal_actions
@@ -144,7 +144,7 @@ def test_the_reload_waits_for_the_heal_that_creates_its_opening():
 
 
 def test_the_reload_names_the_energy_that_repays_a_full_bounce_in_one_attach():
-    from common.energy import provision_units
+    from common.cards.functions.energy import provision_units
 
     tags = {IGNITION_ENERGY: tuple(FUNCTIONS.tags(IGNITION_ENERGY))}
     reload_hint = next(hint for hint in STRATEGY.strategies

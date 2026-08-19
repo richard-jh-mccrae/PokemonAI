@@ -30,9 +30,8 @@ def _self_locking(stats, attack_id: int) -> bool:
 
 def fold_attack_locks(prior: Mapping | None, logs, *, stats, turn: int) -> dict:
     """``{"serial": {"attack_id": locked_turn}}`` after one log delta ending at ``turn``."""
-    # A delta spanning a turn boundary carries its own TURN_START markers, so walk back from
-    # `turn` to date each ATTACK. Keys are STRINGS: JSON has none of the integer kind, and both
-    # providers round-trip this map through it, so int keys return stringified and never match.
+    # Walk back from `turn` over the delta's own TURN_START markers to date each ATTACK. Keys are
+    # STRINGS: both providers round-trip this map through JSON, which returns int keys stringified.
     locks = {str(serial): dict(rows) for serial, rows in (prior or {}).items()}
     entries = tuple(logs or ())
     starts = sum(1 for entry in entries if int(entry.get("type", -1)) == LOG_TURN_START)

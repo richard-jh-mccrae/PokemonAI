@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from common.energy import (
+from .functions.energy import (
     ENERGY_COLORLESS as COLORLESS, ENERGY_GRASS as GRASS, ENERGY_FIRE as FIRE,
     ENERGY_WATER as WATER, ENERGY_LIGHTNING as LIGHTNING, ENERGY_PSYCHIC as PSYCHIC,
     ENERGY_FIGHTING as FIGHTING, ENERGY_DARKNESS as DARKNESS, ENERGY_METAL as METAL,

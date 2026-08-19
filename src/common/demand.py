@@ -12,9 +12,9 @@ from functools import lru_cache
 import hashlib
 from time import perf_counter
 
-from .damage import bench_reach, compute_active_damage
-from .fetch import REACH, WINDOW, fetch_target_matches
-from .energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
+from .cards.functions.damage import bench_reach, compute_active_damage
+from .cards.functions.fetch import REACH, WINDOW, fetch_target_matches
+from .cards.functions.energy import ENERGY_COLORLESS, pays_energy_type, provision_units, unmet_cost_slots
 from .information import OutcomeGroup, hypergeometric_classes
 from .option_equivalence import option_source_card
 from .scouting.card_text import name_in_family

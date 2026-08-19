@@ -13,7 +13,7 @@ from typing import Mapping
 
 from common.cards.card_facts import (
     Ability, Attack, Clause, EnergyCard, PokemonCard, TrainerCard)
-from common.cards.functions import CardFunctions
+from common.cards.tags import CardFunctions
 from common.cards.pokemon_roles import default_pokemon_roles
 
 
