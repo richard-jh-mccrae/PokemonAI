@@ -41,10 +41,13 @@ class BoardState:
     stadium: tuple[Card, ...]
     looking: Looking | None
     select: SelectPrompt | None
+    #: MY face-down prize multiset, once the deck tracker anchors it; opponent prizes stay a count.
     own_prizes: tuple[tuple[int, int], ...] | None
+    #: Ordered (serial, card id) belief about MY deck's top from stacking effects; None = unknown.
     known_top: tuple | None
     attack_locks: tuple | None
     decklist: tuple[int, ...] | None
+    #: MY unseen pool by card id — exact deck once `own_prizes` anchors, deck∪prizes before it.
     deck_counts: tuple[tuple[int, int], ...] | None
     changed: frozenset = field(compare=False)
     raw: dict = field(compare=False, repr=False)
@@ -68,6 +71,8 @@ class BoardState:
     def key(self) -> str:
         hasher = hashlib.blake2b(digest_size=KEY_BYTES)
         feed(hasher.update, self.seat)
+        # Deck knowledge is position identity: the same pieces under another decklist must differ.
+        feed(hasher.update, self.deck_counts)
         for label in PIECES:
             feed(hasher.update, self.digests[label])
         return hasher.hexdigest()

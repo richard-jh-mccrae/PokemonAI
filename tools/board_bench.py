@@ -57,7 +57,8 @@ def _mutate(printout, step):
     kind = step % 5
     if kind == 0:
         body = me["bench"][step % 4]
-        body["hp"] = max(10, body["hp"] - 30)
+        # Cycle rather than floor: a floored value stops mutating and fakes cheap no-op edges.
+        body["hp"] = body["hp"] - 30 if body["hp"] > 30 else 120
     elif kind == 1:
         me["hand"].append({"id": IDS[step % len(IDS)], "serial": 2000 + step, "playerIndex": 0})
         me["handCount"] += 1
@@ -65,7 +66,8 @@ def _mutate(printout, step):
     elif kind == 2:
         me["active"][0]["energies"].append(1)
     elif kind == 3:
-        them["active"][0]["hp"] = max(10, them["active"][0]["hp"] - 30)
+        active = them["active"][0]
+        active["hp"] = active["hp"] - 30 if active["hp"] > 30 else 120
     else:
         printout["current"]["supporterPlayed"] = not printout["current"]["supporterPlayed"]
     return printout

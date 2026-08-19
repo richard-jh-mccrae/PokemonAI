@@ -38,6 +38,14 @@ def test_damage_and_attack_locks_change_the_key():
     assert len(keys) == 3
 
 
+def test_deck_knowledge_reaches_the_key():
+    obs = printout(me=player(hand=[119]))
+    bare = BoardState.root(obs)
+    deck_a = BoardState.root(obs, decklist=(119,) * 4 + (120,) * 2)
+    deck_b = BoardState.root(obs, decklist=(119,) * 4 + (121,) * 2)
+    assert len({bare.key, deck_a.key, deck_b.key}) == 3
+
+
 def test_select_menu_material_never_reaches_the_key():
     a = printout(select={"type": 1, "context": 0, "minCount": 1, "maxCount": 1,
                          "remainDamageCounter": 0, "remainEnergyCost": 0,

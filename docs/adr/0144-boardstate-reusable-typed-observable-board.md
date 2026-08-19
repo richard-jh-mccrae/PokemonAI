@@ -38,10 +38,11 @@ off-limits) offers no delta API — its output is always a complete reprint.
 
 ## Measured
 
-`python -m tools.board_bench --steps 300` (301 synthetic search edges, warm store, one dev box,
-load-noisy — re-measure paired before quoting elsewhere): fresh `root` 0.183 ms/step,
-`advance` 0.034 ms/step, incumbent `DecisionState.from_observation` + `plan_key` 0.407 ms/step
-(~12x advance), `advance == root` mismatches 0 of 301. The bench exits nonzero on any mismatch.
+`python -m tools.board_bench --steps 300` (300 synthetic search edges over 301 snapshots, every
+edge mutating a piece, warm store, one dev box, load-noisy — re-measure paired before quoting
+elsewhere): fresh `root` ~0.19 ms/step, `advance` 0.043–0.047 ms/step across repeats, incumbent
+`DecisionState.from_observation` + `plan_key` 0.44–0.46 ms/step (~10x advance),
+`advance == root` mismatches 0 of 301 snapshots. The bench exits nonzero on any mismatch.
 
 ## Consequences
 
