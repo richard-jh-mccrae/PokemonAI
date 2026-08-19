@@ -16,7 +16,7 @@ CARD = PokemonCard(
         Ability(
             name='Lunar Cycle',
             text='Once during your turn, if you have Solrock in play, you may discard a Basic {F} Energy card from your hand in order to use this Ability. Draw 3 cards. You can’t use more than 1 Lunar Cycle Ability each turn.',
-            clauses=(Clause('draw', amount=3, condition='solrock_in_play', allowance='card', rider='discard_basic_f_energy'),),
+            clauses=(Clause('draw', amount=3, condition='solrock_in_play', allowance='card', rider='discard_basic_f_energy', rider_energy_type=FIGHTING, rider_amount=1),),
         ),
     ),
     attacks=(

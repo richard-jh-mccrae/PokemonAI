@@ -134,8 +134,8 @@ The flattened Bellman core owns the decision model:
 - `strategy/strategies.py`: General, Deck, and Opponent Strategy declarations and Planning-Epoch
   activation snapshots;
 - `demand.py`: Strategy Beam scheduling plus value-side Demand Slots and exact access odds;
-- `attack_locks.py`: pure fold of the printed "can't use this attack next turn" state, which the
-  observation omits, from the public ATTACK log; read by `potential.py` on both seats;
+- `cards/functions/attack_lock.py`: pure fold of the printed "can't use this attack next turn" state,
+  which the observation omits, from the public ATTACK log; read by `potential.py` on both seats;
 - `refresh.py`: analytic shuffle-refresh commitments. It integrates demand-coverage classes with exact
   hypergeometric probabilities, prices immediate and next-turn known-hand options surrendered, and
   never constructs or searches a hypothetical redraw;
@@ -144,7 +144,8 @@ The flattened Bellman core owns the decision model:
   zones use low-discrepancy identity spacing so the deployment world cannot inherit numeric-id
   ordering as fake draw knowledge;
 - `engine.py`: offline-only diagnostic/test transition adapter, excluded from submissions;
-- `effects.py`, `fetch.py`, and `draws.py`: effect data and pure chance-window mechanics;
+- `effects.py`: the effect-clause table; the per-function mechanics it feeds live one module each
+  under `cards/functions/` (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
 - `solver.py`: reference recursion plus production successive-halving search. Every legal root gets
   focused Strategy paths first, retains executable safety paths, then widens across unresolved legal
   roots until proof or timeout. Strategy changes order only; Bellman value selects the action;

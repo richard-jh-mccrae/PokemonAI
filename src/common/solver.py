@@ -15,7 +15,7 @@ from .algebra import (
 from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
-from .fetch import DEADNESS, WINDOW, fetch_target_matches
+from .cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .option_equivalence import option_source_card
 from .demand import (StrategyBeamBuilder, look_class_clauses, outcome_identity,

@@ -7,8 +7,8 @@ import hashlib
 import json
 import re
 
-from common.damage import compute_active_damage
-from common.energy import payment_fraction, unmet_cost_slots
+from common.cards.functions.damage import compute_active_damage
+from common.cards.functions.energy import payment_fraction, unmet_cost_slots
 from common.state import _visible_own_ids
 
 _SCOPES = frozenset({"general", "deck", "opponent"})
@@ -197,7 +197,7 @@ def _attack_ready(body: dict, stats) -> bool:
                      or getattr(stats, "get_attack", None))
     if not attacks or attack_lookup is None:
         return False
-    from common.energy import unmet_cost_slots
+    from common.cards.functions.energy import unmet_cost_slots
 
     provisions = body.get("energies") or ()
     requirements = tuple(

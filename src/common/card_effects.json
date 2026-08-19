@@ -511,7 +511,9 @@
 "amount": 3,
 "condition": "solrock_in_play",
 "allowance": "card",
-"rider": "discard_basic_f_energy"
+"rider": "discard_basic_f_energy",
+"rider_energy_type": 6,
+"rider_amount": 1
 }
 ],
 "678": [

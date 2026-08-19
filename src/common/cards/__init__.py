@@ -13,7 +13,7 @@ from typing import Mapping
 
 from common.cards.card_facts import (
     Ability, Attack, Clause, EnergyCard, PokemonCard, TrainerCard)
-from common.cards.functions import CardFunctions
+from common.cards.tags import CardFunctions
 from common.cards.pokemon_roles import default_pokemon_roles
 
 
@@ -46,6 +46,18 @@ def energy_card_store() -> Mapping[int, EnergyCard]:
 
 
 @lru_cache(maxsize=1)
+def attack_index() -> Mapping[int, Attack]:
+    """Every attack in the store by its engine attack id — the flat lookup a log fold needs."""
+    index: dict = {}
+    for card in pokemon_card_store().values():
+        for attack in card.attacks:
+            if attack.attack_id in index:
+                raise ValueError(f"attack id {attack.attack_id} appears on two cards")
+            index[attack.attack_id] = attack
+    return MappingProxyType(index)
+
+
+@lru_cache(maxsize=1)
 def card_store() -> Mapping[int, PokemonCard | TrainerCard | EnergyCard]:
     stores = (pokemon_card_store(), trainer_card_store(), energy_card_store())
     union: dict = {}
@@ -63,5 +75,5 @@ def pokemon_default_roles() -> Mapping[int, tuple[str, ...]]:
 
 
 __all__ = ("Ability", "Attack", "CardFunctions", "Clause", "EnergyCard", "PokemonCard",
-           "TrainerCard", "card_store", "energy_card_store", "pokemon_card_store",
-           "pokemon_default_roles", "trainer_card_store")
+           "TrainerCard", "attack_index", "card_store", "energy_card_store",
+           "pokemon_card_store", "pokemon_default_roles", "trainer_card_store")

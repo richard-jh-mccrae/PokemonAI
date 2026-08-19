@@ -8,12 +8,12 @@ from .algebra import (
     Actor, Chance, Deterministic, Edge, RevealChoice, RevealOutcome, Terminal, Unknown,
     WeightedEdge,
 )
-from .attack_locks import carry_attack_locks
+from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
-from .fetch import WINDOW, fetch_target_matches
+from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
 from .commutativity import action_footprint
 from .refresh import refresh_transition
@@ -303,7 +303,7 @@ class CgpyTransitionProvider:
         clause = draw_clauses[0]
         if clause.get("opponent_amount") or clause.get("rider") is not None:
             return None
-        from .draws import draw_branches
+        from .cards.functions.draw import draw_branches
 
         players = engine.gs.players
         mine, opponent = players[state.root_seat], players[1 - state.root_seat]

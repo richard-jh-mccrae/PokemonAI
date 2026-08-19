@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from common.energy import (
+from .functions.energy import (
     ENERGY_COLORLESS as COLORLESS, ENERGY_GRASS as GRASS, ENERGY_FIRE as FIRE,
     ENERGY_WATER as WATER, ENERGY_LIGHTNING as LIGHTNING, ENERGY_PSYCHIC as PSYCHIC,
     ENERGY_FIGHTING as FIGHTING, ENERGY_DARKNESS as DARKNESS, ENERGY_METAL as METAL,
@@ -51,6 +51,11 @@ class Clause:
         return f"Clause(kind={self.kind!r}{parts})"
 
 
+def _first_clause(clauses: tuple, kind: str) -> Clause | None:
+    """A plain scan IS the fast path: a record carries at most a handful of clauses."""
+    return next((clause for clause in clauses if clause.kind == kind), None)
+
+
 @dataclass(frozen=True, slots=True)
 class Attack:
     attack_id: int
@@ -60,12 +65,18 @@ class Attack:
     text: str = ""
     clauses: tuple[Clause, ...] = ()
 
+    def clause(self, kind: str) -> Clause | None:
+        return _first_clause(self.clauses, kind)
+
 
 @dataclass(frozen=True, slots=True)
 class Ability:
     name: str
     text: str = ""
     clauses: tuple[Clause, ...] = ()
+
+    def clause(self, kind: str) -> Clause | None:
+        return _first_clause(self.clauses, kind)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +106,14 @@ class PokemonCard:
     def prize_value(self) -> int:
         return 2 if self.ex or self.mega_ex else 1
 
+    @property
+    def is_rule_box(self) -> bool:
+        return self.ex or self.mega_ex
+
+    @property
+    def has_ability(self) -> bool:
+        return bool(self.abilities)
+
 
 @dataclass(frozen=True, slots=True)
 class TrainerCard:
@@ -107,6 +126,9 @@ class TrainerCard:
     tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
 
+    def clause(self, kind: str) -> Clause | None:
+        return _first_clause(self.clauses, kind)
+
 
 @dataclass(frozen=True, slots=True)
 class EnergyCard:
@@ -118,6 +140,9 @@ class EnergyCard:
     text: str = ""
     tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
+
+    def clause(self, kind: str) -> Clause | None:
+        return _first_clause(self.clauses, kind)
 
 
 __all__ = ("Ability", "Attack", "Clause", "EnergyCard", "PokemonCard", "TrainerCard",

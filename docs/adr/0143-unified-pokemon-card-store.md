@@ -30,8 +30,39 @@ with the same semantics as `general_pokemon_roles`.
 
 `tools/build_pokemon_cards.py` generates every card module from the engine-twin defs plus the
 shipped tag/clause stores and refuses to emit any effect it has no encoding for. The former
-`common/cards.py` module folded into the package as `common/cards/functions.py`; the public
+The former `common/cards.py` module folded into the package as `common/cards/tags.py`; the public
 import `from common.cards import CardFunctions` is unchanged.
+
+## Where a card function's logic lives
+
+`common/cards/functions/` holds one module per card function, named for the function it owns:
+`fetch.py`, `draw.py`, `damage.py` (with `damage_context.py` beside it for the scaling variables),
+`energy.py`, `attack_lock.py`. There is deliberately no registry — a function is found by its
+filename — and the package init stays empty of re-exports so importing one function cannot drag in
+its siblings or cycle back into the card records. Every one of these modules imports nothing from
+the project, which is what made the move free.
+
+These modules still read `CardStat`, not the card records. Wiring them to the records is deferred:
+it changes every call site at once, and the self-play-only scope makes it cheap to do later against
+authored cards on both seats. The tag and clause tables stay where they are — 88% of their rows are
+opponent cards, which the scouting rework replaces. `card_worth.py` stays out: it prices a function
+rather than defining one, and ADR-0065 owns that currency.
+
+## How facts reach the functions (amended 2026-08-19)
+
+A function's hands hold records, never ids: `PokemonCard`, `Attack`, `Clause` arrive as plain
+arguments, and the id-to-record resolution happens once at the edge, where the board-state layer
+resolves each body it sees through the package's cached indexes (`card_store()`, `attack_index()`).
+The store's clause vocabulary is canonical — a function conforms to the card file, never the
+reverse — and derived readings live once, on the record (`prize_value`, `is_rule_box`,
+`has_ability`, `clause(kind)` as a plain scan; no caching machinery until a profile earns it).
+
+The native rewrite of the six function bodies and the rewiring of their call sites are ONE event,
+per function (energy first — already aligned; damage last — widest), against this finished
+vocabulary. Until then `tests/cards/test_function_wiring_prep.py` pins the seam: the typed
+ability-energy encodings, the index, and the two silent traps (`bench_reach` reading a store
+Attack as zero reach; the attack-lock fold reading one as never locking) stay asserted at today's
+wrong-but-quiet values so the rewire must flip them consciously.
 
 ## Consequences
 
