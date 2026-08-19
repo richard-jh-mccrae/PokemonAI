@@ -3,6 +3,16 @@ from __future__ import annotations
 
 
 ENERGY_COLORLESS = 0
+# Values verbatim from the engine wire enum (`cg.api` EnergyType).
+ENERGY_GRASS = 1
+ENERGY_FIRE = 2
+ENERGY_WATER = 3
+ENERGY_LIGHTNING = 4
+ENERGY_PSYCHIC = 5
+ENERGY_FIGHTING = 6
+ENERGY_DARKNESS = 7
+ENERGY_METAL = 8
+ENERGY_DRAGON = 9
 ENERGY_WILDCARD = 10
 MINIMUM_ENERGY_UNITS = 1
 
@@ -57,5 +67,7 @@ def payment_fraction(provisions, requirements) -> float:
             (len(required) - len(unmet_cost_slots(provisions, required))) / len(required))
 
 
-__all__ = ("ENERGY_COLORLESS", "ENERGY_WILDCARD", "pays_energy_type",
+__all__ = ("ENERGY_COLORLESS", "ENERGY_GRASS", "ENERGY_FIRE", "ENERGY_WATER", "ENERGY_LIGHTNING",
+           "ENERGY_PSYCHIC", "ENERGY_FIGHTING", "ENERGY_DARKNESS", "ENERGY_METAL", "ENERGY_DRAGON",
+           "ENERGY_WILDCARD", "pays_energy_type",
            "payment_fraction", "provision_units", "unmet_cost_slots")

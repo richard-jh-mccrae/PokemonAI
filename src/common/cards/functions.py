@@ -7,7 +7,7 @@ from pathlib import Path
 
 from common.card_tags import is_card_key
 
-_DEFAULT = Path(__file__).resolve().parent / "card_functions.json"
+_DEFAULT = Path(__file__).resolve().parents[1] / "card_functions.json"
 
 
 class CardFunctions:
