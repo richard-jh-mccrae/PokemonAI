@@ -11,12 +11,28 @@ from common.strategy.strategies import (
     strategy_hint_from_dict,
 )
 from common.strategy.strategy import Roles
+from common.cards.card_facts import (
+    Ability, Attack, BASIC, BASIC_ENERGY, Clause, EnergyCard, ITEM, PokemonCard,
+    SUPPORTER as SUPPORTER_KIND, TrainerCard,
+)
 from common.demand import StrategyBeamBuilder, semantic_action_key
-from common.effects import CardEffects
 from common.options import enumerate_legal_actions
 import pytest
 
 from types import SimpleNamespace
+
+
+def _item(card_id, *clauses):
+    return TrainerCard(card_id, f"Test Item {card_id}", ITEM, clauses=tuple(clauses))
+
+
+def _supporter_card(card_id, *clauses):
+    return TrainerCard(card_id, f"Test Supporter {card_id}", SUPPORTER_KIND,
+                       clauses=tuple(clauses))
+
+
+def _basic(card_id, **kwargs):
+    return PokemonCard(card_id, f"Test Basic {card_id}", 100, 0, BASIC, **kwargs)
 
 
 def test_shipped_deck_roles_name_only_pokemon():
@@ -260,18 +276,11 @@ def test_attack_ready_condition_uses_the_deployed_attack_provider():
     observation = _observation(hand=[])
     observation["current"]["players"][0]["active"][0]["energies"] = [3, 3]
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90, 91))
-
-        @staticmethod
-        def attack(attack_id):
-            return SimpleNamespace(energyTypes=(3,) if attack_id == 90 else (3, 3))
-
+    cards = {10: _basic(10, attacks=(Attack(90, "Small", (3,), 10),
+                                     Attack(91, "Big", (3, 3), 30)))}
     snapshot = activate_strategies(
         observation, resolve_strategies((rule,), (), ()),
-        roles=Roles({}), stats=Stats())
+        roles=Roles({}), cards=cards)
 
     assert snapshot.hints == ()
     assert snapshot.active_ids == ()
@@ -279,31 +288,17 @@ def test_attack_ready_condition_uses_the_deployed_attack_provider():
 
 
 def test_general_funding_strategy_accepts_primary_and_backup_attackers():
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90,))
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(energyTypes=(3,))
+    cards = {10: _basic(10, attacks=(Attack(90, "Hit", (3,), 30),))}
 
     for role in ("primary_attacker", "backup_attacker"):
         snapshot = activate_strategies(
             _observation(hand=[]), resolve_strategies(GENERAL_STRATEGIES),
-            roles=Roles({10: [role]}), stats=Stats())
+            roles=Roles({10: [role]}), cards=cards)
         assert "general.fund_active_attacker" in snapshot.active_ids
 
 
 def test_general_funding_strategy_survives_chip_damage_above_half_health():
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(attacks=(90,))
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(energyTypes=(3,))
+    cards = {10: _basic(10, attacks=(Attack(90, "Hit", (3,), 30),))}
 
     for hp, expected in ((330, True), (250, True), (100, False)):
         observation = _observation(hand=[])
@@ -311,7 +306,7 @@ def test_general_funding_strategy_survives_chip_damage_above_half_health():
             {"hp": hp, "maxHp": 330})
         snapshot = activate_strategies(
             observation, resolve_strategies(GENERAL_STRATEGIES),
-            roles=Roles({10: ["primary_attacker"]}), stats=Stats())
+            roles=Roles({10: ["primary_attacker"]}), cards=cards)
         assert ("general.fund_active_attacker" in snapshot.active_ids) is expected, hp
 
 
@@ -361,16 +356,13 @@ def test_live_odds_refresh_against_the_cached_turn_snapshot():
         observation, resolve_strategies((), (rule,), ()), roles=roles)
     actions = enumerate_legal_actions(observation)
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "draw", "amount": 1},) if card_id == 50 else ()
+    cards = {50: _item(50, Clause("draw", amount=1))}
 
-    reachable = StrategyBeamBuilder(snapshot, effects=Effects()).build(
+    reachable = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1), (12, 9))),
         actions,
     )
-    unreachable = StrategyBeamBuilder(snapshot, effects=Effects()).build(
+    unreachable = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=((12, 10),)), actions)
 
     assert snapshot.snapshot_id
@@ -388,13 +380,7 @@ def test_heal_hint_ignores_play_actions_without_a_source_card():
         obs={"select": {"option": [{}]}, "current": {"players": [{}, {}]}},
         root_seat=0, deck_counts=())
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            assert card_id is not None
-            return ()
-
-    beam = StrategyBeamBuilder(snapshot, effects=Effects()).build(state, [action])
+    beam = StrategyBeamBuilder(snapshot, cards={}).build(state, [action])
 
     assert beam.focused == ()
 
@@ -423,11 +409,10 @@ def _heal_beam(option):
     observation["select"]["option"] = [option, {"type": 14}]
     snapshot = activate_strategies(
         observation, resolve_strategies((rule,), (), ()), roles=Roles({10: ["primary_attacker"]}))
-    # The REAL CardEffects, not a stub: its `int(card_id)` lookup is the thing that raised.
-    effects = CardEffects({"50": [{"kind": "heal", "amount": 30}]})
+    cards = {50: _item(50, Clause("heal", amount=30))}
 
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, effects=effects).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
     return beam, next(action for action in actions if action.identity.kind == "play")
 
@@ -455,30 +440,19 @@ def test_information_hint_includes_free_search_but_excludes_discard_commitments(
         observation, resolve_strategies((rule,), (), ()), roles=Roles({}))
     actions = enumerate_legal_actions(observation)
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "pokemon", "zone": "deck",
-                     "cost": "discard_2", "cost_required": True},)
+    costed = {50: _item(50, Clause("fetch", target="pokemon", zone="deck",
+                                   cost="discard_2", cost_required=True)),
+              11: _basic(11)}
 
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 11,
-                                   stage="basic" if card_id == 11 else None)
-
-    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=costed).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1),)), actions)
 
     assert beam.focused == ()
 
-    class FreeSearch:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+    free = {50: _item(50, Clause("fetch", target="pokemon", zone="deck")),
+            11: _basic(11)}
 
-    free_beam = StrategyBeamBuilder(
-        snapshot, effects=FreeSearch(), stats=Stats()).build(
+    free_beam = StrategyBeamBuilder(snapshot, cards=free).build(
             SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1),)), actions)
 
     assert len(free_beam.focused) == 1
@@ -497,17 +471,10 @@ def test_low_cost_information_strategy_focuses_a_draw_ability():
         observation, resolve_strategies((rule,)), roles=Roles({}))
     actions = enumerate_legal_actions(observation)
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "draw", "amount": 1},) if card_id == 10 else ()
+    cards = {10: _basic(10, abilities=(
+        Ability("Test Draw", clauses=(Clause("draw", amount=1),)),))}
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_supporter=False)
-
-    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1),)), actions)
 
     assert [row.family for row in beam.focused] == ["ability"]
@@ -524,12 +491,7 @@ def test_deploy_strategy_focuses_the_declared_basic():
         observation, resolve_strategies((), (rule,)), roles=Roles({}))
     actions = enumerate_legal_actions(observation)
 
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_pokemon=card_id == 1030, stage="basic")
-
-    beam = StrategyBeamBuilder(snapshot, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards={1030: _basic(1030)}).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     assert [row.family for row in beam.focused] == ["play"]
@@ -546,16 +508,13 @@ def test_damage_setup_strategy_focuses_a_bench_snipe_attack():
         {"id": 20, "serial": 89, "hp": 100, "energies": []}]
     observation["select"]["option"] = [{"type": 13, "attackId": 90}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=30)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(90, "Snipe", (), 10, clauses=(Clause("bench_snipe", amount=30),)),))}
     snapshot = activate_strategies(
         observation, resolve_strategies((), (rule,)), roles=Roles({}),
         opponent_role_worth={20: 30.0})
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     assert [row.family for row in beam.focused] == ["attack"]
@@ -614,20 +573,11 @@ def test_deploy_fetch_is_not_focused_without_a_remaining_evolution_payoff():
                           None, None, (1030,), "this_turn", "high"),
     ))
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 1030,
-                                   stage="basic" if card_id == 1030 else None)
-
+    cards = {50: _item(50, Clause("fetch", target="pokemon", zone="deck")),
+             1030: _basic(1030)}
     registry = SimpleNamespace(line_parents={1031: 1030})
     beam = StrategyBeamBuilder(
-        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+        snapshot, cards=cards, registry=registry).build(
             SimpleNamespace(obs=observation, root_seat=0, deck_counts=((1030, 1),)),
             enumerate_legal_actions(observation),
         )
@@ -645,20 +595,11 @@ def test_deploy_fetch_is_focused_for_a_terminal_basic_partner():
                           None, None, (675,), "immediate", "high"),
     ))
 
-    class Effects:
-        @staticmethod
-        def clauses(_card_id):
-            return ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=card_id == 675,
-                                   stage="basic" if card_id == 675 else None)
-
+    cards = {50: _item(50, Clause("fetch", target="pokemon", zone="deck")),
+             675: _basic(675)}
     registry = SimpleNamespace(line_parents={1031: 1030})
     beam = StrategyBeamBuilder(
-        snapshot, effects=Effects(), stats=Stats(), registry=registry).build(
+        snapshot, cards=cards, registry=registry).build(
             SimpleNamespace(obs=observation, root_seat=0, deck_counts=((675, 1),)),
             enumerate_legal_actions(observation),
         )
@@ -676,21 +617,12 @@ def test_accelerator_clauses_earn_funding_access_odds():
     observation = _observation(hand=[{"id": 1198, "serial": 5, "playerIndex": 0}])
     observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return (({"kind": "accel", "amount": 1, "source": "deck", "energy": "basic"},)
-                    if card_id == 1198 else ())
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(is_supporter=card_id == 1198, is_pokemon=False,
-                                   is_energy=card_id == 906, is_basic_energy=card_id == 906,
-                                   energyType=3)
+    cards = {1198: _supporter_card(
+                 1198, Clause("accel", amount=1, source="deck", energy="basic")),
+             906: EnergyCard(906, "Test Water Energy", BASIC_ENERGY, provides=3)}
 
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=((906, 4),)), actions)
 
     play = next(action for action in actions if action.identity.kind == "play")
@@ -706,18 +638,10 @@ def test_damage_boost_hint_prioritizes_the_boost_play():
     observation = _observation(hand=[{"id": 1141, "serial": 5, "playerIndex": 0}])
     observation["select"]["option"] = [{"type": 7, "index": 0}, {"type": 14}]
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return ({"kind": "damage_boost"},) if card_id == 1141 else ()
-
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=False)
+    cards = {1141: _item(1141, Clause("damage_boost"))}
 
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, effects=Effects(), stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     play = next(action for action in actions if action.identity.kind == "play")
@@ -725,10 +649,7 @@ def test_damage_boost_hint_prioritizes_the_boost_play():
 
 
 def _chain_beam(hand, *, deck_counts, supporter_played=False):
-    """One beam over the REAL card data, so the chain under test is the shipped one."""
-    from common.effects import CardEffects
-    from common.scouting.provider import EngineCardStatProvider
-
+    """One beam over the REAL card store, so the chain under test is the shipped one."""
     hint = SimpleNamespace(
         kind="damage_boost", target_card_ids=(), recipient_serial=None,
         strategy_id="general.boost_the_committed_attack", deadline="this_turn",
@@ -738,9 +659,7 @@ def _chain_beam(hand, *, deck_counts, supporter_played=False):
     observation["current"]["supporterPlayed"] = supporter_played
     observation["select"]["option"] = [{"type": 7, "index": index}
                                        for index in range(len(hand))] + [{"type": 14}]
-    builder = StrategyBeamBuilder(
-        SimpleNamespace(hints=(hint,)), effects=CardEffects.load(),
-        stats=EngineCardStatProvider())
+    builder = StrategyBeamBuilder(SimpleNamespace(hints=(hint,)))
     actions = enumerate_legal_actions(observation)
     state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=tuple(deck_counts))
     beam = builder.build(state, actions)
@@ -913,17 +832,10 @@ def test_damage_setup_hint_matches_a_spread_attacker():
     observation["current"]["players"][1]["bench"] = [{"id": 30, "serial": 88}]
     observation["select"]["option"] = [{"type": 13, "attackId": 500}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def get(_card_id):
-            return SimpleNamespace(is_supporter=False, is_pokemon=True)
-
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=0, benchSpread=60)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(500, "Spread", (), 0, clauses=(Clause("bench_spread", amount=60),)),))}
     actions = enumerate_legal_actions(observation)
-    beam = StrategyBeamBuilder(snapshot, effects=None, stats=Stats()).build(
+    beam = StrategyBeamBuilder(snapshot, cards=cards).build(
         SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
 
     attack = next(action for action in actions if action.identity.kind == "attack")
@@ -943,15 +855,12 @@ def _softening_setup(*, target_hp, amount=None):
         {"id": 20, "serial": 89, "hp": target_hp, "energies": []}]
     observation["select"]["option"] = [{"type": 13, "attackId": 90}, {"type": 14}]
 
-    class Stats:
-        @staticmethod
-        def attack(_attack_id):
-            return SimpleNamespace(benchSnipe=30)
-
+    cards = {10: _basic(10, attacks=(
+        Attack(90, "Snipe", (), 10, clauses=(Clause("bench_snipe", amount=30),)),))}
     snapshot = activate_strategies(
         observation, resolve_strategies((), (rule,)), roles=Roles({}),
         opponent_role_worth={20: 30.0})
-    builder = StrategyBeamBuilder(snapshot, stats=Stats(), sequence_coverage=True)
+    builder = StrategyBeamBuilder(snapshot, cards=cards, sequence_coverage=True)
     state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
     return builder, state, enumerate_legal_actions(observation)
 
@@ -1062,11 +971,7 @@ def _deploy_hint(strategy_id, targets, *, deadline="immediate", conviction="high
         deadline, conviction, bundle, waypoint)
 
 
-class _BasicStats:
-    @staticmethod
-    def get(_card_id):
-        return SimpleNamespace(is_pokemon=True, stage="basic", is_supporter=False,
-                               is_energy=False)
+_BASIC_CARDS = {101: _basic(101), 102: _basic(102)}
 
 
 def _coverage_beam(hints, hand_ids, *, bench_ids=(), sequence_coverage=True,
@@ -1074,7 +979,7 @@ def _coverage_beam(hints, hand_ids, *, bench_ids=(), sequence_coverage=True,
     observation = _coverage_observation(hand_ids, bench_ids=bench_ids)
     snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), tuple(hints))
     builder = StrategyBeamBuilder(
-        snapshot, stats=_BasicStats(), sequence_coverage=sequence_coverage)
+        snapshot, cards=_BASIC_CARDS, sequence_coverage=sequence_coverage)
     builder.prefix_outcomes = tuple(prefix_outcomes)
     actions = enumerate_legal_actions(observation)
     beam = builder.build(
@@ -1168,7 +1073,7 @@ def test_general_and_deck_scope_share_one_need_set_without_precedence():
             observation, resolve_strategies((general,), (deck,)), roles=Roles({}))
         actions = enumerate_legal_actions(observation)
         beam = StrategyBeamBuilder(
-            snapshot, stats=_BasicStats(), sequence_coverage=True).build(
+            snapshot, cards=_BASIC_CARDS, sequence_coverage=True).build(
             SimpleNamespace(obs=observation, root_seat=0, deck_counts=()), actions)
         return [row.action_key for row in beam.focused]
 
@@ -1193,7 +1098,7 @@ def test_satisfied_and_impossible_outcomes_stop_contributing_coverage():
         _deploy_hint("deck.beta_dead", (102, 500)),
     ))
     builder = StrategyBeamBuilder(
-        snapshot, stats=_BasicStats(), sequence_coverage=True)
+        snapshot, cards=_BASIC_CARDS, sequence_coverage=True)
     builder.last_reachability["deck.beta_dead"] = "impossible"
     actions = enumerate_legal_actions(observation)
     beam = builder.build(
@@ -1366,17 +1271,10 @@ def test_riolu_primary_line_with_lunatone_coverage_searches_first():
     ]
     snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
 
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(
-                is_pokemon=True, is_energy=False, is_supporter=False,
-                stage="basic" if card_id == lunatone else "stage1",
-                evolvesFrom=None if card_id == lunatone else "Riolu")
-
     state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=())
     actions = enumerate_legal_actions(observation)
-    builder = StrategyBeamBuilder(snapshot, stats=Stats(), sequence_coverage=True)
+    builder = StrategyBeamBuilder(snapshot, cards={lunatone: _basic(lunatone)},
+                                  sequence_coverage=True)
     beam = builder.build(state, actions)
 
     evolve = next(action for action in actions if action.selection == (0,))
@@ -1421,21 +1319,10 @@ def _partition_beam(peek_clauses, *, deck_counts=((11, 1), (12, 8)),
     ]
     snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return tuple(peek_clauses) if card_id == _PEEK else ()
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(
-                is_pokemon=card_id in {_EVOLUTION, 11, 101, 102}, is_energy=False,
-                is_supporter=False,
-                stage="basic" if card_id in {11, 101, 102} else "stage1")
-
+    cards = {_PEEK: _item(_PEEK, *peek_clauses),
+             11: _basic(11), 101: _basic(101), 102: _basic(102)}
     builder = StrategyBeamBuilder(
-        snapshot, effects=Effects(), stats=Stats(), sequence_coverage=True,
+        snapshot, cards=cards, sequence_coverage=True,
         information_partition=information_partition)
     state = SimpleNamespace(obs=observation, root_seat=0,
                             deck_counts=tuple(deck_counts))
@@ -1445,7 +1332,7 @@ def _partition_beam(peek_clauses, *, deck_counts=((11, 1), (12, 8)),
 
 
 def test_a_live_free_peek_leads_the_beam_by_rule_not_by_score():
-    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    dig = (Clause("fetch", target="pokemon", zone="deck", dig=3),)
 
     beam, actions, builder, _state = _partition_beam(dig)
     evolve = next(action for action in actions if action.identity.kind == "evolve")
@@ -1463,7 +1350,7 @@ def test_a_live_free_peek_leads_the_beam_by_rule_not_by_score():
 
 
 def test_a_dead_peek_does_not_lead_the_beam():
-    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    dig = (Clause("fetch", target="pokemon", zone="deck", dig=3),)
 
     beam, actions, _builder, _state = _partition_beam(dig, deck_counts=((12, 8),))
 
@@ -1474,8 +1361,8 @@ def test_a_dead_peek_does_not_lead_the_beam():
 
 
 def test_a_costed_search_does_not_lead_the_beam():
-    costed = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3,
-               "cost": "discard_2", "cost_required": True},)
+    costed = (Clause("fetch", target="pokemon", zone="deck", dig=3,
+                     cost="discard_2", cost_required=True),)
 
     beam, actions, _builder, _state = _partition_beam(costed)
 
@@ -1486,7 +1373,7 @@ def test_a_costed_search_does_not_lead_the_beam():
 
 
 def test_a_whole_deck_tutor_does_not_lead_over_a_guaranteed_evolve():
-    tutor = ({"kind": "fetch", "target": "pokemon", "zone": "deck"},)
+    tutor = (Clause("fetch", target="pokemon", zone="deck"),)
 
     beam, actions, _builder, _state = _partition_beam(tutor)
 
@@ -1497,7 +1384,7 @@ def test_a_whole_deck_tutor_does_not_lead_over_a_guaranteed_evolve():
 
 
 def test_a_pure_draw_card_does_not_lead_over_a_guaranteed_evolve():
-    draw = ({"kind": "draw", "amount": 1},)
+    draw = (Clause("draw", amount=1),)
 
     beam, actions, _builder, _state = _partition_beam(draw)
 
@@ -1508,7 +1395,7 @@ def test_a_pure_draw_card_does_not_lead_over_a_guaranteed_evolve():
 
 
 def test_partition_keeps_the_coverage_order_inside_each_class():
-    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    dig = (Clause("fetch", target="pokemon", zone="deck", dig=3),)
     extras = (
         _deploy_hint("deck.alpha", (101,)),
         _deploy_hint("deck.beta", (102,)),
@@ -1530,7 +1417,7 @@ def test_partition_keeps_the_coverage_order_inside_each_class():
 
 
 def test_rank_legal_returns_the_live_peek_first_with_the_partition_on():
-    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    dig = (Clause("fetch", target="pokemon", zone="deck", dig=3),)
 
     _beam, actions, builder, state = _partition_beam(dig)
 
@@ -1540,7 +1427,7 @@ def test_rank_legal_returns_the_live_peek_first_with_the_partition_on():
 
 
 def test_a_held_information_hint_does_not_lead_the_beam():
-    dig = ({"kind": "fetch", "target": "pokemon", "zone": "deck", "dig": 3},)
+    dig = (Clause("fetch", target="pokemon", zone="deck", dig=3),)
     hints = (
         ActivatedStrategy("deck.develop_active", "evolve", "own.active", 10, 77,
                           (_EVOLUTION,), "immediate", "high", None, 0),
@@ -1560,21 +1447,9 @@ def test_a_held_information_hint_does_not_lead_the_beam():
     ]
     snapshot = StrategySnapshot(4, 0, "hash", "snapshot", (), (), hints)
 
-    class Effects:
-        @staticmethod
-        def clauses(card_id):
-            return dig if card_id == _PEEK else ()
-
-    class Stats:
-        @staticmethod
-        def get(card_id):
-            return SimpleNamespace(
-                is_pokemon=card_id in {_EVOLUTION, 11}, is_energy=False,
-                is_supporter=False, stage="basic" if card_id == 11 else "stage1")
-
     builder = StrategyBeamBuilder(
-        snapshot, effects=Effects(), stats=Stats(), sequence_coverage=True,
-        information_partition=True)
+        snapshot, cards={_PEEK: _item(_PEEK, *dig), 11: _basic(11)},
+        sequence_coverage=True, information_partition=True)
     state = SimpleNamespace(obs=observation, root_seat=0, deck_counts=((11, 1), (12, 8)))
     actions = enumerate_legal_actions(observation)
     beam = builder.build(state, actions)

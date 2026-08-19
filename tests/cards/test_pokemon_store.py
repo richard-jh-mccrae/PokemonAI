@@ -78,11 +78,14 @@ def test_default_roles_pin():
 
 
 def test_no_role_is_assigned_by_prize_count():
-    """The two-prize bodies do not share a Role, and two of them never attack for the deck."""
+    """The multi-prize bodies do not share a Role, and two of them never attack for the deck."""
     roles = pokemon_default_roles()
-    two_prize = {card_id for card_id, card in pokemon_card_store().items()
-                 if card.prize_value == 2}
-    assert two_prize == {121, 140, 678, 1031, 1071}
+    multi_prize = {card_id for card_id, card in pokemon_card_store().items()
+                   if card.prize_value > 1}
+    assert multi_prize == {121, 140, 678, 1031, 1071}
+    # A Mega Evolution ex gives up three prizes; a plain ex two.
+    assert {card.prize_value for card in map(pokemon_card_store().get, (678, 1031))} == {3}
+    assert {card.prize_value for card in map(pokemon_card_store().get, (121, 140, 1071))} == {2}
     assert "primary_attacker" not in roles[140] + roles[1071]
 
 

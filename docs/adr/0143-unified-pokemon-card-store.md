@@ -42,27 +42,26 @@ filename — and the package init stays empty of re-exports so importing one fun
 its siblings or cycle back into the card records. Every one of these modules imports nothing from
 the project, which is what made the move free.
 
-These modules still read `CardStat`, not the card records. Wiring them to the records is deferred:
-it changes every call site at once, and the self-play-only scope makes it cheap to do later against
-authored cards on both seats. The tag and clause tables stay where they are — 88% of their rows are
-opponent cards, which the scouting rework replaces. `card_worth.py` stays out: it prices a function
-rather than defining one, and ADR-0065 owns that currency.
+The tag and clause tables stay where they are — 88% of their rows are opponent cards, which the
+scouting rework replaces. `card_worth.py` stays out: it prices a function rather than defining
+one, and ADR-0065 owns that currency.
 
-## How facts reach the functions (amended 2026-08-19)
+## How facts reach the functions (amended 2026-08-19; wired the same day)
 
 A function's hands hold records, never ids: `PokemonCard`, `Attack`, `Clause` arrive as plain
-arguments, and the id-to-record resolution happens once at the edge, where the board-state layer
-resolves each body it sees through the package's cached indexes (`card_store()`, `attack_index()`).
-The store's clause vocabulary is canonical — a function conforms to the card file, never the
-reverse — and derived readings live once, on the record (`prize_value`, `is_rule_box`,
-`has_ability`, `clause(kind)` as a plain scan; no caching machinery until a profile earns it).
+arguments, and the id-to-record resolution happens once at the edge, where each board-state
+consumer holds a `cards` mapping that defaults to `card_store()` (tests inject synthetic records
+through the same parameter). The store's clause vocabulary is canonical — a function conforms to
+the card file, never the reverse — and derived readings live once, on the record (`prize_value`,
+`is_rule_box`, `has_ability`, `clause(kind)` as a plain scan; `play_clauses(card)` for the effect
+legs a play offers — a record's own plus its Abilities', never its attacks').
 
-The native rewrite of the six function bodies and the rewiring of their call sites are ONE event,
-per function (energy first — already aligned; damage last — widest), against this finished
-vocabulary. Until then `tests/cards/test_function_wiring_prep.py` pins the seam: the typed
-ability-energy encodings, the index, and the two silent traps (`bench_reach` reading a store
-Attack as zero reach; the attack-lock fold reading one as never locking) stay asserted at today's
-wrong-but-quiet values so the rewire must flip them consciously.
+The wiring pass ran as one event per function, energy first and damage last. The two silent traps
+`tests/cards/test_function_wiring_prep.py` had pinned (`bench_reach` reading a store Attack as
+zero reach; the attack-lock fold reading one as never locking) are FLIPPED: the same tests now
+assert the real readings. The rewire also caught a record defect the prep tests had wrongly
+pinned — a Mega Evolution ex gives up three prizes, not two — surfaced by three human-ruled
+acceptance gates flipping and settled against the engine provider.
 
 ## Consequences
 
@@ -70,6 +69,7 @@ A mid-game card query is one dict hit plus attribute reads, and the store covers
 all three decklists — `tests/cards/test_energy_store.py` pins exactly that, while the
 `test_pokemon_store.py` / `test_trainer_store.py` guards assert every fact class against its
 source (engine defs, tag table, clause store, shipped role derivation), so a hand edit to a
-generated file cannot drift silently. The legacy stores remain live for off-deck cards and every
-current consumer until the decision code repoints; that migration is the follow-up, not this
-decision.
+generated file cannot drift silently. The six card functions and their Bellman consumers now read
+the records; the legacy stat/effects tables remain live only for the scouting layer, the strategy
+authoring/minting layer, and the Lethal Solver's coverage gate, all of which the scouting rework
+owns.

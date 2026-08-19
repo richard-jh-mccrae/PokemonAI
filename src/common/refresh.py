@@ -6,6 +6,7 @@ from collections import Counter
 from math import sqrt
 
 from .algebra import Ledger, Refresh
+from .cards import card_store, play_clauses
 from .cards.functions.draw import draw_branches, draw_shape_problem
 from .demand import DemandModel, access_probability
 from .value import KNOWN_CARD_FLOOR, held_card_worth, worth_to_prizes
@@ -43,12 +44,13 @@ def played_card_id(state, action) -> int | None:
     return int(hand[hand_index]["id"])
 
 
-def refresh_transition(state, action, effects) -> Refresh | None:
+def refresh_transition(state, action, cards=None) -> Refresh | None:
     """Describe a generic shuffle-refresh as printed counts, with no sampled successor."""
     card_id = played_card_id(state, action)
-    clauses = effects.clauses(card_id) if effects is not None and card_id is not None else ()
+    cards = card_store() if cards is None else cards
+    clauses = play_clauses(cards.get(int(card_id))) if card_id is not None else ()
     candidates = tuple(clause for clause in clauses
-                       if clause.get("kind") == "draw" and clause.get("rider") in SHUFFLE_RIDERS)
+                       if clause.kind == "draw" and clause.rider in SHUFFLE_RIDERS)
     if len(candidates) != 1 or draw_shape_problem(candidates[0]) is not None:
         return None
     current = state.obs.get("current") or {}
@@ -62,7 +64,7 @@ def refresh_transition(state, action, effects) -> Refresh | None:
     if not branches:
         return None
     return Refresh(card_id, branches,
-                   candidates[0].get("rider") == SHUFFLE_BOTH_HANDS_RIDER)
+                   candidates[0].rider == SHUFFLE_BOTH_HANDS_RIDER)
 
 
 def _families(potential) -> dict[str, float]:
@@ -72,17 +74,17 @@ def _families(potential) -> dict[str, float]:
 class RefreshEvaluator:
     """Exact draw Odds over Bellman hand value minus surrendered visible options."""
 
-    def __init__(self, registry, family_evaluator, *, effects=None, stats=None,
+    def __init__(self, registry, family_evaluator, *, cards=None,
                  opponent_hand_share=None, **_ignored):
         self.registry = registry
         self.family_evaluator = family_evaluator
-        self.effects = effects
-        self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         # One share for both pricing paths: default to whatever the board potential runs with.
         self.opponent_hand_share = (
             max(0.0, float(opponent_hand_share)) if opponent_hand_share is not None
             else float(getattr(family_evaluator, "opponent_hand_share", 0.0)))
-        self.demand = DemandModel(registry, family_evaluator, effects=effects, stats=stats)
+        self.demand = DemandModel(registry, family_evaluator, cards=self.cards)
 
     def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
         observation = state.obs
@@ -191,8 +193,7 @@ class RefreshEvaluator:
             marginal = sum(max(0.0, before.get(name, 0.0) - families.get(name, 0.0))
                            for name in HELD_OPTION_FAMILIES)
             card_id = int(card["id"])
-            held_worth = held_card_worth(
-                self.registry, self.effects, self.stats, state, card_id)
+            held_worth = held_card_worth(self.registry, self.cards, state, card_id)
             component = (min(marginal, worth_to_prizes(held_worth))
                          if held_worth < self.registry.worth(card_id)
                          else marginal)

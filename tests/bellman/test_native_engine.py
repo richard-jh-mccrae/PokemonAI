@@ -39,12 +39,14 @@ def test_partial_ability_that_resolves_as_a_noop_fails_closed():
     successor = state.with_observation(successor_observation)
     child = SimpleNamespace(gs=SimpleNamespace(pending=None), step=lambda _choice: None)
     engine = SimpleNamespace(fork=lambda: child)
+    from common.cards.card_facts import Clause, STADIUM, TrainerCard
     provider = object.__new__(CgpyTransitionProvider)
     provider._local_nested = False
     provider._engines = {state.semantic_key: engine}
-    provider.effects = CardEffects({1259: [{
-        "kind": "fetch", "target": "pokemon", "zone": "deck", "name_family": "Marnie's",
-    }]})
+    provider.cards = {1259: TrainerCard(
+        1259, "Test Stadium", STADIUM,
+        clauses=(Clause("fetch", target="pokemon", zone="deck", name_family="Marnie's"),))}
+    provider.effects = CardEffects({})
     provider.stats = None
     provider._register_successor = lambda *_args: Deterministic(successor)
 

@@ -56,7 +56,7 @@ def _focused(observation, snapshot):
     state = SimpleNamespace(obs=observation, root_seat=0,
                             deck_counts=((STARYU, 3), (MEGA_STARMIE_EX, 3)))
     beam = StrategyBeamBuilder(
-        snapshot, effects=EFFECTS, stats=STATS, registry=None, width=8).build(state, actions)
+        snapshot, registry=None, width=8).build(state, actions)
     keys = {row.action_key for row in beam.focused}
     return actions, {action for action in actions if semantic_action_key(action) in keys}
 
@@ -67,7 +67,7 @@ def _selections_carrying(observation, snapshot, strategy_id):
     state = SimpleNamespace(obs=observation, root_seat=0,
                             deck_counts=((STARYU, 3), (MEGA_STARMIE_EX, 3)))
     beam = StrategyBeamBuilder(
-        snapshot, effects=EFFECTS, stats=STATS, registry=None, width=8).build(state, actions)
+        snapshot, registry=None, width=8).build(state, actions)
     by_key = {semantic_action_key(action): action for action in actions}
     return {by_key[row.action_key].selection for row in beam.focused
             if strategy_id in row.path_ids}
@@ -104,17 +104,21 @@ def test_bench_hint_focuses_the_basic_pokemon_tutor():
 def test_only_jetting_blow_can_do_the_softening_nebula_beam_cashes_in():
     """Nebula Beam cannot reach the Bench, so the damage_setup matcher — which only ever accepted
     a bench-reaching attack — can only ever mean Jetting Blow's rider."""
-    assert bench_reach(STATS.attack(JETTING_BLOW)) > 0
-    assert bench_reach(STATS.attack(NEBULA_BEAM)) == 0
+    from common.cards import attack_index
+
+    assert bench_reach(attack_index()[JETTING_BLOW]) > 0
+    assert bench_reach(attack_index()[NEBULA_BEAM]) == 0
 
 
 def test_one_softening_pass_covers_a_bench_body_but_not_a_mega_sized_one():
     """One rider then one gusted Nebula Beam reaches this far; a Mega-sized body needs more
     softening passes than that, and the hint keeps asking until the target leaves the board."""
-    reach = int(STATS.attack(NEBULA_BEAM).damage) + bench_reach(STATS.attack(JETTING_BLOW))
+    from common.cards import attack_index, pokemon_card_store
+
+    reach = int(attack_index()[NEBULA_BEAM].damage) + bench_reach(attack_index()[JETTING_BLOW])
 
     assert reach == 260
-    assert reach < int(STATS.get(MEGA_STARMIE_EX).hp)
+    assert reach < int(pokemon_card_store()[MEGA_STARMIE_EX].hp)
 
 
 def test_the_snipe_hint_focuses_jetting_blow_and_not_nebula_beam():
@@ -144,12 +148,12 @@ def test_the_reload_waits_for_the_heal_that_creates_its_opening():
 
 
 def test_the_reload_names_the_energy_that_repays_a_full_bounce_in_one_attach():
+    from common.cards import energy_card_store
     from common.cards.functions.energy import provision_units
 
-    tags = {IGNITION_ENERGY: tuple(FUNCTIONS.tags(IGNITION_ENERGY))}
     reload_hint = next(hint for hint in STRATEGY.strategies
                        if hint.identifier == "mega_starmie.reload_the_healed_mega_with_ignition")
 
     assert reload_hint.desired_facts[0].target_card_ids == (IGNITION_ENERGY,)
-    assert provision_units(tags, IGNITION_ENERGY, evolved=True) == len(
+    assert provision_units(energy_card_store()[IGNITION_ENERGY], evolved=True) == len(
         STATS.attack(NEBULA_BEAM).energyTypes)

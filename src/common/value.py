@@ -15,6 +15,8 @@ from common.card_worth import (
 
 from .algebra import Ledger
 from .api import ActionIdentity
+from .cards import card_store, play_clauses
+from .cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, PokemonCard
 from .cards.functions.damage import bench_reach
 from .cards.functions.fetch import DEADNESS, fetch_target_matches
 from .option_equivalence import fingerprint_source_card_id
@@ -30,22 +32,20 @@ def worth_to_prizes(worth: float) -> float:
     return float(worth) / WORTH_PER_PRIZE
 
 
-def held_card_worth(registry, effects, stats, state: DecisionState, card_id: int, *,
+def held_card_worth(registry, cards, state: DecisionState, card_id: int, *,
                     discount_redundant: bool = False) -> float:
     worth = registry.worth(card_id)
-    if effects is None or stats is None:
-        return worth
-    clauses = tuple(effects.clauses(card_id))
+    clauses = play_clauses(cards.get(int(card_id)))
     fetches = tuple(clause for clause in clauses
-                    if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+                    if clause.kind == "fetch" and clause.zone == "deck")
     if not fetches or len(fetches) != len(clauses):
         return worth
 
     def matches(clause, target_id):
-        stat = stats.get(target_id)
-        return (fetch_target_matches(clause, stat, reading=DEADNESS)
-                and (not clause.get("name_family") or clause["name_family"] in
-                     str(getattr(stat, "name", ""))))
+        card = cards.get(int(target_id))
+        return (fetch_target_matches(clause, card, reading=DEADNESS)
+                and (not clause.name_family or clause.name_family in
+                     str(getattr(card, "name", ""))))
 
     available = tuple(target_id for target_id, count in state.deck_counts if count > 0)
     if not any(matches(clause, target_id)
@@ -141,27 +141,29 @@ class ValueRegistry:
         self.seeds = seeds
 
     @classmethod
-    def from_strategy(cls, *, strategy, stats, functions, deck, roles=None) -> "ValueRegistry":
+    def from_strategy(cls, *, strategy, functions, deck, roles=None,
+                      cards=None) -> "ValueRegistry":
+        records = card_store() if cards is None else cards
         card_ids = set(int(card_id) for card_id in deck)
         roles = roles or getattr(strategy, "roles", {}) or {}
         role_rows = {card_id: tuple(roles.get(card_id, ())) for card_id in card_ids}
         tags = {card_id: tuple(functions.tags(card_id)) if functions else () for card_id in card_ids}
         facts = {}
         for card_id in card_ids:
-            stat = stats.get(card_id) if stats else None
-            attacks = (tuple(stats.attack(attack_id) for attack_id in getattr(stat, "attacks", ()) or ())
-                       if stat is not None and hasattr(stats, "attack") else ())
+            card = records.get(card_id)
+            is_energy = isinstance(card, EnergyCard)
             facts[card_id] = CardFacts(
-                known=stat is not None,
-                ace_spec=bool(stat is not None and getattr(stat, "aceSpec", False)),
-                typed_basic_energy=bool(stat is not None and
-                                        getattr(stat, "is_typed_basic_energy", False)),
-                pokemon=bool(stat is not None and getattr(stat, "is_pokemon", False)),
-                stage=(getattr(stat, "stage", None) if stat is not None else None),
-                prize_value=(getattr(stat, "prize_value", 1) if stat is not None else 1),
-                energy_type=(getattr(stat, "energyType", None) if stat is not None else None),
+                known=card is not None,
+                ace_spec=bool(getattr(card, "ace_spec", False)),
+                typed_basic_energy=bool(is_energy and card.kind == BASIC_ENERGY
+                                        and card.provides != COLORLESS),
+                pokemon=isinstance(card, PokemonCard),
+                stage=getattr(card, "stage", None),
+                prize_value=(getattr(card, "prize_value", 1) if card is not None else 1),
+                energy_type=(card.provides if is_energy
+                             else getattr(card, "energy_type", None)),
                 bench_damage=max((bench_reach(attack)
-                                  for attack in attacks if attack is not None), default=0),
+                                  for attack in getattr(card, "attacks", ()) or ()), default=0),
             )
         declarations = tuple(line for line in getattr(roles, "lines", ()) if line.path)
         lines = tuple(tuple(line.path) for line in declarations)
@@ -229,19 +231,21 @@ class ValueOracle:
 
     def __init__(self, registry: ValueRegistry,
                  family_evaluator: Callable[[Mapping], Potential], *, effects=None, stats=None,
-                 refresh_evaluator=None):
+                 refresh_evaluator=None, cards=None):
         self.registry = registry
         self.effects = effects
         self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         if family_evaluator is None:
             raise ValueError("Bellman requires an explicit board-potential evaluator")
         self._families = family_evaluator
         self._potential_cache: dict[str, Potential] = {}
         self._reveal_priority_cache = {}
-        if refresh_evaluator is None and effects is not None and stats is not None:
+        if refresh_evaluator is None:
             from .refresh import RefreshEvaluator
             refresh_evaluator = RefreshEvaluator(
-                registry, family_evaluator, effects=effects, stats=stats)
+                registry, family_evaluator, cards=self.cards)
         self._refresh = refresh_evaluator
 
     def potential(self, state: DecisionState, *, model=None) -> Potential:
@@ -283,7 +287,7 @@ class ValueOracle:
 
     def _unresolved_fetch_cost(self, before: DecisionState, after: DecisionState,
                                action: ActionIdentity) -> float:
-        if action.kind != "play" or self.effects is None:
+        if action.kind != "play":
             return 0.0
         if int((after.obs.get("select") or {}).get("context", 0)) != 0:
             return 0.0
@@ -292,8 +296,8 @@ class ValueOracle:
         if len(card_ids) != 1:
             return 0.0
         card_id = next(iter(card_ids))
-        clauses = tuple(self.effects.clauses(card_id))
-        if not clauses or any(clause.get("kind") != "fetch" for clause in clauses):
+        clauses = play_clauses(self.cards.get(int(card_id)))
+        if not clauses or any(clause.kind != "fetch" for clause in clauses):
             return 0.0
 
         def board(state):
@@ -322,8 +326,7 @@ class ValueOracle:
 
     def _stranded_fetch_cost(self, state: DecisionState, after: DecisionState,
                              action: ActionIdentity) -> float:
-        if (action.kind not in {"play", "ability", "skill"}
-                or self.effects is None or self.stats is None):
+        if action.kind not in {"play", "ability", "skill"}:
             return 0.0
 
         def card_ids(value):
@@ -345,9 +348,9 @@ class ValueOracle:
             card_id = next((found for part in action.parts
                             if (found := fingerprint_source_card_id(part, state.obs)) is not None),
                            None)
-        clauses = tuple(self.effects.clauses(card_id)) if card_id is not None else ()
+        clauses = play_clauses(self.cards.get(int(card_id))) if card_id is not None else ()
         fetches = tuple(clause for clause in clauses
-                        if clause.get("kind") == "fetch" and clause.get("zone") == "deck")
+                        if clause.kind == "fetch" and clause.zone == "deck")
         if not fetches or len(fetches) != len(clauses):
             return 0.0
         players = (state.obs.get("current") or {}).get("players") or ()
@@ -369,12 +372,12 @@ class ValueOracle:
             targets = tuple(acquired) if acquired else tuple(
                     int(target_id) for target_id, count in available.items()
                     if count > 0 and fetch_target_matches(
-                        clause, self.stats.get(target_id), reading=DEADNESS)
-                    and (not clause.get("name_family") or clause["name_family"] in
-                         str(getattr(self.stats.get(target_id), "name", ""))))
+                        clause, self.cards.get(int(target_id)), reading=DEADNESS)
+                    and (not clause.name_family or clause.name_family in
+                         str(getattr(self.cards.get(int(target_id)), "name", ""))))
             if not targets:
                 continue
-            if any(not getattr(self.stats.get(target_id), "evolvesFrom", None)
+            if any(not getattr(self.cards.get(int(target_id)), "evolves_from", None)
                    for target_id in targets):
                 return 0.0
             playable = {
@@ -437,7 +440,7 @@ class ValueOracle:
     def _held_card_worth(self, state: DecisionState, card_id: int, *,
                          discount_redundant: bool = False) -> float:
         return held_card_worth(
-            self.registry, self.effects, self.stats, state, card_id,
+            self.registry, self.cards, state, card_id,
             discount_redundant=discount_redundant)
 
     def continuation_upper_bound(self, state: DecisionState) -> float:
@@ -456,15 +459,26 @@ class ValueOracle:
         return self._refresh.evaluate(state, node, include_next_turn=include_next_turn)
 
     def refresh_attack_independent(self, state: DecisionState, action) -> bool:
-        if self.stats is None or not hasattr(self.stats, "attack") or len(action.selection) != 1:
+        if len(action.selection) != 1:
             return False
         options = tuple((state.obs.get("select") or {}).get("option") or ())
         index = action.selection[0]
         option = options[index] if 0 <= index < len(options) else {}
         attack_id = option.get("attackId")
-        attack = self.stats.attack(attack_id) if attack_id is not None else None
-        return bool(attack is not None and getattr(attack, "scaleVar", None) != "atk_hand"
-                    and not getattr(attack, "hiddenPerUnit", 0))
+        players = (state.obs.get("current") or {}).get("players") or ()
+        seat = int(state.obs.get("bellmanActor", state.root_seat))
+        mine = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+        active = next((body for body in (mine.get("active") or ()) if body), None)
+        card = self.cards.get(int(active["id"])) if active and active.get("id") is not None \
+            else None
+        attack = next((attack for attack in getattr(card, "attacks", ()) or ()
+                       if attack.attack_id == int(attack_id)), None) \
+            if attack_id is not None else None
+        if attack is None:
+            return False
+        scale = attack.clause("scale")
+        return ((scale is None or scale.var != "atk_hand")
+                and attack.clause("hidden_scale") is None)
 
     def reveal_choice_priority(self, before: DecisionState, after: DecisionState) -> float:
         key = before.semantic_key, after.semantic_key
@@ -491,8 +505,8 @@ class ValueOracle:
 
         card_id = played_card_id(state, action)
         return bool(card_id is not None and any(
-            clause.get("kind") == "heal" and clause.get("rider") == "bounce_energy_to_hand"
-            for clause in self._refresh.effects.clauses(card_id)
+            clause.kind == "heal" and clause.rider == "bounce_energy_to_hand"
+            for clause in play_clauses(self.cards.get(int(card_id)))
         ))
 
 __all__ = (

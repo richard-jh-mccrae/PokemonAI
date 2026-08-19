@@ -57,6 +57,16 @@ def attack_index() -> Mapping[int, Attack]:
     return MappingProxyType(index)
 
 
+def play_clauses(card) -> tuple[Clause, ...]:
+    """Every effect Clause playing this card offers: its own plus its Abilities'. Attack clauses
+    stay on the Attack record — an attack effect is not offered by playing the card."""
+    if card is None:
+        return ()
+    own = tuple(getattr(card, "clauses", ()) or ())
+    return own + tuple(clause for ability in getattr(card, "abilities", ()) or ()
+                       for clause in ability.clauses)
+
+
 @lru_cache(maxsize=1)
 def card_store() -> Mapping[int, PokemonCard | TrainerCard | EnergyCard]:
     stores = (pokemon_card_store(), trainer_card_store(), energy_card_store())
@@ -76,4 +86,5 @@ def pokemon_default_roles() -> Mapping[int, tuple[str, ...]]:
 
 __all__ = ("Ability", "Attack", "CardFunctions", "Clause", "EnergyCard", "PokemonCard",
            "TrainerCard", "attack_index", "card_store", "energy_card_store",
-           "pokemon_card_store", "pokemon_default_roles", "trainer_card_store")
+           "play_clauses", "pokemon_card_store", "pokemon_default_roles",
+           "trainer_card_store")

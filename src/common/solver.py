@@ -15,6 +15,8 @@ from .algebra import (
 from .api import PlanStep, RootDecision
 from .budget_prototype import FairBudgetPrototype
 from .commutativity import ActionFootprint, independent
+from .cards import play_clauses
+from .cards.card_facts import PokemonCard, TOOL, TrainerCard
 from .cards.functions.fetch import DEADNESS, WINDOW, fetch_target_matches
 from .options import LegalAction
 from .option_equivalence import option_source_card
@@ -589,7 +591,7 @@ class ProductionSolver(ReferenceSolver):
         if (self.strategy_snapshot is not None
                 and self.profile.get("strategy.focus_enabled") >= 0.5):
             self._strategy_builder = StrategyBeamBuilder(
-                self.strategy_snapshot, effects=self.oracle.effects, stats=self.oracle.stats,
+                self.strategy_snapshot, cards=self.oracle.cards,
                 registry=self.oracle.registry,
                 width=self.profile.get("strategy.focus_width"),
                 sequence_coverage=(
@@ -1024,30 +1026,26 @@ class ProductionSolver(ReferenceSolver):
     def _peek_is_look_class(self, state: DecisionState, action: LegalAction) -> bool:
         """Whether this peek only looks at a bounded slice of the deck (a printed ``dig``).  A
         whole-deck tutor certainly spends itself for a known card, so playing it is a commitment."""
-        effects = self.oracle.effects
-        if effects is None:
-            return True
         card_id = played_card_id(state, action)
         if card_id is None:
             return True
-        return look_class_clauses(effects.clauses(card_id))
+        return look_class_clauses(play_clauses(self.oracle.cards.get(int(card_id))))
 
     def _peek_is_live(self, state: DecisionState, action: LegalAction) -> bool:
         """Whether this peek can still reveal anything: a fetch window with zero live targets in
         the remaining deck carries zero information, so it must not order anyone (ADR-0140)."""
-        effects, stats = self.oracle.effects, self.oracle.stats
-        if effects is None or stats is None:
-            return True
+        cards = self.oracle.cards
         card_id = played_card_id(state, action)
         if card_id is None:
             return True
-        fetches = tuple(clause for clause in effects.clauses(card_id)
-                        if clause.get("kind") == "fetch")
+        fetches = tuple(clause for clause in play_clauses(cards.get(int(card_id)))
+                        if clause.kind == "fetch")
         if not fetches:
             return True
         return any(
-            count > 0 and any(fetch_target_matches(clause, stats.get(target_id), reading=WINDOW)
-                              for clause in fetches)
+            count > 0 and any(
+                fetch_target_matches(clause, cards.get(int(target_id)), reading=WINDOW)
+                for clause in fetches)
             for target_id, count in state.deck_counts)
 
     def _zone_counts(self, state: DecisionState, zone: str):
@@ -1065,19 +1063,19 @@ class ProductionSolver(ReferenceSolver):
             scratch[key] = tuple(held.items())
         return scratch[key]
 
-    def _dead_fetch_cards(self, card_id: int) -> tuple[dict, ...] | None:
+    def _dead_fetch_cards(self, card_id: int) -> tuple | None:
         """The fetch clauses of a Trainer whose whole printed effect is an unconditional fetch.
         Playing a Pokemon benches a body, so its play changes the board whatever the fetch finds."""
         cached = self._dead_fetch_clauses.get(card_id, _UNSET)
         if cached is not _UNSET:
             return cached
-        stat = self.oracle.stats.get(card_id)
-        clauses = tuple(self.oracle.effects.clauses(card_id))
+        card = self.oracle.cards.get(int(card_id))
+        clauses = play_clauses(card)
         usable = (bool(clauses)
-                  and stat is not None and not getattr(stat, "is_pokemon", False)
-                  and all(clause.get("kind") == "fetch" for clause in clauses)
-                  and not any(clause.get("cost") or clause.get("cost_required")
-                              or clause.get("rider") or clause.get("trigger")
+                  and card is not None and not isinstance(card, PokemonCard)
+                  and all(clause.kind == "fetch" for clause in clauses)
+                  and not any(clause.cost or clause.cost_required
+                              or clause.rider or clause.trigger
                               for clause in clauses))
         self._dead_fetch_clauses[card_id] = result = clauses if usable else None
         return result
@@ -1085,8 +1083,8 @@ class ProductionSolver(ReferenceSolver):
     def _fetch_is_dead(self, state: DecisionState, action: LegalAction) -> bool:
         """Whether this play is entirely a fetch reaching nothing in its named zones.  Only the card
         itself moves, so skipping it keeps every continuation and a strictly larger hand."""
-        stats = self.oracle.stats
-        if self.oracle.effects is None or stats is None or action.identity.kind != "play":
+        cards = self.oracle.cards
+        if action.identity.kind != "play":
             return False
         card_id = played_card_id(state, action)
         if card_id is None:
@@ -1095,28 +1093,26 @@ class ProductionSolver(ReferenceSolver):
         if clauses is None:
             return False
         return not any(
-            count > 0 and fetch_target_matches(clause, stats.get(target_id), reading=DEADNESS)
+            count > 0 and fetch_target_matches(
+                clause, cards.get(int(target_id)), reading=DEADNESS)
             for clause in clauses
-            for target_id, count in self._zone_counts(state, str(clause.get("zone", "deck"))))
+            for target_id, count in self._zone_counts(state, str(clause.zone or "deck")))
 
     def _hand_size_sensitive_play(self, state: DecisionState, actions) -> bool:
         """Whether any legal play reads or moves the whole hand (draw-to-hand-size, shuffle-hand).
         Against one, a smaller hand can be better, so the dead-fetch proof does not hold here."""
-        effects = self.oracle.effects
-        if effects is None:
-            return False
         for action in actions:
             if action.identity.kind != "play":
                 continue
             card_id = played_card_id(state, action)
             if card_id is None:
                 continue
-            for clause in effects.clauses(card_id):
-                if clause.get("to_hand_size") is not None:
+            for clause in play_clauses(self.oracle.cards.get(int(card_id))):
+                if clause.to_hand_size is not None:
                     return True
-                if "hand" in str(clause.get("rider", "")) or "hand" in str(clause.get("cost", "")):
+                if "hand" in str(clause.rider or "") or "hand" in str(clause.cost or ""):
                     return True
-                conditional = clause.get("amount_if") or {}
+                conditional = clause.amount_if or {}
                 if "hand" in str(conditional.get("condition", "")) or "to_hand_size" in conditional:
                     return True
         return False
@@ -1143,17 +1139,14 @@ class ProductionSolver(ReferenceSolver):
         When one does, the peek may be worth more as payment than as a peek, and only the value
         calculation can weigh that — the gate stands down (ADR-0140).
         """
-        effects = self.oracle.effects
-        if effects is None:
-            return False
         for action in actions:
             if action.identity.kind != "play":
                 continue
             card_id = played_card_id(state, action)
             if card_id is None:
                 continue
-            if any(clause.get("cost") or clause.get("cost_required")
-                   for clause in effects.clauses(card_id)):
+            if any(clause.cost or clause.cost_required
+                   for clause in play_clauses(self.oracle.cards.get(int(card_id)))):
                 return True
         return False
 
@@ -1200,11 +1193,11 @@ class ProductionSolver(ReferenceSolver):
             option = options[index] if 0 <= index < len(options) else None
             source = option_source_card(option, state.obs)
             source_id = int(source["id"]) if source and source.get("id") is not None else None
-            source_stat = self.oracle.stats.get(source_id) \
-                if source_id is not None and self.oracle.stats is not None else None
+            source_card = self.oracle.cards.get(source_id) if source_id is not None else None
             if (footprint is not None and footprint.commitment and not footprint.barrier
                     and action.identity.kind in DOMINATED_COMMITMENT_KINDS
-                    and not bool(getattr(source_stat, "is_tool", False))
+                    and not (isinstance(source_card, TrainerCard)
+                             and source_card.kind == TOOL)
                     and semantic_action_key(action) not in protected_keys):
                 self.information_pruned += 1
                 self._structural_prunes.append({

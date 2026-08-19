@@ -6,6 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
+from .cards import card_store
 from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
@@ -158,11 +159,13 @@ class NativeCgTransitionProvider:
     backend = "native-cg-bellman"
 
     def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None,
-                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT):
+                 api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT, cards=None):
         self.root = root
         self.registry = registry
         self.effects = effects
         self.stats = stats
+        #: Card records by id — the unified store unless a test injects its own records.
+        self.cards = card_store() if cards is None else cards
         self.world_count = max(1, int(world_count))
         self._worlds: dict[str, tuple[_NativeWorld, ...]] = {}
         self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
@@ -196,7 +199,7 @@ class NativeCgTransitionProvider:
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
     def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, effects=self.effects, stats=self.stats)
+        return action_footprint(state, action, cards=self.cards)
 
     def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
         kind = action.identity.kind
@@ -230,7 +233,7 @@ class NativeCgTransitionProvider:
         worlds = self._worlds.get(state.semantic_key)
         if not worlds:
             return Unknown("native search state unavailable", state.semantic_key)
-        refresh = refresh_transition(state, action, self.effects)
+        refresh = refresh_transition(state, action, self.cards)
         if refresh is not None:
             return refresh
         children = []
@@ -315,7 +318,7 @@ class NativeCgTransitionProvider:
         # parent's locks forward and fold this successor's own ATTACK entries onto them. Written
         # only when non-empty: the key participates in the state identity, and an empty map present
         # here would not match the absent key on the live observation the next turn arrives as.
-        carry_attack_locks(parent.obs, observation, stats=self.stats)
+        carry_attack_locks(parent.obs, observation)
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,

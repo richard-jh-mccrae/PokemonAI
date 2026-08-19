@@ -104,7 +104,8 @@ class PokemonCard:
 
     @property
     def prize_value(self) -> int:
-        return 2 if self.ex or self.mega_ex else 1
+        """A Mega Evolution Pokemon ex gives up THREE prizes (rulebook L337ff), a plain ex two."""
+        return 3 if self.mega_ex else 2 if self.ex else 1
 
     @property
     def is_rule_box(self) -> bool:

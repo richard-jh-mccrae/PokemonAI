@@ -1,14 +1,20 @@
 from copy import deepcopy
 
 from common import CardFacts, ValueRegistry
+from common.cards.card_facts import (
+    Ability, Attack, BASIC, BASIC_ENERGY, Clause, EnergyCard, PokemonCard,
+)
 from common.options import enumerate_legal_actions, recycled_card_ids
 from agents.dragapult_ex.potential import DragapultPotential
-from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 
 
 MUNKIDORI, DRAGAPULT, TARGET, ENERGY = 112, 121, 900, 7
 MIND_BEND, PHANTOM_DIVE, SNIPE = 141, 154, 901
 ORDINARY = 904
+
+
+def _basic(card_id, hp=100, **kwargs):
+    return PokemonCard(card_id, f"Test Pokemon {card_id}", hp, 0, BASIC, **kwargs)
 
 
 def _body(card_id, *, hp=100, maximum=100, energies=()):
@@ -47,11 +53,13 @@ def _player(active, bench=()):
 
 
 def test_darkness_energy_fuels_munkidori_ability_value():
-    stats = DictCardStatProvider({
-        MUNKIDORI: CardStat(MUNKIDORI, hp=110, abilityEnergyTypes=(7,)),
-        TARGET: CardStat(TARGET, hp=100),
-        ENERGY: CardStat(ENERGY, cardType=5, energyType=7),
-    })
+    stats = {
+        MUNKIDORI: _basic(MUNKIDORI, hp=110, abilities=(
+            Ability("Adrena-Brain",
+                    clauses=(Clause("move_damage", condition_energy_type=7),)),)),
+        TARGET: _basic(TARGET),
+        ENERGY: EnergyCard(ENERGY, "Test Darkness", BASIC_ENERGY, provides=7),
+    }
     registry = ValueRegistry(
         roles={MUNKIDORI: ("counter_mover",)},
         facts={MUNKIDORI: CardFacts(pokemon=True), TARGET: CardFacts(pokemon=True),
@@ -75,10 +83,11 @@ def test_darkness_energy_fuels_munkidori_ability_value():
 
 
 def test_confusion_has_bellman_value():
-    stats = DictCardStatProvider({
-        MUNKIDORI: CardStat(MUNKIDORI, hp=110, attacks=(MIND_BEND,)),
-        TARGET: CardStat(TARGET, hp=100),
-    }, attacks={MIND_BEND: AttackStat(MIND_BEND, damage=60, energyTypes=(5, 0))})
+    stats = {
+        MUNKIDORI: _basic(MUNKIDORI, hp=110,
+                          attacks=(Attack(MIND_BEND, "Mind Bend", (5, 0), 60),)),
+        TARGET: _basic(TARGET),
+    }
     registry = ValueRegistry(functions={MUNKIDORI: ("confuse",)}, facts={
         MUNKIDORI: CardFacts(pokemon=True), TARGET: CardFacts(pokemon=True),
     })
@@ -95,7 +104,7 @@ def test_confusion_has_bellman_value():
 
 
 def test_item_lock_marker_has_bellman_value():
-    stats = DictCardStatProvider({TARGET: CardStat(TARGET, hp=100)})
+    stats = {TARGET: _basic(TARGET), 235: _basic(235)}
     registry = ValueRegistry(functions={235: ("item_lock",)},
                              facts={TARGET: CardFacts(pokemon=True)})
     potential = DragapultPotential(stats, registry=registry, root_seat=0)
@@ -110,12 +119,13 @@ def test_item_lock_marker_has_bellman_value():
 
 
 def test_benched_tera_is_not_exposed_to_direct_snipe():
-    stats = DictCardStatProvider({
-        TARGET: CardStat(TARGET, hp=100),
-        DRAGAPULT: CardStat(DRAGAPULT, hp=320, tera=True),
-        ORDINARY: CardStat(ORDINARY, hp=320),
-        902: CardStat(902, hp=100, attacks=(SNIPE,)),
-    }, attacks={SNIPE: AttackStat(SNIPE, damage=10, benchSnipe=100)})
+    stats = {
+        TARGET: _basic(TARGET),
+        DRAGAPULT: _basic(DRAGAPULT, hp=320, tera=True, ex=True),
+        ORDINARY: _basic(ORDINARY, hp=320, ex=True),
+        902: _basic(902, attacks=(
+            Attack(SNIPE, "Snipe", (), 10, clauses=(Clause("bench_snipe", amount=100),)),)),
+    }
     registry = ValueRegistry(functions={DRAGAPULT: ("spread",)}, facts={
         TARGET: CardFacts(pokemon=True),
         DRAGAPULT: CardFacts(pokemon=True, prize_value=2),
@@ -134,13 +144,12 @@ def test_benched_tera_is_not_exposed_to_direct_snipe():
 
 
 def test_phantom_dive_spread_counts_a_ready_multi_target_ko():
-    stats = DictCardStatProvider({
-        DRAGAPULT: CardStat(DRAGAPULT, hp=320, attacks=(PHANTOM_DIVE,)),
-        TARGET: CardStat(TARGET, hp=200),
-    }, attacks={
-        PHANTOM_DIVE: AttackStat(
-            PHANTOM_DIVE, damage=200, energyTypes=(2, 5), benchSpread=60),
-    })
+    stats = {
+        DRAGAPULT: _basic(DRAGAPULT, hp=320, ex=True, attacks=(
+            Attack(PHANTOM_DIVE, "Phantom Dive", (2, 5), 200,
+                   clauses=(Clause("bench_spread", amount=60),)),)),
+        TARGET: _basic(TARGET, hp=200),
+    }
     registry = ValueRegistry(functions={DRAGAPULT: ("spread",)}, facts={
         DRAGAPULT: CardFacts(pokemon=True, prize_value=2),
         TARGET: CardFacts(pokemon=True),
@@ -156,11 +165,12 @@ def test_phantom_dive_spread_counts_a_ready_multi_target_ko():
 
 
 def test_phantom_dive_splits_six_counters_across_multiple_knockouts():
-    stats = DictCardStatProvider({
-        DRAGAPULT: CardStat(DRAGAPULT, hp=320, attacks=(PHANTOM_DIVE,)),
-        TARGET: CardStat(TARGET, hp=200),
-    }, attacks={PHANTOM_DIVE: AttackStat(
-        PHANTOM_DIVE, damage=200, energyTypes=(2, 5), benchSpread=60)})
+    stats = {
+        DRAGAPULT: _basic(DRAGAPULT, hp=320, ex=True, attacks=(
+            Attack(PHANTOM_DIVE, "Phantom Dive", (2, 5), 200,
+                   clauses=(Clause("bench_spread", amount=60),)),)),
+        TARGET: _basic(TARGET, hp=200),
+    }
     registry = ValueRegistry(functions={DRAGAPULT: ("spread",)}, facts={
         DRAGAPULT: CardFacts(pokemon=True, prize_value=2),
         TARGET: CardFacts(pokemon=True),
@@ -178,7 +188,7 @@ def test_phantom_dive_splits_six_counters_across_multiple_knockouts():
 
 
 def test_extra_counter_on_knocked_out_body_is_negative_value():
-    stats = DictCardStatProvider({TARGET: CardStat(TARGET, hp=100)})
+    stats = {TARGET: _basic(TARGET)}
     registry = ValueRegistry(functions={TARGET: ("spread",)},
                              facts={TARGET: CardFacts(pokemon=True)})
     potential = DragapultPotential(stats, registry=registry, root_seat=0)
@@ -194,13 +204,13 @@ def test_extra_counter_on_knocked_out_body_is_negative_value():
 
 def test_run_away_draw_credits_the_recycled_line_and_freed_pivot():
     dunsparce, dudunsparce = 305, 66
-    stats = DictCardStatProvider({
-        dunsparce: CardStat(dunsparce, hp=70),
-        dudunsparce: CardStat(dudunsparce, hp=140),
-        TARGET: CardStat(TARGET, hp=100),
-        ORDINARY: CardStat(ORDINARY, hp=100),
-        902: CardStat(902, hp=100),
-    })
+    stats = {
+        dunsparce: _basic(dunsparce, hp=70),
+        dudunsparce: _basic(dudunsparce, hp=140),
+        TARGET: _basic(TARGET),
+        ORDINARY: _basic(ORDINARY),
+        902: _basic(902),
+    }
     registry = ValueRegistry(
         functions={dunsparce: ("recycle_line",), dudunsparce: ("recycle_line", "draw")},
         facts={card_id: CardFacts(pokemon=True)

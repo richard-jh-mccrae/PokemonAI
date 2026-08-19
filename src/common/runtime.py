@@ -109,7 +109,7 @@ class BellmanRuntime:
         self.provider_factory = provider_factory
         self.limits = limits
         self.registry = ValueRegistry.from_strategy(
-            strategy=self.strategy, stats=self.stats, functions=self.functions, deck=self.deck,
+            strategy=self.strategy, functions=self.functions, deck=self.deck,
             roles=self.roles)
         self.profile = BellmanDeckProfile.from_registry(self.registry)
         experiment, experiment_path = _pilot_overlay()
@@ -256,7 +256,7 @@ class BellmanRuntime:
             self.opponent_role_worth[card_id] = max(
                 self.opponent_role_worth.get(card_id, 0.0), role_value(card_roles))
         potential = self.potential_type(
-            self.stats, registry=self.registry, profile=self.profile, root_seat=seat,
+            registry=self.registry, profile=self.profile, root_seat=seat,
             opponent_role_worth=self.opponent_role_worth,
             isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0,
             opponent_hand_share=self.pilot_profile.get("value.opponent_hand_share"),
@@ -433,7 +433,7 @@ class BellmanRuntime:
         # Above every early return: a selection answered by the Strategy fallback still has to
         # contribute its ATTACK rows, or the delta carries them away for good.
         self._attack_locks = fold_attack_locks(
-            self._attack_locks, observation.get("logs"), stats=self.stats,
+            self._attack_locks, observation.get("logs"),
             turn=int(current.get("turn", 0)))
         if self._attack_locks:
             observation["attack_locks"] = self._attack_locks
@@ -507,7 +507,7 @@ class BellmanRuntime:
                 value_registry_identity=self.registry.identity)
             actions = enumerate_legal_actions(observation)
             builder = StrategyBeamBuilder(
-                snapshot, effects=self.effects, stats=self.stats, registry=self.registry,
+                snapshot, registry=self.registry,
                 width=int(self.pilot_profile.get("strategy.focus_width")),
                 information_partition=(self.pilot_profile.get(
                     "strategy.information_partition_enabled") >= 0.5))
