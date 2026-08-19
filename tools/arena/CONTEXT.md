@@ -43,7 +43,7 @@ _Avoid_: default deck, starter deck
 The bring-your-own input the Arena accepts — the Limitless Deck Builder export
 (Share → Copy as Text): count + name + set/number lines in Pokémon/Trainer/Energy
 sections, pasted or uploaded as `.txt`. Resolved to competition card ids by *name*
-([ADR-0013](../../docs/adr/0013-decklist-resolution-by-name.md)); an unresolvable deck
+(ADR-0013); an unresolvable deck
 is rejected whole, with every problem listed back to the Visitor.
 _Avoid_: deck.txt (a filename, not the format), decklist (generic), deck.csv (the
 resolved id form the engine eats)

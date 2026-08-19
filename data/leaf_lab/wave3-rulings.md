@@ -138,7 +138,7 @@ Active Mega Starmie ex at 280/330 with three Energy, on f48 it is not. The Cape'
 **A second mid-turn re-plan appears here.** `85046350|21`'s *"Play Recon Directive, redecide"* is the
 same shape as `82225138|82`'s *"redecide on new info"* — the plan branches on what the Ability
 reveals. Two independent instances now, both pointing at
-[ADR-0095](../../docs/adr/0095-information-precedes-commitment.md) and both unrepresentable by a turn
+ADR-0095 and both unrepresentable by a turn
 plan fixed at the start of the turn. Recorded for Issue #263.
 
 ### Batch 7 (2026-08-02) — the last eight of the triaged 17. **All REVERT.**
@@ -188,7 +188,7 @@ intact as it is today in the turn planner. so are you talking about something in
 answer was no, and checking it overturned a conclusion this record previously drew.
 
 **The Lethal Solver is the Turn Planner's TOP rung**
-([ADR-0037](../../docs/adr/0037-lethal-solver-is-the-turn-planners-top-rung.md)), so it decides a
+(ADR-0037), so it decides a
 lethal frame before the develop rung's leaf ranks anything. On all three `missed_win` frames the
 live pilot picks **exactly** the ruled option — `82522698|62` → `[15]`, `82523164|75` → `[8]`,
 `82524455|55` → `[1]`. The leaf ranking the winning line 16th, 11th and 3rd never reaches a decision.
@@ -216,7 +216,7 @@ it is worth taking seriously and why it should not be silenced.
 prices only as a prize lead (measured: a match win at exactly `4 × KO_SCORE` losing to Harlequin at
 `4400.701`), so a positional term outbids a prize. The measurement is real, but the fix is not ours:
 lethality is the Lethal Solver's fact, and a second authority deriving "this wins" is the duplication
-[ADR-0096](../../docs/adr/0096-one-guard-per-fact-bench-carry-forward.md) exists to prevent. Recorded
+ADR-0096 exists to prevent. Recorded
 as a known, bounded blind spot of the scalar instead.
 
 ## Why the remaining 50 are NOT being ruled one at a time
@@ -537,7 +537,7 @@ closed-owner census in the closeout batch below.
 
 **`82225138|0|decision|82` is worth T4's attention specifically.** *"play buddy-buddy, the pokegear,
 redecide on new info"* is not an ordering preference — it asks the planner to **re-plan mid-turn on
-information the earlier action revealed**. That is [ADR-0095](../../docs/adr/0095-information-precedes-commitment.md)'s
+information the earlier action revealed**. That is ADR-0095's
 subject by name, and a turn plan fixed at the start of the turn cannot express it.
 
 ## Card facts, verified at source

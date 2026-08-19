@@ -36,7 +36,7 @@ _GITIGNORED = ("data/meta/", "reports/", "data/probe/", "data/strategy/raw/", "d
 _VENDORED = ".claude/skills/"
 _ADR_ARCHIVE = "docs/adr/"
 
-_CONTROL_LIVE = "docs/rules.md"
+_CONTROL_LIVE = "docs/rulebook.txt"
 _CONTROL_DEAD = "docs/this-doc-does-not-exist.md"
 
 
@@ -88,7 +88,7 @@ def _broken(tracked: list[str]) -> list[str]:
 def test_the_resolver_accepts_a_real_path_and_rejects_an_invented_one() -> None:
     """A negative result needs a positive control: an always-false resolver would pass this file silently."""
     assert _resolves("docs/ci.md", _CONTROL_LIVE), "positive control failed — the resolver cannot see a real file"
-    assert _resolves("docs/adr/README.md", "../rules.md"), "positive control failed — relative resolution is broken"
+    assert _resolves("docs/adr/README.md", "../rulebook.txt"), "positive control failed — relative resolution is broken"
     assert _resolves("docs/ci.md", "src/common/runtime.py:39"), "positive control failed — the file:line form is broken"
     assert not _resolves("docs/ci.md", _CONTROL_DEAD), "negative control failed — the resolver accepts anything"
 
