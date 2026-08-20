@@ -13,9 +13,9 @@ from common.pokemon_roles import general_pokemon_roles
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
 from common.scouting.briefs import match_brief, resolve_scouted_role_worth
 from common.scouting.read import Read, posture_gamma
-from common.state import DecisionState
+from .state import DecisionState
 from common.strategy.context import _TO_HAND
-from common.strategy.strategies import (
+from .activation import (
     GENERAL_STRATEGIES, activate_strategies, general_card_strategies, resolve_strategies,
 )
 

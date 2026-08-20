@@ -16,7 +16,7 @@ from common.algebra import (
 from common.api import ActionIdentity
 from common.effects import terminal_effects_supported
 from common.options import LegalAction
-from common.state import DecisionState
+from .state import DecisionState
 
 
 TERMINAL_WIN = "win"

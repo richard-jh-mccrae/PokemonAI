@@ -3,16 +3,8 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from common import (
-    Chance,
-    Choice,
-    DecisionState,
-    Deterministic,
-    Refresh,
-    RevealChoice,
-    Terminal,
-    Unknown,
-)
+from common import Chance, Choice, Deterministic, Refresh, RevealChoice, Terminal, Unknown
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import ValueRegistry
 from deprecated.bellman.providers import BellmanCgpyProvider as CgpyTransitionProvider
 from train.blunder.store import load_corrections

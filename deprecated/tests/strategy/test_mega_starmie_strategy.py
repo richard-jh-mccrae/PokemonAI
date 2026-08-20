@@ -10,8 +10,10 @@ from deprecated.bellman.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.options import enumerate_legal_actions
 from common.scouting.provider import EngineCardStatProvider
-from common.strategy.strategies import (
-    GENERAL_STRATEGIES, activate_strategies, resolve_strategies,
+from deprecated.bellman.activation import (
+    GENERAL_STRATEGIES,
+    activate_strategies,
+    resolve_strategies,
 )
 
 

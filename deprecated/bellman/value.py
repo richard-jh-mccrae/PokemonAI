@@ -20,7 +20,7 @@ from common.cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, Pokemon
 from common.cards.functions.damage import bench_reach
 from common.cards.functions.fetch import DEADNESS, fetch_target_matches
 from common.option_equivalence import fingerprint_source_card_id
-from common.state import DecisionState
+from .state import DecisionState
 
 
 WORTH_PER_PRIZE = 120.0

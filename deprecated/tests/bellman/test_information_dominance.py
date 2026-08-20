@@ -1,7 +1,8 @@
 """Free-peek dominance: costless deck peeks are searched before neutral commitments."""
 from __future__ import annotations
 
-from common import ActionIdentity, Actor, DecisionState, Deterministic, Terminal
+from common import ActionIdentity, Actor, Deterministic, Terminal
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import PilotProfile, ProductionSolver
 from deprecated.bellman.commutativity import ActionFootprint
 from common.options import LegalAction

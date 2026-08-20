@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from common import DecisionState, RootDecision
+from common import RootDecision
+from deprecated.bellman.state import DecisionState
 from common.board_cards import body_card_ids
 from common.card_worth import ACE_SPEC_TIER, ENERGY_TIER, ROLE_TIER, function_role, role_value
 from common.option_equivalence import (

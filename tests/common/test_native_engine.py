@@ -11,9 +11,14 @@ from types import SimpleNamespace
 import pytest
 
 from common import (
-    Chance, DecisionState, Deterministic, NativeCgTransitionProvider, Terminal, Unknown,
+    Chance,
+    Deterministic,
+    NativeCgTransitionProvider,
+    Terminal,
+    Unknown,
     enumerate_legal_actions,
 )
+from deprecated.bellman.state import DecisionState
 from common.engine import CgpyTransitionProvider
 from common.effects import CardEffects
 from common.runtime import build_runtime

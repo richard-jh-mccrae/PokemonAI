@@ -15,9 +15,10 @@ MODULES = tuple((REPO / "src" / "common" / name) for name in (
     "__init__.py", "algebra.py", "api.py", "cards/functions/damage.py",
     "cards/functions/damage_context.py", "cards/functions/draw.py", "cards/functions/energy.py",
     "cards/functions/attack_lock.py", "cards/functions/fetch.py",
-    "effects.py", "engine.py", "information.py", "options.py", "refresh.py", "state.py",
+    "effects.py", "engine.py", "information.py", "options.py", "refresh.py",
 )) + tuple((REPO / "deprecated" / "bellman" / name) for name in (
-    "commutativity.py", "demand.py", "planner.py", "potential.py", "solver.py", "value.py",
+    "commutativity.py", "demand.py", "planner.py", "potential.py", "solver.py", "state.py",
+    "value.py",
 ))
 
 

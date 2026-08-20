@@ -10,7 +10,6 @@ from .cards import card_store
 from .cards.functions.attack_lock import carry_attack_locks
 from .options import LegalAction, recycled_card_ids
 from .refresh import refresh_transition
-from .state import DecisionState
 from common.strategy.context import _MAIN, _NO, _YES
 
 
@@ -118,7 +117,7 @@ def _stratified_order(cards: tuple[int, ...], world_index: int, world_count: int
     return list(balanced[offset:] + balanced[:offset])
 
 
-def _own_hidden_zones(root: DecisionState, player: dict, *, world_index: int,
+def _own_hidden_zones(root, player: dict, *, world_index: int,
                       world_count: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
     deck_count = max(0, int(player.get("deckCount", 0)))
     prize_count = len(player.get("prize") or ())
@@ -153,7 +152,7 @@ class NativeCgTransitionProvider:
 
     backend = "native-cg-bellman"
 
-    def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None,
+    def __init__(self, root, *, registry=None, effects=None, stats=None,
                  api_module=None, world_count: int = NATIVE_BELIEF_WORLD_COUNT, cards=None):
         self.root = root
         self.registry = registry
@@ -193,16 +192,16 @@ class NativeCgTransitionProvider:
         """The world-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
 
-    def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
+    def actions(self, state) -> tuple[LegalAction, ...]:
         if self._key(state) not in self._worlds:
             return ()
         return state.legal_actions
 
-    def actor(self, state: DecisionState) -> Actor:
+    def actor(self, state) -> Actor:
         seat = int(state.obs.get("bellmanActor", state.root_seat))
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
-    def transition(self, state: DecisionState, action: LegalAction):
+    def transition(self, state, action: LegalAction):
         worlds = self._worlds.get(self._key(state))
         if not worlds:
             return Unknown("native search state unavailable", self._key(state))
@@ -230,7 +229,7 @@ class NativeCgTransitionProvider:
         except Exception as exc:  # noqa: BLE001 - engine gap remains explicit
             return Unknown("native cg transition failed", f"{type(exc).__name__}: {exc}")
 
-    def _begin_worlds(self, root: DecisionState) -> tuple[_NativeWorld, ...]:
+    def _begin_worlds(self, root) -> tuple[_NativeWorld, ...]:
         observation = root.obs
         current = observation.get("current") or {}
         players = current.get("players") or ()
@@ -258,7 +257,7 @@ class NativeCgTransitionProvider:
             worlds.append(_NativeWorld(probability, int(state.searchId)))
         return tuple(worlds)
 
-    def _observation(self, native_observation, parent: DecisionState, *, actor_seat=None) -> dict:
+    def _observation(self, native_observation, parent, *, actor_seat=None) -> dict:
         observation = _plain_native(native_observation)
         observation["bellmanBeliefKey"] = _hidden_signature(observation, parent.root_seat)
         observation["bellmanActor"] = (_actor_seat(observation, parent.root_seat)
@@ -292,7 +291,7 @@ class NativeCgTransitionProvider:
         return observation
 
     def _coin_children(self, search_id: int, probability: float, committed: bool,
-                       parent: DecisionState, observation: dict, *, actor_seat=None):
+                       parent, observation: dict, *, actor_seat=None):
         options = tuple((observation.get("select") or {}).get("option") or ())
         by_type = {int(option.get("type", -1)): index for index, option in enumerate(options)}
         if _YES not in by_type or _NO not in by_type:
@@ -306,7 +305,7 @@ class NativeCgTransitionProvider:
                              int(stepped.searchId), committed, observation))
         return children
 
-    def _group_children(self, parent: DecisionState, action: LegalAction, children):
+    def _group_children(self, parent, action: LegalAction, children):
         if len(children) == 1:
             probability, search_id, committed, observation = children[0]
             observation = dict(observation)
@@ -351,7 +350,7 @@ class NativeCgTransitionProvider:
                            for edge in edges)
         return normalized[0].node if len(normalized) == 1 else Chance(normalized)
 
-    def _node(self, parent: DecisionState, successor: DecisionState, rows):
+    def _node(self, parent, successor, rows):
         current = successor.obs.get("current") or {}
         result = int(current.get("result", -1))
         if result != -1:

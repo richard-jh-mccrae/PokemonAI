@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from common.state import OpponentBelief, freeze
+from .state import OpponentBelief, freeze
 
 
 DEFAULT_SEAT = 0

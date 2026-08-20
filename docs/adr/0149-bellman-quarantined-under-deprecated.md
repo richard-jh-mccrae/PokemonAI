@@ -20,8 +20,11 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   checkout file and fails if `src/` or `tools/submit/` imports `deprecated`.
 - **`deprecated/bellman/`** holds the moved brain (solver, planner, demand, potential, value,
   value_equations, family_ranking, terminal, commutativity, transition_value, pilot_profile,
-  budget_prototype, the refresh evaluator, deck beliefs, dragapult's potential subclass) and
-  re-exports the surface `common/__init__.py` used to carry for it.
+  budget_prototype, DecisionState, the strategy activation engine, the refresh evaluator, deck
+  beliefs, dragapult's potential subclass) and re-exports the surface `common/__init__.py`
+  used to carry for it. What stays in `src/common` outside cards/board/ledger is exactly the
+  live agent's dependency set plus the offline engine twin the Ledger corpus and its tests run
+  on (`engine.py`, `information.py`) and the scouting layer PR #576 wires into the Ledger.
 - **The teacher is a subclass**: `BellmanTeacherRuntime(AgentRuntime)` in
   `deprecated/bellman/runtime.py` reinstates the planner epoch, plan-suffix and proof caches,
   strategy-beam activation and fallback, pilot overlay, and the decision clock.
@@ -36,7 +39,14 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
 - **Splits at the seam**: `refresh.py` keeps the printed-counts `Refresh` transition (the Ledger
   prices those nodes); the Bellman valuation became `refresh_evaluator.py`. `information.py`
   keeps the exact draw/reveal outcome classes (the offline provider's chance modelling); deck
-  profiles and opponent beliefs became `belief.py`.
+  profiles and opponent beliefs became `belief.py`. `strategy/strategies.py` keeps only the
+  declaration language (hint/condition/override dataclasses and their closed vocabularies —
+  decks and Briefs author in it and it ships in the bundle); the activation engine, the
+  `GENERAL_STRATEGIES` catalog, and the card-fact hint minting became `activation.py`.
+  `state.py` (DecisionState, the providers' canonical-state build) moved whole: the live path
+  constructs none (ADR-0146's pin) and both providers are duck-typed over the state shape, so
+  the ADR-0146 heavy-vs-light parity tests now import it from the quarantine — honestly, since
+  that pin is precisely a comparison against the quarantined binding.
 - **The live shell slims**: `AgentRuntime` (renamed from `BellmanRuntime`) is pregame, forced
   selections, attack-lock folding, the Ledger, and a last-resort crash fallback. The bundle
   therefore stops shipping the search stack; the manifest is schema 7, `system: "ledger"`, and

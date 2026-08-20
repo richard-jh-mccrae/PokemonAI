@@ -1,7 +1,8 @@
 """The lethal gate's per-action coverage hook on the search provider (moved with the hook)."""
 from __future__ import annotations
 
-from common import DecisionState, enumerate_legal_actions
+from common import enumerate_legal_actions
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman.providers import BellmanNativeProvider
 
 

@@ -7,9 +7,17 @@ from pathlib import Path
 import pytest
 
 from common import (
-    Actor, Chance, Choice, DecisionState, Deterministic, BellmanLedger, OpponentBelief, Refresh, Terminal,
-    TurnBudgets, Unknown, enumerate_legal_actions,
+    Actor,
+    Chance,
+    Choice,
+    Deterministic,
+    BellmanLedger,
+    Refresh,
+    Terminal,
+    Unknown,
+    enumerate_legal_actions,
 )
+from deprecated.bellman.state import DecisionState, OpponentBelief, TurnBudgets
 from common.algebra import Edge, WeightedEdge
 from train.blunder.store import load_corrections
 

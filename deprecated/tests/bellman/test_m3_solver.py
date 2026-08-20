@@ -11,7 +11,6 @@ from common import (
     Actor,
     Chance,
     Choice,
-    DecisionState,
     Deterministic,
     BellmanLedger,
     RevealChoice,
@@ -20,6 +19,7 @@ from common import (
     RootDecision,
     Terminal,
 )
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import (
     ReferenceSolver,
     PilotProfile,
@@ -2200,7 +2200,7 @@ def test_harvest_hands_the_beam_the_prefix_outcomes_already_advanced(monkeypatch
 def test_dominance_prune_set_is_identical_under_the_coverage_toggle():
     """A structural proof must not depend on beam width or coverage sort order: with focus
     width 1 and two protected evolutions, the retained set is the same toggled on or off."""
-    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from deprecated.bellman.activation import ActivatedStrategy, StrategySnapshot
     from deprecated.bellman.demand import StrategyBeamBuilder
 
     hints = (

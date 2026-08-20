@@ -6,7 +6,7 @@ from cg.api import AreaType, LogType
 
 from common.deck_tracker import OwnCardModel
 from common.effects import CardEffects
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 from build_card_effects import DEFAULT_MEASURED, DEFAULT_OUT, DEFAULT_OVERRIDES, render
 
 

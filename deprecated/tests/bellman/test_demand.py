@@ -408,7 +408,7 @@ def test_undeclared_funding_reads_the_cost_off_the_card():
     an Energy that pays nothing it owes is not treated as funding."""
     from types import SimpleNamespace
     from deprecated.bellman.demand import StrategyBeamBuilder
-    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from deprecated.bellman.activation import ActivatedStrategy, StrategySnapshot
 
     # 2/5/7 are the REAL Basic Fire/Psychic/Darkness Energy records in the store.
     from common.cards import card_store
@@ -442,7 +442,7 @@ def test_a_colorless_slot_does_not_make_every_energy_funding():
     from types import SimpleNamespace
     from common.cards import card_store
     from deprecated.bellman.demand import StrategyBeamBuilder
-    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from deprecated.bellman.activation import ActivatedStrategy, StrategySnapshot
 
     attacker, colorless_only, fire, psychic, darkness = 820, 821, 2, 5, 7
     poke = Attack(12, "Test Poke", (0,), 70)
@@ -481,7 +481,7 @@ def test_funding_satisfies_only_once_the_body_owes_nothing():
     from types import SimpleNamespace
     from common.cards import card_store
     from deprecated.bellman.demand import StrategyBeamBuilder
-    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from deprecated.bellman.activation import ActivatedStrategy, StrategySnapshot
 
     attacker, fire, psychic = 830, 2, 5
     cards = dict(card_store())
@@ -520,7 +520,7 @@ def test_an_unreadable_body_never_reports_its_funding_satisfied():
     bundle on missing information."""
     from types import SimpleNamespace
     from deprecated.bellman.demand import StrategyBeamBuilder
-    from common.strategy.strategies import ActivatedStrategy, StrategySnapshot
+    from deprecated.bellman.activation import ActivatedStrategy, StrategySnapshot
 
     mystery = 831
     hint = ActivatedStrategy(

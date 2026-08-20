@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from common import DecisionState, Refresh
+from common import Refresh
+from deprecated.bellman.state import DecisionState
 from common.effects import CardEffects
 from common.native_engine import _NativeWorld
 from deprecated.bellman.providers import BellmanNativeProvider as NativeCgTransitionProvider

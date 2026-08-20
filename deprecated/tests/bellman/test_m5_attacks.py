@@ -11,7 +11,7 @@ from cgpy.rng import SeededRng
 from cgpy.schema import CardType
 from cgpy.state import PokemonInPlay
 
-from common import DecisionState
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import ReferenceSolver
 from common.engine import _own_prize_export
 from deprecated.bellman.providers import BellmanCgpyProvider as CgpyTransitionProvider

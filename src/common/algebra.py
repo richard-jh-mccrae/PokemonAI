@@ -4,10 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import math
-from typing import TYPE_CHECKING, Mapping
-
-if TYPE_CHECKING:
-    from .state import DecisionState
+from typing import Mapping
 
 
 PROBABILITY_MIN = 0.0
@@ -70,7 +67,7 @@ class WeightedEdge:
 
 @dataclass(frozen=True)
 class Deterministic:
-    state: "DecisionState"
+    state: object
 
 
 @dataclass(frozen=True)
@@ -146,7 +143,7 @@ class Refresh:
 
 @dataclass(frozen=True)
 class Terminal:
-    state: "DecisionState"
+    state: object
     result: str
     ledger: BellmanLedger = BellmanLedger()
 

@@ -61,8 +61,8 @@ Roles and `ledger_overrides`, and sends every normal-turn decision to `common.le
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 
 - Pokémon Roles; evolution relationships are derived from card facts;
-- Deck Strategies and explicit General Strategy overrides (authored data; consumed today by the
-  teacher and by the phase-2 search this evaluator migrates into);
+- Deck Strategies and explicit General Strategy overrides — authored in the declaration
+  language `strategy/strategies.py` keeps; the activation engine lives with the teacher;
 - starter priority and preferred first/second turn;
 - partner dependencies;
 - prize routes;
@@ -83,9 +83,9 @@ The live decision path:
   prices analytically;
 - `information.py`: exact hypergeometric draw/reveal outcome classes for the offline provider;
 - `effects.py`: the effect-clause table and the coverage predicate that gates exact reasoning;
-- `algebra.py`, `api.py`, `options.py`, `state.py`: the transition algebra, decision contracts,
-  legal-action enumeration, and the providers' canonical DecisionState (the Ledger path builds
-  none — pinned in `tests/ledger`).
+- `algebra.py`, `api.py`, `options.py`: the transition algebra, decision contracts, and
+  legal-action enumeration (the providers' canonical DecisionState moved to the quarantine —
+  the live path builds none, pinned in `tests/ledger`).
 
 Neutral retained services are Scouting, card/stat providers, card-function data, own-deck tracking,
 option equivalence, telemetry, and board-card traversal.

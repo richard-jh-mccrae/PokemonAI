@@ -76,7 +76,7 @@ def test_one_outcome_claims_one_protected_bundle():
     from deprecated.bellman.demand import StrategyBeamBuilder
     from deprecated.bellman.pilot_profile import PilotProfile
     from deprecated.bellman.solver import ProductionSolver
-    from common.strategy.strategies import activate_strategies, resolve_strategies
+    from deprecated.bellman.activation import activate_strategies, resolve_strategies
     from types import SimpleNamespace
 
     strategy = _strategy("mega_lucario")

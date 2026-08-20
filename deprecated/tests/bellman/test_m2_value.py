@@ -4,7 +4,8 @@ from copy import deepcopy
 
 import pytest
 
-from common import ActionIdentity, DecisionState
+from common import ActionIdentity
+from deprecated.bellman.state import DecisionState
 from common.cards.card_facts import (
     Ability, BASIC, Clause, ITEM, PokemonCard, STAGE1, TrainerCard,
 )

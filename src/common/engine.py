@@ -13,7 +13,6 @@ from .cards.functions.attack_lock import carry_attack_locks
 from .effects import terminal_effects_supported
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
-from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
@@ -81,7 +80,7 @@ class CgpyTransitionProvider:
 
     backend = "cgpy-bellman"
 
-    def __init__(self, root: DecisionState, *, registry=None, effects=None, stats=None, engine=None,
+    def __init__(self, root, *, registry=None, effects=None, stats=None, engine=None,
                  cards=None):
         self.root = root
         self.registry = registry
@@ -140,12 +139,12 @@ class CgpyTransitionProvider:
         """The engine-map key for a state; the preview seam substitutes identity tokens."""
         return state.semantic_key
 
-    def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
+    def actions(self, state) -> tuple[LegalAction, ...]:
         if not self._local_nested and self._key(state) not in self._engines:
             return ()
         return state.legal_actions
 
-    def actor(self, state: DecisionState) -> Actor:
+    def actor(self, state) -> Actor:
         if self._local_nested:
             return Actor.OURS
         engine = self._engines.get(self._key(state))
@@ -153,7 +152,7 @@ class CgpyTransitionProvider:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
-    def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
+    def terminal_action_supported(self, state, action: LegalAction) -> bool:
         kind = action.identity.kind
         options = tuple((state.obs.get("select") or {}).get("option") or ())
         option_index = action.selection[0] if len(action.selection) == 1 else -1
@@ -182,7 +181,7 @@ class CgpyTransitionProvider:
             state, action, card_id=card_id, recipient_id=recipient_id,
             effects=self.effects, stats=self.stats)
 
-    def transition(self, state: DecisionState, action: LegalAction):
+    def transition(self, state, action: LegalAction):
         if self._local_nested:
             return self._local_nested_transition(state, action)
         engine = self._engines.get(self._key(state))

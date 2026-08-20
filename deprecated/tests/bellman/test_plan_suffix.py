@@ -3,7 +3,7 @@ from __future__ import annotations
 from common import PlanRequest, PlanStep, enumerate_legal_actions
 from deprecated.bellman.pilot_profile import PilotProfile
 from deprecated.bellman.runtime import BellmanTeacherRuntime
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman.terminal import ProofStep
 
 

@@ -1,14 +1,16 @@
 from common.strategy.strategies import (
-    ActivatedStrategy,
     ActivationCondition,
     DesiredFact,
-    GENERAL_STRATEGIES,
     StrategyHint,
     StrategyOverride,
+    strategy_hint_from_dict,
+)
+from deprecated.bellman.activation import (
+    ActivatedStrategy,
+    GENERAL_STRATEGIES,
     StrategySnapshot,
     resolve_strategies,
     activate_strategies,
-    strategy_hint_from_dict,
 )
 from common.strategy.strategy import Roles
 from common.cards.card_facts import (
@@ -1465,7 +1467,7 @@ def test_a_held_information_hint_does_not_lead_the_beam():
 def test_a_body_hp_fraction_reports_the_most_threatened_copy():
     """A deck running four Drakloak asks whether A Drakloak is in danger. Reading whichever copy
     the loop reached last answers about an arbitrary one."""
-    from common.strategy.strategies import _visible_facts
+    from deprecated.bellman.activation import _visible_facts
     from common.strategy import Roles
 
     drakloak = 120
@@ -1489,7 +1491,7 @@ def test_the_board_census_reports_both_sides_zones_and_attachments():
     from types import SimpleNamespace
 
     from common.strategy import Roles
-    from common.strategy.strategies import _visible_facts
+    from deprecated.bellman.activation import _visible_facts
 
     class Stats:
         @staticmethod
@@ -1610,7 +1612,8 @@ def test_a_hint_naming_a_parameterised_body_selector_constructs():
 def test_readiest_and_weakest_select_opposite_copies():
     """Two tie-breaks over the same card, and not interchangeable: one names the body worth
     committing to, the other the body worth saving."""
-    from common.strategy.strategies import _recipient_body, known_recipient_selector
+    from common.strategy.strategies import known_recipient_selector
+    from deprecated.bellman.activation import _recipient_body
     from common.strategy import Roles
 
     card = 120

@@ -16,7 +16,7 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
 from common.ledger import LedgerContext, LedgerDecider
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
 

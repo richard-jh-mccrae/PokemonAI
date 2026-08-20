@@ -9,13 +9,13 @@ from common import (
     ActionIdentity,
     Actor,
     Chance,
-    DecisionState,
     Deterministic,
     BellmanLedger,
     Refresh,
     RevealChoice,
     Terminal,
 )
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import ReferenceSolver
 from common.algebra import WeightedEdge
 from common.information import OutcomeGroup, draw_outcomes, hypergeometric_classes

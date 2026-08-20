@@ -7,10 +7,11 @@ rounds retire it — but the dependency is one-way: this tree may import `src/`,
 
 ## Layout
 
-- `bellman/`: the search brain and its value stack. `runtime.BellmanTeacherRuntime` extends the
-  live `common.runtime.AgentRuntime`; `build_teacher_runtime(...)` is the drop-in for the old
-  `build_runtime(..., brain="bellman")`. `providers.py` restores the search-only provider hooks
-  (`footprint`, the lethal gate, `resolve_end`) on the live engine seams.
+- `bellman/`: the search brain, its value stack, its canonical `state.py` (DecisionState), and
+  the strategy `activation.py` engine + doctrine catalog. `runtime.BellmanTeacherRuntime`
+  extends the live `common.runtime.AgentRuntime`; `build_teacher_runtime(...)` is the drop-in
+  for the old `build_runtime(..., brain="bellman")`. `providers.py` restores the search-only
+  provider hooks (`footprint`, the lethal gate, `resolve_end`) on the live engine seams.
 - `tests/`: the moved suites — the Bellman milestone/policy contracts, the beam/strategy grading
   suites, and the six mega_starmie correction pins that freeze the teacher's rulings.
 

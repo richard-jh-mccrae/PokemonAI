@@ -8,7 +8,7 @@ from common.api import BellmanUnavailable, PlanRequest, RootDecision
 from .providers import BellmanNativeProvider
 from .solver import ProductionLimits, ProductionSolver
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
-from common.state import DecisionState, OpponentBelief
+from .state import DecisionState, OpponentBelief
 from .terminal import TerminalLimits, TerminalProver
 from .value import ValueOracle, ValueRegistry
 

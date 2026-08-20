@@ -13,7 +13,7 @@ import pytest
 from common.algebra import Deterministic, Refresh, Terminal, Unknown
 from common.ledger import LedgerContext, LedgerDecider
 from common.ledger.decider import LedgerUnavailable
-from common.state import DecisionState
+from deprecated.bellman.state import DecisionState
 
 
 def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):

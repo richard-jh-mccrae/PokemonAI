@@ -9,7 +9,6 @@ from common import (
     Actor,
     Chance,
     Choice,
-    DecisionState,
     Deterministic,
     PlanRequest,
     Refresh,
@@ -18,6 +17,7 @@ from common import (
     Terminal,
     Unknown,
 )
+from deprecated.bellman.state import DecisionState
 from deprecated.bellman import BellmanTurnPlanner, Potential, ValueRegistry
 from common.algebra import Edge, WeightedEdge
 from common.options import LegalAction

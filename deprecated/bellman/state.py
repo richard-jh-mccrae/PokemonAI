@@ -354,7 +354,7 @@ class DecisionState:
     def legal_actions(self) -> tuple:
         """The state's legal moves, enumerated once.  The keys below, the menu digest, and every
         transition provider ask for the same menu, and it depends on nothing but ``obs``."""
-        from .options import enumerate_legal_actions
+        from common.options import enumerate_legal_actions
 
         return enumerate_legal_actions(self.obs)
 

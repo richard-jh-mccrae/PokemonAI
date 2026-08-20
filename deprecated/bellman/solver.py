@@ -24,7 +24,7 @@ from .demand import (StrategyBeamBuilder, look_class_clauses, outcome_identity,
                      semantic_action_key)
 from common.refresh import played_card_id
 from .pilot_profile import DEFAULT_PILOT_PROFILE, PilotProfile
-from common.state import DecisionState
+from .state import DecisionState
 from common.strategy.context import _DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY, _DISCARD
 from .value import ValueOracle
 

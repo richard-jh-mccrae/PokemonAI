@@ -142,7 +142,7 @@ def test_looking_carries_visible_cards_and_hides_hidden_ones():
 
 
 def test_deck_counts_match_decision_state():
-    from common.state import DecisionState
+    from deprecated.bellman.state import DecisionState
     deck = (KNOWN,) * 3 + (112,) * 2 + (119,) * 4 + (120,) * 2
     obs = printout(me=player(active=body(KNOWN, 1, energy_cards=(120,)), bench=[body(112, 2)],
                              hand=[119], discard=[119]),

@@ -10,8 +10,11 @@ from common.cards import CardFunctions
 from common.effects import CardEffects
 from deprecated.bellman.value import ValueRegistry
 from common.scouting.provider import EngineCardStatProvider
-from common.strategy.strategies import (
-    GENERAL_STRATEGIES, activate_strategies, general_card_strategies, resolve_strategies,
+from deprecated.bellman.activation import (
+    GENERAL_STRATEGIES,
+    activate_strategies,
+    general_card_strategies,
+    resolve_strategies,
 )
 
 
@@ -304,7 +307,7 @@ def _funding_energy(card_id, attached=()):
     """Deck Energy the shared beam would treat as funding this body as our active."""
     from types import SimpleNamespace
     from deprecated.bellman.demand import StrategyBeamBuilder
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -371,7 +374,7 @@ def test_munkidori_declares_its_darkness_ability_slot_from_the_card():
 
 
 def _active_snapshot(card_id, bench=()):
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -429,7 +432,7 @@ def test_drakloak_evolves_once_the_line_has_no_payoff_of_its_own():
     """No Dragapult ex anywhere is what makes the evolution wanted -- not our active, which is
     fixed at the planning-epoch boundary and would strand a promote-then-evolve turn."""
     from types import SimpleNamespace
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -460,7 +463,7 @@ def test_drakloak_evolves_once_the_line_has_no_payoff_of_its_own():
 def test_protection_saves_the_hurt_drakloak_not_the_healthy_one():
     """The condition fires on the most threatened copy, so the hint must point at that copy.
     Aimed at the readiest one it evolved a healthy Drakloak while the dying one still died."""
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -493,7 +496,7 @@ def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
     """90 HP becomes 320 and the damage already on it stops being lethal. Losing the Drakloak
     loses the line behind the attacker."""
     from types import SimpleNamespace
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -519,7 +522,7 @@ def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
 def test_a_funded_drakloak_that_can_take_a_prize_has_the_knockout_searched():
     """Dragon Headbutt's 70 is worth more than the evolution when it takes a prize. Strategy
     only guarantees both lines are searched; which one wins is Bellman's comparison."""
-    from common.strategy.strategies import GENERAL_STRATEGIES
+    from deprecated.bellman.activation import GENERAL_STRATEGIES
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
@@ -552,7 +555,7 @@ def test_a_funded_drakloak_that_can_take_a_prize_has_the_knockout_searched():
 
 def test_the_healthy_funded_drakloak_is_the_one_promoted():
     """Two Drakloak are not interchangeable. The hurt one stays benched and keeps drawing."""
-    from common.strategy.strategies import GENERAL_STRATEGIES, _recipient_body
+    from deprecated.bellman.activation import GENERAL_STRATEGIES, _recipient_body
 
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
