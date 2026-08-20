@@ -61,6 +61,25 @@ def test_unsupported_shapes_refuse_rather_than_guess():
         6, 6) is None
 
 
+def test_fezandipiti_flip_the_script_prices_through_the_ko_condition_gate():
+    """The store ships `condition='pokemon_ko_last_turn'` (engine-gated: the option only appears
+    when it held) plus the unmodelled `allowance` param; both must stay priceable. If draw.py is
+    ever tightened, this real card must fail loudly here, not silently un-price."""
+    from common.cards import pokemon_card_store
+    clause = pokemon_card_store()[140].abilities[0].clauses[0]
+    assert clause == Clause("draw", amount=3, condition="pokemon_ko_last_turn",
+                            allowance="card")
+    assert draw_branches(clause, 6, 6) == ((3, 0),)
+
+
+def test_unfair_stamp_prices_its_symmetric_shuffle_draw_through_the_ko_gate():
+    from common.cards import trainer_card_store
+    clause = trainer_card_store()[1080].clauses[0]
+    assert clause == Clause("draw", amount=5, condition="pokemon_ko_last_turn",
+                            opponent_amount=2, rider="shuffle_both_hands")
+    assert draw_branches(clause, 6, 6) == ((5, 2),)
+
+
 def test_disagreeing_own_and_opponent_conditions_refuse():
     clause = Clause("draw", amount=3, opponent_amount=3, rider="shuffle_both_hands",
                     amount_if={"condition": "coin_tails", "amount": 6},
