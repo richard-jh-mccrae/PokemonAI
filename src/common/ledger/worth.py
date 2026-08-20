@@ -224,6 +224,18 @@ def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach
     return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
 
 
+def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
+    """The largest attack cost this body can grow into: its own attacks in full, a line
+    evolution's only through a positive reach gate (ADR-0150's concentration target)."""
+    gates = reach or {}
+    best = 0
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        if evo_id is not None and not gates.get(evo_id, 0.0):
+            continue
+        best = max(best, len(attack.cost))
+    return best
+
+
 def usable_units(body_facts, attached, ctx: LedgerContext, reach=None) -> float:
     """The largest attached-unit count any single attack absorbs — typed and colorless slots
     for the body's own attacks; for the forward line's, typed in full and colorless scaled by

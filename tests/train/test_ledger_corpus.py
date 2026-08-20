@@ -218,3 +218,25 @@ def test_a_crashed_decision_is_surfaced_even_when_it_agrees():
     rendered = render_markdown(result)
     assert "Crashed decisions (1)" in rendered
     assert "exception:ValueError" in rendered and "boom" in rendered
+
+
+def test_the_started_twin_wins_the_attach_on_both_re_ruled_frames():
+    """The 2026-08-20 sitting's twin-attach frames (83116501-89 re-ruled to [5], 82752045-97
+    to [4]): with rental energy priced dead on the bench (ADR-0150), the basic-{W}-to-the-
+    started-body ruling wins at default weights."""
+    from train.ledger_corpus import _replay_one
+
+    for store_dir, episode, frame_no in (
+            ("mega_starmie_20260701_fa8f649", "83116501", 89),
+            ("mega_starmie_20260630_b7e483a", "82752045", 97)):
+        from pathlib import Path
+
+        from train.blunder.store import load_corrections
+
+        store = Path(__file__).resolve().parents[2] / "data" / "corrections" / store_dir
+        record = next(r for r in load_corrections(store)
+                      if str(r.episode_id) == episode
+                      and int((r.decision or {}).get("frame", -1)) == frame_no)
+        produced = _replay_one("mega_starmie", record)
+        assert produced["backend"] == "ledger"
+        assert produced["agrees"] is True, (episode, frame_no, produced["chosen_label"])

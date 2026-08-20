@@ -16,7 +16,7 @@ from common.board import BoardState
 from common.board.nodes import Body, Side
 
 from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, demand_scale,
-                    line_reach, usable_units)
+                    line_reach, top_attack_cost, usable_units)
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,7 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
     for body in side.bodies:
         # The Nth fielded copy of the same card saturates: its role is already being done.
         bodies_value += _body_value(body, ctx, gaps, reach=reach, own=own,
+                                    is_active=body is side.active,
                                     discount=weights.surplus_copy ** copies[body.card.card_id])
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
@@ -118,7 +119,7 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
 
 
 def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
-                discount: float = 1.0, own: bool = True) -> float:
+                discount: float = 1.0, own: bool = True, is_active: bool = False) -> float:
     weights = ctx.weights
     worth, gap = base_worth(body.card.card_id, body.card.facts, ctx, own=own)
     if gap:
@@ -129,6 +130,10 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     useless = len(body.energies) - usable
     energy_worth = 0.0
     for card in body.energy_cards:
+        # An end-of-turn-discarding Energy on a BENCHED body evaporates before the body can
+        # ever attack (ADR-0150): its worth is a rental nobody rides, priced zero.
+        if not is_active and "discard_eot" in (getattr(card.facts, "tags", ()) or ()):
+            continue
         unit_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
             gaps.append(f"attached: {gap}")
@@ -138,6 +143,11 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     per_unit = energy_worth / len(body.energies) if body.energies else 0.0
     value += per_unit * (usable * weights.zone_attached_usable
                          + useless * weights.zone_attached_useless)
+    if weights.concentration and body.energies:
+        cost = top_attack_cost(body.card.facts, ctx, reach)
+        if cost > 0:
+            progress = min(1.0, usable / cost)
+            value += weights.concentration * worth * discount * progress * progress
 
     for card in body.tools:
         tool_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)

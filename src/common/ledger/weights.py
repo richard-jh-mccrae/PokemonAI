@@ -115,6 +115,10 @@ class LedgerWeights:
     bench_slot_value: float = 0.06
     prize_liability: float = 0.04
 
+    #: Concentration (ADR-0150): extra credit for a body's progress toward its LARGEST attack,
+    #: squared — so finishing a started attacker outprices starting a fresh one. 0.0 = off.
+    concentration: float = 0.0
+
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08
     #: 0.15 adopted 2026-08-20 (docs/tuning/runs/ledger_20260820_145141.md): an unready
