@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from common import (
-    Actor, Chance, Choice, DecisionState, Deterministic, Ledger, OpponentBelief, Refresh, Terminal,
+    Actor, Chance, Choice, DecisionState, Deterministic, BellmanLedger, OpponentBelief, Refresh, Terminal,
     TurnBudgets, Unknown, enumerate_legal_actions,
 )
 from common.algebra import Edge, WeightedEdge
@@ -49,7 +49,7 @@ def test_belief_mass_and_node_algebra_are_explicit():
     with pytest.raises(ValueError, match="sum"):
         Chance((WeightedEdge(0.4, "heads", deterministic),))
     assert Unknown("unsupported", "card clause").missing_fact == "card clause"
-    assert Terminal(state, "end", Ledger()).ledger.total == 0.0
+    assert Terminal(state, "end", BellmanLedger()).ledger.total == 0.0
     refresh = Refresh(900, ((5, 3), (3, 5)), True)
     assert refresh.draws == ((5, 3), (3, 5))
     assert not hasattr(refresh, "state")

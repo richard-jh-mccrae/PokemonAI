@@ -146,6 +146,8 @@ class Strategy:
     partners: dict[int, tuple[int, ...]] = field(default_factory=dict)
     worth_overrides: dict[int, float] = field(default_factory=dict)
     pilot_overrides: dict[str, float] = field(default_factory=dict)
+    #: The deck's dissents from the Ledger's general weights (`LedgerWeights.resolve` keys).
+    ledger_overrides: dict[str, float] = field(default_factory=dict)
     prize_plan: PrizePlan | None = None
     strategies: tuple[StrategyHint, ...] = ()
     strategy_overrides: tuple[StrategyOverride, ...] = ()
@@ -160,6 +162,8 @@ class Strategy:
                                 for card_id, value in self.worth_overrides.items()}
         self.pilot_overrides = {str(name): float(value)
                                 for name, value in self.pilot_overrides.items()}
+        self.ledger_overrides = {str(name): float(value)
+                                 for name, value in self.ledger_overrides.items()}
         self.strategies = tuple(self.strategies)
         self.strategy_overrides = tuple(self.strategy_overrides)
         self.lines = tuple(self.roles.lines)

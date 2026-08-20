@@ -1,8 +1,20 @@
 # Shared agent runtime
 
-Every shipped deck uses one system: `common.runtime.BellmanRuntime`.
+Every shipped deck uses one system: `common.runtime.BellmanRuntime`. Since ADR-0145 its live
+decisions come from the Ledger (`common/ledger/`, a 1-ply worth-differencing decider over
+`common/board/` BoardState); the Bellman planner below stays callable as the offline teacher
+and phase-2 search skeleton, re-selected only by `brain="bellman"`.
 
 ## Language
+
+**Ledger**:
+The live decider: board value = card worth × zone multiplier, both sides, prizes; an option's
+price is the swing it causes and only ending the turn is worth zero.
+_Avoid_: Evaluator stack, value families
+
+**Swing**:
+One option's price under the Ledger: value after minus value now, expected value at chance points.
+_Avoid_: Score, reward
 
 **Action Family**:
 Legal sibling choices that answer the same local question.

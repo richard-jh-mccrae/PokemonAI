@@ -28,5 +28,8 @@ def deck(name: str) -> tuple[int, ...]:
 
 
 def runtime(name: str = "mega_starmie"):
+    """The TEACHER runtime: every consumer of this helper pins Bellman's own behavior, so it
+    selects the bellman brain explicitly (ADR-0145)."""
     from common.engine import CgpyTransitionProvider
-    return build_runtime(strategy(name), deck(name), provider_factory=CgpyTransitionProvider)
+    return build_runtime(strategy(name), deck(name), provider_factory=CgpyTransitionProvider,
+                         brain="bellman")

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .algebra import Ledger
+from .algebra import BellmanLedger
 from .pilot_profile import PilotProfile
 
 
@@ -20,7 +20,7 @@ def _sum(rows, names) -> float:
     return sum(float(values.get(name, 0.0)) for name in names)
 
 
-def _net(ledger: Ledger, names) -> float:
+def _net(ledger: BellmanLedger, names) -> float:
     return _sum(ledger.benefits, names) - _sum(ledger.costs, names)
 
 
@@ -33,7 +33,7 @@ def _result(features, contributions) -> EquationResult:
     return EquationResult(feature_rows, contribution_rows, score)
 
 
-def attachment(ledger: Ledger, profile: PilotProfile, *, resource_premium=0.0) -> EquationResult:
+def attachment(ledger: BellmanLedger, profile: PilotProfile, *, resource_premium=0.0) -> EquationResult:
     attack = max((_sum(ledger.benefits, (name,)) for name in (
         "board", "development", "energy_position", "multi_target_ko")), default=0.0)
     ability = _sum(ledger.benefits, ("readiness",))
@@ -55,7 +55,7 @@ def attachment(ledger: Ledger, profile: PilotProfile, *, resource_premium=0.0) -
     return _result(features, contributions)
 
 
-def deployment(ledger: Ledger, profile: PilotProfile) -> EquationResult:
+def deployment(ledger: BellmanLedger, profile: PilotProfile) -> EquationResult:
     assignment = _net(ledger, ("board", "development"))
     ability = _net(ledger, ("hand", "hand_demand"))
     acceleration = _net(ledger, ("energy_position", "readiness"))
@@ -73,7 +73,7 @@ def deployment(ledger: Ledger, profile: PilotProfile) -> EquationResult:
     return _result(features, contributions)
 
 
-def evolution(ledger: Ledger, profile: PilotProfile) -> EquationResult:
+def evolution(ledger: BellmanLedger, profile: PilotProfile) -> EquationResult:
     deploy = _net(ledger, ("board", "development", "readiness", "energy_position"))
     income = _net(ledger, ("hand", "hand_demand"))
     gain, loss = max(0.0, income), max(0.0, -income)
@@ -87,7 +87,7 @@ def evolution(ledger: Ledger, profile: PilotProfile) -> EquationResult:
     return _result(features, contributions)
 
 
-def promote_retreat(ledger: Ledger, profile: PilotProfile) -> EquationResult:
+def promote_retreat(ledger: BellmanLedger, profile: PilotProfile) -> EquationResult:
     my_yield = _sum(ledger.benefits, ("damage", "readiness", "multi_target_ko"))
     closure = _sum(ledger.benefits, ("prize_plan",))
     tempo = _sum(ledger.benefits, ("opponent_roles",))
@@ -106,7 +106,7 @@ def promote_retreat(ledger: Ledger, profile: PilotProfile) -> EquationResult:
     return _result(features, contributions)
 
 
-def snipe(ledger: Ledger, profile: PilotProfile) -> EquationResult:
+def snipe(ledger: BellmanLedger, profile: PilotProfile) -> EquationResult:
     their_plan = _sum(ledger.benefits, ("opponent_roles", "readiness"))
     my_route = _sum(ledger.benefits, ("damage", "prize_plan", "prize_race"))
     costs = sum(value for _name, value in ledger.costs)

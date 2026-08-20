@@ -13,7 +13,7 @@ from common.card_worth import (
     ROLE_TIER, TAG_TIER, role_value,
 )
 
-from .algebra import Ledger
+from .algebra import BellmanLedger
 from .api import ActionIdentity
 from .cards import card_store, play_clauses
 from .cards.card_facts import BASIC_ENERGY, COLORLESS, EnergyCard, PokemonCard
@@ -259,7 +259,7 @@ class ValueOracle:
         return result
 
     def transition_ledger(self, before: DecisionState, after: DecisionState,
-                          action: ActionIdentity, *, before_model=None, after_model=None) -> Ledger:
+                          action: ActionIdentity, *, before_model=None, after_model=None) -> BellmanLedger:
         left = dict(self.potential(before, model=before_model).families)
         right = dict(self.potential(after, model=after_model).families)
         benefits, costs = [], []
@@ -283,7 +283,7 @@ class ValueOracle:
         unresolved = self._unresolved_fetch_cost(before, after, action)
         if unresolved > 0.0:
             costs.append(("unresolved_fetch", unresolved))
-        return Ledger(tuple(benefits), tuple(costs))
+        return BellmanLedger(tuple(benefits), tuple(costs))
 
     def _unresolved_fetch_cost(self, before: DecisionState, after: DecisionState,
                                action: ActionIdentity) -> float:

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from common import (
-    ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, Ledger, ReferenceSolver,
+    ActionIdentity, Actor, Chance, Choice, DecisionState, Deterministic, BellmanLedger, ReferenceSolver,
     PilotProfile, ProductionLimits, ProductionSolver, RevealChoice, RevealOutcome,
     Refresh, RootDecision, SearchLimits, Terminal,
 )
@@ -147,7 +147,7 @@ def test_complete_line_continues_and_commits_only_first_action():
         {"root": (attach, end), "mid": (supporter, end), "finish": (attack, end)},
         {("root", "attach"): Deterministic(mid),
          ("mid", "play"): Deterministic(finish),
-         ("finish", "attack"): Terminal(finish, "attack resolved", Ledger())},
+         ("finish", "attack"): Terminal(finish, "attack resolved", BellmanLedger())},
     )
     decision = ReferenceSolver(graph, _oracle()).decide(root)
     assert decision.action.kind == "attach"
@@ -191,7 +191,7 @@ def test_analytic_refresh_keeps_a_guaranteed_attack_continuation(monkeypatch):
     monkeypatch.setattr(
         oracle, "refresh_ledger",
         lambda _state, _node, **_kwargs: (
-            Ledger((("refresh_immediate_demands", 0.1),), ()), ()),
+            BellmanLedger((("refresh_immediate_demands", 0.1),), ()), ()),
     )
     monkeypatch.setattr(oracle, "refresh_attack_independent", lambda _state, _action: True)
 
@@ -218,7 +218,7 @@ def test_analytic_refresh_keeps_the_attacks_forced_resolution_value(monkeypatch)
     oracle = _oracle()
     monkeypatch.setattr(
         oracle, "refresh_ledger",
-        lambda _state, _node, **_kwargs: (Ledger((("refresh", 0.1),), ()), ()),
+        lambda _state, _node, **_kwargs: (BellmanLedger((("refresh", 0.1),), ()), ()),
     )
     monkeypatch.setattr(oracle, "refresh_attack_independent", lambda *_args: True)
 
@@ -238,7 +238,7 @@ def test_production_turn_search_has_no_depth_limit():
         for index in range(len(states) - 1)
     }
     transitions[(states[-1].obs["node"], "play")] = Terminal(
-        states[-1], "win", Ledger())
+        states[-1], "win", BellmanLedger())
 
     decision = ProductionSolver(
         Graph(actions, transitions), _oracle(),
@@ -383,7 +383,7 @@ def test_candidate_harvest_completes_strategy_roots_and_a_safety_root(monkeypatc
          "harvest-alpha": (end,), "harvest-beta": (end,)},
         {("harvest-root", "alpha"): Deterministic(alpha),
          ("harvest-root", "beta"): Deterministic(beta),
-         ("harvest-root", "attack"): Terminal(alpha, "attack resolved", Ledger())},
+         ("harvest-root", "attack"): Terminal(alpha, "attack resolved", BellmanLedger())},
     )
     profile = PilotProfile.resolve(global_values={
         "search.completed_candidate_target": 3,
@@ -523,7 +523,7 @@ def test_timeout_fallback_chooses_only_from_banked_executable_candidates():
     def bank_only_attack(action, _result, _tier=None):
         if action == attack:
             solver._candidate_bank.live[action.identity] = Evaluation(
-                0.2, Ledger(), False, "banked", execution_complete=True)
+                0.2, BellmanLedger(), False, "banked", execution_complete=True)
 
     solver._bank_candidate = bank_only_attack
 
@@ -536,8 +536,8 @@ def test_timeout_fallback_chooses_only_from_banked_executable_candidates():
 def test_candidate_bank_never_replaces_a_stronger_completed_lower_bound():
     action = _action("play")
     solver = ProductionSolver(Graph({}, {}), _oracle())
-    stronger = Evaluation(2.0, Ledger(), False, "stronger", execution_complete=True)
-    weaker = Evaluation(1.0, Ledger(), False, "weaker", execution_complete=True)
+    stronger = Evaluation(2.0, BellmanLedger(), False, "stronger", execution_complete=True)
+    weaker = Evaluation(1.0, BellmanLedger(), False, "weaker", execution_complete=True)
 
     solver._bank_candidate(action, stronger)
     solver._bank_candidate(action, weaker)
@@ -548,7 +548,7 @@ def test_candidate_bank_never_replaces_a_stronger_completed_lower_bound():
 def test_candidate_bank_publishes_a_finite_strategy_recoverable_prefix():
     action = _action("play")
     solver = ProductionSolver(Graph({}, {}), _oracle())
-    recoverable = Evaluation(1.0, Ledger(), False, "deadline")
+    recoverable = Evaluation(1.0, BellmanLedger(), False, "deadline")
 
     solver._bank_candidate(action, recoverable)
     solver._candidate_bank.publish()
@@ -561,8 +561,8 @@ def test_timeout_candidate_prefers_full_plan_over_higher_recoverable_bound():
     full_action, partial_action = _action("attack"), _action("play", 1)
     solver = ProductionSolver(Graph({}, {}), _oracle())
     solver._bank_candidate(
-        full_action, Evaluation(0.2, Ledger(), False, execution_complete=True))
-    solver._bank_candidate(partial_action, Evaluation(2.0, Ledger(), False))
+        full_action, Evaluation(0.2, BellmanLedger(), False, execution_complete=True))
+    solver._bank_candidate(partial_action, Evaluation(2.0, BellmanLedger(), False))
     solver._candidate_bank.publish()
 
     chosen, _result = solver._select_timeout_candidate((
@@ -581,7 +581,7 @@ def test_stability_stop_requires_two_full_checkpoints_patience_and_closed_bounds
         limits=ProductionLimits(max_seconds=10.0))
     solver._root_key = root.semantic_key
     solver._candidate_bank.offer(
-        chosen, Evaluation(1.0, Ledger(), False, execution_complete=True))
+        chosen, Evaluation(1.0, BellmanLedger(), False, execution_complete=True))
     solver._candidate_bank.publish()
     solver._action_bounds = {
         chosen.identity: {"q_upper": 1.0},
@@ -618,8 +618,8 @@ def test_incomplete_equal_lower_bounds_do_not_prefer_the_shorter_partial_trace()
 
     information, commitment = _action("play"), _action("attach", 1)
     chosen, _result = _select_our_action((
-        (information, Evaluation(1.0, Ledger(), False, decisions=4.0)),
-        (commitment, Evaluation(1.0, Ledger(), False, decisions=2.0)),
+        (information, Evaluation(1.0, BellmanLedger(), False, decisions=4.0)),
+        (commitment, Evaluation(1.0, BellmanLedger(), False, decisions=2.0)),
     ), 0)
 
     assert chosen == information
@@ -638,17 +638,17 @@ def test_unresolved_challenger_replaces_strategy_only_after_its_lower_bound_clos
     solver._protected_bundle_diagnostics = {"protected": ("test.bundle",)}
     solver._action_bundles = lambda action: ("test.bundle",) if action == focused else ()
     solver._action_bounds[focused.identity] = {"q_upper": 5.0}
-    focus_result = Evaluation(1.0, Ledger(), False)
+    focus_result = Evaluation(1.0, BellmanLedger(), False)
 
     preferred = solver._prefer_unresolved_strategy(
         state,
-        ((focused, focus_result), (challenger, Evaluation(3.0, Ledger(), False))),
-        (challenger, Evaluation(3.0, Ledger(), False)), 0,
+        ((focused, focus_result), (challenger, Evaluation(3.0, BellmanLedger(), False))),
+        (challenger, Evaluation(3.0, BellmanLedger(), False)), 0,
     )
     closed = solver._prefer_unresolved_strategy(
         state,
-        ((focused, focus_result), (challenger, Evaluation(6.0, Ledger(), False))),
-        (challenger, Evaluation(6.0, Ledger(), False)), 0,
+        ((focused, focus_result), (challenger, Evaluation(6.0, BellmanLedger(), False))),
+        (challenger, Evaluation(6.0, BellmanLedger(), False)), 0,
     )
 
     assert preferred[0] == focused
@@ -722,7 +722,7 @@ def test_complete_equal_damage_placements_use_engine_selection_order():
     from common.solver import Evaluation, _select_our_action
 
     first, strategy_first = _action("counter", 0), _action("counter", 2)
-    tied = Evaluation(1.0, Ledger(), True, decisions=1.0)
+    tied = Evaluation(1.0, BellmanLedger(), True, decisions=1.0)
 
     chosen, _result = _select_our_action(((strategy_first, tied), (first, tied)), 13)
 
@@ -795,8 +795,8 @@ def test_equal_commutative_lines_choose_the_canonical_prefix():
     from common.solver import Evaluation
 
     commitment, information = _action("attach"), _action("play", 1)
-    commitment_result = Evaluation(1.0, Ledger(), True, decisions=3.0)
-    information_result = Evaluation(1.0, Ledger(), True, decisions=2.0)
+    commitment_result = Evaluation(1.0, BellmanLedger(), True, decisions=3.0)
+    information_result = Evaluation(1.0, BellmanLedger(), True, decisions=2.0)
     graph = FootprintedGraph({}, {}, {
         "attach": ActionFootprint(("attach",), writes=frozenset({"energy"})),
         "play": ActionFootprint(("play",), writes=frozenset({"hand"})),
@@ -814,8 +814,8 @@ def test_equal_terminal_line_uses_the_shorter_continuation():
     from common.solver import Evaluation
 
     commitment, attack = _action("attach"), _action("attack", 1)
-    commitment_result = Evaluation(1.0, Ledger(), True, decisions=3.0)
-    attack_result = Evaluation(1.0, Ledger(), True, decisions=2.0)
+    commitment_result = Evaluation(1.0, BellmanLedger(), True, decisions=3.0)
+    attack_result = Evaluation(1.0, BellmanLedger(), True, decisions=2.0)
     graph = FootprintedGraph({}, {}, {
         "attach": ActionFootprint(
             ("attach",), writes=frozenset({"energy"})),
@@ -1168,7 +1168,7 @@ def test_immediate_demand_preparation_never_deletes_a_commitment_without_a_bound
     )
     oracle = _oracle()
     oracle.demand_coverage_ledger = lambda _state, action: (
-        ("deployment", Ledger((("board", 0.2),), ()))
+        ("deployment", BellmanLedger((("board", 0.2),), ()))
         if action.identity.kind == "play" else None)
 
     decision = ProductionSolver(
@@ -1331,8 +1331,8 @@ def test_any_incomplete_forced_discard_uses_stable_immediate_value_fallback():
 
     keep, waste = _action("discard_keep"), _action("discard_waste", 1)
     chosen, _result = _select_our_action((
-        (keep, Evaluation(0.2, Ledger((('hand', 0.2),), ()), False)),
-        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), True)),
+        (keep, Evaluation(0.2, BellmanLedger((('hand', 0.2),), ()), False)),
+        (waste, Evaluation(0.9, BellmanLedger((), (('hand', 0.1),), 1.0), True)),
     ), 8)
 
     assert chosen == keep
@@ -1343,8 +1343,8 @@ def test_complete_forced_discard_still_preserves_the_best_immediate_hand_value()
 
     keep, waste = _action("discard_keep"), _action("discard_waste", 1)
     chosen, _result = _select_our_action((
-        (keep, Evaluation(0.2, Ledger((('hand', 0.2),), ()), True)),
-        (waste, Evaluation(0.9, Ledger((), (('hand', 0.1),), 1.0), True)),
+        (keep, Evaluation(0.2, BellmanLedger((('hand', 0.2),), ()), True)),
+        (waste, Evaluation(0.9, BellmanLedger((), (('hand', 0.1),), 1.0), True)),
     ), 8)
 
     assert chosen == keep

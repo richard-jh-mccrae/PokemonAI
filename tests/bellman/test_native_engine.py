@@ -269,6 +269,6 @@ def test_production_runtime_returns_a_legal_native_action_without_fallback():
         decision = runtime.decide(observation)
 
         assert decision.chosen in legal_selections
-        assert decision.diagnostics["backend"] == "native-cg-bellman"
+        assert decision.diagnostics["backend"] == "ledger"
     finally:
         battle_finish()

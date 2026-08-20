@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from common import ActionIdentity, Deterministic, Ledger
+from common import ActionIdentity, Deterministic, BellmanLedger
 from common.family_ranking import apply_family_ordering, rank_actions
 from common.options import LegalAction
 from common.pilot_profile import PilotProfile
@@ -39,9 +39,9 @@ def test_attachment_leader_near_tie_and_singleton_enter_before_distant_candidate
     water, ignition, bench, wally = (_action("attach", index) for index in range(4))
     wally = _action("play", 4)
     successors = {
-        water: Deterministic(SimpleNamespace(ledger=Ledger((('board', 0.15),), ()))),
-        ignition: Deterministic(SimpleNamespace(ledger=Ledger((('board', 0.145),), ()))),
-        bench: Deterministic(SimpleNamespace(ledger=Ledger((('board', 0.02),), ()))),
+        water: Deterministic(SimpleNamespace(ledger=BellmanLedger((('board', 0.15),), ()))),
+        ignition: Deterministic(SimpleNamespace(ledger=BellmanLedger((('board', 0.145),), ()))),
+        bench: Deterministic(SimpleNamespace(ledger=BellmanLedger((('board', 0.02),), ()))),
     }
 
     ranking = rank_actions(SimpleNamespace(), (bench, wally, ignition, water),
@@ -80,20 +80,20 @@ def test_every_historical_value_equation_emits_shadow_candidates():
             ("attach", "evolve", "retreat", "play", "card")))
     successors = {
         attach: Deterministic(SimpleNamespace(
-            obs=before.obs, ledger=Ledger((("energy_position", 0.2),), ()))),
+            obs=before.obs, ledger=BellmanLedger((("energy_position", 0.2),), ()))),
         evolve: Deterministic(SimpleNamespace(
-            obs=before.obs, ledger=Ledger((("development", 0.3),), ()))),
+            obs=before.obs, ledger=BellmanLedger((("development", 0.3),), ()))),
         retreat: Deterministic(SimpleNamespace(
             obs=_state(active=({"id": 2, "serial": 2, "hp": 70},)).obs,
-            ledger=Ledger((("readiness", 0.4),), ()))),
+            ledger=BellmanLedger((("readiness", 0.4),), ()))),
         deploy: Deterministic(SimpleNamespace(
             obs=_state(bench=({"id": 3, "serial": 3, "hp": 70},),
                        active=({"id": 1, "serial": 1, "hp": 60},)).obs,
-            ledger=Ledger((("board", 0.5),), ()))),
+            ledger=BellmanLedger((("board", 0.5),), ()))),
         snipe: Deterministic(SimpleNamespace(
             obs=_state(active=({"id": 1, "serial": 1, "hp": 60},),
                        opponent_bench=({"id": 9, "serial": 9, "hp": 50},)).obs,
-            ledger=Ledger((("damage", 0.25), ("opponent_roles", 0.1)), ()))),
+            ledger=BellmanLedger((("damage", 0.25), ("opponent_roles", 0.1)), ()))),
     }
 
     ranking = rank_actions(before, (attach, evolve, retreat, deploy, snipe),
@@ -111,7 +111,7 @@ def test_each_shadow_gate_and_coefficient_is_independent():
     evolve = _action("evolve", 0)
     before = _state()
     provider = _Provider({evolve: Deterministic(SimpleNamespace(
-        obs=before.obs, ledger=Ledger((("development", 0.5),), ())))})
+        obs=before.obs, ledger=BellmanLedger((("development", 0.5),), ())))})
 
     disabled = rank_actions(
         before, (evolve,), provider, _Oracle(),
@@ -130,8 +130,8 @@ def test_each_shadow_gate_and_coefficient_is_independent():
 def test_shadow_ordering_never_changes_runtime_order_until_its_family_gate_is_on():
     low, play, high = _action("attach", 0), _action("play", 1), _action("attach", 2)
     successors = {
-        low: Deterministic(SimpleNamespace(ledger=Ledger((("board", 0.1),), ()))),
-        high: Deterministic(SimpleNamespace(ledger=Ledger((("board", 0.9),), ()))),
+        low: Deterministic(SimpleNamespace(ledger=BellmanLedger((("board", 0.1),), ()))),
+        high: Deterministic(SimpleNamespace(ledger=BellmanLedger((("board", 0.9),), ()))),
     }
     actions = (low, play, high)
     base = _equation_profile()
