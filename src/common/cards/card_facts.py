@@ -6,21 +6,28 @@ none derived at query time, so a mid-game read is one dict hit plus attribute ac
 `Clause` is a `kind` plus that card's own named parameters (the `card_effects.json`
 vocabulary); an unset parameter reads as None, so the vocabulary can grow per card without
 touching this module. Amounts are DAMAGE POINTS, never counters; Energy codes are the engine
-wire ints re-exported here under their short names."""
+wire ints, defined here so the function modules read them off the ground layer."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from .functions.energy import (
-    ENERGY_COLORLESS as COLORLESS, ENERGY_GRASS as GRASS, ENERGY_FIRE as FIRE,
-    ENERGY_WATER as WATER, ENERGY_LIGHTNING as LIGHTNING, ENERGY_PSYCHIC as PSYCHIC,
-    ENERGY_FIGHTING as FIGHTING, ENERGY_DARKNESS as DARKNESS, ENERGY_METAL as METAL,
-    ENERGY_DRAGON as DRAGON)
+# Values verbatim from the engine wire enum (`cg.api` EnergyType).
+COLORLESS, GRASS, FIRE, WATER, LIGHTNING = 0, 1, 2, 3, 4
+PSYCHIC, FIGHTING, DARKNESS, METAL, DRAGON, WILDCARD = 5, 6, 7, 8, 9, 10
 
 BASIC, STAGE1, STAGE2 = "basic", "stage1", "stage2"
 ITEM, TOOL, SUPPORTER, STADIUM = "item", "tool", "supporter", "stadium"
 BASIC_ENERGY, SPECIAL_ENERGY = "basic_energy", "special_energy"
+
+
+def _hashable(value):
+    """A JSON-ish parameter value as a hashable equivalent (lists/dicts arrive from the store)."""
+    if isinstance(value, dict):
+        return tuple(sorted((str(key), _hashable(child)) for key, child in value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_hashable(child) for child in value)
+    return value
 
 
 class Clause:
@@ -44,7 +51,9 @@ class Clause:
                 and dict(self.params) == dict(other.params))
 
     def __hash__(self):
-        return hash((self.kind, repr(sorted(self.params.items()))))
+        # Built from the values `__eq__` compares (not their repr), so 1/True stay one entry.
+        return hash((self.kind, frozenset(
+            (key, _hashable(value)) for key, value in self.params.items())))
 
     def __repr__(self):
         parts = "".join(f", {key}={value!r}" for key, value in self.params.items())
@@ -150,4 +159,4 @@ __all__ = ("Ability", "Attack", "Clause", "EnergyCard", "PokemonCard", "TrainerC
            "BASIC", "STAGE1", "STAGE2", "ITEM", "TOOL", "SUPPORTER", "STADIUM",
            "BASIC_ENERGY", "SPECIAL_ENERGY",
            "COLORLESS", "GRASS", "FIRE", "WATER", "LIGHTNING", "PSYCHIC", "FIGHTING",
-           "DARKNESS", "METAL", "DRAGON")
+           "DARKNESS", "METAL", "DRAGON", "WILDCARD")

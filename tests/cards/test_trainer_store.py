@@ -42,6 +42,16 @@ def test_every_trainer_carries_at_least_one_clause():
         assert card.clauses, (card.card_id, card.name)
 
 
+def test_equal_clauses_hash_equal_even_across_numeric_types():
+    """1 == True in Python, so two clauses differing only that way are equal — and equal
+    objects must hash equal or set/dict lookups silently split them."""
+    a, b = Clause("draw", amount=1), Clause("draw", amount=True)
+    assert a == b and hash(a) == hash(b)
+    assert len({a, b}) == 1
+    c = Clause("fetch", target="pokemon", filter=["Solrock", "Lunatone"])
+    assert hash(c) == hash(Clause("fetch", target="pokemon", filter=["Solrock", "Lunatone"]))
+
+
 def test_clause_open_parameters():
     clause = Clause("fetch", target="pokemon", zone="deck")
     assert (clause.kind, clause.target, clause.zone) == ("fetch", "pokemon", "deck")

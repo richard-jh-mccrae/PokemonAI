@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from common.cards import card_store
+from common.cards.functions.attack_lock import fold_attack_locks
 
 from .nodes import (
     Body, Card, CardBag, Looking, SelectPrompt, Side, Turn, active_node, body_node, canon,
@@ -45,6 +46,7 @@ class BoardState:
     own_prizes: tuple[tuple[int, int], ...] | None
     #: Ordered (serial, card id) belief about MY deck's top from stacking effects; None = unknown.
     known_top: tuple | None
+    #: Self-locked attacks by body serial, folded from each step's log delta (never mutates input).
     attack_locks: tuple | None
     decklist: tuple[int, ...] | None
     #: MY unseen pool by card id — exact deck once `own_prizes` anchors, deck∪prizes before it.
@@ -178,11 +180,14 @@ def _bench(build: _Build, label, raw_bench, parent_side: Side | None) -> tuple[B
     survivors = {}
     if parent_side is not None:
         parent_raw = build.parent.raw.get(label) or ()
-        for raw_body, node in zip(parent_raw, parent_side.bench):
-            survivors.setdefault((raw_body or {}).get("serial"), []).append((raw_body, node))
+        # Empty entries never became nodes, so drop them on both sides to keep the zip aligned.
+        for raw_body, node in zip((entry for entry in parent_raw if entry), parent_side.bench):
+            survivors.setdefault(raw_body.get("serial"), []).append((raw_body, node))
     bench = []
     for entry in raw_bench or ():
-        node = next((old for raw_old, old in survivors.get((entry or {}).get("serial"), ())
+        if not entry:
+            continue
+        node = next((old for raw_old, old in survivors.get(entry.get("serial"), ())
                      if raw_old == entry), None)
         node = node if node is not None else body_node(entry, build.store)
         if node is not None:
@@ -230,11 +235,22 @@ def _extras(build: _Build, printout):
     own_prizes = None if raw_prizes is None else tuple(
         sorted((int(card_id), int(count)) for card_id, count in raw_prizes.items()))
     known_top = canon(printout.get("known_top"))
-    attack_locks = canon(printout.get("attack_locks"))
+    attack_locks = canon(_attack_locks(build, printout))
     values = (own_prizes, known_top, attack_locks)
     if not build.reuse(("extras",), values):
         build.keep(("extras",), values, digest(values))
     return values
+
+
+def _attack_locks(build: _Build, printout):
+    """The lock ledger folds here, not upstream: an enriched printout's own ledger is
+    authoritative, else the parent's carries over; the log delta then stamps new locks."""
+    prior = printout.get("attack_locks")
+    if prior is None and build.parent is not None:
+        prior = {serial: dict(rows) for serial, rows in build.parent.attack_locks or ()}
+    locks = fold_attack_locks(prior, printout.get("logs"),
+                              turn=int((printout.get("current") or {}).get("turn") or 0))
+    return locks or None
 
 
 def _deck_counts(build: _Build, decklist, seat, me: Side, stadium, own_prizes):

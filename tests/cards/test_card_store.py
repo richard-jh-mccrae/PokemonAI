@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 from cards_helpers import (
-    DECKS, ENERGY_KINDS, TRAINER_KINDS, all_deck_card_ids, deck_card_ids,
+    DECKS, ENERGY_KINDS, REPO, TRAINER_KINDS, all_deck_card_ids, deck_card_ids,
     deck_card_ids_of_kind, engine_card_defs)
 from cgpy.schema import CardType
 
@@ -56,6 +56,20 @@ def test_the_record_type_matches_what_the_engine_calls_the_card():
         expected = ("PokemonCard" if card_type == CardType.POKEMON
                     else "TrainerCard" if card_type in TRAINER_KINDS else "EnergyCard")
         assert type(card).__name__ == expected, card_id
+
+
+def test_card_facts_is_a_leaf_module():
+    """The records are the ground layer: functions read them, never the reverse. Executing the
+    file alone in a fresh interpreter, with no repo on the path, proves it imports only stdlib."""
+    import subprocess
+    import sys
+    probe = ("import importlib.util, sys; "
+             "spec = importlib.util.spec_from_file_location('card_facts_probe', sys.argv[1]); "
+             "module = importlib.util.module_from_spec(spec); "
+             "sys.modules['card_facts_probe'] = module; spec.loader.exec_module(module); "
+             "sys.exit(1 if any(name.startswith('common') for name in sys.modules) else 0)")
+    path = str(REPO / "src" / "common" / "cards" / "card_facts.py")
+    assert subprocess.run([sys.executable, "-c", probe, path]).returncode == 0
 
 
 def test_the_union_store_is_read_only():

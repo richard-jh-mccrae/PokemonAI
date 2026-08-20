@@ -46,6 +46,31 @@ def test_deck_knowledge_reaches_the_key():
     assert len({bare.key, deck_a.key, deck_b.key}) == 3
 
 
+def test_select_deck_listing_is_menu_material_but_the_context_card_is_not():
+    base = printout(select={"type": 1, "context": 0, "minCount": 1, "maxCount": 1,
+                            "remainDamageCounter": 0, "remainEnergyCost": 0,
+                            "option": [{"type": 7, "index": 0}], "deck": None,
+                            "contextCard": None, "effect": None})
+    with_deck = copy.deepcopy(base)
+    with_deck["select"]["deck"] = [{"id": 119, "serial": 40}]
+    assert _board(base).key == _board(with_deck).key
+    with_context = copy.deepcopy(base)
+    with_context["select"]["contextCard"] = {"id": 1121, "serial": 41}
+    assert _board(base).key != _board(with_context).key
+
+
+def test_known_top_reaches_the_key_and_string_prize_keys_coerce():
+    base = printout(me=player(hand=[119]))
+    stacked = copy.deepcopy(base)
+    stacked["known_top"] = [[41, 66]]
+    assert _board(base).key != _board(stacked).key
+    stringy = copy.deepcopy(base)
+    stringy["own_prizes"] = {"66": 2}                      # JSON round trips keys to strings
+    board = BoardState.root(stringy, decklist=(66,) * 3 + (119,))
+    assert board.own_prizes == ((66, 2),)
+    assert board.deck_counts == ((66, 1),)
+
+
 def test_select_menu_material_never_reaches_the_key():
     a = printout(select={"type": 1, "context": 0, "minCount": 1, "maxCount": 1,
                          "remainDamageCounter": 0, "remainEnergyCost": 0,
