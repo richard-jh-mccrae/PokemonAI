@@ -25,23 +25,16 @@ def test_declarative_roles_derive_a_complete_evolution_line():
     assert strategy.prize_plan.prizes_to_win == 6
 
 
-def test_card_tags_resolve_roles_across_an_evolution_line():
-    class Stats:
-        rows = {
-            10: type("Stat", (), {"name": "Base", "evolvesFrom": None})(),
-            11: type("Stat", (), {"name": "Stage", "evolvesFrom": "Base"})(),
-            12: type("Stat", (), {"name": "Top", "evolvesFrom": "Stage"})(),
-        }
+def test_roles_resolve_reads_the_store_records_across_an_evolution_line():
+    # Dreepy 119 -> Drakloak 120 -> Dragapult ex 121: ancestry from `evolves_from`, roles
+    # from authored `default_roles`, and a deck declaration REPLACING the payoff's default.
+    roles = Roles({121: ["primary_attacker"]}, ready={121: 2}).resolve((119, 120, 121))
 
-        def get(self, card_id):
-            return self.rows.get(card_id)
-
-    roles = Roles({12: ["primary_attacker"]}, ready={12: 2}).resolve((10, 11, 12), Stats())
-
-    assert roles.evolves == {10: 11, 11: 12}
-    assert 10 not in roles and 11 not in roles
-    assert roles[12] == ["primary_attacker"]
-    assert roles.lines[0].path == (10, 11, 12)
+    assert roles.evolves == {119: 120, 120: 121}
+    assert roles[119] == ["primary_attacker"]
+    assert roles[120] == ["primary_attacker", "draw_engine"]
+    assert roles[121] == ["primary_attacker"]        # declared, so the authored sniper is gone
+    assert roles.lines[0].path == (119, 120, 121)
 
 
 def test_portable_worth_is_independent_of_a_legacy_value_stack():

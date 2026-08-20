@@ -57,7 +57,7 @@ class AgentRuntime:
         self.stats = stats
         self.functions = CardFunctions.load() if functions is _ENGINE else functions
         self.effects = CardEffects.load()
-        self.roles = strategy.roles.resolve(self.deck, self.stats, self.functions)
+        self.roles = strategy.roles.resolve(self.deck)
         if scout is _ENGINE:
             scout = Scout(load_artifact(), provider=self.stats)
         self.scout = scout

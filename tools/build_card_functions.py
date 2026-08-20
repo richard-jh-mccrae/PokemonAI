@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
 
-from common.card_tags import is_card_key                   # noqa: E402  the ONE reserved-key rule
+from common.cards.tags import is_card_key                   # noqa: E402  the ONE reserved-key rule
 from meta_tracker.card_functions import accumulate_tables, build_function_table  # noqa: E402
 from meta_tracker.cards import load_cards                     # noqa: E402
 from meta_tracker.probe_cards import (  # noqa: E402
@@ -127,7 +127,7 @@ def _load_overrides(path) -> dict[int, list[str]]:
 
 def _load_table(path) -> dict[int, list[str]]:
     """The previously-shipped ``{cardId: tags}`` table, to accumulate into (empty if none). Reserved
-    keys are SKIPPED rather than `int()`-ed, via `card_tags.is_card_key` (Issue #395 D6.5)."""
+    keys are SKIPPED rather than `int()`-ed, via `cards.tags.is_card_key` (Issue #395 D6.5)."""
     p = Path(path)
     if p.exists():
         return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()

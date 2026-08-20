@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from common.cards import CardFunctions
-from deprecated.bellman.runtime import BellmanTeacherRuntime, build_teacher_runtime
+from deprecated.bellman.runtime import (
+    BellmanTeacherRuntime, build_teacher_runtime, legacy_roles_resolve,
+)
 from common.scouting.provider import EngineCardStatProvider
 
 
@@ -44,7 +46,7 @@ def test_every_deck_pokemon_resolves_to_a_role(name):
             (REPO / "src" / "agents" / name / "deck.csv").read_text().splitlines()
             if value.strip()]
     stats = EngineCardStatProvider()
-    roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+    roles = legacy_roles_resolve(strategy.roles, deck, stats, CardFunctions.load())
     pokemon = {card_id for card_id in deck if stats.get(card_id).is_pokemon}
     assert pokemon <= roles.keys(), f"{name}: missing Roles for {sorted(pokemon - roles.keys())}"
 

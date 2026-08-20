@@ -4,6 +4,7 @@ import json
 import pytest
 
 from agents.dragapult_ex.strategy import STRATEGY
+from deprecated.bellman.runtime import legacy_roles_resolve
 from deprecated.bellman.demand import StrategyBeamBuilder
 from deprecated.bellman.dragapult_potential import DragapultPotential
 from common.cards import CardFunctions
@@ -34,7 +35,7 @@ def test_every_dragapult_card_has_machine_readable_purpose():
     stats = EngineCardStatProvider()
     functions = CardFunctions.load()
     effects = CardEffects.load()
-    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, functions)
 
     assert POKEMON <= roles.keys()
     assert all(functions.tags(card_id) or effects.clauses(card_id)
@@ -76,7 +77,7 @@ def test_dragapult_has_dense_executable_strategy_doctrine():
     } <= identifiers
 
     stats = EngineCardStatProvider()
-    roles = STRATEGY.roles.resolve(_deck(), stats, CardFunctions.load())
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, CardFunctions.load())
     general = {hint.identifier for hint in general_card_strategies(
         _deck(), roles, CardFunctions.load(), stats, CardEffects.load())}
     assert {
@@ -104,7 +105,7 @@ def test_munkidori_ability_hint_activates_for_a_benched_munkidori():
     }
     stats = EngineCardStatProvider()
     functions = CardFunctions.load()
-    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, functions)
     general = general_card_strategies(_deck(), roles, functions, stats, CardEffects.load())
     snapshot = activate_strategies(
         observation, resolve_strategies(general), roles=roles, stats=stats,
@@ -118,7 +119,7 @@ def test_munkidori_ability_hint_activates_for_a_benched_munkidori():
 def test_fezandipiti_deploys_after_ko_without_needing_unfair_stamp():
     stats = EngineCardStatProvider()
     functions, effects = CardFunctions.load(), CardEffects.load()
-    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, functions)
     general = general_card_strategies(_deck(), roles, functions, stats, effects)
     observation = {
         "current": {"turn": 3, "yourIndex": 0, "players": [
@@ -139,7 +140,7 @@ def test_fezandipiti_deploys_after_ko_without_needing_unfair_stamp():
 def test_fezandipiti_deploy_hint_survives_unfair_stamp_replan():
     stats = EngineCardStatProvider()
     functions, effects = CardFunctions.load(), CardEffects.load()
-    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, functions)
     general = general_card_strategies(_deck(), roles, functions, stats, effects)
     observation = {
         "current": {"turn": 3, "yourIndex": 0, "supporterPlayed": True, "players": [
@@ -166,7 +167,7 @@ def test_drakloak_general_evolution_waits_for_the_deck_gate():
         "select": {"context": 0, "option": []},
     }
     stats = EngineCardStatProvider()
-    roles = STRATEGY.roles.resolve(_deck(), stats, CardFunctions.load())
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, CardFunctions.load())
     snapshot = activate_strategies(
         observation,
         resolve_strategies(
@@ -189,7 +190,7 @@ def test_threatened_drakloak_can_evolve_before_it_is_attack_ready():
         "select": {"context": 0, "option": []},
     }
     stats = EngineCardStatProvider()
-    roles = STRATEGY.roles.resolve(_deck(), stats, CardFunctions.load())
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, CardFunctions.load())
     snapshot = activate_strategies(
         observation,
         resolve_strategies(
@@ -295,7 +296,7 @@ def test_every_deck_hint_is_gated_on_a_board_that_makes_it_true():
 def test_the_dunsparce_draw_line_has_a_driver():
     """Neither Dunsparce nor Dudunsparce is an attacker, so the shared evolution machinery drops
     the relationship and no general hint ever reaches it."""
-    roles = STRATEGY.roles.resolve(_deck(), EngineCardStatProvider(), CardFunctions.load())
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), EngineCardStatProvider(), CardFunctions.load())
     assert 305 not in roles.evolves
 
     evolve = {hint.desired_facts[0].target_card_ids for hint in STRATEGY.strategies
@@ -312,7 +313,7 @@ def _funding_energy(card_id, attached=()):
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -353,7 +354,7 @@ def test_darkness_is_never_funding_for_the_dragapult_line(card_id):
 def test_support_pokemon_are_never_funded(card_id):
     """Meowth ex, Dunsparce and Dudunsparce hold no attacker role, so no funding hint reaches
     them. The requirement lives in the shared role vocabulary, not in this deck's doctrine."""
-    roles = STRATEGY.roles.resolve(_deck(), EngineCardStatProvider(), CardFunctions.load())
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), EngineCardStatProvider(), CardFunctions.load())
 
     assert not {"primary_attacker", "backup_attacker"} & set(roles.get(card_id, ()))
     assert _funding_energy(card_id) == set()
@@ -365,7 +366,7 @@ def test_munkidori_declares_its_darkness_ability_slot_from_the_card():
     stats, functions = EngineCardStatProvider(), CardFunctions.load()
     assert stats.get(112).abilityEnergyTypes == (7,)
 
-    roles = STRATEGY.roles.resolve(_deck(), stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, _deck(), stats, functions)
     hint = next(row for row in general_card_strategies(
         _deck(), roles, functions, stats, CardEffects.load())
         if row.identifier == "general.card.112.fund_ability")
@@ -379,7 +380,7 @@ def _active_snapshot(card_id, bench=()):
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -437,7 +438,7 @@ def test_drakloak_evolves_once_the_line_has_no_payoff_of_its_own():
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -468,7 +469,7 @@ def test_protection_saves_the_hurt_drakloak_not_the_healthy_one():
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -501,7 +502,7 @@ def test_a_threatened_drakloak_evolves_even_behind_an_attacking_dragapult():
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -527,7 +528,7 @@ def test_a_funded_drakloak_that_can_take_a_prize_has_the_knockout_searched():
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)
@@ -560,7 +561,7 @@ def test_the_healthy_funded_drakloak_is_the_one_promoted():
     stats, functions, effects = (
         EngineCardStatProvider(), CardFunctions.load(), CardEffects.load())
     deck = _deck()
-    roles = STRATEGY.roles.resolve(deck, stats, functions)
+    roles = legacy_roles_resolve(STRATEGY.roles, deck, stats, functions)
     resolved = resolve_strategies(
         (*GENERAL_STRATEGIES, *general_card_strategies(deck, roles, functions, stats, effects)),
         STRATEGY.strategies, (), STRATEGY.strategy_overrides)

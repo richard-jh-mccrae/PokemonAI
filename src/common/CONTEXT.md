@@ -55,8 +55,9 @@ _Avoid_: Authored evolution map, Pokémon Role
 An intrinsic Trainer or Energy capability shared across decks, such as search, draw, gust, or acceleration.
 _Avoid_: Pokémon Role, deck doctrine
 
-The runtime performs declarative setup choices, builds the deck's LedgerContext from `Strategy`
-Roles and `ledger_overrides`, and sends every normal-turn decision to `common.ledger`.
+The runtime performs declarative setup choices, resolves Roles and evolution from the unified
+card records (deck declarations REPLACE authored defaults), builds the deck's LedgerContext
+from them and `ledger_overrides`, and sends every normal-turn decision to `common.ledger`.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
 

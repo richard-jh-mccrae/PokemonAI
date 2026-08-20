@@ -11,10 +11,8 @@ from collections import Counter
 from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 from submit.package import REPO, _git_hash, artifact_stem
-from common.cards import CardFunctions
 from common.ledger.weights import LedgerWeights
 
 
@@ -50,10 +48,8 @@ def _deck(agent_dir: Path, cards: dict | None = None) -> dict:
     return {"size": len(ids), "cards": rows}
 
 
-def _strategy(strategy, deck, cards) -> dict:
-    stats = SimpleNamespace(get=lambda card_id: (
-        SimpleNamespace(**cards[int(card_id)]) if int(card_id) in cards else None))
-    resolved_roles = strategy.roles.resolve(deck, stats, CardFunctions.load())
+def _strategy(strategy, deck) -> dict:
+    resolved_roles = strategy.roles.resolve(deck)
     roles = {str(card_id): list(names) for card_id, names in sorted(resolved_roles.items())}
     lines = [{"path": list(line.path), "payoff": line.payoff, "role": line.role,
               "ready": {"energy": line.ready.energy}}
@@ -113,7 +109,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
         },
         "system": "ledger",
         "deck": deck,
-        "strategy": _strategy(strategy, deck_ids, cards),
+        "strategy": _strategy(strategy, deck_ids),
         "ledger_weights": _ledger_weights(strategy),
         "safety_bounds": {
             "callback_watchdog_seconds": {

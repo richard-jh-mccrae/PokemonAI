@@ -6,6 +6,7 @@ from agents.mega_starmie.strategy import (
 )
 from common.cards import CardFunctions
 from common.cards.functions.damage import bench_reach
+from deprecated.bellman.runtime import legacy_roles_resolve
 from deprecated.bellman.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.options import enumerate_legal_actions
@@ -23,7 +24,7 @@ POFFIN = 1086
 STATS = EngineCardStatProvider()
 FUNCTIONS = CardFunctions.load()
 EFFECTS = CardEffects.load()
-ROLES = STRATEGY.roles.resolve((STARYU, MEGA_STARMIE_EX, CINDERACE), STATS, FUNCTIONS)
+ROLES = legacy_roles_resolve(STRATEGY.roles, (STARYU, MEGA_STARMIE_EX, CINDERACE), STATS, FUNCTIONS)
 RESOLVED = resolve_strategies(GENERAL_STRATEGIES, STRATEGY.strategies)
 
 

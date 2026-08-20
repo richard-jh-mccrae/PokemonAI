@@ -9,8 +9,9 @@ from pathlib import Path
 from common.api import PlanRequest, RootDecision
 from common.card_worth import role_value
 from common.options import enumerate_legal_actions
-from common.pokemon_roles import general_pokemon_roles
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
+from common.scouting.pokemon_roles import general_pokemon_roles
+from common.strategy import Roles
 from common.scouting.briefs import match_brief, resolve_scouted_role_worth
 from common.scouting.read import Read, posture_gamma
 from .state import DecisionState
@@ -29,6 +30,45 @@ from .potential import BoardPotential
 from .providers import bellman_provider_factory
 from .terminal import proof_lock_step
 from .value import ValueRegistry
+
+
+def legacy_roles_resolve(declared: Roles, deck, stats, functions=None) -> Roles:
+    """The pre-store resolution the teacher shipped with: stats-name evolution inference plus
+    tag-inferred roles, deck declarations EXTENDING rather than replacing."""
+    card_ids = tuple(sorted(set(int(card_id) for card_id in deck)))
+    names = {}
+    for card_id in card_ids:
+        stat = stats.get(card_id) if stats is not None else None
+        name = getattr(stat, "name", None)
+        if name:
+            names.setdefault(str(name), []).append(card_id)
+    evolves = dict(declared.evolves)
+    if not evolves:
+        for target in card_ids:
+            stat = stats.get(target) if stats is not None else None
+            parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
+            if len(parents) == 1:
+                evolves[int(parents[0])] = target
+    cards = general_pokemon_roles(card_ids, stats, functions)
+    for card_id, card_roles in declared.items():
+        resolved = cards.setdefault(int(card_id), [])
+        resolved.extend(role for role in card_roles if role not in resolved)
+    relevant = {
+        card_id for card_id, card_roles in cards.items()
+        if any(role in card_roles for role in Roles._LINE_ROLE_PRIORITY)
+    }
+    changed = True
+    while changed:
+        changed = False
+        for source, target in evolves.items():
+            if target in relevant and source not in relevant:
+                relevant.add(source)
+                changed = True
+    evolves = {
+        source: target for source, target in evolves.items()
+        if source in relevant and target in relevant
+    }
+    return Roles(cards, evolves=evolves, ready=declared.ready)
 
 
 #: Deck-specific potential subclasses, keyed by strategy name (Strategy.potential_factory
@@ -65,6 +105,9 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def __init__(self, strategy, deck, **kwargs):
         super().__init__(strategy, deck, **kwargs)
+        # The teacher's frozen contract predates the store-based resolution (ADR-0149):
+        # re-resolve with the inference it shipped with before anything reads self.roles.
+        self.roles = legacy_roles_resolve(strategy.roles, self.deck, self.stats, self.functions)
         self.potential_type = DECK_POTENTIALS.get(strategy.name, BoardPotential)
         self.registry = ValueRegistry.from_strategy(
             strategy=self.strategy, functions=self.functions, deck=self.deck,

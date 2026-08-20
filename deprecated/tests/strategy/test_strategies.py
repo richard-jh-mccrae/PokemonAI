@@ -17,6 +17,7 @@ from common.cards.card_facts import (
     Ability, Attack, BASIC, BASIC_ENERGY, Clause, EnergyCard, ITEM, PokemonCard,
     SUPPORTER as SUPPORTER_KIND, TrainerCard,
 )
+from deprecated.bellman.runtime import legacy_roles_resolve
 from deprecated.bellman.demand import StrategyBeamBuilder, semantic_action_key
 from common.options import enumerate_legal_actions
 import pytest
@@ -749,7 +750,7 @@ def _lucario_roles():
     repo = Path(__file__).resolve().parents[3]
     deck = [int(v) for v in
             (repo / "src" / "agents" / "mega_lucario" / "deck.csv").read_text().split()]
-    return STRATEGY.roles.resolve(deck, EngineCardStatProvider(), CardFunctions.load())
+    return legacy_roles_resolve(STRATEGY.roles, deck, EngineCardStatProvider(), CardFunctions.load())
 
 
 def test_a_named_bench_selector_binds_that_card_not_the_first_evolvable():

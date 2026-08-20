@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from common.pokemon_roles import general_pokemon_roles
+from common.cards import card_store
+from common.cards.card_facts import PokemonCard
+from common.cards.pokemon_roles import resolve_pokemon_roles
 
 from .strategies import StrategyHint, StrategyOverride
 
@@ -69,25 +71,24 @@ class Roles(dict):
     def lines(self) -> tuple[Line, ...]:
         return self._lines
 
-    def resolve(self, deck, stats, functions=None) -> "Roles":
+    def resolve(self, deck) -> "Roles":
+        """Roles and evolution come from the unified card records (ADR-0143): authored
+        defaults, REPLACED by this deck's declarations; ancestry from `evolves_from`."""
         card_ids = tuple(sorted(set(int(card_id) for card_id in deck)))
-        names = {}
-        for card_id in card_ids:
-            stat = stats.get(card_id) if stats is not None else None
-            name = getattr(stat, "name", None)
-            if name:
-                names.setdefault(str(name), []).append(card_id)
+        store = card_store()
+        pokemon = {card_id: record for card_id in card_ids
+                   if isinstance(record := store.get(card_id), PokemonCard)}
         evolves = dict(self.evolves)
         if not evolves:
-            for target in card_ids:
-                stat = stats.get(target) if stats is not None else None
-                parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
+            names: dict[str, list[int]] = {}
+            for card_id, record in pokemon.items():
+                names.setdefault(record.name, []).append(card_id)
+            for card_id, record in pokemon.items():
+                parents = names.get(record.evolves_from or "", ())
                 if len(parents) == 1:
-                    evolves[int(parents[0])] = target
-        cards = general_pokemon_roles(card_ids, stats, functions)
-        for card_id, card_roles in self.items():
-            resolved = cards.setdefault(int(card_id), [])
-            resolved.extend(role for role in card_roles if role not in resolved)
+                    evolves[int(parents[0])] = card_id
+        cards = {card_id: list(card_roles) for card_id, card_roles
+                 in resolve_pokemon_roles(pokemon, declared=self).items()}
         relevant = {
             card_id for card_id, card_roles in cards.items()
             if any(role in card_roles for role in self._LINE_ROLE_PRIORITY)

@@ -1,4 +1,4 @@
-"""Deck-independent Pokémon Roles shared by own-deck and opponent resolution."""
+"""Inferred Pokémon Roles for cards WITHOUT a store record — opponent-side coverage."""
 from __future__ import annotations
 
 

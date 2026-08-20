@@ -48,7 +48,15 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   the ADR-0146 heavy-vs-light parity tests now import it from the quarantine — honestly, since
   that pin is precisely a comparison against the quarantined binding.
 - **The live shell slims**: `AgentRuntime` (renamed from `BellmanRuntime`) is pregame, forced
-  selections, attack-lock folding, the Ledger, and a last-resort crash fallback. The bundle
+  selections, attack-lock folding, the Ledger, and a last-resort crash fallback. Match-start
+  role resolution reads the unified card records (`Roles.resolve(deck)`: authored
+  `default_roles`, deck declarations REPLACING, ancestry from `evolves_from`) — the pre-store
+  tag inference moved to `scouting/pokemon_roles.py`, where it remains the coverage mechanism
+  for opponent cards without a record; the teacher re-resolves through
+  `legacy_roles_resolve` so its frozen contract is untouched. This corrected a live
+  mispricing: the inference was overwriting mega_lucario's authored `supporter_tutor` on
+  Meowth ex with off-vocabulary words the Ledger prices at zero. `card_tags.is_card_key`
+  folded into `cards/tags.py`. The bundle
   therefore stops shipping the search stack; the manifest is schema 7, `system: "ledger"`, and
   documents the resolved `LedgerWeights` instead of a pilot profile.
 - **CI runs none of it** (owner's ruling): the moved suites leave every CI job; `deprecated/**`

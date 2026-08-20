@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from common.card_worth import role_value
-from common.pokemon_roles import general_pokemon_roles
+from .pokemon_roles import general_pokemon_roles
 from common.strategy.strategies import StrategyHint, strategy_hint_from_dict
 
 from .read import Read
