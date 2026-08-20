@@ -108,6 +108,8 @@ def _replay_one(deck_name: str, correction) -> dict:
         "gaps": sorted(set(diagnostics.get("gaps", ()))),
         "elapsed_seconds": elapsed,
     }
+    if diagnostics.get("fallback"):                # a crashed brain must be visible, not a miss
+        row["fallback"] = diagnostics["fallback"]
     if graded and not agrees:
         row["ledger"] = {"value": decision.value, "backend": diagnostics.get("backend"),
                          "weights": diagnostics.get("weights"),
@@ -132,6 +134,8 @@ def _deck_summary(rows: list[dict]) -> dict:
         "decision_seconds": round(sum(row["elapsed_seconds"] for row in rows), 2),
         "gap_decisions": sum(1 for row in rows if row["gaps"]),
         "gap_census": dict(gap_census.most_common()),
+        # A crashed brain that happened to pick the ruled action is NOT a success.
+        "fallbacks": sum(1 for row in rows if row.get("fallback")),
     }
 
 
@@ -165,19 +169,30 @@ def payload(rows: list[dict], *, baseline: dict | None = None) -> dict:
 def render_markdown(result: dict) -> str:
     lines = ["# Ledger corpus dashboard", "",
              f"Generated {result['generated_at']} at `{result['git_rev'][:12]}`.", ""]
-    lines.append("| deck | graded | agrees | agreement | ungraded | gap-affected decisions |")
-    lines.append("|---|---|---|---|---|---|")
+    lines.append("| deck | graded | agrees | agreement | ungraded | gap-affected decisions "
+                 "| fallbacks |")
+    lines.append("|---|---|---|---|---|---|---|")
     for deck_name, summary in result["decks"].items():
         agreement = ("-" if summary["agreement"] is None
                      else f"{summary['agreement'] * 100:.1f}%")
         lines.append(f"| {deck_name} | {summary['graded']} | {summary['agrees']} | "
-                     f"{agreement} | {summary['ungraded']} | {summary['gap_decisions']} |")
+                     f"{agreement} | {summary['ungraded']} | {summary['gap_decisions']} | "
+                     f"{summary.get('fallbacks', 0)} |")
     floor = result["generality_floor"]
     lines += ["", f"**Generality floor (worst deck): "
                   f"{'-' if floor is None else f'{floor * 100:.1f}%'}**", ""]
     if result["regressions"]:
         lines += [f"## Regressions ({len(result['regressions'])})", ""]
         lines += [f"- `{row_id}`" for row_id in result["regressions"]] + [""]
+    crashed = [row for row in result["rows"] if row.get("fallback")]
+    if crashed:
+        lines += [f"## Crashed decisions ({len(crashed)}) — fix the bug, ignore the grade", ""]
+        for row in crashed:
+            error = (row["fallback"].get("error") or {})
+            lines.append(f"- {row['deck']} `{row['key']}`: {row['fallback'].get('cause')}"
+                         + (f" — {error.get('type')}: {error.get('message')}"
+                            if error else ""))
+        lines.append("")
     lines += ["## Misses (the triage queue: read the rationale first)", ""]
     for row in result["rows"]:
         if not row["graded"] or row["agrees"]:

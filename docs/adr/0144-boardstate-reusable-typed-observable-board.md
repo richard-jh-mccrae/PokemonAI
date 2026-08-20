@@ -1,6 +1,8 @@
 # ADR-0144 — BoardState: the observable board as reusable typed pieces
 
-Status: Accepted (2026-08-19); BUILT dark — no production consumer is rewired yet.
+Status: Accepted (2026-08-19); LIVE since 2026-08-20 — the Ledger (ADR-0145) is the production
+consumer: every live decision builds/advances BoardState, and the preview seam (ADR-0146)
+sources root deck knowledge from it.
 
 ## Context
 

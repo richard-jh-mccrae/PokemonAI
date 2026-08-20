@@ -120,6 +120,18 @@ def test_hidden_scale_floor_mean_and_ceiling_from_exact_deck_facts():
     assert compute_active_damage(mill, mon(), mon(), context={}) == 0
 
 
+def test_hidden_scale_from_a_known_empty_deck_adds_nothing_at_any_bound():
+    """`atk_deck_count == 0` is an exact fact, not missing facts — no phantom ceiling."""
+    mill = attack(0, clauses=(Clause("hidden_scale", per_unit=100, sample=6,
+                                     energy_type=WATER),))
+    empty = {"atk_deck_count": 0, "atk_deck_basic_by_type": {}}
+    assert compute_active_damage(mill, mon(), mon(), context=empty, bound="max") == 0
+    assert compute_active_damage(mill, mon(), mon(), context=empty, bound="min") == 0
+    assert compute_active_damage(mill, mon(), mon(), context=empty) == 0
+    # An UNKNOWN deck (no count at all) keeps the assume-every-card-fuels ceiling.
+    assert compute_active_damage(mill, mon(), mon(), context={}, bound="max") == 600
+
+
 def test_boosts_are_type_gated_ex_gated_and_never_wake_a_zero():
     plain = attack(50)
     boosted = {"atk_boosts": ((30, None, False),)}
@@ -136,6 +148,36 @@ def test_boosts_apply_before_weakness_doubles():
     ctx = {"atk_boosts": ((30, None, False),)}
     assert compute_active_damage(attack(50), mon(energy_type=FIRE), mon(weakness=FIRE),
                                  context=ctx) == 160    # (50+30)*2, not 50*2+30
+
+
+def test_an_unresolved_attacker_record_fails_open():
+    """Opponent cards outside the deck stores resolve to None; every attacker-side gate must
+    read that as no-claim, never as a crash or an invented modifier."""
+    # A typed boost cannot claim the attacker's colour matches; an untyped one still lands.
+    typed = {"atk_boosts": ((30, WATER, False),)}
+    assert compute_active_damage(attack(50), None, mon(), context=typed) == 50
+    untyped = {"atk_boosts": ((30, None, False),)}
+    assert compute_active_damage(attack(50), None, mon(), context=untyped) == 80
+    # No attacker type: Weakness/Resistance make no claim either way.
+    assert compute_active_damage(attack(50), None, mon(weakness=FIRE)) == 50
+    assert compute_active_damage(attack(50), None, mon(resistance=FIRE)) == 50
+    # An unknown attacker is never "an ex": prevention does not fire.
+    assert compute_active_damage(attack(50), None, _prevents("ex")) == 50
+    assert compute_active_damage(attack(50), None, mon(),
+                                 defender_tags=frozenset({"prevent_ex_damage"})) == 50
+
+
+def test_an_unresolved_defender_record_fails_open():
+    typed = {"atk_boosts": ((30, WATER, False),)}
+    vs_ex = {"atk_boosts": ((30, None, True),)}
+    plain = {"atk_boosts": ((30, None, False),)}
+    # A vs-ex boost cannot claim an unknown defender is an ex; a plain boost still lands.
+    assert compute_active_damage(attack(50), mon(), None, context=vs_ex) == 50
+    assert compute_active_damage(attack(50), mon(), None, context=plain) == 80
+    # No defender record: no Weakness claim, and the attacker-type boost gate still reads.
+    assert compute_active_damage(attack(50), mon(energy_type=FIRE), None) == 50
+    assert compute_active_damage(attack(50), mon(energy_type=FIRE), None, context=typed) == 50
+    assert compute_active_damage(attack(50), None, None) == 50
 
 
 def _prevents(scope):
@@ -217,6 +259,6 @@ def test_fighting_weakness_reads_off_the_store_records():
     lucario = store[678]                                     # Fighting attacker
     assert dudunsparce.weakness == FIGHTING
     assert compute_active_damage(land_crush, dudunsparce, lucario) == 90
-    mega_brave = lucario.attacks[1] if len(lucario.attacks) > 1 else lucario.attacks[0]
-    assert compute_active_damage(mega_brave, lucario, dudunsparce) \
-        == 2 * (mega_brave.damage or 0)
+    mega_brave = next(a for a in lucario.attacks if a.attack_id == 983)
+    assert mega_brave.damage == 270
+    assert compute_active_damage(mega_brave, lucario, dudunsparce) == 540    # 270 x2 Weakness

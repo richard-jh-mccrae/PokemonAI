@@ -42,17 +42,18 @@ class LedgerDecider:
         baseline = evaluate(board, self.ctx)
         provider = self.provider_factory(state)
         if not getattr(provider, "available", True):
+            _close_quietly(provider)               # a half-opened engine session must not leak
             raise LedgerUnavailable(str(getattr(provider, "_error", "provider unavailable")))
         try:
             prices = price_actions(state, board, baseline.total, provider, self.ctx)
         finally:
-            close = getattr(provider, "close", None)
-            if close is not None:
-                close()
+            # A close() failing on an already-broken session must not mask the pricing outcome.
+            _close_quietly(provider)
         if not prices:
             raise LedgerUnavailable("no legal actions to price")
 
-        context = int(((observation.get("select") or {}).get("context", _MAIN)))
+        raw_context = (observation.get("select") or {}).get("context")
+        context = _MAIN if raw_context is None else int(raw_context)
         chosen = self._choose(prices, forced=context != _MAIN)
         gaps = tuple(gap for price in prices for gap in price.gaps) + baseline.gaps
         if gaps and self.gap_sink is not None:
@@ -80,6 +81,16 @@ class LedgerDecider:
             return _ranked(continuing)[0]
         enders = [price for price in prices if price.ends_turn]
         return _ranked(enders or prices)[0]
+
+
+def _close_quietly(provider) -> None:
+    close = getattr(provider, "close", None)
+    if close is None:
+        return
+    try:
+        close()
+    except Exception:
+        pass
 
 
 def _ranked(prices):

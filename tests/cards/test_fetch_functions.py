@@ -100,6 +100,13 @@ def test_colour_narrowing_applies_to_reach_and_window_but_not_deadness():
     assert fetch_target_matches(typed, fire_mon, reading="deadness")
 
 
+def test_a_target_word_outside_the_vocabulary_fails_closed_for_every_reading():
+    typoed = fetch(target="basic")                # the vocabulary word is "basic_pokemon"
+    assert not fetch_target_matches(typoed, mon(), reading="reach")
+    assert not fetch_target_matches(typoed, mon(), reading="deadness")
+    assert not fetch_target_matches(typoed, mon(), reading=WINDOW)
+
+
 def test_an_unknown_reading_falls_back_to_the_strictest():
     dug = fetch(target="pokemon", dig=3)
     assert not fetch_target_matches(dug, mon(), reading="made_up")   # reach rules apply

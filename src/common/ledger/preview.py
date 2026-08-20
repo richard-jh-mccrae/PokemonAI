@@ -8,6 +8,7 @@ the last board it could see and logs the gap; it never deletes the root option (
 lesson: a cap must not veto the action carrying the turn's value)."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
@@ -44,7 +45,13 @@ def price_actions(state, board: BoardState, baseline: float, provider,
         walk = _Walk(provider, ctx, board.decklist)
         value, ends_turn = walk.node(state, board, provider.transition(state, action),
                                      CHAIN_DEPTH_CAP)
-        prices.append(OptionPrice(action, value - baseline, ends_turn, tuple(walk.gaps)))
+        swing = value - baseline
+        if not math.isfinite(swing):
+            # Belt behind the weights' finite check: a NaN/inf swing would make every price
+            # unrankable. Score neutral, SAY SO — a visible gap, never a silent absorb.
+            walk.gaps.append(f"non-finite price for {action.identity}; scored zero")
+            swing = 0.0
+        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps)))
     return tuple(prices)
 
 
@@ -88,14 +95,17 @@ class _Walk:
             self.gaps.extend(gaps)
             return value, False
         if isinstance(node, RevealChoice):
-            by_label = {edge.label: edge.node for edge in node.choices}
             chooser = max if node.actor is Actor.OURS else min
-            value = 0.0
+            priced = {edge.label: self.node(state, board, edge.node, depth - 1)
+                      for edge in node.choices}
+            value, ends = 0.0, False
             for outcome in node.outcomes:
-                best = chooser(self.node(state, board, by_label[label], depth - 1)[0]
-                               for label in outcome.choices)
-                value += outcome.probability * best
-            return value, False
+                best_value, best_ends = chooser((priced[label] for label in outcome.choices),
+                                                key=lambda pair: pair[0])
+                value += outcome.probability * best_value
+                # MAY-end counts as ends here too: the leg the revealed set selects decides.
+                ends = ends or best_ends
+            return value, ends
         if isinstance(node, Choice):
             chooser = max if node.actor is Actor.OURS else min
             return chooser((self.node(state, board, edge.node, depth - 1)
@@ -107,7 +117,8 @@ class _Walk:
         return evaluate(board, self.ctx).total, False
 
     def deterministic(self, state, board: BoardState, depth: int) -> tuple[float, bool]:
-        context = int(((state.obs.get("select") or {}).get("context", _MAIN)))
+        raw_context = (state.obs.get("select") or {}).get("context")
+        context = _MAIN if raw_context is None else int(raw_context)
         if context == _MAIN:
             return evaluate(board, self.ctx).total, False
         actions = self.provider.actions(state)

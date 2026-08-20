@@ -16,7 +16,7 @@ from common.board import BoardState
 from common.board.nodes import Body, Side
 
 from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, demand_scale,
-                    usable_units)
+                    line_reach, usable_units)
 
 
 @dataclass(frozen=True)
@@ -37,8 +37,13 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
 
     result = board.turn.result
     if isinstance(result, (int, bool)) and not isinstance(result, bool) and result >= 0:
-        won = int(result) == board.seat
-        parts.append(("result", ctx.weights.win_value if won else -ctx.weights.win_value))
+        if int(result) == 2:
+            # The engine's simultaneous outcome (result 2) is a DRAW: worth neither the win
+            # nor the loss, so a line that draws still beats a line that loses.
+            parts.append(("result", 0.0))
+        else:
+            won = int(result) == board.seat
+            parts.append(("result", ctx.weights.win_value if won else -ctx.weights.win_value))
 
     for label, side, sign in (("me", board.me, 1.0), ("them", board.them, -1.0)):
         own = sign > 0
@@ -54,11 +59,15 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
 
 def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_counts):
     weights = ctx.weights
+    demand = Demand.read(side, ctx)
+    # The reach gate for this side's evolution lines: an opponent's hand and deck are unknown,
+    # which gates their future colorless slots at the partial credit, never at zero.
+    reach = line_reach(demand.hand_name_counts, deck_counts if own else None, ctx)
     copies: Counter = Counter()
     bodies_value = 0.0
     for body in side.bodies:
         # The Nth fielded copy of the same card saturates: its role is already being done.
-        bodies_value += _body_value(body, ctx, gaps,
+        bodies_value += _body_value(body, ctx, gaps, reach=reach,
                                     discount=weights.surplus_copy ** copies[body.card.card_id])
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
@@ -67,13 +76,13 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
         ready = any_attack_payable(side.active.card.facts, side.active.energies)
         yield "active", (weights.active_premium * worth
                          * (1.0 if ready else weights.active_unready_fraction))
+    # The clamp bounds a corrupt benchMax: no printed format offers more than 8 slots.
     yield "bench_slots", weights.bench_slot_value * _harmonic(
-        max(0, side.bench_max - len(side.bench)))
+        min(8, max(0, side.bench_max - len(side.bench))))
     yield "liability", -weights.prize_liability * sum(
         max(0, _prize_value(body) - 1) for body in side.bodies)
 
     if own and side.hand is not None:
-        demand = Demand.read(side, ctx)
         yield "hand", _bag_value(side.hand, weights.zone_in_hand, demand, ctx, gaps,
                                  deck_counts)
     else:
@@ -108,14 +117,15 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
                       + weights.status_burned * side.burned)
 
 
-def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, discount: float = 1.0) -> float:
+def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
+                discount: float = 1.0) -> float:
     weights = ctx.weights
     worth, gap = base_worth(body.card.card_id, body.card.facts, ctx)
     if gap:
         gaps.append(f"in play: {gap}")
     value = worth * discount * weights.zone_in_play
 
-    usable = usable_units(body.card.facts, body.energies, ctx)
+    usable = usable_units(body.card.facts, body.energies, ctx, reach)
     useless = len(body.energies) - usable
     energy_worth = 0.0
     for card in body.energy_cards:

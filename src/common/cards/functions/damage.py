@@ -88,7 +88,9 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
         deck_n = (context or {}).get("atk_deck_count")
         fuel = ((context or {}).get("atk_deck_basic_by_type") or {}).get(hidden.energy_type) \
             if hidden.energy_type is not None else None
-        if units is None and deck_n and fuel is not None:
+        if units is None and deck_n == 0:
+            units = 0    # deck exactly known EMPTY: zero hidden units is a fact, not a missing one
+        elif units is None and deck_n and fuel is not None:
             sample = min(hidden.sample, deck_n)
             if bound == "min":
                 units = max(0, sample - (deck_n - fuel))

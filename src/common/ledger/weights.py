@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field, fields, replace
 from typing import Mapping
 
@@ -71,6 +72,11 @@ class LedgerWeights:
     #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
     #: than either alone — the nonlinearity the sampled-hand chance model feeds on.
     demand_setup: float = 0.70
+    #: The reach gate on a future evolution's colorless slots while that evolution sits in the
+    #: DECK (or the side's knowledge is absent). 0.80 encodes the owner's ruling: pre-charge
+    #: Staryu for Nebula Beam with Mega Starmie merely in the deck — the damage blend then
+    #: refuses the same attach on a doomed carrier by itself.
+    reach_in_deck: float = 0.80
     surplus_copy: float = 0.60
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.
@@ -136,24 +142,33 @@ class LedgerWeights:
             if prefix == "role" and name:
                 if name not in roles and name not in _role_vocabulary():
                     raise KeyError(f"unknown ledger weight {key!r}")
-                roles[name] = float(value)
+                roles[name] = _finite(key, value)
             elif prefix == "tag" and name:
                 if name not in tags and name not in _tag_vocabulary():
                     raise KeyError(f"unknown ledger weight {key!r}")
-                tags[name] = float(value)
+                tags[name] = _finite(key, value)
             elif prefix == "kind" and name:
                 if name not in kinds:
                     raise KeyError(f"unknown ledger weight {key!r}")
-                kinds[name] = float(value)
+                kinds[name] = _finite(key, value)
             elif prefix == "card" and name:
-                cards[int(name)] = float(value)
+                cards[int(name)] = _finite(key, value)
             elif str(key) in scalar_names:
-                scalars[str(key)] = float(value)
+                scalars[str(key)] = _finite(key, value)
             else:
                 raise KeyError(f"unknown ledger weight {key!r}")
         return replace(self, roles=tuple(sorted(roles.items())),
                        tags=tuple(sorted(tags.items())), kinds=tuple(sorted(kinds.items())),
                        card_worth=tuple(sorted(cards.items())), **scalars)
+
+
+def _finite(key, value) -> float:
+    """A non-finite weight poisons every swing into an unrankable NaN/inf: refuse at resolve
+    time, where the typo is one line away, not mid-match where it reads as a brain crash."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"ledger weight {key!r} must be finite, got {value!r}")
+    return number
 
 
 def _role_vocabulary() -> frozenset:

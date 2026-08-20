@@ -17,6 +17,11 @@ def test_exact_colours_still_report_their_shortfall():
     assert unmet_cost_slots([ENERGY_FIRE], [ENERGY_FIRE, ENERGY_WATER]) == ((1, ENERGY_WATER),)
 
 
+def test_an_unpaid_colorless_slot_is_reported_not_swallowed():
+    assert unmet_cost_slots([ENERGY_FIRE], [ENERGY_FIRE, ENERGY_COLORLESS]) \
+        == ((1, ENERGY_COLORLESS),)
+
+
 def test_leftover_wildcards_and_exacts_both_pay_colorless():
     cost = [ENERGY_FIRE, ENERGY_COLORLESS, ENERGY_COLORLESS]
     assert unmet_cost_slots([ENERGY_FIRE, ENERGY_WILDCARD, ENERGY_WATER], cost) == ()

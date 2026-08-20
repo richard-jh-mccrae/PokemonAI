@@ -5,9 +5,10 @@ judgments the plan names (docs/plans/PokemonAI_Ledger_Plan.md §1): a useless at
 negative, overkill counters add nothing, a dead fetch waits, bench slots are scarce goods."""
 from __future__ import annotations
 
-from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
-                            LUNATONE, MAKUHITA, PSYCHIC, ULTRA_BALL, UNKNOWN, body, player,
-                            printout)
+from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
+                            FIRE_E, IGNITION, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
+                            PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
+                            player, printout)
 
 from common.board import BoardState
 from common.ledger import LedgerContext, LedgerWeights, evaluate
@@ -45,12 +46,24 @@ def test_fire_energy_on_bare_dragapult_is_positive():
     assert swing(before, after) > 0
 
 
-def test_dark_energy_on_bare_dreepy_is_negative():
-    """Dreepy's attacks cost Psychic and Fire+Psychic — no colorless slot, so a dark unit is
-    unusable even speculatively."""
-    before = board(me=player(active=body(DREEPY, 1), hand=[DARK_E]))
-    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]))
+def test_dark_energy_on_bare_dreepy_is_negative_once_its_line_is_gone():
+    """Dreepy's own attacks cost Psychic and Fire+Psychic — no colorless slot. Dragapult's
+    one-colorless Jet Headbutt could someday take the dark, so the reach gate must be CLOSED
+    (no evolution left anywhere) for the unit to be unusable even speculatively."""
+    no_line = [DARK_E] * 10                      # a decklist holding no Drakloak or Dragapult
+    before = board(me=player(active=body(DREEPY, 1), hand=[DARK_E]), decklist=no_line)
+    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]),
+                  decklist=no_line)
     assert swing(before, after) < 0
+
+
+def test_dark_energy_on_bare_dreepy_earns_gated_credit_while_dragapult_is_in_hand():
+    """The approved forward-credit rule, in its smallest form: the same dark unit is worth
+    attaching once the evolution whose colorless slot it will pay is actually in hand."""
+    holding = [DARK_E, DRAGAPULT]
+    before = board(me=player(active=body(DREEPY, 1), hand=holding))
+    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[DRAGAPULT]))
+    assert swing(before, after) > 0
 
 
 # --- damage counters: overkill destroys nothing ---
@@ -66,7 +79,7 @@ def test_overkill_counters_add_nothing():
                                                 body(LUNATONE, 8, hp=30, max_hp=60)]))
     context = ctx()
     assert evaluate(split, context).total > evaluate(dumped, context).total
-    assert swing(start, dumped, context) == swing(start, dumped, context)  # deterministic
+    assert swing(start, dumped, context) > 0    # knocking the body down still helps
     assert swing(start, split, context) > swing(start, dumped, context)
 
 
@@ -144,15 +157,20 @@ def test_benching_a_filler_on_an_empty_bench_is_positive():
 # --- evolution demand: a live target prices the card up ---
 
 def test_evolution_in_hand_prices_higher_with_its_base_in_play():
+    """Compared on the HAND part alone, so the two boards' different actives (the thing that
+    makes the base present or absent) cannot decide the inequality for the demand term."""
     context = ctx()
     live = board(me=player(active=body(DREEPY, 1), hand=[DRAKLOAK]))
     dead = board(me=player(active=body(MAKUHITA, 1), hand=[DRAKLOAK]))
-    assert evaluate(live, context).total > evaluate(dead, context).total
+    assert (evaluate(live, context).part("me.hand")
+            > evaluate(dead, context).part("me.hand") + 0.02)
 
 
 def test_the_pair_in_hand_outprices_either_alone():
     """Drakloak's marginal worth is higher when Dreepy shares the hand — the nonlinearity the
-    sampled-hand chance model feeds on (plan §1)."""
+    sampled-hand chance model feeds on (plan §1). The margin is the point: without the pair
+    term the two marginals are equal to within float noise, and a bare `>` would pass on one
+    ULP (the ADR-0128 lesson)."""
     context = ctx()
 
     def value(hand):
@@ -160,7 +178,7 @@ def test_the_pair_in_hand_outprices_either_alone():
 
     marginal_beside_base = value([DREEPY, DRAKLOAK]) - value([DREEPY])
     marginal_alone = value([DRAKLOAK]) - value([])
-    assert marginal_beside_base > marginal_alone
+    assert marginal_beside_base > marginal_alone + 0.02
 
 
 # --- the boundary and coverage honesty ---
@@ -193,12 +211,186 @@ def test_won_result_dominates_everything():
     assert evaluate(won, context).total > 50.0
 
 
-def test_valuation_is_deterministic_and_symmetric_zero_on_mirrors():
-    """The same equation negated: a perfectly mirrored board (no hidden asymmetry) sums to the
-    pure information asymmetry — my known hand vs their counted one — and nothing else."""
+def test_valuation_is_deterministic():
+    """Two builds of the same printout price identically — the replay guarantee."""
     context = ctx()
     mine = player(active=body(DREEPY, 1), hand=[FIRE_E], prizes=6)
     theirs = player(own=False, active=body(DREEPY, 2), hand_count=1, prizes=6)
     first = evaluate(board(me=mine, them=theirs), context).total
     second = evaluate(board(me=mine, them=theirs), context).total
     assert first == second
+
+
+# --- terminal results: win, loss, and the draw between them ---
+
+def test_lost_result_dominates_everything():
+    context = ctx()
+    printed = printout(me=player())
+    printed["current"]["result"] = 1            # seat 1 won; the viewer is seat 0
+    assert evaluate(BoardState.root(printed), context).total < -50.0
+
+
+def test_a_draw_prices_between_the_win_and_the_loss():
+    """cgpy's simultaneous outcome (result=2) is a DRAW: a line that draws must still beat a
+    line that loses, so it scores zero, never the loss."""
+    context = ctx()
+    drawn = printout(me=player())
+    drawn["current"]["result"] = 2
+    lost = printout(me=player())
+    lost["current"]["result"] = 1
+    draw_value = evaluate(BoardState.root(drawn), context)
+    assert draw_value.part("result") == 0.0
+    assert draw_value.total > evaluate(BoardState.root(lost), context).total
+
+
+# --- per-body terms: statuses, tools, the stack underneath, prize liability ---
+
+def test_a_status_condition_prices_the_side_down():
+    well = board(me=player(active=body(DREEPY, 1)))
+    sick = board(me=player(active=body(DREEPY, 1), poisoned=True))
+    context = ctx()
+    assert evaluate(sick, context).total < evaluate(well, context).total
+    assert evaluate(sick, context).part("me.status") < 0
+
+
+def test_an_attached_tool_adds_its_worth_through_the_body():
+    bare = board(me=player(active=body(MEGA_STARMIE, 1)))
+    equipped = board(me=player(active=body(MEGA_STARMIE, 1, tools=(AIR_BALLOON,))))
+    context = ctx()
+    assert evaluate(equipped, context).total > evaluate(bare, context).total + 0.05
+
+
+def test_the_evolutions_underlying_cards_keep_worth():
+    fresh = board(me=player(active=body(MEGA_STARMIE, 1)))
+    stacked = board(me=player(active=body(MEGA_STARMIE, 1, under=(STARYU,))))
+    context = ctx()
+    assert evaluate(stacked, context).total > evaluate(fresh, context).total + 0.005
+
+
+def test_rule_box_bodies_carry_prize_liability():
+    context = ctx()
+    heavy = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
+    light = evaluate(board(me=player(active=body(MAKUHITA, 1))), context)
+    assert heavy.part("me.liability") < light.part("me.liability") == 0.0
+
+
+def test_the_active_premium_pays_more_when_the_active_can_attack():
+    """Dreepy's Bite costs one Psychic: attached, the same body earns the full premium."""
+    context = ctx()
+    unready = evaluate(board(me=player(active=body(DREEPY, 1))), context)
+    ready = evaluate(board(me=player(active=body(DREEPY, 1, energies=(PSYCHIC,)))), context)
+    assert 0.0 < unready.part("me.active") < ready.part("me.active")
+
+
+def test_energy_units_without_card_detail_still_price():
+    """A printout carrying unit counts but no per-card energy listing falls back to the flat
+    energy worth instead of pricing the attachment at zero."""
+    with_units = body(DREEPY, 1, energies=(PSYCHIC,))
+    with_units["energyCards"] = []
+    context = ctx()
+    assert (evaluate(board(me=player(active=with_units)), context).total
+            > evaluate(board(me=player(active=body(DREEPY, 1))), context).total)
+
+
+def test_a_zero_max_hp_body_prices_as_intact():
+    context = ctx()
+    zeroed = board(me=player(active=body(DREEPY, 1, hp=0, max_hp=0)))
+    intact = board(me=player(active=body(DREEPY, 1, hp=100, max_hp=100)))
+    assert evaluate(zeroed, context).total == evaluate(intact, context).total
+
+
+# --- demand branches: colorless-only, bench-full basics, surplus, fetch vocabulary ---
+
+def test_colorless_only_energy_prices_between_dead_and_typed():
+    """The same dark energy in hand: nothing on a line-gone Dreepy, a colorless slot on Mega
+    Starmie's Nebula Beam, and a typed slot is worth the most of the three. The dead leg pins
+    its decklist so the reach gate is truly closed, not merely unknown."""
+    context = ctx()
+    no_line = [DARK_E] * 10
+    dead = evaluate(board(me=player(active=body(DREEPY, 1), hand=[DARK_E]),
+                          decklist=no_line), context)
+    colorless = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[DARK_E])),
+                         context)
+    typed = evaluate(board(me=player(active=body(DREEPY, 1), hand=[FIRE_E])), context)
+    assert dead.part("me.hand") + 0.01 < colorless.part("me.hand")
+    assert colorless.part("me.hand") + 0.01 < typed.part("me.hand")
+
+
+def test_a_basic_in_hand_reads_dead_when_the_bench_is_full():
+    context = ctx()
+    filler = [body(LUNATONE, 10 + i) for i in range(5)]
+    room = evaluate(board(me=player(active=body(DREEPY, 1), bench=filler[:4],
+                                    hand=[MAKUHITA])), context)
+    full = evaluate(board(me=player(active=body(DREEPY, 1), bench=filler,
+                                    hand=[MAKUHITA])), context)
+    assert full.part("me.hand") + 0.02 < room.part("me.hand")
+
+
+def test_hand_copies_beyond_consumable_capacity_saturate():
+    """One free bench slot consumes one Makuhita; the second and third copies decay, so three
+    in hand are worth strictly less than three times one."""
+    context = ctx()
+    filler = [body(LUNATONE, 10 + i) for i in range(4)]
+
+    def hand_part(hand):
+        return evaluate(board(me=player(active=body(DREEPY, 1), bench=filler, hand=hand)),
+                        context).part("me.hand")
+
+    assert hand_part([MAKUHITA] * 3) + 0.02 < 3 * hand_part([MAKUHITA])
+
+
+def test_fetch_liveness_respects_the_target_vocabulary():
+    """Ultra Ball fetches Pokemon: a deck of nothing but energy leaves it dead even though
+    every card in that deck is itself perfectly live."""
+    context = ctx()
+    me = player(active=body(DREEPY, 1), hand=[ULTRA_BALL], deck_count=20)
+    energy_only = board(me=me, decklist=[ULTRA_BALL] + [PSYCHIC_E] * 20)
+    with_pokemon = board(me=me, decklist=[ULTRA_BALL, MAKUHITA] + [PSYCHIC_E] * 19)
+    assert (energy_only_part := evaluate(energy_only, context).part("me.hand")) + 0.01 \
+        < evaluate(with_pokemon, context).part("me.hand")
+    assert energy_only_part > 0
+
+
+# --- forward credit: colorless slots on a REACHABLE evolution (the Staryu question) ---
+
+def test_charging_staryu_for_nebula_beam_is_the_ruled_play_unless_staryu_is_doomed():
+    """The owner's ruling, verbatim: the second (and third) water goes on Staryu even with
+    Mega Starmie merely in the DECK — Nebula Beam's three colorless slots are what the deck is
+    building toward — unless Staryu is doomed. In hand is stronger still; provably gone means
+    the prep is waste again; and a badly damaged carrier refuses by the damage blend alone,
+    which is where the doomed half of the ruling comes from."""
+    context = ctx()
+
+    def attach_swing(attached_before, decklist, extra_hand=(), hp=30):
+        def make(attached, hand):
+            active = body(STARYU, 1, energies=(WATER,) * attached, hp=hp, max_hp=30)
+            return board(me=player(active=active, hand=hand), decklist=decklist)
+        before = make(attached_before, [WATER_E, *extra_hand])
+        after = make(attached_before + 1, list(extra_hand))
+        return swing(before, after, context)
+
+    in_deck = [MEGA_STARMIE] + [WATER_E] * 10
+    gone = [WATER_E] * 10                        # no Mega Starmie left anywhere
+    assert attach_swing(1, in_deck) > 0          # the ruling: deck-reachable is enough
+    assert attach_swing(2, in_deck) > 0
+    assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > attach_swing(1, in_deck)
+    assert attach_swing(1, gone) < 0
+    assert attach_swing(1, in_deck, hp=10) < 0   # doomed carrier: the cargo dies with it
+
+
+# --- Ignition: the multi-unit provision clause read at the demand seam ---
+
+def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
+    """Mega Starmie's Nebula Beam has three colorless slots and Ignition provides three units
+    on an evolution: one card doing three basics' work is fully live, not colorless-discounted.
+    Dragapult ex is the control — also an evolution with a colorless slot, but only ONE, so
+    the multi-provision read must not fire there."""
+    context = ctx()
+    beside_mega = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[IGNITION])),
+                           context)
+    beside_dragapult = evaluate(board(me=player(active=body(DRAGAPULT, 1), hand=[IGNITION])),
+                                context)
+    beside_makuhita = evaluate(board(me=player(active=body(MAKUHITA, 1), hand=[IGNITION])),
+                               context)
+    assert beside_mega.part("me.hand") > beside_dragapult.part("me.hand") + 0.015
+    assert beside_dragapult.part("me.hand") > beside_makuhita.part("me.hand") + 0.015

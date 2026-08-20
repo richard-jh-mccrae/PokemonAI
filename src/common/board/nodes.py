@@ -70,7 +70,10 @@ class Card:
 def card_node(entry, store) -> Card | None:
     if not entry:
         return None
-    card_id = int(entry["id"])
+    card_id = entry.get("id")
+    if card_id is None:
+        return None                    # an id-less row degrades like an unknown id: absent
+    card_id = int(card_id)
     return Card(card_id, entry.get("serial"), entry.get("playerIndex"), store.get(card_id))
 
 
@@ -120,9 +123,11 @@ def body_node(entry, store) -> Body | None:
     if not entry:
         return None
     card = card_node(entry, store)
+    if card is None:
+        return None
     hp, max_hp = int(entry.get("hp") or 0), int(entry.get("maxHp") or 0)
     appeared = bool(entry.get("appearThisTurn"))
-    energies = tuple(int(unit) for unit in entry.get("energies") or ())
+    energies = tuple(int(unit) for unit in entry.get("energies") or () if unit is not None)
     energy_cards = card_tuple(entry.get("energyCards"), store)
     tools = card_tuple(entry.get("tools"), store)
     pre_evolution = card_tuple(entry.get("preEvolution"), store)
@@ -159,7 +164,7 @@ class Side:
 
 def active_node(raw_active, store) -> tuple[Body | None, bool]:
     """The render's three shapes: [] no active, [None] facedown even to its owner, [body]."""
-    entries = raw_active or ()
+    entries = raw_active if isinstance(raw_active, (list, tuple)) else ()
     if not entries:
         return None, False
     if entries[0] is None:
@@ -264,7 +269,8 @@ def select_node(raw, store) -> SelectPrompt | None:
     return SelectPrompt(
         raw.get("type"), raw.get("context"), raw.get("minCount"), raw.get("maxCount"),
         raw.get("remainDamageCounter"), raw.get("remainEnergyCost"),
-        tuple(option_node(entry) for entry in raw.get("option") or ()),
+        tuple(option_node(entry) for entry in raw.get("option") or ()
+              if isinstance(entry, dict)),
         None if deck is None else card_tuple(deck, store),
         card_node(raw.get("contextCard"), store), card_node(raw.get("effect"), store))
 

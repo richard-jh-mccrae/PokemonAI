@@ -168,7 +168,7 @@ class NativeCgTransitionProvider:
         self.cards = card_store() if cards is None else cards
         self.world_count = max(1, int(world_count))
         self._worlds: dict[str, tuple[_NativeWorld, ...]] = {}
-        self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
+        self._root_turn = int((root.obs.get("current") or {}).get("turn") or 0)
         self._error = ""
         self._api = api_module
         self._search_open = False

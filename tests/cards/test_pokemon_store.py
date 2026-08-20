@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from cards_helpers import REPO, engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
 
-from common.cards import CardFunctions, pokemon_card_store, pokemon_default_roles
+from common.cards import CardFunctions, attack_index, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
 from common.cards.pokemon_roles import resolve_pokemon_roles
 
@@ -58,6 +58,32 @@ def test_ability_clauses_stay_synced_with_the_clause_store():
     aura_jab = next(a for a in pokemon_card_store()[678].attacks if a.attack_id == 982)
     shipped_678 = [{k: v for k, v in c.items() if k != "trigger"} for c in effects["678"]]
     assert [_clause_projection(c) for c in aura_jab.clauses] == shipped_678
+
+
+def test_hand_encoded_attack_clauses_pin_to_their_printed_text():
+    """Literal field-for-field pins for the hand-authored attack clauses (the Tool pattern from
+    test_trainer_store.py); each expected tuple was checked against the record's printed text."""
+    index = attack_index()
+    assert index[141].name == "Mind Bend"                    # Munkidori: "...is now Confused."
+    assert index[141].clauses == (Clause("confuse", target="opp_active"),)
+    assert index[323].name == "Itchy Pollen"                 # Budew: "...can't play any Item cards"
+    assert index[323].clauses == (Clause("item_lock", duration="opp_next_turn"),)
+    assert index[423].name == "Trading Places"               # Dunsparce: "Switch this Pokémon..."
+    assert index[423].clauses == (Clause("switch_self"),)
+    assert index[965].name == "Turbo Flare"                  # Cinderace: "...up to 3 Basic Energy"
+    assert index[965].clauses == (Clause("accel", amount=3, zone="deck", target="bench_only"),)
+    assert index[978].name == "Wild Press"                   # Hariyama: "...70 damage to itself."
+    assert index[978].clauses == (Clause("recoil", amount=70),)
+    assert index[981].name == "Accelerating Stab"            # Riolu: "...can't use Accelerating Stab."
+    assert index[981].clauses == (Clause("same_attack_lock", duration="next_turn"),)
+    assert index[1546].name == "Tuck Tail"                   # Meowth ex: "...into your hand."
+    assert index[1546].clauses == (Clause("self_return", dest="hand"),)
+
+
+def test_cinderace_setup_active_ability_pins_to_its_printed_text():
+    explosiveness = pokemon_card_store()[666].abilities[0]
+    assert explosiveness.name == "Explosiveness"             # "...put it face down in the Active Spot."
+    assert explosiveness.clauses == (Clause("setup_active", trigger="setup"),)
 
 
 def test_every_effect_text_carries_a_clause_encoding():

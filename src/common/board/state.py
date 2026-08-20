@@ -233,7 +233,8 @@ def _select(build: _Build, printout) -> SelectPrompt | None:
 def _extras(build: _Build, printout):
     raw_prizes = printout.get("own_prizes")
     own_prizes = None if raw_prizes is None else tuple(
-        sorted((int(card_id), int(count)) for card_id, count in raw_prizes.items()))
+        sorted((int(card_id), int(count)) for card_id, count in raw_prizes.items()
+               if card_id is not None and count is not None))
     known_top = canon(printout.get("known_top"))
     attack_locks = canon(_attack_locks(build, printout))
     values = (own_prizes, known_top, attack_locks)

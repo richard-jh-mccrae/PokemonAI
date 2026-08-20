@@ -33,6 +33,11 @@ def test_every_emitted_role_is_declared_vocabulary():
     assert undeclared_pokemon_roles(emitted) == []
 
 
+def test_a_word_outside_the_role_vocabulary_comes_back():
+    """Positive control for the empty assert above: a degenerate always-[] checker would pass it."""
+    assert undeclared_pokemon_roles(["draw_engine", "typo_role"]) == ["typo_role"]
+
+
 @pytest.mark.parametrize("store,card_types", [
     (pokemon_card_store, (CardType.POKEMON,)),
     (trainer_card_store, tuple(TRAINER_KINDS)),
