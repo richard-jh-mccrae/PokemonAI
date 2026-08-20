@@ -38,8 +38,8 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
     result = board.turn.result
     if isinstance(result, (int, bool)) and not isinstance(result, bool) and result >= 0:
         if int(result) == 2:
-            # The engine's simultaneous outcome (cgpy set_result(2, ...)) is a DRAW: worth
-            # neither the win nor the loss, so a line that draws still beats a line that loses.
+            # The engine's simultaneous outcome (result 2) is a DRAW: worth neither the win
+            # nor the loss, so a line that draws still beats a line that loses.
             parts.append(("result", 0.0))
         else:
             won = int(result) == board.seat
