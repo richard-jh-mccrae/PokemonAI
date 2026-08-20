@@ -353,24 +353,29 @@ def test_fetch_liveness_respects_the_target_vocabulary():
 
 # --- forward credit: colorless slots on a REACHABLE evolution (the Staryu question) ---
 
-def test_charging_staryu_for_nebula_beam_pays_while_mega_starmie_is_in_hand():
-    """The second and third water on Staryu fill nothing Staryu itself can use; Nebula Beam's
-    three colorless slots make them worth attaching exactly as far as Mega Starmie is real:
-    positive with it in hand, refused again once it is gone."""
+def test_charging_staryu_for_nebula_beam_is_the_ruled_play_unless_staryu_is_doomed():
+    """The owner's ruling, verbatim: the second (and third) water goes on Staryu even with
+    Mega Starmie merely in the DECK — Nebula Beam's three colorless slots are what the deck is
+    building toward — unless Staryu is doomed. In hand is stronger still; provably gone means
+    the prep is waste again; and a badly damaged carrier refuses by the damage blend alone,
+    which is where the doomed half of the ruling comes from."""
     context = ctx()
 
-    def attach_swing(attached_before, decklist, extra_hand=()):
+    def attach_swing(attached_before, decklist, extra_hand=(), hp=30):
         def make(attached, hand):
-            active = body(STARYU, 1, energies=(WATER,) * attached)
+            active = body(STARYU, 1, energies=(WATER,) * attached, hp=hp, max_hp=30)
             return board(me=player(active=active, hand=hand), decklist=decklist)
         before = make(attached_before, [WATER_E, *extra_hand])
         after = make(attached_before + 1, list(extra_hand))
         return swing(before, after, context)
 
+    in_deck = [MEGA_STARMIE] + [WATER_E] * 10
     gone = [WATER_E] * 10                        # no Mega Starmie left anywhere
-    assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > 0   # the 2nd water: pure prep
-    assert attach_swing(2, gone, extra_hand=[MEGA_STARMIE]) > 0   # the 3rd
-    assert attach_swing(1, gone) < 0             # the same attach with no Mega is waste again
+    assert attach_swing(1, in_deck) > 0          # the ruling: deck-reachable is enough
+    assert attach_swing(2, in_deck) > 0
+    assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > attach_swing(1, in_deck)
+    assert attach_swing(1, gone) < 0
+    assert attach_swing(1, in_deck, hp=10) < 0   # doomed carrier: the cargo dies with it
 
 
 # --- Ignition: the multi-unit provision clause read at the demand seam ---

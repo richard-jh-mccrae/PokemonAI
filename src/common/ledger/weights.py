@@ -71,6 +71,11 @@ class LedgerWeights:
     #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
     #: than either alone — the nonlinearity the sampled-hand chance model feeds on.
     demand_setup: float = 0.70
+    #: The reach gate on a future evolution's colorless slots while that evolution sits in the
+    #: DECK (or the side's knowledge is absent). 0.80 encodes the owner's ruling: pre-charge
+    #: Staryu for Nebula Beam with Mega Starmie merely in the deck — the damage blend then
+    #: refuses the same attach on a doomed carrier by itself.
+    reach_in_deck: float = 0.80
     surplus_copy: float = 0.60
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.

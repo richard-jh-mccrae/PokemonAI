@@ -7,7 +7,7 @@ what the board can consume decay by `surplus_copy` each. Energy usability is MAR
 counts only if it fills a still-unfilled slot of some attack — typed slots match through the
 forward evolution line (the unit can ride the body up); colorless slots match the body's own
 printed attacks in full, and a future evolution's colorless slots only through the REACH gate:
-full credit when that evolution is in hand, `demand_setup` credit when it sits in the deck (or
+full credit when that evolution is in hand, `reach_in_deck` credit when it sits in the deck (or
 the side's knowledge is absent), nothing when it is known gone. Ungated colorless-through-the-
 line would mark every energy live and collapse the discount; ungated refusal priced charging
 Staryu for Nebula Beam negative."""
@@ -119,7 +119,7 @@ def _line_entries(body_facts, ctx: LedgerContext):
 
 def line_reach(hand_name_counts, deck_counts, ctx: LedgerContext) -> Mapping[int, float]:
     """The reach gate per store evolution id: how credible is it that this evolution arrives?
-    1.0 with the card in hand, `demand_setup` while it sits in the deck — or whenever the
+    1.0 with the card in hand, `reach_in_deck` while it sits in the deck — or whenever the
     side's deck knowledge is absent, since absence of knowledge is not absence of the card —
     and 0.0 when the counts prove it gone (discarded or prized)."""
     in_deck = None if deck_counts is None else \
@@ -131,7 +131,7 @@ def line_reach(hand_name_counts, deck_counts, ctx: LedgerContext) -> Mapping[int
             if facts is not None and hand_name_counts.get(facts.name, 0):
                 gates[evo_id] = 1.0
             elif in_deck is None or evo_id in in_deck:
-                gates[evo_id] = ctx.weights.demand_setup
+                gates[evo_id] = ctx.weights.reach_in_deck
             else:
                 gates[evo_id] = 0.0
     return gates
