@@ -84,6 +84,9 @@ def _replay_one(deck_name: str, correction) -> dict:
         "deck": deck_name,
         "key": f"{correction.episode_id}-{(correction.decision or {}).get('frame', -1)}",
         "id": correction.id,
+        # Not always "ledger": a shell fallback (exception, forced selection) names itself
+        # here, so brainless answers stay visible in the dashboard instead of hiding as misses.
+        "backend": diagnostics.get("backend"),
         "scope": correction.scope,
         "context": (correction.decision or {}).get("select_context"),
         "category": correction.category,

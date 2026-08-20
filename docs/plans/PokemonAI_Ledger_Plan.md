@@ -59,8 +59,9 @@ consumes. Consequences the equation must produce:
 
 For each option on the menu, the pure-Python engine copy plays it (the same `TransitionProvider`
 seam the solver uses) and prints the resulting board. `BoardState.advance(printout)` (ADR-0144)
-digests it and reports which pieces changed; the Ledger re-prices only the changed pieces. The
-Ledger is BoardState's first production consumer.
+digests it. The Ledger is BoardState's first production consumer. (Changed-piece re-pricing is
+DEFERRED: v1 re-evaluates the whole board — measured 30–80 ms per decision, the cache is not
+yet needed; `BoardState.changed` is the seam when it is.)
 
 - "All card mechanics covered" comes from the engine: anything it can execute, the Ledger can
   price. No hand-written transition prediction (the old composer's stub graveyard).
@@ -126,7 +127,8 @@ census lesson). The notes are the gap-closing worklist.
 
 ## 7. Training: corrections corpus through a new harness
 
-- Replay the existing correction frames (all four decks) through the Ledger. Every
+- Replay the existing correction frames (all three decks with corrections: mega_starmie,
+  mega_lucario, dragapult_ex) through the Ledger. Every
   disagreement with a human ruling is a training signal: adjust general weights first; reach
   for a deck tweak only when a deck genuinely dissents from the general rule.
 - **The harness surfaces the ruling's rationale** beside every disagreement: frame, the

@@ -139,6 +139,19 @@ def test_evolution_in_hand_prices_higher_with_its_base_in_play():
     assert evaluate(live, context).total > evaluate(dead, context).total
 
 
+def test_the_pair_in_hand_outprices_either_alone():
+    """Drakloak's marginal worth is higher when Dreepy shares the hand — the nonlinearity the
+    sampled-hand chance model feeds on (plan §1)."""
+    context = ctx()
+
+    def value(hand):
+        return evaluate(board(me=player(active=body(MAKUHITA, 1), hand=hand)), context).total
+
+    marginal_beside_base = value([DREEPY, DRAKLOAK]) - value([DREEPY])
+    marginal_alone = value([DRAKLOAK]) - value([])
+    assert marginal_beside_base > marginal_alone
+
+
 # --- the boundary and coverage honesty ---
 
 def test_unknown_card_scores_the_floor_and_logs_a_gap():

@@ -4,8 +4,8 @@ A fake provider returns prepared algebra nodes, so these pin the POLICY (turn sp
 argmax, chain resolution, refresh sampling determinism) without an engine in the loop."""
 from __future__ import annotations
 
-from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, FIRE, FIRE_E, LILLIES, PSYCHIC,
-                            body, player, printout)
+from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
+                            HARLEQUIN, LILLIES, PSYCHIC, body, player, printout)
 
 from common.algebra import Actor, Deterministic, Refresh, Terminal, Unknown
 from common.api import ActionIdentity
@@ -168,6 +168,54 @@ def test_refresh_pricing_is_deterministic_and_reports_no_false_gaps():
     prices = {entry["action"]: entry["swing"] for entry in first.diagnostics["prices"]}
     again = {entry["action"]: entry["swing"] for entry in second.diagnostics["prices"]}
     assert prices == again
+
+
+def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
+    """The supporter-decision handoff's core demand: the play is judged by the states it
+    produces, so trading a dead hand for six draws beats trading a live one."""
+    deck = tuple([DRAGAPULT] * 10 + [FIRE_E] * 30)
+
+    def swing_of(extra_hand):
+        hand = [LILLIES] + extra_hand
+        root_obs = printout(me=player(active=body(DREEPY, 1), hand=hand, deck_count=40),
+                            them=player(own=False, active=body(DRAGAPULT, 2)))
+        root = state_of(root_obs, deck)
+        play, end = action("play", (0,)), action("end", (1,))
+        provider = ScriptedProvider(
+            menus={root.semantic_key: (play, end)},
+            nodes={(root.semantic_key, play.identity): Refresh(LILLIES, ((6, 0),), False)})
+        decision = LedgerDecider(deck, "test", LedgerContext.build(),
+                                 provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+        return {entry["action"]: entry["swing"]
+                for entry in decision.diagnostics["prices"]}[str(play.identity)]
+
+    dead_hand = [DARK_E, DARK_E]        # Dreepy has no dark or colorless slot: dead cards
+    live_hand = [DRAKLOAK, DRAKLOAK]    # live evolutions of the in-play Dreepy
+    assert swing_of(dead_hand) > swing_of(live_hand)
+
+
+def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
+    """Both coin legs average, and shuffling a FAT opponent hand down to a redraw is worth
+    more than shuffling a thin one up."""
+    deck = tuple([DRAGAPULT] * 10 + [FIRE_E] * 30)
+
+    def swing_against(opponent_hand_count):
+        root_obs = printout(
+            me=player(active=body(DREEPY, 1), hand=[HARLEQUIN, DARK_E], deck_count=40),
+            them=player(own=False, active=body(DRAGAPULT, 2),
+                        hand_count=opponent_hand_count))
+        root = state_of(root_obs, deck)
+        play, end = action("play", (0,)), action("end", (1,))
+        provider = ScriptedProvider(
+            menus={root.semantic_key: (play, end)},
+            nodes={(root.semantic_key, play.identity):
+                   Refresh(HARLEQUIN, ((5, 3), (3, 5)), True)})
+        decision = LedgerDecider(deck, "test", LedgerContext.build(),
+                                 provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+        return {entry["action"]: entry["swing"]
+                for entry in decision.diagnostics["prices"]}[str(play.identity)]
+
+    assert swing_against(8) > swing_against(2)
 
 
 def test_unknown_node_decides_anyway_and_sinks_the_gap():

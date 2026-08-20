@@ -2,24 +2,27 @@
 
 Never decide from P(draw the wanted card): draw whole hands from the pool the shuffle actually
 creates, evaluate each resulting BOARD with the Ledger, and average — combinations matter, and
-the demand-aware hand terms are what see them. Sampling is seeded from the board's semantic key
-plus the played card, so a replayed frame prices identically every time; exact enumeration of
-every hand is deliberately not attempted. The opponent's side needs no sampling: their redrawn
-hand is priced by count, which is exact under the boundary."""
+the demand-aware hand terms are what see them. Drawing without replacement from the real pool
+IS the multivariate hypergeometric, so the branch probabilities are exact in distribution;
+sampling is seeded from the board's semantic key plus the played card, so a replayed frame
+prices identically every time. The opponent's side needs no sampling: their redrawn hand is
+priced by count, which is exact under the boundary."""
 from __future__ import annotations
 
 import hashlib
 import random
-from collections import Counter
 
 from common.board import BoardState
+from common.cards import card_store
+from common.cards.card_facts import SUPPORTER
 
 SAMPLE_BUDGET = 24
 
 
-def refresh_swing(observation, board: BoardState, baseline: float, card_id: int,
-                  draws, opponent_shuffles: bool, ctx, evaluate_fn):
-    """Expected swing of playing shuffle-draw supporter `card_id`, and the gaps met."""
+def refresh_value(observation, board: BoardState, card_id: int,
+                  draws, opponent_shuffles: bool, evaluate_fn):
+    """Expected VALUE of the board after playing shuffle-draw supporter `card_id` (absolute,
+    not a swing — the preview differences it against its own baseline), plus the gaps met."""
     gaps: list[str] = []
     seat = board.seat
     mine = _player(observation, seat)
@@ -46,7 +49,7 @@ def refresh_swing(observation, board: BoardState, baseline: float, card_id: int,
             gaps.extend(valuation.gaps)
             total += valuation.total
             weight += 1
-    return (total / weight - baseline if weight else 0.0), tuple(gaps)
+    return (total / weight if weight else 0.0), tuple(gaps)
 
 
 def _seed(board: BoardState, card_id: int) -> int:
@@ -95,10 +98,12 @@ def _synthesize(observation, seat: int, hand_ids, deck_count: int, played_id: in
     players[1 - seat] = other
 
     current["players"] = players
-    current["supporterPlayed"] = True
+    # Only a Supporter spends the Supporter allowance; an Item-borne shuffle-refresh must not.
+    if getattr(card_store().get(int(played_id)), "kind", None) == SUPPORTER:
+        current["supporterPlayed"] = True
     root["current"] = current
     root["select"] = None
     return root
 
 
-__all__ = ("SAMPLE_BUDGET", "refresh_swing")
+__all__ = ("SAMPLE_BUDGET", "refresh_value")

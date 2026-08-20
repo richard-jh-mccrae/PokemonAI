@@ -51,7 +51,11 @@ bar is the generality dashboard (general weights alone clearing per-deck agreeme
 
 Live play is now a 1-ply decider with untrained weights: strength regresses until the training
 rounds run; that is the accepted bootstrap cost, and ladder win-rate is explicitly not the
-scoreboard (generality on the corpus is). Tests that pinned the live path to Bellman behavior
+scoreboard (generality on the corpus is). Changed-piece re-pricing is deferred — v1 re-evaluates
+the whole board at 30–80 ms per decision; `BoardState.changed` is the seam when the cache is
+needed. The shell's exception fallback (strategy beam) still answers if the Ledger itself
+throws; such decisions name their backend in telemetry and the dashboard, so they cannot hide
+as ordinary misses. Tests that pinned the live path to Bellman behavior
 re-pointed case by case (`brain="bellman"` for teacher pins; the live-path legality pin now
 asserts `backend == "ledger"`). Phase 2 migrates this same evaluator into search as the
 branch-ordering prior; the preview's chance seam is where a short search replaces the static

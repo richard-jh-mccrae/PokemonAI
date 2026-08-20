@@ -148,9 +148,8 @@ def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext) -> bo
 
 
 def usable_units(body_facts, attached, ctx: LedgerContext) -> int:
-    """How many of the attached units are pulling weight: the largest count any single attack
-    can absorb — typed and colorless slots for the body's own attacks, typed only for the
-    forward line's."""
+    """The largest attached-unit count any single attack absorbs — typed and colorless slots
+    for the body's own attacks, typed only for the forward line's."""
     counts = Counter(attached)
     total = sum(counts.values())
     if total == 0 or body_facts is None:
@@ -174,20 +173,23 @@ def usable_units(body_facts, attached, ctx: LedgerContext) -> int:
 class Demand:
     """What my side of the board is currently asking for, read once per evaluation."""
 
-    body_names: tuple[str, ...]
     body_name_counts: Mapping[str, int]
     body_id_counts: Mapping[int, int]
+    hand_name_counts: Mapping[str, int]
     bodies: tuple = ()
     free_bench: int = 0
 
     @classmethod
     def read(cls, side, ctx: LedgerContext) -> "Demand":
         bodies = side.bodies
-        names = tuple(body.card.facts.name for body in bodies
-                      if body.card.facts is not None)
-        return cls(body_names=names, body_name_counts=Counter(names),
+        names = Counter(body.card.facts.name for body in bodies
+                        if body.card.facts is not None)
+        hand_names = Counter(card.facts.name for card in (side.hand or ())
+                             if card.facts is not None)
+        return cls(body_name_counts=names,
                    body_id_counts=Counter(body.card.card_id for body in bodies),
-                   bodies=bodies, free_bench=max(0, side.bench_max - len(side.bench)))
+                   hand_name_counts=hand_names, bodies=bodies,
+                   free_bench=max(0, side.bench_max - len(side.bench)))
 
 
 def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
@@ -201,9 +203,8 @@ def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
 
 
 def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
-    """(demand multiplier for the card's enabling condition, how many copies the board can
-    consume). An energy that only ever pays colorless slots is a lesser want than one filling
-    a typed slot of a printed attack."""
+    """(demand multiplier for the card's enabling condition, copies the board can consume);
+    colorless-only energy is a lesser want than one filling a typed slot."""
     weights = ctx.weights
     if facts is None:
         return 1.0, None
@@ -212,7 +213,12 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
             live = demand.free_bench > 0
             return (1.0 if live else weights.demand_dead), max(1, demand.free_bench)
         targets = demand.body_name_counts.get(facts.evolves_from, 0)
-        return ((1.0, max(1, targets)) if targets else (weights.demand_dead, 1))
+        if targets:
+            return 1.0, max(1, targets)
+        # The pair term: base in HAND is setup pending — worth more together than apart.
+        if demand.hand_name_counts.get(facts.evolves_from, 0):
+            return weights.demand_setup, 1
+        return weights.demand_dead, 1
     if isinstance(facts, EnergyCard):
         colorless_only = False
         for body in demand.bodies:

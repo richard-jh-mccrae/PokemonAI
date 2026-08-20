@@ -90,12 +90,8 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
 
 
 class BellmanRuntime:
-    """Deployment shell: declarative pregame handling plus the Ledger decider (ADR-0145).
-
-    The Bellman planner machinery stays constructed and callable — it is the phase-2 search
-    skeleton and the offline teacher — but live decisions route through `self.ledger`.
-    `brain="bellman"` re-selects the teacher for its own pins and offline tooling; the live
-    default is the Ledger, and nothing switches brains mid-match."""
+    """Deployment shell: declarative pregame plus the Ledger decider (ADR-0145); `brain`
+    selects a whole match's brain — the Bellman planner stays callable as the teacher."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
                  scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,

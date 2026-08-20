@@ -68,6 +68,9 @@ class LedgerWeights:
     # Demand discounts on hand/deck worth.
     demand_dead: float = 0.40
     demand_colorless_only: float = 0.70
+    #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
+    #: than either alone — the nonlinearity the sampled-hand chance model feeds on.
+    demand_setup: float = 0.70
     surplus_copy: float = 0.60
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.

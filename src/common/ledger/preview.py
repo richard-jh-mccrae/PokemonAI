@@ -15,7 +15,7 @@ from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, Revea
 from common.board import BoardState
 from common.solver import MAIN_DECISION_CONTEXT
 
-from .chance import refresh_swing
+from .chance import refresh_value
 from .evaluate import evaluate
 from .worth import LedgerContext
 
@@ -70,20 +70,23 @@ class _Walk:
             for edge in node.children:
                 child_value, child_ends = self.node(state, board, edge.node, depth - 1)
                 value += edge.probability * child_value
+                # MAY-end counts as ends: never gamble the turn away while a sure positive
+                # turn-continuing play remains (the attack-last lesson).
                 ends = ends or child_ends
             return value, ends
         if isinstance(node, Refresh):
-            swing, gaps = refresh_swing(
-                state.obs, board, 0.0, node.card_id, node.draws, node.opponent_shuffles,
-                self.ctx, lambda synthetic: evaluate(synthetic, self.ctx))
+            value, gaps = refresh_value(
+                state.obs, board, node.card_id, node.draws, node.opponent_shuffles,
+                lambda synthetic: evaluate(synthetic, self.ctx))
             self.gaps.extend(gaps)
-            return swing, False
+            return value, False
         if isinstance(node, RevealChoice):
             by_label = {edge.label: edge.node for edge in node.choices}
+            chooser = max if node.actor is Actor.OURS else min
             value = 0.0
             for outcome in node.outcomes:
-                best = max(self.node(state, board, by_label[label], depth - 1)[0]
-                           for label in outcome.choices)
+                best = chooser(self.node(state, board, by_label[label], depth - 1)[0]
+                               for label in outcome.choices)
                 value += outcome.probability * best
             return value, False
         if isinstance(node, Choice):

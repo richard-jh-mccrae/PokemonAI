@@ -118,7 +118,7 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, discount: float =
     usable = usable_units(body.card.facts, body.energies, ctx)
     useless = len(body.energies) - usable
     energy_worth = 0.0
-    for index, card in enumerate(body.energy_cards):
+    for card in body.energy_cards:
         unit_worth, gap = base_worth(card.card_id, card.facts, ctx)
         if gap:
             gaps.append(f"attached: {gap}")
