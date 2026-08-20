@@ -50,10 +50,16 @@ mega_starmie: 160106599249705-8, 26001818654643-18, 26001818654643-31 (praise),
 86090164-67, 91394270-12, 92458248-23, 92591287-35 carry valid rulings whose rationales are
 investigation notes; they stay graded, flagged here for context only.
 
-## Doctrine conflict — DEFERRED by owner 2026-08-20
+## Doctrine conflict — RESOLVED by owner 2026-08-20
 
-"Fully load one attacker" vs "spread the energy a little" on mega_starmie. Concentrate side:
-85046350-85 (dragapult), 82752045-97, 83116501-89, 82756664-35, 26001818654643-72 (second
-entry). Diversify side: 92645419-25 ("i would diversify energy a little by placing 2 energy
-on one staryu and one on another"). Any single pricing rule fails one side; no tuning target
-until the owner rules the doctrine.
+The sides were never symmetric. Ruling (recorded on the two records themselves):
+- **Concentrate is the default attach-recipient rule**: feed the STARTED, non-doomed body
+  toward its big attack before starting new bodies; NEVER feed a doomed body. Concentrate
+  frames all stand; 83116501-89 was RE-RULED on the card only (basic {W}, not Ignition —
+  don't spend the burst where a basic does the job; recipient unchanged).
+- **Diversify is the tempo exception** (92645419-25, annotated): read the opponent's board
+  strength relative to ours; with an easy KO next turn and no live threat, there is no
+  immediate need for the big attack, so a second minimally-functional attacker beats
+  over-stacking the first.
+The threat-read half needs opponent-strength awareness (scouting/planner scope); the
+recipient half (started > bare > doomed) is a 1-ply pricing target now.

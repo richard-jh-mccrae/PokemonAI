@@ -1,6 +1,6 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-20T15:18:26.884030+00:00 at `e0cb4e3a73e2`.
+Generated 2026-08-20T15:56:11.624006+00:00 at `fb3582b82284`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|
@@ -1729,8 +1729,8 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 ### mega_starmie `83116501-89` (Main, misattachment)
 
 - Ledger chose `[3]` Attach Ignition Energy → Mega Starmie ex (bench 2 · 330/330)
-- ruling was `[2]` Attach Ignition Energy → Mega Starmie ex (bench 1 · 330/330 · 1⚡)
-- rationale: CRITICAL: We should not spread out our energy until either main attacker or backup attacker have full energy. for this deck, that means 3 energy to Mega Starmie
+- ruling was `[5]` Attach Basic {W} Energy → Mega Starmie ex (bench 1 · 330/330 · 1⚡)
+- rationale: RE-RULED 2026-08-20 (user): correct moves [2] -> [5] — attach the BASIC {W} Energy to the benched Mega Starmie ex that already holds a single energy. NOT the bare benched twin, and NOT the doomed active (never feed a doomed body). This is the attach-for-turn, not a Turbo Flare distribution; we need only 2 prizes. The recipient half of the original ruling (the started bench body) STANDS; what changes is the card — the basic does the job, Ignition is not spent here. ORIGINAL RULING 2026-07 (superseded, preserved): correct=[2] 'Attach Ignition Energy -> Mega Starmie ex (bench 1)', rationale: "CRITICAL: We should not spread out our energy until either main attacker or backup attacker have full energy. for this deck, that means 3 energy to Mega Starmie"
 - priced +0.2685 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0350 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced +0.0350 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
@@ -2303,6 +2303,8 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - Ledger chose `[0]` Staryu (bench 1 · 70/70 · 2⚡)
 - ruling was `[1]` Staryu (bench 2 · 70/70)
 - rationale: with this board setup, where their active is doomed during our next turn, i would diversify energy a little by placing 2 energy on one staryu and one on another 
+
+NOTE 2026-08-20 (user, doctrine articulation — ruling UNCHANGED): this is a TEMPO play; read the opponent's board and weigh their strength against ours. We have an easy KO next turn (likely Cinderace again; if not, Starmie's Jetting Blow), so there is no immediate need for Nebula Beam — hence diversify. The concentrate rulings elsewhere in the corpus stay the default when the opponent has a live threat.
 - priced +0.0850 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":true,"energies":[3,3],"energyCards":[{"id":3,"playerIndex":1},{"id":3,"playerIndex":1}],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 - priced +0.0850 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
