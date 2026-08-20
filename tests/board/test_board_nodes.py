@@ -87,6 +87,60 @@ def test_select_normalizes_both_engine_dialects():
     assert a.select.options[0].index == 2 and a.select.options[0].area is None
 
 
+def test_seat_one_viewer_maps_sides_and_deck_counts():
+    mine = player(active=body(66, 21), hand=[119], discard=[120])
+    theirs = player(own=False, hand_count=5)
+    obs = printout(me=theirs, them=mine)
+    obs["current"]["yourIndex"] = 1
+    board = BoardState.root(obs, decklist=(66,) * 2 + (119,) * 2 + (120,) * 2)
+    assert board.seat == 1
+    assert board.me.active.card.card_id == 66 and board.me.hand.count(119) == 1
+    assert board.them.hand is None and board.them.hand_count == 5
+    assert board.deck_counts == ((66, 1), (119, 1), (120, 1))
+
+
+def test_stadium_ownership_gates_the_deck_deduction():
+    deck = (1252, 1252)
+    theirs = printout(stadium=[{"id": 1252, "serial": 60, "playerIndex": 1}])
+    assert BoardState.root(theirs, decklist=deck).deck_counts == ((1252, 2),)
+    mine = printout(stadium=[{"id": 1252, "serial": 60, "playerIndex": 0}])
+    assert BoardState.root(mine, decklist=deck).deck_counts == ((1252, 1),)
+    unstamped = printout(stadium=[{"id": 1252, "serial": 60}])   # no owner: counts as mine
+    assert BoardState.root(unstamped, decklist=deck).deck_counts == ((1252, 1),)
+
+
+def test_body_riders_pin_facts_and_reach_the_key():
+    base = printout(me=player(active=body(66, 1, energy_cards=(3,), tools=(1174,), pre=(305,))))
+    board = BoardState.root(base)
+    active = board.me.active
+    assert [card.card_id for card in active.energy_cards] == [3]
+    assert active.tools[0].facts is card_store()[1174]
+    assert active.pre_evolution[0].card_id == 305
+    import copy
+    untooled = copy.deepcopy(base)
+    untooled["current"]["players"][0]["active"][0]["tools"] = []
+    assert BoardState.root(untooled).key != board.key
+
+
+def test_root_degrades_on_an_empty_or_truncated_printout():
+    empty = BoardState.root({})
+    assert empty.me.active is None and empty.me.hand is None
+    assert len(empty.them.discard) == 0 and isinstance(empty.key, str)
+    solo = BoardState.root({"current": {"yourIndex": 0, "players": [player()]}})
+    assert solo.me.hand is not None and solo.them.hand_count == 0
+
+
+def test_looking_carries_visible_cards_and_hides_hidden_ones():
+    seen = printout()
+    seen["current"]["looking"] = [{"id": KNOWN, "serial": 30}, {"id": 112, "serial": 31}]
+    hidden = printout()
+    hidden["current"]["looking"] = [None, None]
+    a, b = BoardState.root(seen), BoardState.root(hidden)
+    assert a.looking.count == 2 and [c.card_id for c in a.looking.cards] == [KNOWN, 112]
+    assert b.looking.count == 2 and b.looking.cards is None
+    assert a.key != b.key
+
+
 def test_deck_counts_match_decision_state():
     from common.state import DecisionState
     deck = (KNOWN,) * 3 + (112,) * 2 + (119,) * 4 + (120,) * 2

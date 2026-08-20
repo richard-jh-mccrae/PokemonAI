@@ -95,6 +95,17 @@ def test_a_deck_declaration_replaces_the_default():
     assert resolved[121] == pokemon_default_roles()[121]    # everything else untouched
 
 
+def test_a_declaration_for_an_unknown_card_is_ignored():
+    resolved = resolve_pokemon_roles(pokemon_card_store(), {999_999: ["gust"]})
+    assert 999_999 not in resolved
+
+
+def test_an_empty_declaration_keeps_the_card_default():
+    """A deck that says NOTHING about a body has not overridden it — [] is silence, not a veto."""
+    resolved = resolve_pokemon_roles(pokemon_card_store(), {140: []})
+    assert resolved[140] == pokemon_default_roles()[140]
+
+
 def test_synergy_is_symmetric_and_names_real_cards():
     store = pokemon_card_store()
     by_name = {card.name: card for card in store.values()}

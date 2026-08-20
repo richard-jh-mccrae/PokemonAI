@@ -1,19 +1,12 @@
-"""Shared typed-Energy affordability primitives."""
+"""Shared typed-Energy affordability primitives; the wire codes live on the ground layer."""
 from __future__ import annotations
 
+from ..card_facts import (
+    COLORLESS as ENERGY_COLORLESS, GRASS as ENERGY_GRASS, FIRE as ENERGY_FIRE,
+    WATER as ENERGY_WATER, LIGHTNING as ENERGY_LIGHTNING, PSYCHIC as ENERGY_PSYCHIC,
+    FIGHTING as ENERGY_FIGHTING, DARKNESS as ENERGY_DARKNESS, METAL as ENERGY_METAL,
+    DRAGON as ENERGY_DRAGON, WILDCARD as ENERGY_WILDCARD)
 
-ENERGY_COLORLESS = 0
-# Values verbatim from the engine wire enum (`cg.api` EnergyType).
-ENERGY_GRASS = 1
-ENERGY_FIRE = 2
-ENERGY_WATER = 3
-ENERGY_LIGHTNING = 4
-ENERGY_PSYCHIC = 5
-ENERGY_FIGHTING = 6
-ENERGY_DARKNESS = 7
-ENERGY_METAL = 8
-ENERGY_DRAGON = 9
-ENERGY_WILDCARD = 10
 MINIMUM_ENERGY_UNITS = 1
 
 
@@ -38,8 +31,12 @@ def unmet_cost_slots(provisions, requirements) -> tuple[tuple[int, int], ...]:
     for slot, energy_type in enumerate(required):
         if energy_type == ENERGY_COLORLESS:
             continue
+        # Exact colour first: a wildcard spent where an exact could pay starves a later slot.
         index = next((index for index, code in enumerate(remaining)
-                      if pays_energy_type(code, energy_type)), None)
+                      if code == energy_type), None)
+        if index is None:
+            index = next((index for index, code in enumerate(remaining)
+                          if pays_energy_type(code, energy_type)), None)
         if index is not None:
             remaining.pop(index)
             paid.add(slot)

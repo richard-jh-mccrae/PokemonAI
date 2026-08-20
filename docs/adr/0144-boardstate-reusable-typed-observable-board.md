@@ -29,6 +29,10 @@ off-limits) offers no delta API — its output is always a complete reprint.
 - **The type is the information boundary.** An opponent's hand contents and any deck order are
   unrepresentable — construction never reads them, even off a full-truth frame — while the
   legally-known channels (`own_prizes`, `known_top`, `attack_locks`) are explicit fields.
+- **The lock ledger folds inside the build.** `attack_locks` derives from the parent's ledger
+  plus the printout's log delta (a printout carrying its own ledger stays authoritative), so no
+  upstream enrichment has to mutate a reprint in place. The deck-tracker channels remain a
+  printout contract.
 - **`key` is semantic identity**: blake2b over per-piece digests; serials, owner stamps, render
   order of unordered zones, and select menu material (options, deck listing) never enter —
   the same equivalence `common.state` applies to whole observations.
