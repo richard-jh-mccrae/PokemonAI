@@ -72,8 +72,8 @@ class CgpyTransitionProvider:
         self._error = ""
         try:
             if engine is not None:
-                self._engines[root.semantic_key] = engine
-                self._attack_committed[root.semantic_key] = False
+                self._engines[self._key(root)] = engine
+                self._attack_committed[self._key(root)] = False
                 return
             from cgpy.rng import SeededRng
             from cgpy.search import state_from_obs
@@ -93,8 +93,8 @@ class CgpyTransitionProvider:
                 _take(filler, int(opp.get("handCount", 0))), [],
                 manual_coin=True, rng=SeededRng(DEFAULT_RNG_SEED),
             )
-            self._engines[root.semantic_key] = engine
-            self._attack_committed[root.semantic_key] = False
+            self._engines[self._key(root)] = engine
+            self._attack_committed[self._key(root)] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
             context = int(((root.obs.get("select") or {}).get("context", -1)))
             if context != _MAIN:
@@ -107,15 +107,24 @@ class CgpyTransitionProvider:
     def available(self) -> bool:
         return not self._error
 
+    def _bind(self, state, observation):
+        """Successor state construction — the Ledger preview seam overrides this to skip the
+        DecisionState build per node (ADR-0146)."""
+        return state.with_observation(observation)
+
+    def _key(self, state) -> str:
+        """The engine-map key for a state; the preview seam substitutes identity tokens."""
+        return state.semantic_key
+
     def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
-        if not self._local_nested and state.semantic_key not in self._engines:
+        if not self._local_nested and self._key(state) not in self._engines:
             return ()
         return state.legal_actions
 
     def actor(self, state: DecisionState) -> Actor:
         if self._local_nested:
             return Actor.OURS
-        engine = self._engines.get(state.semantic_key)
+        engine = self._engines.get(self._key(state))
         if engine is None:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
@@ -155,9 +164,9 @@ class CgpyTransitionProvider:
     def transition(self, state: DecisionState, action: LegalAction):
         if self._local_nested:
             return self._local_nested_transition(state, action)
-        engine = self._engines.get(state.semantic_key)
+        engine = self._engines.get(self._key(state))
         if engine is None:
-            return Unknown("engine state unavailable", self._error or state.semantic_key)
+            return Unknown("engine state unavailable", self._error or self._key(state))
         try:
             refresh = refresh_transition(state, action, self.cards)
             if refresh is not None:
@@ -457,7 +466,7 @@ class CgpyTransitionProvider:
             obs["select"] = None
             obs["bellmanHistoricalMain"] = True
             obs["bellmanHistoricalContext"] = context
-            successor = state.with_observation(obs)
+            successor = self._bind(state, obs)
             return Terminal(successor, "isolated historical nested selection")
         except Exception as exc:  # noqa: BLE001 - stays explicit
             return Unknown("historical nested transition failed", f"{type(exc).__name__}: {exc}")
@@ -477,16 +486,17 @@ class CgpyTransitionProvider:
         recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
         if recycled:
             observation["bellmanRecycledCardIds"] = recycled
-        return state.with_observation(observation)
+        return self._bind(state, observation)
 
     def _register_successor(self, state, child, action):
         try:
             successor = self._state_from_engine(state, child, action)
-            committed = self._attack_committed.get(state.semantic_key, False) or \
+            committed = self._attack_committed.get(self._key(state), False) or \
                 action.identity.kind == "attack"
-            if successor.semantic_key not in self._engines:
-                self._engines[successor.semantic_key] = child
-                self._attack_committed[successor.semantic_key] = committed
+            successor_key = self._key(successor)
+            if successor_key not in self._engines:
+                self._engines[successor_key] = child
+                self._attack_committed[successor_key] = committed
             if child.result != -1:
                 result = "win" if child.result == state.root_seat else "loss"
                 return Terminal(successor, result)
@@ -515,4 +525,22 @@ class CgpyTransitionProvider:
         return Chance(tuple(edges))
 
 
-__all__ = ("CgpyTransitionProvider",)
+from itertools import count as _count
+
+from .ledger.seam import PreviewBinding, register_preview_variant
+
+
+class LedgerCgpyProvider(PreviewBinding, CgpyTransitionProvider):
+    """The offline preview seam over this provider; lives HERE because the Kaggle packager
+    excludes this module and scans shipped content for offline-engine references."""
+
+    backend = "cgpy-ledger"
+
+    def __init__(self, root, **kwargs):
+        self._preview_tokens = _count()
+        super().__init__(root, **kwargs)
+
+
+register_preview_variant(CgpyTransitionProvider, LedgerCgpyProvider)
+
+__all__ = ("CgpyTransitionProvider", "LedgerCgpyProvider")

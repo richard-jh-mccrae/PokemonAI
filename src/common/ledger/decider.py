@@ -11,12 +11,12 @@ from __future__ import annotations
 
 from common.api import RootDecision
 from common.board import BoardState
-from common.native_engine import NativeCgTransitionProvider
 from common.solver import MAIN_DECISION_CONTEXT
 from common.state import DecisionState
 
 from .evaluate import evaluate
 from .preview import NOISE_FLOOR, OptionPrice, price_actions
+from .seam import LedgerNativeProvider
 from .worth import LedgerContext
 
 
@@ -26,7 +26,7 @@ class LedgerUnavailable(RuntimeError):
 
 class LedgerDecider:
     def __init__(self, deck, deck_name: str, ctx: LedgerContext, *,
-                 provider_factory=NativeCgTransitionProvider, gap_sink=None):
+                 provider_factory=LedgerNativeProvider, gap_sink=None):
         self.deck = tuple(int(card_id) for card_id in deck)
         self.deck_name = str(deck_name)
         self.ctx = ctx

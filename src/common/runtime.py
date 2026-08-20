@@ -19,8 +19,7 @@ from common.deck_tracker import OwnCardModel
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
-from common.ledger import LedgerContext, LedgerDecider
-from common.native_engine import NativeCgTransitionProvider
+from common.ledger import LedgerContext, LedgerDecider, preview_provider_factory
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.options import enumerate_legal_actions
@@ -164,7 +163,7 @@ class BellmanRuntime:
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 overrides=getattr(strategy, "ledger_overrides", None)),
-            provider_factory=self.provider_factory or NativeCgTransitionProvider)
+            provider_factory=preview_provider_factory(self.provider_factory))
 
     @staticmethod
     def _player(observation, seat):
