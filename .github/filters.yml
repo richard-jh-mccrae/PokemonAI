@@ -21,12 +21,17 @@ runtime:
 # Source-only tests.  `runtime` is deliberately separate above because its fan-out is wider.
 src:
   - 'src/**'
+  - 'tools/train/**'
   - 'tests/agents/**'
   - 'tests/bellman/**'
+  - 'tests/board/**'
   - 'tests/cards/**'
   - 'tests/common/**'
+  - 'tests/ledger/**'
   - 'tests/parity/**'
   - 'tests/scouting/**'
+  - 'tests/strategy/**'
+  - 'tests/train/**'
   - 'tests/test_import_hygiene.py'
 
 # Agent policy changes must also preserve recorded blunder-correction contracts.
@@ -81,7 +86,6 @@ tool_untested:
   - 'tools/build_scouting_artifact.py'
   - 'tools/doc_budget.py'
   - 'tools/parity/**'
-  - 'tools/train/**'
   - 'tools/README.md'
 
 # The cgpy arm is independent but must re-run whenever the shared runtime changes.
