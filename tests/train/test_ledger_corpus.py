@@ -181,7 +181,7 @@ def test_sweep_partitions_reviewed_before_replaying(monkeypatch):
     kept, dropped = correction("ep", 1), correction("ep", 2)
     monkeypatch.setattr(module, "load_corrections", lambda store: [kept, dropped])
     monkeypatch.setattr(module, "_replay_one",
-                        lambda deck, c: row(deck, c.id, agrees=True))
+                        lambda deck, c, overrides=None: row(deck, c.id, agrees=True))
     reviewed = {"ep-2": {"disposition": "covered", "round": "2026-07-01"}}
     result = module.sweep(store="unused", decks=("a_deck",), reviewed=reviewed)
     assert [r["id"] for r in result["rows"]] == ["ep-1"]

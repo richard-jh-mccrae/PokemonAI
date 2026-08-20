@@ -96,7 +96,7 @@ class BellmanRuntime:
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
                  scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,
-                 brain: str = "ledger"):
+                 brain: str = "ledger", ledger_weights=None):
         if brain not in ("ledger", "bellman"):
             raise ValueError(f"unknown brain {brain!r}")
         self.brain = brain
@@ -162,6 +162,9 @@ class BellmanRuntime:
         self.ledger = LedgerDecider(
             self.deck, strategy.name,
             LedgerContext.build(
+                # `ledger_weights` is the tuner's seam: a candidate GENERAL vector under
+                # trial; the deck's own overrides still bend it on top.
+                weights=ledger_weights,
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 overrides=getattr(strategy, "ledger_overrides", None)),

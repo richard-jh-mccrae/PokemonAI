@@ -43,7 +43,7 @@ DECKS = ("mega_starmie", "mega_lucario", "dragapult_ex")
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "ledger-corpus-dashboard.json"
 
 
-def _build_runtime(deck_name: str):
+def _build_runtime(deck_name: str, weight_overrides=None):
     agent_dir = REPO / "src" / "agents" / deck_name
     spec = importlib.util.spec_from_file_location("_ledger_corpus_strategy",
                                                   agent_dir / "strategy.py")
@@ -51,7 +51,13 @@ def _build_runtime(deck_name: str):
     spec.loader.exec_module(module)
     deck = [int(value) for value in (agent_dir / "deck.csv").read_text().splitlines()
             if value.strip()]
-    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
+    ledger_weights = None
+    if weight_overrides:
+        from common.ledger import LedgerWeights
+
+        ledger_weights = LedgerWeights().resolve(weight_overrides)
+    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
+                         ledger_weights=ledger_weights)
 
 
 def _satisfies_one(chosen, correct, equivalence) -> bool:
@@ -78,10 +84,10 @@ def _labels(obs, indices) -> str:
                      for index in indices or () if 0 <= index < len(options))
 
 
-def _replay_one(deck_name: str, correction) -> dict:
+def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     """One frame through a fresh runtime: isolation, matching the live shell exactly —
     including the own-prize anchor the live shell stamps before every decide."""
-    runtime = _build_runtime(deck_name)
+    runtime = _build_runtime(deck_name, weight_overrides)
     obs = correction.obs
     stamped = stamp_own_prizes(obs, runtime.deck)
     started = time.perf_counter()
@@ -235,7 +241,8 @@ def _retired_row(correction, entry) -> dict:
 
 
 def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
-          baseline: dict | None = None, reviewed: dict | None = None) -> dict:
+          baseline: dict | None = None, reviewed: dict | None = None,
+          weight_overrides: dict | None = None) -> dict:
     swept = [correction for correction in load_corrections(store)
              if correction.agent in decks and correction.obs is not None]
     # A ruling the owner already dispositioned (refuted, fixed, covered…) is retired: grading
@@ -250,14 +257,14 @@ def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
     rows = []
     if workers > 1:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_replay_one, deck_name, correction)
+            futures = [pool.submit(_replay_one, deck_name, correction, weight_overrides)
                        for deck_name, correction in tasks]
             for completed, future in enumerate(as_completed(futures), start=1):
                 rows.append(future.result())
                 print(f"[{completed}/{len(tasks)}]", flush=True)
     else:
         for completed, (deck_name, correction) in enumerate(tasks, start=1):
-            rows.append(_replay_one(deck_name, correction))
+            rows.append(_replay_one(deck_name, correction, weight_overrides))
             print(f"[{completed}/{len(tasks)}] {deck_name} {correction.id}", flush=True)
     return payload(rows, retired=retired, baseline=baseline)
 
