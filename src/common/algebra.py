@@ -22,7 +22,7 @@ class Actor(str, Enum):
 
 
 @dataclass(frozen=True)
-class Ledger:
+class BellmanLedger:
     benefits: tuple[tuple[str, float], ...] = ()
     costs: tuple[tuple[str, float], ...] = ()
     continuation: float = 0.0
@@ -148,7 +148,7 @@ class Refresh:
 class Terminal:
     state: "DecisionState"
     result: str
-    ledger: Ledger = Ledger()
+    ledger: BellmanLedger = BellmanLedger()
 
 
 @dataclass(frozen=True)
@@ -167,7 +167,7 @@ TransitionResult = Deterministic | Choice | Chance | RevealChoice | Refresh | Te
 @dataclass(frozen=True)
 class ActionDiagnostic:
     action_key: str
-    ledger: Ledger
+    ledger: BellmanLedger
     complete: bool
     reason: str = ""
     branches: tuple[Mapping, ...] = ()
@@ -185,7 +185,7 @@ class RootDiagnostics:
 
 
 __all__ = (
-    "ActionDiagnostic", "Actor", "Chance", "Choice", "Deterministic", "Edge", "Ledger",
+    "ActionDiagnostic", "Actor", "Chance", "Choice", "Deterministic", "Edge", "BellmanLedger",
     "Refresh", "RevealChoice", "RevealOutcome", "RootDiagnostics", "Terminal", "TransitionResult", "Unknown",
     "WeightedEdge",
 )

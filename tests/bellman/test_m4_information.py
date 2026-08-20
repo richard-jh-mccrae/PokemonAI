@@ -6,7 +6,7 @@ from math import comb
 import pytest
 
 from common import (
-    ActionIdentity, Actor, Chance, DecisionState, Deterministic, Ledger, ReferenceSolver,
+    ActionIdentity, Actor, Chance, DecisionState, Deterministic, BellmanLedger, ReferenceSolver,
     Refresh, RevealChoice, Terminal,
 )
 from common.algebra import WeightedEdge

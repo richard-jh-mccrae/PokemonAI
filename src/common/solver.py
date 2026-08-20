@@ -9,7 +9,7 @@ from time import monotonic
 from typing import Protocol
 
 from .algebra import (
-    ActionDiagnostic, Actor, Chance, Choice, Deterministic, Ledger, Refresh, RevealChoice,
+    ActionDiagnostic, Actor, Chance, Choice, Deterministic, BellmanLedger, Refresh, RevealChoice,
     RootDiagnostics, Terminal, Unknown,
 )
 from .api import PlanStep, RootDecision
@@ -89,7 +89,7 @@ class ProductionLimits:
 @dataclass(frozen=True)
 class Evaluation:
     value: float
-    ledger: Ledger
+    ledger: BellmanLedger
     complete: bool
     reason: str = ""
     branches: tuple[dict, ...] = ()
@@ -116,8 +116,8 @@ class SleepEvent:
     proof_type: str = "commutativity"
 
 
-def _combine(base: Ledger, continuation: float, extra: Ledger = Ledger()) -> Ledger:
-    return Ledger(base.benefits + extra.benefits, base.costs + extra.costs,
+def _combine(base: BellmanLedger, continuation: float, extra: BellmanLedger = BellmanLedger()) -> BellmanLedger:
+    return BellmanLedger(base.benefits + extra.benefits, base.costs + extra.costs,
                   base.continuation + extra.immediate + float(continuation))
 
 
@@ -198,7 +198,7 @@ def _expected_evaluation(weighted, *, reason: str, branches=(), complete: bool =
             costs[key] = costs.get(key, 0.0) + probability * amount
         continuation += probability * result.ledger.continuation
         decisions += probability * result.decisions
-    ledger = Ledger(tuple(sorted(benefits.items())), tuple(sorted(costs.items())), continuation)
+    ledger = BellmanLedger(tuple(sorted(benefits.items())), tuple(sorted(costs.items())), continuation)
     return Evaluation(ledger.total, ledger, complete, reason, tuple(branches), decisions,
                       execution_complete=all(
                           result.execution_complete for _probability, result in weighted))
@@ -239,7 +239,7 @@ class ReferenceSolver:
         elif end_pair is not None:
             end_eval = end_pair[1]
         else:
-            end_eval = Evaluation(0.0, Ledger(), True)
+            end_eval = Evaluation(0.0, BellmanLedger(), True)
         alternatives = tuple(
             ActionDiagnostic(str(action.identity), result.ledger, result.complete, result.reason,
                              result.branches, result.decisions)
@@ -268,7 +268,7 @@ class ReferenceSolver:
                        if candidate.identity.kind == "end"), actions[0])
         reason = f"root salvage: {solved.evaluation.reason or 'no complete legal action'}"
         return StateEvaluation(
-            0.0, action, Evaluation(0.0, Ledger(), False, reason), solved.alternatives)
+            0.0, action, Evaluation(0.0, BellmanLedger(), False, reason), solved.alternatives)
 
     def _continuation_steps(self, before: DecisionState, action: LegalAction,
                             after: DecisionState,
@@ -283,7 +283,7 @@ class ReferenceSolver:
             return None, None
         return self.model_factory(before), self.model_factory(after)
 
-    def _ledger(self, before: DecisionState, after: DecisionState, action: LegalAction) -> Ledger:
+    def _ledger(self, before: DecisionState, after: DecisionState, action: LegalAction) -> BellmanLedger:
         left, right = self._models(before, after)
         return self.oracle.transition_ledger(before, after, action.identity,
                                              before_model=left, after_model=right)
@@ -300,10 +300,10 @@ class ReferenceSolver:
             self.cache_hits += 1
             return self._memo[key]
         if key in self._active:
-            incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
+            incomplete = Evaluation(-math.inf, BellmanLedger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
         if self.nodes >= self.limits.max_nodes:
-            incomplete = Evaluation(-math.inf, Ledger(), False, "reference cap")
+            incomplete = Evaluation(-math.inf, BellmanLedger(), False, "reference cap")
             return StateEvaluation(-math.inf, None, incomplete, ())
         self.nodes += 1
         self._active.add(key)
@@ -318,7 +318,7 @@ class ReferenceSolver:
         complete = [(action, result) for action, result in results if result.complete]
         if len(complete) != len(results) or not complete:
             answer = StateEvaluation(-math.inf, None,
-                                     Evaluation(-math.inf, Ledger(), False,
+                                     Evaluation(-math.inf, BellmanLedger(), False,
                                                 "one or more legal actions incomplete"), results)
         else:
             chooser = max if actor is Actor.OURS else min
@@ -335,11 +335,11 @@ class ReferenceSolver:
             resolve_end = getattr(self.provider, "resolve_end", None)
             if resolve_end is None:
                 return Evaluation(
-                    0.0, Ledger(), True, "End exact zero", execution_complete=True)
+                    0.0, BellmanLedger(), True, "End exact zero", execution_complete=True)
             node = resolve_end(state, action)
             if node is None:
                 return Evaluation(
-                    0.0, Ledger(), True, "End exact zero", execution_complete=True)
+                    0.0, BellmanLedger(), True, "End exact zero", execution_complete=True)
             return self._end_transition(state, action, node)
         return self._transition(state, action, self._provider_transition(state, action), sleep)
 
@@ -353,9 +353,9 @@ class ReferenceSolver:
             self._end_chain_nodes = 0
         self._end_chain_nodes += 1
         if depth <= 0 or self._end_chain_nodes > END_CHAIN_NODE_CAP:
-            return Evaluation(-math.inf, Ledger(), False, "End continuation capped")
+            return Evaluation(-math.inf, BellmanLedger(), False, "End continuation capped")
         if isinstance(node, Unknown):
-            return Evaluation(-math.inf, Ledger(), False,
+            return Evaluation(-math.inf, BellmanLedger(), False,
                               f"{node.reason}: {node.missing_fact}")
         if isinstance(node, Deterministic):
             ledger = self._ledger(before, node.state, action)
@@ -390,19 +390,19 @@ class ReferenceSolver:
             branches = [(edge, self._end_transition(before, action, edge.node, depth - 1))
                         for edge in node.children]
             if any(not result.complete for _edge, result in branches):
-                return Evaluation(-math.inf, Ledger(), False, "incomplete End chance branch")
+                return Evaluation(-math.inf, BellmanLedger(), False, "incomplete End chance branch")
             return _expected_evaluation(
                 ((edge.probability, result) for edge, result in branches),
                 reason="expected End value",
                 branches=tuple({"label": edge.label, "probability": edge.probability,
                                 "value": result.value} for edge, result in branches),
             )
-        return Evaluation(-math.inf, Ledger(), False, "End transition unavailable")
+        return Evaluation(-math.inf, BellmanLedger(), False, "End transition unavailable")
 
     def _transition(self, before: DecisionState, action: LegalAction, node,
                     sleep: tuple[SleepEvent, ...] = ()) -> Evaluation:
         if isinstance(node, Unknown):
-            return Evaluation(-math.inf, Ledger(), False,
+            return Evaluation(-math.inf, BellmanLedger(), False,
                               f"{node.reason}: {node.missing_fact}")
         if isinstance(node, Deterministic):
             base = self._ledger(before, node.state, action)
@@ -426,7 +426,7 @@ class ReferenceSolver:
             finite = [(edge, result) for edge, result in branches if math.isfinite(result.value)]
             if (not finite
                     or (node.actor is Actor.OPPONENT and len(finite) != len(branches))):
-                return Evaluation(-math.inf, Ledger(), False, "incomplete choice branch",
+                return Evaluation(-math.inf, BellmanLedger(), False, "incomplete choice branch",
                                   tuple({"label": edge.label, "complete": result.complete,
                                          "value": result.value, "reason": result.reason}
                                         for edge, result in branches))
@@ -449,7 +449,7 @@ class ReferenceSolver:
             evaluated = {edge.label: self._transition(before, action, edge.node, ())
                          for edge in self._reveal_choices(before, node)}
             if any(not math.isfinite(result.value) for result in evaluated.values()):
-                return Evaluation(-math.inf, Ledger(), False, "incomplete reveal choice")
+                return Evaluation(-math.inf, BellmanLedger(), False, "incomplete reveal choice")
             chooser = max if node.actor is Actor.OURS else min
             weighted = []
             diagnostics = []
@@ -471,7 +471,7 @@ class ReferenceSolver:
             except Exception as exc:  # noqa: BLE001 - a KeyError here was process death (forfeit)
                 print(f"refresh valuation unavailable ({type(exc).__name__}: {exc}); "
                       "the refresh card is unplayable this decision", file=sys.stderr, flush=True)
-                return Evaluation(-math.inf, Ledger(), False,
+                return Evaluation(-math.inf, BellmanLedger(), False,
                                   f"refresh valuation unavailable: {exc}")
             continuation = self._guaranteed_refresh_continuation(before)
             combined = _combine(ledger, continuation.value)
@@ -482,7 +482,7 @@ class ReferenceSolver:
             branches = [(edge, self._transition(before, action, edge.node, ()))
                         for edge in node.children]
             if any(not math.isfinite(result.value) for _edge, result in branches):
-                return Evaluation(-math.inf, Ledger(), False, "incomplete chance branch")
+                return Evaluation(-math.inf, BellmanLedger(), False, "incomplete chance branch")
             value = sum(edge.probability * result.value for edge, result in branches)
             benefits: dict[str, float] = {}
             costs: dict[str, float] = {}
@@ -493,7 +493,7 @@ class ReferenceSolver:
                 for key, amount in result.ledger.costs:
                     costs[key] = costs.get(key, 0.0) + edge.probability * amount
                 continuation += edge.probability * result.ledger.continuation
-            ledger = Ledger(tuple(sorted(benefits.items())), tuple(sorted(costs.items())), continuation)
+            ledger = BellmanLedger(tuple(sorted(benefits.items())), tuple(sorted(costs.items())), continuation)
             decisions = sum(edge.probability * result.decisions for edge, result in branches)
             return Evaluation(value, ledger, all(result.complete for _edge, result in branches),
                               "expected value",
@@ -502,7 +502,7 @@ class ReferenceSolver:
                                     for edge, result in branches), decisions,
                               execution_complete=all(
                                   result.execution_complete for _edge, result in branches))
-        return Evaluation(-math.inf, Ledger(), False, "undeclared transition result")
+        return Evaluation(-math.inf, BellmanLedger(), False, "undeclared transition result")
 
     def _guaranteed_refresh_continuation(self, state: DecisionState) -> Evaluation:
         candidates = []
@@ -514,7 +514,7 @@ class ReferenceSolver:
             if result.complete and math.isfinite(result.value):
                 candidates.append(result)
         return max(candidates, key=lambda result: _ordered_evaluation(result, Actor.OURS),
-                   default=Evaluation(0.0, Ledger(), True, "no guaranteed attack"))
+                   default=Evaluation(0.0, BellmanLedger(), True, "no guaranteed attack"))
 
 
 class ProductionSolver(ReferenceSolver):
@@ -1372,7 +1372,7 @@ class ProductionSolver(ReferenceSolver):
     def _end_lower_bound(self, state: DecisionState, actions, reason: str) -> StateEvaluation:
         end = next((action for action in actions if action.identity.kind == "end"), None)
         if end is None:
-            incomplete = Evaluation(-math.inf, Ledger(), False, reason)
+            incomplete = Evaluation(-math.inf, BellmanLedger(), False, reason)
             return StateEvaluation(-math.inf, None, incomplete, ())
         exact = self._action(state, end)
         if not math.isfinite(exact.value):
@@ -1484,7 +1484,7 @@ class ProductionSolver(ReferenceSolver):
             self.cache_hits += 1
             return memo[lookup_key]
         if memo_key in self._active:
-            incomplete = Evaluation(-math.inf, Ledger(), False, "semantic cycle")
+            incomplete = Evaluation(-math.inf, BellmanLedger(), False, "semantic cycle")
             return StateEvaluation(-math.inf, None, incomplete, ())
 
         self.nodes += 1
@@ -2027,7 +2027,7 @@ class ProductionSolver(ReferenceSolver):
         finite = [(action, result) for action, result in results if math.isfinite(result.value)]
         if not finite or (actor is Actor.OPPONENT and len(finite) != len(results)):
             answer = StateEvaluation(-math.inf, None,
-                                     Evaluation(-math.inf, Ledger(), False,
+                                     Evaluation(-math.inf, BellmanLedger(), False,
                                                 "one or more legal actions incomplete"), results)
         else:
             if actor is Actor.OURS:

@@ -5,7 +5,7 @@ import copy
 from collections import Counter
 from math import sqrt
 
-from .algebra import Ledger, Refresh
+from .algebra import BellmanLedger, Refresh
 from .cards import card_store, play_clauses
 from .cards.functions.draw import draw_branches, draw_shape_problem
 from .demand import DemandModel, access_probability
@@ -86,7 +86,7 @@ class RefreshEvaluator:
             else float(getattr(family_evaluator, "opponent_hand_share", 0.0)))
         self.demand = DemandModel(registry, family_evaluator, cards=self.cards)
 
-    def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[Ledger, tuple[dict, ...]]:
+    def evaluate(self, state, node: Refresh, *, include_next_turn=True) -> tuple[BellmanLedger, tuple[dict, ...]]:
         observation = state.obs
         current = observation.get("current") or {}
         players = current.get("players") or ()
@@ -160,7 +160,7 @@ class RefreshEvaluator:
                 benefits[label] = value
             elif value < 0.0:
                 costs[label] = -value
-        return (Ledger(tuple(sorted(benefits.items())), tuple(sorted(costs.items()))),
+        return (BellmanLedger(tuple(sorted(benefits.items())), tuple(sorted(costs.items()))),
                 tuple(branch_rows))
 
     def _potential(self, observation):
