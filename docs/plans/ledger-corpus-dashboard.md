@@ -1,12 +1,12 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-20T09:14:50.119950+00:00 at `03e91772e8a1`.
+Generated 2026-08-20T12:40:27.747372+00:00 at `3c2d4399bbf4`.
 
-| deck | graded | agrees | agreement | ungraded | gap-affected decisions |
-|---|---|---|---|---|---|
-| dragapult_ex | 54 | 9 | 16.7% | 0 | 44 |
-| mega_lucario | 70 | 25 | 35.7% | 0 | 30 |
-| mega_starmie | 347 | 107 | 30.8% | 0 | 245 |
+| deck | graded | agrees | agreement | ungraded | gap-affected decisions | fallbacks |
+|---|---|---|---|---|---|---|
+| dragapult_ex | 54 | 9 | 16.7% | 0 | 44 | 0 |
+| mega_lucario | 70 | 25 | 35.7% | 0 | 30 | 0 |
+| mega_starmie | 347 | 108 | 31.1% | 0 | 233 | 0 |
 
 **Generality floor (worst deck): 16.7%**
 
@@ -114,8 +114,8 @@ OWNER #165 (Turn Planner). By ADR-0070 amendment J's test the attach is individu
 
 NOTE this frame is the one the DELETED f21 energized-line guard was named after ('a wincon Line body is already being energized -> develop it, don't retreat for the lock'). This re-ruling says the retreat-for-the-lock is right ON f21 ITSELF, which undercuts that guard at its own source — independently of the paired-A/B result on the blanket removal.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.0625 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":7,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":119,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 - priced -0.0625 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":7,"playerIndex":0}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":305,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-- priced -0.1625 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1121,"playerIndex":0}]]]',))
 
 ### dragapult_ex `85046350-31` (ToActive, slow_setup)
 
@@ -239,8 +239,8 @@ Here we do not want to bench this second Munkidori. with this deck, we typically
 - ruling was `[1]` Attach Basic {P} Energy → Dreepy (active · 70/70)
 - rationale: Gusting up their main attacker only helps them. IF you want to gust, gust up their non-attacking supporter pokemone, Lunatone
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0765 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":5,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":119,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-- priced -0.1045 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":2,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":119,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.0850 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":7,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":119,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.0960 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":5,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":119,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### dragapult_ex `86089638-18` (Main, misattachment)
 
@@ -332,7 +332,7 @@ I say play Night Stretch, fetch fire energy, attach it to benched Dragapult. Use
 - rationale: wasted Boss's Orders here. doesnt really make a difference
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.1030 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1121,"playerIndex":0}]]]',))
-- priced -0.2775 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
+- priced -0.2580 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
 
 ### dragapult_ex `86091435-20` (Main, wasted_resource)
 
@@ -340,7 +340,7 @@ I say play Night Stretch, fetch fire energy, attach it to benched Dragapult. Use
 - ruling was `[0]` Retreat
 - rationale: CRITICAL: Should retreat into Budew, then attack to item lock
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.2775 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
+- priced -0.2580 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
 
 ### dragapult_ex `86091435-30` (Main, wasted_resource)
 
@@ -856,7 +856,7 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - ruling was `[2]` Attack with Water Gun
 - rationale: CRITICAL: no attack still? this is a huge problem
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0550 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0436 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced -0.1278 ActionIdentity(kind='attack', parts=('[0,{"attackId":1486,"type":13},[]]',))
 
 ### mega_starmie `1002062899305-64` (Main, sequencing_error)
@@ -866,16 +866,7 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - rationale: CRITICAL: this pilot just attached energy before playing pokegear when we just explicitly made that a rule not to do such a thing. we have a real supporter need for a Wallys Compassion. Need to attempt to get it.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0984 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
-- priced -0.1225 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-
-### mega_starmie `160106599249705-16` (Main, slow_setup)
-
-- Ledger chose `[3]` End turn
-- ruling was `[1]` Attack with Turbo Flare
-- rationale: CRITICAL: you didnt attack, why? this is the second of such blunders that are extremly critical. what is happening here?
-- priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0484 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced -0.1320 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1145,"playerIndex":0}]]]',))
+- priced -0.1225 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `160106599249705-8` (Main, other)
 
@@ -910,7 +901,7 @@ again, crushing hammer useless.
 These are very straight forward decisions derived from our NEEDS.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0915 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-- priced -0.1076 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
+- priced -0.1000 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `26001818654643-22` (ToHand, wrong_supporter)
 
@@ -932,13 +923,13 @@ so we immediately attach to our active to cover that need and attaching to bench
 then we are left with an actual decision that is in fact easy to decide. we have 4 cards in hand. a salvatore (useless with staryu), ultra ball (want to fetch staryu, but our only other staryu is in discard, ultra ball = useless), and a second energy (a next turn need). Thus hypergeometric odds must weigh the discounted value of a single energy versus shuffling away that energy plus two useless cards to draw 8 cards. an easy decision to play lillies, again, not by walking down branches but by considering present turn needs versus discounted future turn needs and computing odds.
 
 These decisions should be almost instantaneous.
-- priced +0.1223 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.1313 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0570 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `26001818654643-44` (Main, other)
 
-- Ledger chose `[9]` Attach Ignition Energy → Mega Starmie ex (bench 1 · 330/330)
+- Ledger chose `[10]` Attack with Jetting Blow
 - ruling was `[]` 
 - rationale: This is a seemingly more complex turn given our large hand with three different supporters, but, using needs, we see that all we need is to attach an energy to our active as to build towards Nebula Beam.
 
@@ -952,8 +943,8 @@ SO our only choice is between attaching the ignition energy for immediate nebula
 
 ignition is a fine choice, can argue basic energy because it doesnt discard, but that is a wash decision.
 - priced +0.0646 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0020 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.0175 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `26001818654643-49` (Main, other)
 
@@ -980,7 +971,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: i see that to attach our only type of energy to our full HP primary attacker active took 3 seconds. you must analyze which branches we walked down. yes, we have many cards, supporter in hand, but our only real need is to attach this energy and attack. future needs our energy attachments on following turns, which we also have in hand. thus i see no reason to debate here. can this decision making be optimized and made more efficient here?
 - priced +0.0646 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0103 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0079 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 
 ### mega_starmie `26001818654643-72` (Main, misattachment)
 
@@ -989,7 +980,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: CRITICAL: an absolutelt nonsensical choice to attach to our benched starmie when our active starmie still needs 2 more energy to reach nebula beam. true that our opponent has used 3/4 Wallys Compassions, but still, dont diversify like this when both starmies has full HP
 - priced +0.0646 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0103 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0079 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 
 ### mega_starmie `26001818654643-76` (Main, other)
 
@@ -1013,7 +1004,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[4]` Play Pokégear 3.0
 - rationale: 
-- priced +0.0841 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.1004 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0927 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
 
@@ -1022,7 +1013,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[4]` Play Pokégear 3.0
 - rationale: Should play Pokegear  3.0 to dig for supporter earlier in turn
-- priced +0.0232 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0370 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0844 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
 
@@ -1041,7 +1032,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[4]` Play Pokégear 3.0
 - rationale: 
 - priced +2.0155 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0532 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0662 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `81785223-45` (Damage, sequencing_error)
@@ -1067,9 +1058,9 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[6]` Play Salvatore
 - ruling was `[1]` Attach Basic {W} Energy → Cinderace (active · 160/160)
 - rationale: Never attach ignition energy to Cinderace when basic energy available
-- priced +0.0290 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
+- priced +0.0485 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.1269 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.1074 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `81903490-74` (Main, sequencing_error)
 
@@ -1098,6 +1089,15 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - priced -0.0865 ActionIdentity(kind='card', parts=('[0,{"playerIndex":0,"type":3},[[3,{"id":3,"playerIndex":0}]]]',))
 - priced -0.1219 ActionIdentity(kind='card', parts=('[0,{"playerIndex":0,"type":3},[[3,{"id":666,"playerIndex":0}]]]',))
 
+### mega_starmie `81904064-19` (ToHand, other)
+
+- Ledger chose `[0]` Ignition Energy
+- ruling was `[1]` Basic {W} Energy
+- rationale: ignition energy is discarded at end of turn so needs using wisely. in this case, a basic energy would have been enough to kill opponents active AND do bench damge.
+- priced +0.0500 ActionIdentity(kind='card', parts=('[{"playerIndex":0,"type":3},[[1,{"id":17,"playerIndex":0}]]]',))
+- priced +0.0500 ActionIdentity(kind='card', parts=('[{"playerIndex":0,"type":3},[[1,{"id":3,"playerIndex":0}]]]',))
+- priced +0.0000 ActionIdentity(kind='decline', parts=())
+
 ### mega_starmie `81904064-29` (Main, wasted_resource)
 
 - Ledger chose `[1]` Play Buddy-Buddy Poffin
@@ -1105,7 +1105,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: using wally's compassion to heal 10 damage is far too low. save wally's compassion for when it will prevent mega starmie ex from dying next turn
 - priced +0.1715 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0107 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0058 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 
 ### mega_starmie `81904064-49` (Main, sequencing_error)
 
@@ -1122,7 +1122,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[1]` Play Salvatore
 - rationale: Use Salvatore to get other Mega Starmie ex if no other supporter is a better choice
 - priced +1.0199 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0253 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0277 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `81904451-15` (Main, misattachment)
@@ -1148,7 +1148,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[1]` Play Hilda
 - rationale: play hilda to get Mega Starmie. then attach energy and attack
-- priced +0.2271 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.2320 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0630 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
@@ -1157,36 +1157,27 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[1]` Play Hilda
 - rationale: get mega starmie with hilda, then free retreat cinderace to mega starmie and attack
-- priced +0.9986 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced +0.1168 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
-- priced +0.0985 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
-
-### mega_starmie `81904451-50` (Main, misattachment)
-
-- Ledger chose `[5]` Play Salvatore
-- ruling was `[1]` Play Hilda
-- rationale: never attach more than one energy to Cinderace. in this instance, fetching Mega Starmie ex with Hilda would have been the better move.
-- priced +0.2260 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
-- priced +0.1500 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
-- priced +0.1390 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1145,"playerIndex":0}]]]',))
+- priced +1.0888 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
+- priced +0.1299 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0570 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
 
 ### mega_starmie `81904451-53` (Main, sequencing_error)
 
-- Ledger chose `[5]` Play Salvatore
+- Ledger chose `[1]` Play Hilda
 - ruling was `[6]` Play Mega Signal
 - rationale: Should have found mega starmie ex with Mega Signal
 - priced +0.9436 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced +0.2260 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
-- priced +0.1500 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
+- priced +0.1943 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
+- priced +0.1930 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1145,"playerIndex":0}]]]',))
 
 ### mega_starmie `81904451-58` (Main, sequencing_error)
 
-- Ledger chose `[5]` Play Salvatore
+- Ledger chose `[1]` Play Hilda
 - ruling was `[6]` Play Mega Signal
 - rationale: Should have found Mega Starmie ex
 - priced +0.9126 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced +0.2110 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1189,"playerIndex":0}]]]',))
-- priced +0.1350 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
+- priced +0.1792 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
+- priced +0.1780 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1145,"playerIndex":0}]]]',))
 
 ### mega_starmie `81904451-6` (Main, misattachment)
 
@@ -1202,7 +1193,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[2]` Play Buddy-Buddy Poffin
 - rationale: could have fetched two staryu first. that also allows full knowledge of whats in prize cards via what is in deck
-- priced +0.2165 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.2644 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.1020 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1086,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
@@ -1220,7 +1211,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[1]` Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)
 - rationale: Typically alwasys evolve active to mega starmie if able to, especially since energy already attached
-- priced +0.0897 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0994 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0806 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
 
@@ -1229,9 +1220,9 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[16]` Attack with Turbo Flare
 - ruling was `[5]` Attach Basic {W} Energy → Staryu (bench 2 · 70/70)
 - rationale: attach energy when able
-- priced +0.1132 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
+- priced +0.1327 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.1045 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
+- priced -0.1045 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `81905522-64` (Main, sequencing_error)
 
@@ -1274,7 +1265,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[10]` Attack with Jetting Blow
 - ruling was `[3]` Attach Basic {W} Energy → Staryu (bench 1 · 70/70)
 - rationale: attach energy when able and pokemons need it
-- priced +3.2082 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
+- priced +3.2264 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0445 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
@@ -1283,7 +1274,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[6]` Attack with Turbo Flare
 - ruling was `[4]` Evolve Mega Starmie ex → Staryu (bench 2 · 70/70)
 - rationale: fine to evolve bench into main attacker because opponent has no threatening cards.
-- priced +1.2305 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +1.3230 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.1240 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
@@ -1354,7 +1345,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[4]` Play Wally's Compassion
 - ruling was `[2]` Play Lillie's Determination
 - rationale: hand wasnt very useful, therefor use lillie's determintation to swap it out
-- priced +103.3045 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
+- priced +103.3240 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
 - priced +1.2134 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.3583 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1229,"playerIndex":1}]]]',))
 
@@ -1382,14 +1373,14 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Though ignition energy will be helpful in this current board state, Pokegear 3.0's should have been used first to look for supports that could have helped to find basic energy. ignition energy is such a good card, that it should be saved when able.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.1059 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1122,"playerIndex":1}]]]',))
-- priced -0.1390 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":1159,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.1245 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `82225643-12` (Main, sequencing_error)
 
 - Ledger chose `[6]` Attack with Turbo Flare
 - ruling was `[1]` Play Crushing Hammer
 - rationale: Rioulu would not have died from this attack, and next turn he might evolve to opponents main attacker, mega lucario, thus playing the crushing hammers could have reduced its threat through energy removal.
-- priced +0.0856 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +0.1956 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.1059 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1122,"playerIndex":1}]]]',))
 
@@ -1409,15 +1400,15 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Should have attached basic energy to benched main line attacker, giving it enough energy to KO opponents active. then retreat cinderace into that main line attacker.
 - priced +0.1075 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1097,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0488 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
+- priced -0.0473 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
 
 ### mega_starmie `82226116-48` (Main, bad_retreat)
 
-- Ledger chose `[14]` End turn
+- Ledger chose `[12]` Attack with Turbo Flare
 - ruling was `[13]` Retreat
 - rationale: Should have retreated to the folly powered up Mega Starmie which would have setup a double KO with Jetting Blow attack.
+- priced +0.1156 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0474 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
 - priced -0.1000 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `82226116-70` (Main, sequencing_error)
@@ -1443,7 +1434,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[0]` Evolve Mega Starmie ex → Staryu (bench 1 · 70/70)
 - rationale: In this deck, evolving benched stryu to mega starmie is typically best, even if its now a benched mega without energy. here its early game with no real opponent threat yet. also mega starmie requires only single energy to do damage. After evolving, could have played lillie's determination to potentially find more basic energy.
 - priced +2.4039 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
-- priced +0.0338 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0427 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82226759-29` (Main, sequencing_error)
@@ -1453,7 +1444,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: evolve the benched staryu first.
 - priced +2.0471 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.1786 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
+- priced -0.1688 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
 
 ### mega_starmie `82226759-51` (Damage, bad_target)
 
@@ -1478,7 +1469,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[7]` Attack with Jetting Blow
 - ruling was `[2]` Attach Basic {W} Energy → Staryu (bench 2 · 70/70)
 - rationale: Attch energy to benched pokemon when able and they need it. also should use Pokegear 3.0 to potentially find a useful supporter.
-- priced +1.3248 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
+- priced +1.3948 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +1.0968 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
@@ -1497,7 +1488,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[2]` Play Pokégear 3.0
 - rationale: Play Pokegear 3.0 when able to find useful supporters.
 - priced +0.2280 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.1677 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1229,"playerIndex":0}]]]',))
+- priced +0.2067 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1229,"playerIndex":0}]]]',))
 - priced +0.1020 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 
 ### mega_starmie `82228017-4` (Main, sequencing_error)
@@ -1515,7 +1506,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[5]` Attach Basic {W} Energy → Mega Starmie ex (active · 280/330)
 - rationale: Should have attached basic energy instead of ignition energy to active mega starmie, as its Jetting Blow is enough to KO opponents active while also sniping bench. Plus, Ignition Energy discards at end of turn, so should be saved for only when needed.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0526 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
+- priced -0.0721 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced -0.0721 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `82228640-48` (Main, misattachment)
@@ -1525,7 +1516,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: attach energy when able and a pokemon needs it before attacking.
 - priced +0.2160 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.1240 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":310,"id":1031,"maxHp":430,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[{"id":1159,"playerIndex":0}]}]]]',))
+- priced -0.1151 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `82228640-53` (Main, sequencing_error)
 
@@ -1543,7 +1534,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: attach energy first. ultra ball is saved to find mega starmie, which we already have in hand. also dont use ultra ball and discard hilda, when hilda can find mega starmie AND an energy card, far better than ultra ball.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0670 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1121,"playerIndex":0}]]]',))
-- priced -0.1200 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.0907 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `82229122-45` (Main, bad_target)
 
@@ -1561,7 +1552,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Harelquin throws away our hand. we had an enery that we could have attached to the benched Mega Starmie first.
 - priced +0.0870 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0119 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
+- priced -0.0045 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
 
 ### mega_starmie `82522726-23` (Main, sequencing_error)
 
@@ -1569,7 +1560,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[2]` Evolve Mega Starmie ex → Staryu (active · 70/70 · 1⚡)
 - rationale: Could have evolved active to mega starmie and attacked to win the game. always look for game winning move first.
 - priced +0.0785 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1189,"playerIndex":1}]]]',))
-- priced +0.0115 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0262 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82522726-7` (Main, sequencing_error)
@@ -1579,7 +1570,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Attach energy prior to throwing away hand
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0960 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
-- priced -0.1240 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.1225 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
 
 ### mega_starmie `82523164-11` (Main, misattachment)
 
@@ -1597,7 +1588,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Attaching Ignition Energy then attack with nebula beam would have one the game. before using cards that throw away hand like Harelquin or lillie's determination, a full review of possible moves must be made.
 - priced +1.2640 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0823 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":60,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.1005 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1145,"playerIndex":1}]]]',))
 
 ### mega_starmie `82523811-15` (Main, sequencing_error)
 
@@ -1660,7 +1651,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Attach energy in hand to mon who needs it before throwing away hand
 - priced +1.1116 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0100 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.0295 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
 ### mega_starmie `82523811-95` (Main, sequencing_error)
 
@@ -1676,7 +1667,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[3]` Attack with Jetting Blow
 - ruling was `[2]` Attach Basic {W} Energy → Mega Starmie ex (active · 280/330 · 1⚡)
 - rationale: Attach available energy before ending turn
-- priced +1.4289 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
+- priced +1.4989 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0806 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":true,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":280,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
@@ -1721,7 +1712,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[0]` Play Harlequin
 - ruling was `[2]` Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)
 - rationale: Attach available energy to a mon who needs it prior to throwing away hand. Cards that throw away hands need a through review.
-- priced +0.0218 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
+- priced +0.0267 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0670 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
@@ -1731,7 +1722,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[1]` Attach Basic {W} Energy → Mega Starmie ex (active · 330/330 · 1⚡)
 - rationale: attach energy before throwing away hand
 - priced +1.3049 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
-- priced +0.0845 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0926 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82525101-92` (Main, sequencing_error)
@@ -1739,7 +1730,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[3]` Attack with Jetting Blow
 - ruling was `[0]` Play Crushing Hammer
 - rationale: Could have used two crushing hammers, attached energy, then attacked
-- priced +1.3124 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
+- priced +1.3306 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0475 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
@@ -1758,7 +1749,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[1]` Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 1⚡)
 - rationale: Boss's up Staryu will KO the Staryu, but we could have just done more damage to the main threat active starmie instead. that main threat will now just return to active will more HP than it otherwise would have had.
 - priced +0.1916 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0063 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0278 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `82525741-77` (Main, sequencing_error)
@@ -1766,7 +1757,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - Ledger chose `[6]` Play Lillie's Determination
 - ruling was `[0]` Attach Basic {W} Energy → Mega Starmie ex (active · 310/430 · 1⚡)
 - rationale: Attach before throwing away hand
-- priced +0.0989 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.1030 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0331 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
@@ -1804,7 +1795,7 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - rationale: Playing Crushing Hammer here was worthless, given that Jetting Blow will KO Cinderace. 
 - priced +1.3129 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0926 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
+- priced -0.1219 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `82748422-51` (Main, sequencing_error)
 
@@ -1821,8 +1812,8 @@ ignition is a fine choice, can argue basic energy because it doesnt discard, but
 - ruling was `[1]` Play Lillie's Determination
 - rationale: Hilda was not helpful here because i already had an energy and two mega starmies in hand. The opponent was a huge threat due to a nearly full bench. thus i should have played lillie's determination in hopes of filling my bench for protection.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.1163 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 - priced -0.1405 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1225,"playerIndex":0}]]]',))
-- priced -0.1455 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `82749168-21` (Main, wasted_resource)
 
@@ -1843,8 +1834,8 @@ The right line is aggressive: Salvatore (evolve a benched Staryu into Mega Starm
 
 Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow {W}/120 (data/EN_Card_Data.csv id 1031); Hoothoot 70 HP, Dragapult ex 320 HP with Jet Headbutt {C}/70 and Phantom Dive {R}{P}/200 (ids 172, 121); Ignition Energy provides {C}{C}{C} on an Evolution and discards at end of turn (card_functions.json id 17: provides:1, provides_evo:3, discard_eot); Salvatore's printed text permits evolving a Pokemon put into play this turn.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
+- priced -0.0719 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced -0.1045 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1189,"playerIndex":1}]]]',))
-- priced -0.1749 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 
 ### mega_starmie `82749168-50` (Damage, bad_target)
 
@@ -1862,7 +1853,7 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - rationale: Pokemon needed only single energy more to be fully powered and we had an energy in our hand. should have attached that one. the ignition energy was wasted.
 - priced +1.2094 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0580 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.0775 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[3,3],"energyCards":[{"id":3,"playerIndex":1},{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
 ### mega_starmie `82749168-65` (Main, wasted_resource)
 
@@ -1871,7 +1862,7 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - rationale: Lillie's just shuffled back our Ignition Energy, which might come in handy for our benched mega starmie. ignition energy highly valuable in this instance.
 - priced +3.3371 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +2.1173 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
-- priced +0.0971 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0841 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 
 ### mega_starmie `82749168-88` (Main, sequencing_error)
 
@@ -1888,8 +1879,8 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - ruling was `[12]` Attack with Jetting Blow
 - rationale: For any turn, do a consideration if there is a winning move as step 1, always. if there is, take that move immediately.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.0595 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 - priced -0.0595 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-- priced -0.0659 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":300,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `82750161-59` (Main, misattachment)
 
@@ -1898,7 +1889,7 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - rationale: Since i can KO the opponents active with jetting blow, i would have attached an energy to the benched mega starmie.
 - priced +1.5827 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0070 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.0070 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `82751468-14` (Main, misattachment)
 
@@ -1923,27 +1914,27 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - Ledger chose `[11]` Attack with Jetting Blow
 - ruling was `[8]` Play Night Stretcher
 - rationale: We might as well recycle an energy to attach to our benched Mega Starmie at this point.
-- priced +2.5270 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
+- priced +2.5452 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +1.1489 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82752045-94` (Main, wasted_resource)
 
-- Ledger chose `[3]` Attach Ignition Energy → Mega Starmie ex (bench 2 · 330/330)
+- Ledger chose `[13]` Attack with Jetting Blow
 - ruling was `[14]` Attack with Nebula Beam
 - rationale: We have an enormous hand with lots of great stuff, probably never shuffle back hand greater than 7 cards. also ignition energy needs to be valued for highly when considering shuffling.
 - priced +0.3940 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.2268 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
-- priced +0.0170 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82752045-97` (Main, misattachment)
 
-- Ledger chose `[2]` Attach Ignition Energy → Mega Starmie ex (bench 2 · 330/330)
+- Ledger chose `[6]` Attack with Jetting Blow
 - ruling was `[1]` Attach Ignition Energy → Mega Starmie ex (bench 1 · 330/330 · 1⚡)
 - rationale: SHould build up the one, secondary attacker instead of spreading energy out. the one mega starmie had a single energy, the other non. keep feeding the one mega starmie until it has 3 enegry.
 - priced +0.3865 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.2193 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
-- priced +0.0095 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82752604-106` (Main, sequencing_error)
 
@@ -1951,7 +1942,7 @@ Verified at source: Mega Starmie ex's Nebula Beam is {C}{C}{C}/210, Jetting Blow
 - ruling was `[6]` Attack with Jetting Blow
 - rationale: Attaching energy was meaningless that we could just attach and win the game.
 - priced +103.3389 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.2673 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced +0.2604 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `82752604-14` (Main, missed_ko)
@@ -2071,7 +2062,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[5]` Attach Basic {W} Energy → Mega Starmie ex (bench 1 · 330/330 · 2⚡)
 - rationale: Prioritize fully loading a main attacker with energy over spreading out energy
 - priced +0.2062 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
-- priced +0.0595 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0749 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82756664-36` (Main, sequencing_error)
@@ -2080,7 +2071,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[1]` Attach Hero’s Cape → Mega Starmie ex (bench 1 · 330/330 · 2⚡)
 - rationale: attach the fucking heros cape already!
 - priced +0.2062 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
-- priced +0.1342 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.1524 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `82756664-37` (Main, bad_retreat)
@@ -2088,7 +2079,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[2]` Attack with Turbo Flare
 - ruling was `[3]` Retreat
 - rationale: Should retreat to Mega Starmie for the KO and snipe the powered up Riolu
-- priced +0.1454 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +0.1537 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.1125 ActionIdentity(kind='retreat', parts=('[1,{"type":12},[]]',))
 
@@ -2099,16 +2090,16 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - rationale: Hilda was pointless given we have 2 energy in hand and know that 3rd mega starmie is in prize cards
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0670 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":1}],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
-- priced -0.0831 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":30,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.1026 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":30,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 
 ### mega_starmie `82756664-9` (Main, sequencing_error)
 
-- Ledger chose `[6]` End turn
+- Ledger chose `[2]` Play Lillie's Determination
 - ruling was `[1]` Attach Hero’s Cape → Staryu (bench 1 · 70/70)
 - rationale: best not to shuffle back a heros cape when we are able to use it. plus, next turn we can evolve to mega starmie with 3 energy due to Turbo Flare energy acceleration. this, albeit small, is a very good opening hand.
+- priced +0.1672 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +0.0136 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0003 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
-- priced -0.0028 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 
 ### mega_starmie `82756664-97` (ToActive, missed_disruption)
 
@@ -2125,7 +2116,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[2]` Attach Hero’s Cape → Mega Starmie ex (active · 280/330 · 3⚡)
 - rationale: Attach the fucking cape before shuffling!!
 - priced +0.2310 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.1358 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.1480 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.1050 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 
 ### mega_starmie `82866415-48` (Main, sequencing_error)
@@ -2151,8 +2142,8 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[7]` Play Buddy-Buddy Poffin
 - ruling was `[8]` Attack with Turbo Flare
 - rationale: CRITICAL: Should almost never retreat Cinderace into a Staryu with so many energies
-- priced +1.1860 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced +0.2020 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
+- priced +1.2460 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
+- priced +0.2215 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `82867148-87` (Main, bad_retreat)
@@ -2161,7 +2152,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[8]` Attach Basic {W} Energy → Staryu (bench 2 · 70/70)
 - rationale: Typically should attch energy to staryu
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0193 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0068 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced -0.0325 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `83007714-135` (Main, slow_setup)
@@ -2188,7 +2179,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - rationale: CRITICAL: this is a regression, used to be fixed. In SETUP stage, Cinderace leasding with Staryu on bench. this is perfect. Cinderace must get the energy here.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0775 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1121,"playerIndex":1}]]]',))
-- priced -0.1194 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+- priced -0.0999 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `83037962-48` (Main, misattachment)
 
@@ -2197,7 +2188,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - rationale: CRITICAL: Placed second energy on active doomed mega starmie. this deosnt allow it to attack with Nebula Beam, and we can see that opponent can perhaps use an ignition energy to be able to do Nebula Beam and kill us next turn. we must assume that worst case scenario. therefor should start powering up our reserve benched staryu
 - priced +0.2010 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0243 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced -0.0186 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 
 ### mega_starmie `83037962-49` (Main, misattachment)
 
@@ -2213,7 +2204,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[6]` Play Wally's Compassion
 - ruling was `[9]` Attack with Nebula Beam
 - rationale: CRITICAL: playing Wallys Compassion has a COST that must be considered. we remove all energy from our wincon and heal them. but now we are no longer able to KO the opponent and win the match. huge blunder. Wallys Compassion usage cost must be considered along with whether or not we have an Ignition Energy in hand.
-- priced +103.1625 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
+- priced +103.1820 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 - priced +0.2723 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1229,"playerIndex":0}]]]',))
 - priced +0.0843 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 
@@ -2240,7 +2231,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[2]` Play Hilda
 - rationale: CRITICAL: Our agent needs to start planning its turn ahead of time, mapping out potential outcomes, and then picking best path. if it did so, it would have seen that it can KO opponents active via Hilda for energy grab, attach to mega starmie, retreat to mega starmie, and jetting blow.
-- priced +0.1059 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.1108 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.1580 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1120,"playerIndex":1}]]]',))
 
@@ -2258,7 +2249,7 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[12]` Attack with Turbo Flare
 - ruling was `[13]` Retreat
 - rationale: CRITICAL: This is another multi decision example showing that we need a turn planner system. it would have been better to retreat cinderance into mega starmie, attach 3rd energy, KO fezandipiti for 2 prize cards. 
-- priced +0.1387 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +0.0997 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 - priced -0.0100 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[3,3],"energyCards":[{"id":3,"playerIndex":1},{"id":3,"playerIndex":1}],"hp":430,"id":1031,"maxHp":430,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[{"id":1159,"playerIndex":1}]}]]]',))
 
@@ -2267,9 +2258,9 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - Ledger chose `[2]` Play Buddy-Buddy Poffin
 - ruling was `[5]` Play Wally's Compassion
 - rationale: CRITICAL: Our active wincon was low on health and opponent could possibly KO it next turn. also, opponents active was KO'able with our Jetting Blow. Should have healed with Wally, attached single energy, KO opponent
-- priced +2.8607 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.3073 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
-- priced +0.0112 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1229,"playerIndex":0}]]]',))
+- priced +2.8802 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
+- priced +0.2780 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
+- priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `83116501-70` (Main, wasted_resource)
 
@@ -2277,17 +2268,17 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[7]` Attach Basic {W} Energy → Mega Starmie ex (active · 330/330)
 - rationale: Here, 120 dmg with Jetting Blow + 50 dmg to benched rioulu is perferrable given that Nebula Beam will not KO Mega Lucario anyways
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0510 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced -0.0510 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
+- priced -0.0705 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `83116501-89` (Main, misattachment)
 
-- Ledger chose `[3]` Attach Ignition Energy → Mega Starmie ex (bench 2 · 330/330)
+- Ledger chose `[23]` Attack with Jetting Blow
 - ruling was `[2]` Attach Ignition Energy → Mega Starmie ex (bench 1 · 330/330 · 1⚡)
 - rationale: CRITICAL: We should not spread out our energy until either main attacker or backup attacker have full energy. for this deck, that means 3 energy to Mega Starmie
 - priced +0.2310 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0170 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.0025 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 
 ### mega_starmie `83117367-34` (Main, other)
 
@@ -2295,8 +2286,8 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - ruling was `[2]` Play Harlequin
 - rationale: CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.0957 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
-- priced -0.0966 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0836 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced -0.0900 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 
 ### mega_starmie `83117367-45` (Main, other)
 
@@ -2305,8 +2296,8 @@ This is a critical blunder where awareness of opponents pokemon evolution lines 
 - rationale: CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.
 
 PLUS, we need energy! CRITICAL CRITICAL
-- priced +0.2058 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
-- priced +0.1529 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.2164 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced +0.1683 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
 ### mega_starmie `83456015-35` (Main, sequencing_error)
@@ -2335,7 +2326,7 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - ruling was `[2]` Attack with Jetting Blow
 - rationale: Jetting Blow is better here to do some bench sniping because Nebula Beam will not KO them anyway. and one jetting blow + one nebula beam will KO them. also, worth anticipating that they will use wally compassion to fully heal.
 - priced +0.1890 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0824 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced +0.0698 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 - priced +0.0630 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 
 ### mega_starmie `83661649-45` (Damage, bad_target)
@@ -2370,8 +2361,8 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - ruling was `[0]` Attach Basic {W} Energy → Mega Starmie ex (active · 60/330)
 - rationale: This conflicts with dont-feed-the-doomed but is still the better option. we need to keep pressure on our opponent by attacking and bench sniping. next turn we have both basic and ignition energy, thus we can keep attacking with our follow up Starmie. in this case, its better to feed the dammed.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0505 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
 - priced -0.0700 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":1,"preEvolution":[{"id":1030,"playerIndex":1}],"tools":[]}]]]',))
+- priced -0.0700 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":3,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `83664991-25` (Main, sequencing_error)
 
@@ -2387,7 +2378,7 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - Ledger chose `[1]` Play Harlequin
 - ruling was `[3]` Attack with Turbo Flare
 - rationale: CRITICAL: This was a missed opportunity for prize math in our favor. save the ignition energy for next turn and chip them a bit with Cinderace. Also, opponent has 8 cards in hand, a perfect time to play Harlequin.
-- priced +0.0575 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced +0.0640 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0245 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
 
@@ -2407,7 +2398,7 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - rationale: no reason to play lillies here, just attack for win. i think that the lethal line needs to be able to consider multiple decisions to a victory, then to take the shortest path.
 - priced +102.3317 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.8802 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
-- priced +0.1480 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.1407 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 
 ### mega_starmie `83667237-107` (Damage, bad_target)
 
@@ -2454,15 +2445,6 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - priced +0.0125 ActionIdentity(kind='card', parts=('[0,{"playerIndex":0,"type":3},[[2,{"id":1189,"playerIndex":0}]]]', '[0,{"playerIndex":0,"type":3},[[2,{"id":666,"playerIndex":0}]]]'))
 - priced -0.0305 ActionIdentity(kind='card', parts=('[0,{"playerIndex":0,"type":3},[[2,{"id":1189,"playerIndex":0}]]]', '[0,{"playerIndex":0,"type":3},[[2,{"id":1227,"playerIndex":0}]]]'))
 
-### mega_starmie `83968638-17` (Main, wasted_resource)
-
-- Ledger chose `[8]` Attack with Turbo Flare
-- ruling was `[0]` Play Hilda
-- rationale: CRITICAL: Must use turn planner to see that using Crushing Hammer here is a waste. we will KO the opponents active.
-- priced +1.0727 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
-- priced +0.0360 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1225,"playerIndex":1}]]]',))
-- priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-
 ### mega_starmie `84897262-110` (ToHand, missed_win)
 
 - Ledger chose `[0]` Staryu
@@ -2477,7 +2459,7 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - Ledger chose `[2]` Attack with Jetting Blow
 - ruling was `[0]` Play Boss’s Orders
 - rationale: Should have gusted up their future wincon and KO it
-- priced +1.5106 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
+- priced +1.5806 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +1.2106 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
@@ -2495,9 +2477,9 @@ Boss's Orders up their benched mon with hghest retreat cost and least amount of 
 - Ledger chose `[0]` Play Lillie's Determination
 - ruling was `[5]` Attack with Turbo Flare
 - rationale: Only issue with this blunder is that this move was taken one turn too early. we dont need the Starmie now. fetching it now risks enticing our opponent to disrupt us with a judge or harlequin or something. there is no cost to just wait a turn and fetch our Starmie then.
-- priced +0.0651 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0716 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.1241 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced -0.0791 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 
 ### mega_starmie `85163634-41` (Main, wasted_resource)
 
@@ -2534,7 +2516,7 @@ Our matchup Posture feature should have caught this. needs review!
 - Ledger chose `[3]` Play Ultra Ball
 - ruling was `[5]` Attack with Jetting Blow
 - rationale: CRITICAL: Played Ultra ball for nothing. MUST check deck and discard and prize cards prior to playing fetch cards always, as to verify what exists.
-- priced +2.0051 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
+- priced +2.0155 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.9205 ActionIdentity(kind='attack', parts=('[1,{"attackId":1488,"type":13},[]]',))
 - priced +0.0376 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1121,"playerIndex":1}]]]',))
 
@@ -2554,7 +2536,7 @@ Our matchup Posture feature should have caught this. needs review!
 - rationale: CRITICAL: Play "free" cards that give us more information and a better board state, thus buddy buddy poffin and pokegear.
 
 Also a failed calculation by PLANNED gamble. it states 71% chance to get a Mega Starmie to win the game. but it forgot that Mega Starmie also requires energy AND we can only evolve our Staryu via Salvatore this turn. Thus fetching Salvatore is our only win possibility.
-- priced +0.1507 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.1394 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.1140 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
@@ -2574,7 +2556,7 @@ Also a failed calculation by PLANNED gamble. it states 71% chance to get a Mega 
 - rationale: CRITICAL: Collect information before commiting our supporter. play Pokegear, and if we got a Hilda, we could have used that to fetch a basic energy as to not use our ignition energy.
 - priced +0.0361 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0899 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1122,"playerIndex":1}]]]',))
+- priced -0.0880 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":17,"playerIndex":1}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `91394270-102` (ToActive, sequencing_error)
 
@@ -2618,8 +2600,8 @@ Also a failed calculation by PLANNED gamble. it states 71% chance to get a Mega 
 - ruling was `[]` 
 - rationale: CRITICAL: didnt attack when had the chance
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
+- priced -0.0050 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced -0.0510 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1145,"playerIndex":1}]]]',))
-- priced -0.1630 ActionIdentity(kind='retreat', parts=('[1,{"type":12},[]]',))
 
 ### mega_starmie `92091149-33` (Main, missed_win)
 
@@ -2692,7 +2674,7 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - ruling was `[7]` Attack with Jetting Blow
 - rationale: Our active is not doomed. Just attack and snipe one of their Riolus
 - priced +1.1918 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
-- priced +0.0546 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0391 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `92104376-7` (Main, sequencing_error)
@@ -2710,7 +2692,7 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - ruling was `[]` 
 - rationale: develop before attacking.
 - priced +0.1073 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
-- priced +0.0181 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0075 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### mega_starmie `92104376-86` (ToActive, prize_mismanagement)
@@ -2736,9 +2718,9 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - Ledger chose `[1]` Play Lillie's Determination
 - ruling was `[2]` Play Salvatore
 - rationale: CRITICAL: evolve our benched staryu when we can. this is about being aggresive when able
-- priced +0.1712 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.1818 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
+- priced +0.0055 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.1045 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
 
 ### mega_starmie `92131448-22` (Main, misattachment)
 
@@ -2808,9 +2790,9 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - Ledger chose `[3]` Play Lillie's Determination
 - ruling was `[]` 
 - rationale: CRITICAL: Played lillies when had ability to attach energy and play an item first.
-- priced +0.0574 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
+- priced +0.0484 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1227,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.1247 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1120,"playerIndex":0}]]]',))
+- priced -0.0700 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `92458248-23` (Main, sequencing_error)
 
@@ -2828,7 +2810,7 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - rationale: CRITICAL: This is such an enormous blunder, energy attachment valuing has a bug. our benched weakened starmie has full energy of 3, and you attach there instead of to our active full HP starmie with 0 energy.
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 - priced -0.0540 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":330,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
-- priced -0.0715 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
+- priced -0.0642 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 
 ### mega_starmie `92459166-82` (Main, sequencing_error)
 
@@ -2889,8 +2871,8 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - ruling was `[1]` Play Crushing Hammer
 - rationale: CRITICAL: you shuffled away a useful crushing hammer
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
+- priced -0.0033 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 - priced -0.0108 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced -0.0159 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
 
 ### mega_starmie `92644488-14` (Main, sequencing_error)
 
@@ -2908,7 +2890,7 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - rationale: awkward sequencing
 - priced +3.2065 ActionIdentity(kind='attack', parts=('[1,{"attackId":1487,"type":13},[]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
-- priced -0.0451 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
+- priced -0.0377 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1223,"playerIndex":1}]]]',))
 
 ### mega_starmie `92645419-127` (AttachFrom, misattachment)
 
@@ -2942,8 +2924,17 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - Ledger chose `[0]` Staryu (bench 1 · 70/70 · 2⚡)
 - ruling was `[1]` Staryu (bench 2 · 70/70)
 - rationale: with this board setup, where their active is doomed during our next turn, i would diversify energy a little by placing 2 energy on one staryu and one on another 
-- priced +0.0350 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":true,"energies":[3,3],"energyCards":[{"id":3,"playerIndex":1},{"id":3,"playerIndex":1}],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+- priced +0.0850 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":true,"energies":[3,3],"energyCards":[{"id":3,"playerIndex":1},{"id":3,"playerIndex":1}],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 - priced -0.0150 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+
+### mega_starmie `92645419-36` (Main, misattachment)
+
+- Ledger chose `[4]` Attack with Turbo Flare
+- ruling was `[0]` Evolve Mega Starmie ex → Staryu (bench 1 · 70/70 · 3⚡)
+- rationale: CRITICAL: evolve the staryu with full energy. 
+- priced +0.9266 ActionIdentity(kind='attack', parts=('[1,{"attackId":965,"type":13},[]]',))
+- priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
+- priced -0.1089 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1122,"playerIndex":1}]]]',))
 
 ### mega_starmie `92645419-64` (Main, wasted_resource)
 
@@ -2996,8 +2987,8 @@ We have an ignition energy in hand and a savlatore. that ignition energy discard
 - ruling was `[0]` Play Pokégear 3.0
 - rationale: we have our 3 staryus on board thus there is nothing left to fetch with buddy buddy poffin. therefor save the card for eventual discarding when using an ultra ball
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-- priced -0.1070 ActionIdentity(kind='attack', parts=('[0,{"attackId":1486,"type":13},[]]',))
 - priced -0.1245 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
+- priced -0.1550 ActionIdentity(kind='attack', parts=('[0,{"attackId":1486,"type":13},[]]',))
 
 ### mega_starmie `92708809-35` (Main, sequencing_error)
 
