@@ -171,6 +171,8 @@ jobs:
         shell: bash
         run: |
           targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
+          # tests/train reads a real correction record, so record changes must re-run it here.
+          targets+=(tests/train)
           [ -d tests/corrections ] && targets+=(tests/corrections)
           python -m pytest "${targets[@]}" -q --tb=short
 

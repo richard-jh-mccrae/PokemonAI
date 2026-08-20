@@ -6,6 +6,8 @@ may-end propagation, and the two budgets. Expected values are composed from sing
 the same scripts, never recomputed by hand, so the assertions read pure arithmetic relations."""
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, player,
@@ -157,7 +159,7 @@ def test_a_chain_past_the_depth_cap_scores_mid_board_and_keeps_the_root():
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
-    assert entry["swing"] == entry["swing"]        # finite, not dropped
+    assert math.isfinite(entry["swing"])           # priced, not dropped
     assert any("chain capped" in gap for gap in decision.diagnostics["gaps"])
 
 

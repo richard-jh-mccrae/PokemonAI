@@ -50,6 +50,8 @@ def test_a_non_finite_swing_scores_zero_and_logs_the_gap():
                             provider_factory=lambda _s, **_kw: provider)
     decision = decider.decide(root_obs)
     assert any("non-finite price" in gap for gap in decision.diagnostics["gaps"])
+    prices = {entry["action"]: entry["swing"] for entry in decision.diagnostics["prices"]}
+    assert prices[str(play.identity)] == 0.0     # the promised NEUTRAL score, exactly
 
 
 def test_refresh_tolerates_idless_hand_rows():
@@ -83,8 +85,9 @@ def test_the_enumerator_survives_none_counts_and_junk_option_rows():
         "effect": None, "remainDamageCounter": 0, "remainEnergyCost": 0})
     actions = enumerate_legal_actions(obs)
     assert actions
-    offered = {index for act in actions for index in act.selection}
-    assert offered <= {0, 1, 2}
+    covered = {index for act in actions
+               for selection in act.equivalent_selections for index in selection}
+    assert covered == {0, 1, 2}                  # junk keeps its index; every index covered
 
 
 def test_board_digestion_degrades_malformed_rows_like_unknown_ids():
