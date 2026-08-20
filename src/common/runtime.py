@@ -19,14 +19,16 @@ from common.deck_tracker import OwnCardModel
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
-from common.ledger import LedgerContext, LedgerDecider, preview_provider_factory
+from common.ledger import (LedgerContext, LedgerDecider, OpponentLayer,
+                           preview_provider_factory)
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.options import enumerate_legal_actions
 from common.pilot_profile import PilotProfile
 from common.pokemon_roles import general_pokemon_roles
 from common.scouting.artifact import load_artifact
-from common.scouting.briefs import load_briefs, match_brief, resolve_scouted_role_worth
+from common.scouting.briefs import (load_briefs, match_brief, resolve_scouted_role_worth,
+                                    scouted_ledger_roles)
 from common.scouting.provider import EngineCardStatProvider
 from common.scouting.read import Read, posture_gamma
 from common.scouting.scout import Scout
@@ -163,7 +165,9 @@ class BellmanRuntime:
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 overrides=getattr(strategy, "ledger_overrides", None)),
-            provider_factory=preview_provider_factory(self.provider_factory))
+            provider_factory=preview_provider_factory(self.provider_factory),
+            provider_kwargs={"registry": self.registry, "effects": self.effects,
+                             "stats": self.stats})
 
     @staticmethod
     def _player(observation, seat):
@@ -574,7 +578,39 @@ class BellmanRuntime:
         forced = self._forced_selection(observation)
         if forced is not None:
             return forced
-        return self.ledger.decide(observation)
+        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
+        gamma = posture_gamma(self.last_read)
+        brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
+        self.last_brief = brief
+        return self.ledger.decide(
+            observation, opponent=self._opponent_layer(observation, brief, gamma))
+
+    def _opponent_layer(self, observation: dict, brief, gamma: float):
+        """Scouting priced into the Ledger: card-generic roles for the bodies and discards the
+        opponent has shown (full strength — card knowledge needs no recognition), plus the
+        matched Brief's role claims and `ledger_overrides` blended in by the Read's gamma."""
+        current = observation.get("current") or {}
+        seat = int(current.get("yourIndex", 0))
+        players = current.get("players") or ()
+        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
+        bodies = tuple(body for body in
+                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
+                       if body)
+        shown = {int(body["id"]) for body in bodies if body.get("id") is not None}
+        shown.update(int(card["id"]) for card in (opponent.get("discard") or ())
+                     if isinstance(card, dict) and card.get("id") is not None)
+        roles = {card_id: tuple(card_roles) for card_id, card_roles in
+                 general_pokemon_roles(shown, self.stats, self.functions).items()}
+        brief_roles = scouted_ledger_roles(self.last_read, brief, self.stats,
+                                           self.functions) if gamma > 0.0 else {}
+        if not roles and not brief_roles:
+            return None
+        weights = self.ledger.ctx.weights
+        overrides = getattr(brief, "ledger_overrides", None) if brief is not None else None
+        if overrides:
+            weights = weights.resolve(overrides)      # a typo'd Brief key raises loud here
+        return OpponentLayer(roles=roles, brief_roles=brief_roles, weights=weights,
+                             gamma=gamma)
 
     def _decide_with_planner(self, observation: dict) -> RootDecision:
         planner = self._planner(observation)

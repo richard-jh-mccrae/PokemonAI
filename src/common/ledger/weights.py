@@ -16,7 +16,9 @@ from dataclasses import dataclass, field, fields, replace
 from typing import Mapping
 
 
-#: Worth of carrying each Role, in prizes (`pokemon_roles.POKEMON_ROLES` is the vocabulary).
+#: Worth of carrying each Role, in prizes (`pokemon_roles.POKEMON_ROLES` is the vocabulary,
+#: plus the Brief target vocabulary — disruption_target / support_pokemon / engine — which only
+#: scouted OPPONENT bodies ever carry).
 ROLE_WORTH: dict[str, float] = {
     "primary_attacker": 0.50,
     "backup_attacker": 0.35,
@@ -28,9 +30,14 @@ ROLE_WORTH: dict[str, float] = {
     "item_locker": 0.30,
     "retreat_assist": 0.20,
     "gust": 0.30,
+    "disruption_target": 0.35,
+    "support_pokemon": 0.25,
+    "engine": 0.40,
 }
 
 #: Worth by behavioural tag for cards whose Role table has nothing to say (mostly Trainers).
+#: A 0.0 entry is a live lever the training rounds have not raised yet: the card still prices
+#: through its kind fallback, but the tag can now be tuned without a code change.
 TAG_WORTH: dict[str, float] = {
     "draw": 0.18,
     "search": 0.15,
@@ -40,7 +47,27 @@ TAG_WORTH: dict[str, float] = {
     "gust": 0.25,
     "heal": 0.12,
     "switch": 0.12,
-    "recovery": 0.12,
+    "bench_fill": 0.0,
+    "clutch_heal": 0.0,
+    "cost_discard": 0.0,
+    "dig": 0.0,
+    "dig:2": 0.0,
+    "dig:3": 0.0,
+    "discard_energy_recur": 0.0,
+    "discard_eot": 0.0,
+    "energy_denial": 0.0,
+    "item_lock": 0.0,
+    "opener": 0.0,
+    "recycle": 0.0,
+    "recycle_line": 0.0,
+    "rush_evolve": 0.0,
+    "shuffle_hand": 0.0,
+    "spread": 0.0,
+    "stall": 0.0,
+    "supporter_tutor": 0.0,
+    "tutor_energy": 0.0,
+    "tutor_mega": 0.0,
+    "tutor_trainer": 0.0,
 }
 
 #: Fallback worth by card class when neither Roles nor tags price it.
@@ -51,6 +78,7 @@ KIND_WORTH: dict[str, float] = {
     "tool": 0.08,
     "stadium": 0.10,
     "energy": 0.10,
+    "special_energy": 0.10,
 }
 
 
@@ -95,6 +123,10 @@ class LedgerWeights:
     win_value: float = 100.0
     unknown_card_worth: float = 0.05
     opponent_unknown_card_worth: float = 0.12
+    #: A turn-continuing option must clear this swing to be worth acting on; below it the best
+    #: turn-ender decides. 0.0 keeps the historical "any strictly positive swing acts" bar —
+    #: the float-noise floor still applies underneath, so this lever never sharpens ties.
+    act_threshold: float = 0.0
 
     # Flat penalties for the active body's special conditions.
     status_asleep: float = 0.15

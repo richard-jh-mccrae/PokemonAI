@@ -32,6 +32,12 @@ class OptionPrice:
     swing: float
     ends_turn: bool
     gaps: tuple[str, ...]
+    #: The option shuffles our hand away (a Refresh at the root). A hand-ender destroys every
+    #: other hand card's chance to be played first, the way an attack ends the whole turn.
+    refresh: bool = False
+    #: The option restocks the hand (a fetch/draw Trainer): its yield would be shuffled away
+    #: by a pending hand-ender, so it queues BEHIND one instead of holding it back.
+    restocks: bool = False
 
 
 def price_actions(state, board: BoardState, baseline: float, provider,
@@ -43,15 +49,16 @@ def price_actions(state, board: BoardState, baseline: float, provider,
             prices.append(OptionPrice(action, 0.0, True, ()))
             continue
         walk = _Walk(provider, ctx, board.decklist)
-        value, ends_turn = walk.node(state, board, provider.transition(state, action),
-                                     CHAIN_DEPTH_CAP)
+        node = provider.transition(state, action)
+        value, ends_turn = walk.node(state, board, node, CHAIN_DEPTH_CAP)
         swing = value - baseline
         if not math.isfinite(swing):
             # Belt behind the weights' finite check: a NaN/inf swing would make every price
             # unrankable. Score neutral, SAY SO — a visible gap, never a silent absorb.
             walk.gaps.append(f"non-finite price for {action.identity}; scored zero")
             swing = 0.0
-        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps)))
+        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps),
+                                  refresh=isinstance(node, Refresh)))
     return tuple(prices)
 
 

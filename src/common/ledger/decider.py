@@ -9,6 +9,9 @@ in `RootDecision.diagnostics`; a `gap_sink` callable receives one record per dec
 a gap — the honest worklist, counted per decision affected."""
 from __future__ import annotations
 
+import json
+from dataclasses import replace
+
 from common.api import RootDecision
 from common.board import BoardState
 from common.strategy.context import _MAIN
@@ -18,6 +21,12 @@ from .preview import NOISE_FLOOR, OptionPrice, price_actions
 from .seam import LedgerNativeProvider, PreviewState
 from .worth import LedgerContext
 
+#: Tags whose play's WHOLE yield is cards sitting in hand (discard-pile recycling): that yield
+#: is exactly what a pending hand-shuffle throws away, so these queue behind the shuffle.
+#: Deliberately narrow — corpus rulings want bench-fillers, info items and tutors FIRST (their
+#: yield is benched, read, or played before the shuffle), and only the recycle class after.
+_RESTOCK_TAGS = frozenset({"recycle", "recycle_line"})
+
 
 class LedgerUnavailable(RuntimeError):
     """The transition seam could not open for this observation."""
@@ -25,27 +34,32 @@ class LedgerUnavailable(RuntimeError):
 
 class LedgerDecider:
     def __init__(self, deck, deck_name: str, ctx: LedgerContext, *,
-                 provider_factory=LedgerNativeProvider, gap_sink=None):
+                 provider_factory=LedgerNativeProvider, provider_kwargs=None, gap_sink=None):
         self.deck = tuple(int(card_id) for card_id in deck)
         self.deck_name = str(deck_name)
         self.ctx = ctx
         self.provider_factory = provider_factory
+        #: Fact sources the engine adapters read mid-transition (registry/effects/stats). A
+        #: bare provider raises on fact-needing transitions (bench damage, energy typing) and
+        #: those options silently price zero — pass what the runtime already holds.
+        self.provider_kwargs = dict(provider_kwargs or {})
         self.gap_sink = gap_sink
 
-    def decide(self, observation) -> RootDecision:
+    def decide(self, observation, *, opponent=None) -> RootDecision:
+        ctx = self.ctx.with_opponent(opponent)
         board = BoardState.root(observation, decklist=self.deck)
         # The root is a PreviewState too: deck knowledge comes from BoardState, so the Ledger
         # path constructs no DecisionState anywhere (pinned by tests/ledger/test_seam.py).
         state = PreviewState(observation, board.seat, "root", deck=self.deck,
                              deck_counts=board.deck_counts or (),
                              prize_counts=board.own_prizes or ())
-        baseline = evaluate(board, self.ctx)
-        provider = self.provider_factory(state)
+        baseline = evaluate(board, ctx)
+        provider = self.provider_factory(state, **self.provider_kwargs)
         if not getattr(provider, "available", True):
             _close_quietly(provider)               # a half-opened engine session must not leak
             raise LedgerUnavailable(str(getattr(provider, "_error", "provider unavailable")))
         try:
-            prices = price_actions(state, board, baseline.total, provider, self.ctx)
+            prices = price_actions(state, board, baseline.total, provider, ctx)
         finally:
             # A close() failing on an already-broken session must not mask the pricing outcome.
             _close_quietly(provider)
@@ -54,6 +68,10 @@ class LedgerDecider:
 
         raw_context = (observation.get("select") or {}).get("context")
         context = _MAIN if raw_context is None else int(raw_context)
+        if context == _MAIN:
+            prices = tuple(
+                replace(price, restocks=True) if self._restocks_hand(price)
+                else price for price in prices)
         chosen = self._choose(prices, forced=context != _MAIN)
         gaps = tuple(gap for price in prices for gap in price.gaps) + baseline.gaps
         if gaps and self.gap_sink is not None:
@@ -65,6 +83,8 @@ class LedgerDecider:
             diagnostics={
                 "backend": "ledger", "deck": self.deck_name,
                 "weights": self.ctx.weights.identity,
+                **({"opponent_gamma": round(opponent.gamma, 4)}
+                   if opponent is not None else {}),
                 "baseline": baseline.total, "gaps": sorted(set(gaps)),
                 "prices": tuple({"action": str(price.action.identity),
                                  "selection": list(price.action.selection),
@@ -72,15 +92,55 @@ class LedgerDecider:
                                 for price in _ranked(prices)),
             })
 
+    def _restocks_hand(self, price) -> bool:
+        identity = price.action.identity
+        if identity.kind != "play":
+            return False
+        # Raw select options reference hand cards by POSITION; the resolved card ids live in
+        # the canonical identity parts, so the played card is read from there.
+        for part in identity.parts:
+            try:
+                payload = json.loads(part)
+            except (TypeError, ValueError):
+                continue
+            for card_id in _card_ids(payload):
+                facts = self.ctx.facts(card_id)
+                if facts is not None and _RESTOCK_TAGS.intersection(
+                        getattr(facts, "tags", ()) or ()):
+                    return True
+        return False
+
     def _choose(self, prices, *, forced: bool) -> OptionPrice:
         if forced:
             return _ranked(prices)[0]
+        threshold = max(NOISE_FLOOR, self.ctx.weights.act_threshold)
         continuing = [price for price in prices
-                      if not price.ends_turn and price.swing > NOISE_FLOOR]
+                      if not price.ends_turn and price.swing > threshold]
+        refreshes = [price for price in continuing if price.refresh]
+        if refreshes:
+            # A hand-shuffle is a hand-ender: plays that SPEND hand cards go first (their
+            # value survives the shuffle), the shuffle next, and fetch/draw plays queue
+            # behind it — fetching into a hand about to be shuffled wastes the fetch.
+            holders = [price for price in continuing
+                       if not price.refresh and not price.restocks]
+            return _ranked(holders or refreshes)[0]
         if continuing:
             return _ranked(continuing)[0]
         enders = [price for price in prices if price.ends_turn]
         return _ranked(enders or prices)[0]
+
+
+def _card_ids(node):
+    """Card ids referenced inside one raw select option: dicts with an `id` and no board-body
+    shape (`hp`) are card refs, wherever the option nests them."""
+    if isinstance(node, dict):
+        if node.get("id") is not None and "hp" not in node:
+            yield int(node["id"])
+        for value in node.values():
+            yield from _card_ids(value)
+    elif isinstance(node, (list, tuple)):
+        for value in node:
+            yield from _card_ids(value)
 
 
 def _close_quietly(provider) -> None:

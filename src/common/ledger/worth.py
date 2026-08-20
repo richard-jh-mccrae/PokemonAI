@@ -26,12 +26,32 @@ from .weights import LedgerWeights
 
 
 @dataclass(frozen=True)
+class OpponentLayer:
+    """Scouting's read of the opponent, priced fail-open.
+
+    ``roles`` are card-generic role claims (function-tag defaults for bodies the opponent has
+    shown) — card knowledge, applied at full strength. ``brief_roles`` are RECOGNITION claims
+    (the matched Brief's declarations plus the Read's intel) and ``weights`` is the general
+    vector bent by that Brief's ``ledger_overrides`` — both blended in by ``gamma``, the Read's
+    confidence ramp, so a shaky recognition fades toward the general read instead of
+    committing to the wrong archetype."""
+
+    roles: Mapping[int, tuple[str, ...]]
+    brief_roles: Mapping[int, tuple[str, ...]]
+    weights: LedgerWeights
+    gamma: float
+
+
+@dataclass(frozen=True)
 class LedgerContext:
     """Everything deck-scoped the evaluator needs: weights, Roles, and the store itself."""
 
     weights: LedgerWeights
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
+    #: The per-decision scouting layer for THEIR side's worth reads; None prices the opponent
+    #: exactly as before the wiring (store defaults, unknown floor).
+    opponent: OpponentLayer | None = None
 
     @classmethod
     def build(cls, *, weights: LedgerWeights | None = None,
@@ -44,6 +64,11 @@ class LedgerContext:
                 merged[int(card_id)] = tuple(declared)
         return cls(weights=resolved, roles=merged, store=card_store())
 
+    def with_opponent(self, layer: OpponentLayer | None) -> "LedgerContext":
+        from dataclasses import replace
+
+        return self if layer is self.opponent else replace(self, opponent=layer)
+
     def facts(self, card_id: int):
         return self.store.get(int(card_id))
 
@@ -51,27 +76,50 @@ class LedgerContext:
         return self.roles.get(int(card_id), ())
 
 
-def base_worth(card_id: int, facts, ctx: LedgerContext) -> tuple[float, str | None]:
-    """A card's standing worth in prizes, plus a coverage gap when the store cannot see it."""
-    weights = ctx.weights
+def _merge_roles(*claims) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(role for group in claims for role in (group or ())))
+
+
+def _resolve_worth(card_id: int, facts, weights: LedgerWeights,
+                   roles: tuple[str, ...]) -> tuple[float, str | None]:
     pinned = weights.card_worth_map.get(int(card_id))
     if pinned is not None:
         return pinned, None
+    role_read = max((weights.role_worth.get(role, 0.0) for role in roles), default=0.0)
     if facts is None:
-        return weights.unknown_card_worth, f"unknown card {int(card_id)}"
-    role_read = max((weights.role_worth.get(role, 0.0)
-                     for role in ctx.card_roles(card_id) or getattr(facts, "default_roles", ())),
-                    default=0.0)
+        # No record: roles (a scouted claim, or nothing) are all there is to price.
+        return max(role_read, weights.unknown_card_worth), f"unknown card {int(card_id)}"
     tag_read = max((weights.tag_worth.get(tag, 0.0)
                     for tag in getattr(facts, "tags", ()) or ()), default=0.0)
     if isinstance(facts, PokemonCard):
         kind = "pokemon"
     elif isinstance(facts, EnergyCard):
-        kind = "energy"
+        kind = ("special_energy" if getattr(facts, "kind", "") == "special_energy"
+                else "energy")
     else:
         kind = getattr(facts, "kind", "item")
     kind_read = weights.kind_worth.get(kind, weights.unknown_card_worth)
     return max(role_read, tag_read, kind_read), None
+
+
+def base_worth(card_id: int, facts, ctx: LedgerContext, *,
+               own: bool = True) -> tuple[float, str | None]:
+    """A card's standing worth in prizes, plus a coverage gap when the store cannot see it.
+
+    For THEIR side, scouting layers in: card-generic role claims price at full strength, and
+    the matched Brief's claims (roles and weight overrides) blend in by the Read's confidence
+    — `general + gamma x (scouted - general)`, so gamma 0 is exactly the general read."""
+    layer = None if own else ctx.opponent
+    declared = ctx.card_roles(card_id) or getattr(facts, "default_roles", ()) or ()
+    base_roles = declared if layer is None else _merge_roles(
+        declared, layer.roles.get(int(card_id)))
+    general, gap = _resolve_worth(card_id, facts, ctx.weights, tuple(base_roles))
+    if layer is None or layer.gamma <= 0.0:
+        return general, gap
+    scouted, _ = _resolve_worth(
+        card_id, facts, layer.weights,
+        _merge_roles(base_roles, layer.brief_roles.get(int(card_id))))
+    return general + layer.gamma * (scouted - general), gap
 
 
 # --- energy usability -------------------------------------------------------------------

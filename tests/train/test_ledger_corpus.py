@@ -188,6 +188,26 @@ def test_sweep_partitions_reviewed_before_replaying(monkeypatch):
     assert [r["id"] for r in result["retired"]] == ["ep-2"]
 
 
+def test_damage_targets_are_priced_with_engine_facts():
+    """Frame 82749168-50: a Damage-context snipe menu with a free 50 HP KO on it. A bare
+    provider (no registry) raises 'damage amount is absent' inside every transition and all
+    targets price zero, so the brain takes index 0; with the runtime's fact sources passed
+    through the decider, the KO snipe prices its prize and the ruled target wins."""
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    store = (Path(__file__).resolve().parents[2] / "data" / "corrections"
+             / "mega_starmie_20260630_b7e483a")
+    frame = next(record for record in load_corrections(store)
+                 if record.obs is not None and str(record.episode_id) == "82749168"
+                 and int((record.decision or {}).get("frame", -1)) == 50)
+    produced = _replay_one("mega_starmie", frame)
+    assert produced["backend"] == "ledger"
+    assert produced["agrees"] is True
+
+
 def test_a_crashed_decision_is_surfaced_even_when_it_agrees():
     """A dead brain that happened to pick the ruled action must show as a CRASH in the
     human-facing dashboard, never as a quiet success."""
