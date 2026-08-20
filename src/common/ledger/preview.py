@@ -88,14 +88,17 @@ class _Walk:
             self.gaps.extend(gaps)
             return value, False
         if isinstance(node, RevealChoice):
-            by_label = {edge.label: edge.node for edge in node.choices}
             chooser = max if node.actor is Actor.OURS else min
-            value = 0.0
+            priced = {edge.label: self.node(state, board, edge.node, depth - 1)
+                      for edge in node.choices}
+            value, ends = 0.0, False
             for outcome in node.outcomes:
-                best = chooser(self.node(state, board, by_label[label], depth - 1)[0]
-                               for label in outcome.choices)
-                value += outcome.probability * best
-            return value, False
+                best_value, best_ends = chooser((priced[label] for label in outcome.choices),
+                                                key=lambda pair: pair[0])
+                value += outcome.probability * best_value
+                # MAY-end counts as ends here too: the leg the revealed set selects decides.
+                ends = ends or best_ends
+            return value, ends
         if isinstance(node, Choice):
             chooser = max if node.actor is Actor.OURS else min
             return chooser((self.node(state, board, edge.node, depth - 1)

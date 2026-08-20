@@ -16,6 +16,7 @@ from typing import Mapping
 
 from common.cards import card_store, pokemon_default_roles
 from common.cards.card_facts import COLORLESS, EnergyCard, PokemonCard, TrainerCard
+from common.cards.functions.energy import provision_units
 
 from .weights import LedgerWeights
 
@@ -223,7 +224,7 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
         colorless_only = False
         for body in demand.bodies:
             fills = _slot_fill(facts.provides, body.card.facts, body.energies, ctx)
-            if fills == "typed":
+            if fills == "typed" or _multi_provision_live(facts, body):
                 return 1.0, None
             colorless_only = colorless_only or fills == "colorless"
         return (weights.demand_colorless_only if colorless_only
@@ -234,6 +235,26 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
         if fetches and len(fetches) == len(clauses):
             return _fetch_liveness(fetches, demand, ctx, deck_counts), None
     return 1.0, None
+
+
+def _multi_provision_live(facts, body) -> bool:
+    """A special energy whose record provides several units to THIS body (Ignition's
+    `energy_provide` clause: one, or three on an evolution) reads fully live when the body can
+    absorb at least two of them at once — one card doing two basics' work. Bodies are read as
+    they stand: multi-provision on a future evolution is the speculative colorless value the
+    marginal model refuses to pay (module docstring)."""
+    body_facts = body.card.facts
+    if body_facts is None:
+        return False
+    provided = provision_units(facts, evolved=body_facts.evolves_from is not None)
+    if provided < 2:
+        return False
+    counts = Counter(body.energies)
+    for attack in getattr(body_facts, "attacks", ()) or ():
+        _, open_colorless = _unfilled(attack.cost, counts)
+        if open_colorless >= 2:
+            return True
+    return False
 
 
 def _fetch_liveness(fetches, demand: Demand, ctx: LedgerContext, deck_counts) -> float:

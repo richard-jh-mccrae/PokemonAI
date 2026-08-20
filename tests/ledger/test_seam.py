@@ -79,6 +79,16 @@ def test_preview_state_enumerates_the_same_menu_as_decisionstate():
     assert preview.legal_actions == state.legal_actions
 
 
+def test_the_preview_seam_refuses_multiple_hidden_worlds():
+    """Identity keys never merge worlds, so choosing per-world inside a forced menu would
+    decide on facts the player cannot know (strategy fusion) — construction refuses before it
+    ever opens an engine session."""
+    frame = _main_frames(1)[0]
+    state = PreviewState(frame.obs, 0, "root", deck=DECK)
+    with pytest.raises(ValueError):
+        LedgerNativeProvider(state, world_count=4)
+
+
 def test_factory_mapping_targets_the_preview_variants():
     from functools import partial
     assert preview_provider_factory(None) is LedgerNativeProvider

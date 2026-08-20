@@ -65,3 +65,32 @@ def test_markdown_render_carries_the_rationale_beside_the_miss():
     assert "rationale: why" in rendered
     assert "priced -0.2000 x" in rendered
     assert "Generality floor" in rendered
+
+
+def test_the_real_producer_feeds_the_dashboard_shape():
+    """Every other test here builds rows with the `row()` fixture, a hand-maintained mirror of
+    `_replay_one`'s output — the check-the-serializer trap. This replays ONE real correction
+    frame through the real producer (fresh runtime, live Ledger brain, cgpy previews) and runs
+    the result through payload + render_markdown, so a shape drift between the producer and
+    the consumers fails here instead of shipping silently."""
+    from pathlib import Path
+
+    from train.blunder.store import load_corrections
+    from train.ledger_corpus import _replay_one
+
+    store = (Path(__file__).resolve().parents[2] / "data" / "corrections"
+             / "mega_starmie_20260813_c9991b12")
+    frame = next(record for record in load_corrections(store)
+                 if record.obs is not None
+                 and (record.obs.get("select") or {}).get("context") == 0
+                 and int((record.obs.get("current") or {}).get("turn", 0)) > 0)
+    produced = _replay_one("mega_starmie", frame)
+
+    assert produced["backend"] == "ledger"      # the live brain answered, not a fallback
+    fixture_keys = set(row("a_deck", "r1", agrees=True)) - {"ledger"}
+    assert fixture_keys <= set(produced), fixture_keys - set(produced)
+    if "ledger" in produced:                    # misses carry the price breakdown
+        assert set(row("a_deck", "r1", agrees=True)["ledger"]) <= set(produced["ledger"])
+
+    rendered = render_markdown(payload([produced]))
+    assert "Generality floor" in rendered
