@@ -67,6 +67,7 @@ class LedgerWeights:
 
     # Demand discounts on hand/deck worth.
     demand_dead: float = 0.40
+    demand_colorless_only: float = 0.70
     surplus_copy: float = 0.60
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.
@@ -75,6 +76,10 @@ class LedgerWeights:
     # The scarce goods and liabilities of having bodies in play.
     bench_slot_value: float = 0.06
     prize_liability: float = 0.04
+
+    # The Active Spot: worth extra when its occupant can actually pay an attack.
+    active_premium: float = 0.08
+    active_unready_fraction: float = 0.30
 
     # Game-level terms.
     prize_race: float = 1.00

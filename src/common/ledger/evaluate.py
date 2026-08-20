@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from common.board import BoardState
 from common.board.nodes import Body, Side
 
-from .worth import Demand, LedgerContext, base_worth, demand_scale, usable_units
+from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, demand_scale,
+                    usable_units)
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,11 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
                                     discount=weights.surplus_copy ** copies[body.card.card_id])
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
+    if side.active is not None:
+        worth, _ = base_worth(side.active.card.card_id, side.active.card.facts, ctx)
+        ready = any_attack_payable(side.active.card.facts, side.active.energies)
+        yield "active", (weights.active_premium * worth
+                         * (1.0 if ready else weights.active_unready_fraction))
     yield "bench_slots", weights.bench_slot_value * _harmonic(
         max(0, side.bench_max - len(side.bench)))
     yield "liability", -weights.prize_liability * sum(

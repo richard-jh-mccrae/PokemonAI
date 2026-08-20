@@ -117,18 +117,34 @@ def _unfilled(cost, attached: Counter) -> tuple[Counter, int]:
     return open_typed, max(0, colorless - leftovers)
 
 
-def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext) -> bool:
-    """Marginal usability of one MORE unit of this color on this body."""
+def any_attack_payable(body_facts, attached) -> bool:
+    """Can the body pay some printed attack of its own with what is already attached?"""
+    counts = Counter(attached)
+    for attack in getattr(body_facts, "attacks", ()) or ():
+        open_typed, open_colorless = _unfilled(attack.cost, counts)
+        if not open_typed and open_colorless == 0:
+            return True
+    return False
+
+
+def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext) -> str:
+    """What one MORE unit of this color would fill on this body: a typed slot (through the
+    forward line), only a colorless slot (own attacks), or nothing."""
     counts = Counter(attached)
     for attack in _line_attacks(body_facts, ctx):
         open_typed, _ = _unfilled(attack.cost, counts)
         if open_typed.get(unit, 0) > 0:
-            return True
+            return "typed"
     for attack in _line_attacks(body_facts, ctx, own_only=True):
-        open_typed, open_colorless = _unfilled(attack.cost, counts)
-        if open_colorless > 0 or open_typed.get(unit, 0) > 0:
-            return True
-    return False
+        _, open_colorless = _unfilled(attack.cost, counts)
+        if open_colorless > 0:
+            return "colorless"
+    return "dead"
+
+
+def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext) -> bool:
+    """Marginal usability of one MORE unit of this color on this body."""
+    return _slot_fill(unit, body_facts, attached, ctx) != "dead"
 
 
 def usable_units(body_facts, attached, ctx: LedgerContext) -> int:
@@ -178,33 +194,41 @@ def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
                  ctx: LedgerContext, deck_counts) -> float:
     """The multiplier demand puts on this copy's hand/deck worth (1.0 = fully live)."""
     weights = ctx.weights
-    live, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)
-    scale = 1.0 if live else weights.demand_dead
+    scale, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)
     if capacity is not None and copies_before >= capacity:
         scale *= weights.surplus_copy ** (copies_before - capacity + 1)
     return scale
 
 
 def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
-    """(is the card's enabling condition on the board, how many copies can the board consume)."""
+    """(demand multiplier for the card's enabling condition, how many copies the board can
+    consume). An energy that only ever pays colorless slots is a lesser want than one filling
+    a typed slot of a printed attack."""
+    weights = ctx.weights
     if facts is None:
-        return True, None
+        return 1.0, None
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
-            return demand.free_bench > 0, max(1, demand.free_bench)
+            live = demand.free_bench > 0
+            return (1.0 if live else weights.demand_dead), max(1, demand.free_bench)
         targets = demand.body_name_counts.get(facts.evolves_from, 0)
-        return targets > 0, max(1, targets) if targets else 1
+        return ((1.0, max(1, targets)) if targets else (weights.demand_dead, 1))
     if isinstance(facts, EnergyCard):
+        colorless_only = False
         for body in demand.bodies:
-            if unit_fills_a_slot(facts.provides, body.card.facts, body.energies, ctx):
-                return True, None
-        return False, None
+            fills = _slot_fill(facts.provides, body.card.facts, body.energies, ctx)
+            if fills == "typed":
+                return 1.0, None
+            colorless_only = colorless_only or fills == "colorless"
+        return (weights.demand_colorless_only if colorless_only
+                else weights.demand_dead), None
     if isinstance(facts, TrainerCard):
         clauses = tuple(getattr(facts, "clauses", ()) or ())
         fetches = tuple(c for c in clauses if c.kind == "fetch" and c.zone == "deck")
         if fetches and len(fetches) == len(clauses):
-            return _fetch_is_live(fetches, demand, ctx, deck_counts), None
-    return True, None
+            live = _fetch_is_live(fetches, demand, ctx, deck_counts)
+            return (1.0 if live else weights.demand_dead), None
+    return 1.0, None
 
 
 def _fetch_is_live(fetches, demand: Demand, ctx: LedgerContext, deck_counts) -> bool:
@@ -239,5 +263,5 @@ def _fetchable(fetches, target) -> bool:
     return False
 
 
-__all__ = ("Demand", "LedgerContext", "base_worth", "demand_scale", "unit_fills_a_slot",
-           "usable_units")
+__all__ = ("Demand", "LedgerContext", "any_attack_payable", "base_worth", "demand_scale",
+           "unit_fills_a_slot", "usable_units")
