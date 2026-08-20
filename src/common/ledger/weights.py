@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field, fields, replace
 from typing import Mapping
 
@@ -141,24 +142,33 @@ class LedgerWeights:
             if prefix == "role" and name:
                 if name not in roles and name not in _role_vocabulary():
                     raise KeyError(f"unknown ledger weight {key!r}")
-                roles[name] = float(value)
+                roles[name] = _finite(key, value)
             elif prefix == "tag" and name:
                 if name not in tags and name not in _tag_vocabulary():
                     raise KeyError(f"unknown ledger weight {key!r}")
-                tags[name] = float(value)
+                tags[name] = _finite(key, value)
             elif prefix == "kind" and name:
                 if name not in kinds:
                     raise KeyError(f"unknown ledger weight {key!r}")
-                kinds[name] = float(value)
+                kinds[name] = _finite(key, value)
             elif prefix == "card" and name:
-                cards[int(name)] = float(value)
+                cards[int(name)] = _finite(key, value)
             elif str(key) in scalar_names:
-                scalars[str(key)] = float(value)
+                scalars[str(key)] = _finite(key, value)
             else:
                 raise KeyError(f"unknown ledger weight {key!r}")
         return replace(self, roles=tuple(sorted(roles.items())),
                        tags=tuple(sorted(tags.items())), kinds=tuple(sorted(kinds.items())),
                        card_worth=tuple(sorted(cards.items())), **scalars)
+
+
+def _finite(key, value) -> float:
+    """A non-finite weight poisons every swing into an unrankable NaN/inf: refuse at resolve
+    time, where the typo is one line away, not mid-match where it reads as a brain crash."""
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"ledger weight {key!r} must be finite, got {value!r}")
+    return number
 
 
 def _role_vocabulary() -> frozenset:

@@ -118,3 +118,16 @@ def test_a_log_row_missing_its_serial_or_attack_id_is_skipped_not_crashed():
 def test_a_body_with_no_serial_is_barred_from_nothing():
     locks = fold_attack_locks({}, [_attack(86, MEGA_BRAVE)], turn=8)
     assert locked_attack_ids(locks, {"serial": None, "preEvolution": None}, 8) == frozenset()
+
+
+def test_malformed_log_rows_are_skipped_never_fatal():
+    """Audit-proven crash shapes: a None row, a None type, non-numeric attackId and serial
+    strings. Junk rows change nothing — the well-formed row beside them still folds."""
+    good = {"type": LOG_ATTACK, "serial": 7, "attackId": MEGA_BRAVE}
+    expected = fold_attack_locks({}, [good], turn=4)
+    assert expected                              # positive control: the clean fold records it
+    hostile = [None, "junk", {"type": None},
+               {"type": LOG_ATTACK, "attackId": "x", "serial": 5},
+               {"type": LOG_ATTACK, "attackId": MEGA_BRAVE, "serial": "y"},
+               good, {"type": "weird"}]
+    assert fold_attack_locks({}, hostile, turn=4) == expected

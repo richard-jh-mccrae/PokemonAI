@@ -418,8 +418,8 @@ class BellmanRuntime:
     def _forced_selection(self, observation):
         select = observation.get("select") or {}
         options = tuple(select.get("option") or ())
-        minimum = int(select.get("minCount", 0))
-        maximum = int(select.get("maxCount", len(options)))
+        minimum = _int_field(select, "minCount", 0)
+        maximum = _int_field(select, "maxCount", len(options))
         if len(options) > 1 or minimum != maximum or minimum != len(options):
             return None
         self._plan_suffix = ()
@@ -434,8 +434,21 @@ class BellmanRuntime:
     def decide(self, observation: dict) -> RootDecision:
         self.last_deadline_hit = False
         self.last_decision_limit = None
+        try:
+            return self._decide(observation)
+        except Exception as exc:
+            # Hiding a brain crash breeds unfixable bugs: AGENT_BRAIN_STRICT=1 re-raises for
+            # offline harnesses; deployment logs the full traceback (LEDGER-CRASH, greppable)
+            # and carries a bounded report in diagnostics, THEN saves the match.
+            if os.environ.get("AGENT_BRAIN_STRICT") == "1":
+                raise
+            report = self._crash_report(observation, exc)
+            return self._fallback_decision(observation, f"exception:{type(exc).__name__}",
+                                           error=report)
+
+    def _decide(self, observation: dict) -> RootDecision:
         current = observation.get("current") or {}
-        if int(current.get("turn", 0)) <= 0:
+        if _int_field(current, "turn", 0) <= 0:
             self._plan_suffix = ()
             self._proof_suffix = ()
             self._proof_id = ""
@@ -447,12 +460,12 @@ class BellmanRuntime:
         # contribute its ATTACK rows, or the delta carries them away for good.
         self._attack_locks = fold_attack_locks(
             self._attack_locks, observation.get("logs"),
-            turn=int(current.get("turn", 0)))
+            turn=_int_field(current, "turn", 0))
         if self._attack_locks:
             observation["attack_locks"] = self._attack_locks
-        scope = (int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
+        scope = (_int_field(current, "turn", 0), _int_field(current, "yourIndex", 0))
         select = observation.get("select") or {}
-        context = int(select.get("context", -1))
+        context = _int_field(select, "context", -1)
         effect = select.get("effect") or {}
         effect_key = tuple(effect.get(key) for key in ("playerIndex", "id", "serial")) \
             if effect else None
@@ -485,19 +498,30 @@ class BellmanRuntime:
                     self._fallback_scope = scope
                     self._fallback_effect = effect_key
             return decision
-        except Exception as exc:
-            return self._fallback_decision(observation, f"exception:{type(exc).__name__}")
         finally:
             if collector_was_enabled:
                 gc.enable()
 
-    def _fallback_decision(self, observation: dict, cause: str) -> RootDecision:
+    @staticmethod
+    def _crash_report(observation: dict, exc: Exception) -> dict:
+        select = observation.get("select") or {}
+        current = observation.get("current") or {}
+        trace = traceback.format_exc()
+        print(f"LEDGER-CRASH turn={current.get('turn')} seat={current.get('yourIndex')} "
+              f"context={select.get('context')} options={len(select.get('option') or ())}: "
+              f"{type(exc).__name__}: {exc}\n{trace}", file=sys.stderr, flush=True)
+        return {"type": type(exc).__name__, "message": str(exc)[:500],
+                "traceback_tail": trace[-2000:]}
+
+    def _fallback_decision(self, observation: dict, cause: str,
+                           error: dict | None = None) -> RootDecision:
         chosen = tuple(self._strategy_fallback_selection(observation))
         select = observation.get("select") or {}
         current = observation.get("current") or {}
-        if int(select.get("context", -1)) != 0:
+        context = _int_field(select, "context", -1)
+        if context != 0:
             self._fallback_scope = (
-                int(current.get("turn", 0)), int(current.get("yourIndex", 0)))
+                _int_field(current, "turn", 0), _int_field(current, "yourIndex", 0))
             effect = select.get("effect") or {}
             self._fallback_effect = (tuple(effect.get(key) for key in (
                 "playerIndex", "id", "serial")) if effect else self._fallback_effect)
@@ -506,11 +530,11 @@ class BellmanRuntime:
         diagnostics = {
             "backend": "strategy-fallback",
             "fallback": {"cause": cause, "latched": self._fallback_scope is not None,
-                         "context": int(select.get("context", -1)), "chosen": chosen},
+                         "context": context, "chosen": chosen,
+                         **({"error": error} if error else {})},
         }
         return RootDecision(
-            chosen, ActionIdentity("strategy_fallback", (int(select.get("context", -1)),)),
-            0.0, False, diagnostics)
+            chosen, ActionIdentity("strategy_fallback", (context,)), 0.0, False, diagnostics)
 
     def _strategy_fallback_selection(self, observation: dict) -> list[int]:
         default = _last_resort_selection(observation)
@@ -620,11 +644,27 @@ def _read_deck() -> list[int]:
         return [int(value) for value in handle.read().splitlines()[:60] if value.strip()]
 
 
+def _int_field(mapping, key, default: int) -> int:
+    """`int(mapping.get(key, default))` that survives present-but-None: the deployed dialect
+    pads absent fields with None, and `or` would eat a legal 0."""
+    value = (mapping or {}).get(key, default)
+    return default if value is None else int(value)
+
+
 def _last_resort_selection(observation: dict) -> list[int]:
-    """Deterministic legal choice when planning cannot return."""
+    """Deterministic legal choice when planning cannot return. TOTAL by contract: this is the
+    last shell before a forfeit, so any malformed shape degrades to the first offered index
+    rather than raising a second time."""
     select = observation.get("select") or {}
     options = tuple(select.get("option") or ())
-    context = int(select.get("context", -1))
+    try:
+        return _last_resort_ranked(select, options, observation)
+    except Exception:
+        return [0] if options else []
+
+
+def _last_resort_ranked(select, options, observation: dict) -> list[int]:
+    context = _int_field(select, "context", -1)
     end_index = next((index for index, option in enumerate(options)
                       if isinstance(option, dict) and option.get("type") is not None
                       and int(option["type"]) == _END),

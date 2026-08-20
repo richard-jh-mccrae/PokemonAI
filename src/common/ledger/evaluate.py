@@ -76,8 +76,9 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
         ready = any_attack_payable(side.active.card.facts, side.active.energies)
         yield "active", (weights.active_premium * worth
                          * (1.0 if ready else weights.active_unready_fraction))
+    # The clamp bounds a corrupt benchMax: no printed format offers more than 8 slots.
     yield "bench_slots", weights.bench_slot_value * _harmonic(
-        max(0, side.bench_max - len(side.bench)))
+        min(8, max(0, side.bench_max - len(side.bench))))
     yield "liability", -weights.prize_liability * sum(
         max(0, _prize_value(body) - 1) for body in side.bodies)
 

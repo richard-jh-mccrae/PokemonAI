@@ -8,6 +8,7 @@ the last board it could see and logs the gap; it never deletes the root option (
 lesson: a cap must not veto the action carrying the turn's value)."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
@@ -44,7 +45,13 @@ def price_actions(state, board: BoardState, baseline: float, provider,
         walk = _Walk(provider, ctx, board.decklist)
         value, ends_turn = walk.node(state, board, provider.transition(state, action),
                                      CHAIN_DEPTH_CAP)
-        prices.append(OptionPrice(action, value - baseline, ends_turn, tuple(walk.gaps)))
+        swing = value - baseline
+        if not math.isfinite(swing):
+            # Belt behind the weights' finite check: a NaN/inf swing would make every price
+            # unrankable. Score neutral, SAY SO — a visible gap, never a silent absorb.
+            walk.gaps.append(f"non-finite price for {action.identity}; scored zero")
+            swing = 0.0
+        prices.append(OptionPrice(action, swing, ends_turn, tuple(walk.gaps)))
     return tuple(prices)
 
 
@@ -110,7 +117,8 @@ class _Walk:
         return evaluate(board, self.ctx).total, False
 
     def deterministic(self, state, board: BoardState, depth: int) -> tuple[float, bool]:
-        context = int(((state.obs.get("select") or {}).get("context", _MAIN)))
+        raw_context = (state.obs.get("select") or {}).get("context")
+        context = _MAIN if raw_context is None else int(raw_context)
         if context == _MAIN:
             return evaluate(board, self.ctx).total, False
         actions = self.provider.actions(state)

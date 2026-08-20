@@ -108,6 +108,8 @@ def _replay_one(deck_name: str, correction) -> dict:
         "gaps": sorted(set(diagnostics.get("gaps", ()))),
         "elapsed_seconds": elapsed,
     }
+    if diagnostics.get("fallback"):                # a crashed brain must be visible, not a miss
+        row["fallback"] = diagnostics["fallback"]
     if graded and not agrees:
         row["ledger"] = {"value": decision.value, "backend": diagnostics.get("backend"),
                          "weights": diagnostics.get("weights"),

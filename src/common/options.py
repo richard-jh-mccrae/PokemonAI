@@ -90,10 +90,15 @@ class LegalAction:
 
 def enumerate_legal_actions(observation: Mapping) -> tuple[LegalAction, ...]:
     """Group semantically interchangeable physical copies; cover every offered index exactly once."""
-    options = ((observation.get("select") or {}).get("option") or ())
     select = observation.get("select") or {}
-    minimum, maximum = (int(select.get("minCount", DEFAULT_PICK_COUNT)),
-                        int(select.get("maxCount", DEFAULT_PICK_COUNT)))
+    # Junk rows keep their index (every offered index stays covered) but read as typeless;
+    # min/max may arrive present-but-None on the deployed dialect — `or` would eat a legal 0.
+    options = tuple(entry if isinstance(entry, dict) else {}
+                    for entry in select.get("option") or ())
+    raw_minimum = select.get("minCount", DEFAULT_PICK_COUNT)
+    raw_maximum = select.get("maxCount", DEFAULT_PICK_COUNT)
+    minimum = DEFAULT_PICK_COUNT if raw_minimum is None else int(raw_minimum)
+    maximum = DEFAULT_PICK_COUNT if raw_maximum is None else int(raw_maximum)
     maximum = min(maximum, len(options))
     minimum = min(minimum, maximum)                  # an impossible ask still submits its closest
     groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, ...]]] = {}

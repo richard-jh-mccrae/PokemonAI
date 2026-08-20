@@ -39,25 +39,35 @@ def fold_attack_locks(prior: Mapping | None, logs, *, turn: int, attacks=None) -
     # STRINGS: both providers round-trip this map through JSON, which returns int keys stringified.
     records = _attack_records(attacks)
     locks = {str(serial): dict(rows) for serial, rows in (prior or {}).items()}
-    entries = tuple(logs or ())
-    starts = sum(1 for entry in entries if int(entry.get("type", -1)) == LOG_TURN_START)
+    # A malformed row (None, non-dict, non-numeric field) is skipped, never fatal: losing one
+    # lock record is conservative; killing the decision that reads the log is not.
+    entries = tuple(entry for entry in (logs or ()) if isinstance(entry, dict))
+    starts = sum(1 for entry in entries if _int_or(entry.get("type"), -1) == LOG_TURN_START)
     current = int(turn) - starts
     for entry in entries:
-        kind = int(entry.get("type", -1))
+        kind = _int_or(entry.get("type"), -1)
         if kind == LOG_TURN_START:
             current += 1
             continue
         if kind != LOG_ATTACK:
             continue
-        serial, attack_id = entry.get("serial"), entry.get("attackId")
+        serial = _int_or(entry.get("serial"), None)
+        attack_id = _int_or(entry.get("attackId"), None)
         if serial is None or attack_id is None \
-                or not _self_locking(records.get(int(attack_id))):
+                or not _self_locking(records.get(attack_id)):
             continue
-        rows = locks.setdefault(str(int(serial)), {})
+        rows = locks.setdefault(str(serial), {})
         locked = current + LOCK_TURN_STRIDE
-        key = str(int(attack_id))
-        rows[key] = max(int(rows.get(key, locked)), locked)
+        key = str(attack_id)
+        rows[key] = max(_int_or(rows.get(key), locked), locked)
     return locks
+
+
+def _int_or(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def carry_attack_locks(prior_obs, observation, *, attacks=None) -> None:

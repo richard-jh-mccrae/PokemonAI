@@ -26,7 +26,8 @@ def refresh_value(observation, board: BoardState, card_id: int,
     gaps: list[str] = []
     seat = board.seat
     mine = _player(observation, seat)
-    hand_ids = [int(card["id"]) for card in (mine.get("hand") or ()) if card]
+    hand_ids = [int(card["id"]) for card in (mine.get("hand") or ())
+                if card and card.get("id") is not None]
     if int(card_id) in hand_ids:
         hand_ids.remove(int(card_id))
     else:
@@ -75,7 +76,9 @@ def _synthesize(observation, seat: int, hand_ids, deck_count: int, played_id: in
     opponent's counts moved. Serials are synthetic — the evaluator never reads them."""
     root = dict(observation)
     current = dict(root.get("current") or {})
-    players = list(current.get("players") or ({}, {}))
+    players = list(current.get("players") or ())
+    while len(players) < max(2, seat + 1):         # both seats must exist to be rewritten
+        players.append({})
     mine = dict(players[seat] or {})
     mine["hand"] = [{"id": int(card_id), "serial": None, "playerIndex": seat}
                     for card_id in hand_ids]
