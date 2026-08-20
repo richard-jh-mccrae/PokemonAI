@@ -1,6 +1,7 @@
 # The Ledger: 1-ply Worth-Differencing Decider
 
-**Status:** Grilled and confirmed (2026-08-20). Nothing built yet.
+**Status:** BUILT (2026-08-20) — steps 1–7 shipped as ADR-0145 (the Ledger + runtime swap) and
+ADR-0146 (the preview seam). Step 8, the manual training rounds, has not started.
 
 **Role:** Phase 1 — the Ledger replaces Bellman as the sole live decider: a single-decision
 (1-ply) lookahead that prices every option by the board-value change it causes and takes the

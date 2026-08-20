@@ -91,6 +91,17 @@ def test_ultra_ball_with_nothing_to_fetch_is_negative():
     assert swing(before, after) < 0
 
 
+def test_ultra_ball_reads_dead_when_its_only_target_is_undemanded():
+    """A fetchable target that is itself dead (an evolution with no base anywhere) must not
+    mark the fetch live — the multiplier is compared, never truthiness-read."""
+    context = ctx()
+    me = player(active=body(MAKUHITA, 1), hand=[ULTRA_BALL], deck_count=21)
+    dead_target = board(me=me, decklist=[ULTRA_BALL, DRAKLOAK] + [FIRE_E] * 20)
+    live_target = board(me=me, decklist=[ULTRA_BALL, DREEPY] + [FIRE_E] * 20)
+    assert (evaluate(live_target, context).part("me.hand")
+            > evaluate(dead_target, context).part("me.hand"))
+
+
 def test_ultra_ball_fetching_the_live_evolution_is_positive():
     """Dreepy is in play, Drakloak comes out of the deck: demand-live fetch beats the spend."""
     decklist = [DRAKLOAK] + [FIRE_E] * 20

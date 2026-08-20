@@ -132,11 +132,18 @@ class LedgerWeights:
                         if f.init and f.name not in ("roles", "tags", "kinds", "card_worth")}
         for key, value in overrides.items():
             prefix, _, name = str(key).partition(".")
+            # Tier names are closed vocabularies: a typo must raise, never train nothing.
             if prefix == "role" and name:
+                if name not in roles and name not in _role_vocabulary():
+                    raise KeyError(f"unknown ledger weight {key!r}")
                 roles[name] = float(value)
             elif prefix == "tag" and name:
+                if name not in tags and name not in _tag_vocabulary():
+                    raise KeyError(f"unknown ledger weight {key!r}")
                 tags[name] = float(value)
             elif prefix == "kind" and name:
+                if name not in kinds:
+                    raise KeyError(f"unknown ledger weight {key!r}")
                 kinds[name] = float(value)
             elif prefix == "card" and name:
                 cards[int(name)] = float(value)
@@ -147,6 +154,17 @@ class LedgerWeights:
         return replace(self, roles=tuple(sorted(roles.items())),
                        tags=tuple(sorted(tags.items())), kinds=tuple(sorted(kinds.items())),
                        card_worth=tuple(sorted(cards.items())), **scalars)
+
+
+def _role_vocabulary() -> frozenset:
+    from common.cards.pokemon_roles import POKEMON_ROLES
+    return frozenset(POKEMON_ROLES)
+
+
+def _tag_vocabulary() -> frozenset:
+    from common.cards import card_store
+    return frozenset(tag for card in card_store().values()
+                     for tag in (getattr(card, "tags", ()) or ()))
 
 
 __all__ = ("KIND_WORTH", "LedgerWeights", "ROLE_WORTH", "TAG_WORTH")

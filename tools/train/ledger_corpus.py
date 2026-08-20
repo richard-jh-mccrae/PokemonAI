@@ -50,13 +50,20 @@ def _build_runtime(deck_name: str):
     return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
 
 
-def _satisfies_human(chosen, correct, equivalence) -> bool:
+def _satisfies_one(chosen, correct, equivalence) -> bool:
     if chosen is None or correct is None:
         return False
     if not correct:
         return not chosen
     picked = frozenset(chosen)
     return all(bool(class_of(equivalence, wanted) & picked) for wanted in correct)
+
+
+def _satisfies_human(chosen, correction, equivalence) -> bool:
+    """The primary ruling OR any recorded equally-acceptable alternative satisfies."""
+    rulings = [list(correction.correct or ())]
+    rulings += [list(alt or ()) for alt in (correction.correct_alternatives or ())]
+    return any(_satisfies_one(chosen, ruling, equivalence) for ruling in rulings)
 
 
 def _labels(obs, indices) -> str:
@@ -78,7 +85,7 @@ def _replay_one(deck_name: str, correction) -> dict:
     correct = list(correction.correct or ())
     graded = bool(correction.correct) or correction.correct == []
     equivalence = option_equivalence(((obs.get("select") or {}).get("option") or []), obs)
-    agrees = _satisfies_human(chosen, correct, equivalence) if graded else None
+    agrees = _satisfies_human(chosen, correction, equivalence) if graded else None
     diagnostics = decision.diagnostics or {}
     row = {
         "deck": deck_name,
@@ -123,6 +130,7 @@ def _deck_summary(rows: list[dict]) -> dict:
         "agreement": round(agrees / len(graded), 4) if graded else None,
         "ungraded": len(rows) - len(graded),
         "decision_seconds": round(sum(row["elapsed_seconds"] for row in rows), 2),
+        "gap_decisions": sum(1 for row in rows if row["gaps"]),
         "gap_census": dict(gap_census.most_common()),
     }
 
@@ -160,11 +168,10 @@ def render_markdown(result: dict) -> str:
     lines.append("| deck | graded | agrees | agreement | ungraded | gap-affected decisions |")
     lines.append("|---|---|---|---|---|---|")
     for deck_name, summary in result["decks"].items():
-        affected = sum(summary["gap_census"].values())
         agreement = ("-" if summary["agreement"] is None
                      else f"{summary['agreement'] * 100:.1f}%")
         lines.append(f"| {deck_name} | {summary['graded']} | {summary['agrees']} | "
-                     f"{agreement} | {summary['ungraded']} | {affected} |")
+                     f"{agreement} | {summary['ungraded']} | {summary['gap_decisions']} |")
     floor = result["generality_floor"]
     lines += ["", f"**Generality floor (worst deck): "
                   f"{'-' if floor is None else f'{floor * 100:.1f}%'}**", ""]

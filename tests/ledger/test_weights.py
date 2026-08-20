@@ -23,6 +23,17 @@ def test_unknown_override_key_raises():
         LedgerWeights().resolve({"zone_in_pocket": 1.0})
 
 
+def test_tier_name_typos_raise_instead_of_training_nothing():
+    for typo in ("role.primary_atacker", "kind.itme", "tag.draaw"):
+        with pytest.raises(KeyError):
+            LedgerWeights().resolve({typo: 1.0})
+
+
+def test_vocabulary_names_absent_from_the_defaults_still_resolve():
+    weights = LedgerWeights().resolve({"tag.shuffle_hand": 0.2})
+    assert weights.tag_worth["shuffle_hand"] == 0.2
+
+
 def test_identity_tracks_the_resolved_vector():
     base = LedgerWeights()
     assert base.identity == LedgerWeights().identity

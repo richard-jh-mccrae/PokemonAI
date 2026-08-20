@@ -232,25 +232,27 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
         clauses = tuple(getattr(facts, "clauses", ()) or ())
         fetches = tuple(c for c in clauses if c.kind == "fetch" and c.zone == "deck")
         if fetches and len(fetches) == len(clauses):
-            live = _fetch_is_live(fetches, demand, ctx, deck_counts)
-            return (1.0 if live else weights.demand_dead), None
+            return _fetch_liveness(fetches, demand, ctx, deck_counts), None
     return 1.0, None
 
 
-def _fetch_is_live(fetches, demand: Demand, ctx: LedgerContext, deck_counts) -> bool:
-    """A deck fetch is live when some reachable target is itself demanded right now."""
+def _fetch_liveness(fetches, demand: Demand, ctx: LedgerContext, deck_counts) -> float:
+    """A deck fetch is exactly as live as its BEST reachable target — a multiplier compare,
+    never a truthiness read (a dead multiplier is still truthy)."""
     if deck_counts is None:
-        return True
+        return 1.0
+    best = ctx.weights.demand_dead
     for target_id, count in deck_counts:
         if count <= 0:
             continue
         target = ctx.facts(target_id)
         if not _fetchable(fetches, target):
             continue
-        live, _ = _liveness(target_id, target, demand, ctx, None)
-        if live:
-            return True
-    return False
+        scale, _ = _liveness(target_id, target, demand, ctx, None)
+        best = max(best, scale)
+        if best >= 1.0:
+            break
+    return best
 
 
 def _fetchable(fetches, target) -> bool:

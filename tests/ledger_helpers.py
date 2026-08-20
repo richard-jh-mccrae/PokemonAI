@@ -7,7 +7,8 @@ ULTRA_BALL = 1121
 LILLIES = 1227
 HARLEQUIN = 1223
 FIRE_E, PSYCHIC_E, DARK_E = 2, 5, 7
-FIRE, PSYCHIC, DARKNESS = 2, 6, 8
+# Engine wire codes, straight from common.cards.card_facts — 6/8 would be Fighting/Metal.
+FIRE, PSYCHIC, DARKNESS = 2, 5, 7
 UNKNOWN = 999_999
 
 

@@ -63,6 +63,13 @@ class _Walk:
         if isinstance(node, Terminal):
             successor = board.advance(node.state.obs)
             return evaluate(successor, self.ctx).total, True
+        # The budget binds EVERY recursive node type, not just forced-menu walks: a wide or
+        # nested chance tree must also land on the cap instead of running past it.
+        if depth <= 0 or self.nodes >= CHAIN_NODE_CAP:
+            if isinstance(node, Deterministic):
+                board = board.advance(node.state.obs)
+            self.gaps.append("chain capped; scored mid-effect board")
+            return evaluate(board, self.ctx).total, False
         if isinstance(node, Deterministic):
             return self.deterministic(node.state, board.advance(node.state.obs), depth)
         if isinstance(node, Chance):
@@ -102,9 +109,6 @@ class _Walk:
     def deterministic(self, state, board: BoardState, depth: int) -> tuple[float, bool]:
         context = int(((state.obs.get("select") or {}).get("context", _MAIN)))
         if context == _MAIN:
-            return evaluate(board, self.ctx).total, False
-        if depth <= 0 or self.nodes >= CHAIN_NODE_CAP:
-            self.gaps.append("chain capped; scored mid-effect board")
             return evaluate(board, self.ctx).total, False
         actions = self.provider.actions(state)
         if not actions:
