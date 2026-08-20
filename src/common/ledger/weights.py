@@ -89,7 +89,9 @@ class LedgerWeights:
     zone_in_hand: float = 0.65
     zone_in_deck: float = 0.15
     zone_in_discard: float = 0.10
-    zone_under_body: float = 0.10
+    #: 0.65 adopted 2026-08-20 (ADR-0151): the card invested UNDER an evolution keeps most of
+    #: its worth — line continuity, the fix for evolves pricing negative at role parity.
+    zone_under_body: float = 0.65
     zone_attached_usable: float = 1.0
     zone_attached_useless: float = 0.0
     zone_tool_attached: float = 0.90
@@ -110,6 +112,9 @@ class LedgerWeights:
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.
     damage_floor: float = 0.30
+    #: Prizes per 100 printed max HP, on every body, inside the damage multiplier (ADR-0151):
+    #: SIZE becomes worth, so an evolution out-values its basic and chip damage prices real.
+    hp_value: float = 0.0
 
     # The scarce goods and liabilities of having bodies in play.
     bench_slot_value: float = 0.06

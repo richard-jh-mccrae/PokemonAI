@@ -212,5 +212,25 @@
     "disposition": "refuted",
     "reason": "Crispin double-fetch investigation concluded (2026-08-20 triage batch D): the CURRENT ledger preview walks Crispin's chain cleanly (no unpriceable gap on frame 86090676-18); the live-game claim predates the Ledger brain and cannot be re-verified — raw replays are not committed. No ruling extractable.",
     "round": "2026-08-20"
+  },
+  "81904451-37": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (fetch Hilda -> free-retreat Cinderace -> promote Mega -> attack); returns to grading when the turn planner grades maneuvers",
+    "round": "2026-08-20"
+  },
+  "81904451-50": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (the Hilda line + Cinderace attach cap (knife-edge since round 1)); returns to grading when the turn planner grades maneuvers",
+    "round": "2026-08-20"
+  },
+  "85785609-t8s0": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (evolve -> Crispin fetch+attach -> ability -> attack KO chain); returns to grading when the turn planner grades maneuvers",
+    "round": "2026-08-20"
+  },
+  "83667237-107": {
+    "disposition": "deferred-multi-turn",
+    "reason": "owner ruling 2026-08-20: the rationale is a multi-action maneuver no 1-ply price can see (snipe target driven by multi-prize math ('requires planning out prize math')); returns to grading when the turn planner grades maneuvers",
+    "round": "2026-08-20"
   }
 }

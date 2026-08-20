@@ -160,6 +160,10 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
             gaps.append(f"under: {gap}")
         value += under_worth * weights.zone_under_body
 
+    # Size is worth (ADR-0151): printed max HP needs no store record, so even an unknown
+    # opponent body carries threat weight — and the multiplier below makes chip damage a
+    # constant real loss per HP on any body.
+    value += weights.hp_value * (body.max_hp / 100.0)
     hp_fraction = (max(0, body.hp) / body.max_hp) if body.max_hp > 0 else 1.0
     return value * (weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction)
 

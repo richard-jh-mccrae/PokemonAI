@@ -436,3 +436,32 @@ def test_rental_energy_on_the_bench_prices_zero():
     bare_active = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
     rental_active = evaluate(board(me=player(active=ignition_body(1))), context)
     assert rental_active.part("me.bodies") > bare_active.part("me.bodies")
+
+
+def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
+    """ADR-0151: evolving reads NEGATIVE at defaults (the hand pays full worth while the
+    board credits role parity — the diagnosed evolution underpricing); with size priced,
+    the 260-HP jump out-pays the spend. Default 0.0 must keep today's sign."""
+    before = board(me=player(active=body(DRAGAPULT, 9),
+                             bench=[body(STARYU, 1, hp=70, max_hp=70)],
+                             hand=[MEGA_STARMIE]))
+    after = board(me=player(active=body(DRAGAPULT, 9),
+                            bench=[body(MEGA_STARMIE, 1, hp=330, max_hp=330,
+                                        under=(STARYU,))],
+                            hand=[]))
+    assert swing(before, after) < 0                       # the disease, documented
+    armed = ctx(overrides={"hp_value": 0.2})
+    assert swing(before, after, armed) > 0
+
+
+def test_hp_value_prices_chip_damage_and_unknown_threats():
+    """Size needs no store record: chipping 100 off a big body is a real gain, and a
+    store-unknown 330 HP opponent body carries more threat weight than a 70 HP one."""
+    context = ctx(overrides={"hp_value": 0.2})
+    fresh = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=330, max_hp=330)))
+    chipped = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=230, max_hp=330)))
+    assert swing(fresh, chipped, context) > swing(fresh, chipped, ctx())
+
+    big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
+    small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
+    assert evaluate(big, context).total < evaluate(small, context).total
