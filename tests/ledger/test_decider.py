@@ -58,7 +58,6 @@ def test_positive_develop_beats_a_bigger_turn_ender():
     """The attack swings more, but attaching first keeps the turn alive: spend, then end."""
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
-    root = state_of(root_obs, DECK)
     attached = state_of(printout(
         me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[]),
         them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
@@ -68,9 +67,9 @@ def test_positive_develop_beats_a_bigger_turn_ender():
 
     attach, attack, end = action("attach", (0,)), action("attack", (1,)), action("end", (2,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (attach, attack, end)},
-        nodes={(root.semantic_key, attach.identity): Deterministic(attached),
-               (root.semantic_key, attack.identity): Terminal(struck, "attack resolved")})
+        menus={"root": (attach, attack, end)},
+        nodes={("root", attach.identity): Deterministic(attached),
+               ("root", attack.identity): Terminal(struck, "attack resolved")})
     decision = make_decider(provider).decide(root_obs)
     assert decision.action.kind == "attach"
 
@@ -79,7 +78,6 @@ def test_with_nothing_worth_doing_the_best_ender_wins():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC)),
                                   hand=[DARK_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
-    root = state_of(root_obs, DECK)
     dark_attached = state_of(printout(
         me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC, DARKNESS)), hand=[]),
         them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
@@ -89,9 +87,9 @@ def test_with_nothing_worth_doing_the_best_ender_wins():
 
     attach, attack, end = action("attach", (0,)), action("attack", (1,)), action("end", (2,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (attach, attack, end)},
-        nodes={(root.semantic_key, attach.identity): Deterministic(dark_attached),
-               (root.semantic_key, attack.identity): Terminal(struck, "attack resolved")})
+        menus={"root": (attach, attack, end)},
+        nodes={("root", attach.identity): Deterministic(dark_attached),
+               ("root", attack.identity): Terminal(struck, "attack resolved")})
     decision = make_decider(provider).decide(root_obs)
     assert decision.action.kind == "attack"
     prices = {entry["action"]: entry["swing"] for entry in decision.diagnostics["prices"]}
@@ -106,7 +104,6 @@ def test_forced_menu_is_a_straight_argmax():
               "remainDamageCounter": 0, "remainEnergyCost": 0}
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E, DARK_E]),
                         select=select)
-    root = state_of(root_obs, DECK)
     lost_fire = state_of(printout(
         me=player(active=body(DRAGAPULT, 1), hand=[DARK_E], discard=[FIRE_E])), DECK)
     lost_dark = state_of(printout(
@@ -114,9 +111,9 @@ def test_forced_menu_is_a_straight_argmax():
 
     toss_fire, toss_dark = action("discard", (0,)), action("discard", (1,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (toss_fire, toss_dark)},
-        nodes={(root.semantic_key, toss_fire.identity): Deterministic(lost_fire),
-               (root.semantic_key, toss_dark.identity): Deterministic(lost_dark)})
+        menus={"root": (toss_fire, toss_dark)},
+        nodes={("root", toss_fire.identity): Deterministic(lost_fire),
+               ("root", toss_dark.identity): Deterministic(lost_dark)})
     decision = make_decider(provider).decide(root_obs)
     assert decision.action == toss_dark.identity
 
@@ -125,7 +122,6 @@ def test_forced_chain_resolves_to_the_best_leaf():
     """play -> forced pick -> main: the play's price is the best sub-choice's resolved board."""
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
-    root = state_of(root_obs, DECK)
     mid_select = {"type": 1, "context": 7, "minCount": 1, "maxCount": 1,
                   "option": [{"type": 3, "index": 0}], "deck": None, "contextCard": None,
                   "effect": None, "remainDamageCounter": 0, "remainEnergyCost": 0}
@@ -139,9 +135,9 @@ def test_forced_chain_resolves_to_the_best_leaf():
     play, end = action("play", (0,)), action("end", (1,))
     pick_good, pick_bad = action("card", (0,)), action("card", (1,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (play, end),
+        menus={"root": (play, end),
                mid.semantic_key: (pick_good, pick_bad)},
-        nodes={(root.semantic_key, play.identity): Deterministic(mid),
+        nodes={("root", play.identity): Deterministic(mid),
                (mid.semantic_key, pick_good.identity): Deterministic(good_leaf),
                (mid.semantic_key, pick_bad.identity): Deterministic(bad_leaf)})
     decision = make_decider(provider).decide(root_obs)
@@ -156,11 +152,10 @@ def test_refresh_pricing_is_deterministic_and_reports_no_false_gaps():
                                   hand=hand, deck_count=40),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     deck = tuple([DRAGAPULT] * 10 + [FIRE_E] * 20 + [DARK_E] * 10 + hand)
-    root = state_of(root_obs, deck)
     play, end = action("play", (0,)), action("end", (1,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (play, end)},
-        nodes={(root.semantic_key, play.identity): Refresh(LILLIES, ((6, 0),), False)})
+        menus={"root": (play, end)},
+        nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
     decider = LedgerDecider(deck, "test", LedgerContext.build(),
                             provider_factory=lambda _state, **_kw: provider)
     first = decider.decide(root_obs)
@@ -179,11 +174,10 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
         hand = [LILLIES] + extra_hand
         root_obs = printout(me=player(active=body(DREEPY, 1), hand=hand, deck_count=40),
                             them=player(own=False, active=body(DRAGAPULT, 2)))
-        root = state_of(root_obs, deck)
         play, end = action("play", (0,)), action("end", (1,))
         provider = ScriptedProvider(
-            menus={root.semantic_key: (play, end)},
-            nodes={(root.semantic_key, play.identity): Refresh(LILLIES, ((6, 0),), False)})
+            menus={"root": (play, end)},
+            nodes={("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
         decision = LedgerDecider(deck, "test", LedgerContext.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
         return {entry["action"]: entry["swing"]
@@ -204,11 +198,10 @@ def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
             me=player(active=body(DREEPY, 1), hand=[HARLEQUIN, DARK_E], deck_count=40),
             them=player(own=False, active=body(DRAGAPULT, 2),
                         hand_count=opponent_hand_count))
-        root = state_of(root_obs, deck)
         play, end = action("play", (0,)), action("end", (1,))
         provider = ScriptedProvider(
-            menus={root.semantic_key: (play, end)},
-            nodes={(root.semantic_key, play.identity):
+            menus={"root": (play, end)},
+            nodes={("root", play.identity):
                    Refresh(HARLEQUIN, ((5, 3), (3, 5)), True)})
         decision = LedgerDecider(deck, "test", LedgerContext.build(),
                                  provider_factory=lambda _s, **_kw: provider).decide(root_obs)
@@ -220,11 +213,10 @@ def test_harlequin_two_leg_ev_prices_the_opponents_redraw():
 
 def test_unknown_node_decides_anyway_and_sinks_the_gap():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
-    root = state_of(root_obs, DECK)
     weird, end = action("ability", (0,)), action("end", (1,))
     provider = ScriptedProvider(
-        menus={root.semantic_key: (weird, end)},
-        nodes={(root.semantic_key, weird.identity): Unknown("no model", "mystery clause")})
+        menus={"root": (weird, end)},
+        nodes={("root", weird.identity): Unknown("no model", "mystery clause")})
     records = []
     decision = make_decider(provider, sink=records.append).decide(root_obs)
     assert decision.chosen == (1,)  # the unpriced ability reads 0, the end tie-break wins

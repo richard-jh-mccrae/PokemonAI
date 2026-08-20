@@ -1,7 +1,9 @@
 """The dashboard's arithmetic: agreement per deck, gaps per affected decision, regressions."""
 from __future__ import annotations
 
-from train.ledger_corpus import payload, render_markdown
+from types import SimpleNamespace
+
+from train.ledger_corpus import _satisfies_human, payload, render_markdown
 
 
 def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)):
@@ -28,10 +30,27 @@ def test_payload_reports_per_deck_agreement_and_the_generality_floor():
 
 
 def test_gap_census_counts_decisions_affected_not_mentions():
-    rows = [row("a_deck", "r1", agrees=True, gaps=["unknown card 5", "unknown card 5"]),
-            row("a_deck", "r2", agrees=True, gaps=["unknown card 5"])]
+    rows = [row("a_deck", "r1", agrees=True, gaps=["unknown card 5", "no formula for x"]),
+            row("a_deck", "r2", agrees=True, gaps=["unknown card 5"]),
+            row("a_deck", "r3", agrees=True)]
     result = payload(rows)
-    assert result["decks"]["a_deck"]["gap_census"] == {"unknown card 5": 2}
+    assert result["decks"]["a_deck"]["gap_census"] == {"unknown card 5": 2,
+                                                       "no formula for x": 1}
+    # One decision with two gap kinds is ONE affected decision, not two.
+    assert result["decks"]["a_deck"]["gap_decisions"] == 2
+
+
+def test_any_recorded_alternative_ruling_satisfies():
+    """Frames like 6154988eb489 rule several picks equally correct; grading only the primary
+    `correct` list was mis-reporting the alternatives as misses."""
+    from common.option_equivalence import option_equivalence
+
+    correction = SimpleNamespace(correct=[0], correct_alternatives=[[1], [6]])
+    options = [{"type": 7, "index": index} for index in range(8)]
+    equivalence = option_equivalence(options, {"current": {"players": []}})
+    assert _satisfies_human([0], correction, equivalence)
+    assert _satisfies_human([6], correction, equivalence)
+    assert not _satisfies_human([3], correction, equivalence)
 
 
 def test_regressions_name_frames_that_used_to_agree():

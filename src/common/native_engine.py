@@ -176,21 +176,30 @@ class NativeCgTransitionProvider:
             if self._api is None:
                 from cg import api
                 self._api = api
-            self._worlds[root.semantic_key] = self._begin_worlds(root)
+            self._worlds[self._key(root)] = self._begin_worlds(root)
         except Exception as exc:  # noqa: BLE001 - adapter failure is first-class
             self._error = f"{type(exc).__name__}: {exc}"
 
     @property
     def available(self) -> bool:
-        return not self._error and bool(self._worlds.get(self.root.semantic_key))
+        return not self._error and bool(self._worlds.get(self._key(self.root)))
 
     def close(self) -> None:
         if self._api is not None and self._search_open:
             self._api.search_end()
             self._search_open = False
 
+    def _bind(self, state, observation):
+        """Successor state construction — the Ledger preview seam overrides this to skip the
+        DecisionState build per node (ADR-0146)."""
+        return state.with_observation(observation)
+
+    def _key(self, state) -> str:
+        """The world-map key for a state; the preview seam substitutes identity tokens."""
+        return state.semantic_key
+
     def actions(self, state: DecisionState) -> tuple[LegalAction, ...]:
-        if state.semantic_key not in self._worlds:
+        if self._key(state) not in self._worlds:
             return ()
         return state.legal_actions
 
@@ -230,9 +239,9 @@ class NativeCgTransitionProvider:
             effects=self.effects, stats=self.stats)
 
     def transition(self, state: DecisionState, action: LegalAction):
-        worlds = self._worlds.get(state.semantic_key)
+        worlds = self._worlds.get(self._key(state))
         if not worlds:
-            return Unknown("native search state unavailable", state.semantic_key)
+            return Unknown("native search state unavailable", self._key(state))
         refresh = refresh_transition(state, action, self.cards)
         if refresh is not None:
             return refresh
@@ -340,8 +349,8 @@ class NativeCgTransitionProvider:
         if len(children) == 1:
             probability, search_id, committed, observation = children[0]
             observation = dict(observation)
-            successor = parent.with_observation(observation)
-            successor_key = successor.semantic_key
+            successor = self._bind(parent, observation)
+            successor_key = self._key(successor)
             self._worlds[successor_key] = (
                 _NativeWorld(PROBABILITY_TOTAL, int(search_id), bool(committed)),
             )
@@ -350,10 +359,12 @@ class NativeCgTransitionProvider:
                 ((float(probability), int(search_id), bool(committed), observation),),
             )
 
+        # Grouping merges worlds whose PUBLIC successor is identical. Under the preview seam's
+        # identity keys nothing merges — each world keeps its own edge, same expected value.
         grouped: dict[str, list[tuple[float, int, bool, dict]]] = {}
         for probability, search_id, committed, observation in children:
-            public = parent.with_observation(observation)
-            group_key = public.semantic_key
+            public = self._bind(parent, observation)
+            group_key = self._key(public)
             grouped.setdefault(group_key, []).append(
                 (float(probability), int(search_id), bool(committed), observation))
         if not grouped:
@@ -363,8 +374,8 @@ class NativeCgTransitionProvider:
         for index, (group_key, rows) in enumerate(sorted(grouped.items())):
             mass = sum(row[0] for row in rows)
             observation = dict(rows[0][3])
-            successor = parent.with_observation(observation)
-            successor_key = successor.semantic_key
+            successor = self._bind(parent, observation)
+            successor_key = self._key(successor)
             self._worlds[successor_key] = tuple(
                 _NativeWorld(probability / mass, search_id, committed)
                 for probability, search_id, committed, _observation in rows
