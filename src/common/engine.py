@@ -53,17 +53,8 @@ def _own_prize_export(engine, seat: int) -> dict[int, int]:
 
 
 def stamp_own_prizes(observation: dict, decklist) -> bool:
-    """Give an ARCHIVED observation the own-prize anchor the live shell always stamps.
-
-    Live, `make_agent` writes `own_prizes` from the deck tracker before every decide; a frame
-    captured without it makes BoardState count the prized cards as still in the deck, while
-    this provider prints the determinized truth into every successor — so each previewed
-    option pays a phantom deck loss that the pinned-zero End turn never pays. Stamping the
-    same determinized split the provider will honor keeps root and successors telling one
-    story. The split is a stand-in (the archive lost the real prizes); grading needs
-    consistency, not the lost truth. Returns True when it stamped, False when the
-    observation already carried an anchor or has nothing to anchor.
-    """
+    """Stamp the live shell's own-prize anchor onto an ARCHIVED observation (ADR-0147): the
+    same determinized split this provider honors, so root and successors tell one story."""
     if observation.get("own_prizes") is not None:
         return False
     if not decklist:

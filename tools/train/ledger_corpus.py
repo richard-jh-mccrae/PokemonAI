@@ -7,10 +7,9 @@ second look, not a weight nudge), a coverage-gap census counted per affected dec
 against a prior baseline file — the frames that used to agree and no longer do. Frames with no
 `correct` ruling assert nothing and are counted `ungraded`, never as misses. A sweep is only
 sound within one deck (a frame replayed through another decklist is off-policy), so frames are
-grouped by their recording agent throughout. Two honesty rules: frames archived without the
-live shell's `own_prizes` anchor get one stamped before replay (else every engine-previewed
-option pays a phantom deck loss that End turn never pays), and rulings dispositioned in
-`reviewed.json` are RETIRED — listed in their own section, never graded.
+grouped by their recording agent throughout. Honesty rules (ADR-0147): frames archived without
+the live shell's `own_prizes` anchor get one stamped before replay, and rulings dispositioned
+in `reviewed.json` are RETIRED — listed in their own section, never graded.
 
     python tools/train/ledger_corpus.py [--decks mega_starmie ...] [--workers N]
         [--baseline docs/plans/ledger-corpus-dashboard.json] [--limit N]
@@ -173,6 +172,9 @@ def payload(rows: list[dict], *, retired: list[dict] | None = None,
         "schema": 1,
         "git_rev": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO,
                                            text=True).strip(),
+        # An empty regressions list only means something beside the baseline it was measured
+        # against; None here says "never compared", not "zero regressions".
+        "baseline_git_rev": (baseline or {}).get("git_rev"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "decks": decks,
         # The generality bar: the GENERAL weights must clear every deck, so the headline is

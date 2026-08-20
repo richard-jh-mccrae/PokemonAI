@@ -154,11 +154,8 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
 
 def scouted_ledger_roles(read: Read | None, brief: Brief | None, stats,
                          functions=None) -> dict[int, tuple[str, ...]]:
-    """Recognition role claims by card id, for the Ledger's opponent worth read.
-
-    The matched Brief's declarations (primary lines propagated by `resolve_brief_cards`) plus
-    the Read's own threat/target intel. These are RECOGNITION claims — the caller blends them
-    by the Read's confidence; card-generic roles are the caller's own base layer."""
+    """Recognition role claims by card id (matched Brief declarations + Read intel) for the
+    Ledger's opponent worth read; the caller blends them by the Read's gamma (ADR-0148)."""
     claims: dict[int, tuple[str, ...]] = {}
 
     def add(card_id, roles):

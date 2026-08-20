@@ -21,10 +21,8 @@ from .preview import NOISE_FLOOR, OptionPrice, price_actions
 from .seam import LedgerNativeProvider, PreviewState
 from .worth import LedgerContext
 
-#: Tags whose play's WHOLE yield is cards sitting in hand (discard-pile recycling): that yield
-#: is exactly what a pending hand-shuffle throws away, so these queue behind the shuffle.
-#: Deliberately narrow — corpus rulings want bench-fillers, info items and tutors FIRST (their
-#: yield is benched, read, or played before the shuffle), and only the recycle class after.
+#: Plays whose whole yield is hand cards a pending shuffle would discard: they queue BEHIND
+#: it (ADR-0148). Kept narrow — a broad fetch/draw set was measured and lost frames.
 _RESTOCK_TAGS = frozenset({"recycle", "recycle_line"})
 
 
@@ -39,9 +37,8 @@ class LedgerDecider:
         self.deck_name = str(deck_name)
         self.ctx = ctx
         self.provider_factory = provider_factory
-        #: Fact sources the engine adapters read mid-transition (registry/effects/stats). A
-        #: bare provider raises on fact-needing transitions (bench damage, energy typing) and
-        #: those options silently price zero — pass what the runtime already holds.
+        #: Fact sources the engine adapters read mid-transition; a bare provider prices
+        #: fact-needing options (bench damage, energy typing) at zero (ADR-0148).
         self.provider_kwargs = dict(provider_kwargs or {})
         self.gap_sink = gap_sink
 
@@ -118,9 +115,8 @@ class LedgerDecider:
                       if not price.ends_turn and price.swing > threshold]
         refreshes = [price for price in continuing if price.refresh]
         if refreshes:
-            # A hand-shuffle is a hand-ender: plays that SPEND hand cards go first (their
-            # value survives the shuffle), the shuffle next, and fetch/draw plays queue
-            # behind it — fetching into a hand about to be shuffled wastes the fetch.
+            # A hand-shuffle is a hand-ender (ADR-0148): spends go first (they survive it),
+            # the shuffle next, recycle plays behind it — their yield would be shuffled away.
             holders = [price for price in continuing
                        if not price.refresh and not price.restocks]
             return _ranked(holders or refreshes)[0]

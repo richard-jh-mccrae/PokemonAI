@@ -189,10 +189,8 @@ def test_sweep_partitions_reviewed_before_replaying(monkeypatch):
 
 
 def test_damage_targets_are_priced_with_engine_facts():
-    """Frame 82749168-50: a Damage-context snipe menu with a free 50 HP KO on it. A bare
-    provider (no registry) raises 'damage amount is absent' inside every transition and all
-    targets price zero, so the brain takes index 0; with the runtime's fact sources passed
-    through the decider, the KO snipe prices its prize and the ruled target wins."""
+    """Frame 82749168-50, a Damage-context menu with a free 50 HP KO: a bare provider prices
+    every target zero (ADR-0148); with fact sources passed through, the ruled snipe wins."""
     from pathlib import Path
 
     from train.blunder.store import load_corrections

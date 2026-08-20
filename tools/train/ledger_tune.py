@@ -8,7 +8,7 @@ zero-regressions half of the plan's done bar, enforced per nudge. Greedy passes 
 a full pass adopts nothing. The adopted overrides are printed and reported; committing them
 means editing `LedgerWeights`' defaults (the general vector lives in code, not config).
 
-    python tools/train/ledger_tune.py --lever zone_in_hand=0.55,0.75 \
+    python tools/train/ledger_tune.py --lever zone_in_hand=0.55,0.75
         --lever tag.recycle=0.05,0.10 [--decks ...] [--workers N] [--report PATH]
 """
 from __future__ import annotations
@@ -29,11 +29,11 @@ DEFAULT_REPORT_DIR = REPO / "docs" / "tuning" / "runs"
 
 def _agree_sets(result: dict) -> tuple[dict, set]:
     per_deck: dict[str, int] = {}
-    agreed: set[str] = set()
+    agreed: set[tuple[str, str]] = set()             # (deck, id): ids only bind within a deck
     for row in result["rows"]:
         if row["graded"] and row["agrees"]:
             per_deck[row["deck"]] = per_deck.get(row["deck"], 0) + 1
-            agreed.add(row["id"])
+            agreed.add((row["deck"], row["id"]))
     return per_deck, agreed
 
 
@@ -92,7 +92,7 @@ def render_report(outcome: dict, levers: dict) -> str:
     best_floor, best_agrees = _score(outcome["best"])
     _, base_set = _agree_sets(outcome["baseline"])
     _, best_set = _agree_sets(outcome["best"])
-    fixed = sorted(best_set - base_set)
+    fixed = sorted(f"{deck}:{row_id}" for deck, row_id in best_set - base_set)
     lines = [
         "# Ledger tuning round",
         "",

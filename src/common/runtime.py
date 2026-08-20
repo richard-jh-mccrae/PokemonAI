@@ -250,11 +250,17 @@ class BellmanRuntime:
             {"backend": "declarative-pregame", "context": context},
         )
 
-    def _planner(self, observation):
+    def _observe_matchup(self, observation) -> float:
+        """One scouting pass per decision, shared by both brains: refresh the Read, match the
+        Brief when confidence clears zero, and return the gamma."""
         self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
         gamma = posture_gamma(self.last_read)
-        brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
-        self.last_brief = brief
+        self.last_brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
+        return gamma
+
+    def _planner(self, observation):
+        self._observe_matchup(observation)
+        brief = self.last_brief
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
         belief = opponent_belief(
@@ -581,17 +587,13 @@ class BellmanRuntime:
         forced = self._forced_selection(observation)
         if forced is not None:
             return forced
-        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
-        gamma = posture_gamma(self.last_read)
-        brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
-        self.last_brief = brief
+        gamma = self._observe_matchup(observation)
         return self.ledger.decide(
-            observation, opponent=self._opponent_layer(observation, brief, gamma))
+            observation, opponent=self._opponent_layer(observation, self.last_brief, gamma))
 
     def _opponent_layer(self, observation: dict, brief, gamma: float):
-        """Scouting priced into the Ledger: card-generic roles for the bodies and discards the
-        opponent has shown (full strength — card knowledge needs no recognition), plus the
-        matched Brief's role claims and `ledger_overrides` blended in by the Read's gamma."""
+        """Scouting priced into the Ledger (ADR-0148): generic roles for shown cards at full
+        strength; the matched Brief's claims and `ledger_overrides` blended in by gamma."""
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
         players = current.get("players") or ()

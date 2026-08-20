@@ -1,6 +1,6 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-20T15:02:17.416307+00:00 at `2541c9f97536`.
+Generated 2026-08-20T15:18:26.884030+00:00 at `e0cb4e3a73e2`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|

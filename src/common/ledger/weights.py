@@ -16,9 +16,8 @@ from dataclasses import dataclass, field, fields, replace
 from typing import Mapping
 
 
-#: Worth of carrying each Role, in prizes (`pokemon_roles.POKEMON_ROLES` is the vocabulary,
-#: plus the Brief target vocabulary — disruption_target / support_pokemon / engine — which only
-#: scouted OPPONENT bodies ever carry).
+#: Worth of carrying each Role, in prizes. Vocabulary = `POKEMON_ROLES` plus the Brief target
+#: roles (disruption_target / support_pokemon / engine), carried only by scouted opponents.
 ROLE_WORTH: dict[str, float] = {
     "primary_attacker": 0.50,
     "backup_attacker": 0.35,
@@ -36,8 +35,7 @@ ROLE_WORTH: dict[str, float] = {
 }
 
 #: Worth by behavioural tag for cards whose Role table has nothing to say (mostly Trainers).
-#: A 0.0 entry is a live lever the training rounds have not raised yet: the card still prices
-#: through its kind fallback, but the tag can now be tuned without a code change.
+#: A 0.0 entry is a live lever the rounds have not raised: the kind fallback still prices it.
 TAG_WORTH: dict[str, float] = {
     "draw": 0.18,
     "search": 0.15,
@@ -78,10 +76,8 @@ KIND_WORTH: dict[str, float] = {
     "tool": 0.08,
     "stadium": 0.10,
     "energy": 0.10,
-    # 0.05 adopted by the 2026-08-20 tuning round: pricing special energy BELOW basic breaks
-    # the Ignition-vs-{W} exact ties that decided fetches arbitrarily (the tie-break lesson);
-    # the discipline "save Ignition for the wincon line" then falls out of demand, not a pin.
-    # mega_starmie dissents (deck override keeps 0.10) — docs/tuning/runs/ledger_20260820_round1.md.
+    # 0.05 adopted 2026-08-20: below basic, so Ignition-vs-{W} exact ties break on demand.
+    # mega_starmie dissents (keeps 0.10) — docs/tuning/runs/ledger_20260820_round1.md.
     "special_energy": 0.05,
 }
 
@@ -99,9 +95,7 @@ class LedgerWeights:
     zone_tool_attached: float = 0.90
 
     # Demand discounts on hand/deck worth.
-    #: 0.25 adopted by the 2026-08-20 tuning round: a card the board cannot use decays harder,
-    #: so fetches and holds stop out-pricing live plays. mega_starmie dissents (deck override
-    #: keeps 0.40) — see docs/tuning/runs/ledger_20260820_round1.md.
+    #: 0.25 adopted 2026-08-20; mega_starmie dissents — docs/tuning/runs/ledger_20260820_round1.md.
     demand_dead: float = 0.25
     demand_colorless_only: float = 0.70
     #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
@@ -123,8 +117,8 @@ class LedgerWeights:
 
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08
-    #: 0.15 adopted by the 2026-08-20 tuning round (docs/tuning/runs/ledger_20260820_145141.md):
-    #: an unready Active keeps less of the premium, so readying/replacing it prices higher.
+    #: 0.15 adopted 2026-08-20 (docs/tuning/runs/ledger_20260820_145141.md): an unready
+    #: Active keeps less premium, so readying or replacing it prices higher.
     active_unready_fraction: float = 0.15
 
     # Game-level terms.
@@ -132,9 +126,8 @@ class LedgerWeights:
     win_value: float = 100.0
     unknown_card_worth: float = 0.05
     opponent_unknown_card_worth: float = 0.12
-    #: A turn-continuing option must clear this swing to be worth acting on; below it the best
-    #: turn-ender decides. 0.0 keeps the historical "any strictly positive swing acts" bar —
-    #: the float-noise floor still applies underneath, so this lever never sharpens ties.
+    #: The swing a turn-continuing option must clear to act; 0.0 = the historical any-positive
+    #: bar. The float-noise floor still applies underneath, so this never sharpens ties.
     act_threshold: float = 0.0
 
     # Flat penalties for the active body's special conditions.

@@ -14,7 +14,7 @@ Staryu for Nebula Beam negative."""
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Mapping
 
@@ -27,14 +27,8 @@ from .weights import LedgerWeights
 
 @dataclass(frozen=True)
 class OpponentLayer:
-    """Scouting's read of the opponent, priced fail-open.
-
-    ``roles`` are card-generic role claims (function-tag defaults for bodies the opponent has
-    shown) — card knowledge, applied at full strength. ``brief_roles`` are RECOGNITION claims
-    (the matched Brief's declarations plus the Read's intel) and ``weights`` is the general
-    vector bent by that Brief's ``ledger_overrides`` — both blended in by ``gamma``, the Read's
-    confidence ramp, so a shaky recognition fades toward the general read instead of
-    committing to the wrong archetype."""
+    """Scouting's read of THEIR side (ADR-0148): card-generic ``roles`` price at full
+    strength; ``brief_roles`` + the Brief-bent ``weights`` blend in by ``gamma``, fail-open."""
 
     roles: Mapping[int, tuple[str, ...]]
     brief_roles: Mapping[int, tuple[str, ...]]
@@ -65,8 +59,6 @@ class LedgerContext:
         return cls(weights=resolved, roles=merged, store=card_store())
 
     def with_opponent(self, layer: OpponentLayer | None) -> "LedgerContext":
-        from dataclasses import replace
-
         return self if layer is self.opponent else replace(self, opponent=layer)
 
     def facts(self, card_id: int):
@@ -105,10 +97,7 @@ def _resolve_worth(card_id: int, facts, weights: LedgerWeights,
 def base_worth(card_id: int, facts, ctx: LedgerContext, *,
                own: bool = True) -> tuple[float, str | None]:
     """A card's standing worth in prizes, plus a coverage gap when the store cannot see it.
-
-    For THEIR side, scouting layers in: card-generic role claims price at full strength, and
-    the matched Brief's claims (roles and weight overrides) blend in by the Read's confidence
-    — `general + gamma x (scouted - general)`, so gamma 0 is exactly the general read."""
+    THEIR side blends the scouting layer in by gamma (ADR-0148); gamma 0 = the general read."""
     layer = None if own else ctx.opponent
     declared = ctx.card_roles(card_id) or getattr(facts, "default_roles", ()) or ()
     base_roles = declared if layer is None else _merge_roles(

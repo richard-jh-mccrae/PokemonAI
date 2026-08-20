@@ -13,6 +13,8 @@ real ruling, `correct = chosen`, or a `reviewed.json` disposition.
 
 dragapult_ex: 86090164-78, 86090676-18, 86091435-49, 86091728-12
 mega_lucario: 85709280-17, 86090147-5, 86090666-9, 86091172-30, 86091172-8
+(92455378-89 below was ALREADY dispositioned `deferred` in reviewed.json 2026-08-16, so it
+retires from grading rather than counting as a miss)
 mega_starmie: 160106599249705-8, 26001818654643-18, 26001818654643-31 (praise),
 26001818654643-44, 26001818654643-49 (praise), 26001818654643-58 (praise),
 26001818654643-72 (praise; DUPLICATE id, see below), 26001818654643-76 (praise),
@@ -28,7 +30,8 @@ mega_starmie: 160106599249705-8, 26001818654643-18, 26001818654643-31 (praise),
 
 ## Ruling contradicts its own rationale (3)
 
-- mega_lucario 83661652-3 — ruling plays Meowth ex; rationale says avoid playing Meowth at setup.
+- mega_lucario 83661652-3 — ruling plays Meowth ex; rationale says avoid playing Meowth at
+  setup. (ALREADY dispositioned `refuted` in reviewed.json 2026-08-03 — retires from grading.)
 - mega_starmie 81906131-25 — ruling attaches Ignition; rationale says never attach Ignition here.
 - mega_starmie 83664991-43 — ruling is the attack; rationale calls it "a perfect time to play Harlequin".
 
