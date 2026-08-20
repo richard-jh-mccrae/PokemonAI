@@ -1,9 +1,13 @@
-# Ledger corpus triage queue — DEFERRED
+# Ledger corpus triage queue — DRAINED 2026-08-20 (owner sitting)
 
-Saved 2026-08-20 during the ledger tuning-round planning session (dashboard @ `3c2d4399`).
-These 40 corpus entries cannot be graded as rulings and are set aside for a later sitting.
-Until then they still count as misses in `tools/train/ledger_corpus.py` output. The doctrine
-conflict at the bottom is also deferred by the owner's decision.
+Status: the owner read and dispositioned the queue the same day it was deferred. Batch A
+(8 endorsements → correct = chosen), batch B (7 rulings extracted from the notes) are
+recorded ON THE RECORDS with originals preserved; batch C (15 unrulable/deferred) is retired
+via `reviewed.json` — NOTE: turn-scope records retire under their `<ep>-t<turn>s<seat>`
+review key, not the frame anchor. Still open from batch D: the evolve-copy equivalence
+grouping (92710760-56), the forced setup-bench menu (85785609-4), the Crispin double-fetch
+check (86090676-18), and board looks on 92131448-8 / 92131448-22. The list below is the
+original queue, kept as provenance.
 
 ## Empty ruling `[]` — no correct action recorded (33)
 

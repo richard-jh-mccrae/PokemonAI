@@ -132,5 +132,80 @@
     "disposition": "deferred",
     "reason": "Search-budget churn, not a ruling disagreement (2026-08-16). The human ruling [6] Staryu STANDS and the value model agrees with it: given a search that runs to completion (34s, no deadline) decide() returns [6] at 3.135. The production 15s budget never reaches that line, and the answer wanders with the budget - 15s [4], 18s [2], 20s [4], 25s [4], 60s [6] - so the assertion grades how far the clock let the search get. It is load-dependent in both directions: 2 of 3 isolated pytest runs fail while the same commit passes inside the full suite. It was never healthy even when green: at b42283f4 the accepted [2] arrived in the FINAL refinement of the final second (final_incumbent.stabilized_seconds 14.72 of a 14.72s search). UNPINNED in test_m8_acceptance rather than re-pinned to the machine pick - [4] has never been adjudicated. Retiring this needs a search-efficiency round that reaches the line inside the budget, not a weight.",
     "round": "2026-08-16"
+  },
+  "86091435-13": {
+    "disposition": "refuted",
+    "reason": "owner's own words: 'doesnt really make a difference' — not a graded preference (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "91394270-t10s0": {
+    "disposition": "refuted",
+    "reason": "unrulable: rationale is 'CRITICAL:' with no content (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92091149-t6s1": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "86090666-t2s1": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "86091172-t2s1": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "86091172-t4s1": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92708809-t6s0": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92708809-t8s0": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92708809-t10s0": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92459166-t10s0": {
+    "disposition": "refuted",
+    "reason": "unrulable: empty ruling, blank rationale (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92645419-t14s1": {
+    "disposition": "refuted",
+    "reason": "unrulable: 'awkward sequencing' names no action (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92104376-t2s1": {
+    "disposition": "refuted",
+    "reason": "system note about the retired Threat Solver, not a ruling (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "86090147-t1s0": {
+    "disposition": "refuted",
+    "reason": "turn-level critique naming no correct action (planner-scope rant) (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92102433-t2s1": {
+    "disposition": "deferred",
+    "reason": "sprint-vs-build musing the owner calls 'an odds question' — no verdict (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
+  },
+  "92457318-t4s0": {
+    "disposition": "deferred",
+    "reason": "rationale describes a different decision than this record anchors (anchor mismatch) (2026-08-20 owner-approved triage batch C)",
+    "round": "2026-08-20"
   }
 }
