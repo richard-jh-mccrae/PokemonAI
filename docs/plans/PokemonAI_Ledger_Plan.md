@@ -1,7 +1,11 @@
 # The Ledger: 1-ply Worth-Differencing Decider
 
 **Status:** BUILT (2026-08-20) — steps 1–7 shipped as ADR-0145 (the Ledger + runtime swap) and
-ADR-0146 (the preview seam). Step 8, the manual training rounds, has not started.
+ADR-0146 (the preview seam). Step 8, the manual training rounds, is UNDERWAY: the grading
+harness was made honest first (ADR-0147 — own-prize anchor, retired rulings), scouting now
+prices the opponent's side with per-Brief overrides (ADR-0148), and the §7 nudge loop is
+rebuilt as `tools/train/ledger_tune.py` (per-nudge zero-regression gate, reports under
+`docs/tuning/runs/`).
 
 **Role:** Phase 1 — the Ledger replaces Bellman as the sole live decider: a single-decision
 (1-ply) lookahead that prices every option by the board-value change it causes and takes the

@@ -456,10 +456,10 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
 
 
 # --- rendering ---------------------------------------------------------------------------------
-# Laid out for a NARROW column: every line wraps to `WIDTH`, zone lists group by category.
+# Every line wraps to `WIDTH`, zone lists group by category.
 
-WIDTH = 38
-"""Default column width — sized for reading the read-out on a phone."""
+WIDTH = 120
+"""Default column width (owner's 2026-08-20 call); pass ``width=38`` for a phone-sized column."""
 
 LABELS = (
     "[pub] both players can see it",
@@ -1011,3 +1011,23 @@ def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRE
                 if episode_id is None or ep == episode_id:
                     keys.add(f"{ep}-{fr}")
     return sorted(keys, key=lambda k: tuple(int(p) for p in k.split("-")))
+
+
+def main(argv=None) -> int:
+    """``python -m train.blunder.frame_view <ep>-<frame>`` (with tools/ and src/ on PYTHONPATH)."""
+    import argparse
+    import sys
+
+    if hasattr(sys.stdout, "reconfigure"):     # Windows consoles default to cp1252; ⚡ breaks it
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("key", help="frame key, e.g. 92645419-25")
+    parser.add_argument("--width", type=int, default=WIDTH)
+    parser.add_argument("--deck-order", action="store_true")
+    args = parser.parse_args(argv)
+    print(dump(args.key, deck_order=args.deck_order, width=args.width))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

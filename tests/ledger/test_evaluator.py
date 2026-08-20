@@ -10,6 +10,8 @@ from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, 
                             PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
                             player, printout)
 
+import pytest
+
 from common.board import BoardState
 from common.ledger import LedgerContext, LedgerWeights, evaluate
 
@@ -384,8 +386,10 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
     """Mega Starmie's Nebula Beam has three colorless slots and Ignition provides three units
     on an evolution: one card doing three basics' work is fully live, not colorless-discounted.
     Dragapult ex is the control — also an evolution with a colorless slot, but only ONE, so
-    the multi-provision read must not fire there."""
-    context = ctx()
+    the multi-provision read must not fire there. The special-energy worth is pinned here so
+    the MECHANISM stays testable while the tuning rounds move the general default — the
+    asserted margins scale with that worth."""
+    context = ctx(overrides={"kind.special_energy": 0.10})
     beside_mega = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[IGNITION])),
                            context)
     beside_dragapult = evaluate(board(me=player(active=body(DRAGAPULT, 1), hand=[IGNITION])),
@@ -394,3 +398,70 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
                                context)
     assert beside_mega.part("me.hand") > beside_dragapult.part("me.hand") + 0.015
     assert beside_dragapult.part("me.hand") > beside_makuhita.part("me.hand") + 0.015
+
+
+def test_concentration_prefers_finishing_the_started_twin():
+    """ADR-0150: with the lever armed, 2-and-0 across twin attackers out-values 1-and-1 —
+    the second energy toward Nebula Beam's three slots beats the first on a fresh body.
+    At the 0.0 default the term is off and the splits price identically."""
+    def split(started_units, bare_units):
+        return board(me=player(
+            active=body(STARYU, 9),
+            bench=[body(MEGA_STARMIE, 1, energies=(WATER,) * started_units),
+                   body(MEGA_STARMIE, 2, energies=(WATER,) * bare_units)]))
+
+    armed = ctx(overrides={"concentration": 0.1})
+    assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
+    flat = ctx()
+    assert evaluate(split(2, 0), flat).total == pytest.approx(
+        evaluate(split(1, 1), flat).total)
+
+
+def test_rental_energy_on_the_bench_prices_zero():
+    """ADR-0150: an end-of-turn-discarding Energy on a BENCHED body evaporates before the
+    body can attack — worth zero there, priced normally on the Active."""
+    def ignition_body(serial):
+        shell = body(MEGA_STARMIE, serial)
+        shell["energies"] = [0]
+        shell["energyCards"] = [{"id": IGNITION, "serial": 701}]
+        return shell
+
+    context = ctx()
+    bare_bench = evaluate(board(me=player(active=body(STARYU, 9),
+                                          bench=[body(MEGA_STARMIE, 1)])), context)
+    rental_bench = evaluate(board(me=player(active=body(STARYU, 9),
+                                            bench=[ignition_body(1)])), context)
+    assert rental_bench.part("me.bodies") == pytest.approx(bare_bench.part("me.bodies"))
+
+    bare_active = evaluate(board(me=player(active=body(MEGA_STARMIE, 1))), context)
+    rental_active = evaluate(board(me=player(active=ignition_body(1))), context)
+    assert rental_active.part("me.bodies") > bare_active.part("me.bodies")
+
+
+def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
+    """ADR-0151: evolving reads NEGATIVE at defaults (the hand pays full worth while the
+    board credits role parity — the diagnosed evolution underpricing); with size priced,
+    the 260-HP jump out-pays the spend. Default 0.0 must keep today's sign."""
+    before = board(me=player(active=body(DRAGAPULT, 9),
+                             bench=[body(STARYU, 1, hp=70, max_hp=70)],
+                             hand=[MEGA_STARMIE]))
+    after = board(me=player(active=body(DRAGAPULT, 9),
+                            bench=[body(MEGA_STARMIE, 1, hp=330, max_hp=330,
+                                        under=(STARYU,))],
+                            hand=[]))
+    assert swing(before, after) < 0                       # the disease, documented
+    armed = ctx(overrides={"hp_value": 0.2})
+    assert swing(before, after, armed) > 0
+
+
+def test_hp_value_prices_chip_damage_and_unknown_threats():
+    """Size needs no store record: chipping 100 off a big body is a real gain, and a
+    store-unknown 330 HP opponent body carries more threat weight than a 70 HP one."""
+    context = ctx(overrides={"hp_value": 0.2})
+    fresh = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=330, max_hp=330)))
+    chipped = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=230, max_hp=330)))
+    assert swing(fresh, chipped, context) > swing(fresh, chipped, ctx())
+
+    big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
+    small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
+    assert evaluate(big, context).total < evaluate(small, context).total

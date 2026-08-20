@@ -296,3 +296,124 @@ def test_a_refresh_for_a_card_not_in_hand_logs_the_gap_and_decides_anyway():
     decision = make_decider(provider).decide(root_obs)
     assert decision.chosen
     assert any("not visible in hand" in gap for gap in decision.diagnostics["gaps"])
+
+
+def _price(kind, index, swing, *, ends=False, refresh=False):
+    from types import SimpleNamespace
+
+    from common.ledger.preview import OptionPrice
+
+    return OptionPrice(
+        SimpleNamespace(selection=[index], identity=SimpleNamespace(kind=kind)),
+        swing, ends, (), refresh=refresh)
+
+
+def test_a_positive_hand_shuffle_waits_for_other_positive_plays():
+    """A Refresh is a hand-ender: playing it first shuffles away the cards every other
+    positive hand play wanted, so among positive turn-continuing options the shuffle goes
+    last — the same lesson as attack-last, one zone smaller. The shuffle out-pricing the
+    attach is exactly the scenario that bites."""
+    decider = make_decider(provider=None)
+    prices = (_price("attach", 0, 0.05), _price("play", 1, 0.40, refresh=True),
+              _price("end", 2, 0.0, ends=True))
+    assert decider._choose(prices, forced=False).action.identity.kind == "attach"
+
+
+def test_a_positive_hand_shuffle_alone_still_gets_played():
+    decider = make_decider(provider=None)
+    prices = (_price("play", 0, 0.40, refresh=True), _price("end", 1, 0.0, ends=True))
+    assert decider._choose(prices, forced=False).action.identity.kind == "play"
+
+
+def test_price_actions_flags_the_root_refresh_node():
+    from common.board import BoardState
+    from common.ledger import PreviewState, evaluate
+    from common.ledger.preview import price_actions
+
+    hand = [FIRE_E, LILLIES]
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=hand),
+                        them=player(own=False, active=body(DRAGAPULT, 2)))
+    attached = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[LILLIES]),
+        them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
+    attach, play, end = action("attach", (0,)), action("play", (1,)), action("end", (2,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, play, end)},
+        nodes={("root", attach.identity): Deterministic(attached),
+               ("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
+    ctx = LedgerContext.build()
+    board = BoardState.root(root_obs, decklist=DECK)
+    state = PreviewState(root_obs, board.seat, "root", deck=DECK,
+                         deck_counts=board.deck_counts or (),
+                         prize_counts=board.own_prizes or ())
+    flags = {str(price.action.identity): price.refresh
+             for price in price_actions(state, board, evaluate(board, ctx).total,
+                                        provider, ctx)}
+    assert flags[str(play.identity)] is True
+    assert flags[str(attach.identity)] is False
+    assert flags[str(end.identity)] is False
+
+
+def test_act_threshold_hands_a_small_positive_turn_to_the_ender():
+    """The act/pass bar is a lever now: with the threshold above the attach's swing, nothing
+    is worth doing and the best ender decides; at the default 0.0 the attach still acts."""
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
+                        them=player(own=False, active=body(DRAGAPULT, 2)))
+    attached = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[]),
+        them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
+    attach, end = action("attach", (0,)), action("end", (1,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, end)},
+        nodes={("root", attach.identity): Deterministic(attached)})
+    lifted = LedgerDecider(DECK, "test", LedgerContext.build(overrides={"act_threshold": 5.0}),
+                           provider_factory=lambda _s, **_kw: provider).decide(root_obs)
+    assert lifted.action.kind == "end"
+    default = make_decider(provider).decide(root_obs)
+    assert default.action.kind == "attach"
+
+
+def test_fetch_plays_queue_behind_a_positive_hand_shuffle():
+    """The owner's ordering doctrine: shuffle, THEN fetch — a card fetched into a hand about
+    to be shuffled is a wasted fetch. Spend-from-hand plays still go first."""
+    from dataclasses import replace as dc_replace
+
+    decider = make_decider(provider=None)
+    attach = _price("attach", 0, 0.05)
+    fetch = dc_replace(_price("play", 1, 0.10), restocks=True)
+    shuffle = _price("play", 2, 0.40, refresh=True)
+    end = _price("end", 3, 0.0, ends=True)
+
+    assert decider._choose((attach, fetch, shuffle, end),
+                           forced=False).action.selection == [0]   # spend first
+    assert decider._choose((fetch, shuffle, end),
+                           forced=False).action.selection == [2]   # shuffle before fetch
+    assert decider._choose((fetch, end),
+                           forced=False).action.selection == [1]   # no shuffle: fetch normal
+
+
+def test_restock_classification_reads_the_played_cards_tags():
+    """The played card id is read from the canonical identity parts — raw select options
+    reference hand cards by position only."""
+    import json as json_mod
+    from types import SimpleNamespace
+
+    from common.cards import card_store
+
+    fetcher_id = next(card_id for card_id, card in sorted(card_store().items())
+                      if {"recycle", "recycle_line"}.intersection(
+                          getattr(card, "tags", ()) or ()))
+    decider = make_decider(provider=None)
+
+    from common.ledger.preview import OptionPrice
+
+    def play_price(card_id, kind="play"):
+        part = json_mod.dumps([0, {"type": 7},
+                               [[2, {"id": card_id, "playerIndex": 0}]]])
+        action = SimpleNamespace(selection=[0],
+                                 identity=SimpleNamespace(kind=kind, parts=(part,)))
+        return OptionPrice(action, 0.1, False, ())
+
+    assert decider._restocks_hand(play_price(fetcher_id)) is True
+    assert decider._restocks_hand(play_price(999999)) is False
+    assert decider._restocks_hand(play_price(fetcher_id, kind="attach")) is False

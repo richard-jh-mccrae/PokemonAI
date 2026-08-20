@@ -7,7 +7,9 @@ second look, not a weight nudge), a coverage-gap census counted per affected dec
 against a prior baseline file — the frames that used to agree and no longer do. Frames with no
 `correct` ruling assert nothing and are counted `ungraded`, never as misses. A sweep is only
 sound within one deck (a frame replayed through another decklist is off-policy), so frames are
-grouped by their recording agent throughout.
+grouped by their recording agent throughout. Honesty rules (ADR-0147): frames archived without
+the live shell's `own_prizes` anchor get one stamped before replay, and rulings dispositioned
+in `reviewed.json` are RETIRED — listed in their own section, never graded.
 
     python tools/train/ledger_corpus.py [--decks mega_starmie ...] [--workers N]
         [--baseline docs/plans/ledger-corpus-dashboard.json] [--limit N]
@@ -29,17 +31,18 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.option_equivalence import class_of, option_equivalence  # noqa: E402
-from common.engine import CgpyTransitionProvider  # noqa: E402 - offline replay only
+from common.engine import CgpyTransitionProvider, stamp_own_prizes  # noqa: E402 - offline replay only
 from common.runtime import build_runtime  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.blunder.decode import option_label  # noqa: E402
+from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E402
 
 
 DECKS = ("mega_starmie", "mega_lucario", "dragapult_ex")
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "ledger-corpus-dashboard.json"
 
 
-def _build_runtime(deck_name: str):
+def _build_runtime(deck_name: str, weight_overrides=None):
     agent_dir = REPO / "src" / "agents" / deck_name
     spec = importlib.util.spec_from_file_location("_ledger_corpus_strategy",
                                                   agent_dir / "strategy.py")
@@ -47,7 +50,13 @@ def _build_runtime(deck_name: str):
     spec.loader.exec_module(module)
     deck = [int(value) for value in (agent_dir / "deck.csv").read_text().splitlines()
             if value.strip()]
-    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
+    ledger_weights = None
+    if weight_overrides:
+        from common.ledger import LedgerWeights
+
+        ledger_weights = LedgerWeights().resolve(weight_overrides)
+    return build_runtime(module.STRATEGY, deck, provider_factory=CgpyTransitionProvider,
+                         ledger_weights=ledger_weights)
 
 
 def _satisfies_one(chosen, correct, equivalence) -> bool:
@@ -74,10 +83,12 @@ def _labels(obs, indices) -> str:
                      for index in indices or () if 0 <= index < len(options))
 
 
-def _replay_one(deck_name: str, correction) -> dict:
-    """One frame through a fresh runtime: isolation, matching the live shell exactly."""
-    runtime = _build_runtime(deck_name)
+def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
+    """One frame through a fresh runtime: isolation, matching the live shell exactly —
+    including the own-prize anchor the live shell stamps before every decide."""
+    runtime = _build_runtime(deck_name, weight_overrides)
     obs = correction.obs
+    stamped = stamp_own_prizes(obs, runtime.deck)
     started = time.perf_counter()
     decision = runtime.decide(obs)
     elapsed = time.perf_counter() - started
@@ -106,6 +117,7 @@ def _replay_one(deck_name: str, correction) -> dict:
         "correct_label": _labels(obs, correct),
         "rationale": correction.rationale,
         "gaps": sorted(set(diagnostics.get("gaps", ()))),
+        "stamped_prizes": stamped,
         "elapsed_seconds": elapsed,
     }
     if diagnostics.get("fallback"):                # a crashed brain must be visible, not a miss
@@ -139,11 +151,15 @@ def _deck_summary(rows: list[dict]) -> dict:
     }
 
 
-def payload(rows: list[dict], *, baseline: dict | None = None) -> dict:
+def payload(rows: list[dict], *, retired: list[dict] | None = None,
+            baseline: dict | None = None) -> dict:
     rows.sort(key=lambda row: (row["deck"], row["key"], row["id"]))
+    retired = sorted(retired or (), key=lambda row: (row["deck"], row["key"]))
     decks = {}
-    for deck_name in sorted({row["deck"] for row in rows}):
+    for deck_name in sorted({row["deck"] for row in rows}
+                            | {row["deck"] for row in retired}):
         decks[deck_name] = _deck_summary([row for row in rows if row["deck"] == deck_name])
+        decks[deck_name]["retired"] = sum(1 for row in retired if row["deck"] == deck_name)
     agreements = [summary["agreement"] for summary in decks.values()
                   if summary["agreement"] is not None]
     regressions = []
@@ -156,12 +172,16 @@ def payload(rows: list[dict], *, baseline: dict | None = None) -> dict:
         "schema": 1,
         "git_rev": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO,
                                            text=True).strip(),
+        # An empty regressions list only means something beside the baseline it was measured
+        # against; None here says "never compared", not "zero regressions".
+        "baseline_git_rev": (baseline or {}).get("git_rev"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "decks": decks,
         # The generality bar: the GENERAL weights must clear every deck, so the headline is
         # the worst deck, never the average.
         "generality_floor": min(agreements) if agreements else None,
         "regressions": regressions,
+        "retired": retired,
         "rows": rows,
     }
 
@@ -169,21 +189,27 @@ def payload(rows: list[dict], *, baseline: dict | None = None) -> dict:
 def render_markdown(result: dict) -> str:
     lines = ["# Ledger corpus dashboard", "",
              f"Generated {result['generated_at']} at `{result['git_rev'][:12]}`.", ""]
-    lines.append("| deck | graded | agrees | agreement | ungraded | gap-affected decisions "
-                 "| fallbacks |")
-    lines.append("|---|---|---|---|---|---|---|")
+    lines.append("| deck | graded | agrees | agreement | ungraded | retired | "
+                 "gap-affected decisions | fallbacks |")
+    lines.append("|---|---|---|---|---|---|---|---|")
     for deck_name, summary in result["decks"].items():
         agreement = ("-" if summary["agreement"] is None
                      else f"{summary['agreement'] * 100:.1f}%")
         lines.append(f"| {deck_name} | {summary['graded']} | {summary['agrees']} | "
-                     f"{agreement} | {summary['ungraded']} | {summary['gap_decisions']} | "
-                     f"{summary.get('fallbacks', 0)} |")
+                     f"{agreement} | {summary['ungraded']} | {summary.get('retired', 0)} | "
+                     f"{summary['gap_decisions']} | {summary.get('fallbacks', 0)} |")
     floor = result["generality_floor"]
     lines += ["", f"**Generality floor (worst deck): "
                   f"{'-' if floor is None else f'{floor * 100:.1f}%'}**", ""]
     if result["regressions"]:
         lines += [f"## Regressions ({len(result['regressions'])})", ""]
         lines += [f"- `{row_id}`" for row_id in result["regressions"]] + [""]
+    if result.get("retired"):
+        lines += [f"## Retired rulings ({len(result['retired'])}) — dispositioned in "
+                  "reviewed.json, not graded", ""]
+        lines += [f"- {row['deck']} `{row['key']}`: {row['disposition']}"
+                  + (f" ({row['round']})" if row.get("round") else "")
+                  for row in result["retired"]] + [""]
     crashed = [row for row in result["rows"] if row.get("fallback")]
     if crashed:
         lines += [f"## Crashed decisions ({len(crashed)}) — fix the bug, ignore the grade", ""]
@@ -208,28 +234,41 @@ def render_markdown(result: dict) -> str:
     return "\n".join(lines)
 
 
+def _retired_row(correction, entry) -> dict:
+    return {"deck": correction.agent,
+            "key": f"{correction.episode_id}-{(correction.decision or {}).get('frame', -1)}",
+            "id": correction.id,
+            "disposition": entry.get("disposition"),
+            "round": entry.get("round")}
+
+
 def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
-          baseline: dict | None = None) -> dict:
-    tasks = []
-    for correction in load_corrections(store):
-        if correction.agent in decks and correction.obs is not None:
-            tasks.append((correction.agent, correction))
+          baseline: dict | None = None, reviewed: dict | None = None,
+          weight_overrides: dict | None = None) -> dict:
+    swept = [correction for correction in load_corrections(store)
+             if correction.agent in decks and correction.obs is not None]
+    # A ruling the owner already dispositioned (refuted, fixed, covered…) is retired: grading
+    # it would score the brain against a verdict that no longer stands (the ADR-0082 drift).
+    active, dispositioned = partition_reviewed(
+        swept, load_reviewed() if reviewed is None else reviewed)
+    retired = [_retired_row(correction, entry) for correction, entry in dispositioned]
+    tasks = [(correction.agent, correction) for correction in active]
     tasks.sort(key=lambda pair: (pair[0], pair[1].id))
     if limit is not None:
         tasks = tasks[:limit]
     rows = []
     if workers > 1:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_replay_one, deck_name, correction)
+            futures = [pool.submit(_replay_one, deck_name, correction, weight_overrides)
                        for deck_name, correction in tasks]
             for completed, future in enumerate(as_completed(futures), start=1):
                 rows.append(future.result())
                 print(f"[{completed}/{len(tasks)}]", flush=True)
     else:
         for completed, (deck_name, correction) in enumerate(tasks, start=1):
-            rows.append(_replay_one(deck_name, correction))
+            rows.append(_replay_one(deck_name, correction, weight_overrides))
             print(f"[{completed}/{len(tasks)}] {deck_name} {correction.id}", flush=True)
-    return payload(rows, baseline=baseline)
+    return payload(rows, retired=retired, baseline=baseline)
 
 
 def main(argv=None) -> int:

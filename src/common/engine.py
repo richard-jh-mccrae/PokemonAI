@@ -52,6 +52,31 @@ def _own_prize_export(engine, seat: int) -> dict[int, int]:
     return dict(Counter(engine.gs.card_id(serial) for serial in board.prize))
 
 
+def stamp_own_prizes(observation: dict, decklist) -> bool:
+    """Stamp the live shell's own-prize anchor onto an ARCHIVED observation (ADR-0147): the
+    same determinized split this provider honors, so root and successors tell one story."""
+    if observation.get("own_prizes") is not None:
+        return False
+    if not decklist:
+        return False
+    from types import SimpleNamespace
+
+    from common.board import BoardState
+
+    current = observation.get("current") or {}
+    players = current.get("players") or ()
+    seat = int(current.get("yourIndex") or 0)
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else None
+    if me is None:
+        return False
+    board = BoardState.root(observation, decklist=tuple(int(c) for c in decklist))
+    root_view = SimpleNamespace(prize_counts=(), deck_counts=board.deck_counts or (),
+                                deck=tuple(int(c) for c in decklist))
+    _, own_prize = _own_hidden_zones(root_view, me, world_index=0, world_count=1)
+    observation["own_prizes"] = dict(Counter(int(card_id) for card_id in own_prize))
+    return True
+
+
 class CgpyTransitionProvider:
     """Forkable full-rules engine adapter.  It enumerates and applies; it never ranks."""
 

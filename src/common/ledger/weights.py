@@ -16,7 +16,8 @@ from dataclasses import dataclass, field, fields, replace
 from typing import Mapping
 
 
-#: Worth of carrying each Role, in prizes (`pokemon_roles.POKEMON_ROLES` is the vocabulary).
+#: Worth of carrying each Role, in prizes. Vocabulary = `POKEMON_ROLES` plus the Brief target
+#: roles (disruption_target / support_pokemon / engine), carried only by scouted opponents.
 ROLE_WORTH: dict[str, float] = {
     "primary_attacker": 0.50,
     "backup_attacker": 0.35,
@@ -28,9 +29,13 @@ ROLE_WORTH: dict[str, float] = {
     "item_locker": 0.30,
     "retreat_assist": 0.20,
     "gust": 0.30,
+    "disruption_target": 0.35,
+    "support_pokemon": 0.25,
+    "engine": 0.40,
 }
 
 #: Worth by behavioural tag for cards whose Role table has nothing to say (mostly Trainers).
+#: A 0.0 entry is a live lever the rounds have not raised: the kind fallback still prices it.
 TAG_WORTH: dict[str, float] = {
     "draw": 0.18,
     "search": 0.15,
@@ -40,7 +45,27 @@ TAG_WORTH: dict[str, float] = {
     "gust": 0.25,
     "heal": 0.12,
     "switch": 0.12,
-    "recovery": 0.12,
+    "bench_fill": 0.0,
+    "clutch_heal": 0.0,
+    "cost_discard": 0.0,
+    "dig": 0.0,
+    "dig:2": 0.0,
+    "dig:3": 0.0,
+    "discard_energy_recur": 0.0,
+    "discard_eot": 0.0,
+    "energy_denial": 0.0,
+    "item_lock": 0.0,
+    "opener": 0.0,
+    "recycle": 0.0,
+    "recycle_line": 0.0,
+    "rush_evolve": 0.0,
+    "shuffle_hand": 0.0,
+    "spread": 0.0,
+    "stall": 0.0,
+    "supporter_tutor": 0.0,
+    "tutor_energy": 0.0,
+    "tutor_mega": 0.0,
+    "tutor_trainer": 0.0,
 }
 
 #: Fallback worth by card class when neither Roles nor tags price it.
@@ -51,6 +76,9 @@ KIND_WORTH: dict[str, float] = {
     "tool": 0.08,
     "stadium": 0.10,
     "energy": 0.10,
+    # 0.05 adopted 2026-08-20: below basic, so Ignition-vs-{W} exact ties break on demand.
+    # mega_starmie dissents (keeps 0.10) — docs/tuning/runs/ledger_20260820_round1.md.
+    "special_energy": 0.05,
 }
 
 
@@ -61,13 +89,16 @@ class LedgerWeights:
     zone_in_hand: float = 0.65
     zone_in_deck: float = 0.15
     zone_in_discard: float = 0.10
-    zone_under_body: float = 0.10
+    #: 0.65 adopted 2026-08-20 (ADR-0151): the card invested UNDER an evolution keeps most of
+    #: its worth — line continuity, the fix for evolves pricing negative at role parity.
+    zone_under_body: float = 0.65
     zone_attached_usable: float = 1.0
     zone_attached_useless: float = 0.0
     zone_tool_attached: float = 0.90
 
     # Demand discounts on hand/deck worth.
-    demand_dead: float = 0.40
+    #: 0.25 adopted 2026-08-20; mega_starmie dissents — docs/tuning/runs/ledger_20260820_round1.md.
+    demand_dead: float = 0.25
     demand_colorless_only: float = 0.70
     #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
     #: than either alone — the nonlinearity the sampled-hand chance model feeds on.
@@ -81,20 +112,32 @@ class LedgerWeights:
 
     # A damaged body keeps this fraction of its worth even at 1 HP; HP below zero counts as zero.
     damage_floor: float = 0.30
+    #: Prizes per 100 printed max HP, on every body, inside the damage multiplier (ADR-0151):
+    #: SIZE becomes worth, so an evolution out-values its basic and chip damage prices real.
+    hp_value: float = 0.0
 
     # The scarce goods and liabilities of having bodies in play.
     bench_slot_value: float = 0.06
     prize_liability: float = 0.04
 
+    #: Concentration (ADR-0150): extra credit for a body's progress toward its LARGEST attack,
+    #: squared — so finishing a started attacker outprices starting a fresh one. 0.0 = off.
+    concentration: float = 0.0
+
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08
-    active_unready_fraction: float = 0.30
+    #: 0.15 adopted 2026-08-20 (docs/tuning/runs/ledger_20260820_145141.md): an unready
+    #: Active keeps less premium, so readying or replacing it prices higher.
+    active_unready_fraction: float = 0.15
 
     # Game-level terms.
     prize_race: float = 1.00
     win_value: float = 100.0
     unknown_card_worth: float = 0.05
     opponent_unknown_card_worth: float = 0.12
+    #: The swing a turn-continuing option must clear to act; 0.0 = the historical any-positive
+    #: bar. The float-noise floor still applies underneath, so this never sharpens ties.
+    act_threshold: float = 0.0
 
     # Flat penalties for the active body's special conditions.
     status_asleep: float = 0.15

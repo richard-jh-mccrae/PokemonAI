@@ -43,7 +43,7 @@ def _observation():
 def test_a_brain_crash_logs_the_traceback_and_reports_in_diagnostics(capsys):
     runtime = _runtime()
 
-    def dead(_obs):
+    def dead(_obs, **_kw):
         raise ValueError("boom: the exact bug text")
 
     runtime.ledger.decide = dead
@@ -68,7 +68,7 @@ def test_strict_mode_refuses_the_parachute(monkeypatch):
     monkeypatch.setenv("AGENT_BRAIN_STRICT", "1")
     runtime = _runtime()
 
-    def dead(_obs):
+    def dead(_obs, **_kw):
         raise ValueError("boom")
 
     runtime.ledger.decide = dead
@@ -78,7 +78,7 @@ def test_strict_mode_refuses_the_parachute(monkeypatch):
 
 def test_a_healthy_decision_logs_no_crash_marker(capsys):
     runtime = _runtime()
-    runtime.ledger.decide = lambda _obs: RootDecision(
+    runtime.ledger.decide = lambda _obs, **_kw: RootDecision(
         (0,), ActionIdentity("end", (0,)), 0.0, True, {"backend": "ledger"})
     decision = runtime.decide(_observation())
     assert decision.diagnostics["backend"] == "ledger"

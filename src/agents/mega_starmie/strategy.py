@@ -36,6 +36,9 @@ STARMIE_BODY = f"own.body.card:{MEGA_STARMIE_EX}:readiest"
 STRATEGY = Strategy(
     name="mega_starmie",
     roles=ROLES,
+    # Measured deck dissent: the 2026-08-20 general adoptions flip four starmie rulings while
+    # every other deck only gains — trail in docs/tuning/runs/ledger_20260820_round1.md.
+    ledger_overrides={"demand_dead": 0.40, "kind.special_energy": 0.10},
     # The COMPLETE pregame ACTIVE ranking, best first (ADR-0079). Staryu is the Line base and wants
     # the BENCH, evolving behind the Cinderace wall rather than sitting in the most-exposed slot.
     starter_priority=[CINDERACE, STARYU],

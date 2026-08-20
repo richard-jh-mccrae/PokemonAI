@@ -14,7 +14,7 @@ Staryu for Nebula Beam negative."""
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from typing import Mapping
 
@@ -26,12 +26,26 @@ from .weights import LedgerWeights
 
 
 @dataclass(frozen=True)
+class OpponentLayer:
+    """Scouting's read of THEIR side (ADR-0148): card-generic ``roles`` price at full
+    strength; ``brief_roles`` + the Brief-bent ``weights`` blend in by ``gamma``, fail-open."""
+
+    roles: Mapping[int, tuple[str, ...]]
+    brief_roles: Mapping[int, tuple[str, ...]]
+    weights: LedgerWeights
+    gamma: float
+
+
+@dataclass(frozen=True)
 class LedgerContext:
     """Everything deck-scoped the evaluator needs: weights, Roles, and the store itself."""
 
     weights: LedgerWeights
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
+    #: The per-decision scouting layer for THEIR side's worth reads; None prices the opponent
+    #: exactly as before the wiring (store defaults, unknown floor).
+    opponent: OpponentLayer | None = None
 
     @classmethod
     def build(cls, *, weights: LedgerWeights | None = None,
@@ -44,6 +58,9 @@ class LedgerContext:
                 merged[int(card_id)] = tuple(declared)
         return cls(weights=resolved, roles=merged, store=card_store())
 
+    def with_opponent(self, layer: OpponentLayer | None) -> "LedgerContext":
+        return self if layer is self.opponent else replace(self, opponent=layer)
+
     def facts(self, card_id: int):
         return self.store.get(int(card_id))
 
@@ -51,27 +68,47 @@ class LedgerContext:
         return self.roles.get(int(card_id), ())
 
 
-def base_worth(card_id: int, facts, ctx: LedgerContext) -> tuple[float, str | None]:
-    """A card's standing worth in prizes, plus a coverage gap when the store cannot see it."""
-    weights = ctx.weights
+def _merge_roles(*claims) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(role for group in claims for role in (group or ())))
+
+
+def _resolve_worth(card_id: int, facts, weights: LedgerWeights,
+                   roles: tuple[str, ...]) -> tuple[float, str | None]:
     pinned = weights.card_worth_map.get(int(card_id))
     if pinned is not None:
         return pinned, None
+    role_read = max((weights.role_worth.get(role, 0.0) for role in roles), default=0.0)
     if facts is None:
-        return weights.unknown_card_worth, f"unknown card {int(card_id)}"
-    role_read = max((weights.role_worth.get(role, 0.0)
-                     for role in ctx.card_roles(card_id) or getattr(facts, "default_roles", ())),
-                    default=0.0)
+        # No record: roles (a scouted claim, or nothing) are all there is to price.
+        return max(role_read, weights.unknown_card_worth), f"unknown card {int(card_id)}"
     tag_read = max((weights.tag_worth.get(tag, 0.0)
                     for tag in getattr(facts, "tags", ()) or ()), default=0.0)
     if isinstance(facts, PokemonCard):
         kind = "pokemon"
     elif isinstance(facts, EnergyCard):
-        kind = "energy"
+        kind = ("special_energy" if getattr(facts, "kind", "") == "special_energy"
+                else "energy")
     else:
         kind = getattr(facts, "kind", "item")
     kind_read = weights.kind_worth.get(kind, weights.unknown_card_worth)
     return max(role_read, tag_read, kind_read), None
+
+
+def base_worth(card_id: int, facts, ctx: LedgerContext, *,
+               own: bool = True) -> tuple[float, str | None]:
+    """A card's standing worth in prizes, plus a coverage gap when the store cannot see it.
+    THEIR side blends the scouting layer in by gamma (ADR-0148); gamma 0 = the general read."""
+    layer = None if own else ctx.opponent
+    declared = ctx.card_roles(card_id) or getattr(facts, "default_roles", ()) or ()
+    base_roles = declared if layer is None else _merge_roles(
+        declared, layer.roles.get(int(card_id)))
+    general, gap = _resolve_worth(card_id, facts, ctx.weights, tuple(base_roles))
+    if layer is None or layer.gamma <= 0.0:
+        return general, gap
+    scouted, _ = _resolve_worth(
+        card_id, facts, layer.weights,
+        _merge_roles(base_roles, layer.brief_roles.get(int(card_id))))
+    return general + layer.gamma * (scouted - general), gap
 
 
 # --- energy usability -------------------------------------------------------------------
@@ -185,6 +222,18 @@ def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) 
 def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) -> bool:
     """Marginal usability of one MORE unit of this color on this body."""
     return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
+
+
+def top_attack_cost(body_facts, ctx: LedgerContext, reach=None) -> int:
+    """The largest attack cost this body can grow into: its own attacks in full, a line
+    evolution's only through a positive reach gate (ADR-0150's concentration target)."""
+    gates = reach or {}
+    best = 0
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        if evo_id is not None and not gates.get(evo_id, 0.0):
+            continue
+        best = max(best, len(attack.cost))
+    return best
 
 
 def usable_units(body_facts, attached, ctx: LedgerContext, reach=None) -> float:

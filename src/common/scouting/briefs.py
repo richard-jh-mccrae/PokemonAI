@@ -27,6 +27,9 @@ class Brief:
     pokemon: list[dict] = field(default_factory=list)         # {card, roles: [compact doctrine roles]}
     key_cards: list[dict] = field(default_factory=list)       # {card, role}
     strategies: tuple[StrategyHint, ...] = ()
+    #: Ledger weight overrides scoped to THIS archetype's side of the board — same dotted-key
+    #: format as a deck's `Strategy.ledger_overrides`; validated at use, so a typo fails loud.
+    ledger_overrides: dict = field(default_factory=dict)
 
 
 def _brief_from(raw: dict) -> Brief | None:
@@ -47,6 +50,7 @@ def _brief_from(raw: dict) -> Brief | None:
         pokemon=raw.get("pokemon") or [],
         key_cards=raw.get("key_cards") or [],
         strategies=strategies,
+        ledger_overrides=raw.get("ledger_overrides") or {},
     )
 
 
@@ -146,6 +150,29 @@ def resolve_brief_cards(brief: Brief, ids_for_name, *, stat_for_id=None,
         if target_role:
             target_roles[card_id] = target_role
     return frozenset(threat_ids), target_roles
+
+
+def scouted_ledger_roles(read: Read | None, brief: Brief | None, stats,
+                         functions=None) -> dict[int, tuple[str, ...]]:
+    """Recognition role claims by card id (matched Brief declarations + Read intel) for the
+    Ledger's opponent worth read; the caller blends them by the Read's gamma (ADR-0148)."""
+    claims: dict[int, tuple[str, ...]] = {}
+
+    def add(card_id, roles):
+        if roles:
+            claims[int(card_id)] = tuple(dict.fromkeys(
+                (*claims.get(int(card_id), ()), *roles)))
+
+    for intel in (*(read.threats if read else ()), *(read.targets if read else ())):
+        add(intel.cardId, (intel.role,) if intel.role else ())
+    ids_for_name = getattr(stats, "ids_for_name", None)
+    if brief is not None and ids_for_name is not None:
+        _threat_ids, target_roles = resolve_brief_cards(
+            brief, ids_for_name, stat_for_id=getattr(stats, "get", None),
+            forward_ids=getattr(stats, "forward_card_ids", None), functions=functions)
+        for card_id, role in target_roles.items():
+            add(card_id, (role,))
+    return claims
 
 
 class _StatLookup:

@@ -16,7 +16,7 @@ from common.board import BoardState
 from common.board.nodes import Body, Side
 
 from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, demand_scale,
-                    line_reach, usable_units)
+                    line_reach, top_attack_cost, usable_units)
 
 
 @dataclass(frozen=True)
@@ -67,12 +67,13 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
     bodies_value = 0.0
     for body in side.bodies:
         # The Nth fielded copy of the same card saturates: its role is already being done.
-        bodies_value += _body_value(body, ctx, gaps, reach=reach,
+        bodies_value += _body_value(body, ctx, gaps, reach=reach, own=own,
+                                    is_active=body is side.active,
                                     discount=weights.surplus_copy ** copies[body.card.card_id])
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
     if side.active is not None:
-        worth, _ = base_worth(side.active.card.card_id, side.active.card.facts, ctx)
+        worth, _ = base_worth(side.active.card.card_id, side.active.card.facts, ctx, own=own)
         ready = any_attack_payable(side.active.card.facts, side.active.energies)
         yield "active", (weights.active_premium * worth
                          * (1.0 if ready else weights.active_unready_fraction))
@@ -104,7 +105,7 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
 
     discard = 0.0
     for card in side.discard:
-        worth, gap = base_worth(card.card_id, card.facts, ctx)
+        worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
             gaps.append(f"discard: {gap}")
         discard += worth * weights.zone_in_discard
@@ -118,9 +119,9 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
 
 
 def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
-                discount: float = 1.0) -> float:
+                discount: float = 1.0, own: bool = True, is_active: bool = False) -> float:
     weights = ctx.weights
-    worth, gap = base_worth(body.card.card_id, body.card.facts, ctx)
+    worth, gap = base_worth(body.card.card_id, body.card.facts, ctx, own=own)
     if gap:
         gaps.append(f"in play: {gap}")
     value = worth * discount * weights.zone_in_play
@@ -129,27 +130,40 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     useless = len(body.energies) - usable
     energy_worth = 0.0
     for card in body.energy_cards:
-        unit_worth, gap = base_worth(card.card_id, card.facts, ctx)
+        # An end-of-turn-discarding Energy on a BENCHED body evaporates before the body can
+        # ever attack (ADR-0150): its worth is a rental nobody rides, priced zero.
+        if not is_active and "discard_eot" in (getattr(card.facts, "tags", ()) or ()):
+            continue
+        unit_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
             gaps.append(f"attached: {gap}")
         energy_worth += unit_worth
     if body.energies and not body.energy_cards:
-        energy_worth = len(body.energies) * weights.kind_worth.get("energy", 0.1)
+        energy_worth = len(body.energies) * weights.kind_worth["energy"]
     per_unit = energy_worth / len(body.energies) if body.energies else 0.0
     value += per_unit * (usable * weights.zone_attached_usable
                          + useless * weights.zone_attached_useless)
+    if weights.concentration and body.energies:
+        cost = top_attack_cost(body.card.facts, ctx, reach)
+        if cost > 0:
+            progress = min(1.0, usable / cost)
+            value += weights.concentration * worth * discount * progress * progress
 
     for card in body.tools:
-        tool_worth, gap = base_worth(card.card_id, card.facts, ctx)
+        tool_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
             gaps.append(f"tool: {gap}")
         value += tool_worth * weights.zone_tool_attached
     for card in body.pre_evolution:
-        under_worth, gap = base_worth(card.card_id, card.facts, ctx)
+        under_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
             gaps.append(f"under: {gap}")
         value += under_worth * weights.zone_under_body
 
+    # Size is worth (ADR-0151): printed max HP needs no store record, so even an unknown
+    # opponent body carries threat weight — and the multiplier below makes chip damage a
+    # constant real loss per HP on any body.
+    value += weights.hp_value * (body.max_hp / 100.0)
     hp_fraction = (max(0, body.hp) / body.max_hp) if body.max_hp > 0 else 1.0
     return value * (weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction)
 
