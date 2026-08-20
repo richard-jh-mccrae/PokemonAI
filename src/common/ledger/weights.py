@@ -78,7 +78,11 @@ KIND_WORTH: dict[str, float] = {
     "tool": 0.08,
     "stadium": 0.10,
     "energy": 0.10,
-    "special_energy": 0.10,
+    # 0.05 adopted by the 2026-08-20 tuning round: pricing special energy BELOW basic breaks
+    # the Ignition-vs-{W} exact ties that decided fetches arbitrarily (the tie-break lesson);
+    # the discipline "save Ignition for the wincon line" then falls out of demand, not a pin.
+    # mega_starmie dissents (deck override keeps 0.10) — docs/tuning/runs/ledger_20260820_round1.md.
+    "special_energy": 0.05,
 }
 
 
@@ -95,7 +99,10 @@ class LedgerWeights:
     zone_tool_attached: float = 0.90
 
     # Demand discounts on hand/deck worth.
-    demand_dead: float = 0.40
+    #: 0.25 adopted by the 2026-08-20 tuning round: a card the board cannot use decays harder,
+    #: so fetches and holds stop out-pricing live plays. mega_starmie dissents (deck override
+    #: keeps 0.40) — see docs/tuning/runs/ledger_20260820_round1.md.
+    demand_dead: float = 0.25
     demand_colorless_only: float = 0.70
     #: An evolution whose base is in HAND, not yet in play: the pair is worth more together
     #: than either alone — the nonlinearity the sampled-hand chance model feeds on.
@@ -116,7 +123,9 @@ class LedgerWeights:
 
     # The Active Spot: worth extra when its occupant can actually pay an attack.
     active_premium: float = 0.08
-    active_unready_fraction: float = 0.30
+    #: 0.15 adopted by the 2026-08-20 tuning round (docs/tuning/runs/ledger_20260820_145141.md):
+    #: an unready Active keeps less of the premium, so readying/replacing it prices higher.
+    active_unready_fraction: float = 0.15
 
     # Game-level terms.
     prize_race: float = 1.00

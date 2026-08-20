@@ -384,8 +384,10 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
     """Mega Starmie's Nebula Beam has three colorless slots and Ignition provides three units
     on an evolution: one card doing three basics' work is fully live, not colorless-discounted.
     Dragapult ex is the control — also an evolution with a colorless slot, but only ONE, so
-    the multi-provision read must not fire there."""
-    context = ctx()
+    the multi-provision read must not fire there. The special-energy worth is pinned here so
+    the MECHANISM stays testable while the tuning rounds move the general default — the
+    asserted margins scale with that worth."""
+    context = ctx(overrides={"kind.special_energy": 0.10})
     beside_mega = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[IGNITION])),
                            context)
     beside_dragapult = evaluate(board(me=player(active=body(DRAGAPULT, 1), hand=[IGNITION])),
