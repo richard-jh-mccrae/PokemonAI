@@ -1,6 +1,6 @@
 # Context map
 
-- [Agent runtime](./src/common/CONTEXT.md): shared Bellman policy and deck declarations.
+- [Agent runtime](./src/common/CONTEXT.md): the live Ledger decider, the Bellman teacher, and deck declarations.
 - Agent architecture: end-to-end decision flow.
 - Scouting: compiled opponent recognition and matchup facts.
 - [Native/cgpy parity](./src/cgpy/CONTEXT.md): engine transition verification.
