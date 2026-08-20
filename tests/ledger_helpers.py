@@ -12,9 +12,9 @@ ULTRA_BALL = 1121
 LILLIES = 1227
 HARLEQUIN = 1223
 AIR_BALLOON = 1174
-FIRE_E, PSYCHIC_E, DARK_E = 2, 5, 7
+FIRE_E, WATER_E, PSYCHIC_E, DARK_E = 2, 3, 5, 7
 # Engine wire codes, straight from common.cards.card_facts — 6/8 would be Fighting/Metal.
-FIRE, PSYCHIC, DARKNESS = 2, 5, 7
+FIRE, WATER, PSYCHIC, DARKNESS = 2, 3, 5, 7
 UNKNOWN = 999_999
 
 
@@ -28,7 +28,8 @@ def body(card_id, serial, *, hp=100, max_hp=100, energies=(), tools=(), under=()
 
 
 def _energy_card(unit):
-    return {FIRE: FIRE_E, PSYCHIC: PSYCHIC_E, DARKNESS: DARK_E}.get(unit, FIRE_E)
+    return {FIRE: FIRE_E, WATER: WATER_E, PSYCHIC: PSYCHIC_E, DARKNESS: DARK_E}.get(unit,
+                                                                                    FIRE_E)
 
 
 def player(*, active=None, bench=(), hand=(), discard=(), deck_count=30, prizes=6, own=True,

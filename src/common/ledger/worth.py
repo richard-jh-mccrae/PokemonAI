@@ -5,8 +5,12 @@ Demand then scales the hand/deck reading: an evolution without its base in play,
 body can use, a fetch with no wanted target all decay toward `demand_dead`, and copies beyond
 what the board can consume decay by `surplus_copy` each. Energy usability is MARGINAL: a unit
 counts only if it fills a still-unfilled slot of some attack — typed slots match through the
-forward evolution line (the unit can ride the body up), colorless slots only through the body's
-own printed attacks (speculative colorless value through future evolutions is not paid)."""
+forward evolution line (the unit can ride the body up); colorless slots match the body's own
+printed attacks in full, and a future evolution's colorless slots only through the REACH gate:
+full credit when that evolution is in hand, `demand_setup` credit when it sits in the deck (or
+the side's knowledge is absent), nothing when it is known gone. Ungated colorless-through-the-
+line would mark every energy live and collapse the discount; ungated refusal priced charging
+Staryu for Nebula Beam negative."""
 from __future__ import annotations
 
 from collections import Counter
@@ -102,6 +106,37 @@ def _line_attacks(body_facts, ctx: LedgerContext, *, own_only: bool = False):
     return attacks
 
 
+def _line_entries(body_facts, ctx: LedgerContext):
+    """(attack, evolution id or None for the body's own attacks) over the forward line."""
+    for attack in getattr(body_facts, "attacks", ()) or ():
+        yield attack, None
+    if body_facts is None:
+        return
+    for evo_id in _forward_lines().get(body_facts.name, ()):
+        for attack in getattr(ctx.facts(evo_id), "attacks", ()) or ():
+            yield attack, evo_id
+
+
+def line_reach(hand_name_counts, deck_counts, ctx: LedgerContext) -> Mapping[int, float]:
+    """The reach gate per store evolution id: how credible is it that this evolution arrives?
+    1.0 with the card in hand, `demand_setup` while it sits in the deck — or whenever the
+    side's deck knowledge is absent, since absence of knowledge is not absence of the card —
+    and 0.0 when the counts prove it gone (discarded or prized)."""
+    in_deck = None if deck_counts is None else \
+        {int(card_id) for card_id, count in deck_counts if count > 0}
+    gates: dict[int, float] = {}
+    for ids in _forward_lines().values():
+        for evo_id in ids:
+            facts = ctx.facts(evo_id)
+            if facts is not None and hand_name_counts.get(facts.name, 0):
+                gates[evo_id] = 1.0
+            elif in_deck is None or evo_id in in_deck:
+                gates[evo_id] = ctx.weights.demand_setup
+            else:
+                gates[evo_id] = 0.0
+    return gates
+
+
 def _unfilled(cost, attached: Counter) -> tuple[Counter, int]:
     """Typed slots still open after the attached units fill their own colors, and colorless
     slots still open after the leftovers spill into them."""
@@ -128,41 +163,47 @@ def any_attack_payable(body_facts, attached) -> bool:
     return False
 
 
-def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext) -> str:
+def _slot_fill(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) -> str:
     """What one MORE unit of this color would fill on this body: a typed slot (through the
-    forward line), only a colorless slot (own attacks), or nothing."""
+    forward line), a colorless slot (own attacks in full; a line evolution's only through a
+    positive reach gate), or nothing."""
     counts = Counter(attached)
     for attack in _line_attacks(body_facts, ctx):
         open_typed, _ = _unfilled(attack.cost, counts)
         if open_typed.get(unit, 0) > 0:
             return "typed"
-    for attack in _line_attacks(body_facts, ctx, own_only=True):
+    gates = reach or {}
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        if evo_id is not None and not gates.get(evo_id, 0.0):
+            continue
         _, open_colorless = _unfilled(attack.cost, counts)
         if open_colorless > 0:
             return "colorless"
     return "dead"
 
 
-def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext) -> bool:
+def unit_fills_a_slot(unit: int, body_facts, attached, ctx: LedgerContext, reach=None) -> bool:
     """Marginal usability of one MORE unit of this color on this body."""
-    return _slot_fill(unit, body_facts, attached, ctx) != "dead"
+    return _slot_fill(unit, body_facts, attached, ctx, reach) != "dead"
 
 
-def usable_units(body_facts, attached, ctx: LedgerContext) -> int:
+def usable_units(body_facts, attached, ctx: LedgerContext, reach=None) -> float:
     """The largest attached-unit count any single attack absorbs — typed and colorless slots
-    for the body's own attacks, typed only for the forward line's."""
+    for the body's own attacks; for the forward line's, typed in full and colorless scaled by
+    that evolution's reach gate (charging Staryu for Nebula Beam is real value exactly as far
+    as Mega Starmie is real)."""
     counts = Counter(attached)
     total = sum(counts.values())
     if total == 0 or body_facts is None:
         return 0
-    own = tuple(getattr(body_facts, "attacks", ()) or ())
-    best = 0
-    for attack in _line_attacks(body_facts, ctx):
+    gates = reach or {}
+    best = 0.0
+    for attack, evo_id in _line_entries(body_facts, ctx):
         typed = sum(min(count, counts.get(unit, 0))
                     for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
-        colorless = (min(sum(1 for u in attack.cost if u == COLORLESS), total - typed)
-                     if attack in own else 0)
-        best = max(best, typed + colorless)
+        colorless_slots = min(sum(1 for u in attack.cost if u == COLORLESS), total - typed)
+        scale = 1.0 if evo_id is None else gates.get(evo_id, 0.0)
+        best = max(best, typed + colorless_slots * scale)
         if best >= total:
             return total
     return best
@@ -221,9 +262,10 @@ def _liveness(card_id, facts, demand: Demand, ctx: LedgerContext, deck_counts):
             return weights.demand_setup, 1
         return weights.demand_dead, 1
     if isinstance(facts, EnergyCard):
+        reach = line_reach(demand.hand_name_counts, deck_counts, ctx)
         colorless_only = False
         for body in demand.bodies:
-            fills = _slot_fill(facts.provides, body.card.facts, body.energies, ctx)
+            fills = _slot_fill(facts.provides, body.card.facts, body.energies, ctx, reach)
             if fills == "typed" or _multi_provision_live(facts, body):
                 return 1.0, None
             colorless_only = colorless_only or fills == "colorless"
@@ -293,4 +335,4 @@ def _fetchable(fetches, target) -> bool:
 
 
 __all__ = ("Demand", "LedgerContext", "any_attack_payable", "base_worth", "demand_scale",
-           "unit_fills_a_slot", "usable_units")
+           "line_reach", "unit_fills_a_slot", "usable_units")

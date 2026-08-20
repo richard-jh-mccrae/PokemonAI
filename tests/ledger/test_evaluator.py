@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from ledger_helpers import (AIR_BALLOON, DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE,
                             FIRE_E, IGNITION, LUNATONE, MAKUHITA, MEGA_STARMIE, PSYCHIC,
-                            PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, body, player, printout)
+                            PSYCHIC_E, STARYU, ULTRA_BALL, UNKNOWN, WATER, WATER_E, body,
+                            player, printout)
 
 from common.board import BoardState
 from common.ledger import LedgerContext, LedgerWeights, evaluate
@@ -45,12 +46,24 @@ def test_fire_energy_on_bare_dragapult_is_positive():
     assert swing(before, after) > 0
 
 
-def test_dark_energy_on_bare_dreepy_is_negative():
-    """Dreepy's attacks cost Psychic and Fire+Psychic — no colorless slot, so a dark unit is
-    unusable even speculatively."""
-    before = board(me=player(active=body(DREEPY, 1), hand=[DARK_E]))
-    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]))
+def test_dark_energy_on_bare_dreepy_is_negative_once_its_line_is_gone():
+    """Dreepy's own attacks cost Psychic and Fire+Psychic — no colorless slot. Dragapult's
+    one-colorless Jet Headbutt could someday take the dark, so the reach gate must be CLOSED
+    (no evolution left anywhere) for the unit to be unusable even speculatively."""
+    no_line = [DARK_E] * 10                      # a decklist holding no Drakloak or Dragapult
+    before = board(me=player(active=body(DREEPY, 1), hand=[DARK_E]), decklist=no_line)
+    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[]),
+                  decklist=no_line)
     assert swing(before, after) < 0
+
+
+def test_dark_energy_on_bare_dreepy_earns_gated_credit_while_dragapult_is_in_hand():
+    """The approved forward-credit rule, in its smallest form: the same dark unit is worth
+    attaching once the evolution whose colorless slot it will pay is actually in hand."""
+    holding = [DARK_E, DRAGAPULT]
+    before = board(me=player(active=body(DREEPY, 1), hand=holding))
+    after = board(me=player(active=body(DREEPY, 1, energies=(DARKNESS,)), hand=[DRAGAPULT]))
+    assert swing(before, after) > 0
 
 
 # --- damage counters: overkill destroys nothing ---
@@ -289,10 +302,13 @@ def test_a_zero_max_hp_body_prices_as_intact():
 # --- demand branches: colorless-only, bench-full basics, surplus, fetch vocabulary ---
 
 def test_colorless_only_energy_prices_between_dead_and_typed():
-    """The same dark energy in hand: nothing on Dreepy (no dark or colorless slot), a colorless
-    slot on Mega Starmie's Nebula Beam, and a typed slot is worth the most of the three."""
+    """The same dark energy in hand: nothing on a line-gone Dreepy, a colorless slot on Mega
+    Starmie's Nebula Beam, and a typed slot is worth the most of the three. The dead leg pins
+    its decklist so the reach gate is truly closed, not merely unknown."""
     context = ctx()
-    dead = evaluate(board(me=player(active=body(DREEPY, 1), hand=[DARK_E])), context)
+    no_line = [DARK_E] * 10
+    dead = evaluate(board(me=player(active=body(DREEPY, 1), hand=[DARK_E]),
+                          decklist=no_line), context)
     colorless = evaluate(board(me=player(active=body(MEGA_STARMIE, 1), hand=[DARK_E])),
                          context)
     typed = evaluate(board(me=player(active=body(DREEPY, 1), hand=[FIRE_E])), context)
@@ -333,6 +349,28 @@ def test_fetch_liveness_respects_the_target_vocabulary():
     assert (energy_only_part := evaluate(energy_only, context).part("me.hand")) + 0.01 \
         < evaluate(with_pokemon, context).part("me.hand")
     assert energy_only_part > 0
+
+
+# --- forward credit: colorless slots on a REACHABLE evolution (the Staryu question) ---
+
+def test_charging_staryu_for_nebula_beam_pays_while_mega_starmie_is_in_hand():
+    """The second and third water on Staryu fill nothing Staryu itself can use; Nebula Beam's
+    three colorless slots make them worth attaching exactly as far as Mega Starmie is real:
+    positive with it in hand, refused again once it is gone."""
+    context = ctx()
+
+    def attach_swing(attached_before, decklist, extra_hand=()):
+        def make(attached, hand):
+            active = body(STARYU, 1, energies=(WATER,) * attached)
+            return board(me=player(active=active, hand=hand), decklist=decklist)
+        before = make(attached_before, [WATER_E, *extra_hand])
+        after = make(attached_before + 1, list(extra_hand))
+        return swing(before, after, context)
+
+    gone = [WATER_E] * 10                        # no Mega Starmie left anywhere
+    assert attach_swing(1, gone, extra_hand=[MEGA_STARMIE]) > 0   # the 2nd water: pure prep
+    assert attach_swing(2, gone, extra_hand=[MEGA_STARMIE]) > 0   # the 3rd
+    assert attach_swing(1, gone) < 0             # the same attach with no Mega is waste again
 
 
 # --- Ignition: the multi-unit provision clause read at the demand seam ---
