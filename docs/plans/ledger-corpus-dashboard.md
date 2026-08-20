@@ -1,6 +1,6 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-20T16:31:13.328054+00:00 at `c2decc772b50`.
+Generated 2026-08-20T18:40:55.526986+00:00 at `09969ecb6ec9`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|
@@ -1988,8 +1988,8 @@ Also a failed calculation by PLANNED gamble. it states 71% chance to get a Mega 
 ### mega_starmie `92131448-8` (Main, misattachment)
 
 - Ledger chose `[5]` Play Ultra Ball
-- ruling was `[]` 
-- rationale: CRITICAL: you missed a win
+- ruling was `[1]` Attach Basic {W} Energy → Cinderace (active · 160/160)
+- rationale: RULED 2026-08-20 (owner, triage batch D board look): correct = chosen — the attach was fine; the ordering claim belongs to later frames of the turn, not this decision. Original note: "CRITICAL: you missed a win"
 - priced +0.1195 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1121,"playerIndex":0}]]]',))
 - priced +0.0783 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 - priced +0.0443 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1122,"playerIndex":0}]]]',))
