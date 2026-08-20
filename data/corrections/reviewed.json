@@ -207,5 +207,10 @@
     "disposition": "deferred",
     "reason": "rationale describes a different decision than this record anchors (anchor mismatch) (2026-08-20 owner-approved triage batch C)",
     "round": "2026-08-20"
+  },
+  "86090676-t2s1": {
+    "disposition": "refuted",
+    "reason": "Crispin double-fetch investigation concluded (2026-08-20 triage batch D): the CURRENT ledger preview walks Crispin's chain cleanly (no unpriceable gap on frame 86090676-18); the live-game claim predates the Ledger brain and cannot be re-verified — raw replays are not committed. No ruling extractable.",
+    "round": "2026-08-20"
   }
 }

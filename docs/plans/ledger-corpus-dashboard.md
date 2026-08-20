@@ -1,16 +1,16 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-20T16:26:55.720900+00:00 at `334fbd26450f`.
+Generated 2026-08-20T16:31:13.328054+00:00 at `c2decc772b50`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|
-| dragapult_ex | 45 | 17 | 37.8% | 0 | 9 | 35 | 0 |
+| dragapult_ex | 44 | 18 | 40.9% | 0 | 10 | 34 | 0 |
 | mega_lucario | 52 | 24 | 46.2% | 0 | 18 | 22 | 0 |
-| mega_starmie | 335 | 158 | 47.2% | 0 | 12 | 222 | 0 |
+| mega_starmie | 335 | 159 | 47.5% | 0 | 12 | 222 | 0 |
 
-**Generality floor (worst deck): 37.8%**
+**Generality floor (worst deck): 40.9%**
 
-## Retired rulings (39) — dispositioned in reviewed.json, not graded
+## Retired rulings (40) — dispositioned in reviewed.json, not graded
 
 - dragapult_ex `85045840-10`: fixed (2026-08-02)
 - dragapult_ex `85045840-12`: fixed (2026-08-02)
@@ -18,6 +18,7 @@ Generated 2026-08-20T16:26:55.720900+00:00 at `334fbd26450f`.
 - dragapult_ex `85046350-20`: covered (2026-08-03)
 - dragapult_ex `85046350-45`: covered (2026-07-09)
 - dragapult_ex `86089120-14`: transposition (2026-08-02)
+- dragapult_ex `86090676-18`: refuted (2026-08-20)
 - dragapult_ex `86091435-119`: refuted (2026-07-19)
 - dragapult_ex `86091435-13`: refuted (2026-08-20)
 - dragapult_ex `86091435-68`: refuted (2026-07-19)
@@ -152,14 +153,6 @@ Generated 2026-08-20T16:26:55.720900+00:00 at `334fbd26450f`.
 - priced +0.0500 ActionIdentity(kind='card', parts=('[{"playerIndex":0,"type":3},[[1,{"id":5,"playerIndex":0}]]]',))
 - priced +0.0305 ActionIdentity(kind='card', parts=('[{"playerIndex":0,"type":3},[[1,{"id":7,"playerIndex":0}]]]',))
 
-### dragapult_ex `85785609-4` (SetupBenchPokemon, wasted_resource)
-
-- Ledger chose `[]` 
-- ruling was `[0]` Munkidori
-- rationale: This is odd, it shows that to play Munkidori is the only option, though i know the rules do not require playing all basic pokemon to the bench at startup.
-
-Here we do not want to bench this second Munkidori. with this deck, we typically only ever need a single Munkidori in play. this second copy is a perfect fodder for Ultra Ball.
-
 ### dragapult_ex `85786096-86` (AttachTo, slow_setup)
 
 - Ledger chose `[]` 
@@ -213,15 +206,6 @@ Here we do not want to bench this second Munkidori. with this deck, we typically
 - priced +1.4441 ActionIdentity(kind='attack', parts=('[1,{"attackId":153,"type":13},[]]',))
 - priced +0.0657 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1227,"playerIndex":1}]]]',))
 - priced +0.0545 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":7,"playerIndex":1}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":305,"maxHp":70,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
-
-### dragapult_ex `86090676-18` (Main, wasted_resource)
-
-- Ledger chose `[2]` Attach Basic {P} Energy → Fezandipiti ex (active · 210/210)
-- ruling was `[]` 
-- rationale: CRITICAL: Look into this Crispin play. i dont believe that the agent fetched 2 energies like Crispin allows. Should have used this card to attach two energies to Fexandipiti, prepaing for a 100 dmg attack next turn.
-- priced +0.0545 ActionIdentity(kind='attach', parts=('[1,{"type":8},[[2,{"id":5,"playerIndex":1}],[4,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":210,"id":140,"maxHp":210,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
-- priced +0.0055 ActionIdentity(kind='play', parts=('[1,{"type":7},[[2,{"id":1198,"playerIndex":1}]]]',))
-- priced +0.0000 ActionIdentity(kind='end', parts=('[1,{"type":14},[]]',))
 
 ### dragapult_ex `86090676-39` (Main, wasted_resource)
 
@@ -2143,12 +2127,4 @@ NOTE 2026-08-20 (user, doctrine articulation — ruling UNCHANGED): this is a TE
 - priced +0.3475 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
 - priced +0.2156 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
 - priced +0.1958 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1223,"playerIndex":0}]]]',))
-
-### mega_starmie `92710760-56` (EvolvesTo, slow_setup)
-
-- Ledger chose `[0]` Mega Starmie ex
-- ruling was `[2]` Mega Starmie ex
-- rationale: CRITICAL: Something happened here causing us to freeze
-- priced +0.2075 ActionIdentity(kind='card', parts=('[{"playerIndex":0,"type":3},[[1,{"id":1031,"playerIndex":0}]]]',))
-- priced -0.0075 ActionIdentity(kind='decline', parts=())
 
