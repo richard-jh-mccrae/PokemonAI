@@ -16,12 +16,17 @@ Both providers gain two behavior-neutral hooks — `_bind(state, observation)` (
 construction, default `with_observation`) and `_key(state)` (map key, default `semantic_key`).
 `common/ledger/seam.py` overrides them: successors become `PreviewState` (raw printout, seat,
 lazily-enumerated menu via the same `enumerate_legal_actions`) keyed by free per-successor
-identity tokens; roots stay DecisionStates. `LedgerCgpyProvider` / `LedgerNativeProvider` are
-the subclasses; `preview_provider_factory` maps a runtime-configured factory (partials
-unwrapped) to its preview variant, passing unknown factories through unchanged. Identity keys
-mean the native multi-world grouping stops merging semantically-equal branches — equal expected
-value, and the Ledger runs `world_count=1`. Bellman's own path keeps DecisionState successors
-through the same hooks, untouched.
+identity tokens — and the ROOT is a `PreviewState` too, carrying the deck knowledge the
+provider constructors determinize from (`deck`, `deck_counts`, `prize_counts`) sourced from
+BoardState, so a live Ledger decision constructs ZERO DecisionStates
+(`test_the_ledger_path_constructs_no_decisionstate` pins the boundary). The offline variant
+lives in `engine.py` (bundle-excluded) and self-registers into the seam's variant table, so no
+shipped file names the offline engine — the packager token-scan gates pinned this.
+`preview_provider_factory` maps a runtime-configured factory (partials unwrapped) to its
+preview variant, passing unknown factories through unchanged. Identity keys mean the native
+multi-world grouping stops merging semantically-equal branches — equal expected value, and the
+Ledger runs `world_count=1`. Bellman's own path keeps DecisionState successors through the same
+hooks, untouched.
 
 ## Measured
 

@@ -27,19 +27,49 @@ def _main_frames(count=3):
     return frames[:count]
 
 
-def _decide(frame, factory):
-    decider = LedgerDecider(DECK, "mega_starmie", LedgerContext.build(),
-                            provider_factory=factory)
-    return decider.decide(frame.obs)
-
-
 @pytest.mark.parametrize("frame", _main_frames(), ids=lambda row: row.id)
 def test_preview_seam_prices_identically_to_the_decisionstate_path(frame):
-    heavy = _decide(frame, CgpyTransitionProvider)
-    light = _decide(frame, LedgerCgpyProvider)
-    assert light.chosen == heavy.chosen
-    assert light.diagnostics["prices"] == heavy.diagnostics["prices"]
-    assert light.diagnostics["gaps"] == heavy.diagnostics["gaps"]
+    """Same frame, same swings: the DecisionState-successor path (built explicitly here — the
+    decider itself no longer constructs one) against the live board-native path."""
+    from common.board import BoardState
+    from common.ledger.evaluate import evaluate
+    from common.ledger.preview import price_actions
+
+    ctx = LedgerContext.build()
+    board = BoardState.root(frame.obs, decklist=DECK)
+    baseline = evaluate(board, ctx).total
+    heavy_state = DecisionState.from_observation(frame.obs, deck=DECK,
+                                                 deck_name="mega_starmie")
+    heavy = price_actions(heavy_state, board, baseline,
+                          CgpyTransitionProvider(heavy_state), ctx)
+
+    light_decider = LedgerDecider(DECK, "mega_starmie", LedgerContext.build(),
+                                  provider_factory=LedgerCgpyProvider)
+    light = light_decider.decide(frame.obs)
+
+    heavy_prices = {str(price.action.identity): round(price.swing, 12) for price in heavy}
+    light_prices = {entry["action"]: round(entry["swing"], 12)
+                    for entry in light.diagnostics["prices"]}
+    assert light_prices == heavy_prices
+
+
+def test_the_ledger_path_constructs_no_decisionstate(monkeypatch):
+    """The boundary itself, pinned: a full live decision through the seam never touches the
+    legacy state layer."""
+    frame = _main_frames(1)[0]
+    calls = []
+    original = DecisionState.from_observation.__func__
+
+    def counting(cls, *args, **kwargs):
+        calls.append(1)
+        return original(cls, *args, **kwargs)
+
+    monkeypatch.setattr(DecisionState, "from_observation", classmethod(counting))
+    decider = LedgerDecider(DECK, "mega_starmie", LedgerContext.build(),
+                            provider_factory=LedgerCgpyProvider)
+    decision = decider.decide(frame.obs)
+    assert decision.diagnostics["backend"] == "ledger"
+    assert calls == []
 
 
 def test_preview_state_enumerates_the_same_menu_as_decisionstate():

@@ -20,14 +20,21 @@ from common.options import enumerate_legal_actions
 
 
 class PreviewState:
-    """Everything a preview node is ever asked for: the printout, the seat, the menu."""
+    """Everything a preview node is ever asked for: the printout, the seat, the menu — plus,
+    on a ROOT, the deck knowledge the provider constructors determinize hidden zones from
+    (sourced from BoardState, so the Ledger path builds no DecisionState at all)."""
 
-    __slots__ = ("obs", "root_seat", "preview_key", "_legal")
+    __slots__ = ("obs", "root_seat", "preview_key", "deck", "deck_counts", "prize_counts",
+                 "_legal")
 
-    def __init__(self, obs, root_seat: int, preview_key: str):
+    def __init__(self, obs, root_seat: int, preview_key: str, *,
+                 deck=(), deck_counts=(), prize_counts=()):
         self.obs = obs
         self.root_seat = int(root_seat)
         self.preview_key = preview_key
+        self.deck = tuple(deck)
+        self.deck_counts = tuple(deck_counts)
+        self.prize_counts = tuple(prize_counts)
         self._legal = None
 
     @property
@@ -35,6 +42,11 @@ class PreviewState:
         if self._legal is None:
             self._legal = enumerate_legal_actions(self.obs)
         return self._legal
+
+    @property
+    def semantic_key(self) -> str:
+        """The identity token doubles as the key for providers that were not remapped."""
+        return self.preview_key
 
 
 class PreviewBinding:

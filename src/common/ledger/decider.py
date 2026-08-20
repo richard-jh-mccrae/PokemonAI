@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from common.api import RootDecision
 from common.board import BoardState
-from common.solver import MAIN_DECISION_CONTEXT
-from common.state import DecisionState
+from common.strategy.context import _MAIN
 
 from .evaluate import evaluate
 from .preview import NOISE_FLOOR, OptionPrice, price_actions
-from .seam import LedgerNativeProvider
+from .seam import LedgerNativeProvider, PreviewState
 from .worth import LedgerContext
 
 
@@ -34,10 +33,12 @@ class LedgerDecider:
         self.gap_sink = gap_sink
 
     def decide(self, observation) -> RootDecision:
-        state = DecisionState.from_observation(
-            observation, deck=self.deck, deck_name=self.deck_name,
-            value_registry_identity=f"ledger:{self.ctx.weights.identity}")
         board = BoardState.root(observation, decklist=self.deck)
+        # The root is a PreviewState too: deck knowledge comes from BoardState, so the Ledger
+        # path constructs no DecisionState anywhere (pinned by tests/ledger/test_seam.py).
+        state = PreviewState(observation, board.seat, "root", deck=self.deck,
+                             deck_counts=board.deck_counts or (),
+                             prize_counts=board.own_prizes or ())
         baseline = evaluate(board, self.ctx)
         provider = self.provider_factory(state)
         if not getattr(provider, "available", True):
@@ -51,9 +52,8 @@ class LedgerDecider:
         if not prices:
             raise LedgerUnavailable("no legal actions to price")
 
-        context = int(((observation.get("select") or {}).get("context",
-                                                             MAIN_DECISION_CONTEXT)))
-        chosen = self._choose(prices, forced=context != MAIN_DECISION_CONTEXT)
+        context = int(((observation.get("select") or {}).get("context", _MAIN)))
+        chosen = self._choose(prices, forced=context != _MAIN)
         gaps = tuple(gap for price in prices for gap in price.gaps) + baseline.gaps
         if gaps and self.gap_sink is not None:
             self.gap_sink({"context": context, "board": board.key, "gaps": sorted(set(gaps)),
@@ -62,7 +62,8 @@ class LedgerDecider:
             chosen=tuple(chosen.action.selection), action=chosen.action.identity,
             value=chosen.swing, complete=True,
             diagnostics={
-                "backend": "ledger", "weights": self.ctx.weights.identity,
+                "backend": "ledger", "deck": self.deck_name,
+                "weights": self.ctx.weights.identity,
                 "baseline": baseline.total, "gaps": sorted(set(gaps)),
                 "prices": tuple({"action": str(price.action.identity),
                                  "selection": list(price.action.selection),

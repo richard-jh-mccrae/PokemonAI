@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
                             Terminal, Unknown)
 from common.board import BoardState
-from common.solver import MAIN_DECISION_CONTEXT
+from common.strategy.context import _MAIN
 
 from .chance import refresh_value
 from .evaluate import evaluate
@@ -100,9 +100,8 @@ class _Walk:
         return evaluate(board, self.ctx).total, False
 
     def deterministic(self, state, board: BoardState, depth: int) -> tuple[float, bool]:
-        context = int(((state.obs.get("select") or {}).get("context",
-                                                           MAIN_DECISION_CONTEXT)))
-        if context == MAIN_DECISION_CONTEXT:
+        context = int(((state.obs.get("select") or {}).get("context", _MAIN)))
+        if context == _MAIN:
             return evaluate(board, self.ctx).total, False
         if depth <= 0 or self.nodes >= CHAIN_NODE_CAP:
             self.gaps.append("chain capped; scored mid-effect board")
