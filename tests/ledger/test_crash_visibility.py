@@ -49,7 +49,7 @@ def test_a_brain_crash_logs_the_traceback_and_reports_in_diagnostics(capsys):
     runtime.ledger.decide = dead
     decision = runtime.decide(_observation())
 
-    assert decision.diagnostics["backend"] == "strategy-fallback"
+    assert decision.diagnostics["backend"] == "last-resort-fallback"
     fallback = decision.diagnostics["fallback"]
     assert fallback["cause"] == "exception:ValueError"
     assert fallback["error"]["type"] == "ValueError"

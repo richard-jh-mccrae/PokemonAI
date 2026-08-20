@@ -3,10 +3,6 @@
 from common.strategy import (
     ActivationCondition, DesiredFact, Roles, Strategy, StrategyHint, StrategyOverride,
 )
-try:
-    from agents.dragapult_ex.potential import DragapultPotential
-except ImportError:                      # packaged submission: siblings, no `agents` package
-    from potential import DragapultPotential
 
 
 DREEPY, DRAKLOAK, DRAGAPULT_EX = 119, 120, 121
@@ -58,7 +54,6 @@ STRATEGY = Strategy(
         "prize_path": "flexible_best_available",
         "use_general_card_strategies": True,
     },
-    potential_factory=DragapultPotential,
     strategy_overrides=(
         StrategyOverride(
             "general.evolve_active_attacker",

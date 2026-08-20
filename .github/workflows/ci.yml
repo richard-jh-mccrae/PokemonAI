@@ -56,6 +56,7 @@ jobs:
           F_TOOL_UNTESTED: ${{ steps.changes.outputs.tool_untested }}
           F_CORRECTIONS: ${{ steps.changes.outputs.corrections }}
           F_CGPY: ${{ steps.changes.outputs.cgpy }}
+          F_DEPRECATED: ${{ steps.changes.outputs.deprecated }}
           F_MEGA_STARMIE: ${{ steps.changes.outputs.mega_starmie }}
           F_DOCS: ${{ steps.changes.outputs.docs }}
           F_OPERATIONAL_DATA: ${{ steps.changes.outputs.operational_data }}
@@ -91,7 +92,7 @@ jobs:
               add_tool_test sim; src=true; mirrors='["mega_starmie"]'
             fi
             known=false
-            for value in "$F_GLOBAL" "$F_TOOL_GLOBAL" "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOL_ARENA" "$F_TOOL_META_TRACKER" "$F_TOOL_SIM" "$F_TOOL_SUBMIT" "$F_TOOL_AGENT_SKILLS" "$F_TOOL_UNTESTED" "$F_CORRECTIONS" "$F_CGPY" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
+            for value in "$F_GLOBAL" "$F_TOOL_GLOBAL" "$F_RUNTIME" "$F_SRC" "$F_AGENTS" "$F_TOOL_ARENA" "$F_TOOL_META_TRACKER" "$F_TOOL_SIM" "$F_TOOL_SUBMIT" "$F_TOOL_AGENT_SKILLS" "$F_TOOL_UNTESTED" "$F_CORRECTIONS" "$F_CGPY" "$F_DEPRECATED" "$F_MEGA_STARMIE" "$F_DOCS" "$F_OPERATIONAL_DATA" "$F_AUTHORING"; do
               [ "$value" = true ] && known=true
             done
             [ "$F_ANY" = true ] && [ "$known" = false ] && enable_all
@@ -169,11 +170,12 @@ jobs:
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Run correction contracts
         shell: bash
+        # The teacher-replay pins (deprecated/tests) are deliberately not run by CI; run them
+        # locally with `python -m pytest deprecated/tests` when touching the teacher.
         run: |
-          targets=(tests/blunder tests/bellman/test_m6_mechanics.py tests/bellman/test_m8_acceptance.py)
+          targets=(tests/blunder)
           # tests/train reads a real correction record, so record changes must re-run it here.
           targets+=(tests/train)
-          [ -d tests/corrections ] && targets+=(tests/corrections)
           python -m pytest "${targets[@]}" -q --tb=short
 
   test-src:
@@ -191,14 +193,9 @@ jobs:
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Run parallel source contracts
         run: >-
-          python -m pytest tests/agents tests/bellman tests/board tests/cards tests/common
-          tests/ledger tests/parity tests/scouting tests/strategy tests/train
+          python -m pytest tests/board tests/cards tests/common
+          tests/ledger tests/parity tests/scouting tests/train
           tests/test_import_hygiene.py -q -n auto --tb=short
-          --ignore=tests/bellman/test_m6_mechanics.py
-          --ignore=tests/bellman/test_m7_runtime.py
-          --ignore=tests/bellman/test_m8_acceptance.py
-      - name: Run wall-clock runtime contracts serially
-        run: python -m pytest tests/bellman/test_m7_runtime.py -q --tb=short
 
   test-cgpy:
     name: tests / cgpy
@@ -216,15 +213,7 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Run parallel cgpy contracts
-        run: >-
-          python -m pytest tests/parity tests/bellman -q -n auto --tb=short
-          --ignore=tests/bellman/test_m6_mechanics.py
-          --ignore=tests/bellman/test_m7_runtime.py
-          --ignore=tests/bellman/test_m8_acceptance.py
-      - name: Run cgpy wall-clock contracts serially
-        run: >-
-          python -m pytest tests/bellman/test_m6_mechanics.py
-          tests/bellman/test_m7_runtime.py tests/bellman/test_m8_acceptance.py -q --tb=short
+        run: python -m pytest tests/parity tests/ledger -q -n auto --tb=short
 
   test-docs:
     name: tests / docs

@@ -1,4 +1,4 @@
-"""Native ``cg`` transition provider for production Bellman search."""
+"""Native ``cg`` transition provider: fork the engine, enumerate, apply — never rank."""
 from __future__ import annotations
 
 from collections import Counter
@@ -8,15 +8,10 @@ import hashlib
 from .algebra import Actor, Chance, Deterministic, Terminal, Unknown, WeightedEdge
 from .cards import card_store
 from .cards.functions.attack_lock import carry_attack_locks
-from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
-from .commutativity import action_footprint
 from .refresh import refresh_transition
-from .refresh import played_card_id
-from .transition_value import end_has_forced_value_change
 from .state import DecisionState
-from .terminal import terminal_effects_supported
-from common.strategy.context import _ACTIVE, _BENCH, _MAIN, _NO, _YES
+from common.strategy.context import _MAIN, _NO, _YES
 
 
 # One authoritative native world is the deployed latency budget.  Additional worlds are an
@@ -207,37 +202,6 @@ class NativeCgTransitionProvider:
         seat = int(state.obs.get("bellmanActor", state.root_seat))
         return Actor.OURS if seat == state.root_seat else Actor.OPPONENT
 
-    def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, cards=self.cards)
-
-    def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
-        kind = action.identity.kind
-        options = tuple((state.obs.get("select") or {}).get("option") or ())
-        option_index = action.selection[0] if len(action.selection) == 1 else -1
-        option = options[option_index] if 0 <= option_index < len(options) else {}
-        current = state.obs.get("current") or {}
-        players = current.get("players") or ()
-        mine = players[state.root_seat] if state.root_seat < len(players) else {}
-        card_id = played_card_id(state, action)
-        if card_id is None and kind in {"attach", "evolve"}:
-            hand_index = option.get("index")
-            hand = mine.get("hand") or ()
-            if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
-                card_id = int(hand[hand_index]["id"])
-        if card_id is None and kind in {"ability", "skill"}:
-            card_id = option_in_play_source_id(option, state.obs)
-        recipient_id = None
-        if kind == "attach":
-            area = option.get("inPlayArea")
-            index = option.get("inPlayIndex")
-            bodies = (mine.get("active") if area == _ACTIVE else
-                      mine.get("bench") if area == _BENCH else ()) or ()
-            body = bodies[index] if isinstance(index, int) and 0 <= index < len(bodies) else None
-            recipient_id = int(body["id"]) if body and body.get("id") is not None else None
-        return terminal_effects_supported(
-            state, action, card_id=card_id, recipient_id=recipient_id,
-            effects=self.effects, stats=self.stats)
-
     def transition(self, state: DecisionState, action: LegalAction):
         worlds = self._worlds.get(self._key(state))
         if not worlds:
@@ -265,9 +229,6 @@ class NativeCgTransitionProvider:
             return self._group_children(state, action, children)
         except Exception as exc:  # noqa: BLE001 - engine gap remains explicit
             return Unknown("native cg transition failed", f"{type(exc).__name__}: {exc}")
-
-    def resolve_end(self, state: DecisionState, action: LegalAction):
-        return self.transition(state, action) if end_has_forced_value_change(state, self.registry) else None
 
     def _begin_worlds(self, root: DecisionState) -> tuple[_NativeWorld, ...]:
         observation = root.obs

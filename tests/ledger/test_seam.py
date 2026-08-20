@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from bellman_helpers import deck as agent_deck
+from agent_helpers import deck as agent_deck
 
 from common.engine import CgpyTransitionProvider, LedgerCgpyProvider
 from common.ledger import (LedgerContext, LedgerDecider, LedgerNativeProvider, PreviewState,

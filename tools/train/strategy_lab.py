@@ -12,12 +12,12 @@ import sys
 import time
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+sys.path[:0] = [str(REPO), str(REPO / "tools"), str(REPO / "src")]
 
 from common.deck_tracker import OwnCardModel  # noqa: E402
 from common.engine import CgpyTransitionProvider  # noqa: E402
-from common.pilot_profile import PilotProfile  # noqa: E402
-from common.runtime import build_runtime  # noqa: E402
+from deprecated.bellman import PilotProfile  # noqa: E402
+from deprecated.bellman import build_teacher_runtime  # noqa: E402
 from meta_tracker.parse import load_replay  # noqa: E402
 from train.blunder.decisions import iter_decisions  # noqa: E402
 
@@ -28,7 +28,7 @@ def _runtime(focused: bool, *, reuse=True, planning_seconds=None):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     deck = tuple(int(value) for value in (agent / "deck.csv").read_text().split())
-    runtime = build_runtime(
+    runtime = build_teacher_runtime(
         module.STRATEGY, deck, provider_factory=CgpyTransitionProvider)
     values = {"strategy.focus_enabled": float(focused),
               "plan_reuse.enabled": float(reuse)}

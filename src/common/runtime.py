@@ -1,36 +1,23 @@
-"""Agent runtime shared by every deck: the Ledger decides, Bellman stays callable offline."""
+"""Agent runtime shared by every deck: declarative pregame plus the Ledger decider."""
 from __future__ import annotations
 
 import gc
-import json
 import os
 import sys
 import traceback
-from pathlib import Path
 from time import perf_counter
 
 from common import telemetry
-from common.api import ActionIdentity, PlanRequest, RootDecision
+from common.api import ActionIdentity, RootDecision
 from common.cards.functions.attack_lock import fold_attack_locks
-from common.budget_prototype import DecisionClock
 from common.cards import CardFunctions
-from common.card_worth import role_value
 from common.deck_tracker import OwnCardModel
-from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
-from common.information import BellmanDeckProfile, opponent_belief
-from common.ledger import (LedgerContext, LedgerDecider, OpponentLayer,
-                           preview_provider_factory)
-from common.planner import BellmanTurnPlanner
-from common.potential import BoardPotential
-from common.options import enumerate_legal_actions
-from common.pilot_profile import PilotProfile
-from common.pokemon_roles import general_pokemon_roles
+from common.ledger import LedgerContext, LedgerDecider, preview_provider_factory
 from common.scouting.artifact import load_artifact
-from common.scouting.briefs import (load_briefs, match_brief, resolve_scouted_role_worth,
-                                    scouted_ledger_roles)
+from common.scouting.briefs import load_briefs
 from common.scouting.provider import EngineCardStatProvider
-from common.scouting.read import Read, posture_gamma
+from common.scouting.read import Read
 from common.scouting.scout import Scout
 from common.strategy.context import (
     _CARD,
@@ -51,57 +38,18 @@ from common.strategy.context import (
     _TO_HAND,
     _YES,
 )
-from common.strategy.strategies import (
-    GENERAL_STRATEGIES, activate_strategies, general_card_strategies, resolve_strategies,
-)
-from common.state import DecisionState
-from common.value import ValueRegistry
-from common.terminal import proof_lock_step
 
 
 _ENGINE = object()
 
 
-def _pilot_overlay() -> tuple[dict[str, float], str]:
-    packaged = Path(__file__).resolve().parent.parent / "runtime_config.json"
-    values = {}
-    provenance = ""
-    if packaged.exists():
-        payload = json.loads(packaged.read_text(encoding="utf-8"))
-        values = payload.get("pilot", {})
-        if not isinstance(values, dict):
-            raise ValueError("runtime_config.pilot must be an object")
-        provenance = str(packaged)
-    path = os.environ.get("AGENT_OVERLAY")
-    if path:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        overrides = payload.get("pilot", {})
-        if not isinstance(overrides, dict):
-            raise ValueError("AGENT_OVERLAY.pilot must be an object")
-        values = {**values, **overrides}
-        provenance = str(Path(path).resolve())
-    strategy_enabled = os.environ.get("AGENT_STRATEGY_ENABLED")
-    if strategy_enabled is not None:
-        if strategy_enabled not in {"0", "1"}:
-            raise ValueError("AGENT_STRATEGY_ENABLED must be 0 or 1")
-        values = {**values, "strategy.focus_enabled": float(strategy_enabled)}
-        marker = f"strategy:{strategy_enabled}"
-        provenance = f"{provenance};{marker}" if provenance else marker
-    return {str(name): float(value) for name, value in values.items()}, provenance
-
-
-class BellmanRuntime:
-    """Deployment shell: declarative pregame plus the Ledger decider (ADR-0145); `brain`
-    selects a whole match's brain — the Bellman planner stays callable as the teacher."""
+class AgentRuntime:
+    """Deployment shell: declarative pregame, forced selections, and the Ledger (ADR-0145/0149);
+    the Bellman teacher extends this shell from ``deprecated/bellman/runtime.py``."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
-                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,
-                 brain: str = "ledger", ledger_weights=None):
-        if brain not in ("ledger", "bellman"):
-            raise ValueError(f"unknown brain {brain!r}")
-        self.brain = brain
+                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None):
         self.strategy = strategy
-        self.potential_type = strategy.potential_factory or BoardPotential
         self.deck = tuple(int(card_id) for card_id in deck)
         if stats is _ENGINE:
             stats = EngineCardStatProvider()
@@ -116,40 +64,7 @@ class BellmanRuntime:
         self.briefs = load_briefs() if briefs is _ENGINE else list(briefs or ())
         self.provider_factory = provider_factory
         self.limits = limits
-        self.registry = ValueRegistry.from_strategy(
-            strategy=self.strategy, functions=self.functions, deck=self.deck,
-            roles=self.roles)
-        self.profile = BellmanDeckProfile.from_registry(self.registry)
-        experiment, experiment_path = _pilot_overlay()
-        pilot_overrides = dict(getattr(strategy, "pilot_overrides", {}))
-        decision_seconds = os.environ.get("AGENT_DECISION_SECONDS")
-        self.decision_clock = DecisionClock(float(decision_seconds)) \
-            if decision_seconds is not None else None
-        if decision_seconds is not None:
-            pilot_overrides.update({
-                "clock.adaptive_enabled": 0.0,
-                "clock.remaining_200_seconds": self.decision_clock.bellman_seconds,
-                # No `terminal.max_seconds` override: lifting it to 60s here let one abstention
-                # eat 9s of a 10s decision and forfeit a match (ADR-0142).
-            })
-        self.pilot_profile = PilotProfile.resolve(
-            global_values=experiment,
-            authored_deck_overrides=pilot_overrides,
-            provenance=(f"overlay:{experiment_path}" if experiment_path
-                        else f"strategy:{strategy.name}"),
-        )
-        self.strategies = None
-        self._strategy_snapshot = None
-        self._strategy_history = ()
-        self._strategy_ko_window_turn = -1
-        self._strategy_previous_turn = -1
-        self._strategy_previous_bodies = frozenset()
         self.last_brief = None
-        self.opponent_role_worth = {}
-        self._plan_suffix = ()
-        self._proof_suffix = ()
-        self._proof_id = ""
-        self._plan_reuse_stats = {"hits": 0, "planner_calls": 0, "invalidations": {}}
         self.last_read = Read()
         self.last_decision_limit = None
         self.last_deadline_hit = False
@@ -162,15 +77,10 @@ class BellmanRuntime:
         self.ledger = LedgerDecider(
             self.deck, strategy.name,
             LedgerContext.build(
-                # `ledger_weights` is the tuner's seam: a candidate GENERAL vector under
-                # trial; the deck's own overrides still bend it on top.
-                weights=ledger_weights,
                 roles={card_id: tuple(self.roles.get(card_id, ()) or ())
                        for card_id in self.deck},
                 overrides=getattr(strategy, "ledger_overrides", None)),
-            provider_factory=preview_provider_factory(self.provider_factory),
-            provider_kwargs={"registry": self.registry, "effects": self.effects,
-                             "stats": self.stats})
+            provider_factory=preview_provider_factory(self.provider_factory))
 
     @staticmethod
     def _player(observation, seat):
@@ -250,183 +160,13 @@ class BellmanRuntime:
             {"backend": "declarative-pregame", "context": context},
         )
 
-    def _observe_matchup(self, observation) -> float:
-        """One scouting pass per decision, shared by both brains: refresh the Read, match the
-        Brief when confidence clears zero, and return the gamma."""
-        self.last_read = self.scout.observe(observation) if self.scout is not None else Read()
-        gamma = posture_gamma(self.last_read)
-        self.last_brief = match_brief(self.briefs, self.last_read) if gamma > 0.0 else None
-        return gamma
+    def _reset_for_pregame(self) -> None:
+        """Match-boundary state clearing; the teacher extends this with its plan caches."""
+        self.last_read = Read()
+        self._attack_locks = {}
 
-    def _planner(self, observation):
-        self._observe_matchup(observation)
-        brief = self.last_brief
-        current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
-        belief = opponent_belief(
-            observation, candidates=self.last_read.candidates,
-            properties=(brief.opponent_properties if brief is not None else None))
-        self.opponent_role_worth = resolve_scouted_role_worth(
-            self.last_read, getattr(self.scout, "artifact", None), self.stats,
-            briefs=self.briefs, functions=self.functions,
-            line_decay=self.pilot_profile.get("scouting.line_distance_decay"))
-        players = current.get("players") or ()
-        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
-        bodies = tuple(body for body in
-                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
-                       if body)                          # a facedown Active renders as [None]
-        generic_roles = general_pokemon_roles(
-            (body["id"] for body in bodies if body.get("id") is not None),
-            self.stats, self.functions)
-        for card_id, card_roles in generic_roles.items():
-            self.opponent_role_worth[card_id] = max(
-                self.opponent_role_worth.get(card_id, 0.0), role_value(card_roles))
-        potential = self.potential_type(
-            registry=self.registry, profile=self.profile, root_seat=seat,
-            opponent_role_worth=self.opponent_role_worth,
-            isolated_selection=int((observation.get("select") or {}).get("context", 0)) != 0,
-            opponent_hand_share=self.pilot_profile.get("value.opponent_hand_share"),
-            root_observation=observation)
-        planner_kwargs = {}
-        if self.provider_factory is not None:
-            planner_kwargs["provider_factory"] = self.provider_factory
-        if self.limits is not None:
-            planner_kwargs["limits"] = self.limits
-        return BellmanTurnPlanner(
-            registry=self.registry, family_evaluator=potential,
-            effects=self.effects, stats=self.stats, belief=belief,
-            profile=self.pilot_profile, **planner_kwargs)
-
-    def _planning_epoch_strategy(self, observation):
-        current = observation.get("current") or {}
-        turn = int(current.get("turn", 0))
-        seat = int(current.get("yourIndex", 0))
-        players = current.get("players") or ()
-        player = players[seat] if 0 <= seat < len(players) else {}
-        bodies = tuple(player.get("active") or ()) + tuple(player.get("bench") or ())
-        serials = frozenset(int(body.get("serial", -1)) for body in bodies if body)
-        lost_between_turns = (
-            self._strategy_previous_turn >= 0
-            and turn > self._strategy_previous_turn
-            and bool(self._strategy_previous_bodies - serials)
-        )
-        if lost_between_turns:
-            self._strategy_ko_window_turn = turn
-        self._strategy_previous_turn = turn
-        self._strategy_previous_bodies = serials
-        if self._strategy_ko_window_turn == turn:
-            observation["strategyPokemonKoWindow"] = True
-        # Default-on: card facts mint their own hints for every deck; a deck opts OUT, not in.
-        # Opt-in left dragapult_ex the only deck whose Abilities and gusts the beam ever saw.
-        card_strategies = general_card_strategies(
-            self.deck, self.roles, self.functions, self.stats, self.effects
-        ) if self.strategy.params.get("use_general_card_strategies", True) else ()
-        self.strategies = resolve_strategies(
-            (*GENERAL_STRATEGIES, *card_strategies),
-            getattr(self.strategy, "strategies", ()),
-            getattr(self.last_brief, "strategies", ()) if self.last_brief is not None else (),
-            getattr(self.strategy, "strategy_overrides", ()),
-        )
-        candidate = activate_strategies(
-            observation, self.strategies, deck=self.deck, roles=self.roles, stats=self.stats,
-            effects=self.effects,
-            opponent_role_worth=self.opponent_role_worth)
-        if any(hint.strategy_id.endswith(".deploy_after_ko") for hint in candidate.hints):
-            self._strategy_ko_window_turn = turn
-        history = tuple(json.dumps(row, sort_keys=True, separators=(",", ":"))
-                        for row in observation.get("logs") or ())
-        same_history = (len(history) >= len(self._strategy_history)
-                        and history[:len(self._strategy_history)] == self._strategy_history)
-        if (self._strategy_snapshot is not None
-                and self._strategy_snapshot.snapshot_id == candidate.snapshot_id
-                and same_history):
-            return self._strategy_snapshot
-        self._strategy_snapshot = candidate
-        self._strategy_history = history
-        return candidate
-
-    def _cached_decision(self, planner, request):
-        stats = getattr(self, "_plan_reuse_stats", None)
-        if stats is None:
-            stats = self._plan_reuse_stats = {"hits": 0, "planner_calls": 0, "invalidations": {}}
-        if not self._plan_suffix or self.pilot_profile.get("plan_reuse.enabled") < 0.5:
-            return None, "empty"
-        step = self._plan_suffix[0]
-        state = planner.state_for(request)
-        current = state.obs.get("current") or {}
-        guards = (
-            (step.profile_hash == self.pilot_profile.hash, "profile_changed"),
-            (step.turn == int(current.get("turn", 0)), "turn_changed"),
-            (step.seat == int(current.get("yourIndex", 0)), "seat_changed"),
-            (step.legal_menu_digest == state.legal_menu_digest, "legal_menu_changed"),
-            (step.expected_state_key == state.plan_key, "semantic_state_changed"),
-        )
-        failure = next((reason for valid, reason in guards if not valid), None)
-        if failure is not None:
-            self._plan_suffix = ()
-            invalidations = stats["invalidations"]
-            invalidations[failure] = invalidations.get(failure, 0) + 1
-            return None, failure
-        action = next((candidate for candidate in state.legal_actions
-                       if candidate.identity == step.action), None)
-        if action is None:
-            self._plan_suffix = ()
-            failure = "planned_action_missing"
-            invalidations = stats["invalidations"]
-            invalidations[failure] = invalidations.get(failure, 0) + 1
-            return None, failure
-        self._plan_suffix = self._plan_suffix[1:]
-        stats["hits"] += 1
-        return RootDecision(
-            action.selection, action.identity, step.value, True,
-            {"backend": "plan-suffix", "profile_hash": self.pilot_profile.hash,
-             "terminal_proof": getattr(planner, "last_terminal_diagnostics", {
-                 "attempted": False, "result": "skipped", "reason": "unavailable"}),
-             "plan_suffix": {"hit": True, "remaining": len(self._plan_suffix),
-                             "hits": stats["hits"],
-                             "planner_calls_avoided": stats["hits"]}},
-            self._plan_suffix,
-        ), "hit"
-
-    def _cached_proof_decision(self, planner, request):
-        suffix = getattr(self, "_proof_suffix", ())
-        if not suffix:
-            return None, "empty"
-        state = planner.state_for(request)
-        step, failure = proof_lock_step(
-            suffix, state, profile_hash=self.pilot_profile.hash,
-            proof_id=getattr(self, "_proof_id", ""))
-        if failure is not None:
-            self._proof_suffix = ()
-            self._proof_id = ""
-            return None, failure
-        action = next((candidate for candidate in state.legal_actions
-                       if candidate.identity == step.action), None)
-        if action is None:
-            self._proof_suffix = ()
-            self._proof_id = ""
-            return None, "planned_action_missing"
-        self._proof_suffix = tuple(candidate for candidate in suffix if candidate is not step)
-        return RootDecision(
-            action.selection, action.identity, 0.0, True,
-            {"backend": "terminal-proof-lock", "terminal_proof": {
-                "attempted": False, "result": "replayed", "reason": "lock_hit",
-                "proof_id": step.proof_id, "remaining": len(self._proof_suffix),
-                "lock_event": "replayed"}},
-            self._proof_suffix,
-        ), "hit"
-
-    @staticmethod
-    def _with_proof_invalidation(decision, reason):
-        if reason in {"empty", "hit"}:
-            return decision
-        diagnostics = dict(decision.diagnostics)
-        terminal = dict(diagnostics.get("terminal_proof", {}))
-        terminal.update({"lock_event": "invalidated", "lock_reason": reason})
-        diagnostics["terminal_proof"] = terminal
-        return RootDecision(
-            decision.chosen, decision.action, decision.value, decision.complete,
-            diagnostics, decision.plan_suffix)
+    def _invalidate_plans(self) -> None:
+        """The Ledger holds no cross-decision plan state; the Bellman teacher overrides."""
 
     def _forced_selection(self, observation):
         select = observation.get("select") or {}
@@ -435,9 +175,7 @@ class BellmanRuntime:
         maximum = _int_field(select, "maxCount", len(options))
         if len(options) > 1 or minimum != maximum or minimum != len(options):
             return None
-        self._plan_suffix = ()
-        self._proof_suffix = ()
-        self._proof_id = ""
+        self._invalidate_plans()
         return RootDecision(
             tuple(range(len(options))), ActionIdentity(
                 "forced_selection", (int(select.get("context", -1)),)),
@@ -462,14 +200,9 @@ class BellmanRuntime:
     def _decide(self, observation: dict) -> RootDecision:
         current = observation.get("current") or {}
         if _int_field(current, "turn", 0) <= 0:
-            self._plan_suffix = ()
-            self._proof_suffix = ()
-            self._proof_id = ""
-            self.last_read = Read()
-            self._strategy_snapshot = None
-            self._attack_locks = {}
+            self._reset_for_pregame()
             return self._pregame(observation)
-        # Above every early return: a selection answered by the Strategy fallback still has to
+        # Above every early return: a selection answered by the fallback still has to
         # contribute its ATTACK rows, or the delta carries them away for good.
         self._attack_locks = fold_attack_locks(
             self._attack_locks, observation.get("logs"),
@@ -501,8 +234,7 @@ class BellmanRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
-            decision = (self._decide_with_planner(observation) if self.brain == "bellman"
-                        else self._decide_with_ledger(observation))
+            decision = self._decide_core(observation)
             production = (decision.diagnostics.get("production") or {})
             if bool(production.get("deadline_hit")):
                 if context == 0:
@@ -515,6 +247,12 @@ class BellmanRuntime:
             if collector_was_enabled:
                 gc.enable()
 
+    def _decide_core(self, observation: dict) -> RootDecision:
+        forced = self._forced_selection(observation)
+        if forced is not None:
+            return forced
+        return self.ledger.decide(observation)
+
     @staticmethod
     def _crash_report(observation: dict, exc: Exception) -> dict:
         select = observation.get("select") or {}
@@ -526,9 +264,16 @@ class BellmanRuntime:
         return {"type": type(exc).__name__, "message": str(exc)[:500],
                 "traceback_tail": trace[-2000:]}
 
+    #: Names the crash path in diagnostics and the dashboard; the teacher overrides both.
+    fallback_backend = "last-resort-fallback"
+    fallback_action = "last_resort_fallback"
+
+    def _fallback_selection(self, observation: dict) -> list[int]:
+        return _last_resort_selection(observation)
+
     def _fallback_decision(self, observation: dict, cause: str,
                            error: dict | None = None) -> RootDecision:
-        chosen = tuple(self._strategy_fallback_selection(observation))
+        chosen = tuple(self._fallback_selection(observation))
         select = observation.get("select") or {}
         current = observation.get("current") or {}
         context = _int_field(select, "context", -1)
@@ -538,145 +283,21 @@ class BellmanRuntime:
             effect = select.get("effect") or {}
             self._fallback_effect = (tuple(effect.get(key) for key in (
                 "playerIndex", "id", "serial")) if effect else self._fallback_effect)
-        self._plan_suffix = ()
-        self._proof_suffix = ()
+        self._invalidate_plans()
         diagnostics = {
-            "backend": "strategy-fallback",
+            "backend": self.fallback_backend,
             "fallback": {"cause": cause, "latched": self._fallback_scope is not None,
                          "context": context, "chosen": chosen,
                          **({"error": error} if error else {})},
         }
         return RootDecision(
-            chosen, ActionIdentity("strategy_fallback", (context,)), 0.0, False, diagnostics)
-
-    def _strategy_fallback_selection(self, observation: dict) -> list[int]:
-        default = _last_resort_selection(observation)
-        try:
-            snapshot = self._planning_epoch_strategy(observation)
-            state = DecisionState.from_observation(
-                observation, deck=self.deck, deck_name=self.strategy.name,
-                value_registry_identity=self.registry.identity)
-            actions = enumerate_legal_actions(observation)
-            builder = StrategyBeamBuilder(
-                snapshot, registry=self.registry,
-                width=int(self.pilot_profile.get("strategy.focus_width")),
-                information_partition=(self.pilot_profile.get(
-                    "strategy.information_partition_enabled") >= 0.5))
-            ranked = builder.rank_legal(state, actions)
-            focused = builder.last_beam.focused if builder.last_beam is not None else ()
-            if not focused:
-                return default
-            focused_keys = {row.action_key for row in focused}
-            action = next((row for row in ranked
-                           if semantic_action_key(row) in focused_keys), None)
-            if action is None:
-                return default
-            select = observation.get("select") or {}
-            context = int(select.get("context", -1))
-            if context == _TO_HAND:
-                maximum = min(len(select.get("option") or ()),
-                              int(select.get("maxCount", len(action.selection))))
-                remainder = [index for index in range(len(select.get("option") or ()))
-                             if index not in action.selection]
-                return list((*action.selection, *remainder)[:maximum])
-            return list(action.selection) if action.selection else default
-        except Exception:
-            return default
-
-    def _decide_with_ledger(self, observation: dict) -> RootDecision:
-        forced = self._forced_selection(observation)
-        if forced is not None:
-            return forced
-        gamma = self._observe_matchup(observation)
-        return self.ledger.decide(
-            observation, opponent=self._opponent_layer(observation, self.last_brief, gamma))
-
-    def _opponent_layer(self, observation: dict, brief, gamma: float):
-        """Scouting priced into the Ledger (ADR-0148): generic roles for shown cards at full
-        strength; the matched Brief's claims and `ledger_overrides` blended in by gamma."""
-        current = observation.get("current") or {}
-        seat = int(current.get("yourIndex", 0))
-        players = current.get("players") or ()
-        opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
-        bodies = tuple(body for body in
-                       tuple(opponent.get("active") or ()) + tuple(opponent.get("bench") or ())
-                       if body)
-        shown = {int(body["id"]) for body in bodies if body.get("id") is not None}
-        shown.update(int(card["id"]) for card in (opponent.get("discard") or ())
-                     if isinstance(card, dict) and card.get("id") is not None)
-        roles = {card_id: tuple(card_roles) for card_id, card_roles in
-                 general_pokemon_roles(shown, self.stats, self.functions).items()}
-        brief_roles = scouted_ledger_roles(self.last_read, brief, self.stats,
-                                           self.functions) if gamma > 0.0 else {}
-        if not roles and not brief_roles:
-            return None
-        weights = self.ledger.ctx.weights
-        overrides = getattr(brief, "ledger_overrides", None) if brief is not None else None
-        if overrides:
-            weights = weights.resolve(overrides)      # a typo'd Brief key raises loud here
-        return OpponentLayer(roles=roles, brief_roles=brief_roles, weights=weights,
-                             gamma=gamma)
-
-    def _decide_with_planner(self, observation: dict) -> RootDecision:
-        planner = self._planner(observation)
-        request = PlanRequest(observation, self.deck, self.strategy.name)
-        try:
-            return self._planner_epoch(planner, request, observation)
-        except Exception:
-            planner.discard_precheck()               # release the retained native session
-            raise
-
-    def _planner_epoch(self, planner, request, observation) -> RootDecision:
-        self.last_decision_limit = (
-            self.decision_clock.external_seconds if self.decision_clock is not None
-            else planner._epoch_seconds(request))
-        proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
-        if proof_cached is not None:
-            return proof_cached
-        forced = self._forced_selection(observation)
-        if forced is not None:
-            return forced
-        proof = planner.prove(request)
-        if proof is not None:
-            self._proof_suffix = proof.plan_suffix
-            self._proof_id = str(proof.diagnostics["terminal_proof"]["proof_id"])
-            self._plan_suffix = ()
-            return self._with_proof_invalidation(proof, _proof_invalidation)
-        cached, invalidation = self._cached_decision(planner, request)
-        if cached is not None:
-            planner.discard_precheck()
-            return self._with_proof_invalidation(cached, _proof_invalidation)
-        self._plan_reuse_stats["planner_calls"] += 1
-        planner.strategy_snapshot = (
-            self._planning_epoch_strategy(observation)
-            if self.pilot_profile.get("strategy.focus_enabled") >= 0.5 else None)
-        decision = planner.decide(request, terminal_checked=True)
-        self._proof_suffix = ()
-        self._proof_id = ""
-        self._plan_suffix = decision.plan_suffix
-        diagnostics = dict(decision.diagnostics)
-        if _proof_invalidation not in {"empty", "hit"}:
-            terminal = dict(diagnostics.get("terminal_proof", {}))
-            terminal.update({"lock_event": "invalidated", "lock_reason": _proof_invalidation})
-            diagnostics["terminal_proof"] = terminal
-        diagnostics["plan_suffix"] = {
-            "hit": False, "invalidation": invalidation,
-            "cached_steps": len(self._plan_suffix),
-            "hits": self._plan_reuse_stats["hits"],
-            "planner_calls": self._plan_reuse_stats["planner_calls"],
-            "planner_calls_avoided": self._plan_reuse_stats["hits"],
-            "invalidations": dict(self._plan_reuse_stats["invalidations"]),
-        }
-        self.last_deadline_hit = bool(
-            (diagnostics.get("production") or {}).get("deadline_hit", False))
-        return RootDecision(decision.chosen, decision.action, decision.value,
-                            decision.complete, diagnostics, decision.plan_suffix)
+            chosen, ActionIdentity(self.fallback_action, (context,)), 0.0, False, diagnostics)
 
 
-def build_runtime(strategy, deck, **kwargs) -> BellmanRuntime:
+def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     """Construct the one shared runtime; injectable seams keep tests engine-independent."""
 
-    return BellmanRuntime(strategy, deck, **kwargs)
+    return AgentRuntime(strategy, deck, **kwargs)
 
 
 def _read_deck() -> list[int]:
@@ -786,4 +407,4 @@ def make_agent(strategy):
     return agent
 
 
-__all__ = ["BellmanRuntime", "build_runtime", "make_agent"]
+__all__ = ["AgentRuntime", "build_runtime", "make_agent"]

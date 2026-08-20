@@ -82,5 +82,24 @@ def test_the_scan_stays_inside_this_checkout():
         f"or vendored dependency code — {foreign[:10]}")
 
     # ...and it must still reach the tree the ban is actually about.
-    assert any(p.startswith("tests/bellman/") for p in scanned), (
+    assert any(p.startswith("tests/ledger/") for p in scanned), (
         "the scan no longer covers the primary policy suite")
+
+
+_DEPRECATED_IMPORT = re.compile(r"^\s*(?:from\s+deprecated[.\s]|import\s+deprecated[.\s])",
+                                re.MULTILINE)
+
+
+@pytest.mark.req("REQ-IMPORTHYG-0002")
+def test_no_live_source_imports_the_deprecated_quarantine():
+    """ADR-0149's boundary: `deprecated/` may ride `src/`, never the reverse — a live module
+    importing quarantined code silently un-retires the Bellman brain."""
+    offenders = []
+    for path in _repo_python_files():
+        relative = str(path.relative_to(REPO)).replace("\\", "/")
+        if not (relative.startswith("src/") or relative.startswith("tools/submit/")):
+            continue
+        if _DEPRECATED_IMPORT.search(path.read_text(encoding="utf-8")):
+            offenders.append(relative)
+    assert offenders == [], (
+        f"live source imports the deprecated quarantine — {offenders}")

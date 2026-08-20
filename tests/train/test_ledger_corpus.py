@@ -210,7 +210,7 @@ def test_a_crashed_decision_is_surfaced_even_when_it_agrees():
     """A dead brain that happened to pick the ruled action must show as a CRASH in the
     human-facing dashboard, never as a quiet success."""
     crashed = row("a_deck", "r1", agrees=True)
-    crashed["backend"] = "strategy-fallback"
+    crashed["backend"] = "last-resort-fallback"
     crashed["fallback"] = {"cause": "exception:ValueError",
                            "error": {"type": "ValueError", "message": "boom"}}
     result = payload([crashed, row("a_deck", "r2", agrees=True)])

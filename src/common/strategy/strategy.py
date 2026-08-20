@@ -6,7 +6,6 @@ and an optional observable-potential extension. Action policy does not belong he
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from collections.abc import Callable
 
 from common.pokemon_roles import general_pokemon_roles
 
@@ -151,7 +150,6 @@ class Strategy:
     prize_plan: PrizePlan | None = None
     strategies: tuple[StrategyHint, ...] = ()
     strategy_overrides: tuple[StrategyOverride, ...] = ()
-    potential_factory: Callable[..., object] | None = None
     lines: tuple[Line, ...] = field(init=False)
 
     def __post_init__(self) -> None:

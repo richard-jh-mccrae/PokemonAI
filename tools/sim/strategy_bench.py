@@ -19,8 +19,8 @@ from statistics import mean
 from time import monotonic
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "src"))
-from common.budget_prototype import DecisionClock
+sys.path[:0] = [str(REPO), str(REPO / "src")]
+from deprecated.bellman import DecisionClock
 
 
 def default_jobs() -> int:

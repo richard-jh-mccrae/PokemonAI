@@ -1,4 +1,4 @@
-"""Neutral cgpy transition provider for Bellman search."""
+"""Neutral cgpy transition provider: the offline twin of the native engine seam."""
 from __future__ import annotations
 
 from collections import Counter
@@ -10,15 +10,14 @@ from .algebra import (
 )
 from .cards import card_store, play_clauses
 from .cards.functions.attack_lock import carry_attack_locks
+from .effects import terminal_effects_supported
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
 from .state import DecisionState
 from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
-from .commutativity import action_footprint
 from .refresh import refresh_transition
-from .terminal import terminal_effects_supported
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -154,9 +153,6 @@ class CgpyTransitionProvider:
             return Actor.OURS
         return Actor.OURS if engine.select_seat == state.root_seat else Actor.OPPONENT
 
-    def footprint(self, state: DecisionState, action: LegalAction):
-        return action_footprint(state, action, cards=self.cards)
-
     def terminal_action_supported(self, state: DecisionState, action: LegalAction) -> bool:
         kind = action.identity.kind
         options = tuple((state.obs.get("select") or {}).get("option") or ())
@@ -229,9 +225,6 @@ class CgpyTransitionProvider:
             return successor
         except Exception as exc:  # noqa: BLE001 - an engine gap is explicit
             return Unknown("cgpy transition failed", f"{type(exc).__name__}: {exc}")
-
-    def resolve_end(self, state: DecisionState, action: LegalAction):
-        return self.transition(state, action)
 
     @staticmethod
     def _played_card_id(engine, action):
