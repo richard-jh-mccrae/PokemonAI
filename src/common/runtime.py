@@ -1,4 +1,4 @@
-"""Bellman-only agent runtime shared by every deck."""
+"""Agent runtime shared by every deck: the Ledger decides, Bellman stays callable offline."""
 from __future__ import annotations
 
 import gc
@@ -19,6 +19,8 @@ from common.deck_tracker import OwnCardModel
 from common.demand import StrategyBeamBuilder, semantic_action_key
 from common.effects import CardEffects
 from common.information import BellmanDeckProfile, opponent_belief
+from common.ledger import LedgerContext, LedgerDecider
+from common.native_engine import NativeCgTransitionProvider
 from common.planner import BellmanTurnPlanner
 from common.potential import BoardPotential
 from common.options import enumerate_legal_actions
@@ -88,10 +90,19 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
 
 
 class BellmanRuntime:
-    """Deployment shell: declarative pregame handling plus one Bellman planner."""
+    """Deployment shell: declarative pregame handling plus the Ledger decider (ADR-0145).
+
+    The Bellman planner machinery stays constructed and callable — it is the phase-2 search
+    skeleton and the offline teacher — but live decisions route through `self.ledger`.
+    `brain="bellman"` re-selects the teacher for its own pins and offline tooling; the live
+    default is the Ledger, and nothing switches brains mid-match."""
 
     def __init__(self, strategy, deck, *, stats=_ENGINE, functions=_ENGINE,
-                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None):
+                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,
+                 brain: str = "ledger"):
+        if brain not in ("ledger", "bellman"):
+            raise ValueError(f"unknown brain {brain!r}")
+        self.brain = brain
         self.strategy = strategy
         self.potential_type = strategy.potential_factory or BoardPotential
         self.deck = tuple(int(card_id) for card_id in deck)
@@ -151,6 +162,13 @@ class BellmanRuntime:
         # Match-scoped: `logs` is a DELTA, so a lock spent two selections ago is no longer in the
         # observation. On the runtime so replay and test callers see the deployed board state.
         self._attack_locks: dict = {}
+        self.ledger = LedgerDecider(
+            self.deck, strategy.name,
+            LedgerContext.build(
+                roles={card_id: tuple(self.roles.get(card_id, ()) or ())
+                       for card_id in self.deck},
+                overrides=getattr(strategy, "ledger_overrides", None)),
+            provider_factory=self.provider_factory or NativeCgTransitionProvider)
 
     @staticmethod
     def _player(observation, seat):
@@ -462,7 +480,8 @@ class BellmanRuntime:
         if collector_was_enabled:
             gc.disable()
         try:
-            decision = self._decide_with_planner(observation)
+            decision = (self._decide_with_planner(observation) if self.brain == "bellman"
+                        else self._decide_with_ledger(observation))
             production = (decision.diagnostics.get("production") or {})
             if bool(production.get("deadline_hit")):
                 if context == 0:
@@ -531,6 +550,12 @@ class BellmanRuntime:
             return list(action.selection) if action.selection else default
         except Exception:
             return default
+
+    def _decide_with_ledger(self, observation: dict) -> RootDecision:
+        forced = self._forced_selection(observation)
+        if forced is not None:
+            return forced
+        return self.ledger.decide(observation)
 
     def _decide_with_planner(self, observation: dict) -> RootDecision:
         planner = self._planner(observation)

@@ -211,7 +211,7 @@ def test_a_planner_failure_still_closes_the_retained_native_session():
             (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().splitlines()
             if value.strip()]
     runtime = runtime_module.build_runtime(
-        strategy, deck, stats=None, functions=None, scout=None, briefs=[])
+        strategy, deck, stats=None, functions=None, scout=None, briefs=[], brain="bellman")
 
     class BoomPlanner:
         discarded = False
@@ -247,7 +247,7 @@ def test_one_effect_timeout_latches_strategy_fallback_until_main_returns():
             (0,), runtime_module.ActionIdentity("card"), 1.0, False,
             {"production": {"deadline_hit": True}})
 
-    deployed._decide_with_planner = timed_out
+    deployed._decide_with_ledger = timed_out
     observation = _menu(
         [engine_opt(type=3, area=5, index=0, playerIndex=1),
          engine_opt(type=3, area=5, index=1, playerIndex=1)], context=14)
