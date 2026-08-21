@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "git_rev": "ea6da0206abbf322e02eaddeb92a98b1004dff9b",
+  "git_rev": "d681dfc9a7f10e67f1fd08bbe109a3ff60146585",
   "baseline_git_rev": null,
-  "generated_at": "2026-08-21T09:54:19.843481+00:00",
+  "generated_at": "2026-08-21T10:17:40.238063+00:00",
   "decks": {
     "dragapult_ex": {
       "records": 43,
@@ -11,7 +11,7 @@
       "misses": 23,
       "agreement": 0.4651,
       "ungraded": 0,
-      "decision_seconds": 1.16,
+      "decision_seconds": 1.3,
       "gap_decisions": 21,
       "gap_census": {
         "discard: unknown card 1244": 8,
@@ -21,8 +21,8 @@
         "discard: unknown card 1102": 2,
         "unpriceable: historical nested frame unavailable (select context 22)": 1,
         "in play: unknown card 745": 1,
-        "discard: unknown card 8": 1,
         "discard: unknown card 1192": 1,
+        "discard: unknown card 8": 1,
         "unpriceable: historical nested frame unavailable (select context 34)": 1
       },
       "fallbacks": 0,
@@ -35,24 +35,24 @@
       "misses": 23,
       "agreement": 0.5577,
       "ungraded": 0,
-      "decision_seconds": 1.39,
+      "decision_seconds": 1.68,
       "gap_decisions": 17,
       "gap_census": {
         "discard: unknown card 1192": 4,
         "discard: unknown card 1102": 4,
         "in play: unknown card 706": 3,
-        "in play: unknown card 172": 3,
-        "in play: unknown card 173": 3,
-        "discard: unknown card 1250": 3,
         "under: unknown card 172": 3,
+        "in play: unknown card 172": 3,
+        "discard: unknown card 1250": 3,
+        "in play: unknown card 173": 3,
         "discard: unknown card 1126": 2,
         "chain capped; scored mid-effect board": 2,
         "discard: unknown card 1197": 2,
         "in play: unknown card 408": 2,
-        "discard: unknown card 1244": 1,
         "discard: unknown card 8": 1,
-        "discard: unknown card 1185": 1,
+        "discard: unknown card 1244": 1,
         "attached: unknown card 8": 1,
+        "discard: unknown card 1185": 1,
         "attached: unknown card 1": 1,
         "discard: unknown card 1119": 1
       },
@@ -60,20 +60,20 @@
       "retired": 18
     },
     "mega_starmie": {
-      "records": 331,
-      "graded": 331,
+      "records": 327,
+      "graded": 327,
       "agrees": 168,
-      "misses": 163,
-      "agreement": 0.5076,
+      "misses": 159,
+      "agreement": 0.5138,
       "ungraded": 0,
-      "decision_seconds": 10.16,
-      "gap_decisions": 165,
+      "decision_seconds": 10.8,
+      "gap_decisions": 162,
       "gap_census": {
-        "discard: unknown card 1102": 49,
-        "discard: unknown card 1192": 42,
+        "discard: unknown card 1102": 47,
+        "discard: unknown card 1192": 40,
         "discard: unknown card 1231": 18,
         "chain capped; scored mid-effect board": 16,
-        "tool: unknown card 1156": 16,
+        "tool: unknown card 1156": 15,
         "attached: unknown card 1": 13,
         "discard: unknown card 1210": 12,
         "attached: unknown card 19": 12,
@@ -86,11 +86,11 @@
         "discard: unknown card 1215": 6,
         "in play: unknown card 230": 6,
         "discard: unknown card 1156": 6,
-        "in play: unknown card 294": 5,
         "in play: unknown card 318": 5,
+        "in play: unknown card 294": 5,
         "in play: unknown card 176": 5,
-        "under: unknown card 172": 5,
         "in play: unknown card 173": 5,
+        "under: unknown card 172": 5,
         "discard: unknown card 1197": 5,
         "discard: unknown card 1087": 5,
         "discard: unknown card 1": 4,
@@ -102,12 +102,12 @@
         "discard: unknown card 1185": 3,
         "discard: unknown card 13": 3,
         "unpriceable: unsupported ability produced no observable effect (ActionIdentity(kind='ability', parts=('[{\"area\":7,\"index\":0,\"type\":10},[]]',)))": 3,
+        "discard: unknown card 1200": 3,
         "discard: unknown card 1224": 3,
         "discard: unknown card 16": 3,
-        "discard: unknown card 1200": 3,
-        "in play: unknown card 757": 2,
         "discard: unknown card 318": 2,
         "discard: unknown card 294": 2,
+        "in play: unknown card 757": 2,
         "tool: unknown card 1163": 2,
         "discard: unknown card 1092": 2,
         "discard: unknown card 1116": 2,
@@ -119,8 +119,8 @@
         "tool: unknown card 1161": 1,
         "discard: unknown card 1161": 1,
         "discard: unknown card 1242": 1,
-        "discard: unknown card 18": 1,
         "discard: unknown card 1194": 1,
+        "discard: unknown card 18": 1,
         "discard: unknown card 1249": 1,
         "tool: unknown card 1165": 1,
         "in play: unknown card 311": 1,
@@ -134,7 +134,7 @@
         "in play: unknown card 649": 1
       },
       "fallbacks": 0,
-      "retired": 16
+      "retired": 20
     }
   },
   "generality_floor": 0.4651,
@@ -359,10 +359,38 @@
     },
     {
       "deck": "mega_starmie",
+      "key": "81905522-47",
+      "id": "050a401411e5",
+      "disposition": "deferred",
+      "round": "2026-08-21"
+    },
+    {
+      "deck": "mega_starmie",
+      "key": "81905522-64",
+      "id": "928c7f244fbd",
+      "disposition": "deferred",
+      "round": "2026-08-21"
+    },
+    {
+      "deck": "mega_starmie",
+      "key": "82228640-53",
+      "id": "67cc15698ce0",
+      "disposition": "deferred",
+      "round": "2026-08-21"
+    },
+    {
+      "deck": "mega_starmie",
       "key": "82523164-55",
       "id": "feb0655fba5f",
       "disposition": "deferred-multi-turn",
       "round": "2026-08-20"
+    },
+    {
+      "deck": "mega_starmie",
+      "key": "82867148-87",
+      "id": "36b3f8870734",
+      "disposition": "deferred",
+      "round": "2026-08-21"
     },
     {
       "deck": "mega_starmie",
@@ -480,7 +508,7 @@
       "rationale": "Discard a fire energy when we otherwise have no energy is a bad trade.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.037391999969258904,
+      "elapsed_seconds": 0.037414400023408234,
       "ledger": {
         "value": 0.1519999999999998,
         "backend": "ledger",
@@ -556,7 +584,7 @@
       "rationale": "CRITICAL: We just discarded two energy to fetch a drakloak for next turn, then immediatly shuffle our hand away with Lillie's. thus, we completely wasted two energies AND an ultra ball for zero gain.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010566899902187288,
+      "elapsed_seconds": 0.01061590004246682,
       "ledger": {
         "value": 0.40795312500000014,
         "backend": "ledger",
@@ -604,7 +632,7 @@
       "rationale": "CRITICAL: discarding a single dreepy because we have two benched is fine, but not both. now we only have two lines of our main attacker when this hand ideally wants 3 main lines.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.054892800049856305
+      "elapsed_seconds": 0.07158699992578477
     },
     {
       "deck": "dragapult_ex",
@@ -630,7 +658,7 @@
         "discard: unknown card 1205"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005383400013670325,
+      "elapsed_seconds": 0.005251500057056546,
       "ledger": {
         "value": 0.07249999999999979,
         "backend": "ledger",
@@ -703,7 +731,7 @@
         "discard: unknown card 1205"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002197599969804287
+      "elapsed_seconds": 0.0022056999150663614
     },
     {
       "deck": "dragapult_ex",
@@ -729,7 +757,7 @@
         "discard: unknown card 1205"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002111199893988669
+      "elapsed_seconds": 0.0021097999997437
     },
     {
       "deck": "dragapult_ex",
@@ -755,7 +783,7 @@
         "discard: unknown card 1205"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009853299940004945,
+      "elapsed_seconds": 0.008995900047011673,
       "ledger": {
         "value": 0.2500000000000009,
         "backend": "ledger",
@@ -826,7 +854,7 @@
       "rationale": "CRITICAL: You discarded our Drakloak (stage 1) in exchange for a Dragapult (stage 2). nonsensical.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.006002400070428848,
+      "elapsed_seconds": 0.00799009995535016,
       "ledger": {
         "value": 0.24249999999999927,
         "backend": "ledger",
@@ -899,7 +927,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.08669260004535317
+      "elapsed_seconds": 0.08096070005558431
     },
     {
       "deck": "dragapult_ex",
@@ -923,7 +951,7 @@
       "rationale": "save darkness energy for when we have Munkidori available",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0033346000127494335
+      "elapsed_seconds": 0.0038457000628113747
     },
     {
       "deck": "dragapult_ex",
@@ -947,7 +975,7 @@
       "rationale": "CRITICAL: dunspace and dudunspace are not meant to be powered up with energy. only do so if no other options and we are desperate. this line of pokemon is a draw engine 99%\n\nRE-RULED 2026-07-29 (user): correct moves [2] -> [1] — attach the {D} to the ACTIVE Dreepy, not the benched one. The original ruling (don't power up the Dunsparce/Dudunsparce DRAW ENGINE) stands and is unchanged; what changes is WHICH Dreepy. The line is: attach {D} to the Active Dreepy, retreat it into Budew (the retreat cost DISCARDS that {D}, rules.md L89), evolve Drakloak onto the benched Dreepy that already holds the {R}, then Itchy Pollen for the Item lock.\n\nWHY {D} AND WHY THE ACTIVE. {D} appears in NO typed cost this deck pays — Bite / Dragon Headbutt / Phantom Dive are all {R}{P}, Mind Bend is {P}+colourless — so it only ever pays a colourless slot and is the deck's one fungible Energy. Spending it to pay a retreat costs nothing the win condition needs; attaching it to the benched Dreepy instead parks a dead card on a wincon body. Engine-verified that this is unpunished: retreat does NOT trigger the in-play Risky Ruins ('puts a Basic non-{D} Pokemon onto their Bench'), because cgpy calls `_after_benched` only from the play-from-hand and put-from-deck paths, never from `_do_switch` — matching the rulebook, which words retreat as a SWITCH (L142) and reserves 'put onto your Bench' for playing from hand (L109/121).\n\nOWNER #165 (Turn Planner). By ADR-0070 amendment J's test the attach is individually worthless — {D} pays neither {P} nor {R}{P}, so it does nothing for the Active Dreepy's own attacks — and pays only as step 1 of attach -> retreat -> promote -> lock: a Maneuver. It needs NO new heuristic: once the planner commits 'this body retreats this turn', Energy attached to it is SPENT rather than banked, its build value is 0, and the existing attach marginal prefers the most fungible card by itself.\n\nNOTE this frame is the one the DELETED f21 energized-line guard was named after ('a wincon Line body is already being energized -> develop it, don't retreat for the lock'). This re-ruling says the retreat-for-the-lock is right ON f21 ITSELF, which undercuts that guard at its own source — independently of the paired-A/B result on the blanket removal.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0234181999694556
+      "elapsed_seconds": 0.03451549995224923
     },
     {
       "deck": "dragapult_ex",
@@ -971,7 +999,7 @@
       "rationale": "CRITICAL: avoid promoting dreepy/drakloak/dragapult line until its fully evolve and fully powered. until its fully powered, we perfer drakloak for its draw engine ability. also, we wanna item lock our opponent when we can. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003294799942523241
+      "elapsed_seconds": 0.004108899971470237
     },
     {
       "deck": "dragapult_ex",
@@ -995,7 +1023,7 @@
       "rationale": "CRITICAL: We are about to KO their active, so why play Crushing hammer first?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021765200071968138,
+      "elapsed_seconds": 0.023710699984803796,
       "ledger": {
         "value": 0.013250000000001094,
         "backend": "ledger",
@@ -1068,7 +1096,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.14515890006441623
+      "elapsed_seconds": 0.14946840004995465
     },
     {
       "deck": "dragapult_ex",
@@ -1094,7 +1122,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1346987000433728
+      "elapsed_seconds": 0.13681759999599308
     },
     {
       "deck": "dragapult_ex",
@@ -1120,7 +1148,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1196508000139147,
+      "elapsed_seconds": 0.1132598000112921,
       "ledger": {
         "value": 0.1263368566176477,
         "backend": "ledger",
@@ -1191,7 +1219,7 @@
       "rationale": "I would have fetched the darkness energy to attach to the Munkidori. then use its ability to move damage from dreepy to opponents dreepy",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0037306000012904406,
+      "elapsed_seconds": 0.0035470000002533197,
       "ledger": {
         "value": 0.050000000000000266,
         "backend": "ledger",
@@ -1248,7 +1276,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch D): correct = [] — DECLINE. The menu's minCount is 0, so benching was optional, exactly as the note suspected; the doctrine in the note ('we do not want to bench this second Munkidori... perfect fodder for Ultra Ball') means the right pick is to decline. Original note: \"This is odd, it shows that to play Munkidori is the only option, though i know the rules do not require playing all basic pokemon to the bench at startup.\\n\\nHere we do not want to bench this second Munkidori. with this deck, we typically only ever need a single Munkidori in play. this second copy is a perfect fodder for Ultra Ball.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 9.7999582067132e-06
+      "elapsed_seconds": 1.079996582120657e-05
     },
     {
       "deck": "dragapult_ex",
@@ -1272,7 +1300,7 @@
       "rationale": "CRITICAL: Our matchup posture should know that our opponent only has these three Staryu's as basics which can be benched after match setup, thus this stadium only hurts us.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004554699989967048,
+      "elapsed_seconds": 0.007676100009121001,
       "ledger": {
         "value": 0.04750000000000032,
         "backend": "ledger",
@@ -1343,7 +1371,7 @@
       "rationale": "CRITICAL: Our Dreepy doesnt need energy just yet. We should attache to Fez, retreat, promote Budew, then item lock with Itchy Pollen",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0038605000590905547,
+      "elapsed_seconds": 0.004138599964790046,
       "ledger": {
         "value": 0.04750000000000032,
         "backend": "ledger",
@@ -1414,7 +1442,7 @@
       "rationale": "Our hand is small, draw more with Lillie's.\n\n",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.015568099915981293
+      "elapsed_seconds": 0.014512000023387372
     },
     {
       "deck": "dragapult_ex",
@@ -1438,7 +1466,7 @@
       "rationale": "CRITICAL: Our active Dragapult needs an energy, thus Crispin. Could then have also attached a psychic energy to the benched Drakloak",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.037114900071173906
+      "elapsed_seconds": 0.04993720003403723
     },
     {
       "deck": "dragapult_ex",
@@ -1462,7 +1490,7 @@
         "unpriceable: historical nested frame unavailable (select context 22)"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0037148999981582165,
+      "elapsed_seconds": 0.005377899971790612,
       "ledger": {
         "value": 0.0,
         "backend": "ledger",
@@ -1517,7 +1545,7 @@
         "in play: unknown card 745"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.07865140005014837,
+      "elapsed_seconds": 0.1146235999185592,
       "ledger": {
         "value": 0.09649999999999936,
         "backend": "ledger",
@@ -1588,7 +1616,7 @@
       "rationale": "",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01407809997908771
+      "elapsed_seconds": 0.014668099931441247
     },
     {
       "deck": "dragapult_ex",
@@ -1612,7 +1640,7 @@
       "rationale": "CRITICAL: Important to get our Dudunspace online if able such to draw 3.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009602699894458055,
+      "elapsed_seconds": 0.01073129998985678,
       "ledger": {
         "value": 1.460799685858599,
         "backend": "ledger",
@@ -1667,7 +1695,7 @@
       "rationale": "CRITICAL: Dont retreat our active that can KO their active, this wastes energy.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0586580999661237,
+      "elapsed_seconds": 0.05779180000536144,
       "ledger": {
         "value": 0.0749999999999984,
         "backend": "ledger",
@@ -1738,7 +1766,7 @@
       "rationale": "CRITICAL: This deck is insanely retreat happy. look into this. it keeps retreating our active out that can KO our opponent for a weak pokemon that cannot KO our opponent.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.044108100002631545,
+      "elapsed_seconds": 0.07704110001213849,
       "ledger": {
         "value": 0.09999999999999964,
         "backend": "ledger",
@@ -1809,7 +1837,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch B, extracted from the note): 'A waste to attach a darkness energy to Dragapult' -> the {D} belongs on Munkidori, the one body whose ability wants dark. Original note: \"CRITICAL: A waste to attach a darkness energy to Dragapult\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.024786300025880337
+      "elapsed_seconds": 0.025323100038804114
     },
     {
       "deck": "dragapult_ex",
@@ -1837,7 +1865,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01106459996663034
+      "elapsed_seconds": 0.01621629996225238
     },
     {
       "deck": "dragapult_ex",
@@ -1863,7 +1891,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0029350999975576997,
+      "elapsed_seconds": 0.003355200053192675,
       "ledger": {
         "value": 0.0,
         "backend": "ledger",
@@ -1912,7 +1940,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.006706000072881579
+      "elapsed_seconds": 0.010566700017079711
     },
     {
       "deck": "dragapult_ex",
@@ -1939,7 +1967,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.011605100007727742
+      "elapsed_seconds": 0.01160540001001209
     },
     {
       "deck": "dragapult_ex",
@@ -1964,7 +1992,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0028183000395074487,
+      "elapsed_seconds": 0.003111200057901442,
       "ledger": {
         "value": 0.07500000000000018,
         "backend": "ledger",
@@ -2014,7 +2042,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021179300034418702,
+      "elapsed_seconds": 0.022414500010199845,
       "ledger": {
         "value": 0.22562499999999908,
         "backend": "ledger",
@@ -2090,7 +2118,7 @@
         "unpriceable: historical nested frame unavailable (select context 34)"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0020791999995708466
+      "elapsed_seconds": 0.004002999980002642
     },
     {
       "deck": "dragapult_ex",
@@ -2117,7 +2145,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005526999942958355
+      "elapsed_seconds": 0.00550870003644377
     },
     {
       "deck": "dragapult_ex",
@@ -2144,7 +2172,7 @@
         "discard: unknown card 1244"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0330136000411585,
+      "elapsed_seconds": 0.04727370000910014,
       "ledger": {
         "value": 0.06449999999999978,
         "backend": "ledger",
@@ -2213,7 +2241,7 @@
       "rationale": "For this turn, we focus on setup. I would evolve active Dreepy to Drakloak, use Recon Directive, playin Cripsin to fetch on darkness and one fire where Crispin bonus attach is fire to active drakloak. then attach for turn psychic to active drakloak. then attack for 70 dmg.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.048475599964149296,
+      "elapsed_seconds": 0.04642419994343072,
       "ledger": {
         "value": 0.08150000000000013,
         "backend": "ledger",
@@ -2284,7 +2312,7 @@
       "rationale": "We dont need to fetch anything at the moment.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04143109999131411,
+      "elapsed_seconds": 0.03954859997611493,
       "ledger": {
         "value": 0.0770000000000004,
         "backend": "ledger",
@@ -2355,7 +2383,7 @@
       "rationale": "CRITICAL: When given the option to start any other pokemon than Dreepy as active, do that. we need Dreepys on the bench protected, such that they can evolve to Drakloak, use Recon Directive for multiple turns, get energized, and only when fully energized, promoted to active",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 2.459995448589325e-05
+      "elapsed_seconds": 1.850002445280552e-05
     },
     {
       "deck": "dragapult_ex",
@@ -2383,7 +2411,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.008183299913071096,
+      "elapsed_seconds": 0.008099800092168152,
       "ledger": {
         "value": 0.5374999999999994,
         "backend": "ledger",
@@ -2459,7 +2487,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004144700011238456,
+      "elapsed_seconds": 0.004088100045919418,
       "ledger": {
         "value": 0.07500000000000018,
         "backend": "ledger",
@@ -2506,7 +2534,7 @@
       "rationale": "I would have saved the ultra ball a turn because we are just now laying down 3 basics who will not be able to evolve this turn.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.07527929998468608
+      "elapsed_seconds": 0.1116644999710843
     },
     {
       "deck": "mega_lucario",
@@ -2530,7 +2558,7 @@
       "rationale": "CRITICAL: we discarded a riolu to fetch a riolu. what a waste!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.006606400012969971,
+      "elapsed_seconds": 0.0060792999574914575,
       "ledger": {
         "value": 0.25249999999999995,
         "backend": "ledger",
@@ -2601,7 +2629,7 @@
       "rationale": "CRITICAL: Just shuffled in the pre evolution to our main line attacker, Riolu! bad bad",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01570340001489967
+      "elapsed_seconds": 0.016726500005461276
     },
     {
       "deck": "mega_lucario",
@@ -2625,7 +2653,7 @@
       "rationale": "CRITICAL: must never play Premium Power Pro when unable to attack this turn",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0020168001065030694
+      "elapsed_seconds": 0.0024854999501258135
     },
     {
       "deck": "mega_lucario",
@@ -2649,7 +2677,7 @@
       "rationale": "RE-RULED 2026-07-27 (user, #175 Discrimination-Gate review; supersedes the original \"Petrel grabbed a Supporter we already hold\" ruling). Petrel IS the right first action -- what was wrong is WHAT it fetched. Given the opponent's poor setup, do NOT gamble on Lillie's for a quick KO: fetch Air Balloon, attach it to the Active Riolu, retreat, promote Solrock. Their bench is 3 Solrocks with NO Lunatone, so Cosmic Beam \"does nothing\" -- their only live line is Riolu -> Mega Lucario ex + 1 {F} for Aura Jab 130, which KOs either body. So the retreat does not dodge a KO, it CHOOSES which card eats it: Solrock costs 1 prize and zero attached energy and we hold a second one, while Riolu is the Mega Lucario ex base. Measured: leaving Riolu Active exposes it on 63.9% of their turns; after the retreat only ~18.6% (they need the KO *and* a Boss's Orders to gust it back up). Lillie's is then played NEXT turn, still at exactly 6 prizes for the draw-8. TURN-PLANNER scope (#165): the payoff is positional and spans fetch->attach->retreat->promote, which no single-action decider can express.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02009179990272969
+      "elapsed_seconds": 0.03492679994087666
     },
     {
       "deck": "mega_lucario",
@@ -2673,7 +2701,7 @@
       "rationale": "CRITICAL: we have nothing in our hand and are desperately behind the opponent. should refill hand. even though hand contains mega lucario, we have no riolu in play, thus its worthless at this moment.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012726600049063563
+      "elapsed_seconds": 0.01732849993277341
     },
     {
       "deck": "mega_lucario",
@@ -2697,7 +2725,7 @@
       "rationale": "CRITICAL: we need energy, be sure to fetch it with this.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004871900076977909,
+      "elapsed_seconds": 0.00486689992249012,
       "ledger": {
         "value": 0.24249999999999927,
         "backend": "ledger",
@@ -2770,7 +2798,7 @@
         "discard: unknown card 1126"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005560099962167442,
+      "elapsed_seconds": 0.005484099965542555,
       "ledger": {
         "value": 0.2698750000000003,
         "backend": "ledger",
@@ -2843,7 +2871,7 @@
         "discard: unknown card 1126"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.017025699955411255,
+      "elapsed_seconds": 0.02100330009125173,
       "ledger": {
         "value": 0.09062499999999973,
         "backend": "ledger",
@@ -2906,7 +2934,7 @@
       "rationale": "should grab a solrock in this case. our mega lucario is safe and energized while we have single lunatone on bench. give it a solrock to allow us to use lunatones draw ability.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004209699924103916
+      "elapsed_seconds": 0.004079099977388978
     },
     {
       "deck": "mega_lucario",
@@ -2931,7 +2959,7 @@
       "rationale": "in this deck, discarding an extra energy card can be strategic because of Lucario's Aura Jab, which allows taking energy from discard pile and attaching to our bench",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.051068699918687344
+      "elapsed_seconds": 0.06550559995230287
     },
     {
       "deck": "mega_lucario",
@@ -2955,7 +2983,7 @@
       "rationale": "CRITICAL: dont ultra ball to fetch mega lucario when we know that there are no more Riolus in our deck.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0046894000843167305
+      "elapsed_seconds": 0.007232200005091727
     },
     {
       "deck": "mega_lucario",
@@ -2979,7 +3007,7 @@
       "rationale": "avoid attaching energy to lunatone unless only option",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03703610005322844,
+      "elapsed_seconds": 0.038492599967867136,
       "ledger": {
         "value": 0.06500000000000039,
         "backend": "ledger",
@@ -3050,7 +3078,7 @@
       "rationale": "CRITICAL: already have solrock on board, so dont fetch it. we typically only ever need one solrock and one lunatone in play",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0044781999895349145,
+      "elapsed_seconds": 0.005929699982516468,
       "ledger": {
         "value": 0.24249999999999972,
         "backend": "ledger",
@@ -3124,7 +3152,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.026525499997660518,
+      "elapsed_seconds": 0.03376549994572997,
       "ledger": {
         "value": 0.11249999999999982,
         "backend": "ledger",
@@ -3195,7 +3223,7 @@
       "rationale": "CRITICAL: Already have lunatone on board, do not then fetch one",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004909200011752546,
+      "elapsed_seconds": 0.00588769989553839,
       "ledger": {
         "value": 0.2524999999999995,
         "backend": "ledger",
@@ -3269,7 +3297,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0053807999938726425
+      "elapsed_seconds": 0.005059199989773333
     },
     {
       "deck": "mega_lucario",
@@ -3296,7 +3324,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00420179998036474
+      "elapsed_seconds": 0.006616800092160702
     },
     {
       "deck": "mega_lucario",
@@ -3323,7 +3351,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0037244000704959035
+      "elapsed_seconds": 0.0061642000218853354
     },
     {
       "deck": "mega_lucario",
@@ -3350,7 +3378,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003754699951969087
+      "elapsed_seconds": 0.005103799980133772
     },
     {
       "deck": "mega_lucario",
@@ -3374,7 +3402,7 @@
       "rationale": "CRITICAL: Lunatone is typically never an attacker while Solrock is our badass starter, swinging for 70 dmg for only a single energy. we almost always wanna start Solrock when we have a Lunatone as well.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 1.9699917174875736e-05
+      "elapsed_seconds": 2.059992402791977e-05
     },
     {
       "deck": "mega_lucario",
@@ -3400,7 +3428,7 @@
         "in play: unknown card 706"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.033629000070504844
+      "elapsed_seconds": 0.03166229999624193
     },
     {
       "deck": "mega_lucario",
@@ -3426,7 +3454,7 @@
         "in play: unknown card 706"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02512500004377216,
+      "elapsed_seconds": 0.024529200047254562,
       "ledger": {
         "value": 0.03000000000000025,
         "backend": "ledger",
@@ -3485,7 +3513,7 @@
         "in play: unknown card 706"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0046591999707743526,
+      "elapsed_seconds": 0.005525499931536615,
       "ledger": {
         "value": 0.33025000000000027,
         "backend": "ledger",
@@ -3556,7 +3584,7 @@
       "rationale": "CRITICAL: There was a win on this turn. fetch lunatone with ultra ball, attack for 70 dmg, win!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005578099982813001,
+      "elapsed_seconds": 0.006535999942570925,
       "ledger": {
         "value": 0.38874999999999993,
         "backend": "ledger",
@@ -3627,7 +3655,7 @@
       "rationale": "CRITICAL: Dont play Poke Pad when we do not intent to fetch a pokemon with it. these cards are perfect fodder for ultra balls",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.10656940005719662
+      "elapsed_seconds": 0.1373971999855712
     },
     {
       "deck": "mega_lucario",
@@ -3651,7 +3679,7 @@
       "rationale": "PLANNER / multi-turn (re-tagged [2]->[3], user-confirmed 2026-07-22). Neither the corpus's Mega Lucario ex nor a Solrock is right. The opponent can't KO any of our Pokemon next turn, and the active Mega Lucario ex is ALREADY a next-turn KO (one manual F -> Mega Brave 270 > Dragapult's 190 left) without this route. So the Aura Jab energy stages the NEXT 1-prize attacker: route >=2 F to Hariyama (Wild Press 210), skipping the weaker Solrock and the 3-prize Mega Lucario liability (force-8-prizes doctrine). Assumes a fully-energized backup Dragapult promotes after we KO; the commit-to-Hariyama call rests on an odds calc (turns until an energy/fetch reaches the benched Mega Lucario ~ 3). TURN-PLANNER scope, NOT the single-turn energy oracle.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004857599968090653,
+      "elapsed_seconds": 0.005868399981409311,
       "ledger": {
         "value": 0.1250000000000009,
         "backend": "ledger",
@@ -3722,7 +3750,7 @@
       "rationale": "Would have been more impactful to discard the energy and draw 3 cards instead of attaching and NOT attacking",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012397299986332655
+      "elapsed_seconds": 0.012158400029875338
     },
     {
       "deck": "mega_lucario",
@@ -3746,7 +3774,7 @@
       "rationale": "CRITICAL: Dont play Premium Power Pro unless we intend to attack this turn. Given Riolu's attack went last turn, he cannot use it this turn as well.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012798999901860952
+      "elapsed_seconds": 0.014464500010944903
     },
     {
       "deck": "mega_lucario",
@@ -3770,7 +3798,7 @@
       "rationale": "I would have fetched fighting gong, then used that to fetch an energy, then discarded that energy to draw 3 cards using Lunatones ability.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01184689998626709,
+      "elapsed_seconds": 0.019839099957607687,
       "ledger": {
         "value": 0.11750000000000016,
         "backend": "ledger",
@@ -3843,7 +3871,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.21791610005311668,
+      "elapsed_seconds": 0.21002679993398488,
       "ledger": {
         "value": 0.02287499999999998,
         "backend": "ledger",
@@ -3916,7 +3944,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.18585769995115697,
+      "elapsed_seconds": 0.2431424999376759,
       "ledger": {
         "value": 0.02287499999999998,
         "backend": "ledger",
@@ -3987,7 +4015,7 @@
       "rationale": "This deck wants to be aggressive and fast paced, thus when given the option to start a slow and basically non-attacking pokemon like Lunatone versus Riolu, start the Riolu. That gives the option to quickely evolve into Mega Lucario to begin whomping opponent early.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 2.220005262643099e-05
+      "elapsed_seconds": 1.7600017599761486e-05
     },
     {
       "deck": "mega_lucario",
@@ -4011,7 +4039,7 @@
       "rationale": "CRITICAL: We have a Lunatone in play, a few energy cards in hand plus a fully energized Lucario. we need a solrock to utilize Lunatone's draw 3 ability.\n\nThen we wanna start draw 3 each turn, discarding energy that can be recycled with Lucario's Aura Jab attack.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00734569993801415,
+      "elapsed_seconds": 0.011716699926182628,
       "ledger": {
         "value": 0.2525000000000004,
         "backend": "ledger",
@@ -4082,7 +4110,7 @@
       "rationale": "as a general rule, dont energize Meowth, its a tutor fetch engine.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0060767000541090965
+      "elapsed_seconds": 0.006780999945476651
     },
     {
       "deck": "mega_lucario",
@@ -4106,7 +4134,7 @@
       "rationale": "CRITICAL: Dont fetch a lillie's when we already have one in our hand.\n\nHere I would have fetch a Petrel, which can be used to fetch a fighting gong, which can be used to fetch a solrock. then we can discard an energy card to draw three cards. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003938599955290556,
+      "elapsed_seconds": 0.003817399963736534,
       "ledger": {
         "value": 0.125,
         "backend": "ledger",
@@ -4183,7 +4211,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.15647280006669462
+      "elapsed_seconds": 0.20575819991063327
     },
     {
       "deck": "mega_lucario",
@@ -4212,7 +4240,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.055134100024588406,
+      "elapsed_seconds": 0.06962710001971573,
       "ledger": {
         "value": 0.09587499999999949,
         "backend": "ledger",
@@ -4289,7 +4317,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.09752489998936653
+      "elapsed_seconds": 0.11429229995701462
     },
     {
       "deck": "mega_lucario",
@@ -4313,7 +4341,7 @@
       "rationale": "Should have gusted up their non-threatening Meowth ex to delay them.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004422100028023124
+      "elapsed_seconds": 0.004482100019231439
     },
     {
       "deck": "mega_lucario",
@@ -4337,7 +4365,7 @@
       "rationale": "Our hand is empty, would have been better investment to discard energy and draw 3",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00543170003220439
+      "elapsed_seconds": 0.00963800004683435
     },
     {
       "deck": "mega_lucario",
@@ -4361,7 +4389,7 @@
       "rationale": "Hand empty, we are still setting up and desperately need cards. discard energy, use lunatones ability to draw 3. our discarded enegyer can be recycled with Aura Jab",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0075907999416813254
+      "elapsed_seconds": 0.006275100051425397
     },
     {
       "deck": "mega_lucario",
@@ -4385,7 +4413,7 @@
       "rationale": "Gusting is not helpful here",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.006357099977321923,
+      "elapsed_seconds": 0.0069324999349191785,
       "ledger": {
         "value": 0.13500000000000068,
         "backend": "ledger",
@@ -4456,7 +4484,7 @@
       "rationale": "CRITICAL: Get Solrock attacking.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00512790004722774,
+      "elapsed_seconds": 0.006313999998383224,
       "ledger": {
         "value": 0.13500000000000079,
         "backend": "ledger",
@@ -4527,7 +4555,7 @@
       "rationale": "CRITICAL: Lillies would have been far more helpful here.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00422260002233088,
+      "elapsed_seconds": 0.004613199969753623,
       "ledger": {
         "value": 0.125,
         "backend": "ledger",
@@ -4594,7 +4622,7 @@
       "rationale": "",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 9.7999582067132e-06
+      "elapsed_seconds": 1.3999990187585354e-05
     },
     {
       "deck": "mega_lucario",
@@ -4618,7 +4646,7 @@
       "rationale": "I would have not played this second Makuhita, and instead used it as Ultra Ball fodder.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04530030000023544
+      "elapsed_seconds": 0.046365899965167046
     },
     {
       "deck": "mega_lucario",
@@ -4642,7 +4670,7 @@
       "rationale": "Our deck is a fast passed, aggresive attacker, promote the Mega Lucario and start hitting!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004265800002031028
+      "elapsed_seconds": 0.008922200067900121
     },
     {
       "deck": "mega_lucario",
@@ -4666,7 +4694,7 @@
       "rationale": "CRITICAL: Why give a third energy to Riolu/Lucario who need only 2?? This must never happen again. Solrock would have been better here for the third energy.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004201999981887639
+      "elapsed_seconds": 0.004517899942584336
     },
     {
       "deck": "mega_lucario",
@@ -4690,7 +4718,7 @@
       "rationale": "CRITICAL: We cannot attack this turn, so a complete waste",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002422699937596917,
+      "elapsed_seconds": 0.0038690000073984265,
       "ledger": {
         "value": 0.040999999999999925,
         "backend": "ledger",
@@ -4755,7 +4783,7 @@
         "in play: unknown card 408"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03103959991130978
+      "elapsed_seconds": 0.04297600011341274
     },
     {
       "deck": "mega_lucario",
@@ -4781,7 +4809,7 @@
         "in play: unknown card 408"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007295000017620623,
+      "elapsed_seconds": 0.006848299992270768,
       "ledger": {
         "value": 0.1200000000000001,
         "backend": "ledger",
@@ -4852,7 +4880,7 @@
       "rationale": "CRITICAL: no attack still? this is a huge problem",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.013227400020696223,
+      "elapsed_seconds": 0.014283500029705465,
       "ledger": {
         "value": 0.01994166666666697,
         "backend": "ledger",
@@ -4915,7 +4943,7 @@
       "rationale": "CRITICAL: again, evolved benched no energy starmie instead of our active starmie with energy",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003918500035069883
+      "elapsed_seconds": 0.0038012999575585127
     },
     {
       "deck": "mega_starmie",
@@ -4939,7 +4967,7 @@
       "rationale": "CRITICAL: this pilot just attached energy before playing pokegear when we just explicitly made that a rule not to do such a thing. we have a real supporter need for a Wallys Compassion. Need to attempt to get it.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.024679500027559698,
+      "elapsed_seconds": 0.024319699965417385,
       "ledger": {
         "value": 0.3047777777777778,
         "backend": "ledger",
@@ -5010,7 +5038,7 @@
       "rationale": "CRITICAL: you didnt attack, why? this is the second of such blunders that are extremly critical. what is happening here?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010077099897898734,
+      "elapsed_seconds": 0.01148829993326217,
       "ledger": {
         "value": 0.018000000000000238,
         "backend": "ledger",
@@ -5073,7 +5101,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch B, extracted from the note): 'play buddy buddy first to thin deck, then pokegear' — the thin-before-dig ordering doctrine. Original note: \"After 15 seconds deliberation, we played Pokegear. with that much time, we should have considered our basic needs first. first is to attach energy, second is benching staryu. we can bench staryus with buddy buddy. pokegear can perhaps fetch a hilda. play buddy buddy first to thin deck. then pokegear. if no hilda, then we must gamble with lilles for fetching an energy. shuffling away a starmie, which is a discounted need for next turn is worth it, because without energy, the starmie (and Cinderace) are worthless.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.019145999918691814
+      "elapsed_seconds": 0.018979599932208657
     },
     {
       "deck": "mega_starmie",
@@ -5097,7 +5125,7 @@
       "rationale": "CRITICAL: why are we not attacking when energized? this is a consistent problem that shows something is seriously wrong with how we evaluate end of turn and dealing damage.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004167300066910684
+      "elapsed_seconds": 0.0037284999853000045
     },
     {
       "deck": "mega_starmie",
@@ -5121,7 +5149,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. The note rules 'evolve and attach ignition IN ANY ORDER'; the evolve is recorded as an equal alternative. Original note: \"Here, our primary needs are met, energy and mega starmie. and energy needs doubly met with ignition energy. thus immediate action is to evolve active staryu to starmie and attach iginition energy in any order.\\n\\nThen, we have free fetch cards of buddy buddy poffin and pokegear. play buddy buddy first to thin deck and then pokegear. Pokegear might yield a choice that provides a supporter to use this turn. Our next need is a second Mega Starmie. Therefor Hilda and then Salvatore. Hilda over Salvatore because we have a staryu that was benced last turn, and hilda also fetches an energy for us.\\n\\nAfter pokegear and replanning, we will have a choice to use a supporter. Our next turn need will be intensely an energy card because our ignition energy will be discarded. thus, dont shuffle away our hand with Harlequin. Also, opponent has only 5 cards in hand, so disruption value is 5-4(avg) or one card reduction, which is small. Bosses Orders doesnt help us. So IF we play a supporter, its dependant on what Pokegear provides and if that supporter can fetch us a starmie.\\n\\nagain, crushing hammer useless.\\n\\nThese are very straight forward decisions derived from our NEEDS.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.019619899918325245
+      "elapsed_seconds": 0.030495099956169724
     },
     {
       "deck": "mega_starmie",
@@ -5145,7 +5173,7 @@
       "rationale": "CRITICAL: 1) we already have a harlequin in hand. 2) dont want to play harlequin this turn anyways. 3) we really want a second starmie.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0028578999917954206,
+      "elapsed_seconds": 0.0025621000677347183,
       "ledger": {
         "value": 0.08999999999999986,
         "backend": "ledger",
@@ -5198,7 +5226,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. Original note: \"Our needs this turn: attach energy (covered). future needs 1 and 2 turns away: attach energy (covered) eventually healing (not covered).\\n\\nso we immediately attach to our active to cover that need and attaching to bench should never even be considered. that decision branch should never be walked down and the needs system should determine that.\\n\\nthen we are left with an actual decision that is in fact easy to decide. we have 4 cards in hand. a salvatore (useless with staryu), ultra ball (want to fetch staryu, but our only other staryu is in discard, ultra ball = useless), and a second energy (a next turn need). Thus hypergeometric odds must weigh the discounted value of a single energy versus shuffling away that energy plus two useless cards to draw 8 cards. an easy decision to play lillies, again, not by walking down branches but by considering present turn needs versus discounted future turn needs and computing odds.\\n\\nThese decisions should be almost instantaneous.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0249752999516204
+      "elapsed_seconds": 0.02417380001861602
     },
     {
       "deck": "mega_starmie",
@@ -5222,7 +5250,7 @@
       "rationale": "CRITICAL: shuffle away 3 cards (1 useful next turn, 2 useless) for 8. compute odds of drawing an energy with Lillies",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.09193080000113696
+      "elapsed_seconds": 0.09364440001081675
     },
     {
       "deck": "mega_starmie",
@@ -5246,7 +5274,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. Basic {W} to the active recorded as an equal alternative ('can argue basic energy... that is a wash'). Original note: \"This is a seemingly more complex turn given our large hand with three different supporters, but, using needs, we see that all we need is to attach an energy to our active as to build towards Nebula Beam.\\n\\nAttaching to bench shall never be considered.\\n2 Salvatores are useless, never walk that branch\\nUltra Ball worthess (stryu discared), never walk that branch\\nWallys worthless, ignored.\\nLillies shuffles away our one need, dont consider.\\n\\nSO our only choice is between attaching the ignition energy for immediate nebula beam satisfaction or attaching basic energy as to build towards nebula beam over 2 turns.\\n\\nignition is a fine choice, can argue basic energy because it doesnt discard, but that is a wash decision.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0533712999895215
+      "elapsed_seconds": 0.05469959997572005
     },
     {
       "deck": "mega_starmie",
@@ -5270,7 +5298,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. Original note: \"the sequence carried out by our pilot in this turn is perfect, well done\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.059735900023952127,
+      "elapsed_seconds": 0.06035030004568398,
       "ledger": {
         "value": 0.051666666666666305,
         "backend": "ledger",
@@ -5341,7 +5369,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. Original note: \"perfectly executed turn in no time at all, well done\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04356839996762574
+      "elapsed_seconds": 0.0459332000464201
     },
     {
       "deck": "mega_starmie",
@@ -5365,7 +5393,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A, duplicate alignment): the note ENDORSES the agent's own pick, so correct = chosen. Aligned with the sibling CRITICAL ruling on this same frame (attach to the ACTIVE starmie): both records now carry it. Original note: \"i see that to attach our only type of energy to our full HP primary attacker active took 3 seconds. you must analyze which branches we walked down. yes, we have many cards, supporter in hand, but our only real need is to attach this energy and attack. future needs our energy attachments on following turns, which we also have in hand. thus i see no reason to debate here. can this decision making be optimized and made more efficient here?\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.05550939997192472
+      "elapsed_seconds": 0.03567529993597418
     },
     {
       "deck": "mega_starmie",
@@ -5389,7 +5417,7 @@
       "rationale": "CRITICAL: an absolutelt nonsensical choice to attach to our benched starmie when our active starmie still needs 2 more energy to reach nebula beam. true that our opponent has used 3/4 Wallys Compassions, but still, dont diversify like this when both starmies has full HP",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03499449999071658
+      "elapsed_seconds": 0.04208669997751713
     },
     {
       "deck": "mega_starmie",
@@ -5413,7 +5441,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch A): the note ENDORSES the agent's own pick, so correct = chosen. Original note: \"Game winning move found and taken without any intermediate moves, excellent.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04159909998998046,
+      "elapsed_seconds": 0.04288670001551509,
       "ledger": {
         "value": 0.0711666666666666,
         "backend": "ledger",
@@ -5484,7 +5512,7 @@
       "rationale": "Want Cinderace to attack next turn, so stay in active",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002429199987091124
+      "elapsed_seconds": 0.0026629999047145247
     },
     {
       "deck": "mega_starmie",
@@ -5510,7 +5538,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0024631000123918056
+      "elapsed_seconds": 0.003208699985407293
     },
     {
       "deck": "mega_starmie",
@@ -5536,7 +5564,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.031192299909889698
+      "elapsed_seconds": 0.056253100046887994
     },
     {
       "deck": "mega_starmie",
@@ -5562,7 +5590,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03554239997174591
+      "elapsed_seconds": 0.0421028999844566
     },
     {
       "deck": "mega_starmie",
@@ -5588,7 +5616,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003233300056308508
+      "elapsed_seconds": 0.0035714999539777637
     },
     {
       "deck": "mega_starmie",
@@ -5615,7 +5643,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.12547470000572503
+      "elapsed_seconds": 0.12434660003054887
     },
     {
       "deck": "mega_starmie",
@@ -5641,7 +5669,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003221199964173138,
+      "elapsed_seconds": 0.0034678999800235033,
       "ledger": {
         "value": 0.08333333309146784,
         "backend": "ledger",
@@ -5696,7 +5724,7 @@
       "rationale": "Cinderace is our first attacker because he is cheap for 1 energy and then adds 3 energy to bench. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0015878999838605523
+      "elapsed_seconds": 0.0015776000218465924
     },
     {
       "deck": "mega_starmie",
@@ -5722,7 +5750,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007033600006252527
+      "elapsed_seconds": 0.01334629999473691
     },
     {
       "deck": "mega_starmie",
@@ -5748,7 +5776,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.015518700005486608,
+      "elapsed_seconds": 0.018361900001764297,
       "ledger": {
         "value": 0.48550000000000054,
         "backend": "ledger",
@@ -5819,7 +5847,7 @@
       "rationale": "Ignition energy shall never be played on first turn when player goes first. they cant attack, then energy gets discarded.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.025277100037783384
+      "elapsed_seconds": 0.023623500019311905
     },
     {
       "deck": "mega_starmie",
@@ -5845,7 +5873,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03133329993579537
+      "elapsed_seconds": 0.034140100004151464
     },
     {
       "deck": "mega_starmie",
@@ -5871,7 +5899,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.031271800049580634,
+      "elapsed_seconds": 0.03214919997844845,
       "ledger": {
         "value": 0.4448261437908503,
         "backend": "ledger",
@@ -5942,7 +5970,7 @@
       "rationale": "Ultra balls should be usually used to find main pokemon, in this case Mega Starmie Ex",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002848200034350157,
+      "elapsed_seconds": 0.0029273999389261007,
       "ledger": {
         "value": 0.2424999999999996,
         "backend": "ledger",
@@ -6005,7 +6033,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004736199975013733,
+      "elapsed_seconds": 0.004120600060559809,
       "ledger": {
         "value": 0.2699999999999996,
         "backend": "ledger",
@@ -6062,7 +6090,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012613800005055964
+      "elapsed_seconds": 0.01115039992146194
     },
     {
       "deck": "mega_starmie",
@@ -6088,7 +6116,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0033922999864444137,
+      "elapsed_seconds": 0.005052399937994778,
       "ledger": {
         "value": 0.050000000000000266,
         "backend": "ledger",
@@ -6143,7 +6171,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.026494999998249114,
+      "elapsed_seconds": 0.020433200057595968,
       "ledger": {
         "value": 0.31100000000000105,
         "backend": "ledger",
@@ -6216,7 +6244,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02424950001295656
+      "elapsed_seconds": 0.024878900032490492
     },
     {
       "deck": "mega_starmie",
@@ -6242,7 +6270,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.029465900035575032
+      "elapsed_seconds": 0.034520399989560246
     },
     {
       "deck": "mega_starmie",
@@ -6268,7 +6296,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01702200004365295,
+      "elapsed_seconds": 0.01604440005030483,
       "ledger": {
         "value": 0.029184166666665234,
         "backend": "ledger",
@@ -6333,7 +6361,7 @@
         "in play: unknown card 720"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0023497999645769596
+      "elapsed_seconds": 0.002268900047056377
     },
     {
       "deck": "mega_starmie",
@@ -6361,7 +6389,7 @@
         "in play: unknown card 318"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.027731499983929098
+      "elapsed_seconds": 0.028398499940522015
     },
     {
       "deck": "mega_starmie",
@@ -6389,7 +6417,7 @@
         "in play: unknown card 318"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003687600023113191,
+      "elapsed_seconds": 0.004767999984323978,
       "ledger": {
         "value": 0.0,
         "backend": "ledger",
@@ -6448,7 +6476,7 @@
         "in play: unknown card 318"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03956919990014285
+      "elapsed_seconds": 0.03876160003710538
     },
     {
       "deck": "mega_starmie",
@@ -6477,7 +6505,7 @@
         "in play: unknown card 757"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04910669999662787,
+      "elapsed_seconds": 0.06750230002216995,
       "ledger": {
         "value": 0.4762757575757579,
         "backend": "ledger",
@@ -6554,7 +6582,7 @@
         "in play: unknown card 757"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0480619000736624,
+      "elapsed_seconds": 0.047743799979798496,
       "ledger": {
         "value": 0.4762757575757579,
         "backend": "ledger",
@@ -6629,7 +6657,7 @@
         "in play: unknown card 318"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004688999964855611,
+      "elapsed_seconds": 0.0048825000412762165,
       "ledger": {
         "value": 0.6672499999999998,
         "backend": "ledger",
@@ -6696,7 +6724,7 @@
         "in play: unknown card 318"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002239899942651391
+      "elapsed_seconds": 0.0020668000215664506
     },
     {
       "deck": "mega_starmie",
@@ -6720,7 +6748,7 @@
       "rationale": "could have fetched two staryu first. that also allows full knowledge of whats in prize cards via what is in deck",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.015008500078693032
+      "elapsed_seconds": 0.015190600068308413
     },
     {
       "deck": "mega_starmie",
@@ -6744,7 +6772,7 @@
       "rationale": "why retreat when could have attacked? this wasted an energy and damage to opponent",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003899000003002584
+      "elapsed_seconds": 0.005653899977914989
     },
     {
       "deck": "mega_starmie",
@@ -6768,7 +6796,7 @@
       "rationale": "keep Cinderace in active during SETUP",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002612199983559549
+      "elapsed_seconds": 0.0026207000482827425
     },
     {
       "deck": "mega_starmie",
@@ -6795,155 +6823,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02078689995687455
-    },
-    {
-      "deck": "mega_starmie",
-      "key": "81905522-47",
-      "id": "050a401411e5",
-      "backend": "ledger",
-      "scope": "decision",
-      "context": "Main",
-      "category": "sequencing_error",
-      "graded": true,
-      "chosen": [
-        17
-      ],
-      "correct": [
-        5
-      ],
-      "exact": false,
-      "agrees": false,
-      "chosen_label": "Retreat",
-      "correct_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70)",
-      "rationale": "attach energy when able",
-      "gaps": [
-        "discard: unknown card 1102",
-        "discard: unknown card 1192"
-      ],
-      "stamped_prizes": true,
-      "elapsed_seconds": 0.04792390007060021,
-      "ledger": {
-        "value": 0.07841249999999977,
-        "backend": "ledger",
-        "weights": "0fbb8c28f56dc694",
-        "prices": [
-          {
-            "action": "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":965,\"type\":13},[]]',))",
-            "selection": [
-              16
-            ],
-            "swing": 0.35566176470588196,
-            "ends_turn": true
-          },
-          {
-            "action": "ActionIdentity(kind='retreat', parts=('[0,{\"type\":12},[]]',))",
-            "selection": [
-              17
-            ],
-            "swing": 0.07841249999999977,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
-            "selection": [
-              5
-            ],
-            "swing": 0.040555555555555234,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[3],\"energyCards\":[{\"id\":3,\"playerIndex\":0}],\"hp\":330,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]',))",
-            "selection": [
-              4
-            ],
-            "swing": 0.032166666666666455,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))",
-            "selection": [
-              18
-            ],
-            "swing": 0.0,
-            "ends_turn": true
-          }
-        ]
-      }
-    },
-    {
-      "deck": "mega_starmie",
-      "key": "81905522-64",
-      "id": "928c7f244fbd",
-      "backend": "ledger",
-      "scope": "decision",
-      "context": "Main",
-      "category": "sequencing_error",
-      "graded": true,
-      "chosen": [
-        7
-      ],
-      "correct": [
-        5
-      ],
-      "exact": false,
-      "agrees": false,
-      "chosen_label": "Play Boss’s Orders",
-      "correct_label": "Attach Basic {W} Energy → Staryu (bench 1 · 70/70)",
-      "rationale": "attach energy when able",
-      "gaps": [
-        "discard: unknown card 1102",
-        "discard: unknown card 1192"
-      ],
-      "stamped_prizes": true,
-      "elapsed_seconds": 0.04570149991195649,
-      "ledger": {
-        "value": 0.12929999999999975,
-        "backend": "ledger",
-        "weights": "0fbb8c28f56dc694",
-        "prices": [
-          {
-            "action": "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":1487,\"type\":13},[]]',))",
-            "selection": [
-              15
-            ],
-            "swing": 0.659573529411765,
-            "ends_turn": true
-          },
-          {
-            "action": "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":1488,\"type\":13},[]]',))",
-            "selection": [
-              16
-            ],
-            "swing": 0.5603382352941181,
-            "ends_turn": true
-          },
-          {
-            "action": "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1182,\"playerIndex\":0}]]]',))",
-            "selection": [
-              7
-            ],
-            "swing": 0.12929999999999975,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
-            "selection": [
-              5
-            ],
-            "swing": 0.04055555555555479,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1097,\"playerIndex\":0}]]]',))",
-            "selection": [
-              1
-            ],
-            "swing": 0.0009999999999998899,
-            "ends_turn": false
-          }
-        ]
-      }
+      "elapsed_seconds": 0.022152399993501604
     },
     {
       "deck": "mega_starmie",
@@ -6970,7 +6850,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005232900031842291
+      "elapsed_seconds": 0.005679200054146349
     },
     {
       "deck": "mega_starmie",
@@ -6997,7 +6877,7 @@
         "tool: unknown card 1163"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010023699956946075,
+      "elapsed_seconds": 0.008010199991986156,
       "ledger": {
         "value": 0.6379999999999993,
         "backend": "ledger",
@@ -7071,7 +6951,7 @@
         "tool: unknown card 1163"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010802300064824522
+      "elapsed_seconds": 0.010842499905265868
     },
     {
       "deck": "mega_starmie",
@@ -7100,7 +6980,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03845889994408935
+      "elapsed_seconds": 0.04067330004181713
     },
     {
       "deck": "mega_starmie",
@@ -7124,7 +7004,7 @@
       "rationale": "dont waste energy by needlessly retreating",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002629700000397861
+      "elapsed_seconds": 0.0026190999196842313
     },
     {
       "deck": "mega_starmie",
@@ -7154,7 +7034,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1678218999877572,
+      "elapsed_seconds": 0.2298204000107944,
       "ledger": {
         "value": 3.367233333333333,
         "backend": "ledger",
@@ -7227,7 +7107,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11397159995976835,
+      "elapsed_seconds": 0.1125824999762699,
       "ledger": {
         "value": 0.14578749999999996,
         "backend": "ledger",
@@ -7298,7 +7178,7 @@
       "rationale": "dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched mon without any energy",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002624599961563945
+      "elapsed_seconds": 0.0031629999866709113
     },
     {
       "deck": "mega_starmie",
@@ -7322,7 +7202,7 @@
       "rationale": "Cinderace already had all the energy it needed, so dont waste more energy on it, attach to the benched mon without any energy.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.026106899953447282,
+      "elapsed_seconds": 0.025389599963091314,
       "ledger": {
         "value": 0.29262500000000014,
         "backend": "ledger",
@@ -7393,7 +7273,7 @@
       "rationale": "When main attacker has full energy on bench, retreat into it to finish off the opponent",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.023766200058162212
+      "elapsed_seconds": 0.02250570000614971
     },
     {
       "deck": "mega_starmie",
@@ -7417,7 +7297,7 @@
       "rationale": "should have boss's orders the preevolution to the opponents main attacker",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1281861000461504,
+      "elapsed_seconds": 0.13207569997757673,
       "ledger": {
         "value": 0.017999999999999794,
         "backend": "ledger",
@@ -7488,7 +7368,7 @@
       "rationale": "should snipe preevolution to opponents main attacker",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0027395000215619802
+      "elapsed_seconds": 0.003436199971474707
     },
     {
       "deck": "mega_starmie",
@@ -7512,7 +7392,7 @@
       "rationale": "snipe the opponents main attacker",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003031000029295683,
+      "elapsed_seconds": 0.00404490006621927,
       "ledger": {
         "value": 0.15312500000000018,
         "backend": "ledger",
@@ -7567,7 +7447,7 @@
       "rationale": "opponents active is their main attacker with an energy on it, thats a huge threat. use crushing hammer.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.10042109992355108,
+      "elapsed_seconds": 0.14222959999460727,
       "ledger": {
         "value": 0.2801515151515148,
         "backend": "ledger",
@@ -7638,7 +7518,7 @@
       "rationale": "hand wasnt very useful, therefor use lillie's determintation to swap it out",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11950839997734874,
+      "elapsed_seconds": 0.12042150006163865,
       "ledger": {
         "value": 0.5156323529411764,
         "backend": "ledger",
@@ -7709,7 +7589,7 @@
       "rationale": "never play salvatore when no staryu is on board to evolve. hand also sucked, so use harlequin",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0125848000170663,
+      "elapsed_seconds": 0.012884599971584976,
       "ledger": {
         "value": 0.0,
         "backend": "ledger",
@@ -7775,7 +7655,7 @@
         "tool: unknown card 1161"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002482100040651858
+      "elapsed_seconds": 0.0023831999860703945
     },
     {
       "deck": "mega_starmie",
@@ -7803,7 +7683,7 @@
         "discard: unknown card 1242"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.027761400095187128
+      "elapsed_seconds": 0.03050310001708567
     },
     {
       "deck": "mega_starmie",
@@ -7829,7 +7709,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.014197599957697093,
+      "elapsed_seconds": 0.014386900002136827,
       "ledger": {
         "value": 0.08325000000000005,
         "backend": "ledger",
@@ -7902,7 +7782,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021411199937574565
+      "elapsed_seconds": 0.020509399939328432
     },
     {
       "deck": "mega_starmie",
@@ -7930,7 +7810,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11797180003486574
+      "elapsed_seconds": 0.11918359994888306
     },
     {
       "deck": "mega_starmie",
@@ -7958,7 +7838,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1710684000281617
+      "elapsed_seconds": 0.175059900037013
     },
     {
       "deck": "mega_starmie",
@@ -7989,7 +7869,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.034646499902009964,
+      "elapsed_seconds": 0.03563890000805259,
       "ledger": {
         "value": 0.21999999999999975,
         "backend": "ledger",
@@ -8063,7 +7943,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.050182699924334884
+      "elapsed_seconds": 0.049397299997508526
     },
     {
       "deck": "mega_starmie",
@@ -8087,7 +7967,7 @@
       "rationale": "Never ever ever play ignition energy on first turn when going first. cannot attack in this situation and then ignition energy is discarded.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00292480003554374,
+      "elapsed_seconds": 0.003229200025089085,
       "ledger": {
         "value": 0.24663333333333348,
         "backend": "ledger",
@@ -8138,7 +8018,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.23615440004505217,
+      "elapsed_seconds": 0.22694349999073893,
       "ledger": {
         "value": 0.20977878787878712,
         "backend": "ledger",
@@ -8216,7 +8096,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0034299000399187207,
+      "elapsed_seconds": 0.0041093999752774835,
       "ledger": {
         "value": 0.04800000000000004,
         "backend": "ledger",
@@ -8265,7 +8145,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.08496060001198202,
+      "elapsed_seconds": 0.09658729995135218,
       "ledger": {
         "value": 0.04688333333333339,
         "backend": "ledger",
@@ -8331,7 +8211,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.09859499998856336,
+      "elapsed_seconds": 0.1286852000048384,
       "ledger": {
         "value": 2.8369995558199204,
         "backend": "ledger",
@@ -8404,7 +8284,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003991900011897087
+      "elapsed_seconds": 0.0038775999564677477
     },
     {
       "deck": "mega_starmie",
@@ -8430,7 +8310,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.05085140001028776,
+      "elapsed_seconds": 0.07656699989456683,
       "ledger": {
         "value": 0.05157168719386318,
         "backend": "ledger",
@@ -8501,7 +8381,7 @@
       "rationale": "Attach basic energy when able. in this case, attach to the weaker benched pokemon because we know that Cinderace's Turbo Flare attack will provide a full 3 basic energy to Mega Starmie.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.032785299932584167,
+      "elapsed_seconds": 0.033519300050102174,
       "ledger": {
         "value": 0.055388550661160496,
         "backend": "ledger",
@@ -8572,7 +8452,7 @@
       "rationale": "Attch energy to benched pokemon when able and they need it. also should use Pokegear 3.0 to potentially find a useful supporter.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.07674769998993725,
+      "elapsed_seconds": 0.07554879994131625,
       "ledger": {
         "value": 0.058441134203983,
         "backend": "ledger",
@@ -8643,7 +8523,7 @@
       "rationale": "Here, we could have played Wally's Compassion to fully heal our active. then played ignition energy to attack with Nebula Beam again.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03196860000025481
+      "elapsed_seconds": 0.03255800006445497
     },
     {
       "deck": "mega_starmie",
@@ -8667,7 +8547,7 @@
       "rationale": "Play Pokegear 3.0 when able to find useful supporters.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.023657700046896935,
+      "elapsed_seconds": 0.024588300031609833,
       "ledger": {
         "value": 0.6155000000000002,
         "backend": "ledger",
@@ -8738,7 +8618,7 @@
       "rationale": "Save Hero's cape for our own main attacker.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0035440000938251615,
+      "elapsed_seconds": 0.0035082000540569425,
       "ledger": {
         "value": 0.020000000000000462,
         "backend": "ledger",
@@ -8801,7 +8681,7 @@
       "rationale": "Cinderace's attack give 3 energy to benched pokemon, therefor we should lay down a bench and at any cost when its empty before attacking. thus we should have payed buddy buddy poffin first.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03658499999437481
+      "elapsed_seconds": 0.03785189997870475
     },
     {
       "deck": "mega_starmie",
@@ -8825,7 +8705,7 @@
       "rationale": "When no staryus on board that need evolving and already 2 mega starmies in hand, dont waste the mega signal.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0032975999638438225
+      "elapsed_seconds": 0.0037592999869957566
     },
     {
       "deck": "mega_starmie",
@@ -8849,7 +8729,7 @@
       "rationale": "Should have attached basic energy instead of ignition energy to active mega starmie, as its Jetting Blow is enough to KO opponents active while also sniping bench. Plus, Ignition Energy discards at end of turn, so should be saved for only when needed.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01122770004440099,
+      "elapsed_seconds": 0.012349499971605837,
       "ledger": {
         "value": 0.29709090909090907,
         "backend": "ledger",
@@ -8920,78 +8800,7 @@
       "rationale": "attach energy when able and a pokemon needs it before attacking.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.026434300001710653
-    },
-    {
-      "deck": "mega_starmie",
-      "key": "82228640-53",
-      "id": "67cc15698ce0",
-      "backend": "ledger",
-      "scope": "decision",
-      "context": "Main",
-      "category": "sequencing_error",
-      "graded": true,
-      "chosen": [
-        1
-      ],
-      "correct": [
-        2
-      ],
-      "exact": false,
-      "agrees": false,
-      "chosen_label": "Play Crushing Hammer",
-      "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 190/430 · 1⚡)",
-      "rationale": "attach energy when able and needed prior to attacking.",
-      "gaps": [],
-      "stamped_prizes": true,
-      "elapsed_seconds": 0.03071809990797192,
-      "ledger": {
-        "value": 0.09347068827813043,
-        "backend": "ledger",
-        "weights": "0fbb8c28f56dc694",
-        "prices": [
-          {
-            "action": "ActionIdentity(kind='attack', parts=('[0,{\"attackId\":1487,\"type\":13},[]]',))",
-            "selection": [
-              7
-            ],
-            "swing": 0.6622020202020201,
-            "ends_turn": true
-          },
-          {
-            "action": "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1120,\"playerIndex\":0}]]]',))",
-            "selection": [
-              1
-            ],
-            "swing": 0.09347068827813043,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[4,{\"appearThisTurn\":false,\"energies\":[3],\"energyCards\":[{\"id\":3,\"playerIndex\":0}],\"hp\":190,\"id\":1031,\"maxHp\":430,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[{\"id\":1159,\"playerIndex\":0}]}]]]',))",
-            "selection": [
-              2
-            ],
-            "swing": 0.0020232558139534618,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='end', parts=('[0,{\"type\":14},[]]',))",
-            "selection": [
-              8
-            ],
-            "swing": 0.0,
-            "ends_turn": true
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":230,\"id\":1031,\"maxHp\":330,\"playerIndex\":0,\"preEvolution\":[{\"id\":1030,\"playerIndex\":0}],\"tools\":[]}]]]',))",
-            "selection": [
-              3
-            ],
-            "swing": -0.003085858585858414,
-            "ends_turn": false
-          }
-        ]
-      }
+      "elapsed_seconds": 0.02776660001836717
     },
     {
       "deck": "mega_starmie",
@@ -9015,7 +8824,7 @@
       "rationale": "attach energy first. ultra ball is saved to find mega starmie, which we already have in hand. also dont use ultra ball and discard hilda, when hilda can find mega starmie AND an energy card, far better than ultra ball.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0427100999513641,
+      "elapsed_seconds": 0.04281000001356006,
       "ledger": {
         "value": 0.05749999999999922,
         "backend": "ledger",
@@ -9070,7 +8879,7 @@
       "rationale": "In this deck, never ever ever use ultra ball to find Cinderace. its useless as Cinderace can only be played to active when setting up.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0035472000017762184
+      "elapsed_seconds": 0.003395100007764995
     },
     {
       "deck": "mega_starmie",
@@ -9097,7 +8906,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0473964000120759
+      "elapsed_seconds": 0.07779560005292296
     },
     {
       "deck": "mega_starmie",
@@ -9126,7 +8935,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.030000100028701127
+      "elapsed_seconds": 0.02966020000167191
     },
     {
       "deck": "mega_starmie",
@@ -9155,7 +8964,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.10194149997550994,
+      "elapsed_seconds": 0.10162370000034571,
       "ledger": {
         "value": 0.040555555555556566,
         "backend": "ledger",
@@ -9226,7 +9035,7 @@
       "rationale": "Harelquin throws away our hand. we had an enery that we could have attached to the benched Mega Starmie first.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02392629999667406
+      "elapsed_seconds": 0.025137500022538006
     },
     {
       "deck": "mega_starmie",
@@ -9250,7 +9059,7 @@
       "rationale": "When the choice is present to win the game, always take that choice immediately",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.029840099974535406,
+      "elapsed_seconds": 0.034436300047673285,
       "ledger": {
         "value": 0.04671717171717216,
         "backend": "ledger",
@@ -9323,7 +9132,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.018950099940411747,
+      "elapsed_seconds": 0.020618899958208203,
       "ledger": {
         "value": 0.7382500000000001,
         "backend": "ledger",
@@ -9394,7 +9203,7 @@
       "rationale": "Attach energy prior to throwing away hand",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009749899967573583
+      "elapsed_seconds": 0.010583499912172556
     },
     {
       "deck": "mega_starmie",
@@ -9420,7 +9229,7 @@
         "attached: unknown card 1"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.013079599943011999
+      "elapsed_seconds": 0.01372440007980913
     },
     {
       "deck": "mega_starmie",
@@ -9450,7 +9259,7 @@
         "discard: unknown card 18"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.022651099949143827,
+      "elapsed_seconds": 0.0388063999125734,
       "ledger": {
         "value": 0.07549090909090861,
         "backend": "ledger",
@@ -9524,7 +9333,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02532350004184991
+      "elapsed_seconds": 0.024409599951468408
     },
     {
       "deck": "mega_starmie",
@@ -9550,7 +9359,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007748400093987584,
+      "elapsed_seconds": 0.008660800056532025,
       "ledger": {
         "value": 0.019999999999999574,
         "backend": "ledger",
@@ -9623,7 +9432,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005124300019815564,
+      "elapsed_seconds": 0.004463400109671056,
       "ledger": {
         "value": 0.15312500000000018,
         "backend": "ledger",
@@ -9698,7 +9507,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11032520001754165,
+      "elapsed_seconds": 0.16427649999968708,
       "ledger": {
         "value": 1.5441250000000002,
         "backend": "ledger",
@@ -9772,7 +9581,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004396599950268865,
+      "elapsed_seconds": 0.005261000012978911,
       "ledger": {
         "value": 0.15312500000000018,
         "backend": "ledger",
@@ -9846,7 +9655,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.013634399976581335
+      "elapsed_seconds": 0.013846199959516525
     },
     {
       "deck": "mega_starmie",
@@ -9873,7 +9682,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0290777999907732,
+      "elapsed_seconds": 0.03143089998047799,
       "ledger": {
         "value": 0.06449999999999978,
         "backend": "ledger",
@@ -9947,7 +9756,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06506569997873157
+      "elapsed_seconds": 0.07058960001450032
     },
     {
       "deck": "mega_starmie",
@@ -9974,7 +9783,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02896120003424585
+      "elapsed_seconds": 0.03526159992907196
     },
     {
       "deck": "mega_starmie",
@@ -9998,7 +9807,7 @@
       "rationale": "Attach available energy before ending turn",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028056000010110438
+      "elapsed_seconds": 0.032206299947574735
     },
     {
       "deck": "mega_starmie",
@@ -10022,7 +9831,7 @@
       "rationale": "Could have attached energy, attacked, and won",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007964600110426545
+      "elapsed_seconds": 0.008561099995858967
     },
     {
       "deck": "mega_starmie",
@@ -10046,7 +9855,7 @@
       "rationale": "I had just played Buddy-buddy poffin and received no Staryu's back, thus i know that non are in my deck. therefor its a waste to play a second buddy'buddy poffin. that extra card in hand might come in useful later with an Ultra Ball. This requires a knowledge of what is in our deck, that should become fully known once we search it the first time. our prize cards can then be deduced from this.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009224200039170682,
+      "elapsed_seconds": 0.010685799992643297,
       "ledger": {
         "value": 0.2789999999999999,
         "backend": "ledger",
@@ -10120,7 +9929,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010187999927438796
+      "elapsed_seconds": 0.011834700009785593
     },
     {
       "deck": "mega_starmie",
@@ -10147,7 +9956,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.025126200052909553,
+      "elapsed_seconds": 0.028540799976326525,
       "ledger": {
         "value": 0.05190553911205065,
         "backend": "ledger",
@@ -10222,7 +10031,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03423300001304597
+      "elapsed_seconds": 0.03966750006657094
     },
     {
       "deck": "mega_starmie",
@@ -10249,7 +10058,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01755119999870658,
+      "elapsed_seconds": 0.01663069997448474,
       "ledger": {
         "value": 0.04500000000000015,
         "backend": "ledger",
@@ -10315,7 +10124,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.025077100028283894
+      "elapsed_seconds": 0.02840250008739531
     },
     {
       "deck": "mega_starmie",
@@ -10342,7 +10151,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0174270001007244,
+      "elapsed_seconds": 0.019543299917131662,
       "ledger": {
         "value": 0.0711666666666666,
         "backend": "ledger",
@@ -10405,7 +10214,7 @@
       "rationale": "Attack for the win when able",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0100544000742957,
+      "elapsed_seconds": 0.011440499918535352,
       "ledger": {
         "value": 0.2991969696969692,
         "backend": "ledger",
@@ -10476,7 +10285,7 @@
       "rationale": "Boss's up Staryu will KO the Staryu, but we could have just done more damage to the main threat active starmie instead. that main threat will now just return to active will more HP than it otherwise would have had.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01964750001206994,
+      "elapsed_seconds": 0.020214500022120774,
       "ledger": {
         "value": 0.2926451726568009,
         "backend": "ledger",
@@ -10547,7 +10356,7 @@
       "rationale": "Attach before throwing away hand",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.016009400016628206,
+      "elapsed_seconds": 0.016116300015710294,
       "ledger": {
         "value": 0.04055555555555568,
         "backend": "ledger",
@@ -10618,7 +10427,7 @@
       "rationale": "From previous deck scans, we should have known that there are no Staryus left in deck, therefor save buddy buddy for possible ultra ball discard",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.015345399966463447,
+      "elapsed_seconds": 0.014527500024996698,
       "ledger": {
         "value": 0.044392423957398064,
         "backend": "ledger",
@@ -10689,7 +10498,7 @@
       "rationale": "Should have attached second energy to our active to power it up towards Nebula Beam",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007772700046189129,
+      "elapsed_seconds": 0.007852699956856668,
       "ledger": {
         "value": 0.04055555555555579,
         "backend": "ledger",
@@ -10760,7 +10569,7 @@
       "rationale": "Cinderace already had a single basic energy. thus zero reason to waste ignition energy on it",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028785399976186454
+      "elapsed_seconds": 0.029450700036250055
     },
     {
       "deck": "mega_starmie",
@@ -10784,7 +10593,7 @@
       "rationale": "Should have free retreated to fully powered mega starmie for a Jetting Block attack.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028795900056138635
+      "elapsed_seconds": 0.0279101999476552
     },
     {
       "deck": "mega_starmie",
@@ -10808,7 +10617,7 @@
       "rationale": "Playing Crushing Hammer here was worthless, given that Jetting Blow will KO Cinderace. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.023768799961544573
+      "elapsed_seconds": 0.031204500002786517
     },
     {
       "deck": "mega_starmie",
@@ -10832,7 +10641,7 @@
       "rationale": "could have just attacked for the win",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012960699968971312,
+      "elapsed_seconds": 0.013026900007389486,
       "ledger": {
         "value": 0.8850000000000002,
         "backend": "ledger",
@@ -10895,7 +10704,7 @@
       "rationale": "Hilda was not helpful here because i already had an energy and two mega starmies in hand. The opponent was a huge threat due to a nearly full bench. thus i should have played lillie's determination in hopes of filling my bench for protection.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.030529299983754754,
+      "elapsed_seconds": 0.049751500017009676,
       "ledger": {
         "value": 0.045305555555555266,
         "backend": "ledger",
@@ -10969,7 +10778,7 @@
         "in play: unknown card 176"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009211399941705167
+      "elapsed_seconds": 0.00905270001385361
     },
     {
       "deck": "mega_starmie",
@@ -10996,7 +10805,7 @@
         "in play: unknown card 176"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02171130001079291
+      "elapsed_seconds": 0.020950099918991327
     },
     {
       "deck": "mega_starmie",
@@ -11023,7 +10832,7 @@
         "in play: unknown card 176"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0027004999574273825,
+      "elapsed_seconds": 0.005277800024487078,
       "ledger": {
         "value": 0.12499996953739967,
         "backend": "ledger",
@@ -11075,7 +10884,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004728500032797456
+      "elapsed_seconds": 0.0044698999263346195
     },
     {
       "deck": "mega_starmie",
@@ -11103,7 +10912,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021915400051511824
+      "elapsed_seconds": 0.02218109997920692
     },
     {
       "deck": "mega_starmie",
@@ -11131,7 +10940,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.024714199942536652
+      "elapsed_seconds": 0.025328999967314303
     },
     {
       "deck": "mega_starmie",
@@ -11160,7 +10969,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.14484870003070682,
+      "elapsed_seconds": 0.14969649992417544,
       "ledger": {
         "value": 0.06518041666666718,
         "backend": "ledger",
@@ -11236,7 +11045,7 @@
         "under: unknown card 172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06898109999019653,
+      "elapsed_seconds": 0.07535589998587966,
       "ledger": {
         "value": 0.04352689312911728,
         "backend": "ledger",
@@ -11308,7 +11117,7 @@
       "rationale": "Discarding Hero's Cape, our ACE SPEC, is typically not ideal. Discarding Wally's Compassion was a good choice. Given that we have a Mega Starmie in hand, i would have given back Salvatore.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02886589989066124
+      "elapsed_seconds": 0.03049429995007813
     },
     {
       "deck": "mega_starmie",
@@ -11332,7 +11141,7 @@
       "rationale": "When we start with Cinderace, it is critical to fill our bench with at least a single Staryu as to take advange of Cinderace's energy acceleration via Turbo Flare",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004183600074611604
+      "elapsed_seconds": 0.003918500035069883
     },
     {
       "deck": "mega_starmie",
@@ -11361,7 +11170,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02164639998227358,
+      "elapsed_seconds": 0.022214399999938905,
       "ledger": {
         "value": 0.040555555555556566,
         "backend": "ledger",
@@ -11432,7 +11241,7 @@
       "rationale": "Given that we already have an energy in hand, i would have just played Mega Signal",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0252747000195086
+      "elapsed_seconds": 0.026343400008045137
     },
     {
       "deck": "mega_starmie",
@@ -11456,7 +11265,7 @@
       "rationale": "Crushing Hammer here is useless as we are about to kill his active",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01988449995405972
+      "elapsed_seconds": 0.02081350004300475
     },
     {
       "deck": "mega_starmie",
@@ -11480,7 +11289,7 @@
       "rationale": "Since i can KO the opponents active with jetting blow, i would have attached an energy to the benched mega starmie.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.029147200053557754,
+      "elapsed_seconds": 0.029553699889220297,
       "ledger": {
         "value": 0.054646464646465276,
         "backend": "ledger",
@@ -11551,7 +11360,7 @@
       "rationale": "This is a HUGE blunder, HUGE! We have 11 cards in our hand, opponent has 2. Harlequin shuffles all of our cards back in exchange for either 2 or 5.  a terrible deal.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03289169992785901
+      "elapsed_seconds": 0.037531399982981384
     },
     {
       "deck": "mega_starmie",
@@ -11575,7 +11384,7 @@
       "rationale": "Here, we could have attached to Mega Starmie, retreated Cinderace, and KO'd the opponents active while sniping their bench. that would have been the better move. especially since we have additional protection with Wallys Compassion in our deck",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0042628999799489975,
+      "elapsed_seconds": 0.004914000048302114,
       "ledger": {
         "value": 0.14179999999999993,
         "backend": "ledger",
@@ -11638,7 +11447,7 @@
       "rationale": "We had already searched deck earlier in game, thus we know that one Mega Starmie is in the discard. that means this Salvatore play was a wasted use of a supporter. instead, a boss's orders could have gusted up the opponents main attacker that has no energy on it, potentially stalling them.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012257999973371625,
+      "elapsed_seconds": 0.012959299958311021,
       "ledger": {
         "value": 0.02196969696969653,
         "backend": "ledger",
@@ -11709,7 +11518,7 @@
       "rationale": "Attacking with Nebula Beam would have won the game.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020300199976190925,
+      "elapsed_seconds": 0.02092609996907413,
       "ledger": {
         "value": 0.03371212121212119,
         "backend": "ledger",
@@ -11780,7 +11589,7 @@
       "rationale": "Gusting up bench brought up a main line attacker who we could no longer KO for the win. We could have just attacked their active to win. This blunder is CRITICAL and must never happen again.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01986989995930344
+      "elapsed_seconds": 0.017267399933189154
     },
     {
       "deck": "mega_starmie",
@@ -11807,7 +11616,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028358399984426796
+      "elapsed_seconds": 0.031647700001485646
     },
     {
       "deck": "mega_starmie",
@@ -11831,7 +11640,7 @@
       "rationale": "playing Hilda here did not help us at all, so best just not to play her.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04284050001297146
+      "elapsed_seconds": 0.04114669992122799
     },
     {
       "deck": "mega_starmie",
@@ -11859,7 +11668,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.18907399999443442,
+      "elapsed_seconds": 0.17617569991853088,
       "ledger": {
         "value": 2.4544499999999996,
         "backend": "ledger",
@@ -11933,7 +11742,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06475150003097951
+      "elapsed_seconds": 0.06496929994318634
     },
     {
       "deck": "mega_starmie",
@@ -11960,7 +11769,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04086849989835173
+      "elapsed_seconds": 0.043398399953730404
     },
     {
       "deck": "mega_starmie",
@@ -11987,7 +11796,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06447800004389137,
+      "elapsed_seconds": 0.07678919995669276,
       "ledger": {
         "value": 0.021969696969696972,
         "backend": "ledger",
@@ -12058,7 +11867,7 @@
       "rationale": "a crushing hammer must never ever ever be played when opponents active pokemon has no energy attached",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.018731700023636222,
+      "elapsed_seconds": 0.0196031000232324,
       "ledger": {
         "value": 0.09600000000000009,
         "backend": "ledger",
@@ -12129,7 +11938,7 @@
       "rationale": "Shuffling here is a critial blunder. we have two staryus on the bench and two mega starmies in the hand. one staryu is about to receive 3 water energy. absolute critical blunder.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028535200050100684,
+      "elapsed_seconds": 0.032210999983362854,
       "ledger": {
         "value": 0.0959999999999992,
         "backend": "ledger",
@@ -12202,7 +12011,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.1034533999627456
+      "elapsed_seconds": 0.13043020002078265
     },
     {
       "deck": "mega_starmie",
@@ -12228,7 +12037,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004380000056698918
+      "elapsed_seconds": 0.0050604999996721745
     },
     {
       "deck": "mega_starmie",
@@ -12254,7 +12063,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.035711599979549646,
+      "elapsed_seconds": 0.03182659996673465,
       "ledger": {
         "value": 0.14287878787878805,
         "backend": "ledger",
@@ -12333,7 +12142,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.055840899934992194,
+      "elapsed_seconds": 0.05173050006851554,
       "ledger": {
         "value": 0.009500000000000064,
         "backend": "ledger",
@@ -12412,7 +12221,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0034757000394165516
+      "elapsed_seconds": 0.0037861999589949846
     },
     {
       "deck": "mega_starmie",
@@ -12439,7 +12248,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03274329996202141
+      "elapsed_seconds": 0.03510970005299896
     },
     {
       "deck": "mega_starmie",
@@ -12465,7 +12274,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003796699922531843
+      "elapsed_seconds": 0.003911799984052777
     },
     {
       "deck": "mega_starmie",
@@ -12493,7 +12302,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01320239994674921,
+      "elapsed_seconds": 0.01444709999486804,
       "ledger": {
         "value": 0.11330000000000018,
         "backend": "ledger",
@@ -12569,7 +12378,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0024405999574810266
+      "elapsed_seconds": 0.0025666001019999385
     },
     {
       "deck": "mega_starmie",
@@ -12598,7 +12407,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.005239299964159727
+      "elapsed_seconds": 0.004723599995486438
     },
     {
       "deck": "mega_starmie",
@@ -12624,7 +12433,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04850600007921457,
+      "elapsed_seconds": 0.049673100002110004,
       "ledger": {
         "value": 0.26463333333333316,
         "backend": "ledger",
@@ -12698,7 +12507,7 @@
         "in play: unknown card 311"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01745939999818802
+      "elapsed_seconds": 0.018919599941000342
     },
     {
       "deck": "mega_starmie",
@@ -12722,7 +12531,7 @@
       "rationale": "lillie's determination is typically a better pick then harlequin, especially early game when lillie's allows for drawing 8 cards.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0020025999983772635,
+      "elapsed_seconds": 0.0018443999579176307,
       "ledger": {
         "value": 0.08999999999999986,
         "backend": "ledger",
@@ -12775,7 +12584,7 @@
       "rationale": "complete waste. we know that there are no more staryus in deck therefor this card should be discard fodder for ultra ball",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.022134599974378943
+      "elapsed_seconds": 0.02051699999719858
     },
     {
       "deck": "mega_starmie",
@@ -12802,7 +12611,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.08824770001228899,
+      "elapsed_seconds": 0.11572579992935061,
       "ledger": {
         "value": 0.01200000000000001,
         "backend": "ledger",
@@ -12867,7 +12676,7 @@
         "attached: unknown card 1"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0026021000230684876
+      "elapsed_seconds": 0.0026100999675691128
     },
     {
       "deck": "mega_starmie",
@@ -12897,7 +12706,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.011305399937555194,
+      "elapsed_seconds": 0.009836700046434999,
       "ledger": {
         "value": 0.4626249999999996,
         "backend": "ledger",
@@ -12962,7 +12771,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.07354140002280474,
+      "elapsed_seconds": 0.0780308999819681,
       "ledger": {
         "value": 0.030999999999999694,
         "backend": "ledger",
@@ -13028,7 +12837,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0606127999490127,
+      "elapsed_seconds": 0.060743800015188754,
       "ledger": {
         "value": 0.08749999999999969,
         "backend": "ledger",
@@ -13102,7 +12911,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004504399956203997,
+      "elapsed_seconds": 0.005780900013633072,
       "ledger": {
         "value": 0.1985763888888885,
         "backend": "ledger",
@@ -13168,7 +12977,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003713599988259375,
+      "elapsed_seconds": 0.004943499923683703,
       "ledger": {
         "value": 0.1543181818181818,
         "backend": "ledger",
@@ -13225,7 +13034,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.05992639996111393,
+      "elapsed_seconds": 0.0924040999962017,
       "ledger": {
         "value": 0.2153496503496506,
         "backend": "ledger",
@@ -13298,7 +13107,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.05611259990837425,
+      "elapsed_seconds": 0.061654900084249675,
       "ledger": {
         "value": 0.21534965034965103,
         "backend": "ledger",
@@ -13371,7 +13180,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11123440007213503
+      "elapsed_seconds": 0.11895299993921071
     },
     {
       "deck": "mega_starmie",
@@ -13397,7 +13206,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.13146320008672774,
+      "elapsed_seconds": 0.10928239999338984,
       "ledger": {
         "value": 0.04499999999999993,
         "backend": "ledger",
@@ -13468,7 +13277,7 @@
       "rationale": "best not to shuffle back a heros cape when we are able to use it. plus, next turn we can evolve to mega starmie with 3 energy due to Turbo Flare energy acceleration. this, albeit small, is a very good opening hand.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.018783300067298114,
+      "elapsed_seconds": 0.03930649999529123,
       "ledger": {
         "value": 0.020000000000000018,
         "backend": "ledger",
@@ -13542,7 +13351,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004852700047194958,
+      "elapsed_seconds": 0.004537199973128736,
       "ledger": {
         "value": 0.21223818181818155,
         "backend": "ledger",
@@ -13597,7 +13406,7 @@
       "rationale": "Attach the fucking cape before shuffling!!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.031206399900838733,
+      "elapsed_seconds": 0.03104089992120862,
       "ledger": {
         "value": 0.22600000000000042,
         "backend": "ledger",
@@ -13668,7 +13477,7 @@
       "rationale": "There is a clear bug with our ACE-SPEC Hero's Cape. here it should be attached to the benched Staryu with a single energy as to protect it from Jetting Blow",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.022839499986730516,
+      "elapsed_seconds": 0.023023699992336333,
       "ledger": {
         "value": 0.043121212121211894,
         "backend": "ledger",
@@ -13739,7 +13548,7 @@
       "rationale": "something wrong at this decision point. we have an Ultra Ball in hand. we should have played the ultra ball to fetch a stryu, and then bench it.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03857079998124391
+      "elapsed_seconds": 0.04430549999233335
     },
     {
       "deck": "mega_starmie",
@@ -13764,7 +13573,7 @@
       "rationale": "CRITICAL: gave away boss's orders and Harlequin, key disruptors when we had two copies of lillie's and three mega starmies. discarding should weigh discarding duplicate hards more heavily",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.033735399949364364,
+      "elapsed_seconds": 0.0359487000387162,
       "ledger": {
         "value": 0.40159999999999885,
         "backend": "ledger",
@@ -13840,7 +13649,7 @@
       "rationale": "CRITICAL: shuffled away a mega starmie when next turn we will have a benched staryu with 3 energy. save lillie's for future turn.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.018608500016853213
+      "elapsed_seconds": 0.02191869996022433
     },
     {
       "deck": "mega_starmie",
@@ -13864,7 +13673,7 @@
       "rationale": "CRITICAL: Should almost never retreat Cinderace into a Staryu with so many energies",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.035657200030982494,
+      "elapsed_seconds": 0.03686980006750673,
       "ledger": {
         "value": 0.36849999999999916,
         "backend": "ledger",
@@ -13915,79 +13724,6 @@
     },
     {
       "deck": "mega_starmie",
-      "key": "82867148-87",
-      "id": "36b3f8870734",
-      "backend": "ledger",
-      "scope": "decision",
-      "context": "Main",
-      "category": "bad_retreat",
-      "graded": true,
-      "chosen": [
-        11
-      ],
-      "correct": [
-        8
-      ],
-      "exact": false,
-      "agrees": false,
-      "chosen_label": "Retreat",
-      "correct_label": "Attach Basic {W} Energy → Staryu (bench 2 · 70/70)",
-      "rationale": "Typically should attch energy to staryu",
-      "gaps": [
-        "tool: unknown card 1156"
-      ],
-      "stamped_prizes": true,
-      "elapsed_seconds": 0.033904300071299076,
-      "ledger": {
-        "value": 0.10212500000000002,
-        "backend": "ledger",
-        "weights": "0fbb8c28f56dc694",
-        "prices": [
-          {
-            "action": "ActionIdentity(kind='retreat', parts=('[0,{\"type\":12},[]]',))",
-            "selection": [
-              11
-            ],
-            "swing": 0.10212500000000002,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":1030,\"maxHp\":70,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
-            "selection": [
-              8
-            ],
-            "swing": 0.03833333333333355,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='attach', parts=('[0,{\"type\":8},[[2,{\"id\":3,\"playerIndex\":0}],[5,{\"appearThisTurn\":false,\"energies\":[],\"energyCards\":[],\"hp\":70,\"id\":666,\"maxHp\":160,\"playerIndex\":0,\"preEvolution\":[],\"tools\":[]}]]]',))",
-            "selection": [
-              7
-            ],
-            "swing": 0.016843750000000046,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1227,\"playerIndex\":0}]]]',))",
-            "selection": [
-              0
-            ],
-            "swing": 0.012963333333333438,
-            "ends_turn": false
-          },
-          {
-            "action": "ActionIdentity(kind='play', parts=('[0,{\"type\":7},[[2,{\"id\":1097,\"playerIndex\":0}]]]',))",
-            "selection": [
-              5
-            ],
-            "swing": 0.0,
-            "ends_turn": false
-          }
-        ]
-      }
-    },
-    {
-      "deck": "mega_starmie",
       "key": "83007714-104",
       "id": "d5680be64b0b",
       "backend": "ledger",
@@ -14008,7 +13744,7 @@
       "rationale": "CRITICAL: Seems that pilot only wants to promote the 1st bench position instead of considering which benched pokemon is best to become our new active. i imagine that we need a bench_promote baseline or doctrine created.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00350099999923259
+      "elapsed_seconds": 0.003412800026126206
     },
     {
       "deck": "mega_starmie",
@@ -14032,7 +13768,7 @@
       "rationale": "Again, many other corrections state this, we need a hard rule that every single turn begins by analyzing if there is a match winning decision present. if there is, take it immediately to win the match.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.027449500048533082,
+      "elapsed_seconds": 0.02933409996330738,
       "ledger": {
         "value": 0.2200000000000002,
         "backend": "ledger",
@@ -14103,7 +13839,7 @@
       "rationale": "CRITICAL: you attached 3 energy to Staryu instead of making sure that our Mega Starmie had 3 energy. attach the energy to our evolved mainline attacker as priority over the preevolution",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0025337999686598778
+      "elapsed_seconds": 0.0026346000377088785
     },
     {
       "deck": "mega_starmie",
@@ -14127,7 +13863,7 @@
       "rationale": "CRITICAL: played ignition energy just to \"attach energy\", but we are retreating Cinderace right after, thus this wasted a precious special energy card. only play special energy cards when the moment requires. need own doctrine for this i think",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010447700042277575
+      "elapsed_seconds": 0.010084399953484535
     },
     {
       "deck": "mega_starmie",
@@ -14151,7 +13887,7 @@
       "rationale": "CRITICAL: this is a regression, used to be fixed. In SETUP stage, Cinderace leasding with Staryu on bench. this is perfect. Cinderace must get the energy here.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.034102699952200055,
+      "elapsed_seconds": 0.032572300056926906,
       "ledger": {
         "value": 0.09379999999999988,
         "backend": "ledger",
@@ -14222,7 +13958,7 @@
       "rationale": "We have the Mega Starmie that we need and a Staryu on the bench, thus tossing the supporters is a poor trade. should simply not have played Ultra Ball in this instance.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01928579993546009,
+      "elapsed_seconds": 0.019288200070150197,
       "ledger": {
         "value": 0.0495000000000001,
         "backend": "ledger",
@@ -14277,7 +14013,7 @@
       "rationale": "CRITICAL: Retreating was the right move, but not into the unpowered Cinderace when we had a fully powered wincon on the bench. This Mega Starmie could have KO'd the opponents active AND it had Heros Cape. the obvious choice.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003542899969033897
+      "elapsed_seconds": 0.0033446999732404947
     },
     {
       "deck": "mega_starmie",
@@ -14301,7 +14037,7 @@
       "rationale": "CRITICAL: Placed second energy on active doomed mega starmie. this deosnt allow it to attack with Nebula Beam, and we can see that opponent can perhaps use an ignition energy to be able to do Nebula Beam and kill us next turn. we must assume that worst case scenario. therefor should start powering up our reserve benched staryu",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.019211299950256944,
+      "elapsed_seconds": 0.023304800037294626,
       "ledger": {
         "value": 0.021969696969696972,
         "backend": "ledger",
@@ -14372,7 +14108,7 @@
       "rationale": "CRITICAL: shuffle logic needs work. here we disrupt our opponent, which is good. however we also give back a Mega Starmie AND an energy that we need next turn. poor gamble in my opinion",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020386200048960745,
+      "elapsed_seconds": 0.022396699991077185,
       "ledger": {
         "value": 0.035487500000000116,
         "backend": "ledger",
@@ -14443,7 +14179,7 @@
       "rationale": "CRITICAL: playing Wallys Compassion has a COST that must be considered. we remove all energy from our wincon and heal them. but now we are no longer able to KO the opponent and win the match. huge blunder. Wallys Compassion usage cost must be considered along with whether or not we have an Ignition Energy in hand.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03642540005967021,
+      "elapsed_seconds": 0.040245600044727325,
       "ledger": {
         "value": 0.3911055813953488,
         "backend": "ledger",
@@ -14514,7 +14250,7 @@
       "rationale": "we desperately need a bench at this point, so id use lillie's to draw",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04272739996667951
+      "elapsed_seconds": 0.035411100019700825
     },
     {
       "deck": "mega_starmie",
@@ -14538,7 +14274,7 @@
       "rationale": "Here our hand is quite strong for next turn, would not have shuffled it back. Shuffling requires an awareness of our hand strength for the following turn",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03348270000424236,
+      "elapsed_seconds": 0.034904300002381206,
       "ledger": {
         "value": 0.09600000000000009,
         "backend": "ledger",
@@ -14609,7 +14345,7 @@
       "rationale": "CRITICAL: Our agent needs to start planning its turn ahead of time, mapping out potential outcomes, and then picking best path. if it did so, it would have seen that it can KO opponents active via Hilda for energy grab, attach to mega starmie, retreat to mega starmie, and jetting blow.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.022575399954803288,
+      "elapsed_seconds": 0.023050099960528314,
       "ledger": {
         "value": 0.013249999999999651,
         "backend": "ledger",
@@ -14680,7 +14416,7 @@
       "rationale": "CRITICAL - Should have retreated Cinderace, attached to Meta Starmie, and KO'd opponents active",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0037751999916508794,
+      "elapsed_seconds": 0.006456199917010963,
       "ledger": {
         "value": 0.0878937500000001,
         "backend": "ledger",
@@ -14743,7 +14479,7 @@
       "rationale": "CRITICAL: This is a regression. Ignition Energy can NEVER EVER EVER be played on first turn for player going first. It should never be played when player cannot themselves attack with it",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.008742299978621304
+      "elapsed_seconds": 0.005483500077389181
     },
     {
       "deck": "mega_starmie",
@@ -14769,7 +14505,7 @@
         "discard: unknown card 1210"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.034394699963741004,
+      "elapsed_seconds": 0.03699450008571148,
       "ledger": {
         "value": 0.08227777777777856,
         "backend": "ledger",
@@ -14842,7 +14578,7 @@
         "attached: unknown card 1"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007545399945229292
+      "elapsed_seconds": 0.008395000011660159
     },
     {
       "deck": "mega_starmie",
@@ -14869,7 +14605,7 @@
         "attached: unknown card 18"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00628950004465878,
+      "elapsed_seconds": 0.005837299977429211,
       "ledger": {
         "value": 0.0578434343434342,
         "backend": "ledger",
@@ -14932,7 +14668,7 @@
       "rationale": "at this point in early game, refreshing hand with 8 cards is better than disrupting opponent",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.029852399951778352
+      "elapsed_seconds": 0.02938299998641014
     },
     {
       "deck": "mega_starmie",
@@ -14956,7 +14692,7 @@
       "rationale": "Fill up one wincons energy before spreading to other mons. Thus here, specific for this deck, with Cinderace's Turbo Flare, place all three energy on a single staryu if that staryu had 0 energy.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002392199938185513,
+      "elapsed_seconds": 0.0021617000456899405,
       "ledger": {
         "value": 0.08833333333333293,
         "backend": "ledger",
@@ -15003,7 +14739,7 @@
       "rationale": "CRITICAL: Our active wincon was low on health and opponent could possibly KO it next turn. also, opponents active was KO'able with our Jetting Blow. Should have healed with Wally, attached single energy, KO opponent",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06566189997829497,
+      "elapsed_seconds": 0.06543009995948523,
       "ledger": {
         "value": 0.4055000000000001,
         "backend": "ledger",
@@ -15077,7 +14813,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06902749999426305
+      "elapsed_seconds": 0.07634470006451011
     },
     {
       "deck": "mega_starmie",
@@ -15104,7 +14840,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00880369998048991,
+      "elapsed_seconds": 0.009447299991734326,
       "ledger": {
         "value": 0.09950000000000081,
         "backend": "ledger",
@@ -15178,7 +14914,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.014747099950909615
+      "elapsed_seconds": 0.015528799965977669
     },
     {
       "deck": "mega_starmie",
@@ -15202,7 +14938,7 @@
       "rationale": "CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.",
       "gaps": [],
       "stamped_prizes": false,
-      "elapsed_seconds": 0.035180200007744133,
+      "elapsed_seconds": 0.06763159995898604,
       "ledger": {
         "value": 0.5302444444444439,
         "backend": "ledger",
@@ -15273,7 +15009,7 @@
       "rationale": "CRITICAL: Via Hilda, we have searched out deck. thus we know that there is a single Mega Starmie in our prize cards and non in deck. therefor Salvatore is a waste. a rule must be made that checking deck contents must be performed prior to any search card.\n\nPLUS, we need energy! CRITICAL CRITICAL",
       "gaps": [],
       "stamped_prizes": false,
-      "elapsed_seconds": 0.025228500016964972,
+      "elapsed_seconds": 0.02510879992041737,
       "ledger": {
         "value": 0.21635416666666707,
         "backend": "ledger",
@@ -15343,7 +15079,7 @@
         "discard: unknown card 1126"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.014403400011360645
+      "elapsed_seconds": 0.012851599953137338
     },
     {
       "deck": "mega_starmie",
@@ -15369,7 +15105,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020179099985398352
+      "elapsed_seconds": 0.02065639989450574
     },
     {
       "deck": "mega_starmie",
@@ -15393,7 +15129,7 @@
       "rationale": "CRITICAL: This is critical because of sequencing. Our opponent has mega starmie that can do 210 dmg. our active has 210 HP. the opponent's deck commonly runs ignition energy, thus we should prepare ourselves for that by healing first, then attaching Ignition Energy ourselves, then attacking for KO. Also might as well play the pokegear 3.0 before attaching.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.028470999910496175,
+      "elapsed_seconds": 0.02836380002554506,
       "ledger": {
         "value": 0.2670875420875418,
         "backend": "ledger",
@@ -15464,7 +15200,7 @@
       "rationale": "CRITICAL: Complete blunder. We had opportunity to KO their main attacker for 3 prize points but we instead gusted up their 1 prize point pre-evolution.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06408180005382746
+      "elapsed_seconds": 0.0672832999844104
     },
     {
       "deck": "mega_starmie",
@@ -15488,7 +15224,7 @@
       "rationale": "CRITICAL: Use of Wally's Compassion has regressed. We desperately need to heal ourselves here, then attach Ignition ENergy, then KO opponent's active",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03291780001018196
+      "elapsed_seconds": 0.044202599907293916
     },
     {
       "deck": "mega_starmie",
@@ -15512,7 +15248,7 @@
       "rationale": "We do not have energy to power Cinderace, thus we are behind in tempo. The Salvatore however nice, doesnt help our immediate turn. we need to stall our opponent here given the real risk they evolve into Mega Lucario and KO our Cinderace, putting us even further behind. \n\nBoss's Orders up their benched mon with hghest retreat cost and least amount of energy and lowest threat. That is Makuhita ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009578999946825206,
+      "elapsed_seconds": 0.011584099964238703,
       "ledger": {
         "value": 0.46600000000000014,
         "backend": "ledger",
@@ -15583,7 +15319,7 @@
       "rationale": "CRITICAL: We need energy here and we need to disrupt opponent. Should play our two Buddy-buddy poffins to discard them (do not want them shuffled back into deck), then play Harlequin",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01692600001115352
+      "elapsed_seconds": 0.01633889996446669
     },
     {
       "deck": "mega_starmie",
@@ -15607,7 +15343,7 @@
       "rationale": "CRITICAL: Cinderace shall never be recycled with Night Stretch because it can never be played outside of match setup.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00344630004838109,
+      "elapsed_seconds": 0.00491589994635433,
       "ledger": {
         "value": 0.001000000000000334,
         "backend": "ledger",
@@ -15662,7 +15398,7 @@
       "rationale": "Jetting Blow is better here to do some bench sniping because Nebula Beam will not KO them anyway. and one jetting blow + one nebula beam will KO them. also, worth anticipating that they will use wally compassion to fully heal.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0214285000693053,
+      "elapsed_seconds": 0.02700649993494153,
       "ledger": {
         "value": 0.08414166666666645,
         "backend": "ledger",
@@ -15733,7 +15469,7 @@
       "rationale": "wasteful attacking staryu when we know that they will promote mega starmie next.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0026956000365316868,
+      "elapsed_seconds": 0.0025728000327944756,
       "ledger": {
         "value": 0.30277777777777815,
         "backend": "ledger",
@@ -15780,7 +15516,7 @@
       "rationale": "CRITICAL: Should absolutely attach energy here before attacking. attach basic in preparation for nebula beam next turn.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02951659995596856
+      "elapsed_seconds": 0.031914500053972006
     },
     {
       "deck": "mega_starmie",
@@ -15806,7 +15542,7 @@
         "discard: unknown card 1215"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04762810003012419,
+      "elapsed_seconds": 0.04962599999271333,
       "ledger": {
         "value": 1.2920000382656711,
         "backend": "ledger",
@@ -15863,7 +15599,7 @@
         "discard: unknown card 1"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.050364599912427366,
+      "elapsed_seconds": 0.04685490007977933,
       "ledger": {
         "value": 0.0521664149550185,
         "backend": "ledger",
@@ -15936,7 +15672,7 @@
         "attached: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03055090003181249
+      "elapsed_seconds": 0.030237399972975254
     },
     {
       "deck": "mega_starmie",
@@ -15965,7 +15701,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007967300014570355,
+      "elapsed_seconds": 0.007334699970670044,
       "ledger": {
         "value": 0.04055555555555568,
         "backend": "ledger",
@@ -16036,7 +15772,7 @@
       "rationale": "Here, given that we have two mega starmies, i would have evolved the one with energy and then played harlequin for disruption. we can see that we are able to rush up with starmie to KO active plus bench snipe, therefor we should go into sprint mode hoping to get a quick win.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06857480003964156,
+      "elapsed_seconds": 0.07787530007772148,
       "ledger": {
         "value": 0.05327881872730056,
         "backend": "ledger",
@@ -16107,7 +15843,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch B, extracted from the note): 'a perfect time to play Harlequin' + attack-last: Harlequin first, the Turbo Flare chip follows (the prior attack ruling is the follow-up, preserved below). Original note: \"CRITICAL: This was a missed opportunity for prize math in our favor. save the ignition energy for next turn and chip them a bit with Cinderace. Also, opponent has 8 cards in hand, a perfect time to play Harlequin.\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.040072300005704165,
+      "elapsed_seconds": 0.04376690008211881,
       "ledger": {
         "value": 0.29377777777777747,
         "backend": "ledger",
@@ -16178,7 +15914,7 @@
       "rationale": "CRITICAL: Our Cinderace is not in danger here, therefor using Heros Cape here was a waste.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021106800064444542,
+      "elapsed_seconds": 0.018624200019985437,
       "ledger": {
         "value": 0.22599999999999965,
         "backend": "ledger",
@@ -16253,7 +15989,7 @@
         "in play: unknown card 941"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04315329995006323,
+      "elapsed_seconds": 0.04193810001015663,
       "ledger": {
         "value": 0.18893999999999944,
         "backend": "ledger",
@@ -16326,7 +16062,7 @@
         "discard: unknown card 1205"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01673759997356683
+      "elapsed_seconds": 0.016179199912585318
     },
     {
       "deck": "mega_starmie",
@@ -16352,7 +16088,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.141363300033845
+      "elapsed_seconds": 0.14982169994618744
     },
     {
       "deck": "mega_starmie",
@@ -16379,7 +16115,7 @@
         "discard: unknown card 1102"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11757899995427579
+      "elapsed_seconds": 0.121334100025706
     },
     {
       "deck": "mega_starmie",
@@ -16403,7 +16139,7 @@
       "rationale": "Given that our hand is a little weak, our board is well setup, and our opponent has 7 cards in hand, i think harlequin would have done well here.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.031476099975407124
+      "elapsed_seconds": 0.0348931000335142
     },
     {
       "deck": "mega_starmie",
@@ -16427,7 +16163,7 @@
       "rationale": "CRITICAL: Its highly important that we evolve our benched staryu or we risk loses a second mega starmie. deck has one mega starmie and 3 mega signals and 2 savaltores and 2 hildas. lots of chances that lead to mega starmie.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02287610003259033,
+      "elapsed_seconds": 0.027459400007501245,
       "ledger": {
         "value": 0.2553315656565651,
         "backend": "ledger",
@@ -16498,7 +16234,7 @@
       "rationale": "CRITICAL: Concerning prize math, KO'ing a Cinderace does not help us. we still need to KO 2 mega starmies. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0043447999050840735,
+      "elapsed_seconds": 0.00615899998228997,
       "ledger": {
         "value": 0.3803315656565651,
         "backend": "ledger",
@@ -16557,7 +16293,7 @@
         "discard: unknown card 1119"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0314174999948591,
+      "elapsed_seconds": 0.03535709995776415,
       "ledger": {
         "value": 0.19450000000000056,
         "backend": "ledger",
@@ -16637,7 +16373,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11333750002086163
+      "elapsed_seconds": 0.11496639996767044
     },
     {
       "deck": "mega_starmie",
@@ -16661,7 +16397,7 @@
       "rationale": "During the end game where we have a single mega starmie against their two, id rather not shuffle back our wallys compassion. he can really save us against a nebula beam",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.015754500054754317,
+      "elapsed_seconds": 0.01578810007777065,
       "ledger": {
         "value": 0.023175000000000168,
         "backend": "ledger",
@@ -16735,7 +16471,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03451809997204691
+      "elapsed_seconds": 0.035950299934484065
     },
     {
       "deck": "mega_starmie",
@@ -16762,7 +16498,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004199999966658652,
+      "elapsed_seconds": 0.004648200003430247,
       "ledger": {
         "value": 0.27000000000000024,
         "backend": "ledger",
@@ -16817,7 +16553,7 @@
       "rationale": "Should have gusted up their future wincon and KO it",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01597459998447448
+      "elapsed_seconds": 0.016791600035503507
     },
     {
       "deck": "mega_starmie",
@@ -16841,7 +16577,7 @@
       "rationale": "Too conservative to attach energy to Cinderace. Our Mega Starmie is lost next turn, so be it, hit the opponent with everything we got and hope for an opportunity next turn.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007450200035236776
+      "elapsed_seconds": 0.009720999980345368
     },
     {
       "deck": "mega_starmie",
@@ -16868,7 +16604,7 @@
         "tool: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04697459994349629,
+      "elapsed_seconds": 0.047434400068596005,
       "ledger": {
         "value": 0.01349999999999918,
         "backend": "ledger",
@@ -16942,7 +16678,7 @@
         "discard: unknown card 1172"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04526200005784631
+      "elapsed_seconds": 0.04044619994238019
     },
     {
       "deck": "mega_starmie",
@@ -16966,7 +16702,7 @@
       "rationale": "CRITICAL: We dont care at all about the benched Cinderace. Our Starmie can OHKO it whenever its promoted. we need to stomp out the next big threat, the opponents eventual win condition.\n\nOur matchup Posture feature should have caught this. needs review!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003236599965021014
+      "elapsed_seconds": 0.002281299908645451
     },
     {
       "deck": "mega_starmie",
@@ -16990,7 +16726,7 @@
       "rationale": "CRITICAL: Why oh why attach an ignitin energy and then NOT attack with Nebula Beam? We will lose those 3 special energies next turn so cannot use Nebula Beam. Do the heavy damage especially when facing off against opponents wincon.\n\nAgain, match posturing needs review.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007037999923340976
+      "elapsed_seconds": 0.006236199988052249
     },
     {
       "deck": "mega_starmie",
@@ -17017,7 +16753,7 @@
         "discard: unknown card 1129"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.10252790001686662
+      "elapsed_seconds": 0.16033149999566376
     },
     {
       "deck": "mega_starmie",
@@ -17044,7 +16780,7 @@
         "discard: unknown card 1129"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0025427000364288688
+      "elapsed_seconds": 0.002546000061556697
     },
     {
       "deck": "mega_starmie",
@@ -17068,7 +16804,7 @@
       "rationale": "fetching a Mega Starmie here doesnt help us, rather just not do it.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0035319000016897917
+      "elapsed_seconds": 0.003511000075377524
     },
     {
       "deck": "mega_starmie",
@@ -17096,7 +16832,7 @@
         "discard: unknown card 19"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.14244870003312826,
+      "elapsed_seconds": 0.14237799996044487,
       "ledger": {
         "value": 0.15459999999999985,
         "backend": "ledger",
@@ -17171,7 +16907,7 @@
         "discard: unknown card 19"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0032527000876143575
+      "elapsed_seconds": 0.002930199960246682
     },
     {
       "deck": "mega_starmie",
@@ -17195,7 +16931,7 @@
       "rationale": "CRITICAL: Play \"free\" cards that give us more information and a better board state, thus buddy buddy poffin and pokegear.\n\nAlso a failed calculation by PLANNED gamble. it states 71% chance to get a Mega Starmie to win the game. but it forgot that Mega Starmie also requires energy AND we can only evolve our Staryu via Salvatore this turn. Thus fetching Salvatore is our only win possibility.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020043900003656745,
+      "elapsed_seconds": 0.01934090000577271,
       "ledger": {
         "value": 0.2789999999999999,
         "backend": "ledger",
@@ -17266,7 +17002,7 @@
       "rationale": "CRITICAL: We had a chance to KO their 2 prize active but didnt take it. non-sensiscal",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.05026920000091195,
+      "elapsed_seconds": 0.04891480004880577,
       "ledger": {
         "value": 0.02169166666666622,
         "backend": "ledger",
@@ -17340,7 +17076,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.040090000024065375,
+      "elapsed_seconds": 0.03760149993468076,
       "ledger": {
         "value": 0.42849999999999966,
         "backend": "ledger",
@@ -17414,7 +17150,7 @@
         "tool: unknown card 1156"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.018756299978122115
+      "elapsed_seconds": 0.019665800034999847
     },
     {
       "deck": "mega_starmie",
@@ -17438,7 +17174,7 @@
       "rationale": "CRITICAL: Collect information before commiting our supporter. play Pokegear, and if we got a Hilda, we could have used that to fetch a basic energy as to not use our ignition energy.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020974700106307864,
+      "elapsed_seconds": 0.02060159994289279,
       "ledger": {
         "value": 0.2066048275803427,
         "backend": "ledger",
@@ -17509,7 +17245,7 @@
       "rationale": "Promote Cinderace. we can always retreat him from free during turn depending on the card that we draw.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003485799999907613,
+      "elapsed_seconds": 0.003531399997882545,
       "ledger": {
         "value": 0.0259999999999998,
         "backend": "ledger",
@@ -17564,7 +17300,7 @@
       "rationale": "CRITICAL: Why our ideal starter?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.008654400007799268,
+      "elapsed_seconds": 0.009623500052839518,
       "ledger": {
         "value": 0.09600000000000053,
         "backend": "ledger",
@@ -17627,7 +17363,7 @@
       "rationale": "CRITICAL: Obtain free information with Pokegear. if it finds Hilda, we then can fetch an energy for our Cinderace. We dont need a Starmie now anyways, we have a Mega Signal, which is cheaper to use than Salvatore.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012237900053150952,
+      "elapsed_seconds": 0.012548799975775182,
       "ledger": {
         "value": 0.3459999999999992,
         "backend": "ledger",
@@ -17698,7 +17434,7 @@
       "rationale": "Worth gambling here in hopes of getting a Stryu or something that can fetch a staryu as to take full advantage of Turbo Flare",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02376649994403124,
+      "elapsed_seconds": 0.021630299976095557,
       "ledger": {
         "value": 0.04199999999999984,
         "backend": "ledger",
@@ -17761,7 +17497,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch B, extracted from the note): 'didnt attack when had the chance' -> Turbo Flare. Original note: \"CRITICAL: didnt attack when had the chance\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01116959995124489,
+      "elapsed_seconds": 0.011222199886105955,
       "ledger": {
         "value": 0.09600000000000097,
         "backend": "ledger",
@@ -17835,7 +17571,7 @@
         "unpriceable: unsupported ability produced no observable effect (ActionIdentity(kind='ability', parts=('[{\"area\":7,\"index\":0,\"type\":10},[]]',)))"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.12488200003281236
+      "elapsed_seconds": 0.12154230009764433
     },
     {
       "deck": "mega_starmie",
@@ -17861,7 +17597,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11179450002964586
+      "elapsed_seconds": 0.10999069991521537
     },
     {
       "deck": "mega_starmie",
@@ -17887,7 +17623,7 @@
         "in play: unknown card 649"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.06140620005317032,
+      "elapsed_seconds": 0.054150499985553324,
       "ledger": {
         "value": 0.09949999999999992,
         "backend": "ledger",
@@ -17961,7 +17697,7 @@
         "discard: unknown card 19"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.08893600001465529
+      "elapsed_seconds": 0.09022819995880127
     },
     {
       "deck": "mega_starmie",
@@ -17988,7 +17724,7 @@
         "discard: unknown card 19"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0030300000216811895
+      "elapsed_seconds": 0.002848900039680302
     },
     {
       "deck": "mega_starmie",
@@ -18017,7 +17753,7 @@
         "discard: unknown card 19"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0037053999258205295,
+      "elapsed_seconds": 0.0036162000615149736,
       "ledger": {
         "value": 0.06000000000000005,
         "backend": "ledger",
@@ -18072,7 +17808,7 @@
       "rationale": "fetch information before commiting to a move.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.013336400035768747
+      "elapsed_seconds": 0.017498700064606965
     },
     {
       "deck": "mega_starmie",
@@ -18100,7 +17836,7 @@
         "discard: unknown card 16"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.04800049995537847,
+      "elapsed_seconds": 0.04554490000009537,
       "ledger": {
         "value": 0.017999999999999794,
         "backend": "ledger",
@@ -18176,7 +17912,7 @@
         "discard: unknown card 16"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0567464999621734,
+      "elapsed_seconds": 0.05996739992406219,
       "ledger": {
         "value": 0.06999999999999984,
         "backend": "ledger",
@@ -18252,7 +17988,7 @@
         "discard: unknown card 16"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003309299936518073,
+      "elapsed_seconds": 0.0032866999972611666,
       "ledger": {
         "value": 0.0259999999999998,
         "backend": "ledger",
@@ -18307,7 +18043,7 @@
       "rationale": "mega signal first to thin the deck a little",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010725499945692718
+      "elapsed_seconds": 0.010925700073130429
     },
     {
       "deck": "mega_starmie",
@@ -18331,7 +18067,7 @@
       "rationale": "why not attack?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0042477999813854694,
+      "elapsed_seconds": 0.004485300043597817,
       "ledger": {
         "value": 0.22599999999999998,
         "backend": "ledger",
@@ -18386,7 +18122,7 @@
       "rationale": "Should snipe Morgrem because it becomes their wincon ex. even without this opponents deck under our scouting, pilot should be able to look ahead to guess their next evolution, find its health, damge done, energy needs, etc. that is all available information",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0034976000897586346
+      "elapsed_seconds": 0.004084500018507242
     },
     {
       "deck": "mega_starmie",
@@ -18410,7 +18146,7 @@
       "rationale": "CRITICAL: evolve our benched staryu when we can. this is about being aggresive when able",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.023824499920010567
+      "elapsed_seconds": 0.03782530000898987
     },
     {
       "deck": "mega_starmie",
@@ -18434,7 +18170,7 @@
       "rationale": "CRITICAL: evolve our active staryu with 3 energy. ",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003953500068746507
+      "elapsed_seconds": 0.004939000005833805
     },
     {
       "deck": "mega_starmie",
@@ -18462,7 +18198,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03819180000573397,
+      "elapsed_seconds": 0.0375680000288412,
       "ledger": {
         "value": 0.20250000000000012,
         "backend": "ledger",
@@ -18540,7 +18276,7 @@
         "discard: unknown card 1231"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002535599982365966
+      "elapsed_seconds": 0.002803799929097295
     },
     {
       "deck": "mega_starmie",
@@ -18564,7 +18300,7 @@
       "rationale": "RULED 2026-08-20 (owner, triage batch D board look): correct = chosen — the attach was fine; the ordering claim belongs to later frames of the turn, not this decision. Original note: \"CRITICAL: you missed a win\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.041915199952200055
+      "elapsed_seconds": 0.04111619992181659
     },
     {
       "deck": "mega_starmie",
@@ -18589,7 +18325,7 @@
       "rationale": "Collect free information first with pokegear and buddy buddy. would be nice to find a hilda",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.017655700095929205,
+      "elapsed_seconds": 0.017553400015458465,
       "ledger": {
         "value": 0.27900000000000036,
         "backend": "ledger",
@@ -18660,7 +18396,7 @@
       "rationale": "dont need to heal here, wasteful",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004504899960011244
+      "elapsed_seconds": 0.004487499943934381
     },
     {
       "deck": "mega_starmie",
@@ -18682,7 +18418,7 @@
       "rationale": "",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.01115939998999238,
+      "elapsed_seconds": 0.01095639995764941,
       "ledger": {
         "value": 0.3047777777777778,
         "backend": "ledger",
@@ -18753,7 +18489,7 @@
       "rationale": "CRITICAL: Play Cinderace from hand to start",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 2.3900065571069717e-05
+      "elapsed_seconds": 2.4700071662664413e-05
     },
     {
       "deck": "mega_starmie",
@@ -18777,7 +18513,7 @@
       "rationale": "CRITICAL: why not attack?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00437370000872761,
+      "elapsed_seconds": 0.003899300005286932,
       "ledger": {
         "value": 0.0,
         "backend": "ledger",
@@ -18832,7 +18568,7 @@
       "rationale": "CRITICAL: Again, game froze on my turn, HUGE ISSUE!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03659679996781051,
+      "elapsed_seconds": 0.036765400087460876,
       "ledger": {
         "value": 0.22599999999999998,
         "backend": "ledger",
@@ -18906,7 +18642,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020196800003759563,
+      "elapsed_seconds": 0.019821699941530824,
       "ledger": {
         "value": 0.1323939393939395,
         "backend": "ledger",
@@ -18980,7 +18716,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.019401199999265373
+      "elapsed_seconds": 0.020193300093524158
     },
     {
       "deck": "mega_starmie",
@@ -19007,7 +18743,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020192299969494343,
+      "elapsed_seconds": 0.020796800032258034,
       "ledger": {
         "value": 1.565266363636363,
         "backend": "ledger",
@@ -19065,7 +18801,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004323899978771806
+      "elapsed_seconds": 0.004601699998602271
     },
     {
       "deck": "mega_starmie",
@@ -19089,7 +18825,7 @@
       "rationale": "CRITICAL: There appears to be an issue with not attack when we have the available energy still. our mirror is attacking with Nebula Beam when it has ignition energy attacked with also a single water basic energy, is that the issue? is the colorless only energy not being considered satisfiable by Nebua Beam, which it is?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0045440999092534184
+      "elapsed_seconds": 0.004457699949853122
     },
     {
       "deck": "mega_starmie",
@@ -19113,7 +18849,7 @@
       "rationale": "CRITICAL: Save blunder as this matches other frame.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.007913299952633679,
+      "elapsed_seconds": 0.007512400043196976,
       "ledger": {
         "value": 0.018000000000000238,
         "backend": "ledger",
@@ -19184,7 +18920,7 @@
       "rationale": "CRITICAL: Wallys to heal 50HP is a waste. just fetch and evolve another starmie instead",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.03010749991517514,
+      "elapsed_seconds": 0.03527520003262907,
       "ledger": {
         "value": 0.13200000000000012,
         "backend": "ledger",
@@ -19255,7 +18991,7 @@
       "rationale": "Promote our fully energized primary attacker over our 0 energy weak pre-evolution",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0030457000248134136
+      "elapsed_seconds": 0.004405300016514957
     },
     {
       "deck": "mega_starmie",
@@ -19279,7 +19015,7 @@
       "rationale": "CRITICAL: We need to analyze what happened here, because the result is confusing. We played Salvatore when we had a Mega Starmie in deck, though non was fetched or evolved.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0033867000602185726
+      "elapsed_seconds": 0.00393370003439486
     },
     {
       "deck": "mega_starmie",
@@ -19303,7 +19039,7 @@
       "rationale": "Snipe their fully evolved primary attacker",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003341499948874116,
+      "elapsed_seconds": 0.0036242000060155988,
       "ledger": {
         "value": 0.25,
         "backend": "ledger",
@@ -19350,7 +19086,7 @@
       "rationale": "CRITICAL: you shuffled away a useful crushing hammer",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.016320599941536784
+      "elapsed_seconds": 0.01615239994134754
     },
     {
       "deck": "mega_starmie",
@@ -19374,7 +19110,7 @@
       "rationale": "CRITICAL: its critical that we get staryus on our bench when attacking early with cinderace to take advantage of turbo flare energy accel. thus, we should use lillies here to gamble for staryus or buddy buddy poffins",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0048102999571710825
+      "elapsed_seconds": 0.0031102000502869487
     },
     {
       "deck": "mega_starmie",
@@ -19401,7 +19137,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.009647600003518164,
+      "elapsed_seconds": 0.0101208999985829,
       "ledger": {
         "value": 0.3360000000000005,
         "backend": "ledger",
@@ -19462,7 +19198,7 @@
         "discard: unknown card 8"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.002921300008893013
+      "elapsed_seconds": 0.0027115000411868095
     },
     {
       "deck": "mega_starmie",
@@ -19489,7 +19225,7 @@
         "discard: unknown card 1087"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.02022850001230836
+      "elapsed_seconds": 0.023054699995554984
     },
     {
       "deck": "mega_starmie",
@@ -19516,7 +19252,7 @@
         "discard: unknown card 1087"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.004145400016568601
+      "elapsed_seconds": 0.004140300094150007
     },
     {
       "deck": "mega_starmie",
@@ -19543,7 +19279,7 @@
         "discard: unknown card 1087"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0047166000586003065
+      "elapsed_seconds": 0.004907499998807907
     },
     {
       "deck": "mega_starmie",
@@ -19570,7 +19306,7 @@
         "discard: unknown card 1087"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.021239499910734594,
+      "elapsed_seconds": 0.02390110003761947,
       "ledger": {
         "value": 0.0848374999999999,
         "backend": "ledger",
@@ -19641,7 +19377,7 @@
       "rationale": "CRITICAL: play the pokegear",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020382099901326
+      "elapsed_seconds": 0.021851300029084086
     },
     {
       "deck": "mega_starmie",
@@ -19665,7 +19401,7 @@
       "rationale": "with this board setup, where their active is doomed during our next turn, i would diversify energy a little by placing 2 energy on one staryu and one on another \n\nNOTE 2026-08-20 (user, doctrine articulation — ruling UNCHANGED): this is a TEMPO play; read the opponent's board and weigh their strength against ours. We have an easy KO next turn (likely Cinderace again; if not, Starmie's Jetting Blow), so there is no immediate need for Nebula Beam — hence diversify. The concentrate rulings elsewhere in the corpus stay the default when the opponent has a live threat.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0034043999621644616,
+      "elapsed_seconds": 0.0037094999570399523,
       "ledger": {
         "value": 0.11277777777777763,
         "backend": "ledger",
@@ -19714,7 +19450,7 @@
         "chain capped; scored mid-effect board"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.11482839996460825
+      "elapsed_seconds": 0.11912689998280257
     },
     {
       "deck": "mega_starmie",
@@ -19740,7 +19476,7 @@
         "attached: unknown card 13"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.026558200013823807,
+      "elapsed_seconds": 0.026759499916806817,
       "ledger": {
         "value": 0.6587416487455192,
         "backend": "ledger",
@@ -19814,7 +19550,7 @@
         "discard: unknown card 1087"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.019491699989885092
+      "elapsed_seconds": 0.02008040004875511
     },
     {
       "deck": "mega_starmie",
@@ -19838,7 +19574,7 @@
       "rationale": "CRITICAL: we really need staryus here, such that Cinderaces Turbo Flare attack clearly needs some sort of label OR we can add a deck specific strategy to state this fact. in this way, we must gamble for getting a staryu at all cost. thus pokegear and hope to get lillies, if no lillies, play Harlequin",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.020187799935229123
+      "elapsed_seconds": 0.024267700035125017
     },
     {
       "deck": "mega_starmie",
@@ -19864,7 +19600,7 @@
         "unpriceable: unsupported ability produced no observable effect (ActionIdentity(kind='ability', parts=('[{\"area\":7,\"index\":0,\"type\":10},[]]',)))"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0999346999451518,
+      "elapsed_seconds": 0.10646340006496757,
       "ledger": {
         "value": 0.03100000000000014,
         "backend": "ledger",
@@ -19937,7 +19673,7 @@
         "unpriceable: unsupported ability produced no observable effect (ActionIdentity(kind='ability', parts=('[{\"area\":7,\"index\":0,\"type\":10},[]]',)))"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.035433399956673384,
+      "elapsed_seconds": 0.059397800010629,
       "ledger": {
         "value": 0.025500000000000078,
         "backend": "ledger",
@@ -20008,7 +19744,7 @@
       "rationale": "i would have fetched a basic energy here only because we have two ignition energies in hand. its good to have some energy cards that do not discard at end of turn",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0029646999901160598
+      "elapsed_seconds": 0.0035876999609172344
     },
     {
       "deck": "mega_starmie",
@@ -20032,7 +19768,7 @@
       "rationale": "CRITICAL: huge blunder. why did you not attack?",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.013522099936380982
+      "elapsed_seconds": 0.012910000048577785
     },
     {
       "deck": "mega_starmie",
@@ -20056,7 +19792,7 @@
       "rationale": "CRITICAL: Dont commit with something so valuable as an ignition energy before using our free Pokegears. Also, the staryu already has an energy and can attack!",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.012499099946580827
+      "elapsed_seconds": 0.013200600049458444
     },
     {
       "deck": "mega_starmie",
@@ -20080,7 +19816,7 @@
       "rationale": "we have our 3 staryus on board thus there is nothing left to fetch with buddy buddy poffin. therefor save the card for eventual discarding when using an ultra ball",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.010635900078341365
+      "elapsed_seconds": 0.010953699937090278
     },
     {
       "deck": "mega_starmie",
@@ -20107,7 +19843,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0028039999306201935
+      "elapsed_seconds": 0.002479200018569827
     },
     {
       "deck": "mega_starmie",
@@ -20134,7 +19870,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00380469998344779
+      "elapsed_seconds": 0.003637000103481114
     },
     {
       "deck": "mega_starmie",
@@ -20161,7 +19897,7 @@
         "discard: unknown card 1192"
       ],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.00561659992672503
+      "elapsed_seconds": 0.006695899995975196
     },
     {
       "deck": "mega_starmie",
@@ -20185,7 +19921,7 @@
       "rationale": "RULED 2026-08-20 (owner-approved triage batch B, extracted from the note): Blunder 1 of the note: Poffin over Ultra Ball for the Staryu fetch. Original note: \"CRITICAL: this turn had a number of key blunders. \\n1) Used utlra ball to fetch a staryu when we had a buddy buddy poffin\\n2) attached heros cape to cinderace instead of our primary attacker\\n3) attached energy to one staryu but then evolved a different staryu using salvatore\"",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.08973499992862344
+      "elapsed_seconds": 0.10969869990367442
     },
     {
       "deck": "mega_starmie",
@@ -20209,7 +19945,7 @@
       "rationale": "CRITICAL: grab an ignition energy and starmie for next turn",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.07676500000525266
+      "elapsed_seconds": 0.07512269995640963
     },
     {
       "deck": "mega_starmie",
@@ -20233,7 +19969,7 @@
       "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 20/430 (410 dmg, 1 Energy) vs BENCH0 180/330 (150 dmg, 3 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5001.trace.json.gz`, frame 100. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003771499963477254
+      "elapsed_seconds": 0.0037838000571355224
     },
     {
       "deck": "mega_starmie",
@@ -20257,7 +19993,7 @@
       "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 40/330 (290 dmg, 0 Energy) vs BENCH1 40/330 (290 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/v2_ms_mirror_5000.trace.json.gz`, frame 82. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=5000`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.003227700013667345
+      "elapsed_seconds": 0.0034456999273970723
     },
     {
       "deck": "mega_starmie",
@@ -20281,7 +20017,7 @@
       "rationale": "Developer ruling, 2026-08-06: HEAL THE ACTIVE. Issue #409 R5.2 — the first ctx-17 (SelectContext.HEAL) rulings in this corpus; there were ZERO before these, which is why the target ranker shipped validated by construction only.\n\nWHY: only the Active can be attacked next turn. Printed attack damage always lands on the Active (docs/rules.md; CombatMath.form_damage_vs, ADR-0070 s9), so a benched body is reachable ONLY by a rider — here Jetting Blow's 'also does 50 damage to 1 of your opponent's Benched Pokemon', capped at 50. HP restored to the bench beyond that 50 can never be taken back off, so it buys nothing. On this board ACTIVE 190/430 (240 dmg, 0 Energy) vs BENCH0 280/330 (50 dmg, 1 Energy), the Active's missing HP is genuinely at risk and the bench's is not.\n\nPROVENANCE — NOT A LADDER GAME. There is no episode: `episode_id` is null because this board comes from the committed engine-parity capture `tests/fixtures/parity/ms_mirror_1001.trace.json.gz`, frame 90. That trace's own recorded choice is DISCARDED and must never be read as evidence: `meta.policy` is `chaos:seed=1001`, a randomised policy `tools/parity/capture_match.py` uses to exercise the engine, so its picks are noise. `chosen` below is the SHIPPED Pilot's pick at ruling time (build 03f7c17c), asserted at write time — not a pick any game made. It equals `correct`, so this record ENDORSES current behaviour and stands as a regression guard rather than reporting a blunder.\n\nSCOPE: this rules the TARGET only (which body), not whether to play the heal. `v2_ms_mirror_5000` f126 — the fourth real-choice board — is deliberately NOT ruled here: the developer's verdict there is that Wally's should not have been played that turn at all, which ctx 17 cannot express (`supporterPlayed` is already YES; the play was committed at the MAIN menu one step earlier). Issue #409 R6 leaves whether-to-play to `baseline_heal.py` / Issue #386.",
       "gaps": [],
       "stamped_prizes": true,
-      "elapsed_seconds": 0.0030590000096708536
+      "elapsed_seconds": 0.0029952999902889132
     }
   ]
 }

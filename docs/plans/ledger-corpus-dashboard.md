@@ -1,16 +1,16 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-21T09:54:19.843481+00:00 at `ea6da0206abb`.
+Generated 2026-08-21T10:17:40.238063+00:00 at `d681dfc9a7f1`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|
 | dragapult_ex | 43 | 20 | 46.5% | 0 | 11 | 21 | 0 |
 | mega_lucario | 52 | 29 | 55.8% | 0 | 18 | 17 | 0 |
-| mega_starmie | 331 | 168 | 50.8% | 0 | 16 | 165 | 0 |
+| mega_starmie | 327 | 168 | 51.4% | 0 | 20 | 162 | 0 |
 
 **Generality floor (worst deck): 46.5%**
 
-## Retired rulings (45) — dispositioned in reviewed.json, not graded
+## Retired rulings (49) — dispositioned in reviewed.json, not graded
 
 - dragapult_ex `85045840-10`: fixed (2026-08-02)
 - dragapult_ex `85045840-12`: fixed (2026-08-02)
@@ -43,7 +43,11 @@ Generated 2026-08-21T09:54:19.843481+00:00 at `ea6da0206abb`.
 - mega_lucario `86091172-8`: refuted (2026-08-20)
 - mega_starmie `81904451-37`: deferred-multi-turn (2026-08-20)
 - mega_starmie `81904451-50`: deferred-multi-turn (2026-08-20)
+- mega_starmie `81905522-47`: deferred (2026-08-21)
+- mega_starmie `81905522-64`: deferred (2026-08-21)
+- mega_starmie `82228640-53`: deferred (2026-08-21)
 - mega_starmie `82523164-55`: deferred-multi-turn (2026-08-20)
+- mega_starmie `82867148-87`: deferred (2026-08-21)
 - mega_starmie `83667237-107`: deferred-multi-turn (2026-08-20)
 - mega_starmie `91394270-85`: refuted (2026-08-20)
 - mega_starmie `92091149-60`: refuted (2026-08-20)
@@ -639,24 +643,6 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - priced +0.0450 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":160,"id":666,"maxHp":160,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
 
-### mega_starmie `81905522-47` (Main, sequencing_error)
-
-- Ledger chose `[17]` Retreat
-- ruling was `[5]` Attach Basic {W} Energy → Staryu (bench 2 · 70/70)
-- rationale: attach energy when able
-- priced +0.3557 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
-- priced +0.0784 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
-- priced +0.0406 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-
-### mega_starmie `81905522-64` (Main, sequencing_error)
-
-- Ledger chose `[7]` Play Boss’s Orders
-- ruling was `[5]` Attach Basic {W} Energy → Staryu (bench 1 · 70/70)
-- rationale: attach energy when able
-- priced +0.6596 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.5603 ActionIdentity(kind='attack', parts=('[0,{"attackId":1488,"type":13},[]]',))
-- priced +0.1293 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1182,"playerIndex":0}]]]',))
-
 ### mega_starmie `81906131-25` (Main, bad_target)
 
 - Ledger chose `[1]` Play Buddy-Buddy Poffin
@@ -852,15 +838,6 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - priced +0.2971 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":17,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced +0.2574 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":280,"id":1031,"maxHp":330,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[]}]]]',))
 - priced +0.0406 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":true,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-
-### mega_starmie `82228640-53` (Main, sequencing_error)
-
-- Ledger chose `[1]` Play Crushing Hammer
-- ruling was `[2]` Attach Basic {W} Energy → Mega Starmie ex (active · 190/430 · 1⚡)
-- rationale: attach energy when able and needed prior to attacking.
-- priced +0.6622 ActionIdentity(kind='attack', parts=('[0,{"attackId":1487,"type":13},[]]',))
-- priced +0.0935 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1120,"playerIndex":0}]]]',))
-- priced +0.0020 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[4,{"appearThisTurn":false,"energies":[3],"energyCards":[{"id":3,"playerIndex":0}],"hp":190,"id":1031,"maxHp":430,"playerIndex":0,"preEvolution":[{"id":1030,"playerIndex":0}],"tools":[{"id":1159,"playerIndex":0}]}]]]',))
 
 ### mega_starmie `82228640-7` (Main, sequencing_error)
 
@@ -1339,15 +1316,6 @@ Also, the opponetns active has 320 HP. one Jetting Blow + Nebula Beam = 320. thu
 - priced +1.2810 ActionIdentity(kind='attack', parts=('[0,{"attackId":965,"type":13},[]]',))
 - priced +0.3685 ActionIdentity(kind='play', parts=('[0,{"type":7},[[2,{"id":1086,"playerIndex":0}]]]',))
 - priced +0.0000 ActionIdentity(kind='end', parts=('[0,{"type":14},[]]',))
-
-### mega_starmie `82867148-87` (Main, bad_retreat)
-
-- Ledger chose `[11]` Retreat
-- ruling was `[8]` Attach Basic {W} Energy → Staryu (bench 2 · 70/70)
-- rationale: Typically should attch energy to staryu
-- priced +0.1021 ActionIdentity(kind='retreat', parts=('[0,{"type":12},[]]',))
-- priced +0.0383 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":1030,"maxHp":70,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
-- priced +0.0168 ActionIdentity(kind='attach', parts=('[0,{"type":8},[[2,{"id":3,"playerIndex":0}],[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":70,"id":666,"maxHp":160,"playerIndex":0,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `83007714-135` (Main, slow_setup)
 
