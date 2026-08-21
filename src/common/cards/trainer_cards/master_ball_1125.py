@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Search your deck for a Pokémon, reveal it, and put it into your hand. Then, shuffle your deck.',
     ace_spec=True,
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='pokemon', zone='deck'),),
     covers='full',
 )

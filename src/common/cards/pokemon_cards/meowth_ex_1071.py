@@ -10,7 +10,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['search', 'supporter_tutor']),
     default_roles=('supporter_tutor',),
     covers='full',
     abilities=(

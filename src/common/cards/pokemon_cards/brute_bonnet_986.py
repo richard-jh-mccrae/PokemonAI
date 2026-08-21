@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=GRASS,
     retreat_cost=3,
-    tags=frozenset(['poison']),
     attacks=(
         Attack(
             attack_id=1421,

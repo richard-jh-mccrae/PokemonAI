@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Heal 150 damage from 1 of your Pokémon.\n\nThis card can’t be put into your hand or deck from the discard pile.',
     ace_spec=True,
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=150),),
     covers='full',
 )

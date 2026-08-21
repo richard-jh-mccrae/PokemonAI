@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=FIRE,
     resistance=GRASS,
     retreat_cost=3,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=407,

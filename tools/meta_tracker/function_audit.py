@@ -10,7 +10,7 @@ confidence, disagreement points at exactly the cards to inspect.
     missed it (precondition never aligned, evolution not reached, …).
 
 Pure & lib-free: the caller passes each card's text. The lib shell that gathers engine text and
-prints the report is ``tools/audit_card_functions.py``. Heuristic, not a gate — text is noisy
+the frozen Bellman report lives under ``deprecated/bellman/tag_tools``. Heuristic, not a gate — text is noisy
 (that's *why* we probe), so a flag means "inspect", not "wrong".
 """
 from __future__ import annotations

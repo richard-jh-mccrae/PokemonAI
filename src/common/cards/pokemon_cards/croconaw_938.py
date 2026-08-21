@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Totodile',
     weakness=LIGHTNING,
     retreat_cost=2,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=1346,

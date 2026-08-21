@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=LIGHTNING,
     resistance=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['confuse', 'team_rocket']),
     abilities=(
         Ability(
             name='Sneaky Bite',

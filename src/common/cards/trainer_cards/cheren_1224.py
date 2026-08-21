@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Cheren',
     kind=SUPPORTER,
     text='Draw 3 cards.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=3),),
     covers='full',
 )

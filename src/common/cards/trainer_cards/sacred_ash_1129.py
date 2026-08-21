@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Sacred Ash',
     kind=ITEM,
     text='Shuffle up to 5 Pokémon from your discard pile into your deck.',
-    tags=frozenset(['recycle']),
 )

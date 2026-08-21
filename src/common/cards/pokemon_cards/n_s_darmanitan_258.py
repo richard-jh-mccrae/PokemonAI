@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='N’s Darumaka',
     weakness=WATER,
     retreat_cost=3,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

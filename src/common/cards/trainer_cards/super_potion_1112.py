@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Super Potion',
     kind=ITEM,
     text='Heal 60 damage from 1 of your Pokémon. If you healed any damage in this way, discard an Energy from that Pokémon.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=60, rider='discard_own_energy'),),
     covers='full',
 )

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Iris’s Fighting Spirit',
     kind=SUPPORTER,
     text='You can use this card only if you discard another card from your hand.\n\nDraw cards until you have 6 cards in your hand.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', to_hand_size=6, cost='discard_1', cost_required=True),),
     covers='full',
 )

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     weakness=LIGHTNING,
     resistance=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['team_rocket']),
     default_roles=('support_pokemon',),
     covers='full',
     abilities=(

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Festival Grounds',
     kind=STADIUM,
     text='Each Pokémon that has any Energy attached (both yours and your opponent’s) recovers from all Special Conditions and can’t be affected by any Special Conditions.',
-    tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='special_condition_immunity', applies_to='has_energy_attached', rider='cure_existing', symmetric=True),),
     covers='full',
 )

@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, field, fields
+from types import MappingProxyType
+
+from .features import FEATURE_CATALOG, FeatureCatalog
+
+
+def _finite(key, value) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"valuation coefficient {key!r} must be finite, got {value!r}")
+    return number
+
+
+@dataclass(frozen=True, init=False)
+class DeckOverlay:
+    residuals: tuple[tuple[str, float], ...]
+
+    def __init__(self, residuals: Mapping[str, float] | None = None):
+        unknown = set(residuals or ()) - set(FEATURE_CATALOG.priced_keys)
+        if unknown:
+            raise KeyError(f"unknown valuation feature {sorted(unknown)[0]!r}")
+        values = tuple(sorted((str(key), _finite(key, value))
+                              for key, value in (residuals or {}).items()))
+        object.__setattr__(self, "residuals", values)
+
+
+@dataclass(frozen=True, init=False)
+class ValuationConfiguration(Mapping[str, float]):
+    schema_version: int
+    values: tuple[tuple[str, float], ...]
+    _lookup: Mapping[str, float] = field(repr=False, compare=False)
+
+    def __init__(self, values: Mapping[str, float], *, schema_version: int):
+        version = int(schema_version)
+        if version != FEATURE_CATALOG.schema_version:
+            raise ValueError("valuation schema version does not match feature catalog")
+        keys = {str(key) for key in values}
+        expected = set(FEATURE_CATALOG.priced_keys)
+        if keys != expected:
+            missing = sorted(expected - keys)
+            unknown = sorted(keys - expected)
+            detail = f"missing {missing[0]!r}" if missing else f"unknown {unknown[0]!r}"
+            raise ValueError(f"valuation configuration must cover exact catalog: {detail}")
+        object.__setattr__(self, "schema_version", version)
+        normalized = tuple(sorted(
+            (str(key), _finite(key, value)) for key, value in values.items()))
+        object.__setattr__(self, "values", normalized)
+        object.__setattr__(self, "_lookup", MappingProxyType(dict(normalized)))
+
+    @classmethod
+    def general(cls, catalog: FeatureCatalog = FEATURE_CATALOG):
+        return cls({key: catalog[key].default for key in catalog.priced_keys},
+                   schema_version=catalog.schema_version)
+
+    def resolve(self, overlay: DeckOverlay,
+                catalog: FeatureCatalog = FEATURE_CATALOG) -> "ValuationConfiguration":
+        if self.schema_version != catalog.schema_version:
+            raise ValueError("valuation schema version does not match feature catalog")
+        values = dict(self.values)
+        if set(values) != set(catalog.priced_keys):
+            raise ValueError("valuation configuration must cover the exact priced catalog")
+        for key, residual in overlay.residuals:
+            if key not in catalog:
+                raise KeyError(f"unknown valuation feature {key!r}")
+            values[key] += residual
+        return type(self)(values, schema_version=self.schema_version)
+
+    def with_values(self, replacements: Mapping[str, float],
+                    catalog: FeatureCatalog = FEATURE_CATALOG) -> "ValuationConfiguration":
+        unknown = set(replacements) - set(catalog.priced_keys)
+        if unknown:
+            raise KeyError(f"unknown valuation feature {sorted(unknown)[0]!r}")
+        values = dict(self.values)
+        values.update((str(key), _finite(key, value)) for key, value in replacements.items())
+        return type(self)(values, schema_version=self.schema_version).resolve(DeckOverlay(), catalog)
+
+    def __getitem__(self, key: str) -> float:
+        try:
+            return self._lookup[str(key)]
+        except KeyError:
+            raise KeyError(f"unknown valuation feature {key!r}") from None
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(key for key, _ in self.values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    @property
+    def identity(self) -> str:
+        payload = {"schema_version": self.schema_version, "values": self.values}
+        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.blake2b(blob, digest_size=8).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class ComputeConfiguration:
+    schema_version: int = 1
+    chain_depth_cap: int = 16
+    chain_node_cap: int = 128
+    noise_tolerance: float = 1e-9
+    tie_seed: int = 1178
+    chance_sample_budget: int = 24
+    chance_seed: int = 582
+
+    def __post_init__(self):
+        if self.schema_version <= 0:
+            raise ValueError("compute schema version must be positive")
+        if (self.chain_depth_cap <= 0 or self.chain_node_cap <= 0
+                or self.chance_sample_budget <= 0):
+            raise ValueError("compute caps must be positive")
+        _finite("noise_tolerance", self.noise_tolerance)
+        if self.noise_tolerance <= 0:
+            raise ValueError("noise tolerance must be positive")
+
+    @property
+    def identity(self) -> str:
+        payload = {field.name: getattr(self, field.name) for field in fields(self)}
+        blob = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.blake2b(blob, digest_size=8).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class BehaviorIdentity:
+    valuation: str
+    compute: str
+
+
+__all__ = ("BehaviorIdentity", "ComputeConfiguration", "DeckOverlay",
+           "ValuationConfiguration")

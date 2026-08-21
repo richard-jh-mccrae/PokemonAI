@@ -1,6 +1,7 @@
 # ADR-0145 — The Ledger decides live; Bellman becomes the offline teacher
 
-Status: Accepted (grilled and confirmed 2026-08-20); BUILT. Plan:
+Status: Superseded in part by Issue #582's Feature Catalog and effective configuration. The
+live-Ledger decision remains; the weight-vector valuation described below is historical. Plan:
 `docs/plans/PokemonAI_Ledger_Plan.md`; chance model: `docs/plans/PokemonAI_Supporter_Decision_Handoff.md`.
 
 ## Context

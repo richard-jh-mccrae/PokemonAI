@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Swirlix',
     weakness=METAL,
     retreat_cost=2,
-    tags=frozenset(['confuse']),
     attacks=(
         Attack(
             attack_id=138,

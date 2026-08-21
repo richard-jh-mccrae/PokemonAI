@@ -10,11 +10,11 @@
     "opp_comeback_disruptor": true
   },
   "pokemon": [
-    {"card": "Cynthia's Gabite", "roles": ["primary_attacker", "disruption_target"]},
+    {"card": "Cynthia's Gabite", "roles": ["primary_attacker"]},
     {"card": "Cynthia's Garchomp ex", "roles": ["primary_attacker"]},
     {"card": "Cynthia's Gible", "roles": ["primary_attacker"]},
     {"card": "Cynthia's Roselia", "roles": ["backup_attacker", "support_pokemon"]},
-    {"card": "Cynthia's Roserade", "roles": ["backup_attacker", "disruption_target", "support_pokemon"]},
+    {"card": "Cynthia's Roserade", "roles": ["backup_attacker", "support_pokemon"]},
     {"card": "Cynthia's Spiritomb", "roles": ["backup_attacker"]}
   ],
   "key_cards": [

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Jacinthe',
     kind=SUPPORTER,
     text='Heal 150 damage from 1 of your {P} Pokémon.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=150, restriction='psychic_only'),),
     covers='full',
 )

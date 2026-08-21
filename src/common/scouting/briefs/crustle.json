@@ -73,9 +73,7 @@
     },
     {
       "card": "Budew",
-      "roles": [
-        "disruption_target"
-      ]
+      "roles": []
     },
     {
       "card": "Druddigon",
@@ -86,8 +84,7 @@
     {
       "card": "Flutter Mane",
       "roles": [
-        "support_pokemon",
-        "disruption_target"
+        "support_pokemon"
       ]
     },
     {

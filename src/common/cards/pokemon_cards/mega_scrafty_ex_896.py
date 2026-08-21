@@ -11,7 +11,6 @@ CARD = PokemonCard(
     mega_ex=True,
     weakness=GRASS,
     retreat_cost=2,
-    tags=frozenset(['hand_disruption']),
     abilities=(
         Ability(
             name='Counterattacking Crest',

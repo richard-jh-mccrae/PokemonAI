@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Boxed Order',
     kind=ITEM,
     text='Search your deck for up to 2 Item cards, reveal them, and put them into your hand. Then, shuffle your deck. Your turn ends.',
-    tags=frozenset(['search']),
 )

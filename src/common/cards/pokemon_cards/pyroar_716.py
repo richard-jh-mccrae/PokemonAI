@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Litleo',
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Intimidating Fang',

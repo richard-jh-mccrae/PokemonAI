@@ -3,28 +3,22 @@
 One rule (plan §4): while any turn-continuing option's swing clears the noise floor, take the
 best of those; only when nothing is worth doing, take the best turn-ender — and ending the turn
 is worth exactly zero, so a turn-ender must earn its damage. Forced menus (no End on offer) are
-a straight argmax. Ties inside the noise floor break to the lowest engine selection, so a
-replayed frame answers identically. Every decision reports its option prices and coverage gaps
+a straight argmax. Ties inside the noise floor use a seeded neutral lottery. Every decision
+reports its option prices and coverage gaps
 in `RootDecision.diagnostics`; a `gap_sink` callable receives one record per decision that met
 a gap — the honest worklist, counted per decision affected."""
 from __future__ import annotations
 
-import json
-from dataclasses import replace
+import hashlib
 
 from common.api import RootDecision
 from common.observation import KnownOwnPrizes, ObservationStateBuilder
 from common.strategy.context import _MAIN
 
 from .evaluate import evaluate
-from .preview import NOISE_FLOOR, OptionPrice, price_actions
+from .preview import OptionPrice, price_actions
 from .seam import LedgerNativeProvider, PreviewState
 from .worth import EvaluationModel
-
-#: Plays whose whole yield is hand cards a pending shuffle would discard: they queue BEHIND
-#: it (ADR-0148). Kept narrow — a broad fetch/draw set was measured and lost frames.
-_RESTOCK_TAGS = frozenset({"recycle", "recycle_line"})
-
 
 class LedgerUnavailable(RuntimeError):
     """The transition seam could not open for this observation."""
@@ -68,11 +62,10 @@ class LedgerDecider:
 
         context_value = None if board.select is None else board.select.context
         context = _MAIN if context_value is None else int(context_value)
-        if context == _MAIN:
-            prices = tuple(
-                replace(price, restocks=True) if self._restocks_hand(price)
-                else price for price in prices)
         chosen = self._choose(prices, forced=context != _MAIN)
+        indifference_ordinals = tuple(
+            index for index, price in enumerate(prices)
+            if abs(price.swing - chosen.swing) <= ctx.compute.noise_tolerance)
         gaps = tuple(gap for price in prices for gap in price.gaps) + baseline.gaps
         if gaps and self.gap_sink is not None:
             self.gap_sink({"context": context, "position_key": board.position_key,
@@ -83,67 +76,69 @@ class LedgerDecider:
             value=chosen.swing, complete=True,
             diagnostics={
                 "backend": "ledger", "deck": self.deck_name,
-                "weights": self.ctx.weights.identity,
-                "evaluation_model": self.ctx.version,
+                "valuation": self.ctx.configuration.identity,
+                "compute": self.ctx.compute.identity,
                 "position_key": board.position_key,
                 "decision_key": board.decision_key,
-                **({"opponent_gamma": round(opponent.gamma, 4)}
+                **({"opponent_unknown_mass": opponent.unknown_mass}
                    if opponent is not None else {}),
                 "baseline": baseline.total, "gaps": sorted(set(gaps)),
+                "indifference_ordinals": indifference_ordinals,
                 "prices": tuple({"action": str(price.action.identity),
                                  "selection": list(price.action.selection),
-                                 "swing": price.swing, "ends_turn": price.ends_turn}
-                                for price in _ranked(prices)),
+                                 "swing": price.swing, "ends_turn": price.ends_turn,
+                                 "continuation": {
+                                     "state_delta": price.footprint.state_delta,
+                                     "action_opportunity": price.footprint.action_opportunity,
+                                     "continues_turn": price.footprint.continues_turn,
+                                     "zones_created": price.footprint.zones_created,
+                                     "zones_replaced": price.footprint.zones_replaced,
+                                     "allowances_consumed": price.footprint.allowances_consumed,
+                                     "immediately_usable_outputs":
+                                         price.footprint.immediately_usable_outputs,
+                                     "opportunities_created":
+                                         price.footprint.opportunities_created,
+                                     "opportunities_preserved":
+                                         price.footprint.opportunities_preserved,
+                                     "opportunities_consumed":
+                                         price.footprint.opportunities_consumed,
+                                     "contributions": tuple({
+                                         "feature": item.feature,
+                                         "activation": item.activation,
+                                         "coefficient": item.coefficient,
+                                         "value": item.value,
+                                     } for item in price.footprint.contributions),
+                                 }}
+                                for price in self._ranked(prices)),
             })
-
-    def _restocks_hand(self, price) -> bool:
-        identity = price.action.identity
-        if identity.kind != "play":
-            return False
-        # Raw select options reference hand cards by POSITION; the resolved card ids live in
-        # the canonical identity parts, so the played card is read from there.
-        for part in identity.parts:
-            try:
-                payload = json.loads(part)
-            except (TypeError, ValueError):
-                continue
-            for card_id in _card_ids(payload):
-                facts = self.ctx.facts(card_id)
-                if facts is not None and _RESTOCK_TAGS.intersection(
-                        getattr(facts, "tags", ()) or ()):
-                    return True
-        return False
 
     def _choose(self, prices, *, forced: bool) -> OptionPrice:
         if forced:
-            return _ranked(prices)[0]
-        threshold = max(NOISE_FLOOR, self.ctx.weights.act_threshold)
+            return self._ranked(prices)[0]
+        threshold = self.ctx.compute.noise_tolerance
         continuing = [price for price in prices
                       if not price.ends_turn and price.swing > threshold]
-        refreshes = [price for price in continuing if price.refresh]
-        if refreshes:
-            # A hand-shuffle is a hand-ender (ADR-0148): spends go first (they survive it),
-            # the shuffle next, recycle plays behind it — their yield would be shuffled away.
-            holders = [price for price in continuing
-                       if not price.refresh and not price.restocks]
-            return _ranked(holders or refreshes)[0]
         if continuing:
-            return _ranked(continuing)[0]
+            return self._ranked(continuing)[0]
         enders = [price for price in prices if price.ends_turn]
-        return _ranked(enders or prices)[0]
+        return self._ranked(enders or prices)[0]
 
-
-def _card_ids(node):
-    """Card ids referenced inside one raw select option: dicts with an `id` and no board-body
-    shape (`hp`) are card refs, wherever the option nests them."""
-    if isinstance(node, dict):
-        if node.get("id") is not None and "hp" not in node:
-            yield int(node["id"])
-        for value in node.values():
-            yield from _card_ids(value)
-    elif isinstance(node, (list, tuple)):
-        for value in node:
-            yield from _card_ids(value)
+    def _ranked(self, prices):
+        tolerance = self.ctx.compute.noise_tolerance
+        seed = self.ctx.compute.tie_seed
+        remaining = list(enumerate(prices))
+        ranked = []
+        while remaining:
+            best = max(price.swing for _index, price in remaining)
+            tied = [(index, price) for index, price in remaining
+                    if best - price.swing <= tolerance]
+            tied.sort(key=lambda indexed: hashlib.blake2b(
+                f"{seed}:{indexed[0]}".encode("utf-8"), digest_size=8).digest())
+            ranked.extend(price for _index, price in tied)
+            tied_indices = {index for index, _price in tied}
+            remaining = [(index, price) for index, price in remaining
+                         if index not in tied_indices]
+        return ranked
 
 
 def _close_quietly(provider) -> None:
@@ -154,13 +149,6 @@ def _close_quietly(provider) -> None:
         close()
     except Exception:
         pass
-
-
-def _ranked(prices):
-    """Best swing first; inside the noise floor the lowest engine selection wins, so the
-    ordering is a total, replayable one."""
-    return sorted(prices, key=lambda price: (-round(price.swing / NOISE_FLOOR) * NOISE_FLOOR,
-                                             price.action.selection))
 
 
 __all__ = ("LedgerDecider", "LedgerUnavailable")

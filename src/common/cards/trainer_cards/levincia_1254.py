@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Levincia',
     kind=STADIUM,
     text='Once during each player’s turn, that player may put up to 2 Basic {L} Energy cards from their discard pile into their hand.',
-    tags=frozenset(['recycle']),
 )

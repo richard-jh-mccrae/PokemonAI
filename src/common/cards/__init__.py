@@ -1,4 +1,4 @@
-"""Card knowledge under one roof: the `CardFunctions` tag table and the unified card store.
+"""Typed card knowledge under one roof.
 
 `card_store()` builds `{card_id: PokemonCard | TrainerCard | EnergyCard}` once per process from
 the modules under `pokemon_cards/`, `trainer_cards/` and `energy_cards/`;
@@ -13,7 +13,8 @@ from typing import Mapping
 
 from common.cards.card_facts import (
     Ability, Attack, Clause, EnergyCard, PokemonCard, TrainerCard)
-from common.cards.tags import CardFunctions
+from common.cards.function_catalog import (FUNCTION_CATALOG, FUNCTION_FEATURES, FunctionCatalog,
+                                           FunctionSpec, card_clauses)
 from common.cards.pokemon_roles import default_pokemon_roles
 
 
@@ -84,7 +85,9 @@ def pokemon_default_roles() -> Mapping[int, tuple[str, ...]]:
     return MappingProxyType(default_pokemon_roles(pokemon_card_store()))
 
 
-__all__ = ("Ability", "Attack", "CardFunctions", "Clause", "EnergyCard", "PokemonCard",
+__all__ = ("Ability", "Attack", "Clause", "EnergyCard", "FUNCTION_CATALOG",
+           "FUNCTION_FEATURES",
+           "FunctionCatalog", "FunctionSpec", "PokemonCard",
            "TrainerCard", "attack_index", "card_store", "energy_card_store",
-           "play_clauses", "pokemon_card_store", "pokemon_default_roles",
+           "card_clauses", "play_clauses", "pokemon_card_store", "pokemon_default_roles",
            "trainer_card_store")

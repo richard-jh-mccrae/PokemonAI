@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Tera Orb',
     kind=ITEM,
     text='Search your deck for a Tera Pokémon, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset([]),
     clauses=(Clause('fetch', target='tera', zone='deck'),),
     covers='full',
 )

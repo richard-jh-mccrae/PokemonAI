@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Seel',
     weakness=LIGHTNING,
     retreat_cost=2,
-    tags=frozenset([]),
     abilities=(
         Ability(
             name='Thick Fat',

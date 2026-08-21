@@ -7,11 +7,11 @@ import os
 from pathlib import Path
 
 from common.api import PlanRequest, RootDecision
-from common.card_worth import role_value
+from .card_worth import role_value
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
-from common.scouting.briefs import resolve_scouted_role_worth
+from common.scouting.briefs import _evolution_line, resolve_brief_cards
 from .state import DecisionState
 
 from .belief import BellmanDeckProfile, opponent_belief
@@ -24,6 +24,69 @@ from .potential import BoardPotential
 from .providers import bellman_provider_factory
 from .terminal import proof_lock_step
 from .value import ValueRegistry
+
+
+_STAGE_RANK = {"basic": 0, "stage1": 1, "stage2": 2}
+
+
+def resolve_scouted_role_worth(read, artifact, stats, *, briefs=(), functions=None,
+                               line_decay: float = 1.0):
+    """Frozen matched-Brief valuation retained only inside the Bellman teacher."""
+    expected = {}
+    dossiers = getattr(artifact, "dossiers", {}) if artifact is not None else {}
+    for candidate, probability in (read.candidates if read is not None else ()):
+        brief = next((item for item in briefs if candidate in item.covers), None)
+        ids_for_name = getattr(stats, "ids_for_name", None)
+        if brief is not None and ids_for_name is not None:
+            _threat_ids, target_roles = resolve_brief_cards(
+                brief, ids_for_name, stat_for_id=getattr(stats, "get", None),
+                forward_ids=getattr(stats, "forward_card_ids", None))
+            candidate_worth = {}
+            for row in brief.pokemon or ():
+                roles = tuple(row.get("roles") or ())
+                row_ids = {int(card_id) for card_id in ids_for_name(row.get("card", "")) or ()}
+                generic = general_pokemon_roles(row_ids, stats)
+                worth = role_value(roles)
+                for card_id in row_ids:
+                    combined = tuple(dict.fromkeys((*generic.get(card_id, ()), *roles)))
+                    candidate_worth[card_id] = max(
+                        candidate_worth.get(card_id, 0.0), role_value(combined))
+                if "primary_attacker" in roles:
+                    line_ids = _evolution_line(
+                        row_ids, ids_for_name, getattr(stats, "get", None),
+                        getattr(stats, "forward_card_ids", None))
+                    payoff_rank = max((_stage_rank(stats, card_id) for card_id in line_ids),
+                                      default=0)
+                    payoff_prizes = max((int(getattr(stats.get(card_id), "prize_value", 1) or 1)
+                                         for card_id in line_ids), default=1)
+                    for card_id in line_ids:
+                        owed = max(0, payoff_rank - _stage_rank(stats, card_id))
+                        candidate_worth[card_id] = max(candidate_worth.get(card_id, 0.0),
+                                                       worth * payoff_prizes
+                                                       * line_decay ** owed)
+            primary_worth = role_value(("primary_attacker",))
+            for card_id, role in target_roles.items():
+                if role == "primary_attacker":
+                    candidate_worth[card_id] = max(candidate_worth.get(card_id, 0.0),
+                                                   primary_worth)
+            for card_id, worth in candidate_worth.items():
+                expected[card_id] = expected.get(card_id, 0.0) + probability * worth
+            continue
+        dossier = dossiers.get(candidate) or {}
+        roles_by_card = {}
+        for row in dossier.get("targets") or ():
+            roles_by_card.setdefault(int(row["cardId"]), set()).add(str(row["role"]))
+        for card_id, roles in roles_by_card.items():
+            stat = stats.get(card_id) if stats is not None else None
+            if "fragile_preevo" in roles and getattr(stat, "stage", None) not in (None, "basic"):
+                roles = {*roles, "primary_attacker"}
+            expected[card_id] = expected.get(card_id, 0.0) + probability * role_value(roles)
+    return expected
+
+
+def _stage_rank(stats, card_id):
+    stat = stats.get(card_id) if stats is not None else None
+    return _STAGE_RANK.get(str(getattr(stat, "stage", "") or "").lower(), 0)
 
 
 def legacy_roles_resolve(declared: Roles, deck, stats, functions=None) -> Roles:
@@ -43,7 +106,7 @@ def legacy_roles_resolve(declared: Roles, deck, stats, functions=None) -> Roles:
             parents = names.get(str(getattr(stat, "evolvesFrom", "")), ())
             if len(parents) == 1:
                 evolves[int(parents[0])] = target
-    cards = general_pokemon_roles(card_ids, stats, functions)
+    cards = general_pokemon_roles(card_ids, stats)
     for card_id, card_roles in declared.items():
         resolved = cards.setdefault(int(card_id), [])
         resolved.extend(role for role in card_roles if role not in resolved)
@@ -91,7 +154,9 @@ class BellmanTeacherRuntime(AgentRuntime):
     fallback_action = "bellman_fallback"
 
     def __init__(self, strategy, deck, **kwargs):
+        teacher_functions = kwargs.pop("functions", None)
         super().__init__(strategy, deck, **kwargs)
+        self.functions = teacher_functions
         self.effects = CardEffects.load()
         # The teacher's frozen contract predates the store-based resolution (ADR-0149):
         # re-resolve with the inference it shipped with before anything reads self.roles.
@@ -155,7 +220,7 @@ class BellmanTeacherRuntime(AgentRuntime):
                        if body)                          # a facedown Active renders as [None]
         generic_roles = general_pokemon_roles(
             (body["id"] for body in bodies if body.get("id") is not None),
-            self.stats, self.functions)
+            self.stats)
         for card_id, card_roles in generic_roles.items():
             self.opponent_role_worth[card_id] = max(
                 self.opponent_role_worth.get(card_id, 0.0), role_value(card_roles))

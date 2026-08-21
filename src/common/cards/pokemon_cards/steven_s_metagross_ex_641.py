@@ -12,7 +12,6 @@ CARD = PokemonCard(
     weakness=FIRE,
     resistance=GRASS,
     retreat_cost=3,
-    tags=frozenset(['energy_accel']),
     abilities=(
         Ability(
             name='X-Boot',

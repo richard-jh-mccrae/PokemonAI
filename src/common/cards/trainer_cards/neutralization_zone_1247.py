@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=STADIUM,
     text='Prevent all damage done to Pokémon\xa0that don’t have a Rule Box\xa0(both yours and your opponent’s)\xa0by attacks from the opponent’s Pokémon {ex} and Pokémon {V}.\xa0(Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)\n\nThis card can’t be put into\xa0your\xa0hand or deck from the discard pile.',
     ace_spec=True,
-    tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='prevent_damage', applies_to='no_rule_box', source='opponent_attack', source_class='ex_or_v', symmetric=True),),
     covers='full',
 )

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Team Rocket's Giovanni",
     kind=SUPPORTER,
     text='Switch your Active Team Rocket’s Pokémon with 1 of your Benched Team Rocket’s Pokémon. If you do, switch in 1 of your opponent’s Benched Pokémon to the Active Spot.',
-    tags=frozenset(['switch']),
     clauses=(Clause('gust', target='any', rider='self_switch', name_family="Team Rocket's"),),
     covers='partial',
 )

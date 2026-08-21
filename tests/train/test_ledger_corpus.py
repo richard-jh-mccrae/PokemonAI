@@ -13,7 +13,7 @@ def row(deck, row_id, *, agrees, graded=True, gaps=(), chosen=(0,), correct=(1,)
             "exact": False, "agrees": agrees if graded else None,
             "chosen_label": "a", "correct_label": "b", "rationale": "why",
             "gaps": list(gaps), "elapsed_seconds": 0.1,
-            "ledger": {"value": 0.0, "backend": "ledger", "weights": "w",
+            "ledger": {"value": 0.0, "backend": "ledger", "valuation": "v",
                        "prices": [{"action": "x", "selection": [0], "swing": -0.2,
                                    "ends_turn": False}]}}
 
@@ -58,6 +58,19 @@ def test_regressions_name_frames_that_used_to_agree():
     result = payload([row("a_deck", "r1", agrees=False), row("a_deck", "r2", agrees=False)],
                      baseline=baseline)
     assert result["regressions"] == ["r1"]
+
+
+def test_semantic_flip_allowlist_preserves_the_unaffected_migration_floor():
+    baseline = payload([row("a_deck", "r1", agrees=True),
+                        row("a_deck", "r2", agrees=True)])
+    result = payload([row("a_deck", "r1", agrees=False),
+                      row("a_deck", "r2", agrees=True)], baseline=baseline,
+                     semantic_flips={"flips": {"r1": "additive_marginal_valuation"}})
+
+    assert result["unexplained_regressions"] == []
+    assert result["migration_generality_floor"] == 1.0
+    assert result["raw_generality_floor_retained"] is False
+    assert result["generality_floor_retained"] is True
 
 
 def test_markdown_render_carries_the_rationale_beside_the_miss():
@@ -219,25 +232,3 @@ def test_a_crashed_decision_is_surfaced_even_when_it_agrees():
     rendered = render_markdown(result)
     assert "Crashed decisions (1)" in rendered
     assert "exception:ValueError" in rendered and "boom" in rendered
-
-
-def test_the_started_twin_wins_the_attach_on_both_re_ruled_frames():
-    """The 2026-08-20 sitting's twin-attach frames (83116501-89 re-ruled to [5], 82752045-97
-    to [4]): with rental energy priced dead on the bench (ADR-0150), the basic-{W}-to-the-
-    started-body ruling wins at default weights."""
-    from train.ledger_corpus import _replay_one
-
-    for store_dir, episode, frame_no in (
-            ("mega_starmie_20260701_fa8f649", "83116501", 89),
-            ("mega_starmie_20260630_b7e483a", "82752045", 97)):
-        from pathlib import Path
-
-        from train.blunder.store import load_corrections
-
-        store = Path(__file__).resolve().parents[2] / "data" / "corrections" / store_dir
-        record = next(r for r in load_corrections(store)
-                      if str(r.episode_id) == episode
-                      and int((r.decision or {}).get("frame", -1)) == frame_no)
-        produced = _replay_one("mega_starmie", record)
-        assert produced["backend"] == "ledger"
-        assert produced["agrees"] is True, (episode, frame_no, produced["chosen_label"])

@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Cyrano',
     kind=SUPPORTER,
     text='Search your deck for up to 3 Pokémon {ex}, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='pokemon_ex', zone='deck', amount=3),),
     covers='full',
 )

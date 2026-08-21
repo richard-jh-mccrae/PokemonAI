@@ -10,8 +10,7 @@ CARD = PokemonCard(
     evolves_from='Bayleef',
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset([]),
-    default_roles=('backup_attacker', 'accel_source', 'disruption_target', 'support_pokemon'),
+    default_roles=('backup_attacker', 'accel_source', 'support_pokemon'),
     covers='full',
     abilities=(
         Ability(

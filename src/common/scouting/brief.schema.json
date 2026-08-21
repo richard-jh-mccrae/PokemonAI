@@ -25,7 +25,7 @@
         "type": "object", "additionalProperties": false, "required": ["card", "roles"],
         "properties": {
           "card": {"type": "string"},
-          "roles": {"type": "array", "items": {"type": "string", "enum": ["primary_attacker", "backup_attacker", "support_pokemon", "accel_source", "engine", "counter_mover", "disruption_target"]}}
+          "roles": {"type": "array", "items": {"type": "string", "enum": ["primary_attacker", "backup_attacker", "sniper", "draw_engine", "search_engine", "healer", "stall_pokemon", "supporter_tutor", "accel_source", "counter_mover", "item_locker", "retreat_assist", "gust", "support_pokemon"]}}
         }
       }
     },

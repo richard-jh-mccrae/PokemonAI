@@ -10,8 +10,7 @@ CARD = PokemonCard(
     evolves_from='Snorunt',
     weakness=METAL,
     retreat_cost=1,
-    tags=frozenset([]),
-    default_roles=('backup_attacker', 'disruption_target', 'support_pokemon'),
+    default_roles=('backup_attacker', 'support_pokemon'),
     covers='full',
     abilities=(
         Ability(

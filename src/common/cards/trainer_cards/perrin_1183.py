@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Perrin',
     kind=SUPPORTER,
     text='Reveal up to 2 Pokémon in your hand and put them into your deck. If you do, search your deck for up to that many Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
 )

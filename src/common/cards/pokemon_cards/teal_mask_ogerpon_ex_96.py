@@ -11,8 +11,7 @@ CARD = PokemonCard(
     tera=True,
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['draw', 'energy_accel']),
-    default_roles=('primary_attacker', 'disruption_target', 'backup_attacker'),
+    default_roles=('primary_attacker', 'backup_attacker'),
     covers='full',
     abilities=(
         Ability(

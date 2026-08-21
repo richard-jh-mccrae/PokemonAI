@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Team Rocket's Proton",
     kind=SUPPORTER,
     text='If you go first, you may use this card during your first turn.\n\nSearch your deck for up to 3 Basic Team Rocket’s Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='basic_pokemon', zone='deck', amount=3, name_family="Team Rocket's"),),
     covers='partial',
 )

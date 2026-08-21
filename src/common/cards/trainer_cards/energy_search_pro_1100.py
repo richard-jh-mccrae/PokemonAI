@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Search your deck for any number of Basic Energy cards of different types, reveal them, and put them into your hand. Then, shuffle your deck.',
     ace_spec=True,
-    tags=frozenset(['search', 'tutor_energy']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck', amount='all', distinct_types=True),),
     covers='full',
 )

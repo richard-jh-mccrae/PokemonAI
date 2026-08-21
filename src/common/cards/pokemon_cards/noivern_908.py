@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=STAGE1,
     evolves_from='Noibat',
     retreat_cost=0,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=1309,

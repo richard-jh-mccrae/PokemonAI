@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=FIRE,
     resistance=GRASS,
     retreat_cost=2,
-    tags=frozenset(['dig', 'energy_accel']),
     abilities=(
         Ability(
             name='Metal Maker',

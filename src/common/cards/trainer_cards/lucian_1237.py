@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lucian',
     kind=SUPPORTER,
     text='Each player shuffles their hand and puts it on the bottom of their deck. If either player put any cards on the bottom of their deck in this way, each player flips a coin. If heads, that player draws 6 cards. If tails, they draw 3 cards.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=6, amount_if={'condition': 'coin_tails', 'amount': 3}, rider='both_hands_to_bottom'),),
     covers='partial',
 )

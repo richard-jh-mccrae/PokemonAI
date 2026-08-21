@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Carmine',
     kind=SUPPORTER,
     text='If you go first, you may use this card during your first turn.\n\nDiscard your hand and draw 5 cards.',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', amount=5, cost='discard_hand'),),
     covers='full',
 )

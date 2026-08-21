@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Hustle Play',

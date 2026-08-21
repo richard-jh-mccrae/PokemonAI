@@ -12,7 +12,6 @@ CARD = PokemonCard(
     tera=True,
     weakness=GRASS,
     retreat_cost=2,
-    tags=frozenset(['confuse']),
     attacks=(
         Attack(
             attack_id=343,

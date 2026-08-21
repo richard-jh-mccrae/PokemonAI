@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Snom',
     weakness=METAL,
     retreat_cost=2,
-    tags=frozenset(['sleep']),
     attacks=(
         Attack(
             attack_id=1055,

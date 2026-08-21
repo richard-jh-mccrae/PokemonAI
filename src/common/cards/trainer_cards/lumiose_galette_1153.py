@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lumiose Galette',
     kind=ITEM,
     text='Heal 20 damage and remove a Special Condition from your Active Pokémon.',
-    tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=20, restriction='active_only'),),
     covers='partial',
 )

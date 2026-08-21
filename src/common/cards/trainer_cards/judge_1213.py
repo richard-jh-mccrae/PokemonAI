@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Judge',
     kind=SUPPORTER,
     text='Each player shuffles their hand into their deck and draws 4 cards.',
-    tags=frozenset(['draw', 'hand_disruption', 'shuffle_hand']),
     clauses=(Clause('draw', amount=4, opponent_amount=4, rider='shuffle_both_hands'),),
     covers='full',
 )

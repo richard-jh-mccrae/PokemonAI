@@ -11,7 +11,6 @@ CARD = PokemonCard(
     mega_ex=True,
     weakness=METAL,
     retreat_cost=4,
-    tags=frozenset([]),
     default_roles=('primary_attacker',),
     attacks=(
         Attack(

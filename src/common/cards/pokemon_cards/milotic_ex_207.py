@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=LIGHTNING,
     retreat_cost=2,
-    tags=frozenset(['sleep']),
     abilities=(
         Ability(
             name='Sparkling Scales',

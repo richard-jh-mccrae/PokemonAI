@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Larvesta',
     weakness=WATER,
     retreat_cost=1,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Torrid Scales',

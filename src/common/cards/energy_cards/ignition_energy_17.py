@@ -7,7 +7,6 @@ CARD = EnergyCard(
     kind=SPECIAL_ENERGY,
     provides=COLORLESS,
     text='If this card is attached to 1 of your Pokémon, discard it at the end of your turn.\n\nAs long as this card is attached to a Pokémon, it provides {C} Energy.\n\nIf this card is attached to an Evolution Pokémon, it provides {C}{C}{C} Energy instead.',
-    tags=frozenset(['discard_eot', 'provides:1', 'provides_evo:3']),
     clauses=(Clause('energy_provide', amount=1, amount_on_evolution=3, type='colorless', rider='discard_eot'),),
     covers='full',
 )

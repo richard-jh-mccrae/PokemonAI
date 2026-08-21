@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lisia’s Appeal',
     kind=SUPPORTER,
     text='Switch in 1 of your opponent’s Benched Basic Pokémon to the Active Spot. If you do, the new Active Pokémon is now Confused.',
-    tags=frozenset(['confuse', 'gust']),
     clauses=(Clause('gust', target='basic', rider='confuse_target'),),
     covers='full',
 )

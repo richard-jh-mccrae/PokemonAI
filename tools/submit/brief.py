@@ -8,12 +8,11 @@ import io
 import json
 import sys
 from collections import Counter
-from dataclasses import fields
 from datetime import datetime
 from pathlib import Path
 
 from submit.package import REPO, _git_hash, artifact_stem
-from common.ledger.weights import LedgerWeights
+from common.ledger import ComputeConfiguration, DeckOverlay, ValuationConfiguration
 
 
 def _load_strategy(agent_dir: Path):
@@ -72,19 +71,14 @@ def _strategy(strategy, deck) -> dict:
     }
 
 
-def _ledger_weights(strategy) -> dict:
-    overrides = dict(getattr(strategy, "ledger_overrides", {}) or {})
-    resolved = LedgerWeights().resolve(overrides)
-    scalars = {f.name: getattr(resolved, f.name) for f in fields(resolved)
-               if f.init and f.name not in ("roles", "tags", "kinds", "card_worth")}
+def _ledger_configuration(strategy) -> dict:
+    overlay = dict(strategy.ledger_overlay)
+    resolved = ValuationConfiguration.general().resolve(DeckOverlay(overlay))
     return {
         "identity": resolved.identity,
-        "deck_overrides": {str(name): float(value) for name, value in sorted(overrides.items())},
-        "scalars": scalars,
-        "roles": {name: value for name, value in resolved.roles},
-        "tags": {name: value for name, value in resolved.tags},
-        "kinds": {name: value for name, value in resolved.kinds},
-        "card_worth": {str(card_id): value for card_id, value in resolved.card_worth},
+        "schema_version": resolved.schema_version,
+        "deck_overlay": {str(name): float(value) for name, value in sorted(overlay.items())},
+        "values": dict(resolved),
     }
 
 
@@ -100,7 +94,7 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
     deck = _deck(agent_dir, cards)
     deck_ids = tuple(card["id"] for card in deck["cards"] for _ in range(card["count"]))
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "provenance": {
             "agent": agent_name,
             "built_at": when.isoformat(timespec="seconds"),
@@ -110,7 +104,13 @@ def build_manifest(agent_dir, *, when=None, git_hash=None, agent_name=None, card
         "system": "ledger",
         "deck": deck,
         "strategy": _strategy(strategy, deck_ids),
-        "ledger_weights": _ledger_weights(strategy),
+        "valuation_configuration": _ledger_configuration(strategy),
+        "compute_configuration": {
+            "identity": ComputeConfiguration().identity,
+            **{field: getattr(ComputeConfiguration(), field) for field in (
+                "schema_version", "chain_depth_cap", "chain_node_cap", "noise_tolerance",
+                "tie_seed", "chance_sample_budget", "chance_seed")},
+        },
         "safety_bounds": {
             "callback_watchdog_seconds": {
                 "value": 120.0, "units": "seconds", "adjustable": False,
@@ -138,14 +138,10 @@ def render_brief_csv(manifest: dict) -> str:
     rows.extend({**common, "record_type": "starter", "card_id": card_id,
                  "value": position}
                 for position, card_id in enumerate(manifest["strategy"]["starter_priority"]))
-    weights = manifest["ledger_weights"]
-    for group in ("scalars", "roles", "tags", "kinds"):
-        rows.extend({**common, "record_type": "ledger_weight", "name": f"{group}.{name}",
-                     "value": value, "provenance": weights["identity"]}
-                    for name, value in weights[group].items())
-    rows.extend({**common, "record_type": "ledger_weight", "name": f"card.{card_id}",
-                 "value": value, "provenance": weights["identity"]}
-                for card_id, value in weights["card_worth"].items())
+    configuration = manifest["valuation_configuration"]
+    rows.extend({**common, "record_type": "valuation_coefficient", "name": name,
+                 "value": value, "provenance": configuration["identity"]}
+                for name, value in configuration["values"].items())
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=fields_)
     writer.writeheader()
@@ -160,29 +156,23 @@ def render_brief(manifest: dict, **_ignored) -> str:
     role_rows = "".join(
         f"<li><code>{html.escape(card_id)}</code>: {html.escape(', '.join(roles))}</li>"
         for card_id, roles in strategy["roles"].items())
-    weights = manifest["ledger_weights"]
-    overridden = set(weights["deck_overrides"])
+    configuration = manifest["valuation_configuration"]
+    overridden = set(configuration["deck_overlay"])
 
     def weight_table(group: str, prefix: str = "") -> str:
         rendered = "".join(
             ("<tr class='custom'>" if f"{prefix}{name}" in overridden or name in overridden
              else "<tr>")
             + f"<td>{html.escape(str(name))}</td><td>{value}</td></tr>"
-            for name, value in weights[group].items())
-        return (f"<details><summary>{html.escape(group)} ({len(weights[group])})</summary>"
+            for name, value in configuration[group].items())
+        return (f"<details><summary>{html.escape(group)} ({len(configuration[group])})</summary>"
                 "<table><thead><tr><th>Name</th><th>Value</th></tr></thead>"
                 f"<tbody>{rendered}</tbody></table></details>")
 
-    weight_sections = "".join((
-        weight_table("scalars"),
-        weight_table("roles", "role."),
-        weight_table("tags", "tag."),
-        weight_table("kinds", "kind."),
-        weight_table("card_worth", "card."),
-    ))
+    weight_sections = weight_table("values")
     override_rows = "".join(
         f"<li><code>{html.escape(name)}</code>: {value}</li>"
-        for name, value in weights["deck_overrides"].items()) or "<li>none</li>"
+        for name, value in configuration["deck_overlay"].items()) or "<li>none</li>"
     safety_rows = "".join(
         f"<li><code>{html.escape(name)}</code>: {row['value']} {html.escape(row['units'])}</li>"
         for name, row in manifest["safety_bounds"].items())
@@ -198,8 +188,8 @@ def render_brief(manifest: dict, **_ignored) -> str:
         f"<code>{html.escape(provenance['git_hash'])}</code></p>"
         f"<h2>Deck roles</h2><ul>{role_rows}</ul>"
         f"<h2>Starter priority</h2><p>{html.escape(str(strategy['starter_priority']))}</p>"
-        f"<h2>Ledger weights</h2><p><code>{weights['identity']}</code> · "
-        f"{len(weights['deck_overrides'])} deck overrides</p>"
+        f"<h2>Valuation configuration</h2><p><code>{configuration['identity']}</code> · "
+        f"{len(configuration['deck_overlay'])} deck residuals</p>"
         f"<ul>{override_rows}</ul>{weight_sections}"
         f"<details><summary>Read-only safety bounds</summary><ul>{safety_rows}</ul></details>"
         f"<script type='application/json' id='manifest'>{payload}</script>"

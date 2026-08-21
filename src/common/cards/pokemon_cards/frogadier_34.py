@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Froakie',
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset(['paralyze']),
     attacks=(
         Attack(
             attack_id=25,

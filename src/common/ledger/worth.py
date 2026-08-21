@@ -1,81 +1,122 @@
-"""Card worth and demand: what a card is worth, given what THIS board is asking for.
+"""Card demand: what this board can consume from its hand and attached Energy.
 
-Base worth resolves deck pin > Role tier > tag tier > class default > floor, always in prizes.
-Demand then scales the hand/deck reading: an evolution without its base in play, an energy no
-body can use, a fetch with no wanted target all decay toward `demand_dead`, and copies beyond
-what the board can consume decay by `surplus_copy` each. Energy usability is MARGINAL: a unit
-counts only if it fills a still-unfilled slot of some attack — typed slots match through the
-forward evolution line (the unit can ride the body up); colorless slots match the body's own
-printed attacks in full, and a future evolution's colorless slots only through the REACH gate:
-full credit when that evolution is in hand, `reach_in_deck` credit when it sits in the deck (or
-the side's knowledge is absent), nothing when it is known gone. Ungated colorless-through-the-
-line would mark every energy live and collapse the discount; ungated refusal priced charging
-Staryu for Nebula Beam negative."""
+Demand classifies cards semantically; valuation coefficients are applied later by the Ledger.
+Energy usability is MARGINAL: a unit counts only if it fills a still-unfilled slot of an attack
+on the current body or a forward evolution already visible in hand."""
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from types import MappingProxyType
+from enum import Enum
 from typing import Mapping
 
-from common.cards import card_store, pokemon_default_roles
-from common.cards.card_facts import COLORLESS, EnergyCard, PokemonCard, TrainerCard
+from common.cards import FUNCTION_CATALOG, card_store, play_clauses, pokemon_default_roles
+from common.cards.card_facts import COLORLESS, SUPPORTER, EnergyCard, PokemonCard, TrainerCard
 from common.cards.functions.energy import provision_units
+from common.cards.functions.fetch import DEADNESS, fetch_target_matches
+from common.cards.pokemon_roles import undeclared_pokemon_roles
+from common.scouting.traits import TRAIT_CATALOG
 
-from .weights import LedgerWeights
+from .configuration import (BehaviorIdentity, ComputeConfiguration, DeckOverlay,
+                            ValuationConfiguration)
+
+
+def _validated_roles(roles) -> Mapping[int, tuple[str, ...]]:
+    normalized = {int(card_id): tuple(dict.fromkeys(card_roles))
+                  for card_id, card_roles in (roles or {}).items()}
+    unknown = undeclared_pokemon_roles(
+        role for card_roles in normalized.values() for role in card_roles)
+    if unknown:
+        raise KeyError(f"unknown Pokemon Role {unknown[0]!r}")
+    return MappingProxyType(normalized)
 
 
 @dataclass(frozen=True)
-class OpponentEvaluation:
-    """Scouting's read of THEIR side (ADR-0148): card-generic ``roles`` price at full
-    strength; ``brief_roles`` + the Brief-bent ``weights`` blend in by ``gamma``, fail-open."""
-
-    roles: Mapping[int, tuple[str, ...]]
-    brief_roles: Mapping[int, tuple[str, ...]]
-    weights: LedgerWeights
-    gamma: float
+class ArchetypeBelief:
+    probability: float
+    roles: Mapping[int, tuple[str, ...]] = field(default_factory=dict)
+    traits: tuple = ()
+    archetype: str = ""
+    resources: Mapping[int, float] = field(default_factory=dict)
 
     def __post_init__(self):
-        object.__setattr__(self, "roles", MappingProxyType({
-            int(card_id): tuple(values) for card_id, values in self.roles.items()}))
-        object.__setattr__(self, "brief_roles", MappingProxyType({
-            int(card_id): tuple(values) for card_id, values in self.brief_roles.items()}))
+        probability = float(self.probability)
+        if not 0.0 <= probability <= 1.0:
+            raise ValueError("archetype probability must be between zero and one")
+        object.__setattr__(self, "probability", probability)
+        object.__setattr__(self, "roles", _validated_roles(self.roles))
+        object.__setattr__(self, "traits", TRAIT_CATALOG.validate(self.traits))
+        object.__setattr__(self, "archetype", str(self.archetype))
+        resources = {int(card_id): float(chance)
+                     for card_id, chance in self.resources.items()}
+        if any(not 0.0 <= chance <= 1.0 for chance in resources.values()):
+            raise ValueError("opponent resource probabilities must be between zero and one")
+        object.__setattr__(self, "resources", MappingProxyType(resources))
+
+
+@dataclass(frozen=True)
+class OpponentBeliefs:
+    observed_roles: Mapping[int, tuple[str, ...]] = field(default_factory=dict)
+    candidates: tuple[ArchetypeBelief, ...] = ()
+    unknown_mass: float = 1.0
+
+    def __post_init__(self):
+        unknown_mass = float(self.unknown_mass)
+        if not 0.0 <= unknown_mass <= 1.0:
+            raise ValueError("unknown posterior mass must be between zero and one")
+        candidates = tuple(self.candidates)
+        total = unknown_mass + sum(candidate.probability for candidate in candidates)
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError("candidate probabilities plus unknown mass must equal one")
+        object.__setattr__(self, "unknown_mass", unknown_mass)
+        object.__setattr__(self, "candidates", candidates)
+        object.__setattr__(self, "observed_roles", _validated_roles(self.observed_roles))
 
 
 @dataclass(frozen=True)
 class EvaluationModel:
-    """Everything deck-scoped the evaluator needs: weights, Roles, and the store itself."""
+    """Everything deck-scoped the evaluator needs: configuration, Roles, and card facts."""
 
-    weights: LedgerWeights
+    configuration: ValuationConfiguration
+    compute: ComputeConfiguration
     roles: Mapping[int, tuple[str, ...]]
     store: Mapping[int, object] = field(repr=False)
-    #: The per-decision scouting layer for THEIR side's worth reads; None prices the opponent
-    #: exactly as before the wiring (store defaults, unknown floor).
-    opponent: OpponentEvaluation | None = None
-    schema_version: int = 1
-
-    def __post_init__(self):
-        object.__setattr__(self, "roles", MappingProxyType({
-            int(card_id): tuple(values) for card_id, values in self.roles.items()}))
-        object.__setattr__(self, "store", MappingProxyType(dict(self.store)))
-
-    @property
-    def version(self) -> str:
-        return f"evaluation-v{self.schema_version}:{self.weights.identity}"
+    #: Posterior beliefs used for the opponent side; None means unknown archetype.
+    opponent: OpponentBeliefs | None = None
 
     @classmethod
-    def build(cls, *, weights: LedgerWeights | None = None,
-              roles: Mapping[int, tuple[str, ...]] | None = None,
-              overrides: Mapping[str, float] | None = None) -> "EvaluationModel":
-        resolved = (weights or LedgerWeights()).resolve(overrides)
+    def build(cls, *, roles: Mapping[int, tuple[str, ...]] | None = None,
+              configuration: ValuationConfiguration | None = None,
+              overlay: DeckOverlay | None = None,
+              compute: ComputeConfiguration | None = None) -> "EvaluationModel":
+        configured = (configuration or ValuationConfiguration.general()).resolve(
+            overlay or DeckOverlay())
         merged = dict(pokemon_default_roles())
         for card_id, declared in (roles or {}).items():
             if declared:
                 merged[int(card_id)] = tuple(declared)
-        return cls(weights=resolved, roles=merged, store=card_store())
+        unknown_roles = undeclared_pokemon_roles(
+            role for declared in merged.values() for role in declared)
+        if unknown_roles:
+            raise KeyError(f"unknown Pokemon Role {unknown_roles[0]!r}")
+        store = card_store()
+        for facts in store.values():
+            clauses = list(getattr(facts, "clauses", ()) or ())
+            for ability in getattr(facts, "abilities", ()) or ():
+                clauses.extend(ability.clauses)
+            for attack in getattr(facts, "attacks", ()) or ():
+                clauses.extend(attack.clauses)
+            FUNCTION_CATALOG.compile(clauses)
+        return cls(configuration=configured, compute=compute or ComputeConfiguration(), roles=merged,
+                   store=store)
 
-    def with_opponent(self, layer: OpponentEvaluation | None) -> "EvaluationModel":
+    @property
+    def behavior_identity(self) -> BehaviorIdentity:
+        return BehaviorIdentity(self.configuration.identity, self.compute.identity)
+
+    def with_opponent(self, layer: OpponentBeliefs | None) -> "EvaluationModel":
         return self if layer is self.opponent else replace(self, opponent=layer)
 
     def facts(self, card_id: int):
@@ -85,79 +126,35 @@ class EvaluationModel:
         return self.roles.get(int(card_id), ())
 
 
-def _merge_roles(*claims) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(role for group in claims for role in (group or ())))
-
-
-def _resolve_worth(card_id: int, facts, weights: LedgerWeights,
-                   roles: tuple[str, ...]) -> tuple[float, str | None]:
-    pinned = weights.card_worth_map.get(int(card_id))
-    if pinned is not None:
-        return pinned, None
-    role_read = max((weights.role_worth.get(role, 0.0) for role in roles), default=0.0)
-    if facts is None:
-        # No record: roles (a scouted claim, or nothing) are all there is to price.
-        return max(role_read, weights.unknown_card_worth), f"unknown card {int(card_id)}"
-    tag_read = max((weights.tag_worth.get(tag, 0.0)
-                    for tag in getattr(facts, "tags", ()) or ()), default=0.0)
-    if isinstance(facts, PokemonCard):
-        kind = "pokemon"
-    elif isinstance(facts, EnergyCard):
-        kind = ("special_energy" if getattr(facts, "kind", "") == "special_energy"
-                else "energy")
-    else:
-        kind = getattr(facts, "kind", "item")
-    kind_read = weights.kind_worth.get(kind, weights.unknown_card_worth)
-    return max(role_read, tag_read, kind_read), None
-
-
-def base_worth(card_id: int, facts, ctx: EvaluationModel, *,
-               own: bool = True) -> tuple[float, str | None]:
-    """A card's standing worth in prizes, plus a coverage gap when the store cannot see it.
-    THEIR side blends the scouting layer in by gamma (ADR-0148); gamma 0 = the general read."""
-    layer = None if own else ctx.opponent
-    declared = ctx.card_roles(card_id) or getattr(facts, "default_roles", ()) or ()
-    base_roles = declared if layer is None else _merge_roles(
-        declared, layer.roles.get(int(card_id)))
-    general, gap = _resolve_worth(card_id, facts, ctx.weights, tuple(base_roles))
-    if layer is None or layer.gamma <= 0.0:
-        return general, gap
-    scouted, _ = _resolve_worth(
-        card_id, facts, layer.weights,
-        _merge_roles(base_roles, layer.brief_roles.get(int(card_id))))
-    return general + layer.gamma * (scouted - general), gap
-
-
 # --- energy usability -------------------------------------------------------------------
 
 @lru_cache(maxsize=1)
 def _forward_lines() -> Mapping[str, tuple[int, ...]]:
     """name -> ids of every card in the store that evolves (transitively) from that name."""
-    store = card_store()
-    by_name = {card.name: card_id for card_id, card in store.items()
-               if isinstance(card, PokemonCard)}
+    return _compile_forward_lines(card_store())
+
+
+def _compile_forward_lines(store) -> Mapping[str, tuple[int, ...]]:
+    parents: dict[str, str | None] = {}
+    for card in store.values():
+        if not isinstance(card, PokemonCard):
+            continue
+        previous = parents.setdefault(card.name, card.evolves_from)
+        if previous != card.evolves_from:
+            raise ValueError(f"conflicting evolution parents for {card.name!r}")
     forward: dict[str, list[int]] = {}
     for card_id, card in store.items():
         if not isinstance(card, PokemonCard):
             continue
         base = card.evolves_from
-        seen = 0
-        while base is not None and seen < 4:
+        seen: set[str] = set()
+        while base is not None:
+            if base in seen or base == card.name:
+                raise ValueError(f"evolution relationships contain a cycle at {base!r}")
+            seen.add(base)
             forward.setdefault(base, []).append(card_id)
-            parent = by_name.get(base)
-            base = store[parent].evolves_from if parent is not None else None
-            seen += 1
+            base = parents.get(base)
     return {name: tuple(ids) for name, ids in forward.items()}
-
-
-def _line_attacks(body_facts, ctx: EvaluationModel, *, own_only: bool = False):
-    attacks = list(getattr(body_facts, "attacks", ()) or ())
-    if own_only or body_facts is None:
-        return attacks
-    for evo_id in _forward_lines().get(body_facts.name, ()):
-        evo = ctx.facts(evo_id)
-        attacks.extend(getattr(evo, "attacks", ()) or ())
-    return attacks
 
 
 def _line_entries(body_facts, ctx: EvaluationModel):
@@ -171,24 +168,109 @@ def _line_entries(body_facts, ctx: EvaluationModel):
             yield attack, evo_id
 
 
-def line_reach(hand_name_counts, deck_counts, ctx: EvaluationModel) -> Mapping[int, float]:
-    """The reach gate per store evolution id: how credible is it that this evolution arrives?
-    1.0 with the card in hand, `reach_in_deck` while it sits in the deck — or whenever the
-    side's deck knowledge is absent, since absence of knowledge is not absence of the card —
-    and 0.0 when the counts prove it gone (discarded or prized)."""
-    in_deck = None if deck_counts is None else \
-        {int(card_id) for card_id, count in deck_counts if count > 0}
-    gates: dict[int, float] = {}
+class Reach(str, Enum):
+    HAND = "hand"
+    FETCHABLE = "fetchable"
+    NEXT_TURN = "next_turn"
+    ABSENT = "absent"
+
+
+class DemandState(str, Enum):
+    LIVE = "live"
+    DEAD = "dead"
+    SETUP = "setup"
+    COLORLESS_ONLY = "colorless_only"
+
+
+_DEMAND_PRIORITY = {
+    DemandState.DEAD: 0,
+    DemandState.COLORLESS_ONLY: 1,
+    DemandState.SETUP: 1,
+    DemandState.LIVE: 2,
+}
+
+
+def line_reach(hand_name_counts, deck_counts, ctx: EvaluationModel, *, hand=(), turn=None) -> Mapping[int, Reach]:
+    """Forward evolutions visible in hand now or still present for a later turn."""
+    in_deck = None if deck_counts is None else {
+        int(card_id) for card_id, count in deck_counts if count > 0}
+    gates: dict[int, Reach] = {}
     for ids in _forward_lines().values():
         for evo_id in ids:
             facts = ctx.facts(evo_id)
             if facts is not None and hand_name_counts.get(facts.name, 0):
-                gates[evo_id] = 1.0
+                gates[evo_id] = Reach.HAND
+            elif (facts is not None and in_deck is not None and evo_id in in_deck
+                  and _held_fetch_reaches(hand, turn, facts, ctx)):
+                gates[evo_id] = Reach.FETCHABLE
             elif in_deck is None or evo_id in in_deck:
-                gates[evo_id] = ctx.weights.reach_in_deck
+                gates[evo_id] = Reach.NEXT_TURN if in_deck is not None else Reach.ABSENT
             else:
-                gates[evo_id] = 0.0
+                gates[evo_id] = Reach.ABSENT
     return gates
+
+
+def _reach_scale(status: Reach) -> float:
+    if status in {Reach.HAND, Reach.FETCHABLE}:
+        return 1.0
+    if isinstance(status, (int, float)):
+        return max(0.0, min(1.0, float(status)))
+    return 0.0
+
+
+def legal_line_reach(body, reach, ctx: EvaluationModel, hand=(), turn=None) -> Mapping[int, Reach | float]:
+    card = getattr(body, "card", None)
+    facts = ctx.facts(card.card_id) if card is not None else body
+    if facts is None:
+        return {}
+    direct = {card_id for card_id in _forward_lines().get(facts.name, ())
+              if getattr(card_store().get(card_id), "evolves_from", None) == facts.name}
+    legal = {card_id: status for card_id, status in reach.items() if card_id in direct}
+    if getattr(body, "appeared_this_turn", False):
+        return {card_id: (status if isinstance(status, (int, float)) else Reach.NEXT_TURN)
+                for card_id, status in legal.items()}
+    candy = any(
+        clause.kind == "fetch" and clause.zone == "hand" and clause.rider == "skip_stage1"
+        for card in hand for clause in play_clauses(ctx.facts(card.card_id)))
+    if candy and turn is not None and turn.number > 1 and getattr(facts, "stage", None) == "basic":
+        for card_id in _forward_lines().get(facts.name, ()):
+            target = card_store().get(card_id)
+            if getattr(target, "stage", None) == "stage2" and reach.get(card_id) is Reach.HAND:
+                legal[card_id] = Reach.HAND
+    return legal
+
+
+def opponent_line_reach(ctx: EvaluationModel) -> Mapping[int, float]:
+    if ctx.opponent is None:
+        return {}
+    ids = {evo_id for line in _forward_lines().values() for evo_id in line}
+    return {evo_id: sum(candidate.probability * candidate.resources.get(evo_id, 0.0)
+                        for candidate in ctx.opponent.candidates)
+            for evo_id in ids
+            if any(candidate.resources.get(evo_id, 0.0)
+                   for candidate in ctx.opponent.candidates)}
+
+
+def _held_fetch_reaches(hand, turn, target, ctx: EvaluationModel) -> bool:
+    for card in hand:
+        facts = ctx.facts(card.card_id)
+        if not isinstance(facts, TrainerCard):
+            continue
+        if facts.kind == SUPPORTER and (turn is None or turn.supporter_played):
+            continue
+        if any(clause.kind == "fetch" and clause.zone == "deck"
+               and _fetch_cost_payable(clause, len(hand) - 1)
+               and fetch_target_matches(clause, target)
+               for clause in play_clauses(facts)):
+            return True
+    return False
+
+
+def _fetch_cost_payable(clause, other_hand_cards: int) -> bool:
+    cost = str(clause.cost or "")
+    if cost.startswith("discard_") and cost.removeprefix("discard_").isdigit():
+        return other_hand_cards >= int(cost.removeprefix("discard_"))
+    return not clause.cost_required or cost in {"", "discard_hand"}
 
 
 def _unfilled(cost, attached: Counter) -> tuple[Counter, int]:
@@ -222,13 +304,17 @@ def _slot_fill(unit: int, body_facts, attached, ctx: EvaluationModel, reach=None
     forward line), a colorless slot (own attacks in full; a line evolution's only through a
     positive reach gate), or nothing."""
     counts = Counter(attached)
-    for attack in _line_attacks(body_facts, ctx):
+    gates = reach or {}
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        if (evo_id is not None
+                and _reach_scale(gates.get(evo_id, Reach.ABSENT)) <= 0.0):
+            continue
         open_typed, _ = _unfilled(attack.cost, counts)
         if open_typed.get(unit, 0) > 0:
             return "typed"
-    gates = reach or {}
     for attack, evo_id in _line_entries(body_facts, ctx):
-        if evo_id is not None and not gates.get(evo_id, 0.0):
+        if (evo_id is not None
+                and _reach_scale(gates.get(evo_id, Reach.ABSENT)) <= 0.0):
             continue
         _, open_colorless = _unfilled(attack.cost, counts)
         if open_colorless > 0:
@@ -267,45 +353,6 @@ def best_payable_damage(attacker_facts, attached, defender_facts) -> int:
     return best
 
 
-def projected_incoming_damage(attacker_facts, attached, defender_facts,
-                              ctx: EvaluationModel) -> int:
-    """The conservative next-turn read (ADR-0152): before the opponent's active attacks it
-    gets ONE more Energy (of whatever color is still missing) and may evolve ONCE, attached
-    units carried up. Largest damage any such attacker lands on the defender."""
-    counts = Counter(attached)
-    candidates = [attacker_facts]
-    name = getattr(attacker_facts, "name", None)
-    if name:
-        for evo_id in _forward_lines().get(name, ()):
-            evo = ctx.facts(evo_id)
-            # Once means the DIRECT evolution only — a Basic does not become the stage 2.
-            if evo is not None and getattr(evo, "evolves_from", None) == name:
-                candidates.append(evo)
-    best = 0
-    for facts in candidates:
-        attacker_type = getattr(facts, "energy_type", None)
-        for attack in getattr(facts, "attacks", ()) or ():
-            open_typed, open_colorless = _unfilled(attack.cost, counts)
-            if sum(open_typed.values()) + open_colorless > 1:
-                continue
-            damage = int(getattr(attack, "damage", 0) or 0)
-            if damage > 0:
-                best = max(best, _wr_adjusted(damage, attacker_type, defender_facts))
-    return best
-
-
-def top_attack_cost(body_facts, ctx: EvaluationModel, reach=None) -> int:
-    """The largest attack cost this body can grow into: its own attacks in full, a line
-    evolution's only through a positive reach gate (ADR-0150's concentration target)."""
-    gates = reach or {}
-    best = 0
-    for attack, evo_id in _line_entries(body_facts, ctx):
-        if evo_id is not None and not gates.get(evo_id, 0.0):
-            continue
-        best = max(best, len(attack.cost))
-    return best
-
-
 def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> float:
     """The largest attached-unit count any single attack absorbs — typed and colorless slots
     for the body's own attacks; for the forward line's, typed in full and colorless scaled by
@@ -321,11 +368,33 @@ def usable_units(body_facts, attached, ctx: EvaluationModel, reach=None) -> floa
         typed = sum(min(count, counts.get(unit, 0))
                     for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
         colorless_slots = min(sum(1 for u in attack.cost if u == COLORLESS), total - typed)
-        scale = 1.0 if evo_id is None else gates.get(evo_id, 0.0)
-        best = max(best, typed + colorless_slots * scale)
+        status = Reach.HAND if evo_id is None else gates.get(evo_id, Reach.ABSENT)
+        scale = _reach_scale(status)
+        best = max(best, (typed + colorless_slots) * scale)
         if best >= total:
             return total
     return best
+
+
+def development_reach_units(body_facts, attached, ctx: EvaluationModel, reach=None):
+    counts = Counter(attached)
+    total = sum(counts.values())
+    visible = future = 0.0
+    for attack, evo_id in _line_entries(body_facts, ctx):
+        if evo_id is None:
+            continue
+        status = (reach or {}).get(evo_id, Reach.ABSENT)
+        typed = sum(min(count, counts.get(unit, 0))
+                    for unit, count in Counter(u for u in attack.cost if u != COLORLESS).items())
+        colorless = min(sum(1 for unit in attack.cost if unit == COLORLESS), total - typed)
+        units = typed + colorless
+        if status in {Reach.HAND, Reach.FETCHABLE}:
+            visible = max(visible, units)
+        elif status is Reach.NEXT_TURN:
+            future = max(future, units)
+        elif isinstance(status, (int, float)):
+            future = max(future, units * max(0.0, min(1.0, float(status))))
+    return visible, future
 
 
 # --- demand -----------------------------------------------------------------------------
@@ -339,64 +408,57 @@ class Demand:
     hand_name_counts: Mapping[str, int]
     bodies: tuple = ()
     free_bench: int = 0
+    hand: tuple = ()
+    turn: object = None
 
     @classmethod
-    def read(cls, side, ctx: EvaluationModel) -> "Demand":
+    def read(cls, side, ctx: EvaluationModel, turn=None) -> "Demand":
         bodies = side.bodies
         names = Counter(facts.name for body in bodies
                         if (facts := ctx.facts(body.card.card_id)) is not None)
-        hand_names = Counter(facts.name for card in side.hand
+        hand_names = Counter(facts.name for card in (side.hand or ())
                              if (facts := ctx.facts(card.card_id)) is not None)
         return cls(body_name_counts=names,
                    body_id_counts=Counter(body.card.card_id for body in bodies),
                    hand_name_counts=hand_names, bodies=bodies,
-                   free_bench=max(0, side.bench_max - len(side.bench)))
-
-
-def demand_scale(card_id: int, facts, demand: Demand, copies_before: int,
-                 ctx: EvaluationModel, deck_counts) -> float:
-    """The multiplier demand puts on this copy's hand/deck worth (1.0 = fully live)."""
-    weights = ctx.weights
-    scale, capacity = _liveness(card_id, facts, demand, ctx, deck_counts)
-    if capacity is not None and copies_before >= capacity:
-        scale *= weights.surplus_copy ** (copies_before - capacity + 1)
-    return scale
+                   free_bench=max(0, side.bench_max - len(side.bench)),
+                   hand=tuple(side.hand or ()), turn=turn)
 
 
 def _liveness(card_id, facts, demand: Demand, ctx: EvaluationModel, deck_counts):
-    """(demand multiplier for the card's enabling condition, copies the board can consume);
-    colorless-only energy is a lesser want than one filling a typed slot."""
-    weights = ctx.weights
+    """Semantic demand state and number of copies the board can consume."""
     if facts is None:
-        return 1.0, None
+        return DemandState.LIVE, None
     if isinstance(facts, PokemonCard):
         if facts.evolves_from is None:
             live = demand.free_bench > 0
-            return (1.0 if live else weights.demand_dead), max(1, demand.free_bench)
+            return (DemandState.LIVE if live else DemandState.DEAD), max(1, demand.free_bench)
         targets = demand.body_name_counts.get(facts.evolves_from, 0)
         if targets:
-            return 1.0, max(1, targets)
+            return DemandState.LIVE, max(1, targets)
         # The pair term: base in HAND is setup pending — worth more together than apart.
         if demand.hand_name_counts.get(facts.evolves_from, 0):
-            return weights.demand_setup, 1
-        return weights.demand_dead, 1
+            return DemandState.SETUP, 1
+        return DemandState.DEAD, 1
     if isinstance(facts, EnergyCard):
-        reach = line_reach(demand.hand_name_counts, deck_counts, ctx)
+        reach = line_reach(demand.hand_name_counts, deck_counts, ctx,
+                           hand=demand.hand, turn=demand.turn)
         colorless_only = False
         for body in demand.bodies:
+            body_reach = legal_line_reach(body, reach, ctx, demand.hand, demand.turn)
             fills = _slot_fill(facts.provides, ctx.facts(body.card.card_id),
-                               body.energies, ctx, reach)
+                               body.energies, ctx, body_reach)
             if fills == "typed" or _multi_provision_live(facts, body, ctx):
-                return 1.0, None
+                return DemandState.LIVE, None
             colorless_only = colorless_only or fills == "colorless"
-        return (weights.demand_colorless_only if colorless_only
-                else weights.demand_dead), None
+        return (DemandState.COLORLESS_ONLY if colorless_only
+                else DemandState.DEAD), None
     if isinstance(facts, TrainerCard):
         clauses = tuple(getattr(facts, "clauses", ()) or ())
         fetches = tuple(c for c in clauses if c.kind == "fetch" and c.zone == "deck")
         if fetches and len(fetches) == len(clauses):
             return _fetch_liveness(fetches, demand, ctx, deck_counts), None
-    return 1.0, None
+    return DemandState.LIVE, None
 
 
 def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:
@@ -419,40 +481,25 @@ def _multi_provision_live(facts, body, ctx: EvaluationModel) -> bool:
     return False
 
 
-def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) -> float:
-    """A deck fetch is exactly as live as its BEST reachable target — a multiplier compare,
-    never a truthiness read (a dead multiplier is still truthy)."""
+def _fetch_liveness(fetches, demand: Demand, ctx: EvaluationModel, deck_counts) -> DemandState:
+    """A deck fetch is as live as its best reachable target."""
     if deck_counts is None:
-        return 1.0
-    best = ctx.weights.demand_dead
+        return DemandState.LIVE
+    best = DemandState.DEAD
     for target_id, count in deck_counts:
         if count <= 0:
             continue
         target = ctx.facts(target_id)
-        if not _fetchable(fetches, target):
+        if not any(fetch_target_matches(clause, target, reading=DEADNESS)
+                   for clause in fetches):
             continue
-        scale, _ = _liveness(target_id, target, demand, ctx, None)
-        best = max(best, scale)
-        if best >= 1.0:
+        state, _ = _liveness(target_id, target, demand, ctx, None)
+        if _DEMAND_PRIORITY[state] > _DEMAND_PRIORITY[best]:
+            best = state
+        if best is DemandState.LIVE:
             break
     return best
 
-
-def _fetchable(fetches, target) -> bool:
-    if target is None:
-        return False
-    for clause in fetches:
-        wants = clause.target
-        if wants in (None, "card"):
-            return True
-        if wants == "pokemon" and isinstance(target, PokemonCard):
-            return True
-        if wants == "energy" and isinstance(target, EnergyCard):
-            return True
-        if wants == "trainer" and isinstance(target, TrainerCard):
-            return True
-    return False
-
-
-__all__ = ("Demand", "EvaluationModel", "any_attack_payable", "base_worth", "demand_scale",
-           "line_reach", "unit_fills_a_slot", "usable_units")
+__all__ = ("ArchetypeBelief", "Demand", "EvaluationModel", "OpponentBeliefs",
+           "any_attack_payable", "legal_line_reach", "line_reach", "opponent_line_reach",
+           "unit_fills_a_slot", "usable_units")

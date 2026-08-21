@@ -1,8 +1,7 @@
 """Rank cards by real usage across stored meta episodes — "what actually shows up".
 
 Pure & lib-free: the caller passes the episode dicts (from ``store.load_episodes``). Used to
-prioritise the function-tag verification toward the cards that decide games (see
-``tools/verify_meta_cards.py``).
+prioritise card-fact verification toward the cards that decide games.
 """
 from __future__ import annotations
 

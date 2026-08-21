@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Firebreather',
     kind=SUPPORTER,
     text='Search your deck for up to 7 Basic {R} Energy cards, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search', 'tutor_energy']),
 )

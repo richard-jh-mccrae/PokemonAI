@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Search your deck for up to 3 Stage 1 Pokémon, reveal them, and put them into your hand. Then, shuffle your deck.',
     ace_spec=True,
-    tags=frozenset([]),
     clauses=(Clause('fetch', target='stage1', zone='deck', amount=3),),
     covers='full',
 )

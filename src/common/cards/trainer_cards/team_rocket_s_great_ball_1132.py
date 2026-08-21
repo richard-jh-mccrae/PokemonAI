@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Team Rocket's Great Ball",
     kind=ITEM,
     text='Search your deck for a Trainer card, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='trainer', zone='deck'),),
     covers='full',
 )

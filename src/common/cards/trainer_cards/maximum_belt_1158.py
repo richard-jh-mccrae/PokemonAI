@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=TOOL,
     text='Attacks used by the Pokémon this card is attached to do 50 more damage to your opponent’s Active Pokémon {ex} (before applying Weakness and Resistance).',
     ace_spec=True,
-    tags=frozenset([]),
     clauses=(Clause('damage_boost', amount=50, applies_to='attached_body', target='opponent_active', target_class='ex', timing='before_weakness_resistance'),),
     covers='full',
 )

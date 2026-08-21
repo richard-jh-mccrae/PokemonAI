@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Energy Search',
     kind=ITEM,
     text='Search your deck for a Basic Energy card, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search', 'tutor_energy']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck'),),
     covers='full',
 )

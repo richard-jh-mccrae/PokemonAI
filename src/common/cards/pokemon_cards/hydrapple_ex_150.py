@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=FIRE,
     retreat_cost=3,
-    tags=frozenset([]),
     default_roles=('primary_attacker', 'accel_source'),
     covers='full',
     abilities=(

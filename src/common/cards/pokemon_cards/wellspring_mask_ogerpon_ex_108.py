@@ -11,7 +11,6 @@ CARD = PokemonCard(
     tera=True,
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

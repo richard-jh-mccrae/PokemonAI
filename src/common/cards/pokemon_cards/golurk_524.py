@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=4,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=747,

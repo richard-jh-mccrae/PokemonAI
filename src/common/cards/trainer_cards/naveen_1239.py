@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Naveen',
     kind=SUPPORTER,
     text='Draw cards until you have 5 cards in your hand. Before drawing cards, you may discard any number of cards from your hand. (If you can’t draw any cards in this way, you can’t use this card.)',
-    tags=frozenset(['draw']),
     clauses=(Clause('draw', to_hand_size=5),),
     covers='partial',
 )

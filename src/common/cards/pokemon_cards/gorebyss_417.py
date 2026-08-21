@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Clamperl',
     weakness=LIGHTNING,
     retreat_cost=1,
-    tags=frozenset(['energy_accel']),
     attacks=(
         Attack(
             attack_id=586,

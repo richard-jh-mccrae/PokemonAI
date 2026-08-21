@@ -10,8 +10,7 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=0,
-    tags=frozenset([]),
-    default_roles=('accel_source', 'disruption_target'),
+    default_roles=('accel_source',),
     attacks=(
         Attack(
             attack_id=242,

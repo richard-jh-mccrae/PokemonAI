@@ -10,8 +10,7 @@ CARD = PokemonCard(
     evolves_from='Grookey',
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset(['search']),
-    default_roles=('backup_attacker', 'disruption_target'),
+    default_roles=('backup_attacker',),
     covers='full',
     abilities=(
         Ability(

@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='You can use this card only if you discard 3 other cards from your hand.\n\nSearch your deck for an Item card, a Pokémon Tool card, a Supporter card, and a Stadium card, reveal them, and put them into your hand. Then, shuffle your deck.',
     ace_spec=True,
-    tags=frozenset(['search']),
     clauses=(Clause('fetch', target='item', zone='deck', cost='discard_3', cost_required=True), Clause('fetch', target='stadium', zone='deck', cost='discard_3', cost_required=True), Clause('fetch', target='supporter', zone='deck', cost='discard_3', cost_required=True), Clause('fetch', target='tool', zone='deck', cost='discard_3', cost_required=True)),
     covers='full',
 )

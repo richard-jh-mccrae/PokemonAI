@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=PSYCHIC,
     retreat_cost=0,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     attacks=(
         Attack(

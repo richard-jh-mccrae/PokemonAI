@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Call Bell',
     kind=ITEM,
     text='You can use this card only if you go second, and only during your first turn.\n\nSearch your deck for a Supporter card, reveal it, and put it into your hand. Then, shuffle your deck.',
-    tags=frozenset([]),
     clauses=(Clause('fetch', target='supporter', zone='deck', condition='going_second_first_turn'),),
     covers='full',
 )

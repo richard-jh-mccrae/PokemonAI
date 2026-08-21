@@ -1,15 +1,15 @@
-"""The Ledger's training loop: nudge general weights, keep the best, adopt only clean gains.
+"""The Ledger's training loop: nudge general coefficients, keep the best, adopt clean gains.
 
 The plan's §7 method (nudge / keep-best-so-far / adoption gate), re-pointed at the Ledger's
-weight vector. Each candidate is a full corpus sweep through the live brain; a candidate is
+Valuation Configuration. Each candidate is a full corpus sweep through the live brain; a candidate is
 adopted only when the generality floor (worst deck, never the average) does not drop, total
 agreement rises, and NO frame that agreed under the best-so-far vector flips to a miss — the
 zero-regressions half of the plan's done bar, enforced per nudge. Greedy passes repeat until
-a full pass adopts nothing. The adopted overrides are printed and reported; committing them
-means editing `LedgerWeights`' defaults (the general vector lives in code, not config).
+a full pass adopts nothing. The adopted values are printed and reported; committing them
+means editing the Feature Catalog defaults.
 
-    python tools/train/ledger_tune.py --lever zone_in_hand=0.55,0.75
-        --lever tag.recycle=0.05,0.10 [--decks ...] [--workers N] [--report PATH]
+    python tools/train/ledger_tune.py --lever zone.in_hand=0.55,0.75
+        --lever role.primary_attacker=0.45,0.55 [--decks ...] [--workers N]
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import sys
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from common.ledger import LedgerWeights  # noqa: E402
+from common.ledger import ValuationConfiguration  # noqa: E402
 from train.ledger_corpus import DECKS, sweep  # noqa: E402
 
 DEFAULT_REPORT_DIR = REPO / "docs" / "tuning" / "runs"
@@ -50,7 +50,8 @@ def run(*, levers: dict[str, list[float]], store, decks=DECKS, workers: int = 1,
         max_passes: int = 4, log=print) -> dict:
     """Greedy coordinate nudging. Returns {"adopted": overrides, "baseline": …, "best": …,
     "trials": […]} — every trial is recorded, adopted or not, so the report is the audit."""
-    LedgerWeights().resolve({name: values[0] for name, values in levers.items()})  # fail fast
+    ValuationConfiguration.general().with_values(
+        {name: values[0] for name, values in levers.items()})
     baseline = sweep(store=store, decks=decks, workers=workers)
     best, best_score = baseline, _score(baseline)
     _, best_agreed = _agree_sets(baseline)
@@ -104,8 +105,8 @@ def render_report(outcome: dict, levers: dict) -> str:
         f"- adopted:  {_fmt(outcome['adopted'])}",
         f"- frames fixed ({len(fixed)}): " + (", ".join(f"`{f}`" for f in fixed) or "-"),
         "",
-        "Adoption means editing `LedgerWeights`' defaults to the adopted values — the",
-        "general vector lives in code. Zero-regression gate enforced per nudge.",
+        "Adoption means editing the Feature Catalog defaults to the adopted values.",
+        "Zero-regression gate enforced per nudge.",
         "",
         "| pass | lever | value | floor | agrees | regressions | verdict |",
         "|---|---|---|---|---|---|---|",

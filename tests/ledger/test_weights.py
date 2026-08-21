@@ -1,41 +1,26 @@
-"""The weight vector: overrides bend named entries, typos refuse to train nothing."""
+"""The configured Feature Catalog: complete vectors, residual overlays, loud typos."""
 from __future__ import annotations
 
 import pytest
 
-from common.ledger import LedgerWeights
+from common.ledger import DeckOverlay, ValuationConfiguration
 
 
-def test_scalar_and_tier_overrides_resolve():
-    weights = LedgerWeights().resolve({
-        "zone_in_hand": 0.5, "prize_race": 1.2,
-        "role.primary_attacker": 0.8, "tag.draw": 0.3, "kind.item": 0.2, "card.121": 0.9})
-    assert weights.zone_in_hand == 0.5
-    assert weights.prize_race == 1.2
-    assert weights.role_worth["primary_attacker"] == 0.8
-    assert weights.tag_worth["draw"] == 0.3
-    assert weights.kind_worth["item"] == 0.2
-    assert weights.card_worth_map[121] == 0.9
+def test_absolute_training_values_and_deck_residuals_are_distinct():
+    general = ValuationConfiguration.general().with_values({"zone.in_hand": 0.5})
+    configured = general.resolve(DeckOverlay({"zone.in_hand": 0.2}))
+
+    assert general["zone.in_hand"] == 0.5
+    assert configured["zone.in_hand"] == 0.7
 
 
-def test_unknown_override_key_raises():
-    with pytest.raises(KeyError):
-        LedgerWeights().resolve({"zone_in_pocket": 1.0})
-
-
-def test_tier_name_typos_raise_instead_of_training_nothing():
-    for typo in ("role.primary_atacker", "kind.itme", "tag.draaw"):
+def test_unknown_feature_raises():
+    for typo in ("zone.in_pocket", "role.primary_atacker", "kind.itme", "tag.draw"):
         with pytest.raises(KeyError):
-            LedgerWeights().resolve({typo: 1.0})
+            ValuationConfiguration.general().with_values({typo: 1.0})
 
 
-def test_vocabulary_names_absent_from_the_defaults_still_resolve():
-    weights = LedgerWeights().resolve({"tag.shuffle_hand": 0.2})
-    assert weights.tag_worth["shuffle_hand"] == 0.2
-
-
-def test_identity_tracks_the_resolved_vector():
-    base = LedgerWeights()
-    assert base.identity == LedgerWeights().identity
-    assert base.identity != base.resolve({"prize_race": 2.0}).identity
-    assert base.resolve(None) is base
+def test_identity_tracks_complete_resolved_vector():
+    base = ValuationConfiguration.general()
+    assert base.identity == ValuationConfiguration.general().identity
+    assert base.identity != base.with_values({"prize.race": 2.0}).identity

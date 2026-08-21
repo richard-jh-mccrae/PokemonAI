@@ -10,8 +10,7 @@ CARD = PokemonCard(
     mega_ex=True,
     weakness=FIGHTING,
     retreat_cost=3,
-    tags=frozenset(['dig:2', 'draw', 'stall']),
-    default_roles=('primary_attacker', 'disruption_target'),
+    default_roles=('primary_attacker',),
     covers='full',
     abilities=(
         Ability(

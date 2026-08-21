@@ -7,5 +7,4 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Switch your Active Pokémon with 1 of your Benched Pokémon. If you do, you may move any amount of Energy from the Pokémon you moved to your Bench to the new Active Pokémon.',
     ace_spec=True,
-    tags=frozenset(['switch']),
 )

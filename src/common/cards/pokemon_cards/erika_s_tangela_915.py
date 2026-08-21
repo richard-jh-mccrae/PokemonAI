@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset(['paralyze', 'search']),
     abilities=(
         Ability(
             name='Gathering of Blossoms',

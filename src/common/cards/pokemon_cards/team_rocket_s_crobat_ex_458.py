@@ -12,7 +12,6 @@ CARD = PokemonCard(
     weakness=LIGHTNING,
     resistance=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Biting Spree',

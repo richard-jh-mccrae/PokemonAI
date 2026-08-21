@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Dwebble',
     weakness=FIRE,
     retreat_cost=3,
-    tags=frozenset(['prevent_ex_damage']),
     default_roles=('primary_attacker',),
     covers='full',
     abilities=(

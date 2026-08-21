@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Houndour",
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset(['team_rocket']),
     attacks=(
         Attack(
             attack_id=573,

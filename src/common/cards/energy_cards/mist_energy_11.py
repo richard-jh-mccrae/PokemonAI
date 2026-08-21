@@ -7,7 +7,6 @@ CARD = EnergyCard(
     kind=SPECIAL_ENERGY,
     provides=COLORLESS,
     text='As long as this card is attached to a Pokémon, it provides {C} Energy.\n\nPrevent all effects of attacks used by your opponent’s Pokémon done to the Pokémon this card is attached to.\xa0(Existing effects are not removed. Damage is not an effect.)',
-    tags=frozenset([]),
     clauses=(Clause('energy_provide', amount=1, type='colorless'), Clause('prevent_effects', applies_to='attached_body', source='opponent_attack')),
     covers='full',
 )

@@ -16,7 +16,8 @@ ROLES = Roles({
 STRATEGY = Strategy(
     name="mega_starmie",
     roles=ROLES,
-    ledger_overrides={"demand_dead": 0.40, "kind.special_energy": 0.10},
+    ledger_overlay={"demand.dead": 0.15, "kind.special_energy": 0.05,
+                    "energy.concentration": 0.02},
     starter_priority=(CINDERACE, STARYU),
     prize_plan=PrizePlan(routes=(
         (CINDERACE, MEGA_STARMIE_EX, MEGA_STARMIE_EX),

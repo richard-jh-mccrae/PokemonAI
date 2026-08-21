@@ -11,7 +11,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=GRASS,
     retreat_cost=4,
-    tags=frozenset(['search']),
     abilities=(
         Ability(
             name='Mammoth Hauler',

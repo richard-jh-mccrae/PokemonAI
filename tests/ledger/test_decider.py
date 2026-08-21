@@ -4,10 +4,8 @@ A fake provider returns prepared algebra nodes, so these pin the POLICY (turn sp
 argmax, chain resolution, refresh sampling determinism) without an engine in the loop."""
 from __future__ import annotations
 
-from observation_builders import build_observation, advance_observation
-
 from ledger_helpers import (DARK_E, DARKNESS, DRAGAPULT, DRAKLOAK, DREEPY, FIRE, FIRE_E,
-                            HARLEQUIN, LILLIES, PSYCHIC, ScriptedProvider, action, body,
+                            HARLEQUIN, LILLIES, PSYCHIC, PSYCHIC_E, ScriptedProvider, action, body,
                             player, printout)
 
 import pytest
@@ -24,7 +22,7 @@ def make_decider(provider, deck=(DRAGAPULT, FIRE_E, DARK_E) * 20, sink=None):
 
 
 def state_of(observation, deck):
-    identity = f"ledger:{EvaluationModel.build().weights.identity}"
+    identity = f"ledger:{EvaluationModel.build().behavior_identity}"
     return DecisionState.from_observation(observation, deck=tuple(deck), deck_name="test",
                                           value_registry_identity=identity)
 
@@ -123,9 +121,9 @@ def test_forced_chain_resolves_to_the_best_leaf():
     assert decision.value > 0
 
 
-def test_refresh_pricing_is_deterministic_and_reports_no_false_gaps():
+def test_refresh_pricing_is_deterministic_and_reports_missing_successor_inventory():
     """Lillie's through the sampled-hand chance model: same frame, same price, every time —
-    and a fully-modelled frame reports an empty gap list."""
+    and an incomplete scripted successor inventory reports its coverage gap."""
     hand = [LILLIES, DARK_E, DARK_E]
     root_obs = printout(me=player(active=body(DRAGAPULT, 1, energies=(FIRE, PSYCHIC)),
                                   hand=hand, deck_count=40),
@@ -142,7 +140,7 @@ def test_refresh_pricing_is_deterministic_and_reports_no_false_gaps():
     prices = {entry["action"]: entry["swing"] for entry in first.diagnostics["prices"]}
     again = {entry["action"]: entry["swing"] for entry in second.diagnostics["prices"]}
     assert prices == again
-    assert first.diagnostics["gaps"] == []
+    assert "continuation action inventory unavailable: KeyError" in first.diagnostics["gaps"]
 
 
 def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
@@ -167,9 +165,7 @@ def test_lillies_prices_higher_when_the_hand_it_shuffles_away_is_dead():
                 for entry in decision.diagnostics["prices"]}[str(play.identity)]
 
     context = EvaluationModel.build()
-    from common.ledger.worth import base_worth
-    assert (base_worth(DARK_E, context.facts(DARK_E), context)
-            == base_worth(FIRE_E, context.facts(FIRE_E), context))
+    assert context.facts(DARK_E).kind == context.facts(FIRE_E).kind
     dead_hand = [DARK_E, DARK_E]        # Dreepy has no dark or colorless slot: dead cards
     live_hand = [FIRE_E, FIRE_E]        # fire fills Bite's typed partner slot on Dreepy
     assert swing_of(dead_hand) > swing_of(live_hand) + 0.05
@@ -211,20 +207,26 @@ def test_unknown_node_decides_anyway_and_sinks_the_gap():
     assert records and any("mystery clause" in gap for gap in records[0]["gaps"])
 
 
-def test_equal_swings_break_to_the_lowest_engine_selection():
-    """Two plays land on the SAME successor: identical swings, so the replayable total order
-    must pick the lower selection no matter how the menu lists them."""
-    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E, FIRE_E]),
-                        them=player(own=False, active=body(DRAGAPULT, 2)))
-    attached = state_of(printout(
-        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[FIRE_E]),
-        them=player(own=False, active=body(DRAGAPULT, 2))), DECK)
-    first, second, end = action("attach", (0,)), action("attach", (1,)), action("end", (2,))
-    nodes = {("root", first.identity): Deterministic(attached),
-             ("root", second.identity): Deterministic(attached)}
-    for menu in ((first, second, end), (second, first, end)):
-        provider = ScriptedProvider(menus={"root": menu}, nodes=nodes)
-        assert make_decider(provider).decide(root_obs).chosen == (0,)
+def test_equal_swings_use_a_reproducible_neutral_lottery():
+    from common.api import ActionIdentity
+    from common.ledger.preview import OptionPrice
+    from types import SimpleNamespace
+
+    first = OptionPrice(SimpleNamespace(
+        selection=[0], identity=ActionIdentity("attach", ("candidate-a",))), 0.1, False, ())
+    second = OptionPrice(SimpleNamespace(
+        selection=[1], identity=ActionIdentity("attach", ("candidate-b",))), 0.1, False, ())
+    decider = make_decider(provider=None)
+
+    chosen = decider._choose((first, second), forced=False)
+    relabeled = (
+        OptionPrice(SimpleNamespace(selection=[0], identity=ActionIdentity("play", (999,))),
+                    0.1, False, ()),
+        OptionPrice(SimpleNamespace(selection=[1], identity=ActionIdentity("attack", (1,))),
+                    0.1, False, ()),
+    )
+    assert decider._choose((first, second), forced=False) is chosen
+    assert decider._choose(relabeled, forced=False).action.selection == chosen.action.selection
 
 
 def test_a_menu_with_no_ender_takes_the_least_bad_option():
@@ -307,18 +309,14 @@ def _price(kind, index, swing, *, ends=False, refresh=False):
 
     return OptionPrice(
         SimpleNamespace(selection=[index], identity=SimpleNamespace(kind=kind)),
-        swing, ends, (), refresh=refresh)
+        swing, ends, ())
 
 
-def test_a_positive_hand_shuffle_waits_for_other_positive_plays():
-    """A Refresh is a hand-ender: playing it first shuffles away the cards every other
-    positive hand play wanted, so among positive turn-continuing options the shuffle goes
-    last — the same lesson as attack-last, one zone smaller. The shuffle out-pricing the
-    attach is exactly the scenario that bites."""
+def test_continuing_options_rank_only_by_configured_price():
     decider = make_decider(provider=None)
     prices = (_price("attach", 0, 0.05), _price("play", 1, 0.40, refresh=True),
               _price("end", 2, 0.0, ends=True))
-    assert decider._choose(prices, forced=False).action.identity.kind == "attach"
+    assert decider._choose(prices, forced=False).action.identity.kind == "play"
 
 
 def test_a_positive_hand_shuffle_alone_still_gets_played():
@@ -327,8 +325,8 @@ def test_a_positive_hand_shuffle_alone_still_gets_played():
     assert decider._choose(prices, forced=False).action.identity.kind == "play"
 
 
-def test_price_actions_flags_the_root_refresh_node():
-    from common.observation import ObservationState
+def test_price_actions_has_no_mechanic_specific_ordering_flags():
+    from common.observation import KnownOwnPrizes, ObservationStateBuilder
     from common.ledger import PreviewState, evaluate
     from common.ledger.preview import price_actions
 
@@ -344,21 +342,20 @@ def test_price_actions_flags_the_root_refresh_node():
         nodes={("root", attach.identity): Deterministic(attached),
                ("root", play.identity): Refresh(LILLIES, ((6, 0),), False)})
     ctx = EvaluationModel.build()
-    board = build_observation(root_obs, decklist=DECK)
-    state = PreviewState(root_obs, board.seat, "root", deck=DECK,
+    board = ObservationStateBuilder(DECK).root(root_obs)
+    state = PreviewState(root_obs, board, "root", deck=DECK,
                          deck_counts=board.deck_counts or (),
-                         prize_counts=getattr(board.knowledge.own_prizes, "cards", ()))
-    flags = {str(price.action.identity): price.refresh
-             for price in price_actions(state, board, evaluate(board, ctx).total,
-                                        provider, ctx)}
-    assert flags[str(play.identity)] is True
-    assert flags[str(attach.identity)] is False
-    assert flags[str(end.identity)] is False
+                         prize_counts=(board.knowledge.own_prizes.cards
+                                       if isinstance(board.knowledge.own_prizes,
+                                                     KnownOwnPrizes) else ()))
+    prices = price_actions(state, board, evaluate(board, ctx).total, provider, ctx)
+    assert all(not hasattr(price, "refresh") and not hasattr(price, "restocks")
+               for price in prices)
+    assert all(sum(item.value for item in price.footprint.contributions)
+               == pytest.approx(price.swing) for price in prices)
 
 
-def test_act_threshold_hands_a_small_positive_turn_to_the_ender():
-    """The act/pass bar is a lever now: with the threshold above the attach's swing, nothing
-    is worth doing and the best ender decides; at the default 0.0 the attach still acts."""
+def test_action_opportunity_cost_hands_a_small_positive_turn_to_the_ender():
     root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]),
                         them=player(own=False, active=body(DRAGAPULT, 2)))
     attached = state_of(printout(
@@ -368,54 +365,48 @@ def test_act_threshold_hands_a_small_positive_turn_to_the_ender():
     provider = ScriptedProvider(
         menus={"root": (attach, end)},
         nodes={("root", attach.identity): Deterministic(attached)})
-    lifted = LedgerDecider(DECK, "test", EvaluationModel.build(overrides={"act_threshold": 5.0}),
+    from common.ledger import DeckOverlay
+    lifted = LedgerDecider(DECK, "test", EvaluationModel.build(
+        overlay=DeckOverlay({"action.opportunity_cost": 5.0})),
                            provider_factory=lambda _s, **_kw: provider).decide(root_obs)
     assert lifted.action.kind == "end"
     default = make_decider(provider).decide(root_obs)
     assert default.action.kind == "attach"
 
 
-def test_fetch_plays_queue_behind_a_positive_hand_shuffle():
-    """The owner's ordering doctrine: shuffle, THEN fetch — a card fetched into a hand about
-    to be shuffled is a wasted fetch. Spend-from-hand plays still go first."""
-    from dataclasses import replace as dc_replace
+def test_continuation_footprint_compares_successor_legal_actions():
+    root_obs = printout(me=player(active=body(DRAGAPULT, 1), hand=[FIRE_E]))
+    successor = state_of(printout(
+        me=player(active=body(DRAGAPULT, 1, energies=(FIRE,)), hand=[])), DECK)
+    attach, attack, end = action("attach", (0,)), action("attack", (1,)), action("end", (2,))
+    provider = ScriptedProvider(
+        menus={"root": (attach, end), successor.semantic_key: (attack, end)},
+        nodes={("root", attach.identity): Deterministic(successor)})
 
+    decision = make_decider(provider).decide(root_obs)
+    price = next(row for row in decision.diagnostics["prices"]
+                 if row["action"] == str(attach.identity))
+    footprint = price["continuation"]
+    assert "attack" in footprint["opportunities_created"]
+    assert "end" in footprint["opportunities_preserved"]
+    assert "attach" in footprint["opportunities_consumed"]
+
+
+def test_no_card_or_mechanic_specific_ordering_branch_remains():
     decider = make_decider(provider=None)
     attach = _price("attach", 0, 0.05)
-    fetch = dc_replace(_price("play", 1, 0.10), restocks=True)
+    fetch = _price("play", 1, 0.10)
     shuffle = _price("play", 2, 0.40, refresh=True)
     end = _price("end", 3, 0.0, ends=True)
 
     assert decider._choose((attach, fetch, shuffle, end),
-                           forced=False).action.selection == [0]   # spend first
+                           forced=False).action.selection == [2]
     assert decider._choose((fetch, shuffle, end),
                            forced=False).action.selection == [2]   # shuffle before fetch
     assert decider._choose((fetch, end),
                            forced=False).action.selection == [1]   # no shuffle: fetch normal
 
 
-def test_restock_classification_reads_the_played_cards_tags():
-    """The played card id is read from the canonical identity parts — raw select options
-    reference hand cards by position only."""
-    import json as json_mod
-    from types import SimpleNamespace
-
-    from common.cards import card_store
-
-    fetcher_id = next(card_id for card_id, card in sorted(card_store().items())
-                      if {"recycle", "recycle_line"}.intersection(
-                          getattr(card, "tags", ()) or ()))
+def test_decider_has_no_restock_classifier():
     decider = make_decider(provider=None)
-
-    from common.ledger.preview import OptionPrice
-
-    def play_price(card_id, kind="play"):
-        part = json_mod.dumps([0, {"type": 7},
-                               [[2, {"id": card_id, "playerIndex": 0}]]])
-        action = SimpleNamespace(selection=[0],
-                                 identity=SimpleNamespace(kind=kind, parts=(part,)))
-        return OptionPrice(action, 0.1, False, ())
-
-    assert decider._restocks_hand(play_price(fetcher_id)) is True
-    assert decider._restocks_hand(play_price(999999)) is False
-    assert decider._restocks_hand(play_price(fetcher_id, kind="attach")) is False
+    assert not hasattr(decider, "_restocks_hand")

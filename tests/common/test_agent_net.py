@@ -174,7 +174,7 @@ def _mega_starmie_runtime():
             (REPO / "src" / "agents" / "mega_starmie" / "deck.csv").read_text().splitlines()
             if value.strip()]
     return runtime_module.build_runtime(
-        strategy, deck, stats=None, functions=None, scout=None, briefs=[])
+        strategy, deck, stats=None, scout=None, briefs=[])
 
 
 def test_pregame_draw_count_survives_a_dense_non_number_option():

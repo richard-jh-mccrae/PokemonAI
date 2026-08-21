@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Hop’s Wooloo',
     weakness=FIGHTING,
     retreat_cost=2,
-    tags=frozenset([]),
     covers='full',
     abilities=(
         Ability(

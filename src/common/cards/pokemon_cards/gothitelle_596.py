@@ -11,7 +11,6 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['hand_disruption']),
     abilities=(
         Ability(
             name='Distorted Future',

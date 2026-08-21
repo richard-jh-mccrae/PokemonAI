@@ -6,6 +6,5 @@ CARD = TrainerCard(
     name='Air Balloon',
     kind=TOOL,
     text='The Retreat Cost of the Pokémon this card is attached to is {C}{C} less.',
-    tags=frozenset(['tool']),
     clauses=(Clause('retreat_reduction', amount=2),),
 )

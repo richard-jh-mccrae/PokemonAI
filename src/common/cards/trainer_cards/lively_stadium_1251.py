@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Lively Stadium',
     kind=STADIUM,
     text='Each Basic Pokémon in play (both yours and your opponent’s) gets +30 HP.',
-    tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='hp_delta', amount=30, applies_to='basic', symmetric=True),),
     covers='full',
 )

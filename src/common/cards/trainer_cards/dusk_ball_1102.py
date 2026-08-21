@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Dusk Ball',
     kind=ITEM,
     text='Look at the bottom 7 cards of your deck. You may reveal a Pokémon you find there and put it into your hand. Shuffle the other cards back into your deck.',
-    tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='pokemon', zone='deck', dig=7, dig_from='bottom'),),
     covers='full',
 )

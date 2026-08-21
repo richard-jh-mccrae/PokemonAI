@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Pokémon Catcher',
     kind=ITEM,
     text='Flip a coin. If heads, switch in 1 of your opponent’s Benched Pokémon to the Active Spot.',
-    tags=frozenset(['gust']),
     clauses=(Clause('coin', effect='gust', target='any'),),
     covers='partial',
 )

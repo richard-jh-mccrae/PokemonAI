@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Helioptile',
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset([]),
     abilities=(
         Ability(
             name='Frilled Generator',

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Marnie's Impidimp",
     weakness=GRASS,
     retreat_cost=1,
-    tags=frozenset([]),
     default_roles=('primary_attacker',),
     attacks=(
         Attack(

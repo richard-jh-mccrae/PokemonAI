@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Porygon2",
     weakness=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['draw', 'team_rocket']),
     abilities=(
         Ability(
             name='Reconstitute',

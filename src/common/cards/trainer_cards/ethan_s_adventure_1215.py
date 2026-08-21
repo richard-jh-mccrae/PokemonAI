@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name="Ethan's Adventure",
     kind=SUPPORTER,
     text='Search your deck for up to 3 in any combination of Ethan’s Pokémon and Basic {R} Energy cards, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search', 'tutor_energy']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck', amount=3, energy_type=FIRE, choice=True), Clause('fetch', target='pokemon', zone='deck', amount=3, name_family="Ethan's", choice=True)),
     covers='partial',
 )

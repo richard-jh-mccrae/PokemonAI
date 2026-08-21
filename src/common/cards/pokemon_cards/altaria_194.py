@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=STAGE1,
     evolves_from='Swablu',
     retreat_cost=1,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=260,

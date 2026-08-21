@@ -191,7 +191,7 @@ def test_real_engine_owns_resolution_and_hidden_information_has_an_explicit_boun
     deck = tuple(int(line) for line in (repo / "src" / "agents" / "mega_starmie" /
                                         "deck.csv").read_text().split())
     from bellman_helpers import runtime
-    from common.cards import CardFunctions
+    from deprecated.bellman.tags import CardFunctions
     from deprecated.bellman.effects import CardEffects
     tags = CardFunctions.load()
     stats = runtime().stats

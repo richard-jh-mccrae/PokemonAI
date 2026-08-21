@@ -1,9 +1,11 @@
 # The Ledger: 1-ply Worth-Differencing Decider
 
-**Status:** BUILT (2026-08-20) — steps 1–7 shipped as ADR-0145 (the Ledger + runtime swap) and
+**Status:** SUPERSEDED by Issue #582's canonical Feature Catalog and linear activation model.
+This file preserves the original build plan; its weight-vector and per-Brief override claims are
+historical, not live architecture. Steps 1–7 shipped as ADR-0145 (the Ledger + runtime swap) and
 ADR-0146 (the preview seam). Step 8, the manual training rounds, is UNDERWAY: the grading
 harness was made honest first (ADR-0147 — own-prize anchor, retired rulings), scouting now
-prices the opponent's side with per-Brief overrides (ADR-0148), and the §7 nudge loop is
+originally priced the opponent's side with per-Brief overrides (retired by Issue #582), and the §7 nudge loop was
 rebuilt as `tools/train/ledger_tune.py` (per-nudge zero-regression gate, reports under
 `docs/tuning/runs/`).
 
@@ -28,9 +30,9 @@ same equation and negated.
 - **Usability-dependent multipliers, not flat:** an energy attached to a body whose attacks and
   retreat cannot consume it contributes 0 benefit. The position multiplier asks the card store
   (attack costs, retreat cost, ability fuel) whether the attachment is consumable.
-- **Card worth** comes from the ADR-0143 card store — roles, functions, stage, prize value,
-  clauses — through one general weight vector (tiers/multipliers) plus a thin per-deck override
-  layer. Deck overrides exist only where a deck genuinely breaks the general rule.
+- **Historical design:** card worth came from the ADR-0143 card store through a general weight
+  vector plus per-deck overrides. Issue #582 replaced this with the canonical Feature Catalog,
+  full Valuation Configuration, and own-deck sparse coefficient deltas.
 - **Demand-aware, combination-aware hand worth.** A card in hand is priced against what the
   board is missing, not what the card supplies in the abstract (the ADR-0127 lesson). Pairs
   matter: Rare Candy with its evolution in the same hand outprices either alone. This
@@ -134,21 +136,21 @@ census lesson). The notes are the gap-closing worklist.
 
 - Replay the existing correction frames (all three decks with corrections: mega_starmie,
   mega_lucario, dragapult_ex) through the Ledger. Every
-  disagreement with a human ruling is a training signal: adjust general weights first; reach
+  disagreement with a human ruling was a training signal: adjust general coefficients first; reach
   for a deck tweak only when a deck genuinely dissents from the general rule.
 - **The harness surfaces the ruling's rationale** beside every disagreement: frame, the
   Ledger's pick with its price breakdown, the ruled play, the rationale text. The rationale is
   context — some old rulings may deserve a second look rather than a weight nudge.
 - New blunders from watched games are filed as new correction frames, as today.
 - Tuning method: the documented nudge / keep-best-so-far / adoption-gate methodology,
-  re-pointed at the Ledger's weight vector.
+  re-pointed at the Ledger's canonical valuation configuration.
 - Watched-game batches start with dragapult ex; replay grading covers all decks from day one.
 
 ### Done bar (ends phase 1)
 
 The generality dashboard, then the owner's call:
 
-1. Agreement rate with human rulings per deck — the GENERAL weights alone must clear the bar
+1. Agreement rate with human rulings per deck — the general configuration alone must clear the bar
    on every deck; deck tweaks only polish the remainder.
 2. Zero regressions: frames it already gets right stay right.
 3. A watched batch of full games per deck with no new must-fix blunder filings.

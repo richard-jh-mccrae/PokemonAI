@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Dewott',
     weakness=LIGHTNING,
     retreat_cost=2,
-    tags=frozenset(['switch']),
     abilities=(
         Ability(
             name='Torrential Whirlpool',

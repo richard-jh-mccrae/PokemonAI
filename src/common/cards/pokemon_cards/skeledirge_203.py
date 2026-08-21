@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Crocalor',
     weakness=WATER,
     retreat_cost=3,
-    tags=frozenset([]),
     abilities=(
         Ability(
             name='Unaware',

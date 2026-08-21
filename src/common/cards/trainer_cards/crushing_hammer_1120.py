@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Crushing Hammer',
     kind=ITEM,
     text='Flip a coin. If heads, discard an Energy from 1 of your opponent’s Pokémon.',
-    tags=frozenset(['coin', 'energy_denial']),
     clauses=(Clause('coin', effect='discard_opp_energy', amount=1),),
     covers='full',
 )

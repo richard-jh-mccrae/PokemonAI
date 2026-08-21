@@ -1,6 +1,6 @@
 # ADR-0152 — Brief-deck store records and the doomed-active read
 
-Status: Accepted (2026-08-20); BUILT. Follows ADR-0148/0151; owner's order of the same day.
+Status: Accepted (2026-08-20); doomed projection superseded by Issue #582.
 
 ## Context
 
@@ -35,13 +35,8 @@ for every card the 16 scouting Briefs name.
 
 ## Addendum 2026-08-21
 
-The doomed read was re-ruled ASYMMETRIC and armed at 0.4 by owner order. THEIR active is
-doomed only on our paid-up outright KO this turn (the engine still prices every actual attack;
-the record read only bridges the pre-attack step — ours-only measured 210/426, NET negative,
-so the anticipation stays). OURS is doomed under the conservative incoming read: their active
-receives its coming attach (missing color first) plus one DIRECT evolution, energy carried,
-before it swings (`worth.projected_incoming_damage`). Armed profile vs the armed-concentration
-baseline: 213 -> 216 of 426, floor dragapult_ex 46.5% (19 up, 16 down).
+Issue #582 superseded the invented guaranteed attachment/evolution projection. The Ledger now
+uses typed visible resources, Functions, turn allowances, and configured uncertain horizon reach.
 
 Ammunition waiver (same day, owner doctrine on frame d98fc4c74107 — tempo aggression when
 options are thin): usable Energy on OUR doomed active converts to damage this very turn, so

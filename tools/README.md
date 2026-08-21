@@ -1,7 +1,7 @@
 # tools/
 
 Offline build & maintenance scripts. Run from the repo root. Most are pure-Python and read the
-card pool from `cards.json`; only `dump_cards`, `build_card_functions`, and `check_agent` load the
+card pool from `cards.json`; only `dump_cards` and `check_agent` load the
 native `cg` engine (`src/cg`). Each script's module docstring has the full usage;
 deeper design docs live under `docs/`.
 
@@ -12,10 +12,7 @@ the data products **in order** (each step reads the previous output):
 
 1. **`python tools/meta_tracker/dump_cards.py`** — refresh `cards.json` from the new engine.
    *Foundation: every tool below reads it.*
-2. **`python tools/build_card_functions.py --fresh`** — rebuild the function-tag table
-   (`common/card_functions.json`) for the new pool. `--fresh` drops rotated-out cards; then
-   **re-run without `--fresh` a few times** to accumulate the rng-gated tags
-   (recycle/heal/energy_accel — coverage is monotonic, see `docs/card-functions.md`).
+2. **`python tools/build_pokemon_cards.py`** — rebuild typed card records and Functions.
 3. **`python tools/build_scouting_artifact.py`** — recompile the scouting artifact
    (`common/scouting/artifact.json`). Requires the meta store; run the daily fetch first if stale.
 4. **Re-validate decks**: `python tools/deck_convert.py to-csv <deck.txt> <name>` hard-fails on
@@ -27,9 +24,7 @@ the data products **in order** (each step reads the previous output):
 | Tool | Does | Run |
 |---|---|---|
 | `meta_tracker/dump_cards.py` | Engine pool → `cards.json` (the cache every tool reads) | `python tools/meta_tracker/dump_cards.py` |
-| `build_card_functions.py` | Probe the engine → function-tag table `common/card_functions.json`; **accumulates** across runs | `python tools/build_card_functions.py [--fresh] [--limit N]` |
-| `audit_card_functions.py` | Cross-check the tag table against card **text** (independent oracle) → flags suspect false-positives / misses | `python tools/audit_card_functions.py [--show 15]` |
-| `verify_meta_cards.py` | Same check but **ranked by real usage** in the meta DB → flag-only review list of the popular cards whose tags look wrong (e.g. Munkidori) | `python tools/verify_meta_cards.py [--top 120]` |
+| `build_pokemon_cards.py` | Canonical card data + typed clause inputs → frozen record modules | `python tools/build_pokemon_cards.py` |
 | `build_scouting_artifact.py` | Meta store + `cards.json` → `common/scouting/artifact.json` | `python tools/build_scouting_artifact.py [--half-life 21] [--min-episodes 50]` |
 | `run_meta_tracker.py` | Daily fetch: download top episodes, band by rating, parse, build HTML dashboard | `python tools/run_meta_tracker.py [--bands Elite High] [--cap 500]` |
 | `deck_convert.py` | Limitless `.txt` ↔ `deck.csv` (resolves by card name, asserts the 5 deck rules) | `python tools/deck_convert.py to-csv <deck.txt> <name> [--force]`  ·  `to-txt <deck.csv> [-o out.txt]` |
@@ -37,6 +32,8 @@ the data products **in order** (each step reads the previous output):
 | `sim/check_agent.py` | Gated pre-submit check: contents → legality → playability → deployability | `python tools/sim/check_agent.py <name> [--matches 5] [--no-deployability]` |
 | `submit_agent.py` | Submission lifecycle (ADR-0019): `build` (package → local `builds.jsonl` ledger, no upload), gated `submit [N]` (uploads a *prior* build's exact zip, default latest: refuse-dirty → Agent Check → upload → committed `agent_history.jsonl`), `collect` (replays+score → `performance.jsonl`), `dashboard`. Packaging itself is the `submit/package.py` library. | `python tools/submit_agent.py build\|submit\|collect\|dashboard <args>` |
 
-Deps: native `cg` for `dump_cards` / `build_card_functions` / `check_agent`; `check_agent`'s
+Tag-era builders and audits are frozen under `deprecated/bellman/tag_tools/` for teacher replay.
+
+Deps: native `cg` for `dump_cards` / `check_agent`; `check_agent`'s
 self-play also needs `kaggle_environments` (`tools/sim/requirements.txt`). The rest are
 pure-Python. Tests: `python -m pytest tests/ -q`.

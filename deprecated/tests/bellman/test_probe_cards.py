@@ -5,7 +5,7 @@ Lib-free — the engine-driving shell is validated by running, not unit-tested (
 """
 import pytest
 
-from meta_tracker.card_functions import classify_functions
+from deprecated.bellman.tag_tools.card_functions import classify_functions
 from meta_tracker.probe_cards import (
     _attack_turn_logs, _damaged_option_indices, _setup_active_option, _strip_serials,
     build_evolution_deck, build_pokemon_deck, build_probe_deck, build_trigger_deck,

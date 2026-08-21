@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Pupitar",
     weakness=GRASS,
     retreat_cost=3,
-    tags=frozenset(['team_rocket']),
     abilities=(
         Ability(
             name='Sand Stream',

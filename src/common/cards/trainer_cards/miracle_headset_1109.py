@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Put up to 2 Supporter cards from your discard pile into your hand.',
     ace_spec=True,
-    tags=frozenset([]),
     clauses=(Clause('fetch', target='supporter', zone='discard', amount=2),),
     covers='full',
 )

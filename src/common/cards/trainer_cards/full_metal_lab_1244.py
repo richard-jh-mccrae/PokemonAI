@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Full Metal Lab',
     kind=STADIUM,
     text='{M} Pokémon (both yours and your opponent’s) take 30 less damage from attacks from the opponent’s Pokémon (after applying Weakness and Resistance).',
-    tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='damage_reduction', amount=30, applies_to='metal', source='opponent_attack', timing='after_weakness_resistance', symmetric=True),),
     covers='full',
 )

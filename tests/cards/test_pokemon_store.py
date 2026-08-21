@@ -1,15 +1,14 @@
-"""Pokémon records stay true to the engine defs, the tag table, and the clause store.
+"""Pokémon records stay true to the engine defs and clause store.
 
 Card modules are generated data; these guards are what lets a human edit slip be caught, so every
-fact class (printed stats, attacks, tags, Ability clauses, both Role layers) is asserted at its
+fact class (printed stats, attacks, Ability clauses, both Role layers) is asserted at its
 source. Coverage of the decklists is `test_card_store.py`'s job, not this file's."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
-from cards_helpers import REPO, engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
+from cards_helpers import engine_attacks, engine_cards, engine_stage  # noqa: F401  fixtures
 
 from common.cards import attack_index, pokemon_card_store, pokemon_default_roles
 from common.cards.card_facts import Clause
@@ -36,13 +35,6 @@ def test_card_facts_match_the_engine_defs(engine_cards, engine_attacks):
                 wire["name"].strip(), wire["damage"], wire["energies"], wire["text"]), card_id
         assert [(a.name, a.text) for a in card.abilities] == [
             (s["name"].strip(), s["text"]) for s in source.get("skills") or []], card_id
-
-
-def test_tags_match_the_shipped_tag_table():
-    measured = json.loads((REPO / "tools" / "meta_tracker" / "measured_functions.json")
-                          .read_text(encoding="utf-8"))
-    for card_id, card in pokemon_card_store().items():
-        assert card.tags == frozenset(measured.get(str(card_id), [])), card_id
 
 
 def test_ability_clauses_stay_synced_with_the_clause_store():

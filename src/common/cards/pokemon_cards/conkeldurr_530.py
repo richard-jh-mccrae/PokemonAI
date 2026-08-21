@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Gurdurr',
     weakness=PSYCHIC,
     retreat_cost=3,
-    tags=frozenset([]),
     default_roles=('backup_attacker',),
     covers='full',
     abilities=(

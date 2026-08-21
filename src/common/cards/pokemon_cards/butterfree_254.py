@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Metapod',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['paralyze']),
     attacks=(
         Attack(
             attack_id=350,

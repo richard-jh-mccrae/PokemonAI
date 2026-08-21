@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Energy Coin',
     kind=ITEM,
     text='Flip 2 coins. If both of them are heads, search your deck for a Basic Energy card and attach it to 1 of your Pokémon. Then, shuffle your deck.',
-    tags=frozenset(['energy_accel']),
 )

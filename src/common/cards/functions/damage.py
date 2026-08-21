@@ -10,8 +10,6 @@ Per-target: the defending ACTIVE only. A bench-snipe rider is a separate path (t
 from __future__ import annotations
 
 _RESISTANCE = 30       # flat S&V Resistance reduction — engine-verified (tools/sim/probe_resistance.py)
-_PREVENT_EX_TAG = "prevent_ex_damage"
-
 #: The OPEN filtered-count family (ADR-0115), family -> the context key holding its RAW MATERIAL.
 #: The scale clause's ``filter`` carries the predicate's argument; the family vocabulary stays CLOSED.
 _FILTERED_COUNTS = {
@@ -40,7 +38,7 @@ def wr_adjust(attacker, defender, dmg: float) -> float:
     return dmg
 
 
-def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(), *,
+def compute_active_damage(attack, attacker, defender, *,
                           bound: str = "exact", context: dict | None = None,
                           defender_transient: dict | None = None) -> float:
     """Closed-form damage this Attack record deals to the defending Active (ADR-0032 E1). ``bound``:
@@ -113,7 +111,7 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
             continue
         dmg += amount
     ignores_effects = attack.clause("ignores_effects") is not None
-    if not ignores_effects and _prevented(attacker, defender, defender_tags):
+    if not ignores_effects and _prevented(attacker, defender):
         return 0
     atype = attacker.energy_type if attacker is not None else None
     pierces_wr = attack.clause("ignores_wr") is not None
@@ -157,13 +155,10 @@ def _body_clause(card, kind: str):
                  for clause in ability.clauses if clause.kind == kind), None)
 
 
-def _prevented(attacker, defender, defender_tags) -> bool:
-    """The defender's Ability prevents this attacker's damage outright — the `prevent_ex_damage` tag
-    OR a ``prevents_damage_from`` clause ("ex", or "basic_ex" which also requires a Basic attacker)."""
+def _prevented(attacker, defender) -> bool:
+    """Whether the defender's typed Ability clause prevents this attacker's damage."""
     if attacker is None or not attacker.is_rule_box:
         return False
-    if _PREVENT_EX_TAG in (defender_tags or frozenset()):
-        return True
     clause = _body_clause(defender, "prevents_damage_from") if defender is not None else None
     scope = clause.scope if clause is not None else None
     if scope == "ex":

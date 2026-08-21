@@ -7,5 +7,4 @@ CARD = EnergyCard(
     kind=SPECIAL_ENERGY,
     provides=COLORLESS,
     text='As long as this card is attached to a Pokémon, it provides {C} Energy.\n\nIf this card is discarded by an effect of an attack used by the Pokémon this card is attached to, attach this card from your discard pile to that Pokémon after attacking.',
-    tags=frozenset(['provides:1']),
 )

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import math
 
 from common.algebra import Deterministic
-from common.card_worth import ENERGY_TIER
+from .card_worth import ENERGY_TIER
 from common.options import LegalAction
 from .pilot_profile import PilotProfile
 from .value_equations import SCORERS

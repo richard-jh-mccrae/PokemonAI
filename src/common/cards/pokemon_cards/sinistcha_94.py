@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Poltchageist',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset(['spread']),
     attacks=(
         Attack(
             attack_id=116,

@@ -8,7 +8,7 @@ import json
 import math
 from typing import Callable, Mapping
 
-from common.card_worth import (
+from .card_worth import (
     ACE_SPEC_TIER, ATTACKER_LINE_BASE_TIER, ENERGY_TIER, FUNCTION_TIER, KNOWN_CARD_FLOOR,
     ROLE_TIER, TAG_TIER, role_value,
 )

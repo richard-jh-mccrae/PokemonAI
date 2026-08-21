@@ -6,5 +6,4 @@ CARD = TrainerCard(
     name='Xerosic’s Machinations',
     kind=SUPPORTER,
     text='Your opponent discards cards from their hand until they have 3 cards in their hand.',
-    tags=frozenset(['hand_disruption']),
 )

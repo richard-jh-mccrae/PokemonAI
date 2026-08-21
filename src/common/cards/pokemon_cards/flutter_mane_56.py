@@ -9,8 +9,7 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=METAL,
     retreat_cost=1,
-    tags=frozenset(['spread']),
-    default_roles=('support_pokemon', 'disruption_target'),
+    default_roles=('support_pokemon',),
     covers='full',
     abilities=(
         Ability(

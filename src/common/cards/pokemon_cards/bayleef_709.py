@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Chikorita',
     weakness=FIRE,
     retreat_cost=2,
-    tags=frozenset([]),
     default_roles=('backup_attacker', 'support_pokemon'),
     attacks=(
         Attack(

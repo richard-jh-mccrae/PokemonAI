@@ -163,8 +163,6 @@ def test_an_unresolved_attacker_record_fails_open():
     assert compute_active_damage(attack(50), None, mon(resistance=FIRE)) == 50
     # An unknown attacker is never "an ex": prevention does not fire.
     assert compute_active_damage(attack(50), None, _prevents("ex")) == 50
-    assert compute_active_damage(attack(50), None, mon(),
-                                 defender_tags=frozenset({"prevent_ex_damage"})) == 50
 
 
 def test_an_unresolved_defender_record_fails_open():
@@ -185,15 +183,12 @@ def _prevents(scope):
         Clause("prevents_damage_from", scope=scope),)),))
 
 
-def test_ex_prevention_by_tag_scope_and_basic_scope():
+def test_ex_prevention_by_typed_scope_and_basic_scope():
     ex_attacker = mon(ex=True)
     basic_ex = mon(ex=True)                                  # no evolves_from -> Basic
     evolved_ex = mon(ex=True, stage=STAGE1, evolves_from="Something")
     plain_attacker = mon()
-    assert compute_active_damage(attack(), ex_attacker, mon(),
-                                 defender_tags=frozenset({"prevent_ex_damage"})) == 0
-    assert compute_active_damage(attack(), plain_attacker, mon(),
-                                 defender_tags=frozenset({"prevent_ex_damage"})) == 100
+    assert compute_active_damage(attack(), plain_attacker, _prevents("ex")) == 100
     assert compute_active_damage(attack(), ex_attacker, _prevents("ex")) == 0
     assert compute_active_damage(attack(), basic_ex, _prevents("basic_ex")) == 0
     assert compute_active_damage(attack(), evolved_ex, _prevents("basic_ex")) == 100

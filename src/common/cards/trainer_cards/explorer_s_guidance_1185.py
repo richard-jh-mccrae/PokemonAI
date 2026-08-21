@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Explorer’s Guidance',
     kind=SUPPORTER,
     text='Look at the top 6 cards of your deck and put 2 of them into your hand. Discard the other cards.',
-    tags=frozenset(['dig', 'draw']),
     clauses=(Clause('fetch', target='any', zone='deck', dig=6, amount=2, rider='discard_remainder'),),
     covers='full',
 )

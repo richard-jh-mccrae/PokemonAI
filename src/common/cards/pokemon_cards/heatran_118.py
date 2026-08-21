@@ -10,7 +10,6 @@ CARD = PokemonCard(
     weakness=FIRE,
     resistance=GRASS,
     retreat_cost=4,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Incandescent Body',

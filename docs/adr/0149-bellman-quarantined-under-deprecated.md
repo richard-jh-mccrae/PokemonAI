@@ -61,7 +61,8 @@ one-way: `deprecated/` may ride `src/`, never the reverse.
   `engine.py`, its one live consumer. `card_effects.json` STAYS in src as the audited
   authoring source the store records are generated from, but leaves the bundle. The bundle
   therefore stops shipping the search stack; the manifest is schema 7, `system: "ledger"`, and
-  documents the resolved `LedgerWeights` instead of a pilot profile.
+  documented the then-current resolved weight vector instead of a pilot profile; Issue #582
+  replaced that vector with the effective Valuation Configuration.
 - **CI runs none of it** (owner's ruling): the moved suites leave every CI job; `deprecated/**`
   stays a known path in the filters only so it does not trip the fail-closed all-jobs fallback.
   The teacher is validated on demand — `python -m pytest deprecated/tests` — accepting that a

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     ex=True,
     weakness=WATER,
     retreat_cost=3,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Scalding Steam',

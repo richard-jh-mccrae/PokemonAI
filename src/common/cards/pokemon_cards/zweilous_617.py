@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Deino',
     weakness=GRASS,
     retreat_cost=3,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=889,

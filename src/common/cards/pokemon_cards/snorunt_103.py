@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=METAL,
     retreat_cost=1,
-    tags=frozenset(['hand_disruption']),
     default_roles=('backup_attacker', 'primary_attacker'),
     attacks=(
         Attack(

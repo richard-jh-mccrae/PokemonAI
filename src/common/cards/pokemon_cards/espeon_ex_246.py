@@ -13,7 +13,6 @@ CARD = PokemonCard(
     weakness=DARKNESS,
     resistance=FIGHTING,
     retreat_cost=1,
-    tags=frozenset(['hand_disruption']),
     attacks=(
         Attack(
             attack_id=340,

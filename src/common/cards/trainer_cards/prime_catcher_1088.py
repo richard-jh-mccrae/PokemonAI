@@ -7,7 +7,6 @@ CARD = TrainerCard(
     kind=ITEM,
     text='Switch in 1 of your opponent’s Benched Pokémon to the Active Spot. If you do, switch your Active Pokémon with 1 of your Benched Pokémon.',
     ace_spec=True,
-    tags=frozenset(['gust', 'switch']),
     clauses=(Clause('gust', target='any', rider='self_switch'),),
     covers='full',
 )

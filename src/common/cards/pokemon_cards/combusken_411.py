@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Torchic',
     weakness=WATER,
     retreat_cost=2,
-    tags=frozenset([]),
     attacks=(
         Attack(
             attack_id=577,

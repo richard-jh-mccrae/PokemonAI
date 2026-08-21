@@ -9,7 +9,6 @@ CARD = PokemonCard(
     stage=BASIC,
     weakness=WATER,
     retreat_cost=3,
-    tags=frozenset(['burn']),
     abilities=(
         Ability(
             name='Incandescent Body',

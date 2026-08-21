@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from="Team Rocket's Mareep",
     weakness=FIGHTING,
     retreat_cost=2,
-    tags=frozenset(['paralyze', 'team_rocket']),
     attacks=(
         Attack(
             attack_id=603,

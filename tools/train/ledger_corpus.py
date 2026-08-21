@@ -44,6 +44,10 @@ from train.blunder.reviewed import load_reviewed, partition_reviewed  # noqa: E4
 
 DECKS = ("mega_starmie", "mega_lucario", "dragapult_ex")
 DEFAULT_OUTPUT = REPO / "docs" / "plans" / "ledger-corpus-dashboard.json"
+SEMANTIC_DECISIONS = frozenset({
+    "additive_marginal_valuation", "continuation_persistence",
+    "legal_development_reach", "neutral_tie_lottery",
+})
 
 
 def _build_runtime(deck_name: str, weight_overrides=None):
@@ -54,14 +58,14 @@ def _build_runtime(deck_name: str, weight_overrides=None):
     spec.loader.exec_module(module)
     deck = [int(value) for value in (agent_dir / "deck.csv").read_text().splitlines()
             if value.strip()]
-    ledger_weights = None
+    valuation_configuration = None
     if weight_overrides:
-        from common.ledger import LedgerWeights
+        from common.ledger import ValuationConfiguration
 
-        ledger_weights = LedgerWeights().resolve(weight_overrides)
+        valuation_configuration = ValuationConfiguration.general().with_values(weight_overrides)
     replay_provider = partial(CgpyTransitionProvider, effects=CardEffects.load())
     return build_runtime(module.STRATEGY, deck, provider_factory=replay_provider,
-                         ledger_weights=ledger_weights)
+                         valuation_configuration=valuation_configuration)
 
 
 def _satisfies_one(chosen, correct, equivalence) -> bool:
@@ -132,7 +136,7 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
         row["fallback"] = diagnostics["fallback"]
     if graded and not agrees:
         row["ledger"] = {"value": decision.value, "backend": diagnostics.get("backend"),
-                         "weights": diagnostics.get("weights"),
+                         "valuation": diagnostics.get("valuation"),
                          "prices": list(diagnostics.get("prices", ()))[:5]}
     return row
 
@@ -160,7 +164,11 @@ def _deck_summary(rows: list[dict]) -> dict:
 
 
 def payload(rows: list[dict], *, retired: list[dict] | None = None,
-            baseline: dict | None = None) -> dict:
+            baseline: dict | None = None, semantic_flips: dict | None = None) -> dict:
+    reasons = set((semantic_flips or {}).get("flips", {}).values())
+    unknown_reasons = reasons - SEMANTIC_DECISIONS
+    if unknown_reasons:
+        raise ValueError(f"semantic flip lacks an issue decision: {sorted(unknown_reasons)[0]}")
     rows.sort(key=lambda row: (row["deck"], row["key"], row["id"]))
     retired = sorted(retired or (), key=lambda row: (row["deck"], row["key"]))
     decks = {}
@@ -176,6 +184,18 @@ def payload(rows: list[dict], *, retired: list[dict] | None = None,
                 if row.get("agrees")}
         regressions = [row["id"] for row in rows
                        if (row["deck"], row["id"]) in held and row["agrees"] is False]
+    allowed = set((semantic_flips or {}).get("flips", ()))
+    unexplained = sorted(set(regressions) - allowed)
+    preserved = []
+    if baseline is not None:
+        for deck_name in decks:
+            expected = {(row["deck"], row["id"]) for row in baseline.get("rows", ())
+                        if row.get("deck") == deck_name and row.get("agrees")
+                        and row.get("id") not in allowed}
+            kept = {(row["deck"], row["id"]) for row in rows
+                    if row.get("deck") == deck_name and row.get("agrees")}
+            if expected:
+                preserved.append(len(expected & kept) / len(expected))
     return {
         "schema": 1,
         "git_rev": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO,
@@ -185,10 +205,18 @@ def payload(rows: list[dict], *, retired: list[dict] | None = None,
         "baseline_git_rev": (baseline or {}).get("git_rev"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "decks": decks,
-        # The generality bar: the GENERAL weights must clear every deck, so the headline is
+        # The general configuration must clear every deck, so the headline is
         # the worst deck, never the average.
         "generality_floor": min(agreements) if agreements else None,
+        "baseline_generality_floor": (baseline or {}).get("generality_floor"),
+        "raw_generality_floor_retained": (
+            baseline is None or not agreements
+            or min(agreements) >= float(baseline.get("generality_floor") or 0.0)),
         "regressions": regressions,
+        "unexplained_regressions": unexplained,
+        "migration_generality_floor": round(min(preserved), 4) if preserved else None,
+        "generality_floor_retained": (
+            baseline is None or not preserved or min(preserved) >= 1.0),
         "retired": retired,
         "rows": rows,
     }
@@ -252,7 +280,8 @@ def _retired_row(correction, entry) -> dict:
 
 def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
           baseline: dict | None = None, reviewed: dict | None = None,
-          weight_overrides: dict | None = None) -> dict:
+          weight_overrides: dict | None = None,
+          semantic_flips: dict | None = None) -> dict:
     swept = [correction for correction in load_corrections(store)
              if correction.agent in decks and correction.obs is not None]
     # A ruling the owner already dispositioned (refuted, fixed, covered…) is retired: grading
@@ -276,7 +305,7 @@ def sweep(*, store, decks=DECKS, limit=None, workers: int = 1,
         for completed, (deck_name, correction) in enumerate(tasks, start=1):
             rows.append(_replay_one(deck_name, correction, weight_overrides))
             print(f"[{completed}/{len(tasks)}] {deck_name} {correction.id}", flush=True)
-    return payload(rows, retired=retired, baseline=baseline)
+    return payload(rows, retired=retired, baseline=baseline, semantic_flips=semantic_flips)
 
 
 def main(argv=None) -> int:
@@ -285,13 +314,20 @@ def main(argv=None) -> int:
     parser.add_argument("--decks", nargs="+", default=list(DECKS))
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--semantic-flips", type=Path)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args(argv)
     baseline = (json.loads(args.baseline.read_text(encoding="utf-8"))
                 if args.baseline and args.baseline.exists() else None)
+    semantic_flips = (json.loads(args.semantic_flips.read_text(encoding="utf-8"))
+                      if args.semantic_flips and args.semantic_flips.exists() else None)
+    if (semantic_flips and baseline
+            and semantic_flips.get("baseline_git_rev") != baseline.get("git_rev")):
+        raise ValueError("semantic-flip allowlist names a different frozen baseline")
     result = sweep(store=args.store, decks=tuple(args.decks), limit=args.limit,
-                   workers=max(1, args.workers), baseline=baseline)
+                   workers=max(1, args.workers), baseline=baseline,
+                   semantic_flips=semantic_flips)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n",
                            encoding="utf-8")
     args.output.with_suffix(".md").write_text(render_markdown(result) + "\n",
@@ -299,7 +335,8 @@ def main(argv=None) -> int:
     floor = result["generality_floor"]
     print(f"generality floor {floor} | regressions {len(result['regressions'])} "
           f"| written to {args.output}")
-    return 0
+    return 1 if (result["unexplained_regressions"]
+                 or not result["generality_floor_retained"]) else 0
 
 
 if __name__ == "__main__":

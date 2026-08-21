@@ -6,7 +6,6 @@ CARD = TrainerCard(
     name='Larry’s Skill',
     kind=SUPPORTER,
     text='Discard your hand and search your deck for a Pokémon, a Supporter card, and a Basic Energy card, reveal them, and put them into your hand. Then, shuffle your deck.',
-    tags=frozenset(['search', 'tutor_energy']),
     clauses=(Clause('fetch', target='basic_energy', zone='deck', cost='discard_hand'), Clause('fetch', target='pokemon', zone='deck', cost='discard_hand'), Clause('fetch', target='supporter', zone='deck', cost='discard_hand')),
     covers='full',
 )

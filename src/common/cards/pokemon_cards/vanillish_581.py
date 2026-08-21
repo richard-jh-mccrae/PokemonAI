@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Vanillite',
     weakness=METAL,
     retreat_cost=2,
-    tags=frozenset(['paralyze']),
     attacks=(
         Attack(
             attack_id=832,

@@ -10,7 +10,6 @@ CARD = PokemonCard(
     evolves_from='Rellor',
     weakness=FIRE,
     retreat_cost=1,
-    tags=frozenset([]),
     default_roles=('support_pokemon',),
     covers='full',
     abilities=(
