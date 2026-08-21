@@ -473,7 +473,10 @@ def test_doomed_active_discount_prices_the_killable_active_as_spent():
     gusting up the killable body beats gusting up the safe one. Weakness doubles the reach:
     Mega Starmie's 120 covers a 160 HP Cinderace only through its {W} weakness. 0.0 = off."""
     def against(defender):
-        return board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,))),
+        # Our active sits at full 330 so the conservative incoming read (their side's
+        # projected attach + evolution) never dooms US — this test isolates THEIR side.
+        return board(me=player(active=body(MEGA_STARMIE, 1, energies=(WATER,),
+                                           hp=330, max_hp=330)),
                      them=player(own=False, active=defender))
 
     killable = against(body(STARYU, 9, hp=70, max_hp=70))            # 120 >= 70
@@ -488,3 +491,27 @@ def test_doomed_active_discount_prices_the_killable_active_as_spent():
     ours = board(me=player(active=body(STARYU, 1, hp=70, max_hp=70)),
                  them=player(own=False, active=body(MEGA_STARMIE, 9, energies=(WATER,))))
     assert evaluate(ours, armed).total < evaluate(ours, flat).total
+
+
+def test_our_doomed_read_grants_their_active_the_coming_attach_and_one_evolution():
+    """ADR-0152, the conservative incoming read: their active swings only AFTER its next
+    attach and possibly one evolution. Makuhita holding two Fighting cannot KO now, but a
+    third energy plus Hariyama's Wild Press (210) can — doomed. One energy short of even
+    that projection stays safe; and once means ONCE — Dreepy never swings with its
+    grandchild Dragapult ex's 200."""
+    fighting = 6
+
+    def ours_vs(attacker):
+        return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330)),
+                     them=player(own=False, active=attacker))
+
+    armed = ctx(overrides={"doomed_active_discount": 0.5})
+    flat = ctx()
+    doomed = ours_vs(body(MAKUHITA, 9, energies=(fighting, fighting)))
+    assert evaluate(doomed, armed).total < evaluate(doomed, flat).total
+    one_short = ours_vs(body(MAKUHITA, 9, energies=(fighting,)))
+    assert evaluate(one_short, armed).total == pytest.approx(
+        evaluate(one_short, flat).total)
+    grandchild = ours_vs(body(DREEPY, 9, energies=(FIRE, PSYCHIC)))
+    assert evaluate(grandchild, armed).total == pytest.approx(
+        evaluate(grandchild, flat).total)

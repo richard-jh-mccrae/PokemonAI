@@ -16,7 +16,8 @@ from common.board import BoardState
 from common.board.nodes import Body, Side
 
 from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, best_payable_damage,
-                    demand_scale, line_reach, top_attack_cost, usable_units)
+                    demand_scale, line_reach, projected_incoming_damage, top_attack_cost,
+                    usable_units)
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,11 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
 
     for label, side, sign in (("me", board.me, 1.0), ("them", board.them, -1.0)):
         own = sign > 0
-        doomed = (_active_doomed(board.them if own else board.me, side)
+        # Asymmetric on purpose (ADR-0152): THEIR active is doomed only if we can pay the KO
+        # right now; OURS is doomed under the conservative next-turn read — their attacker
+        # gets an attach and one evolution before it swings.
+        doomed = (_active_doomed(board.them if own else board.me, side, ctx,
+                                 next_turn=own)
                   if ctx.weights.doomed_active_discount else False)
         for name, value in _side_parts(side, ctx, gaps, own=own, active_doomed=doomed,
                                        deck_counts=board.deck_counts if own else None):
@@ -59,12 +64,17 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
                      parts=tuple(parts), gaps=tuple(gaps))
 
 
-def _active_doomed(attacker: Side, defender: Side) -> bool:
-    """Can the attacker's active KO the defender's active outright this turn (ADR-0152)?"""
+def _active_doomed(attacker: Side, defender: Side, ctx: LedgerContext, *,
+                   next_turn: bool) -> bool:
+    """Can the attacker's active KO the defender's active outright (ADR-0152)? ``next_turn``
+    grants the attacker its coming attach plus one evolution — the conservative incoming read."""
     if attacker.active is None or defender.active is None:
         return False
-    damage = best_payable_damage(attacker.active.card.facts, attacker.active.energies,
-                                 defender.active.card.facts)
+    read = projected_incoming_damage if next_turn else \
+        (lambda facts, attached, defender_facts, _ctx:
+         best_payable_damage(facts, attached, defender_facts))
+    damage = read(attacker.active.card.facts, attacker.active.energies,
+                  defender.active.card.facts, ctx)
     return 0 < defender.active.hp <= damage
 
 

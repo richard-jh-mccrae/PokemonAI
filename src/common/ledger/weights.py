@@ -125,8 +125,9 @@ class LedgerWeights:
     #: owner-ordered seed; the flips it buys are accepted, not gate-clean (2026-08-21 ruling).
     concentration: float = 0.1
 
-    #: Fraction of its worth THEIR active loses when OUR active's payable attack can KO it
-    #: outright (weakness applied) — the 1-ply doomed read: gust up what you can kill.
+    #: Fraction of its worth a doomed active loses. THEIR active is doomed when OUR paid-up
+    #: attack can KO it outright (weakness applied). OURS is doomed under the conservative
+    #: next-turn read: their active gets one attach and one evolution before it swings.
     doomed_active_discount: float = 0.0
 
     # The Active Spot: worth extra when its occupant can actually pay an attack.
