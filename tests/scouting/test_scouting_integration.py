@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from common.opponent import OpponentEvidence, OpponentKnowledgeBase, OpponentModel
 from common.scouting.artifact import load_artifact
 from common.scouting.provider import EngineCardStatProvider
@@ -39,3 +41,11 @@ def test_real_replay_decks_compile_and_recognize(tmp_path):
     snapshot = model.update(evidence)
 
     assert snapshot.candidates[0].archetype == a1
+
+
+def test_strict_artifact_loader_rejects_an_empty_schema(tmp_path):
+    source = tmp_path / "artifact.json"
+    source.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="required fields"):
+        load_artifact(source, strict=True)

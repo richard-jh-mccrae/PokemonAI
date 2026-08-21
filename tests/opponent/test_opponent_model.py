@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from common.opponent import OpponentEvidence, OpponentKnowledgeBase, OpponentModel
+from common.opponent import (OpponentEvidence, OpponentEventKind, OpponentKnowledgeBase,
+                             OpponentModel, OpponentSubsystem)
 from common.scouting.artifact import Artifact
 from common.scouting.briefs import Brief
 from common.scouting.provider import CardStat, DictCardStatProvider
@@ -115,10 +116,26 @@ def test_inference_failure_is_typed_degradation_and_strict_mode_reraises():
     degraded = OpponentModel(knowledge, provider=_provider(), scorer=broken).update(evidence)
 
     assert degraded.degraded
-    assert degraded.failures == ("inference:RuntimeError",)
+    assert degraded.failures[0].subsystem is OpponentSubsystem.INFERENCE
+    assert degraded.failures[0].error == "RuntimeError"
     assert degraded.evidence == evidence
+    assert RIOLU in degraded.observed_roles
     with pytest.raises(RuntimeError, match="broken scorer"):
         OpponentModel(knowledge, provider=_provider(), scorer=broken, strict=True).update(evidence)
+
+
+def test_public_movement_and_knockout_events_are_typed_with_provenance():
+    evidence = OpponentEvidence.from_state(make_obs(turn=2, logs=[
+        {"type": 6, "playerIndex": 1, "cardId": RIOLU, "fromArea": 5, "toArea": 4},
+        {"type": 6, "playerIndex": 1, "cardId": SOLROCK, "fromArea": 4, "toArea": 3},
+    ]))
+    snapshot = OpponentModel(OpponentKnowledgeBase.compile(
+        tiny_artifact(), (), _provider()), provider=_provider()).update(evidence)
+
+    assert [event.kind for event in snapshot.timeline] == [
+        OpponentEventKind.MOVEMENT, OpponentEventKind.KNOCKOUT]
+    assert snapshot.timeline[1].source == "public_log"
+    assert snapshot.timeline[1].card_id == SOLROCK
 
 
 def test_telemetry_adapter_consumes_the_snapshot_canonical_surface():

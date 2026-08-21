@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 
 from common.api import PlanRequest, RootDecision
 from .card_worth import role_value
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
+from common.scouting.artifact import load_artifact
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
-from .scouting import evolution_line, resolve_brief_cards
+from .scouting import (LegacyRead, LegacyScout, evolution_line, load_legacy_briefs,
+                       match_legacy_brief, resolve_brief_cards)
 from .state import DecisionState
 
 from .belief import BellmanDeckProfile, opponent_belief
@@ -150,14 +153,38 @@ def _pilot_overlay() -> tuple[dict[str, float], str]:
 class BellmanTeacherRuntime(AgentRuntime):
     """The deployment shell with the Bellman planner as its brain, exactly as it shipped."""
 
-    fallback_backend = "bellman-fallback"
+    fallback_backend = "strategy-fallback"
     fallback_action = "bellman_fallback"
+
+    def decide(self, observation):
+        normalized = deepcopy(observation)
+        current = normalized.setdefault("current", {})
+        for field, default in {
+            "energyAttached": False, "firstPlayer": 0, "looking": None,
+            "result": None, "retreated": False, "stadium": [],
+            "stadiumPlayed": False, "supporterPlayed": False,
+        }.items():
+            current.setdefault(field, default)
+        for player in current.get("players", ()):
+            for field, default in {
+                "asleep": False, "benchMax": 3, "burned": False,
+                "confused": False, "deckCount": 0, "handCount": 0,
+                "paralyzed": False, "poisoned": False,
+            }.items():
+                player.setdefault(field, default)
+        return super().decide(normalized)
 
     def __init__(self, strategy, deck, **kwargs):
         teacher_functions = kwargs.pop("functions", None)
-        kwargs.pop("scout", None)
-        kwargs.pop("briefs", None)
+        legacy_scout = kwargs.pop("scout", "default")
+        legacy_briefs = kwargs.pop("briefs", "default")
         super().__init__(strategy, deck, **kwargs)
+        self.scout = (LegacyScout(load_artifact(strict=True))
+                      if legacy_scout == "default" else legacy_scout)
+        self.briefs = (load_legacy_briefs()
+                       if legacy_briefs == "default" else list(legacy_briefs or ()))
+        self.last_read = LegacyRead()
+        self.last_brief = None
         self.functions = teacher_functions
         self.effects = CardEffects.load()
         # The teacher's frozen contract predates the store-based resolution (ADR-0149):
@@ -194,6 +221,8 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def _reset_for_pregame(self) -> None:
         super()._reset_for_pregame()
+        self.last_read = LegacyRead()
+        self.last_brief = None
         self._plan_suffix = ()
         self._proof_suffix = ()
         self._proof_id = ""
@@ -203,22 +232,22 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._proof_suffix = ()
         self._proof_id = ""
 
-    def _planner(self, state, observation):
-        snapshot = self._observe_matchup(state)
+    def _observe_matchup(self, state):
+        self.last_read = self.scout.observe(state) if self.scout is not None else LegacyRead()
+        self.last_brief = match_legacy_brief(self.briefs, self.last_read)
+
+    def _planner(self, observation):
+        self._observe_matchup(observation)
+        brief = self.last_brief
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
-        candidates = tuple((candidate.archetype, candidate.probability)
-                           for candidate in snapshot.candidates)
-        properties = {trait.name: trait.value
-                      for candidate in snapshot.candidates[:1] for trait in candidate.traits}
         belief = opponent_belief(
-            observation, candidates=candidates, properties=properties)
-        self.opponent_role_worth = {}
-        for candidate in snapshot.candidates:
-            for card_id, roles in candidate.roles.items():
-                self.opponent_role_worth[card_id] = max(
-                    self.opponent_role_worth.get(card_id, 0.0),
-                    candidate.probability * role_value(roles))
+            observation, candidates=self.last_read.candidates,
+            properties=(brief.opponent_properties if brief is not None else None))
+        self.opponent_role_worth = resolve_scouted_role_worth(
+            self.last_read, getattr(self.scout, "artifact", None), self.stats,
+            briefs=self.briefs, functions=self.functions,
+            line_decay=self.pilot_profile.get("scouting.line_distance_decay"))
         players = current.get("players") or ()
         opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
         bodies = tuple(body for body in
@@ -330,7 +359,7 @@ class BellmanTeacherRuntime(AgentRuntime):
             diagnostics, decision.plan_suffix)
 
     def _decide_core(self, state, observation: dict) -> RootDecision:
-        planner = self._planner(state, observation)
+        planner = self._planner(observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
         try:
             return self._planner_epoch(planner, request, observation, state)

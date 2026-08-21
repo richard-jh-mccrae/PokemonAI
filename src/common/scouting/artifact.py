@@ -28,6 +28,17 @@ def load_artifact(path: str | Path | None = None, *, strict: bool = False) -> Ar
     degrades to an EMPTY Artifact, so the Scout still runs on observed-only intel."""
     try:
         raw = json.loads(Path(path or _DEFAULT).read_text(encoding="utf-8"))
+        required = {"meta", "priors", "background", "dossiers"}
+        if not isinstance(raw, dict) or not required <= set(raw):
+            raise ValueError("opponent artifact is missing required fields")
+        if not all(isinstance(raw[field], dict) for field in required):
+            raise ValueError("opponent artifact fields must be objects")
+        if raw["meta"].get("schema_version") != 2:
+            raise ValueError("unsupported opponent artifact schema")
+        if any(not isinstance(dossier, dict)
+               or not isinstance(dossier.get("card_inclusion"), dict)
+               for dossier in raw["dossiers"].values()):
+            raise ValueError("opponent artifact dossiers require card inclusion data")
         priors = {a: float(p) for a, p in (raw.get("priors") or {}).items()}
         background = {int(c): float(p) for c, p in (raw.get("background") or {}).items()}
         card_inclusion: dict[str, dict[int, float]] = {}

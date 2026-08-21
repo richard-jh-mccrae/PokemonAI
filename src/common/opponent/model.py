@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass, field
+from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
@@ -168,13 +169,57 @@ class OpponentResourceDelta:
     discard_count: int
 
 
+class OpponentEventKind(str, Enum):
+    ATTACK = "attack"
+    DRAW = "draw"
+    KNOCKOUT = "knockout"
+    MOVEMENT = "movement"
+    PUBLIC = "public"
+    SHUFFLE = "shuffle"
+    UNKNOWN = "unknown"
+
+
+class OpponentSubsystem(str, Enum):
+    INFERENCE = "inference"
+    LIFECYCLE = "lifecycle"
+    ROLE_RESOLUTION = "role_resolution"
+
+
+@dataclass(frozen=True, slots=True)
+class OpponentFailure:
+    subsystem: OpponentSubsystem
+    error: str
+
+
 @dataclass(frozen=True, slots=True)
 class OpponentPublicEvent:
     turn: int
     sequence: int
-    kind: int | None
+    kind: OpponentEventKind
+    source: str
+    raw_kind: int | None
     public_fields: tuple[tuple[str, object], ...]
     recognized: bool
+    player_index: int | None = None
+    card_id: int | None = None
+    from_area: int | None = None
+    to_area: int | None = None
+
+
+def _public_event(turn, sequence, raw_kind, fields, recognized):
+    values = dict(fields)
+    from_area, to_area = values.get("fromArea"), values.get("toArea")
+    if raw_kind in {6, 7}:
+        kind = (OpponentEventKind.KNOCKOUT if from_area == 4 and to_area == 3
+                else OpponentEventKind.MOVEMENT)
+    else:
+        kind = {0: OpponentEventKind.SHUFFLE, 4: OpponentEventKind.DRAW,
+                5: OpponentEventKind.DRAW, 15: OpponentEventKind.ATTACK}.get(
+                    raw_kind, OpponentEventKind.PUBLIC if recognized
+                    else OpponentEventKind.UNKNOWN)
+    return OpponentPublicEvent(
+        turn, sequence, kind, "public_log", raw_kind, tuple(fields), recognized,
+        values.get("playerIndex"), values.get("cardId"), from_area, to_area)
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,7 +288,7 @@ class OpponentSnapshot:
     unknown_mass: float
     timeline: tuple[OpponentPublicEvent, ...] = ()
     resource_delta: OpponentResourceDelta | None = None
-    failures: tuple[str, ...] = ()
+    failures: tuple[OpponentFailure, ...] = ()
     knowledge_identity: str = ""
     identity: str = ""
 
@@ -258,7 +303,10 @@ class OpponentSnapshot:
         object.__setattr__(self, "candidates", candidates)
         object.__setattr__(self, "unknown_mass", unknown)
         object.__setattr__(self, "timeline", tuple(self.timeline))
-        object.__setattr__(self, "failures", tuple(str(item) for item in self.failures))
+        failures = tuple(self.failures)
+        if any(not isinstance(item, OpponentFailure) for item in failures):
+            raise TypeError("opponent failures must be OpponentFailure values")
+        object.__setattr__(self, "failures", failures)
         if not self.identity:
             object.__setattr__(self, "identity", _identity(self.canonical_data()))
 
@@ -288,7 +336,8 @@ class OpponentSnapshot:
                 "revealed_card_ids": list(evidence.revealed_card_ids),
                 "turn": evidence.turn,
             },
-            "failures": list(self.failures),
+            "failures": [{"error": item.error, "subsystem": item.subsystem.value}
+                         for item in self.failures],
             "knowledge_identity": self.knowledge_identity,
             "observed_roles": [(card_id, list(roles))
                                for card_id, roles in self.observed_roles.items()],
@@ -298,7 +347,13 @@ class OpponentSnapshot:
                                    "prize_count", "active_count", "bench_count",
                                    "discard_count")]),
             "timeline": [{
-                "kind": event.kind,
+                "kind": event.kind.value,
+                "source": event.source,
+                "raw_kind": event.raw_kind,
+                "player_index": event.player_index,
+                "card_id": event.card_id,
+                "from_area": event.from_area,
+                "to_area": event.to_area,
                 "public_fields": list(event.public_fields),
                 "recognized": event.recognized,
                 "sequence": event.sequence,
@@ -427,8 +482,8 @@ class OpponentModel:
             if batch_id not in batches:
                 events = []
                 for kind, fields, recognized in payload:
-                    events.append(OpponentPublicEvent(
-                        evidence.turn, self._sequence, kind, tuple(fields), recognized))
+                    events.append(_public_event(
+                        evidence.turn, self._sequence, kind, fields, recognized))
                     self._sequence += 1
                 batches[batch_id] = tuple(events)
         minimum = evidence.turn - 1
@@ -465,29 +520,39 @@ class OpponentModel:
         delta = self._resource_delta(evidence)
         self._last_evidence = evidence
         self._revealed.update(evidence.revealed_card_ids)
+        failures = []
+        beliefs = ()
+        unknown = 1.0
+        if regression:
+            failures.append(OpponentFailure(
+                OpponentSubsystem.LIFECYCLE, "turn_regression"))
+        else:
+            try:
+                candidates, unknown = self.scorer(
+                    self.knowledge.priors, self.knowledge.card_inclusion,
+                    self.knowledge.background, self._revealed)
+                kept = tuple(candidates[:self.candidate_limit])
+                unknown += sum(probability for _name, probability
+                               in candidates[self.candidate_limit:])
+                beliefs = tuple(ArchetypeBelief(
+                    probability, self.knowledge.profiles[name].roles,
+                    self.knowledge.profiles[name].traits,
+                    self.knowledge.profiles[name].mechanics, archetype=name,
+                    resources=self.knowledge.card_inclusion.get(name, {}))
+                    for name, probability in kept)
+            except Exception as exc:
+                if self.strict:
+                    raise
+                failures.append(OpponentFailure(
+                    OpponentSubsystem.INFERENCE, type(exc).__name__))
         try:
-            if regression:
-                raise ValueError("opponent evidence turn regressed within one match")
-            candidates, unknown = self.scorer(
-                self.knowledge.priors, self.knowledge.card_inclusion,
-                self.knowledge.background, self._revealed)
-            kept = tuple(candidates[:self.candidate_limit])
-            unknown += sum(probability for _name, probability
-                           in candidates[self.candidate_limit:])
-            beliefs = tuple(ArchetypeBelief(
-                probability, self.knowledge.profiles[name].roles,
-                self.knowledge.profiles[name].traits,
-                self.knowledge.profiles[name].mechanics, archetype=name,
-                resources=self.knowledge.card_inclusion.get(name, {}))
-                for name, probability in kept)
             roles = general_pokemon_roles(evidence.revealed_card_ids, self.provider)
-            return OpponentSnapshot(
-                evidence, roles, beliefs, unknown, timeline, delta,
-                knowledge_identity=self.knowledge.identity)
         except Exception as exc:
             if self.strict:
                 raise
-            return OpponentSnapshot(
-                evidence, {}, (), 1.0, timeline, delta,
-                failures=(f"inference:{type(exc).__name__}",),
-                knowledge_identity=self.knowledge.identity)
+            roles = {}
+            failures.append(OpponentFailure(
+                OpponentSubsystem.ROLE_RESOLUTION, type(exc).__name__))
+        return OpponentSnapshot(
+            evidence, roles, beliefs, unknown, timeline, delta,
+            failures=tuple(failures), knowledge_identity=self.knowledge.identity)

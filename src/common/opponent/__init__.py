@@ -3,6 +3,8 @@
 from .model import (
     ArchetypeBelief,
     OpponentEvidence,
+    OpponentEventKind,
+    OpponentFailure,
     OpponentKnowledgeBase,
     OpponentMechanic,
     OpponentModel,
@@ -10,12 +12,15 @@ from .model import (
     OpponentResourceDelta,
     OpponentResources,
     OpponentSnapshot,
+    OpponentSubsystem,
     OpponentTrait,
 )
 
 __all__ = (
     "ArchetypeBelief",
     "OpponentEvidence",
+    "OpponentEventKind",
+    "OpponentFailure",
     "OpponentKnowledgeBase",
     "OpponentMechanic",
     "OpponentModel",
@@ -23,5 +28,6 @@ __all__ = (
     "OpponentResourceDelta",
     "OpponentResources",
     "OpponentSnapshot",
+    "OpponentSubsystem",
     "OpponentTrait",
 )

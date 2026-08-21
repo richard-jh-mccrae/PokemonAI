@@ -26,8 +26,8 @@ threshold, or emit `posture_gamma`; Issue #582's canonical configuration owns ho
 valuation. Candidate conditioning preserves correlations and makes telemetry reproducible.
 
 Hidden information is blocked before the model. A typed `OpponentEvidence` is built from the public
-`BoardState` fields and an allowlisted projection of public events; hidden hand contents and deck
-order are unrepresentable. Scout and Opponent Model consume this type, never a raw observation.
+Observation State and an allowlisted projection of public events; hidden hand contents and deck
+order are unrepresentable. Opponent inference consumes this type, never a raw observation.
 Snapshot serialization therefore starts from legal-view data, while Issue #585 still owns the final
 telemetry schema and leak gates.
 
@@ -44,12 +44,9 @@ such as gust and snipe are Card Functions. Keeping one expansive role soup or se
 role vocabularies was rejected because both preserve the semantic and weighting mismatches this work
 must remove.
 
-The legacy property audit retains only irreducible qualitative beliefs: tempo, opening fragility,
-heal-wall behaviour, setup dependencies, and deck-out vulnerability. Engine and acceleration
-dependency collapse into one relation parameterized by canonical `PokemonRole`. Claims about
-immunity, damage caps, piercing, hand-size attacks, prize class, energy composition, mobility,
-spread, Item lock, and comeback cards derive from the candidate deck and Card Functions instead of
-being authored twice. Prescriptive consequences remain Opponent Strategy.
+The legacy property audit retains irreducible qualitative beliefs as typed traits. Intrinsic claims
+derive from candidate deck data and Card Functions instead of being authored twice; prescriptive
+consequences remain Opponent Strategy. This prevents disagreement between authored and card truth.
 
 The model folds public log deltas into a bounded, typed current/previous-turn event timeline.
 Snapshots expose current public resource counts, exact interval deltas, KOs, and visible movements
@@ -66,10 +63,9 @@ ADR-0149 keeps the Bellman teacher frozen behind the one-way `deprecated/` bound
 quarantine through Issue #555; no Bellman compatibility resolver remains in live `src/`, and the
 teacher does not widen the live snapshot contract.
 
-The mutable Scouting `Read` retires. Scout becomes an internal inference subsystem whose output is
-normalized immediately into candidate-conditioned Archetype Beliefs; `OpponentSnapshot` is the only
-public read surface. Runtime `last_read`/`last_brief`, `posture_gamma`, top-only Brief matching, and
-telemetry's separate `read=` hand-off retire with it.
+The mutable Scouting `Read` retires. Inference output is normalized immediately into
+candidate-conditioned Archetype Beliefs; `OpponentSnapshot` is the only public read surface.
+The separate runtime and telemetry hand-offs retire with it.
 
 Issue #582's canonical role/configuration contract lands before Issue #559. Issue #559 then builds
 directly on final vocabulary and threshold types; it does not mint provisional adapters. Issue #555

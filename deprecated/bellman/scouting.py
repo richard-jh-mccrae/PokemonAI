@@ -1,7 +1,97 @@
 """Frozen Brief-role resolver retained only for the deprecated Bellman teacher."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
+from common.observation import ObservationState
+from common.scouting.briefs import load_briefs
 from common.scouting.pokemon_roles import general_pokemon_roles
+from common.scouting.scorer import posterior
+
+
+_LEGACY_PROPERTIES = {
+    "alakazam": {
+        "opp_hand_size_attacker": True, "opp_single_prize": True, "opp_tempo": "midrange"},
+    "archaludon_ex_cinderace": {
+        "opp_is_heal_wall": True, "opp_accel_dependent": True, "opp_tempo": "slow"},
+    "cinderace_mega_starmie_ex": {
+        "opp_tempo": "fast", "opp_pierces_active_effects": True},
+    "cornerstone_mask_ogerpon_ex_crustle_mega_kangaskhan_ex": {
+        "opp_tempo": "slow", "opp_ex_damage_immune": True,
+        "opp_effect_immune_bodies": True, "opp_is_heal_wall": True,
+        "opp_pierces_active_effects": True},
+    "crustle": {
+        "opp_ex_damage_immune": True, "opp_caps_big_hits": True,
+        "opp_is_heal_wall": True, "opp_pierces_active_effects": True,
+        "opp_single_prize": True},
+    "cynthia_s_garchomp_ex_cynthia_s_roserade_cynthia_s_spiritomb": {
+        "opp_tempo": "midrange", "opp_donk_vulnerable": True,
+        "opp_effect_immune_bodies": True, "opp_comeback_disruptor": True},
+    "dipplin_thwackey_volbeat": {
+        "opp_tempo": "fast", "opp_donk_vulnerable": True,
+        "opp_comeback_disruptor": True},
+    "dragapult_ex": {
+        "opp_tempo": "midrange", "opp_spreads_bench": True,
+        "opp_item_locks": True, "opp_comeback_disruptor": True},
+    "froslass_marnie_s_grimmsnarl_ex": {
+        "opp_tempo": "midrange", "opp_spreads_bench": True,
+        "opp_comeback_disruptor": True},
+    "hariyama_mega_lucario_ex_solrock": {"opp_tempo": "midrange"},
+    "hop_s_trevenant_hop_s_snorlax": {
+        "opp_single_prize": True, "opp_tempo": "midrange",
+        "opp_special_energy_fragile": True, "opp_effect_immune_bodies": True},
+    "hydrapple_ex_meganium_teal_mask_ogerpon_ex": {
+        "opp_tempo": "midrange", "opp_comeback_disruptor": True},
+    "kyogre_mega_abomasnow_ex": {
+        "opp_tempo": "slow", "opp_no_pivot": True,
+        "opp_deckout_vulnerable": True},
+    "latias_ex_mega_kangaskhan_ex_slowking": {
+        "opp_tempo": "midrange", "opp_is_engine_dependent": True},
+    "mega_froslass_ex_mega_lopunny_ex": {
+        "opp_tempo": "fast", "opp_is_heal_wall": True,
+        "opp_pierces_active_effects": True, "opp_effect_immune_bodies": True},
+    "n_s_zekrom_n_s_reshiram_n_s_zoroark_ex": {"opp_is_engine_dependent": True},
+}
+
+
+@dataclass
+class LegacyRead:
+    candidates: list[tuple[str, float]] = field(default_factory=list)
+    unknown_mass: float = 1.0
+
+
+class LegacyScout:
+    def __init__(self, artifact):
+        self.artifact = artifact
+        self._evidence = set()
+
+    def observe(self, state):
+        if not isinstance(state, ObservationState):
+            return LegacyRead()
+        for body in state.them.bodies:
+            self._evidence.add(body.card.card_id)
+            self._evidence.update(card.card_id for card in (
+                body.energy_cards + body.tools + body.pre_evolution))
+        self._evidence.update(card.card_id for card in state.them.discard)
+        candidates, unknown = posterior(
+            self.artifact.priors, self.artifact.card_inclusion,
+            self.artifact.background, self._evidence)
+        return LegacyRead(candidates, unknown)
+
+
+def load_legacy_briefs():
+    briefs = load_briefs(strict=True)
+    for brief in briefs:
+        brief.opponent_properties = dict(_LEGACY_PROPERTIES.get(brief.slug, {}))
+    return briefs
+
+
+def match_legacy_brief(briefs, read):
+    if not read.candidates:
+        return None
+    key = read.candidates[0][0].replace("’", "'")
+    return next((brief for brief in briefs
+                 if any(key == cover.replace("’", "'") for cover in brief.covers)), None)
 
 
 _TARGET_ROLE_ORDER = (
