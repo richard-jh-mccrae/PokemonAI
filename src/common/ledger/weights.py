@@ -114,7 +114,9 @@ class LedgerWeights:
     damage_floor: float = 0.30
     #: Prizes per 100 printed max HP, on every body, inside the damage multiplier (ADR-0151):
     #: SIZE becomes worth, so an evolution out-values its basic and chip damage prices real.
-    hp_value: float = 0.0
+    #: Armed at 0.2 by owner order 2026-08-21 under the bootstrap lens: bulk is a LEAF
+    #: property the SearchAlgo inherits; the corpus flips it costs are 1-ply policy artifacts.
+    hp_value: float = 0.2
 
     # The scarce goods and liabilities of having bodies in play.
     bench_slot_value: float = 0.06

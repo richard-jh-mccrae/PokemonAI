@@ -141,12 +141,15 @@ def test_benching_the_wincon_basic_is_positive_even_on_the_last_slot():
 
 def test_benching_a_duplicate_of_a_fielded_body_on_the_last_slot_is_negative():
     """Every basic in the store carries a Role, so 'redundant' means DUPLICATED: three
-    Makuhita already field the backup-attacker job; a fourth on the last slot is refused."""
+    Makuhita already field the backup-attacker job; a fourth on the last slot is refused.
+    Pinned with size-as-worth zeroed: the armed hp_value default pays bulk for any body,
+    which at 0.2 offsets this refusal — the surplus/last-slot mechanism itself must hold."""
+    context = ctx(overrides={"hp_value": 0.0})
     filler = [body(MAKUHITA, 10 + i) for i in range(3)] + [body(LUNATONE, 14)]
     before = board(me=player(active=body(DRAGAPULT, 1), bench=filler, hand=[MAKUHITA]))
     after = board(me=player(active=body(DRAGAPULT, 1),
                             bench=filler + [body(MAKUHITA, 20)], hand=[]))
-    assert swing(before, after) < 0
+    assert swing(before, after, context) < 0
 
 
 def test_benching_a_filler_on_an_empty_bench_is_positive():
@@ -295,7 +298,9 @@ def test_energy_units_without_card_detail_still_price():
 
 
 def test_a_zero_max_hp_body_prices_as_intact():
-    context = ctx()
+    # Size-as-worth zeroed: the armed hp_value default legitimately prices printed bulk,
+    # which a zero-max-hp record does not have; this pins the damage-blend fallback alone.
+    context = ctx(overrides={"hp_value": 0.0})
     zeroed = board(me=player(active=body(DREEPY, 1, hp=0, max_hp=0)))
     intact = board(me=player(active=body(DREEPY, 1, hp=100, max_hp=100)))
     assert evaluate(zeroed, context).total == evaluate(intact, context).total
@@ -442,7 +447,8 @@ def test_rental_energy_on_the_bench_prices_zero():
 def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
     """ADR-0151: evolving reads NEGATIVE at defaults (the hand pays full worth while the
     board credits role parity — the diagnosed evolution underpricing); with size priced,
-    the 260-HP jump out-pays the spend. Default 0.0 must keep today's sign."""
+    the 260-HP jump out-pays the spend. The armed default (0.2, 2026-08-21) must keep
+    the cure; the zeroed control documents the disease."""
     before = board(me=player(active=body(DRAGAPULT, 9),
                              bench=[body(STARYU, 1, hp=70, max_hp=70)],
                              hand=[MEGA_STARMIE]))
@@ -450,18 +456,21 @@ def test_hp_value_makes_the_evolve_pay_for_its_hand_card():
                             bench=[body(MEGA_STARMIE, 1, hp=330, max_hp=330,
                                         under=(STARYU,))],
                             hand=[]))
-    assert swing(before, after) < 0                       # the disease, documented
-    armed = ctx(overrides={"hp_value": 0.2})
+    flat = ctx(overrides={"hp_value": 0.0})
+    assert swing(before, after, flat) < 0                 # the disease, documented
+    armed = ctx()
+    assert armed.weights.hp_value > 0
     assert swing(before, after, armed) > 0
 
 
 def test_hp_value_prices_chip_damage_and_unknown_threats():
     """Size needs no store record: chipping 100 off a big body is a real gain, and a
     store-unknown 330 HP opponent body carries more threat weight than a 70 HP one."""
-    context = ctx(overrides={"hp_value": 0.2})
+    context = ctx()
     fresh = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=330, max_hp=330)))
     chipped = board(them=player(own=False, active=body(MEGA_STARMIE, 9, hp=230, max_hp=330)))
-    assert swing(fresh, chipped, context) > swing(fresh, chipped, ctx())
+    assert (swing(fresh, chipped, context)
+            > swing(fresh, chipped, ctx(overrides={"hp_value": 0.0})))
 
     big = board(them=player(own=False, active=body(UNKNOWN, 9, hp=330, max_hp=330)))
     small = board(them=player(own=False, active=body(UNKNOWN, 9, hp=70, max_hp=70)))
