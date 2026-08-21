@@ -170,7 +170,7 @@ class Correction:
     built_at: str | None = None     # that build's timestamp (ISO), parsed from stem
     live_trace: dict | None = None  # live Decision Telemetry this game emitted (ADR-0019), incl.
                                     # `posture` — who the agent thought it faced (ADR-0041)
-    posture_mismatch: bool = False  # human judged the Read/Posture WRONG here (ADR-0041): tie it to
+    posture_mismatch: bool = False  # human judged the opponent belief wrong here (ADR-0041): tie it to
                                     # that archetype's Brief, not to a generic weight.
     # --- Scope (ADR-0049) ---
     scope: str = "decision"         # decision (one Decision) | turn (one ply)

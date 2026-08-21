@@ -1,22 +1,33 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Matchup Brief",
-  "description": "The objective, shared counterplay annotations for ONE opponent Variant Cluster (ADR-0027). Lives beside the auto-artifact at src/common/scouting/briefs/<slug>.json; authored by /matchup-genie, consumed (future) by the Read/Posture layer to populate Board opponent-property fields. Validated by scripts/validate_brief.py (the enforcing gate; this schema is the human/machine reference).",
+  "description": "Typed qualitative opponent knowledge for one variant cluster.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["slug", "covers", "pokemon", "key_cards", "opponent_properties"],
+  "required": ["slug", "covers", "pokemon", "key_cards", "traits"],
   "properties": {
     "slug": {"type": "string", "description": "matches the filename and data/meta/decks/<slug>/"},
     "label": {"type": "string", "description": "optional human label"},
     "covers": {
       "type": "array", "minItems": 1, "items": {"type": "string"},
-      "description": "member Archetype strings (from index.json[slug].covers) — routes every variant to this one Brief; the Read matches read.candidates[0] against this list"
+      "description": "Archetype strings compiled into candidate-conditioned profiles."
     },
     "authored": {"type": "string", "description": "ISO date the Brief was authored/updated"},
-    "opponent_properties": {
+    "traits": {
       "type": "object",
-      "description": "the levers — boolean/scalar weakness keys the (future) consumer maps onto Board. Every key must be registered in src/common/scouting/opponent_properties.json.",
-      "additionalProperties": {"type": ["boolean", "string", "number"]}
+      "description": "Only qualitative claims not derivable from card records.",
+      "additionalProperties": false,
+      "properties": {
+        "tempo": {"enum": ["fast", "midrange", "slow"]},
+        "opening_fragility": {"type": "boolean"},
+        "heal_wall": {"type": "boolean"},
+        "deckout_vulnerability": {"type": "boolean"},
+        "setup_dependency": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["primary_attacker", "backup_attacker", "sniper", "draw_engine", "search_engine", "healer", "stall_pokemon", "supporter_tutor", "accel_source", "counter_mover", "item_locker", "retreat_assist", "gust", "support_pokemon"]}
+        }
+      }
     },
     "pokemon": {
       "type": "array",

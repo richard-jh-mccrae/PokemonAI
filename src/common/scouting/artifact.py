@@ -23,7 +23,7 @@ def _empty() -> Artifact:
     return Artifact(priors={}, card_inclusion={}, background={}, dossiers={}, meta={})
 
 
-def load_artifact(path: str | Path | None = None) -> Artifact:
+def load_artifact(path: str | Path | None = None, *, strict: bool = False) -> Artifact:
     """Re-ints the string card-id keys and lifts `card_inclusion` to the top level. Any error
     degrades to an EMPTY Artifact, so the Scout still runs on observed-only intel."""
     try:
@@ -51,4 +51,6 @@ def load_artifact(path: str | Path | None = None) -> Artifact:
         return Artifact(priors=priors, card_inclusion=card_inclusion, background=background,
                         dossiers=dossiers, meta=raw.get("meta") or {})
     except Exception:
+        if strict:
+            raise
         return _empty()

@@ -1,7 +1,7 @@
 {
   "slug": "kyogre_mega_abomasnow_ex",
   "covers": ["Jynx / Kyogre / Mega Abomasnow ex", "Kyogre / Mega Abomasnow ex", "Mega Abomasnow ex"],
-  "opponent_properties": {"opp_tempo": "slow", "opp_no_pivot": true, "opp_deckout_vulnerable": true},
+  "traits": {"tempo": "slow", "deckout_vulnerability": true},
   "pokemon": [
     {"card": "Kyogre", "roles": ["primary_attacker", "support_pokemon"]},
     {"card": "Mega Abomasnow ex", "roles": ["primary_attacker"]},

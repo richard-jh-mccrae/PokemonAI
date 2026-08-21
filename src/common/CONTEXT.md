@@ -148,7 +148,7 @@ Own-deck doctrine that may add to or explicitly override General Strategies.
 _Avoid_: Card Role, hard-coded line
 
 **Opponent Strategy**:
-Scouting doctrine activated by the matched opponent Brief.
+Scouting doctrine activated by an **Archetype Belief**, including target and avoidance priorities.
 _Avoid_: Opponent Role, matchup value
 
 **Pokémon Role**:
@@ -172,6 +172,31 @@ _Avoid_: Authored evolution map, Pokémon Role
 An intrinsic typed parameterized card capability shared across decks. It carries no value itself;
 the Ledger combines it with board context to emit Valuation Features.
 _Avoid_: Tag, Pokémon Role, deck doctrine, valuation feature
+
+**Opponent Model**:
+The match-scoped owner of opponent knowledge. It updates once per observation and emits an
+**Opponent Snapshot**; it never chooses actions and is never itself passed to decision consumers.
+_Avoid_: mutable opponent state, opponent policy
+
+**Opponent Snapshot**:
+The immutable legal-view of opponent knowledge for one decision. It is the sole opponent-knowledge
+surface consumed by the Ledger and exposed to telemetry; degraded knowledge is stated, never hidden.
+_Avoid_: Opponent Layer, mutable opponent state, telemetry record
+
+**Opponent Evidence**:
+The typed public facts and events from which the **Opponent Model** learns. Hidden hand contents and
+deck order cannot be represented.
+_Avoid_: raw observation, replay truth, Opponent Snapshot
+
+**Opponent Trait**:
+An archetype-level belief about the opponent that cannot be derived from visible state or card facts.
+It is typed and carries belief provenance inside the **Opponent Snapshot**.
+_Avoid_: opponent property, Pokémon Role, Opponent Strategy, card mechanic
+
+**Archetype Belief**:
+One candidate explanation of the opponent's Deck, carrying its posterior probability and descriptive
+claims. An **Opponent Snapshot** retains every bounded candidate plus the unknown probability.
+_Avoid_: matched Brief, recognized deck, top archetype, Posture
 
 The runtime performs declarative setup choices, resolves Roles and evolution from the unified
 card records (deck declarations REPLACE authored defaults), builds the deck's Evaluation Model

@@ -3,12 +3,9 @@
   "label": "Cornerstone Mask Ogerpon ex / Crustle / Mega Kangaskhan ex",
   "covers": ["Cornerstone Mask Ogerpon ex / Crustle / Mega Kangaskhan ex", "Crustle / Mega Kangaskhan ex"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "slow",
-    "opp_ex_damage_immune": true,
-    "opp_effect_immune_bodies": true,
-    "opp_is_heal_wall": true,
-    "opp_pierces_active_effects": true
+  "traits": {
+    "tempo": "slow",
+    "heal_wall": true
   },
   "pokemon": [
     {"card": "Cornerstone Mask Ogerpon ex", "roles": ["primary_attacker"]},

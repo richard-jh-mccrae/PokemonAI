@@ -1,17 +1,8 @@
-"""Scouting: recognize the opponent's deck and produce the Read.
-
-See ../CONTEXT.md for the glossary and docs/scouting.md for the design. Public
-surface: ``Scout``, ``Read`` (+ ``Intel`` / ``EvoPath``), ``load_artifact`` /
-``Artifact``, and the card-stat providers. Importing this package never loads the
-native engine.
-"""
+"""Offline scouting artifacts and card-stat adapters used by the Opponent Model."""
 from .artifact import Artifact, load_artifact
 from .provider import CardStat, DictCardStatProvider, EngineCardStatProvider
-from .read import EvoPath, Intel, Read
-from .scout import Scout
 
 __all__ = [
-    "Scout", "Read", "Intel", "EvoPath",
     "Artifact", "load_artifact",
     "CardStat", "DictCardStatProvider", "EngineCardStatProvider",
 ]

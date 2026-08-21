@@ -3,11 +3,9 @@
   "label": "Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb",
   "covers": ["Cynthia's Garchomp ex / Cynthia's Roserade / Cynthia's Spiritomb"],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "midrange",
-    "opp_donk_vulnerable": true,
-    "opp_effect_immune_bodies": true,
-    "opp_comeback_disruptor": true
+  "traits": {
+    "tempo": "midrange",
+    "opening_fragility": true
   },
   "pokemon": [
     {"card": "Cynthia's Gabite", "roles": ["primary_attacker"]},

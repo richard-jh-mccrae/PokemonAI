@@ -11,13 +11,13 @@ from .features import FEATURE_CATALOG, FeatureCatalog, FeatureSpec
 from .preview import ContinuationFootprint
 from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
                    register_preview_variant)
-from .worth import ArchetypeBelief, EvaluationModel, OpponentBeliefs
+from .worth import EvaluationModel
 
-__all__ = ("ArchetypeBelief", "BehaviorIdentity", "ComputeConfiguration",
+__all__ = ("BehaviorIdentity", "ComputeConfiguration",
            "ContinuationFootprint", "DeckOverlay",
            "FEATURE_CATALOG",
            "FeatureActivation", "FeatureCatalog", "FeatureContribution", "FeatureSpec",
            "EvaluationModel", "LedgerDecider", "LedgerNativeProvider", "LedgerUnavailable",
-           "OpponentBeliefs", "PreviewState", "Valuation",
+           "PreviewState", "Valuation",
            "ValuationConfiguration", "evaluate", "preview_provider_factory",
            "register_preview_variant")

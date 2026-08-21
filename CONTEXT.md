@@ -70,10 +70,9 @@ The **Win rate** of one Archetype *against a specific opponent Archetype* — an
 pair (A-beats-B ≠ B-beats-A), recency-weighted and shrunk toward A's overall Win rate
 then 0.5 so thin records stay neutral. Compiled into the Scouting artifact
 (`dossier.matchups`) and consumed as *favorability* (how favored the agent is vs the
-predicted opponent). An **offline statistic** — distinct from the Agent Runtime **Read**,
-which is the live per-turn assessment (the Read glossary deprecates "matchup" for *that*
-live sense).
-_Avoid_: "the Read" (that's live/per-turn); counter (a card-level tech, not a rate)
+predicted opponent). An **offline statistic** — distinct from an Agent Runtime
+**Archetype Belief**, which is a live per-decision assessment.
+_Avoid_: Archetype Belief (that's live/per-decision); counter (a card-level tech, not a rate)
 
 **Top Deck**:
 A Deck with a high **Win rate** within the kept (refined) Bands — genuinely strong. Refinement is ensured by the top-rated source + band filter rather than a per-Submission confidence proxy.

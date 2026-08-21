@@ -6,7 +6,7 @@
     "Mega Lucario ex",
     "Lunatone / Mega Lucario ex / Solrock"
   ],
-  "opponent_properties": {"opp_tempo": "midrange"},
+  "traits": {"tempo": "midrange"},
   "pokemon": [
     {"card": "Hariyama", "roles": ["backup_attacker"]},
     {"card": "Lunatone", "roles": ["backup_attacker", "accel_source"]},

@@ -11,7 +11,7 @@ from .card_worth import role_value
 from common.runtime import AgentRuntime, _int_field, _last_resort_selection
 from common.scouting.pokemon_roles import general_pokemon_roles
 from common.strategy import Roles
-from common.scouting.briefs import _evolution_line, resolve_brief_cards
+from .scouting import evolution_line, resolve_brief_cards
 from .state import DecisionState
 
 from .belief import BellmanDeckProfile, opponent_belief
@@ -52,7 +52,7 @@ def resolve_scouted_role_worth(read, artifact, stats, *, briefs=(), functions=No
                     candidate_worth[card_id] = max(
                         candidate_worth.get(card_id, 0.0), role_value(combined))
                 if "primary_attacker" in roles:
-                    line_ids = _evolution_line(
+                    line_ids = evolution_line(
                         row_ids, ids_for_name, getattr(stats, "get", None),
                         getattr(stats, "forward_card_ids", None))
                     payoff_rank = max((_stage_rank(stats, card_id) for card_id in line_ids),
@@ -155,6 +155,8 @@ class BellmanTeacherRuntime(AgentRuntime):
 
     def __init__(self, strategy, deck, **kwargs):
         teacher_functions = kwargs.pop("functions", None)
+        kwargs.pop("scout", None)
+        kwargs.pop("briefs", None)
         super().__init__(strategy, deck, **kwargs)
         self.functions = teacher_functions
         self.effects = CardEffects.load()
@@ -201,18 +203,22 @@ class BellmanTeacherRuntime(AgentRuntime):
         self._proof_suffix = ()
         self._proof_id = ""
 
-    def _planner(self, observation):
-        self._observe_matchup(observation)
-        brief = self.last_brief
+    def _planner(self, state, observation):
+        snapshot = self._observe_matchup(state)
         current = observation.get("current") or {}
         seat = int(current.get("yourIndex", 0))
+        candidates = tuple((candidate.archetype, candidate.probability)
+                           for candidate in snapshot.candidates)
+        properties = {trait.name: trait.value
+                      for candidate in snapshot.candidates[:1] for trait in candidate.traits}
         belief = opponent_belief(
-            observation, candidates=self.last_read.candidates,
-            properties=(brief.opponent_properties if brief is not None else None))
-        self.opponent_role_worth = resolve_scouted_role_worth(
-            self.last_read, getattr(self.scout, "artifact", None), self.stats,
-            briefs=self.briefs, functions=self.functions,
-            line_decay=self.pilot_profile.get("scouting.line_distance_decay"))
+            observation, candidates=candidates, properties=properties)
+        self.opponent_role_worth = {}
+        for candidate in snapshot.candidates:
+            for card_id, roles in candidate.roles.items():
+                self.opponent_role_worth[card_id] = max(
+                    self.opponent_role_worth.get(card_id, 0.0),
+                    candidate.probability * role_value(roles))
         players = current.get("players") or ()
         opponent = (players[1 - seat] if len(players) == 2 and players[1 - seat] else {})
         bodies = tuple(body for body in
@@ -323,23 +329,23 @@ class BellmanTeacherRuntime(AgentRuntime):
             decision.chosen, decision.action, decision.value, decision.complete,
             diagnostics, decision.plan_suffix)
 
-    def _decide_core(self, observation: dict) -> RootDecision:
-        planner = self._planner(observation)
+    def _decide_core(self, state, observation: dict) -> RootDecision:
+        planner = self._planner(state, observation)
         request = PlanRequest(observation, self.deck, self.strategy.name)
         try:
-            return self._planner_epoch(planner, request, observation)
+            return self._planner_epoch(planner, request, observation, state)
         except Exception:
             planner.discard_precheck()               # release the retained native session
             raise
 
-    def _planner_epoch(self, planner, request, observation) -> RootDecision:
+    def _planner_epoch(self, planner, request, observation, state) -> RootDecision:
         self.last_decision_limit = (
             self.decision_clock.external_seconds if self.decision_clock is not None
             else planner._epoch_seconds(request))
         proof_cached, _proof_invalidation = self._cached_proof_decision(planner, request)
         if proof_cached is not None:
             return proof_cached
-        forced = self._forced_selection(observation)
+        forced = self._forced_selection(state)
         if forced is not None:
             return forced
         proof = planner.prove(request)

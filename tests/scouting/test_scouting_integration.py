@@ -1,63 +1,41 @@
-"""End-to-end: real replay decks -> compile -> load -> Scout recognizes.
+"""Real replay decks compile into the Opponent Model and remain recognizable."""
+from __future__ import annotations
 
-Exercises the whole lib-free pipeline against the committed sample replay.
-"""
 import json
 from pathlib import Path
 
-import pytest
-
-from common.scouting import Scout, load_artifact
-from common.observation import ObservationStateBuilder
+from common.opponent import OpponentEvidence, OpponentKnowledgeBase, OpponentModel
+from common.scouting.artifact import load_artifact
+from common.scouting.provider import EngineCardStatProvider
 from meta_tracker.archetype import classify
 from meta_tracker.cards import load_cards
 from meta_tracker.compile_scouting import compile_artifact
 from meta_tracker.parse import extract_decks, load_replay
+from scouting_helpers import make_obs
+
 
 REPLAY = Path(__file__).resolve().parents[1] / "fixtures" / "episode-81364540-replay.json.gz"
 NOW = "2026-06-23T00:00:00"
 
 
-def _ep(a0, d0, a1, d1):
+def _episode(a0, d0, a1, d1):
     return {"arch0": a0, "deck0": d0, "arch1": a1, "deck1": d1,
             "band": "Mid", "end_time": "2026-06-22T00:00:00"}
 
 
-def _obs_revealing(card_ids, *, your_index=0, turn=2):
-    opp = 1 - your_index
-    players = [None, None]
-    base = {"bench": [], "benchMax": 5, "deckCount": 0, "hand": [], "handCount": 0,
-            "prize": [], "poisoned": False, "burned": False, "asleep": False,
-            "paralyzed": False, "confused": False}
-    players[your_index] = {**base, "active": [{"id": 700, "hp": 1, "maxHp": 1}],
-                           "discard": []}
-    players[opp] = {**base, "active": [],
-                    "discard": [{"id": c} for c in card_ids]}
-    return ObservationStateBuilder().root(
-        {"select": {"context": 0}, "logs": [],
-         "current": {"turn": turn, "yourIndex": your_index, "players": players,
-                     "firstPlayer": 0, "supporterPlayed": False, "stadiumPlayed": False,
-                     "energyAttached": False, "retreated": False, "result": None,
-                     "stadium": [], "looking": None}})
-
-
-@pytest.mark.req("REQ-SCOUT-0001")
 def test_real_replay_decks_compile_and_recognize(tmp_path):
     cards = load_cards()
-    d0, d1 = extract_decks(load_replay(REPLAY))
-    a0, a1 = classify(d0, cards).name, classify(d1, cards).name
+    first, second = extract_decks(load_replay(REPLAY))
+    a0, a1 = classify(first, cards).name, classify(second, cards).name
+    payload = compile_artifact([_episode(a0, first, a1, second)] * 3, cards, now=NOW)
+    source = tmp_path / "artifact.json"
+    source.write_text(json.dumps(payload), encoding="utf-8")
+    provider = EngineCardStatProvider()
+    provider.warm()
+    knowledge = OpponentKnowledgeBase.compile(load_artifact(source, strict=True), (), provider)
+    model = OpponentModel(knowledge, provider=provider)
+    evidence = OpponentEvidence.from_state(make_obs(opp_discard=sorted(set(second))))
 
-    art_dict = compile_artifact([_ep(a0, d0, a1, d1)] * 3, cards, now=NOW)
-    p = tmp_path / "artifact.json"
-    p.write_text(json.dumps(art_dict), encoding="utf-8")
-    artifact = load_artifact(p)
+    snapshot = model.update(evidence)
 
-    # Revealing side 1's whole deck should pin side 1's archetype.
-    read = Scout(artifact).observe(_obs_revealing(sorted(set(d1))))
-    assert read.candidates and read.candidates[0][0] == a1
-
-    # Reset across matches: a prior match's reveal must not bleed into next.
-    scout = Scout(artifact)
-    scout.observe(_obs_revealing(sorted(set(d0)), turn=9))
-    read2 = scout.observe(_obs_revealing(sorted(set(d1)), turn=1))
-    assert read2.candidates[0][0] == a1
+    assert snapshot.candidates[0].archetype == a1

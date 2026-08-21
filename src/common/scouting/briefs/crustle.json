@@ -8,12 +8,8 @@
     "Crustle / Teal Mask Ogerpon",
     "Crustle / Druddigon / Flutter Mane"
   ],
-  "opponent_properties": {
-    "opp_ex_damage_immune": true,
-    "opp_caps_big_hits": true,
-    "opp_is_heal_wall": true,
-    "opp_pierces_active_effects": true,
-    "opp_single_prize": true
+  "traits": {
+    "heal_wall": true
   },
   "pokemon": [
     {

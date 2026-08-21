@@ -79,7 +79,7 @@ def _compact_diagnostics(diagnostics: dict) -> dict:
     return compact
 
 
-def to_record(decision, *, read=None, seat=None, compact=False,
+def to_record(decision, *, opponent=None, seat=None, compact=False,
               state=None,
               decision_seconds: float | None = None,
               decision_limit_seconds: float | None = None,
@@ -96,10 +96,9 @@ def to_record(decision, *, read=None, seat=None, compact=False,
         "value": float(decision.value),
         "complete": bool(decision.complete),
         "diagnostics": diagnostics,
-        "belief": ({
-            "candidates": _wire(read.candidates),
-            "unknown_mass": float(read.unknown_mass),
-        } if read is not None and read.candidates else None),
+        "belief": ({"identity": opponent.identity,
+                    "snapshot": _wire(opponent.canonical_data())}
+                   if opponent is not None else None),
     }
     if state is not None:
         from common.observation import ObservationRecord
@@ -115,9 +114,9 @@ def to_record(decision, *, read=None, seat=None, compact=False,
     return record
 
 
-def emit(decision, *, read=None, seat=None, state=None, out=None, decision_seconds=None,
+def emit(decision, *, opponent=None, seat=None, state=None, out=None, decision_seconds=None,
          decision_limit_seconds=None, deadline_hit=None) -> None:
-    record = to_record(decision, read=read, seat=seat, state=state, compact=True,
+    record = to_record(decision, opponent=opponent, seat=seat, state=state, compact=True,
                        decision_seconds=decision_seconds,
                        decision_limit_seconds=decision_limit_seconds,
                        deadline_hit=deadline_hit)

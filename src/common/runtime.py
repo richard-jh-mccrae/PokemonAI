@@ -12,20 +12,17 @@ from common.api import ActionIdentity, RootDecision
 from common.observation import (HiddenHand, LegalKnowledge, ObservationState,
                                 ObservationStateBuilder, OpponentBelief, reduce_knowledge)
 from common.cards import card_clauses, card_store
-from common.cards.pokemon_roles import undeclared_pokemon_roles
 from common.cards.card_facts import EnergyCard
 from common.cards.functions.damage import bench_reach
 from common.deck_tracker import OwnCardModel
-from common.ledger import (ArchetypeBelief, ComputeConfiguration, DeckOverlay, EvaluationModel,
-                           LedgerDecider, OpponentBeliefs, ValuationConfiguration,
+from common.ledger import (ComputeConfiguration, DeckOverlay, EvaluationModel,
+                           LedgerDecider, ValuationConfiguration,
                            preview_provider_factory)
+from common.opponent import (OpponentEvidence, OpponentKnowledgeBase, OpponentModel,
+                             OpponentSnapshot)
 from common.scouting.artifact import load_artifact
-from common.scouting.briefs import brief_for_candidate, load_briefs, scouted_ledger_roles
-from common.scouting.pokemon_roles import general_pokemon_roles
+from common.scouting.briefs import load_briefs
 from common.scouting.provider import EngineCardStatProvider
-from common.scouting.read import Read
-from common.scouting.scout import Scout
-from common.scouting.traits import TRAIT_CATALOG
 from common.strategy.context import (
     _CARD,
     _DRAW_COUNT,
@@ -96,8 +93,8 @@ class AgentRuntime:
     """Deployment shell: declarative pregame, forced selections, and the Ledger (ADR-0145/0149);
     the Bellman teacher extends this shell from ``deprecated/bellman/runtime.py``."""
 
-    def __init__(self, strategy, deck, *, stats=_ENGINE,
-                 scout=_ENGINE, briefs=_ENGINE, provider_factory=None, limits=None,
+    def __init__(self, strategy, deck, *, stats=_ENGINE, knowledge_base=None,
+                 opponent_model_factory=OpponentModel, provider_factory=None, limits=None,
                  valuation_configuration=None, compute_configuration=None):
         self.strategy = strategy
         self.deck = tuple(int(card_id) for card_id in deck)
@@ -106,19 +103,18 @@ class AgentRuntime:
             stats.warm()
         self.stats = stats
         self.roles = strategy.roles.resolve(self.deck)
-        if scout is _ENGINE:
-            scout = Scout(load_artifact(), provider=self.stats)
-        self.scout = scout
-        self.briefs = load_briefs() if briefs is _ENGINE else list(briefs or ())
-        for brief in self.briefs:
-            TRAIT_CATALOG.compile(brief.opponent_properties)
-            unknown_roles = undeclared_pokemon_roles(
-                role for pokemon in brief.pokemon for role in pokemon.get("roles", ()))
-            if unknown_roles:
-                raise KeyError(f"unknown Pokemon Role {unknown_roles[0]!r}")
+        profile_provider = self.stats
+        if profile_provider is None:
+            profile_provider = EngineCardStatProvider()
+            profile_provider.warm()
+        self.opponent_knowledge = (knowledge_base or OpponentKnowledgeBase.compile(
+            load_artifact(strict=True), load_briefs(strict=True), profile_provider))
+        self.opponent_model_factory = opponent_model_factory
+        self.opponent_model = None
+        self.opponent_snapshot: OpponentSnapshot | None = None
+        self._in_pregame = False
         self.provider_factory = provider_factory
         self.limits = limits
-        self.last_read = Read()
         self.last_decision_limit = None
         self.last_deadline_hit = False
         self._fallback_scope = None
@@ -210,13 +206,21 @@ class AgentRuntime:
             {"backend": "declarative-pregame", "context": context},
         )
 
-    def _observe_matchup(self, state: ObservationState) -> float:
-        """One scouting pass per decision, shared by both brains."""
-        self.last_read = self.scout.observe(state) if self.scout is not None else Read()
+    def _new_opponent_model(self):
+        return self.opponent_model_factory(
+            self.opponent_knowledge, provider=self.stats,
+            strict=os.environ.get("AGENT_BRAIN_STRICT") == "1")
+
+    def _observe_matchup(self, state: ObservationState) -> OpponentSnapshot:
+        if self.opponent_model is None:
+            self.opponent_model = self._new_opponent_model()
+        self.opponent_snapshot = self.opponent_model.update(OpponentEvidence.from_state(state))
+        return self.opponent_snapshot
 
     def _reset_for_pregame(self) -> None:
         """Match-boundary state clearing; the teacher extends this with its plan caches."""
-        self.last_read = Read()
+        self.opponent_model = self._new_opponent_model()
+        self.opponent_snapshot = None
         self._attack_locks = {}
         self.knowledge = LegalKnowledge()
 
@@ -258,8 +262,11 @@ class AgentRuntime:
         state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
         self.knowledge = state.knowledge
         if state.turn.number <= 0:
-            self._reset_for_pregame()
+            if not self._in_pregame:
+                self._reset_for_pregame()
+            self._in_pregame = True
             return self._pregame(state)
+        self._in_pregame = False
         scope = (state.turn.number, state.seat)
         select = state.select
         context = -1 if select is None or select.context is None else int(select.context)
@@ -301,30 +308,14 @@ class AgentRuntime:
         forced = self._forced_selection(state)
         if forced is not None:
             return forced
-        self._observe_matchup(state)
+        snapshot = self._observe_matchup(state)
         self.knowledge = reduce_knowledge(
-            self.knowledge, opponent=_belief_from_read(self.last_read))
+            self.knowledge, opponent=_belief_from_snapshot(snapshot))
         state = ObservationStateBuilder(self.deck).root(observation, knowledge=self.knowledge)
         self.last_state = state
         return self.ledger.decide(
-            observation, opponent=self._opponent_beliefs(state),
+            observation, opponent=snapshot,
             knowledge=self.knowledge, state=state)
-
-    def _opponent_beliefs(self, state: ObservationState):
-        shown = {body.card.card_id for body in state.them.bodies}
-        shown.update(card.card_id for card in state.them.discard)
-        roles = {card_id: tuple(card_roles) for card_id, card_roles in
-                 general_pokemon_roles(shown, self.stats).items()}
-        candidates = []
-        inclusion = getattr(getattr(self.scout, "artifact", None), "card_inclusion", {})
-        for archetype, probability in self.last_read.candidates:
-            brief = brief_for_candidate(self.briefs, archetype)
-            claims = scouted_ledger_roles(Read(), brief, self.stats)
-            traits = TRAIT_CATALOG.compile(brief.opponent_properties) if brief else ()
-            candidates.append(ArchetypeBelief(
-                probability, claims, traits, archetype,
-                resources=inclusion.get(archetype, {})))
-        return OpponentBeliefs(roles, tuple(candidates), self.last_read.unknown_mass)
 
     @staticmethod
     def _crash_report(observation: dict, exc: Exception) -> dict:
@@ -373,13 +364,19 @@ def build_runtime(strategy, deck, **kwargs) -> AgentRuntime:
     return AgentRuntime(strategy, deck, **kwargs)
 
 
-def _belief_from_read(read: Read) -> OpponentBelief:
+def _belief_from_snapshot(snapshot: OpponentSnapshot) -> OpponentBelief:
     scale = 1_000_000
-    candidates = tuple((str(name), round(float(probability) * scale))
-                       for name, probability in read.candidates)
-    expected = tuple(sorted((int(card_id), round(float(probability) * scale))
-                            for card_id, probability in read.expected_cards))
-    return OpponentBelief(evidence=(("archetypes", candidates),), probabilities=expected)
+    candidates = tuple((candidate.archetype, round(candidate.probability * scale))
+                       for candidate in snapshot.candidates)
+    card_ids = {card_id for candidate in snapshot.candidates
+                for card_id in candidate.resources}
+    expected = tuple((card_id, round(sum(
+        candidate.probability * candidate.resources.get(card_id, 0.0)
+        for candidate in snapshot.candidates) * scale))
+                     for card_id in sorted(card_ids))
+    return OpponentBelief(
+        evidence=(("snapshot", snapshot.identity), ("archetypes", candidates)),
+        probabilities=expected)
 
 
 def _read_deck() -> list[int]:
@@ -479,7 +476,8 @@ def make_agent(strategy):
             return chosen
         if telemetry_on:
             try:
-                telemetry.emit(decision, read=runtime.last_read, seat=provisional.seat,
+                telemetry.emit(decision, opponent=runtime.opponent_snapshot,
+                               seat=provisional.seat,
                                state=getattr(runtime, "last_state", provisional),
                                decision_seconds=perf_counter() - started,
                                decision_limit_seconds=runtime.last_decision_limit,

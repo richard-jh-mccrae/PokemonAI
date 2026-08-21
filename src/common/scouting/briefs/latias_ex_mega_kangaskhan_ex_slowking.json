@@ -7,9 +7,9 @@
     "Mega Kangaskhan ex / Meowth ex / Teal Mask Ogerpon ex"
   ],
   "authored": "2026-08-12",
-  "opponent_properties": {
-    "opp_tempo": "midrange",
-    "opp_is_engine_dependent": true
+  "traits": {
+    "tempo": "midrange",
+    "setup_dependency": ["draw_engine", "search_engine"]
   },
   "pokemon": [
     {

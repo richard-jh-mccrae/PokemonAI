@@ -158,33 +158,32 @@ _SCALAR_DEFAULTS = {
     "status.burned": 0.08,
 }
 
-_TRAIT_DEFAULTS = {
-    "trait.opp_accel_dependent": 0.0,
-    "trait.opp_caps_big_hits": 0.0,
-    "trait.opp_comeback_disruptor": 0.0,
-    "trait.opp_deckout_vulnerable": 0.0,
-    "trait.opp_donk_vulnerable": 0.0,
-    "trait.opp_effect_immune_bodies": 0.0,
-    "trait.opp_ex_damage_immune": 0.0,
-    "trait.opp_hand_size_attacker": 0.0,
-    "trait.opp_is_engine_dependent": 0.0,
-    "trait.opp_is_heal_wall": 0.0,
-    "trait.opp_item_locks": 0.0,
-    "trait.opp_no_pivot": 0.0,
-    "trait.opp_pierces_active_effects": 0.0,
-    "trait.opp_single_prize": 0.0,
-    "trait.opp_special_energy_fragile": 0.0,
-    "trait.opp_spreads_bench": 0.0,
-    "trait.opp_tempo.fast": 0.0,
-    "trait.opp_tempo.midrange": 0.0,
-    "trait.opp_tempo.slow": 0.0,
+_BELIEF_DEFAULTS = {
+    "mechanic.comeback_disruption": 0.0,
+    "mechanic.damage_cap": 0.0,
+    "mechanic.effect_immunity": 0.0,
+    "mechanic.hand_size_attack": 0.0,
+    "mechanic.item_lock": 0.0,
+    "mechanic.no_pivot": 0.0,
+    "mechanic.piercing": 0.0,
+    "mechanic.single_prize": 0.0,
+    "mechanic.special_energy_only": 0.0,
+    "mechanic.spread": 0.0,
+    "trait.deckout_vulnerability": 0.0,
+    "trait.heal_wall": 0.0,
+    "trait.opening_fragility": 0.0,
+    "trait.tempo.fast": 0.0,
+    "trait.tempo.midrange": 0.0,
+    "trait.tempo.slow": 0.0,
 }
 
 
 FEATURE_CATALOG = FeatureCatalog(
     tuple(FeatureSpec(key, value) for key, value in _SCALAR_DEFAULTS.items())
     + tuple(FeatureSpec(key, value, "posterior")
-            for key, value in _TRAIT_DEFAULTS.items())
+            for key, value in _BELIEF_DEFAULTS.items())
+    + tuple(FeatureSpec(f"trait.setup_dependency.{role}", 0.0, "posterior")
+            for role in POKEMON_ROLES)
     + tuple(FeatureSpec(f"kind.{kind}", value, "count")
             for kind, value in _KIND_DEFAULTS.items())
     + tuple(FeatureSpec(f"role.{role}", _ROLE_DEFAULTS[role],

@@ -57,7 +57,8 @@ def test_package_contains_the_ledger_and_no_bellman_search(tmp_path):
         assert "common/ledger/configuration.py" in names
         assert "common/ledger/features.py" in names
         assert "common/cards/function_catalog.py" in names
-        assert "common/scouting/traits.py" in names
+        assert "common/opponent/model.py" in names
+        assert "common/scouting/read.py" not in names
         assert "common/ledger/weights.py" not in names
         assert "common/ledger/seam.py" in names
         assert "common/observation/state.py" in names
