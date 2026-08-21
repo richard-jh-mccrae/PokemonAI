@@ -142,7 +142,7 @@ fires, the first-merged-keeps-it convention established above still applies: ref
 recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
 `.claude/skills/open-pr/SKILL.md` for the full mechanics.
 
-**Next free number: 0145.**
+**Next free number: 0153.** (0149 is claimed by open PR #577; 0150-0152 are on disk.)
 
 ## Index
 
