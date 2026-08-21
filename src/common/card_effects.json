@@ -604,6 +604,22 @@
 "1264": {
 "covers": "full",
 "reason": "prevention of damage-COUNTER placement on Benched bodies, both sides, sourced to \"effects of attacks and Abilities from the opponent's Pokemon\" — the effect-not-attack-damage distinction the card's own parenthetical draws (\"Damage from attacks is still taken\") is carried by the minted effect value, not blurred into prevent_damage"
+},
+"56": {
+"covers": "full",
+"reason": "the Active-Spot-gated opponent-active Ability suppression is the whole Ability"
+},
+"353": {
+"covers": "partial",
+"reason": "the once-per-turn deck fetch is carried, but 'Ethan's Adventure' is a name family with no structural field in the engine dump — recorded and UNDECIDED, the 1115/1134 ruling; a filter nothing can evaluate fails CLOSED"
+},
+"202": {
+"covers": "full",
+"reason": "the static +10 for evolved {R} attackers against the opponent's Active is the whole Ability"
+},
+"272": {
+"covers": "full",
+"reason": "the {N}-weakness rewrite to {P} x2 is the whole Ability"
 }
 },
 "11": [
@@ -655,6 +671,13 @@
 "applies_to": "attached_body",
 "target_type": 6,
 "source": "opponent_attack"
+}
+],
+"56": [
+{
+"kind": "ability_suppression",
+"target": "opp_active",
+"condition": "self_active"
 }
 ],
 "57": [
@@ -843,10 +866,25 @@
 "target": "own_type"
 }
 ],
+"202": [
+{
+"kind": "damage_boost",
+"amount": 10,
+"applies_to": "own_evolution_r_pokemon",
+"target": "opp_active"
+}
+],
 "240": [
 {
 "kind": "attack_twice",
 "condition": "festival_grounds_in_play"
+}
+],
+"272": [
+{
+"kind": "weakness_override",
+"target": "opp_dragon_pokemon",
+"new_weakness": 5
 }
 ],
 "293": [
@@ -914,6 +952,15 @@
 "applies_to": "self",
 "source": "opponent_attack",
 "source_class": "ex"
+}
+],
+"353": [
+{
+"kind": "fetch",
+"target": "trainer",
+"zone": "deck",
+"name_family": "Ethan's Adventure",
+"allowance": "body"
 }
 ],
 "380": [

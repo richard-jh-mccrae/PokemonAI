@@ -12,7 +12,7 @@ CARD = PokemonCard(
     weakness=FIRE,
     retreat_cost=1,
     tags=frozenset(['draw', 'energy_accel']),
-    default_roles=('primary_attacker', 'disruption_target'),
+    default_roles=('primary_attacker', 'disruption_target', 'backup_attacker'),
     abilities=(
         Ability(
             name='Teal Dance',

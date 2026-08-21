@@ -363,3 +363,15 @@ def test_primary_attacker_expands_both_directions_and_overrides_backup_role():
 
     assert threats == frozenset({1, 2, 3})
     assert roles == {1: "primary_attacker", 2: "primary_attacker", 3: "primary_attacker"}
+
+
+def test_brief_matching_ignores_apostrophe_typography():
+    """The artifact's archetype labels drift between straight and curly apostrophes per set;
+    routing must not hinge on typography (49 corpus frames went unmatched over it)."""
+    from common.scouting.briefs import Brief, match_brief
+    from common.scouting.read import Read
+
+    brief = Brief(slug="hop", label="hop", covers=["Hop's Trevenant / Hop's Snorlax"])
+    curly = Read(candidates=[("Hop's Trevenant / Hop\u2019s Snorlax", 0.95)],
+                 unknown_mass=0.0, confidence=(0.95, 0.9))
+    assert match_brief([brief], curly) is brief

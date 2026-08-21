@@ -1,12 +1,12 @@
 # Ledger corpus dashboard
 
-Generated 2026-08-21T04:51:04.200400+00:00 at `89a7a44dac25`.
+Generated 2026-08-21T04:57:09.936332+00:00 at `8f143f8fa7e4`.
 
 | deck | graded | agrees | agreement | ungraded | retired | gap-affected decisions | fallbacks |
 |---|---|---|---|---|---|---|---|
 | dragapult_ex | 43 | 19 | 44.2% | 0 | 11 | 21 | 0 |
 | mega_lucario | 52 | 24 | 46.2% | 0 | 18 | 17 | 0 |
-| mega_starmie | 331 | 165 | 49.9% | 0 | 16 | 169 | 0 |
+| mega_starmie | 331 | 165 | 49.9% | 0 | 16 | 165 | 0 |
 
 **Generality floor (worst deck): 44.2%**
 
@@ -376,7 +376,7 @@ Generated 2026-08-21T04:51:04.200400+00:00 at `89a7a44dac25`.
 - Ledger chose `[2]` Riolu
 - ruling was `[1]` Basic {F} Energy
 - rationale: CRITICAL: you had the chance to fetch an energy, which could be attached to Mega Lucario, then free retreat to lucario and KO opponent with Aura Jab. that then would have recycled 2 energies from discard to be placed on solrock and lunatone.
-- priced +0.3302 ActionIdentity(kind='card', parts=('[{"playerIndex":1,"type":3},[[1,{"id":677,"playerIndex":1}]]]',))
+- priced +0.3303 ActionIdentity(kind='card', parts=('[{"playerIndex":1,"type":3},[[1,{"id":677,"playerIndex":1}]]]',))
 - priced +0.2525 ActionIdentity(kind='card', parts=('[{"playerIndex":1,"type":3},[[1,{"id":675,"playerIndex":1}]]]',))
 - priced +0.1925 ActionIdentity(kind='card', parts=('[{"playerIndex":1,"type":3},[[1,{"id":676,"playerIndex":1}]]]',))
 
@@ -583,7 +583,7 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - rationale: Should snipe highest threat Pokemon, in this case the only benched pokemon with energy.
 - priced +0.0833 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":110,"id":184,"maxHp":210,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 - priced +0.0833 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":90,"id":108,"maxHp":210,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
-- priced +0.0636 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[6],"energyCards":[{"id":20,"playerIndex":1}],"hp":70,"id":272,"maxHp":190,"playerIndex":1,"preEvolution":[],"tools":[{"id":1172,"playerIndex":1}]}]]]',))
+- priced +0.0820 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[6],"energyCards":[{"id":20,"playerIndex":1}],"hp":70,"id":272,"maxHp":190,"playerIndex":1,"preEvolution":[],"tools":[{"id":1172,"playerIndex":1}]}]]]',))
 
 ### mega_starmie `81785223-45` (Damage, sequencing_error)
 
@@ -592,7 +592,7 @@ retreat meowth, promote solrock, attach energy to solrock (never should have att
 - rationale: 
 - priced +0.0833 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":60,"id":184,"maxHp":210,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 - priced +0.0833 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[],"energyCards":[],"hp":90,"id":108,"maxHp":210,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
-- priced +0.0553 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[6],"energyCards":[{"id":6,"playerIndex":1}],"hp":70,"id":272,"maxHp":190,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
+- priced +0.0737 ActionIdentity(kind='card', parts=('[1,{"playerIndex":1,"type":3},[[5,{"appearThisTurn":false,"energies":[6],"energyCards":[{"id":6,"playerIndex":1}],"hp":70,"id":272,"maxHp":190,"playerIndex":1,"preEvolution":[],"tools":[]}]]]',))
 
 ### mega_starmie `81903490-49` (Main, misattachment)
 

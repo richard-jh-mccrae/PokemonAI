@@ -70,13 +70,20 @@ def load_briefs(path: str | Path | None = None) -> list[Brief]:
     return out
 
 
+def _covers_key(label: str) -> str:
+    """Archetype labels arrive with mixed straight/curly apostrophes (the artifact's own
+    spellings drift per set); routing must not hinge on typography."""
+    return label.replace("’", "'")
+
+
 def match_brief(briefs: list[Brief], read: Read | None) -> Brief | None:
     """Plain string routing on ``candidates[0]``; γ tempers how the match is USED downstream, never
     whether it matches."""
     if not read or not read.candidates:
         return None
-    top = read.candidates[0][0]
-    return next((b for b in briefs if top in b.covers), None)
+    top = _covers_key(read.candidates[0][0])
+    return next((b for b in briefs
+                 if any(top == _covers_key(cover) for cover in b.covers)), None)
 
 
 _TARGET_ROLE = {

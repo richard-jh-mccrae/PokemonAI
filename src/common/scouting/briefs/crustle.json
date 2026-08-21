@@ -1,6 +1,13 @@
 {
   "slug": "crustle",
-  "covers": ["Crustle", "Crustle / Drednaw / Sylveon", "Crustle / Sylveon"],
+  "covers": [
+    "Crustle",
+    "Crustle / Drednaw / Sylveon",
+    "Crustle / Sylveon",
+    "Centiskorch / Crustle",
+    "Crustle / Teal Mask Ogerpon",
+    "Crustle / Druddigon / Flutter Mane"
+  ],
   "opponent_properties": {
     "opp_ex_damage_immune": true,
     "opp_caps_big_hits": true,
@@ -9,12 +16,95 @@
     "opp_single_prize": true
   },
   "pokemon": [
-    {"card": "Crustle", "roles": ["primary_attacker"]},
-    {"card": "Dwebble", "roles": ["primary_attacker"]},
-    {"card": "Chewtle", "roles": ["backup_attacker"]},
-    {"card": "Drednaw", "roles": ["backup_attacker"]},
-    {"card": "Eevee", "roles": ["backup_attacker"]},
-    {"card": "Sylveon", "roles": ["backup_attacker"]}
+    {
+      "card": "Crustle",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Dwebble",
+      "roles": [
+        "primary_attacker"
+      ]
+    },
+    {
+      "card": "Chewtle",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Drednaw",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Eevee",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Sylveon",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Sizzlipede",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Centiskorch",
+      "roles": [
+        "backup_attacker"
+      ]
+    },
+    {
+      "card": "Teal Mask Ogerpon",
+      "roles": [
+        "support_pokemon",
+        "accel_source"
+      ]
+    },
+    {
+      "card": "Budew",
+      "roles": [
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Druddigon",
+      "roles": [
+        "support_pokemon"
+      ]
+    },
+    {
+      "card": "Flutter Mane",
+      "roles": [
+        "support_pokemon",
+        "disruption_target"
+      ]
+    },
+    {
+      "card": "Koraidon",
+      "roles": [
+        "backup_attacker"
+      ]
+    }
   ],
-  "key_cards": [{"card": "Hero's Cape", "role": "hp_boost"}, {"card": "Cook", "role": "healing"}]
+  "key_cards": [
+    {
+      "card": "Hero's Cape",
+      "role": "hp_boost"
+    },
+    {
+      "card": "Cook",
+      "role": "healing"
+    }
+  ]
 }
