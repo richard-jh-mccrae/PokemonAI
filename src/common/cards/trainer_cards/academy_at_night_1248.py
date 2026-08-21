@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Once during each player’s turn, that player may put a card from their hand on top of their deck.',
     tags=frozenset([]),
     clauses=(Clause('deck_top', source='hand', dest='deck_top', amount=1, granted_action=True, symmetric=True),),
+    covers='full',
 )

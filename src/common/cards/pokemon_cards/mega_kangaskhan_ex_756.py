@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset(['dig:2', 'draw', 'stall']),
     default_roles=('primary_attacker', 'disruption_target'),
+    covers='full',
     abilities=(
         Ability(
             name='Run Errand',
@@ -27,6 +28,8 @@ CARD = PokemonCard(
             damage=200,
             text='Flip a coin until you get tails. This attack does 50 more damage for each heads.',
             clauses=(Clause('coin', count='until_tails', effect='damage_boost', amount=50, per='heads'),),
+            damage_min=0,
+            damage_max=1350,
         ),
     ),
 )

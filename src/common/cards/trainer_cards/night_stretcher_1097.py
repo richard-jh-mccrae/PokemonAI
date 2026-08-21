@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Put a Pokémon or a Basic Energy card from your discard pile into your hand.',
     tags=frozenset(['recycle']),
     clauses=(Clause('fetch', target='basic_energy', zone='discard', choice=True), Clause('fetch', target='pokemon', zone='discard', choice=True)),
+    covers='full',
 )

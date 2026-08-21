@@ -17,9 +17,10 @@ def test_unknown_card_has_no_tags():
 
 
 @pytest.mark.req("REQ-PILOT-0008")
-def test_load_missing_file_degrades_to_empty(tmp_path):
-    cf = CardFunctions.load(tmp_path / "absent.json")
-    assert cf.tags(1) == []
+def test_load_serves_the_record_tags(tmp_path):
+    cf = CardFunctions.load()
+    assert "gust" in cf.tags(674)                    # Hariyama's record authored it
+    assert cf.tags(99999999) == []                   # an unknown card still has none
 
 
 @pytest.mark.req("REQ-PILOT-0008")

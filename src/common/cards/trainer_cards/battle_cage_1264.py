@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Prevent all damage counters from being placed on Benched Pokémon (both yours and your opponent’s) by effects of attacks and Abilities from the opponent’s Pokémon. (Damage from attacks is still taken.)',
     tags=frozenset(['bench_guard']),
     clauses=(Clause('stadium_static', effect='prevent_damage_counters', applies_to='benched', source='opponent_effects_and_abilities', symmetric=True),),
+    covers='full',
 )

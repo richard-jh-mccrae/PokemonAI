@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 _REPO = Path(__file__).resolve().parents[2]
 _MEASUREMENTS = _REPO / "reports" / "attack_audit" / "measurements.json"
-_OUT = _REPO / "src" / "common" / "attack_overrides.json"
+_OUT = _REPO / "tools" / "meta_tracker" / "attack_overrides.json"
 _PROVENANCE = _REPO / "src" / "common" / "attack_overrides.provenance.json"
 _SWEEP_VARS = {"hand": ("atk_hand", "myHandSize"), "energy": ("atk_active_energy", "attackerEnergies")}
 _PANEL = ("vanilla", "weak", "resist", "prevent_ex")

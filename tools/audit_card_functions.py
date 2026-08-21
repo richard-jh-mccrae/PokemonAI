@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (laz
 from meta_tracker.function_audit import audit_card  # noqa: E402
 
 DEFAULT_TABLE = (Path(__file__).resolve().parents[1]
-                 / "src" / "common" / "card_functions.json")
+                 / "tools" / "meta_tracker" / "measured_functions.json")
 
 
 def _card_texts() -> dict[int, tuple[str, str]]:

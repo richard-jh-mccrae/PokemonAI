@@ -1,7 +1,8 @@
 """Build the shipped card-function-tag table (see docs/card-functions.md).
 
 Probes every Trainer in the engine to derive behavioral tags, merges static + curated-override
-tags, and writes ``{cardId: [tags]}`` to ``common/card_functions.json``. Lib-using — run offline.
+tags, and writes ``{cardId: [tags]}`` to ``meta_tracker/measured_functions.json`` — the
+authoring input `build_pokemon_cards.py` bakes into the card records (ADR-0153). Lib-using — run offline.
 
 Re-runs ACCUMULATE by default: a tag once observed is never lost, so successive stochastic runs
 only improve coverage of the rng-gated tags. ``--fresh`` rebuilds from scratch.
@@ -24,8 +25,7 @@ from meta_tracker.cards import load_cards                     # noqa: E402
 from meta_tracker.probe_cards import (  # noqa: E402
     _ability_pokemon, probe_card, probe_evolution, probe_pokemon, probe_pokemon_ability)
 
-DEFAULT_OUT = (Path(__file__).resolve().parents[1]
-               / "src" / "common" / "card_functions.json")
+DEFAULT_OUT = Path(__file__).resolve().parent / "meta_tracker" / "measured_functions.json"
 DEFAULT_OVERRIDES = Path(__file__).resolve().parent / "meta_tracker" / "function_overrides.json"
 _TRAINER_CATS = {"item", "supporter", "stadium", "tool"}
 _COMBAT_PASSES = 4   # heal/damage align only ~1-in-N combat games -> probe several & union

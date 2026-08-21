@@ -20,6 +20,8 @@ CARD = PokemonCard(
             damage=50,
             text='Flip 2 coins. For each heads, discard an Energy from your opponent’s Active Pokémon.',
             clauses=(Clause('coin', count=2, effect='discard_opp_energy', amount=1, per='heads'),),
+            damage_min=50,
+            damage_max=50,
         ),
         Attack(
             attack_id=1038,

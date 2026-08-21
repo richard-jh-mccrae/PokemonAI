@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='The Cynthia’s Pokémon this card is attached to gets +70 HP.',
     tags=frozenset([]),
     clauses=(Clause('hp_bonus', amount=70, name_family="Cynthia's"),),
+    covers='full',
 )

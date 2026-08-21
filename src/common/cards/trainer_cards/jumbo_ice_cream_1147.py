@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Heal 80 damage from your Active Pokémon that has 3 or more Energy attached.',
     tags=frozenset(['heal']),
     clauses=(Clause('heal', amount=80, restriction='active_only', condition='energy_3_plus'),),
+    covers='full',
 )

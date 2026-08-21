@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset([]),
     default_roles=('backup_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Festival Lead',
@@ -26,6 +27,8 @@ CARD = PokemonCard(
             damage=10,
             text='Flip a coin. If heads, discard an Energy from your opponent’s Active Pokémon.',
             clauses=(Clause('coin', effect='discard_opp_energy', amount=1),),
+            damage_min=10,
+            damage_max=10,
         ),
     ),
 )

@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Shuffle your hand into your deck. Then, draw 6 cards. If you have exactly 6 Prize cards remaining, draw 8 cards instead.',
     tags=frozenset(['draw', 'shuffle_hand']),
     clauses=(Clause('draw', amount=6, amount_if={'condition': 'exactly_6_prizes_remaining', 'amount': 8}, rider='shuffle_own_hand_in'),),
+    covers='full',
 )

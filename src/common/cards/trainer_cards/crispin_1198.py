@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for up to 2 Basic Energy cards of different types, reveal them, and put 1 of them into your hand. Attach the other to 1 of your Pokémon. Then, shuffle your deck.',
     tags=frozenset(['energy_accel', 'search', 'tutor_energy']),
     clauses=(Clause('accel', amount=1, source='deck', target='any_pokemon', energy='basic', to_hand=1, distinct_types=True),),
+    covers='full',
 )

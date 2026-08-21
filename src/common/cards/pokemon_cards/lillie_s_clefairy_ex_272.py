@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset([]),
     default_roles=('primary_attacker',),
+    covers='full',
     abilities=(
         Ability(
             name='Fairy Zone',
@@ -27,6 +28,8 @@ CARD = PokemonCard(
             damage=20,
             text='This attack does 20 more damage for each Benched Pokémon (both yours and your opponent’s).',
             clauses=(Clause('damage_boost', amount=20, per='all_bench'),),
+            scale_var='both_bench',
+            scale_per_unit=20,
         ),
     ),
 )

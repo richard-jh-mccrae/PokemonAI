@@ -20,10 +20,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
-# Ship code, not docs. `attack_overrides.provenance.json` is documentation wearing a `.json`
-# extension — the runtime loads only `attack_overrides.json` (ADR-0108 §1).
-_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs", "engine.py",
-                                 "attack_overrides.provenance.json", "card_effects.json")
+_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs", "engine.py")
 FORBIDDEN_KAGGLE_TOKEN = b"cgpy"
 
 

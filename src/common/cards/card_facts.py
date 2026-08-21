@@ -3,8 +3,7 @@
 One frozen record per printing — `PokemonCard` under `pokemon_cards/`, `TrainerCard` under
 `trainer_cards/` — served as one dict by `common.cards.card_store()`. Every field is stored,
 none derived at query time, so a mid-game read is one dict hit plus attribute access.
-`Clause` is a `kind` plus that card's own named parameters (the `card_effects.json`
-vocabulary); an unset parameter reads as None, so the vocabulary can grow per card without
+`Clause` is a `kind` plus that card's own named parameters; an unset parameter reads as None, so the vocabulary can grow per card without
 touching this module. Amounts are DAMAGE POINTS, never counters; Energy codes are the engine
 wire ints, defined here so the function modules read them off the ground layer."""
 from __future__ import annotations
@@ -73,9 +72,26 @@ class Attack:
     damage: int
     text: str = ""
     clauses: tuple[Clause, ...] = ()
+    #: Corrections to the ENGINE's stat row for this attack (ADR-0108): fields the CSV gets
+    #: wrong, authored per attack; the stat provider overlays them onto its cache.
+    damage_fix: int | None = None
+    damage_min: int | None = None
+    damage_max: int | None = None
+    scale_var: str | None = None
+    scale_per_unit: int | None = None
+    scale_filter: tuple[int, ...] | None = None
 
     def clause(self, kind: str) -> Clause | None:
         return _first_clause(self.clauses, kind)
+
+    def engine_overrides(self) -> dict:
+        """The stat-provider patch this record authors, in the engine's own field names."""
+        pairs = (("damage", self.damage_fix), ("damageMin", self.damage_min),
+                 ("damageMax", self.damage_max), ("scaleVar", self.scale_var),
+                 ("scalePerUnit", self.scale_per_unit),
+                 ("scaleFilter", list(self.scale_filter) if self.scale_filter is not None
+                  else None))
+        return {name: value for name, value in pairs if value is not None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +122,9 @@ class PokemonCard:
     #: This body's own job, authored from its text — see `pokemon_roles.POKEMON_ROLES`. A deck
     #: that wants a different job for it overrides; prize count never enters this.
     default_roles: tuple[str, ...] = ()
+    #: Clause-set completeness verdict ("full" | "partial"; None = unruled). The reasons live
+    #: with the authoring source, `tools/meta_tracker/effect_overrides.json`.
+    covers: str | None = None
     #: Cards this one's OWN text names to function (Solrock/Lunatone). Symmetric by construction.
     synergy: tuple[str, ...] = ()
     abilities: tuple[Ability, ...] = ()
@@ -135,6 +154,7 @@ class TrainerCard:
     ace_spec: bool = False
     tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
+    covers: str | None = None
 
     def clause(self, kind: str) -> Clause | None:
         return _first_clause(self.clauses, kind)
@@ -150,6 +170,7 @@ class EnergyCard:
     text: str = ""
     tags: frozenset = frozenset()
     clauses: tuple[Clause, ...] = ()
+    covers: str | None = None
 
     def clause(self, kind: str) -> Clause | None:
         return _first_clause(self.clauses, kind)

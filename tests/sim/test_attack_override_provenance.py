@@ -19,8 +19,8 @@ from sim.generate_attack_overrides import (ABOUT, CONTROLLED_KEYS, EVIDENCE_KEYS
                                            load_provenance)
 
 REPO = Path(__file__).resolve().parents[2]
-_TABLE = REPO / "src" / "common" / "attack_overrides.json"
-_SIDECAR = REPO / "src" / "common" / "attack_overrides.provenance.json"
+_TABLE = REPO / "tools" / "meta_tracker" / "attack_overrides.json"
+_SIDECAR = REPO / "tools" / "meta_tracker" / "attack_overrides.provenance.json"
 
 #: Overrides already shipped when provenance became a requirement, their captures gone. Asserted as
 #: a SUBSET, never an equality: backfilling one must cost no edit here, adding one must fail.

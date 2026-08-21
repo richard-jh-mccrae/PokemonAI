@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Discard a Special Energy from 1 of your opponent’s Pokémon.',
     tags=frozenset(['energy_denial']),
     clauses=(Clause('discard_opp_energy', amount=1, energy='special'),),
+    covers='full',
 )

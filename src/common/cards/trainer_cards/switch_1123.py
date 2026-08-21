@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Switch your Active Pokémon with 1 of your Benched Pokémon.',
     tags=frozenset(['switch']),
     clauses=(Clause('self_switch'),),
+    covers='full',
 )

@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='You can use this card only if you have more Prize cards remaining than your opponent.\n\nAttach up to 2 Basic Energy cards from your discard pile to 1 of your Stage 2 Pokémon.',
     tags=frozenset(['energy_accel']),
     clauses=(Clause('accel', amount=2, source='discard', target='stage2', energy='basic', condition='more_prizes_remaining_than_opp'),),
+    covers='full',
 )

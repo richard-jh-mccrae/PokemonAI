@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['spread']),
     default_roles=('support_pokemon', 'disruption_target'),
+    covers='full',
     abilities=(
         Ability(
             name='Midnight Fluttering',

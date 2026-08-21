@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=2,
     tags=frozenset(['search']),
     default_roles=('backup_attacker', 'disruption_target'),
+    covers='full',
     abilities=(
         Ability(
             name='Boom Boom Groove',

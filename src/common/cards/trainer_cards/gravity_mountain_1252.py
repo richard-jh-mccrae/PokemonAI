@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Each Stage 2 Pokémon in play (both yours and your opponent’s) gets -30 HP.',
     tags=frozenset([]),
     clauses=(Clause('stadium_static', effect='hp_delta', amount=-30, applies_to='stage2', symmetric=True),),
+    covers='full',
 )

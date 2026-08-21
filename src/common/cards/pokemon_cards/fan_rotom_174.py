@@ -12,6 +12,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['search']),
     default_roles=('support_pokemon',),
+    covers='full',
     abilities=(
         Ability(
             name='Fan Call',

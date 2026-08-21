@@ -11,6 +11,7 @@ CARD = PokemonCard(
     retreat_cost=4,
     tags=frozenset([]),
     default_roles=('backup_attacker', 'support_pokemon'),
+    covers='full',
     abilities=(
         Ability(
             name='Extra Helpings',

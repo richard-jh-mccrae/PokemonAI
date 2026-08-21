@@ -8,4 +8,5 @@ CARD = TrainerCard(
     text='Search your deck for a card that has no Abilities and evolves from 1 of your Pokémon, and put it onto that Pokémon to evolve it. Then, shuffle your deck. You can use this card on a Pokémon you put down when you were setting up to play or on a Pokémon that was put into play this turn.',
     tags=frozenset(['rush_evolve', 'search']),
     clauses=(Clause('fetch', target='evolution', zone='deck', no_ability=True, dest='in_play'),),
+    covers='full',
 )

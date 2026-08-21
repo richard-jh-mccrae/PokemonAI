@@ -74,8 +74,9 @@ The live decision path:
 - `ledger/`: the decider, worth/zone evaluation, option previews, and sampled-hand chance
   (ADR-0145), plus the preview seam over the providers (ADR-0146);
 - `board/`: BoardState, the typed observable board (ADR-0144);
-- `cards/`: the unified card store (ADR-0143) and per-function mechanics
-  (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
+- `cards/`: the unified card store — one record module per card, carrying tags, clauses,
+  coverage verdicts, and engine stat corrections (ADR-0143/0153) — and the per-function
+  mechanics (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
 - `native_engine.py`: the production `cg` transition provider — forks the engine, enumerates and
   applies actions, never ranks; unknown zones use low-discrepancy identity spacing so the
   deployment world cannot inherit numeric-id ordering as fake draw knowledge;
@@ -83,8 +84,6 @@ The live decision path:
 - `refresh.py`: the printed-counts shuffle-refresh transition both providers emit and the Ledger
   prices analytically;
 - `information.py`: exact hypergeometric draw/reveal outcome classes for the offline provider;
-- `card_effects.json`: the audited effect-clause source the store records are generated from
-  (`tools/build_pokemon_cards.py`); its runtime loader lives with the teacher;
 - `algebra.py`, `api.py`, `options.py`: the transition algebra, decision contracts, and
   legal-action enumeration (the providers' canonical DecisionState moved to the quarantine —
   the live path builds none, pinned in `tests/ledger`).

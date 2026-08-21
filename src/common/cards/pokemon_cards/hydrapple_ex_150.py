@@ -13,6 +13,7 @@ CARD = PokemonCard(
     retreat_cost=3,
     tags=frozenset([]),
     default_roles=('primary_attacker', 'accel_source'),
+    covers='full',
     abilities=(
         Ability(
             name='Ripening Charge',
@@ -28,6 +29,8 @@ CARD = PokemonCard(
             damage=30,
             text='This attack does 30 more damage for each {G} Energy attached to all of your Pokémon.',
             clauses=(Clause('damage_boost', amount=30, per='energy_on_own_all', energy_type=GRASS),),
+            scale_var='atk_active_energy',
+            scale_per_unit=30,
         ),
     ),
 )

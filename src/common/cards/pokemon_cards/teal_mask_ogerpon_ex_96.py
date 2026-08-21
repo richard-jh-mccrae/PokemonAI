@@ -13,6 +13,7 @@ CARD = PokemonCard(
     retreat_cost=1,
     tags=frozenset(['draw', 'energy_accel']),
     default_roles=('primary_attacker', 'disruption_target', 'backup_attacker'),
+    covers='full',
     abilities=(
         Ability(
             name='Teal Dance',
@@ -28,6 +29,8 @@ CARD = PokemonCard(
             damage=30,
             text='This attack does 30 more damage for each Energy attached to both Active Pokémon.',
             clauses=(Clause('damage_boost', amount=30, per='energy_on_both_actives'),),
+            scale_var='both_active_energy',
+            scale_per_unit=30,
         ),
     ),
 )
