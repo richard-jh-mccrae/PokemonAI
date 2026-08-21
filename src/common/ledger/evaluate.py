@@ -144,10 +144,12 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     usable = usable_units(body.card.facts, body.energies, ctx, reach)
     useless = len(body.energies) - usable
     energy_worth = 0.0
+    rentals = 0
     for card in body.energy_cards:
         # An end-of-turn-discarding Energy on a BENCHED body evaporates before the body can
         # ever attack (ADR-0150): its worth is a rental nobody rides, priced zero.
         if not is_active and "discard_eot" in (getattr(card.facts, "tags", ()) or ()):
+            rentals += 1
             continue
         unit_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
         if gap:
@@ -161,7 +163,9 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     if weights.concentration and body.energies:
         cost = top_attack_cost(body.card.facts, ctx, reach)
         if cost > 0:
-            progress = min(1.0, usable / cost)
+            # A benched rental evaporates before the attack it would pay for (ADR-0150),
+            # so it is no progress toward that attack either.
+            progress = min(1.0, max(0, usable - rentals) / cost)
             value += weights.concentration * worth * discount * progress * progress
 
     for card in body.tools:

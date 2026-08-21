@@ -121,8 +121,9 @@ class LedgerWeights:
     prize_liability: float = 0.04
 
     #: Concentration (ADR-0150): extra credit for a body's progress toward its LARGEST attack,
-    #: squared — so finishing a started attacker outprices starting a fresh one. 0.0 = off.
-    concentration: float = 0.0
+    #: squared — so finishing a started attacker outprices starting a fresh one. Armed at the
+    #: owner-ordered seed; the flips it buys are accepted, not gate-clean (2026-08-21 ruling).
+    concentration: float = 0.1
 
     #: Fraction of its worth THEIR active loses when OUR active's payable attack can KO it
     #: outright (weakness applied) — the 1-ply doomed read: gust up what you can kill.

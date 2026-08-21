@@ -401,18 +401,19 @@ def test_ignition_reads_fully_live_beside_a_multi_slot_evolution():
 
 
 def test_concentration_prefers_finishing_the_started_twin():
-    """ADR-0150: with the lever armed, 2-and-0 across twin attackers out-values 1-and-1 —
-    the second energy toward Nebula Beam's three slots beats the first on a fresh body.
-    At the 0.0 default the term is off and the splits price identically."""
+    """ADR-0150: with the lever armed (the 2026-08-21 default), 2-and-0 across twin attackers
+    out-values 1-and-1 — the second energy toward Nebula Beam's three slots beats the first on
+    a fresh body. Zeroed, the term is off and the splits price identically."""
     def split(started_units, bare_units):
         return board(me=player(
             active=body(STARYU, 9),
             bench=[body(MEGA_STARMIE, 1, energies=(WATER,) * started_units),
                    body(MEGA_STARMIE, 2, energies=(WATER,) * bare_units)]))
 
-    armed = ctx(overrides={"concentration": 0.1})
+    armed = ctx()
+    assert armed.weights.concentration > 0
     assert evaluate(split(2, 0), armed).total > evaluate(split(1, 1), armed).total
-    flat = ctx()
+    flat = ctx(overrides={"concentration": 0.0})
     assert evaluate(split(2, 0), flat).total == pytest.approx(
         evaluate(split(1, 1), flat).total)
 
