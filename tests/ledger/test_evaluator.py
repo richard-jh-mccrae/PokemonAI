@@ -516,3 +516,26 @@ def test_our_doomed_read_grants_their_active_the_coming_attach_and_one_evolution
     grandchild = ours_vs(body(DREEPY, 9, energies=(FIRE, PSYCHIC)))
     assert evaluate(grandchild, armed).total == pytest.approx(
         evaluate(grandchild, flat).total)
+
+
+def test_usable_energy_on_our_doomed_active_is_ammunition_not_investment():
+    """The d98fc4c74107 ruling: a doomed active converts usable Energy into damage this very
+    turn, so the doom discount spares that Energy — attaching to the doomed carrier prices
+    the same swing armed or not, while the body itself still reads mostly spent."""
+    def ours(energies):
+        return board(me=player(active=body(MEGA_STARMIE, 1, hp=150, max_hp=330,
+                                           energies=energies)),
+                     them=player(own=False, active=body(MAKUHITA, 9, energies=(6, 6))))
+
+    # Concentration is zeroed both sides: progress credit is investment-shaped and stays
+    # under the discount; only the direct usable-Energy worth is the ammunition here.
+    armed = ctx(overrides={"concentration": 0.0})
+    assert armed.weights.doomed_active_discount > 0
+    flat = ctx(overrides={"doomed_active_discount": 0.0, "concentration": 0.0})
+    armed_swing = (evaluate(ours((WATER,)), armed).part("me.bodies")
+                   - evaluate(ours(()), armed).part("me.bodies"))
+    flat_swing = (evaluate(ours((WATER,)), flat).part("me.bodies")
+                  - evaluate(ours(()), flat).part("me.bodies"))
+    assert armed_swing == pytest.approx(flat_swing)
+    assert (evaluate(ours(()), armed).part("me.bodies")
+            < evaluate(ours(()), flat).part("me.bodies"))

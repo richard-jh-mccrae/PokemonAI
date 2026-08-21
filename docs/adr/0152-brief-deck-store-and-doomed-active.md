@@ -42,3 +42,9 @@ so the anticipation stays). OURS is doomed under the conservative incoming read:
 receives its coming attach (missing color first) plus one DIRECT evolution, energy carried,
 before it swings (`worth.projected_incoming_damage`). Armed profile vs the armed-concentration
 baseline: 213 -> 216 of 426, floor dragapult_ex 46.5% (19 up, 16 down).
+
+Ammunition waiver (same day, owner doctrine on frame d98fc4c74107 — tempo aggression when
+options are thin): usable Energy on OUR doomed active converts to damage this very turn, so
+the doom discount spares that term; the body, dead units, and concentration progress still
+read mostly spent. Gate-clean: 216 -> 217 of 426, zero flips, the gained frame is the ruling
+frame itself.

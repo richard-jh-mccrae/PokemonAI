@@ -194,10 +194,14 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     # constant real loss per HP on any body.
     value += weights.hp_value * (body.max_hp / 100.0)
     hp_fraction = (max(0, body.hp) / body.max_hp) if body.max_hp > 0 else 1.0
-    value *= weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction
+    blend = weights.damage_floor + (1.0 - weights.damage_floor) * hp_fraction
+    value *= blend
     if doomed:
-        # An active the opposing active can KO outright is mostly spent (ADR-0152).
-        value *= 1.0 - ctx.weights.doomed_active_discount
+        # An active the opposing active can KO outright is mostly spent (ADR-0152) — but
+        # ammunition is not investment (the d98fc4c74107 ruling): usable Energy on OUR
+        # doomed active converts to damage this very turn, so the discount spares it.
+        ammo = per_unit * usable * weights.zone_attached_usable * blend if own else 0.0
+        value = ammo + (value - ammo) * (1.0 - ctx.weights.doomed_active_discount)
     return value
 
 
