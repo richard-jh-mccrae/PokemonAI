@@ -1,8 +1,9 @@
 # Shared agent runtime
 
 Every shipped deck uses one system: `common.runtime.AgentRuntime`. Live decisions come from the
-Ledger (`common/ledger/`, a 1-ply worth-differencing decider over `common/board/` BoardState,
-ADR-0145); the shell around it does declarative pregame, forced selections, attack-lock folding,
+Ledger (`common/ledger/`, a 1-ply worth-differencing decider over
+`common/observation/` ObservationState, ADR-0145); the shell around it does declarative pregame,
+forced selections, typed knowledge reduction,
 and a last-resort crash fallback. The pre-Ledger Bellman planner is quarantined under
 `deprecated/bellman/` (ADR-0149) and extends this shell as the offline teacher.
 
@@ -16,6 +17,59 @@ _Avoid_: Evaluator stack, value families
 **Swing**:
 One option's price under the Ledger: value after minus value now, expected value at chance points.
 _Avoid_: Score, reward
+
+**Position Key**:
+Identity of one player-visible position and its explicit legal knowledge, independent of the
+question currently presented.
+_Avoid_: State key, decision id
+
+**Decision Key**:
+Identity of one choice point: its Position Key plus the exact legal question and actions offered.
+_Avoid_: Position Key, replay id
+
+**Legal Knowledge**:
+Facts the player may carry from earlier observations but the current engine printout does not contain.
+It includes exact facts and honest beliefs, never hidden truth or provider-control metadata.
+_Avoid_: Scratch state, hidden state, provider metadata
+
+**Observation State**:
+One immutable player-visible position, its Legal Knowledge, and any legal question currently offered.
+It never represents hidden game truth or provider-control state.
+_Avoid_: BoardState, GameState, DecisionState
+
+**Evaluation Model**:
+The versioned card knowledge, roles, and parameters used to value an Observation State.
+It changes evaluation, never the facts or identity of the position.
+_Avoid_: Observation State, LedgerContext, evaluator state
+
+**Observation Record**:
+The versioned, hidden-safe serialized form of an Observation State used for replay and learning.
+_Avoid_: Raw observation, diagnostic dump
+
+**Opponent Belief**:
+Scouting's immutable evidence-level estimate of the opponent, including its uncertainty.
+Evaluation Models interpret it; the belief itself contains no roles, weights, or matchup policy.
+_Avoid_: Opponent Layer, Brief, matchup weights
+
+**Observation Event**:
+A typed event legally shown since the previous choice, used to advance Legal Knowledge.
+An unknown event invalidates affected certainty rather than preserving a stale belief.
+_Avoid_: Raw log, generic event mapping
+
+**Transition Trace**:
+A versioned training record linking a starting Position Key, an action sequence, and its resulting
+Position Key. It supplies commutativity evidence, never proof that a branch is safe to prune.
+_Avoid_: Position identity, pruning rule
+
+**Tracking Serial**:
+The engine's match-local identity for one physical card copy, used to correlate observations and
+events. It never contributes directly to semantic position identity.
+_Avoid_: Card ID, Position Key
+
+**Observation Delta**:
+Parent-relative facts about which parts changed while producing an Observation State.
+It guides reuse and training but never contributes to state identity.
+_Avoid_: Observation State, event history
 
 **Strategy**:
 An authored, conditional hint about decision sequences likely to reach valuable end states.
@@ -56,7 +110,7 @@ An intrinsic Trainer or Energy capability shared across decks, such as search, d
 _Avoid_: Pokémon Role, deck doctrine
 
 The runtime performs declarative setup choices, resolves Roles and evolution from the unified
-card records (deck declarations REPLACE authored defaults), builds the deck's LedgerContext
+card records (deck declarations REPLACE authored defaults), builds the deck's EvaluationModel
 from them and `ledger_overrides`, and sends every normal-turn decision to `common.ledger`.
 
 Deck-local policy is data in `src/agents/<deck>/strategy.py`:
@@ -71,7 +125,8 @@ The live decision path:
 
 - `ledger/`: the decider, worth/zone evaluation, option previews, and sampled-hand chance
   (ADR-0145), plus the preview seam over the providers (ADR-0146);
-- `board/`: BoardState, the typed observable board (ADR-0144);
+- `observation/`: ObservationState, its builder, knowledge, provider capsule, keys, record codec,
+  events, and parent-relative delta;
 - `cards/`: the unified card store — one record module per card, carrying tags, clauses,
   coverage verdicts, and engine stat corrections (ADR-0143/0153) — and the per-function
   mechanics (`fetch.py`, `draw.py`, `damage.py`, `energy.py`, `attack_lock.py`);
@@ -83,8 +138,8 @@ The live decision path:
   prices analytically;
 - `information.py`: exact hypergeometric draw/reveal outcome classes for the offline provider;
 - `algebra.py`, `api.py`, `options.py`: the transition algebra, decision contracts, and
-  legal-action enumeration (the providers' canonical DecisionState moved to the quarantine —
-  the live path builds none, pinned in `tests/ledger`).
+  legal-action construction (the providers' old DecisionState moved to the quarantine — the live
+  path builds none, pinned in `tests/ledger`).
 
 Neutral retained services are Scouting, card/stat providers, card-function data, own-deck tracking,
-option equivalence, telemetry, and board-card traversal.
+option equivalence and telemetry.

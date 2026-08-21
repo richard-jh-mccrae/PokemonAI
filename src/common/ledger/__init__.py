@@ -8,8 +8,8 @@ from .evaluate import Valuation, evaluate
 from .seam import (LedgerNativeProvider, PreviewState, preview_provider_factory,
                    register_preview_variant)
 from .weights import LedgerWeights
-from .worth import LedgerContext, OpponentLayer
+from .worth import EvaluationModel, OpponentEvaluation
 
-__all__ = ("LedgerContext", "LedgerDecider", "LedgerNativeProvider", "LedgerUnavailable",
-           "LedgerWeights", "OpponentLayer", "PreviewState", "Valuation", "evaluate",
+__all__ = ("EvaluationModel", "LedgerDecider", "LedgerNativeProvider", "LedgerUnavailable",
+           "LedgerWeights", "OpponentEvaluation", "PreviewState", "Valuation", "evaluate",
            "preview_provider_factory", "register_preview_variant")

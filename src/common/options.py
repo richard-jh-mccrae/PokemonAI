@@ -134,8 +134,9 @@ def end_action(actions: tuple[LegalAction, ...]) -> LegalAction | None:
     return next((action for action in actions if action.identity.kind == "end"), None)
 
 
-def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_seat: int):
-    carried = tuple(observation.get("bellmanRecycledCardIds") or ())
+def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_seat: int, *,
+                      carried=(), actor_seat=None):
+    carried = tuple(carried)
     if action.identity.kind != "ability" or len(action.selection) != 1 or registry is None:
         return carried
     options = tuple((observation.get("select") or {}).get("option") or ())
@@ -145,7 +146,7 @@ def recycled_card_ids(observation: Mapping, action: LegalAction, registry, root_
     option = options[option_index]
     current = observation.get("current") or {}
     players = current.get("players") or ()
-    seat = int(observation.get("bellmanActor", root_seat))
+    seat = int(root_seat if actor_seat is None else actor_seat)
     player = players[seat] if 0 <= seat < len(players) else {}
     area, index = option.get("inPlayArea", option.get("area")), option.get(
         "inPlayIndex", option.get("index"))

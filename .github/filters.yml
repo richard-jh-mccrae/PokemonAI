@@ -22,7 +22,7 @@ runtime:
 src:
   - 'src/**'
   - 'tools/train/**'
-  - 'tests/board/**'
+  - 'tests/observation/**'
   - 'tests/cards/**'
   - 'tests/common/**'
   - 'tests/ledger/**'

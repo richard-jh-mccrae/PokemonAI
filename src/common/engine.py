@@ -9,13 +9,13 @@ from .algebra import (
     WeightedEdge,
 )
 from .cards import card_store, play_clauses
-from .cards.functions.attack_lock import carry_attack_locks
 from .option_equivalence import option_in_play_source_id
 from .options import LegalAction, recycled_card_ids
 from .information import draw_outcomes, reveal_sets
 from .cards.functions.fetch import WINDOW, fetch_target_matches
 from .native_engine import _own_hidden_zones
 from .refresh import refresh_transition
+from .observation.provider import provider_payload as _payload
 from common.strategy.context import (
     _ACTIVE, _ATTACH_FROM, _BENCH, _CARD, _DAMAGE, _DECK, _DISCARD, _DISCARD_ENERGY, _HAND,
     _LOOKING, _MAIN, _MOVE_CARD, _SWITCH, _TO_ACTIVE, _TO_HAND, _YES, _NO,
@@ -44,34 +44,26 @@ def _take(cards: tuple[int, ...], count: int) -> list[int]:
     return copies[:count]
 
 
-def _own_prize_export(engine, seat: int) -> dict[int, int]:
-    board = engine.gs.players[seat]
-    return dict(Counter(engine.gs.card_id(serial) for serial in board.prize))
-
-
-def stamp_own_prizes(observation: dict, decklist) -> bool:
-    """Stamp the live shell's own-prize anchor onto an ARCHIVED observation (ADR-0147): the
-    same determinized split this provider honors, so root and successors tell one story."""
-    if observation.get("own_prizes") is not None:
-        return False
+def determinized_prize_knowledge(observation: dict, decklist):
+    """Build archived-frame prize knowledge with the provider's deterministic split."""
     if not decklist:
-        return False
+        return None
     from types import SimpleNamespace
 
-    from common.board import BoardState
+    from common.observation import KnownOwnPrizes, LegalKnowledge, ObservationStateBuilder
 
     current = observation.get("current") or {}
     players = current.get("players") or ()
     seat = int(current.get("yourIndex") or 0)
     me = players[seat] if 0 <= seat < len(players) and players[seat] else None
     if me is None:
-        return False
-    board = BoardState.root(observation, decklist=tuple(int(c) for c in decklist))
+        return None
+    board = ObservationStateBuilder(decklist).root(observation)
     root_view = SimpleNamespace(prize_counts=(), deck_counts=board.deck_counts or (),
                                 deck=tuple(int(c) for c in decklist))
     _, own_prize = _own_hidden_zones(root_view, me, world_index=0, world_count=1)
-    observation["own_prizes"] = dict(Counter(int(card_id) for card_id in own_prize))
-    return True
+    counts = tuple(sorted(Counter(int(card_id) for card_id in own_prize).items()))
+    return LegalKnowledge(own_prizes=KnownOwnPrizes(counts))
 
 
 def terminal_effects_supported(state, action, *, card_id, recipient_id, effects, stats) -> bool:
@@ -104,10 +96,10 @@ def terminal_effects_supported(state, action, *, card_id, recipient_id, effects,
     if any(clause.get("kind") == "draw" or clause.get("dig") for clause in clauses):
         return False
     if (any(clause.get("kind") == "fetch" and clause.get("zone") == "deck"
-            for clause in clauses) and "own_prizes" not in state.obs):
+            for clause in clauses) and "own_prizes" not in _payload(state)):
         return False
     if kind == "attack" and len(action.selection) == 1:
-        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        options = tuple((_payload(state).get("select") or {}).get("option") or ())
         index = action.selection[0]
         option = options[index] if 0 <= index < len(options) else {}
         attack = (stats.attack(option.get("attackId"))
@@ -132,8 +124,9 @@ class CgpyTransitionProvider:
         self.cards = card_store() if cards is None else cards
         self._engines: dict[str, object] = {}
         self._attack_committed: dict[str, bool] = {}
+        self._provider_metadata: dict[int, dict] = {}
         self._local_nested = False
-        self._root_turn = int((root.obs.get("current") or {}).get("turn", 0))
+        self._root_turn = int((_payload(root).get("current") or {}).get("turn", 0))
         self._error = ""
         try:
             if engine is not None:
@@ -143,7 +136,7 @@ class CgpyTransitionProvider:
             from cgpy.rng import SeededRng
             from cgpy.search import state_from_obs
 
-            obs = root.obs
+            obs = _payload(root)
             current = obs.get("current") or {}
             players = current.get("players") or ()
             me = players[root.root_seat] if len(players) > root.root_seat else {}
@@ -161,7 +154,7 @@ class CgpyTransitionProvider:
             self._engines[self._key(root)] = engine
             self._attack_committed[self._key(root)] = False
         except Exception as exc:  # noqa: BLE001 - becomes first-class Unknown
-            context = int(((root.obs.get("select") or {}).get("context", -1)))
+            context = int(((_payload(root).get("select") or {}).get("context", -1)))
             if context != _MAIN:
                 self._local_nested = True
                 self._error = ""
@@ -196,12 +189,12 @@ class CgpyTransitionProvider:
 
     def terminal_action_supported(self, state, action: LegalAction) -> bool:
         kind = action.identity.kind
-        options = tuple((state.obs.get("select") or {}).get("option") or ())
+        options = tuple((_payload(state).get("select") or {}).get("option") or ())
         option_index = action.selection[0] if len(action.selection) == 1 else -1
         option = options[option_index] if 0 <= option_index < len(options) else {}
-        current = state.obs.get("current") or {}
+        current = _payload(state).get("current") or {}
         players = current.get("players") or ()
-        seat = int(state.obs.get("bellmanActor", state.root_seat))
+        seat = int(getattr(state, "actor_seat", state.root_seat))
         mine = players[seat] if 0 <= seat < len(players) else {}
         card_id = None
         if kind in {"play", "attach", "evolve"}:
@@ -210,7 +203,7 @@ class CgpyTransitionProvider:
             if isinstance(hand_index, int) and 0 <= hand_index < len(hand) and hand[hand_index]:
                 card_id = int(hand[hand_index]["id"])
         if kind in {"ability", "skill"}:
-            card_id = option_in_play_source_id(option, state.obs, seat)
+            card_id = option_in_play_source_id(option, _payload(state), seat)
         recipient_id = None
         if kind == "attach":
             area = option.get("inPlayArea")
@@ -251,10 +244,10 @@ class CgpyTransitionProvider:
                     # has merely not finished: a cost-first Ability (Lunar Cycle discards a Basic
                     # {F} Energy before drawing) resolves nothing until the choice is answered, so
                     # `current` is legitimately unchanged and the walk continues through the menu.
-                    and int((successor.state.obs.get("select") or {}).get(
+                    and int((_payload(successor.state).get("select") or {}).get(
                         "context", _MAIN)) == _MAIN):
-                before = state.obs.get("current") or {}
-                after = successor.state.obs.get("current") or {}
+                before = _payload(state).get("current") or {}
+                after = _payload(successor.state).get("current") or {}
                 # Same comparison the old deepcopy-then-freeze form made: every key except the
                 # action counter, by value.  Both trees come out of ``thaw`` and are never
                 # mutated, so they can be compared in place.
@@ -411,7 +404,7 @@ class CgpyTransitionProvider:
         engine-fact bridge, not a target chooser.
         """
         try:
-            obs = copy.deepcopy(state.obs)
+            obs = copy.deepcopy(_payload(state))
             select = obs.get("select") or {}
             options = select.get("option") or ()
             picked = [options[index] for index in action.selection]
@@ -523,8 +516,6 @@ class CgpyTransitionProvider:
                                f"select context {context}")
             current["turnActionCount"] = int(current.get("turnActionCount", 0)) + 1
             obs["select"] = None
-            obs["bellmanHistoricalMain"] = True
-            obs["bellmanHistoricalContext"] = context
             successor = self._bind(state, obs)
             return Terminal(successor, "isolated historical nested selection")
         except Exception as exc:  # noqa: BLE001 - stays explicit
@@ -535,16 +526,14 @@ class CgpyTransitionProvider:
 
         observation = child.observation(
             viewer=state.root_seat, sbi_token=export_token(child.gs))
-        observation["bellmanActor"] = int(child.select_seat)
-        observation["own_prizes"] = _own_prize_export(child, state.root_seat)
-        if "known_top" in state.obs:
-            observation["known_top"] = state.obs["known_top"]
-        # Same carry-forward as the native adapter: a self-lock spent inside the search is only
-        # visible in this step's log, and the parent's locks must survive it.
-        carry_attack_locks(state.obs, observation)
-        recycled = recycled_card_ids(state.obs, action, self.registry, state.root_seat)
-        if recycled:
-            observation["bellmanRecycledCardIds"] = recycled
+        recycled = recycled_card_ids(
+            _payload(state), action, self.registry, state.root_seat,
+            carried=getattr(state, "recycled_card_ids", ()),
+            actor_seat=getattr(state, "actor_seat", state.root_seat))
+        self._provider_metadata[id(observation)] = {
+            "actor_seat": int(child.select_seat),
+            "recycled_card_ids": recycled,
+        }
         return self._bind(state, observation)
 
     def _register_successor(self, state, child, action):

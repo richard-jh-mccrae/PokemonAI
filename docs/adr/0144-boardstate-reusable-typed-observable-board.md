@@ -1,5 +1,7 @@
 # ADR-0144 — BoardState: the observable board as reusable typed pieces
 
+Superseded by ADR-0154. The historical `BoardState` name and `common.board` package are retired.
+
 Status: Accepted (2026-08-19); LIVE since 2026-08-20 — the Ledger (ADR-0145) is the production
 consumer: every live decision builds/advances BoardState, and the preview seam (ADR-0146)
 sources root deck knowledge from it.
@@ -55,5 +57,6 @@ elsewhere): fresh `root` ~0.19 ms/step, `advance` 0.043–0.047 ms/step across r
 No consumer is rewired: `DecisionState`, the solver, and the value stack are untouched, so this
 ships with zero behavioral delta and needs no kill switch. Value-side reuse (families skipping
 unchanged pieces) is deliberately deferred; `changed` is the seam it will consume.
-`tests/board/` pins construction, both select dialects, the boundary, piece reuse identity,
+The successor suite in `tests/observation/` pins construction, both select dialects, the boundary,
+piece reuse identity,
 advance-equals-root equivalence, and key invariances.

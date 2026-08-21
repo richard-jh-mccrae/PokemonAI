@@ -350,6 +350,10 @@ class DecisionState:
     def obs(self) -> dict:
         return self.observation
 
+    @property
+    def provider_payload(self) -> dict:
+        return self.observation
+
     @cached_property
     def legal_actions(self) -> tuple:
         """The state's legal moves, enumerated once.  The keys below, the menu digest, and every

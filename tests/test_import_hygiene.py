@@ -16,6 +16,7 @@ reading, and `.claude/worktrees/` made the guard fail on `main` over another bra
 from __future__ import annotations
 
 import re
+import ast
 import subprocess
 from pathlib import Path
 
@@ -103,3 +104,49 @@ def test_no_live_source_imports_the_deprecated_quarantine():
             offenders.append(relative)
     assert offenders == [], (
         f"live source imports the deprecated quarantine — {offenders}")
+
+
+def test_observation_state_is_the_only_live_legal_view_surface():
+    retired = re.compile(r"\b(?:common\.board|BoardState|LedgerContext|OpponentLayer)\b")
+    enrichments = ("bellmanActor", "bellmanBeliefKey", "bellmanRecycledCardIds",
+                   "bellmanHistoricalMain", "bellmanHistoricalContext")
+    offenders = []
+    for path in _repo_python_files():
+        relative = str(path.relative_to(REPO)).replace("\\", "/")
+        if not relative.startswith("src/"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        if retired.search(text) or any(name in text for name in enrichments):
+            offenders.append(relative)
+    assert offenders == [], f"retired observation surfaces or raw enrichments remain — {offenders}"
+
+
+def test_policy_consumers_cannot_walk_raw_observations():
+    targets = (
+        "src/common/runtime.py", "src/common/deck_tracker.py", "src/common/telemetry.py",
+        "src/common/scouting/scout.py", "src/common/ledger/decider.py",
+        "src/common/ledger/evaluate.py", "src/common/ledger/worth.py",
+    )
+    fallback_functions = {"_crash_report", "_fallback_decision", "_last_resort_selection",
+                          "_last_resort_ranked", "agent"}
+    offenders = []
+    for relative in targets:
+        path = REPO / relative
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=relative)
+        parents = {}
+        for node in ast.walk(tree):
+            for child in ast.iter_child_nodes(node):
+                parents[child] = node
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get" and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value in {"current", "select", "logs"}):
+                continue
+            owner = node
+            while owner in parents and not isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                owner = parents[owner]
+            if relative == "src/common/runtime.py" and getattr(owner, "name", None) in fallback_functions:
+                continue
+            offenders.append(f"{relative}:{node.lineno}")
+    assert offenders == [], f"policy consumers walk raw engine observations — {offenders}"

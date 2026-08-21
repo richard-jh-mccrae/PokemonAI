@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 from functools import partial
 import importlib.util
 import os
@@ -91,7 +93,8 @@ def test_end_observation_can_preserve_the_actual_next_turn_actor():
     successor = provider._observation(observation, parent, actor_seat=1)
 
     assert successor["current"]["yourIndex"] == 0
-    assert successor["bellmanActor"] == 1
+    assert provider._provider_metadata[id(successor)]["actor_seat"] == 1
+    assert "bellmanActor" not in successor
 
 
 def test_successor_preserves_unchanged_root_hand_when_native_perspective_flips():
@@ -204,8 +207,8 @@ def test_production_runtime_returns_a_legal_native_action_without_fallback():
 def test_preview_seam_prices_match_the_decisionstate_path_on_native():
     """ADR-0146's native half: the light PreviewState path and the heavy DecisionState path
     must price every root option identically on a live native frame."""
-    from common.board import BoardState
-    from common.ledger import LedgerContext, LedgerNativeProvider, PreviewState
+    from common.observation import ObservationState
+    from common.ledger import EvaluationModel, LedgerNativeProvider, PreviewState
     from common.ledger.evaluate import evaluate
     from common.ledger.preview import price_actions
 
@@ -214,8 +217,8 @@ def test_preview_seam_prices_match_the_decisionstate_path_on_native():
     try:
         assert start.errorPlayer == -1
         observation = _first_main(observation)
-        ctx = LedgerContext.build()
-        board = BoardState.root(observation, decklist=deck)
+        ctx = EvaluationModel.build()
+        board = build_observation(observation, decklist=deck)
         baseline = evaluate(board, ctx).total
 
         heavy_state = DecisionState.from_observation(observation, deck=deck,
@@ -228,7 +231,7 @@ def test_preview_seam_prices_match_the_decisionstate_path_on_native():
 
         light_state = PreviewState(observation, board.seat, "root", deck=deck,
                                    deck_counts=board.deck_counts or (),
-                                   prize_counts=board.own_prizes or ())
+                                   prize_counts=getattr(board.knowledge.own_prizes, "cards", ()))
         light_provider = LedgerNativeProvider(light_state, world_count=1)
         try:
             light = price_actions(light_state, board, baseline, light_provider, ctx)

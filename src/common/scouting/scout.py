@@ -1,10 +1,9 @@
 """Scout: accumulate revealed-card evidence across a match and produce the Read.
 
-Reads the raw observation *dict*, so importing this package never loads the native engine; card
-stats come from an injected provider. `observe` never raises — an error returns an empty Read."""
+Reads ObservationState only; card stats come from an injected provider. `observe` never raises."""
 from __future__ import annotations
 
-from ..board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
+from common.observation import ObservationState
 from .read import EvoPath, Intel, Read
 from .scorer import posterior
 
@@ -20,10 +19,10 @@ class Scout:
         self._opp_in_play: list[int] = []
         self._last_turn: int | None = None
 
-    def observe(self, obs: dict) -> Read:
+    def observe(self, state: ObservationState) -> Read:
         try:
-            self._maybe_reset(obs.get("current") or {})
-            self._absorb(obs)
+            self._maybe_reset(state.turn.number)
+            self._absorb(state)
             candidates, unknown_mass = posterior(
                 self.artifact.priors, self.artifact.card_inclusion,
                 self.artifact.background, self._evidence,
@@ -42,42 +41,29 @@ class Scout:
         except Exception:
             return Read()
 
-    def _maybe_reset(self, cur: dict) -> None:
+    def _maybe_reset(self, turn: int) -> None:
         # A turn counter only ever increases within a match; a drop means a new match began.
-        turn = cur.get("turn")
-        if turn is not None:
-            if self._last_turn is not None and turn < self._last_turn:
-                self._evidence.clear()
-            self._last_turn = turn
+        if self._last_turn is not None and turn < self._last_turn:
+            self._evidence.clear()
+        self._last_turn = turn
 
-    def _absorb(self, obs: dict) -> None:
+    def _absorb(self, state: ObservationState) -> None:
         self._opp_in_play = []
-        cur = obs.get("current") or {}
-        you = cur.get("yourIndex", 0)
-        players = cur.get("players") or []
-        if len(players) < 2:
-            return
-        opp_index = 1 - you
-        opp = players[opp_index] or {}
-        for p in (opp.get("active") or []) + (opp.get("bench") or []):
-            self._add_pokemon(p)
-            if p and p.get("id"):
-                self._opp_in_play.append(p["id"])
-        for c in (opp.get("discard") or []):
-            self._add_card(c)
-        for log in (obs.get("logs") or []):
-            if log.get("playerIndex") == opp_index and log.get("cardId"):
-                self._evidence.add(log["cardId"])
+        for body in state.them.bodies:
+            self._add_body(body)
+            self._opp_in_play.append(body.card.card_id)
+        for card in state.them.discard:
+            self._evidence.add(card.card_id)
+        opponent_seat = 1 - state.seat
+        for event in state.events:
+            fields = dict(event.public_fields)
+            if fields.get("playerIndex") == opponent_seat and fields.get("cardId"):
+                self._evidence.add(int(fields["cardId"]))
 
-    def _add_pokemon(self, p) -> None:
-        """Every CARD a board Pokémon accounts for — body, Energy cards, Tools, pre-evolutions. One
-        walk, shared with the deck tracker; ``energies`` is UNITS, not cards, so it is excluded."""
-        for cid in body_card_ids(p):
-            self._evidence.add(cid)
-
-    def _add_card(self, c) -> None:
-        if c and c.get("id"):
-            self._evidence.add(c["id"])
+    def _add_body(self, body) -> None:
+        self._evidence.add(body.card.card_id)
+        self._evidence.update(card.card_id for card in (
+            body.energy_cards + body.tools + body.pre_evolution))
 
     def _observed_intel(self) -> tuple[list[Intel], list[Intel]]:
         """Objective threats/targets from the opponent's board now (`seen=True`)."""

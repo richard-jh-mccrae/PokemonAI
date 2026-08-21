@@ -1,4 +1,4 @@
-"""Price one option: the engine plays it, BoardState digests the reprint, the Ledger differences.
+"""Price one option: the engine plays it, ObservationState digests the reprint, the Ledger differences.
 
 Every transition node the providers emit is priced here. A forced follow-up chain (Ultra Ball's
 discard pick, then its fetch pick) is resolved inside the preview — each sub-menu chosen by the
@@ -13,12 +13,13 @@ from dataclasses import dataclass
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Refresh, RevealChoice,
                             Terminal, Unknown)
-from common.board import BoardState
+from common.observation import ObservationState
+from common.observation import ObservationStateBuilder
 from common.strategy.context import _MAIN
 
 from .chance import refresh_value
 from .evaluate import evaluate
-from .worth import LedgerContext
+from .worth import EvaluationModel
 
 CHAIN_DEPTH_CAP = 16
 CHAIN_NODE_CAP = 128
@@ -40,8 +41,8 @@ class OptionPrice:
     restocks: bool = False
 
 
-def price_actions(state, board: BoardState, baseline: float, provider,
-                  ctx: LedgerContext) -> tuple[OptionPrice, ...]:
+def price_actions(state, board: ObservationState, baseline: float, provider,
+                  ctx: EvaluationModel) -> tuple[OptionPrice, ...]:
     prices = []
     for action in provider.actions(state):
         if action.identity.kind == "end":
@@ -65,27 +66,27 @@ def price_actions(state, board: BoardState, baseline: float, provider,
 class _Walk:
     """One root option's preview: a node budget, a gap log, and the recursion over nodes."""
 
-    def __init__(self, provider, ctx: LedgerContext, decklist):
+    def __init__(self, provider, ctx: EvaluationModel, decklist):
         self.provider = provider
         self.ctx = ctx
         self.decklist = decklist
         self.gaps: list[str] = []
         self.nodes = 0
 
-    def node(self, state, board: BoardState, node, depth: int) -> tuple[float, bool]:
+    def node(self, state, board: ObservationState, node, depth: int) -> tuple[float, bool]:
         self.nodes += 1
         if isinstance(node, Terminal):
-            successor = board.advance(node.state.obs)
+            successor = self._typed(node.state, board)
             return evaluate(successor, self.ctx).total, True
         # The budget binds EVERY recursive node type, not just forced-menu walks: a wide or
         # nested chance tree must also land on the cap instead of running past it.
         if depth <= 0 or self.nodes >= CHAIN_NODE_CAP:
             if isinstance(node, Deterministic):
-                board = board.advance(node.state.obs)
+                board = self._typed(node.state, board)
             self.gaps.append("chain capped; scored mid-effect board")
             return evaluate(board, self.ctx).total, False
         if isinstance(node, Deterministic):
-            return self.deterministic(node.state, board.advance(node.state.obs), depth)
+            return self.deterministic(node.state, self._typed(node.state, board), depth)
         if isinstance(node, Chance):
             value, ends = 0.0, False
             for edge in node.children:
@@ -97,7 +98,7 @@ class _Walk:
             return value, ends
         if isinstance(node, Refresh):
             value, gaps = refresh_value(
-                state.obs, board, node.card_id, node.draws, node.opponent_shuffles,
+                board, node.card_id, node.draws, node.opponent_shuffles,
                 lambda synthetic: evaluate(synthetic, self.ctx))
             self.gaps.extend(gaps)
             return value, False
@@ -123,9 +124,9 @@ class _Walk:
         self.gaps.append(f"unpriceable: undeclared node {type(node).__name__}")
         return evaluate(board, self.ctx).total, False
 
-    def deterministic(self, state, board: BoardState, depth: int) -> tuple[float, bool]:
-        raw_context = (state.obs.get("select") or {}).get("context")
-        context = _MAIN if raw_context is None else int(raw_context)
+    def deterministic(self, state, board: ObservationState, depth: int) -> tuple[float, bool]:
+        context_value = None if board.select is None else board.select.context
+        context = _MAIN if context_value is None else int(context_value)
         if context == _MAIN:
             return evaluate(board, self.ctx).total, False
         actions = self.provider.actions(state)
@@ -137,6 +138,20 @@ class _Walk:
                               depth - 1)
                     for action in actions)
         return chooser(outcomes, key=lambda pair: pair[0])
+
+    def _typed(self, state, parent: ObservationState) -> ObservationState:
+        found = getattr(state, "observation", None)
+        if isinstance(found, ObservationState):
+            return found
+        return ObservationStateBuilder(parent.decklist).advance(parent, _payload(state))[0]
+
+
+def _payload(state):
+    found = getattr(state, "provider_payload", None)
+    if found is not None:
+        return found
+    found = getattr(state, "obs", None)
+    return found if found is not None else state.observation
 
 
 __all__ = ("CHAIN_DEPTH_CAP", "CHAIN_NODE_CAP", "NOISE_FLOOR", "OptionPrice", "price_actions")

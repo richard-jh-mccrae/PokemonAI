@@ -13,13 +13,13 @@ import json
 from dataclasses import replace
 
 from common.api import RootDecision
-from common.board import BoardState
+from common.observation import KnownOwnPrizes, ObservationStateBuilder
 from common.strategy.context import _MAIN
 
 from .evaluate import evaluate
 from .preview import NOISE_FLOOR, OptionPrice, price_actions
 from .seam import LedgerNativeProvider, PreviewState
-from .worth import LedgerContext
+from .worth import EvaluationModel
 
 #: Plays whose whole yield is hand cards a pending shuffle would discard: they queue BEHIND
 #: it (ADR-0148). Kept narrow — a broad fetch/draw set was measured and lost frames.
@@ -31,7 +31,7 @@ class LedgerUnavailable(RuntimeError):
 
 
 class LedgerDecider:
-    def __init__(self, deck, deck_name: str, ctx: LedgerContext, *,
+    def __init__(self, deck, deck_name: str, ctx: EvaluationModel, *,
                  provider_factory=LedgerNativeProvider, provider_kwargs=None, gap_sink=None):
         self.deck = tuple(int(card_id) for card_id in deck)
         self.deck_name = str(deck_name)
@@ -42,14 +42,17 @@ class LedgerDecider:
         self.provider_kwargs = dict(provider_kwargs or {})
         self.gap_sink = gap_sink
 
-    def decide(self, observation, *, opponent=None) -> RootDecision:
+    def decide(self, observation, *, opponent=None, knowledge=None, state=None) -> RootDecision:
         ctx = self.ctx.with_opponent(opponent)
-        board = BoardState.root(observation, decklist=self.deck)
-        # The root is a PreviewState too: deck knowledge comes from BoardState, so the Ledger
+        board = (ObservationStateBuilder(self.deck).root(observation, knowledge=knowledge)
+                 if state is None else state)
+        # The root is a PreviewState too: deck knowledge comes from ObservationState, so the Ledger
         # path constructs no DecisionState anywhere (pinned by tests/ledger/test_seam.py).
-        state = PreviewState(observation, board.seat, "root", deck=self.deck,
+        state = PreviewState(observation, board, "root", deck=self.deck,
                              deck_counts=board.deck_counts or (),
-                             prize_counts=board.own_prizes or ())
+                             prize_counts=(board.knowledge.own_prizes.cards
+                                           if isinstance(board.knowledge.own_prizes,
+                                                         KnownOwnPrizes) else ()))
         baseline = evaluate(board, ctx)
         provider = self.provider_factory(state, **self.provider_kwargs)
         if not getattr(provider, "available", True):
@@ -63,8 +66,8 @@ class LedgerDecider:
         if not prices:
             raise LedgerUnavailable("no legal actions to price")
 
-        raw_context = (observation.get("select") or {}).get("context")
-        context = _MAIN if raw_context is None else int(raw_context)
+        context_value = None if board.select is None else board.select.context
+        context = _MAIN if context_value is None else int(context_value)
         if context == _MAIN:
             prices = tuple(
                 replace(price, restocks=True) if self._restocks_hand(price)
@@ -72,7 +75,8 @@ class LedgerDecider:
         chosen = self._choose(prices, forced=context != _MAIN)
         gaps = tuple(gap for price in prices for gap in price.gaps) + baseline.gaps
         if gaps and self.gap_sink is not None:
-            self.gap_sink({"context": context, "board": board.key, "gaps": sorted(set(gaps)),
+            self.gap_sink({"context": context, "position_key": board.position_key,
+                           "decision_key": board.decision_key, "gaps": sorted(set(gaps)),
                            "chosen": list(chosen.action.selection)})
         return RootDecision(
             chosen=tuple(chosen.action.selection), action=chosen.action.identity,
@@ -80,6 +84,9 @@ class LedgerDecider:
             diagnostics={
                 "backend": "ledger", "deck": self.deck_name,
                 "weights": self.ctx.weights.identity,
+                "evaluation_model": self.ctx.version,
+                "position_key": board.position_key,
+                "decision_key": board.decision_key,
                 **({"opponent_gamma": round(opponent.gamma, 4)}
                    if opponent is not None else {}),
                 "baseline": baseline.total, "gaps": sorted(set(gaps)),

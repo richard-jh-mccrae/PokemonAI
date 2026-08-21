@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from common.scouting import Scout, load_artifact
+from common.observation import ObservationStateBuilder
 from meta_tracker.archetype import classify
 from meta_tracker.cards import load_cards
 from meta_tracker.compile_scouting import compile_artifact
@@ -25,10 +26,19 @@ def _ep(a0, d0, a1, d1):
 def _obs_revealing(card_ids, *, your_index=0, turn=2):
     opp = 1 - your_index
     players = [None, None]
-    players[your_index] = {"active": [{"id": 700}], "bench": [], "discard": []}
-    players[opp] = {"active": [], "bench": [], "discard": [{"id": c} for c in card_ids]}
-    return {"select": {"context": 0}, "logs": [],
-            "current": {"turn": turn, "yourIndex": your_index, "players": players}}
+    base = {"bench": [], "benchMax": 5, "deckCount": 0, "hand": [], "handCount": 0,
+            "prize": [], "poisoned": False, "burned": False, "asleep": False,
+            "paralyzed": False, "confused": False}
+    players[your_index] = {**base, "active": [{"id": 700, "hp": 1, "maxHp": 1}],
+                           "discard": []}
+    players[opp] = {**base, "active": [],
+                    "discard": [{"id": c} for c in card_ids]}
+    return ObservationStateBuilder().root(
+        {"select": {"context": 0}, "logs": [],
+         "current": {"turn": turn, "yourIndex": your_index, "players": players,
+                     "firstPlayer": 0, "supporterPlayed": False, "stadiumPlayed": False,
+                     "energyAttached": False, "retreated": False, "result": None,
+                     "stadium": [], "looking": None}})
 
 
 @pytest.mark.req("REQ-SCOUT-0001")

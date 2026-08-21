@@ -12,10 +12,10 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from common.board import BoardState
-from common.board.nodes import Body, Side
+from common.observation import ObservationState
+from common.observation.nodes import Body, Side
 
-from .worth import (Demand, LedgerContext, any_attack_payable, base_worth, best_payable_damage,
+from .worth import (Demand, EvaluationModel, any_attack_payable, base_worth, best_payable_damage,
                     demand_scale, line_reach, projected_incoming_damage, top_attack_cost,
                     usable_units)
 
@@ -32,7 +32,7 @@ class Valuation:
         return next((value for label, value in self.parts if label == name), 0.0)
 
 
-def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
+def evaluate(board: ObservationState, ctx: EvaluationModel) -> Valuation:
     parts: list[tuple[str, float]] = []
     gaps: list[str] = []
 
@@ -64,7 +64,7 @@ def evaluate(board: BoardState, ctx: LedgerContext) -> Valuation:
                      parts=tuple(parts), gaps=tuple(gaps))
 
 
-def _active_doomed(attacker: Side, defender: Side, ctx: LedgerContext, *,
+def _active_doomed(attacker: Side, defender: Side, ctx: EvaluationModel, *,
                    next_turn: bool) -> bool:
     """Can the attacker's active KO the defender's active outright (ADR-0152)? ``next_turn``
     grants the attacker its coming attach plus one evolution — the conservative incoming read."""
@@ -73,12 +73,12 @@ def _active_doomed(attacker: Side, defender: Side, ctx: LedgerContext, *,
     read = projected_incoming_damage if next_turn else \
         (lambda facts, attached, defender_facts, _ctx:
          best_payable_damage(facts, attached, defender_facts))
-    damage = read(attacker.active.card.facts, attacker.active.energies,
-                  defender.active.card.facts, ctx)
+    damage = read(ctx.facts(attacker.active.card.card_id), attacker.active.energies,
+                  ctx.facts(defender.active.card.card_id), ctx)
     return 0 < defender.active.hp <= damage
 
 
-def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_counts,
+def _side_parts(side: Side, ctx: EvaluationModel, gaps: list, *, own: bool, deck_counts,
                 active_doomed: bool = False):
     weights = ctx.weights
     demand = Demand.read(side, ctx)
@@ -97,17 +97,18 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
         copies[body.card.card_id] += 1
     yield "bodies", bodies_value
     if side.active is not None:
-        worth, _ = base_worth(side.active.card.card_id, side.active.card.facts, ctx, own=own)
-        ready = any_attack_payable(side.active.card.facts, side.active.energies)
+        active_facts = ctx.facts(side.active.card.card_id)
+        worth, _ = base_worth(side.active.card.card_id, active_facts, ctx, own=own)
+        ready = any_attack_payable(active_facts, side.active.energies)
         yield "active", (weights.active_premium * worth
                          * (1.0 if ready else weights.active_unready_fraction))
     # The clamp bounds a corrupt benchMax: no printed format offers more than 8 slots.
     yield "bench_slots", weights.bench_slot_value * _harmonic(
         min(8, max(0, side.bench_max - len(side.bench))))
     yield "liability", -weights.prize_liability * sum(
-        max(0, _prize_value(body) - 1) for body in side.bodies)
+        max(0, _prize_value(body, ctx) - 1) for body in side.bodies)
 
-    if own and side.hand is not None:
+    if own:
         yield "hand", _bag_value(side.hand, weights.zone_in_hand, demand, ctx, gaps,
                                  deck_counts)
     else:
@@ -129,7 +130,7 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
 
     discard = 0.0
     for card in side.discard:
-        worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
+        worth, gap = base_worth(card.card_id, ctx.facts(card.card_id), ctx, own=own)
         if gap:
             gaps.append(f"discard: {gap}")
         discard += worth * weights.zone_in_discard
@@ -142,26 +143,28 @@ def _side_parts(side: Side, ctx: LedgerContext, gaps: list, *, own: bool, deck_c
                       + weights.status_burned * side.burned)
 
 
-def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
+def _body_value(body: Body, ctx: EvaluationModel, gaps: list, *, reach=None,
                 discount: float = 1.0, own: bool = True, is_active: bool = False,
                 doomed: bool = False) -> float:
     weights = ctx.weights
-    worth, gap = base_worth(body.card.card_id, body.card.facts, ctx, own=own)
+    body_facts = ctx.facts(body.card.card_id)
+    worth, gap = base_worth(body.card.card_id, body_facts, ctx, own=own)
     if gap:
         gaps.append(f"in play: {gap}")
     value = worth * discount * weights.zone_in_play
 
-    usable = usable_units(body.card.facts, body.energies, ctx, reach)
+    usable = usable_units(body_facts, body.energies, ctx, reach)
     useless = len(body.energies) - usable
     energy_worth = 0.0
     rentals = 0
     for card in body.energy_cards:
         # An end-of-turn-discarding Energy on a BENCHED body evaporates before the body can
         # ever attack (ADR-0150): its worth is a rental nobody rides, priced zero.
-        if not is_active and "discard_eot" in (getattr(card.facts, "tags", ()) or ()):
+        card_facts = ctx.facts(card.card_id)
+        if not is_active and "discard_eot" in (getattr(card_facts, "tags", ()) or ()):
             rentals += 1
             continue
-        unit_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
+        unit_worth, gap = base_worth(card.card_id, card_facts, ctx, own=own)
         if gap:
             gaps.append(f"attached: {gap}")
         energy_worth += unit_worth
@@ -171,7 +174,7 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     value += per_unit * (usable * weights.zone_attached_usable
                          + useless * weights.zone_attached_useless)
     if weights.concentration and body.energies:
-        cost = top_attack_cost(body.card.facts, ctx, reach)
+        cost = top_attack_cost(body_facts, ctx, reach)
         if cost > 0:
             # A benched rental evaporates before the attack it would pay for (ADR-0150),
             # so it is no progress toward that attack either.
@@ -179,12 +182,12 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
             value += weights.concentration * worth * discount * progress * progress
 
     for card in body.tools:
-        tool_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
+        tool_worth, gap = base_worth(card.card_id, ctx.facts(card.card_id), ctx, own=own)
         if gap:
             gaps.append(f"tool: {gap}")
         value += tool_worth * weights.zone_tool_attached
     for card in body.pre_evolution:
-        under_worth, gap = base_worth(card.card_id, card.facts, ctx, own=own)
+        under_worth, gap = base_worth(card.card_id, ctx.facts(card.card_id), ctx, own=own)
         if gap:
             gaps.append(f"under: {gap}")
         value += under_worth * weights.zone_under_body
@@ -205,24 +208,25 @@ def _body_value(body: Body, ctx: LedgerContext, gaps: list, *, reach=None,
     return value
 
 
-def _bag_value(bag, zone: float, demand: Demand, ctx: LedgerContext, gaps: list,
+def _bag_value(bag, zone: float, demand: Demand, ctx: EvaluationModel, gaps: list,
                deck_counts) -> float:
     # A copy already fielded counts against the hand copy's demand: same job, already staffed.
     copies_seen: Counter = Counter(demand.body_id_counts)
     total = 0.0
     for card in bag:
-        worth, gap = base_worth(card.card_id, card.facts, ctx)
+        facts = ctx.facts(card.card_id)
+        worth, gap = base_worth(card.card_id, facts, ctx)
         if gap:
             gaps.append(f"hand: {gap}")
-        scale = demand_scale(card.card_id, card.facts, demand,
+        scale = demand_scale(card.card_id, facts, demand,
                              copies_seen[card.card_id], ctx, deck_counts)
         copies_seen[card.card_id] += 1
         total += worth * scale * zone
     return total
 
 
-def _prize_value(body: Body) -> int:
-    return getattr(body.card.facts, "prize_value", 1) if body.card.facts is not None else 1
+def _prize_value(body: Body, ctx: EvaluationModel) -> int:
+    return getattr(ctx.facts(body.card.card_id), "prize_value", 1)
 
 
 def _harmonic(count: int) -> float:

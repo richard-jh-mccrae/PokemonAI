@@ -15,7 +15,7 @@ from ledger_helpers import (DRAGAPULT, FIRE_E, ScriptedProvider, action, body, p
 
 from common.algebra import (Actor, Chance, Choice, Deterministic, Edge, RevealChoice,
                             RevealOutcome, Terminal, WeightedEdge)
-from common.ledger import LedgerContext, LedgerDecider
+from common.ledger import EvaluationModel, LedgerDecider
 from deprecated.bellman.state import DecisionState
 
 DECK = (DRAGAPULT, FIRE_E) * 20
@@ -40,7 +40,7 @@ def price_of(node):
     play, end = action("play", (0,)), action("end", (1,))
     provider = ScriptedProvider(menus={"root": (play, end)},
                                 nodes={("root", play.identity): node})
-    decision = LedgerDecider(DECK, "test", LedgerContext.build(),
+    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
@@ -131,7 +131,7 @@ def test_a_two_menu_forced_chain_is_walked_to_its_leaf():
         nodes={("root", play.identity): Deterministic(first_menu),
                (first_menu.semantic_key, pick_one.identity): Deterministic(second_menu),
                (second_menu.semantic_key, pick_two.identity): Deterministic(GOOD)})
-    decision = LedgerDecider(DECK, "test", LedgerContext.build(),
+    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
@@ -155,7 +155,7 @@ def test_a_chain_past_the_depth_cap_scores_mid_board_and_keeps_the_root():
     menus[mids[-1].semantic_key] = (step,)
     nodes[(mids[-1].semantic_key, step.identity)] = Deterministic(GOOD)
     provider = ScriptedProvider(menus=menus, nodes=nodes)
-    decision = LedgerDecider(DECK, "test", LedgerContext.build(),
+    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     entry = next(row for row in decision.diagnostics["prices"]
                  if row["action"] == str(play.identity))
@@ -177,7 +177,7 @@ def test_an_empty_forced_menu_logs_its_gap_and_scores_the_mid_board():
     provider = ScriptedProvider(
         menus={"root": (play, end), starved.semantic_key: ()},
         nodes={("root", play.identity): Deterministic(starved)})
-    decision = LedgerDecider(DECK, "test", LedgerContext.build(),
+    decision = LedgerDecider(DECK, "test", EvaluationModel.build(),
                              provider_factory=lambda _s, **_kw: provider).decide(ROOT_OBS)
     assert any("forced menu offered no actions" in gap
                for gap in decision.diagnostics["gaps"])

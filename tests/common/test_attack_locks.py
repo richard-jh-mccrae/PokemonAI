@@ -6,7 +6,7 @@ import json
 import pytest
 
 from common.cards.functions.attack_lock import (
-    LOCK_TURN_STRIDE, carry_attack_locks, fold_attack_locks, locked_attack_ids)
+    LOCK_TURN_STRIDE, fold_attack_locks, locked_attack_ids)
 
 
 #: Real store attacks: only Mega Brave (983) prints the "can't use this next turn" clause;
@@ -79,26 +79,6 @@ def test_the_lock_map_survives_a_json_round_trip():
 @pytest.mark.parametrize("empty", [None, {}])
 def test_no_locks_bars_nothing(empty):
     assert locked_attack_ids(empty, _body(86), 8) == frozenset()
-
-
-def test_carrying_an_empty_ledger_leaves_the_observation_key_absent():
-    """The key is part of state identity: an empty `{}` present here would never match the
-    absent key on the live observation the next turn arrives as."""
-    observation = {"logs": [_attack(86, AURA_JAB)], "current": {"turn": 8}}
-    carry_attack_locks(None, observation)
-    assert "attack_locks" not in observation
-
-
-def test_carrying_a_lock_writes_the_folded_ledger_onto_the_observation():
-    observation = {"logs": [_attack(86, MEGA_BRAVE)], "current": {"turn": 8}}
-    carry_attack_locks({}, observation)
-    assert observation["attack_locks"] == {"86": {"983": 8 + LOCK_TURN_STRIDE}}
-
-
-def test_a_parent_ledger_survives_a_step_with_no_new_attacks():
-    observation = {"logs": [], "current": {"turn": 9}}
-    carry_attack_locks({"attack_locks": {"86": {"983": 10}}}, observation)
-    assert observation["attack_locks"] == {"86": {"983": 10}}
 
 
 def test_refolding_the_same_nonempty_delta_never_retracts_a_lock():

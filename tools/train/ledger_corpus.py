@@ -33,7 +33,8 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from common.option_equivalence import class_of, option_equivalence  # noqa: E402
 from functools import partial
 
-from common.engine import CgpyTransitionProvider, stamp_own_prizes  # noqa: E402 - offline replay only
+from common.engine import (CgpyTransitionProvider,
+                           determinized_prize_knowledge)  # noqa: E402 - offline replay only
 from deprecated.bellman.effects import CardEffects  # noqa: E402 - replay coverage facts (ADR-0147)
 from common.runtime import build_runtime  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
@@ -92,7 +93,10 @@ def _replay_one(deck_name: str, correction, weight_overrides=None) -> dict:
     including the own-prize anchor the live shell stamps before every decide."""
     runtime = _build_runtime(deck_name, weight_overrides)
     obs = correction.obs
-    stamped = stamp_own_prizes(obs, runtime.deck)
+    knowledge = determinized_prize_knowledge(obs, runtime.deck)
+    stamped = knowledge is not None
+    if knowledge is not None:
+        runtime.knowledge = knowledge
     started = time.perf_counter()
     decision = runtime.decide(obs)
     elapsed = time.perf_counter() - started

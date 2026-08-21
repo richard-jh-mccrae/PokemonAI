@@ -4,6 +4,7 @@ from cg.api import AreaType, LogType
 
 from common.cards.card_facts import Clause, ITEM, TrainerCard
 from common.deck_tracker import OwnCardModel
+from common.observation import ObservationStateBuilder
 from deprecated.bellman.state import DecisionState
 
 
@@ -15,15 +16,25 @@ DECK = int(AreaType.DECK)
 HAND = int(AreaType.HAND)
 
 
-def _obs(*logs, effect=None):
+def _raw_obs(*logs, effect=None):
     select = {"effect": {"id": effect}} if effect is not None else {}
+    side = {"hand": [], "handCount": 0, "discard": [], "active": [], "bench": [],
+            "benchMax": 5, "prize": [None] * 6, "deckCount": 0,
+            "poisoned": False, "burned": False, "asleep": False,
+            "paralyzed": False, "confused": False}
     return {
         "logs": list(logs), "select": select,
-        "current": {"turn": 2, "yourIndex": ME, "players": [
-            {"hand": [], "discard": [], "active": [], "bench": [], "prize": [None] * 6},
-            {},
+        "current": {"turn": 2, "yourIndex": ME, "firstPlayer": 0,
+                    "supporterPlayed": False, "stadiumPlayed": False,
+                    "energyAttached": False, "retreated": False, "result": None,
+                    "stadium": [], "looking": None, "players": [
+            side, {**side, "hand": None},
         ]},
     }
+
+
+def _obs(*logs, effect=None):
+    return ObservationStateBuilder().root(_raw_obs(*logs, effect=effect))
 
 
 def _move(card_id, serial, *, source=DECK, destination=DECK):
@@ -86,7 +97,7 @@ def test_known_top_uses_the_source_from_the_prompt_before_the_log_delta():
 
 
 def test_known_top_participates_in_the_bellman_semantic_key():
-    observation = _obs()
+    observation = _raw_obs()
     blind = DecisionState.from_observation(observation, deck=(), deck_name="test")
     known = DecisionState.from_observation(
         {**observation, "known_top": ((41, FIRST),)}, deck=(), deck_name="test")

@@ -193,7 +193,7 @@ jobs:
       - run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Run parallel source contracts
         run: >-
-          python -m pytest tests/board tests/cards tests/common
+          python -m pytest tests/observation tests/cards tests/common
           tests/ledger tests/parity tests/scouting tests/train
           tests/test_import_hygiene.py -q -n auto --tb=short
 

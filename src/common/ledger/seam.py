@@ -15,32 +15,27 @@ from functools import partial
 from itertools import count
 
 from common.native_engine import NativeCgTransitionProvider
-from common.options import enumerate_legal_actions
+from common.observation import ObservationStateBuilder
+from common.observation.provider import ProviderState
 
 
-class PreviewState:
+class PreviewState(ProviderState):
     """Everything a preview node is ever asked for: the printout, the seat, the menu — plus,
     on a ROOT, the deck knowledge the provider constructors determinize hidden zones from
-    (sourced from BoardState, so the Ledger path builds no DecisionState at all)."""
+    (sourced from ObservationState, so the Ledger path builds no DecisionState at all)."""
 
-    __slots__ = ("obs", "root_seat", "preview_key", "deck", "deck_counts", "prize_counts",
-                 "_legal")
+    __slots__ = ("preview_key",)
 
-    def __init__(self, obs, root_seat: int, preview_key: str, *,
-                 deck=(), deck_counts=(), prize_counts=()):
-        self.obs = obs
-        self.root_seat = int(root_seat)
+    def __init__(self, payload, observation, preview_key: str, *,
+                 deck=(), deck_counts=(), prize_counts=(), actor_seat=None,
+                 belief_token=None, recycled_card_ids=(), **_ignored):
+        if not hasattr(observation, "seat"):
+            observation = ObservationStateBuilder(deck or None).root(payload)
+        super().__init__(payload, observation, token=preview_key, deck=deck,
+                         deck_counts=deck_counts, prize_counts=prize_counts,
+                         actor_seat=actor_seat, belief_token=belief_token,
+                         recycled_card_ids=recycled_card_ids)
         self.preview_key = preview_key
-        self.deck = tuple(deck)
-        self.deck_counts = tuple(deck_counts)
-        self.prize_counts = tuple(prize_counts)
-        self._legal = None
-
-    @property
-    def legal_actions(self) -> tuple:
-        if self._legal is None:
-            self._legal = enumerate_legal_actions(self.obs)
-        return self._legal
 
     @property
     def semantic_key(self) -> str:
@@ -52,8 +47,13 @@ class PreviewBinding:
     """Successors become PreviewStates; map keys become identity tokens (roots keep theirs)."""
 
     def _bind(self, state, observation):
-        return PreviewState(observation, state.root_seat,
-                            f"preview:{next(self._preview_tokens)}")
+        child, _delta = ObservationStateBuilder(state.observation.decklist).advance(
+            state.observation, observation)
+        metadata = getattr(self, "_provider_metadata", {}).pop(id(observation), {})
+        return PreviewState(observation, child, f"preview:{next(self._preview_tokens)}",
+                            actor_seat=metadata.get("actor_seat"),
+                            belief_token=metadata.get("belief_token"),
+                            recycled_card_ids=metadata.get("recycled_card_ids", ()))
 
     def _key(self, state) -> str:
         key = getattr(state, "preview_key", None)

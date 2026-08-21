@@ -1,15 +1,17 @@
 """The key: semantic identity ignores serials, owners, render order, and menu material."""
 from __future__ import annotations
 
+from observation_builders import build_observation, advance_observation
+
 import copy
 
-from test_board_nodes import body, player, printout
+from test_observation_nodes import body, player, printout
 
-from common.board import BoardState
+from common.observation import ObservationState
 
 
 def _board(obs):
-    return BoardState.root(obs)
+    return build_observation(obs)
 
 
 def test_hand_order_and_serials_never_reach_the_key():
@@ -40,9 +42,9 @@ def test_damage_and_attack_locks_change_the_key():
 
 def test_deck_knowledge_reaches_the_key():
     obs = printout(me=player(hand=[119]))
-    bare = BoardState.root(obs)
-    deck_a = BoardState.root(obs, decklist=(119,) * 4 + (120,) * 2)
-    deck_b = BoardState.root(obs, decklist=(119,) * 4 + (121,) * 2)
+    bare = build_observation(obs)
+    deck_a = build_observation(obs, decklist=(119,) * 4 + (120,) * 2)
+    deck_b = build_observation(obs, decklist=(119,) * 4 + (121,) * 2)
     assert len({bare.key, deck_a.key, deck_b.key}) == 3
 
 
@@ -56,7 +58,7 @@ def test_select_deck_listing_is_menu_material_but_the_context_card_is_not():
     assert _board(base).key == _board(with_deck).key
     with_context = copy.deepcopy(base)
     with_context["select"]["contextCard"] = {"id": 1121, "serial": 41}
-    assert _board(base).key != _board(with_context).key
+    assert _board(base).decision_key != _board(with_context).decision_key
 
 
 def test_known_top_reaches_the_key_and_string_prize_keys_coerce():
@@ -66,8 +68,8 @@ def test_known_top_reaches_the_key_and_string_prize_keys_coerce():
     assert _board(base).key != _board(stacked).key
     stringy = copy.deepcopy(base)
     stringy["own_prizes"] = {"66": 2}                      # JSON round trips keys to strings
-    board = BoardState.root(stringy, decklist=(66,) * 3 + (119,))
-    assert board.own_prizes == ((66, 2),)
+    board = build_observation(stringy, decklist=(66,) * 3 + (119,))
+    assert board.knowledge.own_prizes.cards == ((66, 2),)
     assert board.deck_counts == ((66, 1),)
 
 
